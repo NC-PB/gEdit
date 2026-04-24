@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+:root {
+  --bg-app: #1e1e1e;
+  --bg-ribbon: #2d2d2d;
+  --bg-panel: #252526;
+  --text-main: #cccccc;
+  --text-active: #ffffff;
+  --text-muted: #808080;
+  --accent: #0078d4;
+  --accent-hover: #2b88d8;
+  --border-color: #3e3e42;
+  --success: #10b981;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  @apply antialiased;
+}
+
+/* Scrollbar styling for CAD feel */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border-color);
+}
+::-webkit-scrollbar-thumb {
+  background: #424242;
+  border: 1px solid var(--bg-panel); /* Give it a little padding feel */
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4f4f4f;
+}
+::-webkit-scrollbar-corner {
+  background: var(--bg-panel);
+}

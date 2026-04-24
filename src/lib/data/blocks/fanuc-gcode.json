@@ -1,0 +1,20 @@
+{
+  "start": {
+    "Description": "Standard Fanuc Program Start Header with standard units and work offset.",
+    "Text": "Header",
+    "Button": true,
+    "TextBlock": "% \nO1000 (NEW PRG) \nG21 G90 G54 \n"
+  },
+  "example": {
+    "Description": "Cancel all modal cycles (G80)",
+    "Text": "Block Cancel",
+    "Button": false,
+    "TextBlock": "G80 (CANCEL CYCLE)\n"
+  },
+  "drill": {
+    "Description": "Standard Drilling Cycle (G81)",
+    "Text": "Drilling",
+    "Button": true,
+    "TextBlock": "G81 Z-10.0 R2.0 F150.0 (DRILL CYCLE)\nX10.0 Y10.0\n"
+  }
+}

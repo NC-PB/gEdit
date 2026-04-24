@@ -1,0 +1,20 @@
+{
+  "start": {
+    "Description": "Standard Heidenhain PGM Start",
+    "Text": "Header",
+    "Button": true,
+    "TextBlock": "BEGIN PGM NEW_PRG MM\n"
+  },
+  "example": {
+    "Description": "Cycle 240, general centering drift cycle",
+    "Text": "Centering",
+    "Button": false,
+    "TextBlock": "CYCL DEF 240 ZENTRIEREN\nQ200=2 ;SICHERHEITS-ABST.\nQ343=1 ;AUSWAHL DURCHM/TIEFE\nQ201=+0 ;TIEFE\nQ344=-9 ;DURCHMESSER\nQ206=250 ;VORSCHUB TIEFENZ.\nQ211=0.1 ;VERWEILZEIT UNTEN\nQ203=+20 ;KOOR. OBERFLAECHE\nQ204=100 ;2. SICHERHEITS-ABST.\n"
+  },
+  "drill": {
+    "Description": "Drilling cycle depth",
+    "Text": "Drill depth",
+    "Button": true,
+    "TextBlock": "CYCL DEF 200 BOHREN\nQ200=2 ;SICHERHEITS-ABST.\nQ201=-15 ;TIEFE\nQ206=150 ;VORSCHUB TIEFENZ.\nQ202=5 ;ZUSTELL-TIEFE\nQ210=0 ;VERWEILZEIT OBEN\nQ203=+0 ;KOOR. OBERFLAECHE\nQ204=50 ;2. SICHERHEITS-ABST.\nQ211=0.25 ;VERWEILZEIT UNTEN\n"
+  }
+}
