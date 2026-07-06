@@ -1,7 +1,49 @@
-# Tauri + SvelteKit + TypeScript
+# gEdit
 
-This template should help get you started developing with Tauri, SvelteKit and TypeScript in Vite.
+A desktop G-code editor for CNC programming. Built with Tauri, SvelteKit and Monaco.
 
-## Recommended IDE Setup
+Supports two dialects:
 
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer).
+- **Fanuc G-Code** (`.nc`, `.txt`, `.min`)
+- **Heidenhain Klartext** (`.h`, `.txt`)
+
+![Main window](docs/screenshots/main_screenshot.png)
+
+## Features
+
+- **Syntax highlighting** for Fanuc G-Code and Heidenhain Klartext.
+- **Autocomplete** for G/M codes and cycles.
+
+  ![Autocomplete](docs/screenshots/autocomplete.png)
+
+- **Program map** — a browser panel listing tool calls and comments; click an entry to jump to that line.
+- **Code blocks** — insert ready-made snippets (program header, drilling cycle, etc.) from the ribbon.
+- **Python post-processing** — point gEdit at a folder of Python scripts and run one against the current file (or selected text). The script receives the code on stdin; its stdout is shown in the output panel, and JSON output is parsed into a structured view.
+
+  ![Script output](docs/screenshots/script.png)
+
+- **Open / Save** files through native dialogs.
+
+## Requirements
+
+- To build: [Node.js](https://nodejs.org/), [Rust](https://www.rust-lang.org/tools/install), and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your platform.
+- To use the Python script runner: Python available on `PATH` (`python` on Windows, `python3` on macOS/Linux).
+
+## Development
+
+```bash
+npm install
+npm run tauri dev
+```
+
+## Build
+
+```bash
+npm run tauri build
+```
+
+Installers are written to `src-tauri/target/release/bundle/`.
+
+## License
+
+MIT

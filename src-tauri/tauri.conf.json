@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "tauri-app",
+  "productName": "gEdit",
   "version": "0.1.0",
-  "identifier": "com.pburg.tauri-app",
+  "identifier": "com.pburg.gedit",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,9 +12,9 @@
   "app": {
     "windows": [
       {
-        "title": "tauri-app",
-        "width": 800,
-        "height": 600
+        "title": "gEdit",
+        "width": 1280,
+        "height": 800
       }
     ],
     "security": {
