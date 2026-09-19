@@ -1,0 +1,12 @@
+{
+  "dialect": "fanuc-gcode",
+  "items": [
+    {"id":"fanuc-cmt-1","line":1,"type":"comment","text":"(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)"},
+    {"id":"fanuc-cmt-4","line":4,"type":"comment","text":"(T1  D10 FLAT END MILL)"},
+    {"id":"fanuc-cmt-5","line":5,"type":"comment","text":"(T2  M8X1.25 TAP)"},
+    {"id":"fanuc-cmt-6","line":6,"type":"comment","text":"(T3  TURNING TOOL ON A MILL-TURN)"},
+    {"id":"fanuc-tool-8","line":8,"type":"tool","text":"T1 M6"},
+    {"id":"fanuc-tool-23","line":23,"type":"tool","text":"T2 M6"},
+    {"id":"fanuc-tool-34","line":34,"type":"tool","text":"T3 M6"}
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "dialect": "heidenhain-klartext",
+  "items": [
+    {"id":"heid-cmt-2","line":2,"type":"comment","text":"1 ; WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"id":"heid-tool-6","line":6,"type":"tool","text":"5 TOOL CALL 1 Z S3000 F800 ; D10 END MILL"},
+    {"id":"heid-cmt-16","line":16,"type":"comment","text":"15 ; FOUR HOLES D8.5"},
+    {"id":"heid-tool-17","line":17,"type":"tool","text":"16 TOOL CALL 2 Z S2400"},
+    {"id":"heid-tool-35","line":35,"type":"tool","text":"25 TOOL CALL 3 Z S5000 F600 DR-0.02"}
+  ]
+}

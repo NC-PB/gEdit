@@ -1,4 +1,9 @@
-@import "tailwindcss";
+/* Only the app sources decide which utilities ship. Tailwind's automatic scan walks the
+   whole project, so a word in a markdown file, a test script or the generated
+   licenses.json would emit a bare utility rule such as `.contents` or `.sticky` —
+   single-class selectors that also match Monaco's own DOM and silently override it. */
+@import "tailwindcss" source(none);
+@source "./**/*.{svelte,ts,js}";
 
 :root {
   --bg-app: #1e1e1e;

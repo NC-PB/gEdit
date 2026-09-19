@@ -20,8 +20,30 @@
     { value: 'heidenhain-klartext', label: 'Heidenhain Klartext' }
   ];
 
+  const tabs: { id: string; label: string }[] = [
+    { id: 'home', label: 'Home' },
+    { id: 'insert', label: 'Insert' },
+    { id: 'tools', label: 'Tools' }
+  ];
+
   let activeTab = 'home';
   let selectedScript = '';
+
+  // ARIA tab pattern: the strip is one tab stop, the arrows move and select inside it
+  function handleTabKey(e: KeyboardEvent & { currentTarget: HTMLElement }, index: number) {
+    const targets: Record<string, number> = {
+      ArrowLeft: (index - 1 + tabs.length) % tabs.length,
+      ArrowRight: (index + 1) % tabs.length,
+      Home: 0,
+      End: tabs.length - 1
+    };
+    const next = targets[e.key];
+    if (next === undefined) return;
+    e.preventDefault();
+    activeTab = tabs[next].id;
+    const sibling = e.currentTarget.parentElement?.children[next];
+    if (sibling instanceof HTMLElement) sibling.focus();
+  }
 
   $: currentBlocks = activeBlocksLib[activeLanguage] || {};
   $: primaryBlocks = Object.entries(currentBlocks).filter(([_, b]) => b.Button);
@@ -174,7 +196,7 @@
   }
 </style>
 
-<div class="ribbon-container">
+<div class="ribbon-container" data-testid="ribbon">
   <!-- Title bar / Quick Access -->
   <div class="app-header">
     <div class="flex items-center gap-2">
@@ -184,28 +206,36 @@
   </div>
 
   <!-- Tabs -->
-  <div class="ribbon-tabs">
-    <!-- svelte-ignore a11y-click-events-have-key-events -->
-    <div class="ribbon-tab {activeTab === 'home' ? 'active' : ''}" on:click={() => activeTab = 'home'}>Home</div>
-    <!-- svelte-ignore a11y-click-events-have-key-events -->
-    <div class="ribbon-tab {activeTab === 'insert' ? 'active' : ''}" on:click={() => activeTab = 'insert'}>Insert</div>
-    <!-- svelte-ignore a11y-click-events-have-key-events -->
-    <div class="ribbon-tab {activeTab === 'tools' ? 'active' : ''}" on:click={() => activeTab = 'tools'}>Tools</div>
+  <div class="ribbon-tabs" role="tablist">
+    {#each tabs as tab, i}
+      <div
+        id="ribbon-tab-{tab.id}"
+        class="ribbon-tab {activeTab === tab.id ? 'active' : ''}"
+        role="tab"
+        tabindex={activeTab === tab.id ? 0 : -1}
+        aria-selected={activeTab === tab.id}
+        aria-controls="ribbon-panel"
+        data-testid="ribbon-tab"
+        data-tab={tab.id}
+        on:click={() => activeTab = tab.id}
+        on:keydown={(e) => handleTabKey(e, i)}
+      >{tab.label}</div>
+    {/each}
   </div>
 
   <!-- Body -->
-  <div class="ribbon-body">
+  <div class="ribbon-body" id="ribbon-panel" role="tabpanel" aria-labelledby="ribbon-tab-{activeTab}">
     {#if activeTab === 'home'}
       <div class="ribbon-group">
-        <button class="ribbon-btn" on:click={onOpen} title="Open File ({shortcutLabel('O')})">
+        <button class="ribbon-btn" data-testid="cmd-button" data-command="file.open" on:click={onOpen} title="Open File ({shortcutLabel('O')})">
           <FolderOpen size={24} class="btn-icon text-[#dcb67a]" />
           <span class="btn-label">Open</span>
         </button>
-        <button class="ribbon-btn" on:click={onSave} title="Save ({shortcutLabel('S')})">
+        <button class="ribbon-btn" data-testid="cmd-button" data-command="file.save" on:click={onSave} title="Save ({shortcutLabel('S')})">
           <Save size={24} class="btn-icon text-[#0078d4]" />
           <span class="btn-label">Save</span>
         </button>
-        <button class="ribbon-btn" on:click={onSaveAs} title="Save As… ({shortcutLabel('S', true)})">
+        <button class="ribbon-btn" data-testid="cmd-button" data-command="file.saveAs" on:click={onSaveAs} title="Save As… ({shortcutLabel('S', true)})">
           <FilePen size={24} class="btn-icon text-[#0078d4]" />
           <span class="btn-label">Save As</span>
         </button>
@@ -213,7 +243,7 @@
       </div>
 
       <div class="ribbon-group">
-        <button class="ribbon-btn" on:click={() => onInsertBlock('start')} title="New Program Header">
+        <button class="ribbon-btn" data-testid="cmd-button" data-command="insert.block:start" on:click={() => onInsertBlock('start')} title="New Program Header">
           <Plus size={24} class="btn-icon text-[#10b981]" />
           <span class="btn-label">New Prg</span>
         </button>
@@ -224,7 +254,7 @@
     {#if activeTab === 'insert'}
       <div class="ribbon-group">
         {#each primaryBlocks as [key, block]}
-          <button class="ribbon-btn" on:click={() => onInsertBlock(key)} title={block.Description}>
+          <button class="ribbon-btn" data-testid="cmd-button" data-command="insert.block:{key}" on:click={() => onInsertBlock(key)} title={block.Description}>
             <Plus size={24} class="btn-icon text-[#10b981]" />
             <span class="btn-label">{block.Text}</span>
           </button>
@@ -250,7 +280,7 @@
     
     {#if activeTab === 'tools'}
       <div class="ribbon-group">
-        <button class="ribbon-btn" on:click={onSetScriptsFolder} title={scriptsFolder ? `Scripts: ${scriptsFolder}` : 'Set Python Scripts Folder'}>
+        <button class="ribbon-btn" data-testid="scripts-folder" on:click={onSetScriptsFolder} title={scriptsFolder ? `Scripts: ${scriptsFolder}` : 'Set Python Scripts Folder'}>
           <FolderCog size={24} class="btn-icon {scriptsFolder ? 'text-[#a6e3a1]' : 'text-[#94a3b8]'}" />
           <span class="btn-label">Scripts Dir</span>
         </button>
@@ -261,7 +291,7 @@
         {#if availableScripts.length > 0}
           <div class="flex items-center gap-2 h-full pb-4">
             <div class="select-wrapper">
-              <select bind:value={selectedScript} class="utility-select" style="width: 160px;">
+              <select bind:value={selectedScript} class="utility-select" style="width: 160px;" data-testid="script-select">
                 <option value="" disabled>Select Script...</option>
                 {#each availableScripts as script}
                   <option value={script}>{script}</option>
@@ -270,7 +300,7 @@
               <ChevronDown size={14} class="absolute right-2 pointer-events-none text-[#808080]" />
             </div>
           </div>
-          <button class="ribbon-btn" on:click={() => { if (selectedScript) onRunScript(selectedScript); }} title={selectedScript ? `Run ${selectedScript}` : 'Select a script first'}>
+          <button class="ribbon-btn" data-testid="script-run" on:click={() => { if (selectedScript) onRunScript(selectedScript); }} title={selectedScript ? `Run ${selectedScript}` : 'Select a script first'}>
             <Play size={24} class="btn-icon {selectedScript ? 'text-[#a6e3a1]' : 'text-[#94a3b8]'}" />
             <span class="btn-label">Run</span>
           </button>
@@ -295,7 +325,7 @@
 
     <div class="ribbon-utilities">
       <div class="select-wrapper">
-        <select bind:value={activeLanguage} class="utility-select">
+        <select bind:value={activeLanguage} class="utility-select" data-testid="profile-select">
           {#each languages as lang}
             <option value={lang.value}>{lang.label}</option>
           {/each}

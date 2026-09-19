@@ -242,7 +242,7 @@ Standing rules, checked by the review gate:
 1. Never add `src-tauri/permissions/` or an app ACL manifest (F5).
 2. Every new Rust command that takes a path checks `fs_scope().is_allowed`, or resolves an id against fixed roots.
 3. No `{@html}` with file, script or profile content. Hovers use `isTrusted:false` and `supportHtml:false`.
-4. No dependency that uses `eval` or `new Function`. Gate G5 greps the build for both.
+4. No dependency that uses `eval` or `Function(…)`, with or without `new`. Gate G5 greps the build for both.
 5. Scripts never run automatically.
 
 Residual risk: `settings.json` can be written through `settings_save`, so an XSS could add a script folder or an interpreter. This is the same class of risk as today's v1 `run_python_script(folder)`. The CSP is the primary barrier. Rust checks that the interpreter is an existing file and that the folders are existing directories.
@@ -317,7 +317,7 @@ G5 command:
 
 ```sh
 npm run build && npm run licenses:check && npm run versions:check \
-  && ! grep -rE 'new Function\(|[^a-zA-Z_.]eval\(' build/_app \
+  && ! grep -rE '(^|[^a-zA-Z0-9_.$])(Function|eval)[[:space:]]*\(' build/_app \
   && ! grep -rq '__gedit' build/_app
 ```
 

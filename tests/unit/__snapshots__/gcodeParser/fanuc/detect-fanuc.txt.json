@@ -1,0 +1,8 @@
+{
+  "dialect": "fanuc-gcode",
+  "items": [
+    {"id":"fanuc-cmt-1","line":1,"type":"comment","text":"(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)"},
+    {"id":"fanuc-cmt-2","line":2,"type":"comment","text":"(PLAIN TEXT FILE: THE DIALECT COMES FROM THE CONTENT)"},
+    {"id":"fanuc-tool-6","line":6,"type":"tool","text":"T1 M6"}
+  ]
+}

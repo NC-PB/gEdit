@@ -1,18 +1,18 @@
 {
   "start": {
-    "Description": "Standard Fanuc Program Start Header with standard units and work offset.",
+    "Description": "Program start: % tape mark, program number and name, metric units (G21), absolute positions (G90) and work offset G54.",
     "Text": "Header",
     "Button": true,
     "TextBlock": "% \nO1000 (NEW PRG) \nG21 G90 G54 \n"
   },
   "example": {
-    "Description": "Cancel all modal cycles (G80)",
-    "Text": "Block Cancel",
+    "Description": "Cancels the active drilling cycle (G80).",
+    "Text": "Cancel cycle",
     "Button": false,
     "TextBlock": "G80 (CANCEL CYCLE)\n"
   },
   "drill": {
-    "Description": "Standard Drilling Cycle (G81)",
+    "Description": "Drilling cycle G81 with sample depth, R plane and feed, followed by a second hole position. Stays active until G80.",
     "Text": "Drilling",
     "Button": true,
     "TextBlock": "G81 Z-10.0 R2.0 F150.0 (DRILL CYCLE)\nX10.0 Y10.0\n"

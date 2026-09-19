@@ -18,7 +18,7 @@
 </script>
 
 {#if visible}
-  <div class="output-panel">
+  <div class="output-panel" data-testid="output-panel" data-running={isRunning ? "1" : "0"}>
     <div class="panel-header">
       <div class="panel-header-left">
         <Terminal size={14} class="text-[#a6e3a1]" />
@@ -41,21 +41,21 @@
             <div class="block-label json-label">
               <Database size={10} /> Structured Result
             </div>
-            <pre style="margin: 0;">{JSON.stringify(data, null, 2)}</pre>
+            <pre style="margin: 0;" data-testid="output-json">{JSON.stringify(data, null, 2)}</pre>
           </div>
         {/if}
 
         {#if stdout && stdout !== JSON.stringify(data)}
           <div class="output-block output-stdout">
             <div class="block-label stdout-label">Raw Stdout</div>
-            {stdout}
+            <span data-testid="output-stdout">{stdout}</span>
           </div>
         {/if}
 
         {#if stderr}
           <div class="output-block output-stderr">
             <div class="block-label stderr-label">stderr</div>
-            {stderr}
+            <span data-testid="output-stderr">{stderr}</span>
           </div>
         {/if}
       {:else}

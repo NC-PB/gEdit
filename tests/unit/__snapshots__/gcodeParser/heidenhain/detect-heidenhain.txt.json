@@ -1,0 +1,8 @@
+{
+  "dialect": "heidenhain-klartext",
+  "items": [
+    {"id":"heid-cmt-2","line":2,"type":"comment","text":"1 ; WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"id":"heid-cmt-3","line":3,"type":"comment","text":"2 ; PLAIN TEXT FILE: THE DIALECT COMES FROM THE CONTENT"},
+    {"id":"heid-tool-6","line":6,"type":"tool","text":"5 TOOL CALL 1 Z S4000 F600"}
+  ]
+}

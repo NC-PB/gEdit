@@ -1,0 +1,17 @@
+{
+  "dialect": "fanuc-gcode",
+  "items": [
+    {"id":"fanuc-cmt-1","line":1,"type":"comment","text":"(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)"},
+    {"id":"fanuc-cmt-4","line":4,"type":"comment","text":"(POST: SYNTHETIC 3-AXIS MILL)"},
+    {"id":"fanuc-cmt-5","line":5,"type":"comment","text":"(STOCK 100 X 80 X 20 MM)"},
+    {"id":"fanuc-cmt-6","line":6,"type":"comment","text":"(T1  D10 FLAT END MILL)"},
+    {"id":"fanuc-cmt-7","line":7,"type":"comment","text":"(T2  D8.5 DRILL)"},
+    {"id":"fanuc-cmt-8","line":8,"type":"comment","text":"(T3  M10X1.5 TAP)"},
+    {"id":"fanuc-cmt-10","line":10,"type":"comment","text":"(CONTOUR ROUGH)"},
+    {"id":"fanuc-tool-11","line":11,"type":"tool","text":"T1 M6"},
+    {"id":"fanuc-cmt-29","line":29,"type":"comment","text":"(SPOT AND PECK DRILL)"},
+    {"id":"fanuc-tool-30","line":30,"type":"tool","text":"T2 M6"},
+    {"id":"fanuc-cmt-48","line":48,"type":"comment","text":"(TAP M10X1.5)"},
+    {"id":"fanuc-tool-49","line":49,"type":"tool","text":"T3 M6"}
+  ]
+}

@@ -38,3 +38,6 @@ vite.config.ts.timestamp-*
 
 # Local tooling
 .codegraph/
+
+# Generated large test programs (tests/gen/gen-large.mjs)
+.perf/

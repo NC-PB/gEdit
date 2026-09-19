@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, flushSync } from "svelte";
   import Ribbon from "../lib/components/Ribbon.svelte";
   import MonacoEditor from "../lib/components/MonacoEditor.svelte";
   import ScriptOutputPanel from "../lib/components/ScriptOutputPanel.svelte";
@@ -16,7 +16,7 @@
     type StructureItem,
   } from "../lib/utils/gcodeParser";
   import { detectLanguage } from "../lib/utils/detectLanguage";
-  import { DIALECTS, type Dialect } from "../lib/utils/dialects";
+  import { DIALECTS, isDialect, type Dialect } from "../lib/utils/dialects";
   import {
     baseName,
     isMacPlatform,
@@ -35,6 +35,7 @@
     type Unencodable,
   } from "../lib/utils/textCodec";
   import type { CursorInfo } from "../lib/monaco/types";
+  import { installTestHook } from "../lib/app/testHook";
 
   /** Shape of the `run_python_script` command result. */
   interface ScriptResult {
@@ -89,6 +90,14 @@
   let isScriptRunning = false;
   let showOutputPanel = false;
 
+  // Test seams (plan §7.9). The single buffer gets a new document id whenever a file
+  // replaces it, so ids are never reused, as with the tabbed documents in M1.
+  let docSeq = 1;
+  let docId = "d1";
+  let appReady = false;
+  let resolveReady!: () => void;
+  const ready = new Promise<void>((resolve) => (resolveReady = resolve));
+
   let fileOpBusy = false;
   let unlistenClose: UnlistenFn | undefined;
   let destroyed = false;
@@ -107,6 +116,19 @@
 
   onMount(() => {
     if (IN_TAURI) void registerCloseGuard();
+    installTestHook({
+      ready,
+      version: __APP_VERSION__,
+      // The model joins lines with its own EOL (LF or CRLF); the hook always reports LF
+      text: () => (editorRef ? editorRef.getEditorValue() : initialContent).replace(/\r\n?/g, "\n"),
+      cursor: () => ({ line: cursor.line, column: cursor.column }),
+      activeProfile: () => activeLanguage,
+      setProfile: (id) => {
+        if (!isDialect(id)) throw new Error(`Unknown profile: ${id}`);
+        // Same path as the profile selector; flushed so the UI and the editor follow at once
+        flushSync(() => (activeLanguage = id));
+      },
+    });
   });
 
   onDestroy(() => {
@@ -205,6 +227,8 @@
   function handleEditorReady() {
     updateDirty();
     refreshTree();
+    appReady = true;
+    resolveReady();
   }
 
   function handleCursorChange(info: CursorInfo) {
@@ -395,6 +419,7 @@
     const dialect = detectLanguage(selected, text, activeLanguage);
     activeLanguage = dialect;
     editorRef?.loadDocument(text, dialect); // sets the language before the text
+    docId = `d${++docSeq}`;
     currentFilePath = selected;
     fileEncoding = { encoding, hasBom };
     updateDirty();
@@ -523,6 +548,8 @@
 <div
   class="flex flex-col h-screen w-screen overflow-hidden"
   style="background-color: var(--bg-app);"
+  data-testid="app-shell"
+  data-ready={appReady ? "1" : "0"}
 >
   <!-- Ribbon Toolbar -->
   <Ribbon
@@ -561,7 +588,7 @@
       </div>
 
       <!-- Tree Content -->
-      <div class="p-2 flex-1 overflow-y-auto">
+      <div class="p-2 flex-1 overflow-y-auto" data-testid="program-map">
         <div
           class="flex flex-col gap-1 text-sm pt-1"
           style="color: var(--text-main);"
@@ -584,6 +611,9 @@
               class="flex items-center gap-2 px-2 py-1 ml-4 rounded cursor-pointer hover:bg-white/5 opacity-80"
               style="color: var(--text-muted);"
               title="Line {item.line}"
+              data-testid="program-map-item"
+              data-line={item.line}
+              data-kind={item.type}
               on:click={() => editorRef?.alignToLine(item.line)}
             >
               <div
@@ -613,6 +643,8 @@
     <div
       class="flex-1 flex flex-col relative bg-black/20"
       style="min-width: 0;"
+      data-testid="editor-host"
+      data-doc-id={docId}
     >
       <MonacoEditor
         bind:this={editorRef}
@@ -639,23 +671,41 @@
   <div
     class="flex items-center justify-between gap-4 px-3 h-6 flex-shrink-0 text-[11px]"
     style="background-color: var(--accent); color: white;"
+    data-testid="status-bar"
   >
     <div class="flex items-center gap-3 min-w-0">
-      <span class="truncate flex-shrink-0" title={currentFilePath ?? "Untitled"}
-        >{fileName}{dirty ? " ● Modified" : ""}</span
+      <span
+        class="truncate flex-shrink-0"
+        title={currentFilePath ?? "Untitled"}
+        data-testid="status-item"
+        data-item="file">{fileName}{dirty ? " ● Modified" : ""}</span
       >
-      {#if statusMessage}
-        <span
-          class="truncate {statusIsError ? 'bg-[#c42b1c] px-1.5 rounded-sm' : 'opacity-90'}"
-          role={statusIsError ? "alert" : "status"}
-          title={statusMessage}>{statusMessage}</span
-        >
-      {/if}
+      <!-- The wrapper is transparent to the layout, so the inner span is the flex item -->
+      <span class="status-message-slot" data-testid="status-item" data-item="message">
+        {#if statusMessage}
+          <span
+            class="truncate {statusIsError ? 'bg-[#c42b1c] px-1.5 rounded-sm' : 'opacity-90'}"
+            role={statusIsError ? "alert" : "status"}
+            title={statusMessage}
+            data-testid="status-message"
+            data-error={statusIsError ? "1" : "0"}>{statusMessage}</span
+          >
+        {/if}
+      </span>
     </div>
     <div class="flex items-center gap-4 flex-shrink-0">
-      <span>{DIALECTS[activeLanguage].label}</span>
-      <span>{encodingLabel(fileEncoding)}</span>
-      <span>{cursorLabel}</span>
+      <span data-testid="status-item" data-item="profile">{DIALECTS[activeLanguage].label}</span>
+      <span data-testid="status-item" data-item="encoding">{encodingLabel(fileEncoding)}</span>
+      <span data-testid="status-item" data-item="cursor">{cursorLabel}</span>
     </div>
   </div>
 </div>
+
+<style>
+  /* Scoped to this component on purpose: the matching Tailwind utility is a bare
+     single-class rule that would also match elements inside Monaco and drop their
+     layout, so the wrapper carries a name of its own. */
+  .status-message-slot {
+    display: contents;
+  }
+</style>

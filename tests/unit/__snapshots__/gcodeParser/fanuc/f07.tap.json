@@ -1,0 +1,8 @@
+{
+  "dialect": "fanuc-gcode",
+  "items": [
+    {"id":"fanuc-cmt-1","line":1,"type":"comment","text":"(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)"},
+    {"id":"fanuc-cmt-4","line":4,"type":"comment","text":"(T4  D16 FACE MILL)"},
+    {"id":"fanuc-tool-6","line":6,"type":"tool","text":"T4 M6"}
+  ]
+}

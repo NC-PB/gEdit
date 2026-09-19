@@ -9,6 +9,11 @@
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "licenses": "node scripts/gen-licenses.mjs",
+    "licenses:check": "node scripts/gen-licenses.mjs --check",
+    "versions:check": "node scripts/check-versions.mjs",
     "tauri": "tauri"
   },
   "license": "MIT",
@@ -25,12 +30,14 @@
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "@tailwindcss/vite": "^4.2.2",
     "@tauri-apps/cli": "^2.11.4",
+    "@types/node": "^22.20.4",
     "autoprefixer": "^10.5.0",
     "postcss": "^8.5.10",
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",
     "tailwindcss": "^4.2.2",
     "typescript": "~5.6.2",
-    "vite": "^6.0.3"
+    "vite": "^6.0.3",
+    "vitest": "^3.2.7"
   }
 }

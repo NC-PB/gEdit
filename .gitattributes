@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Test fixtures are byte-exact (CRLF, CR-only, Latin-1, NUL, UTF-16): never normalize
+tests/fixtures/** -text
+tests/runtime/fixtures/** -text

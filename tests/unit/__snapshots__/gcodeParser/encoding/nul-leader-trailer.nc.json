@@ -1,0 +1,6 @@
+{
+  "dialect": "fanuc-gcode",
+  "items": [
+    {"id":"fanuc-tool-5","line":5,"type":"tool","text":"T1 M6"}
+  ]
+}

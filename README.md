@@ -33,9 +33,11 @@ Supports two dialects:
 ## Development
 
 ```bash
-npm install
+npm ci
 npm run tauri dev
 ```
+
+Type check and unit tests: `npm run check` and `npm test`. Setup, conventions, the full list of checks and the macOS runtime harness are described in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Build
 
@@ -49,6 +51,10 @@ Installers are written to `src-tauri/target/release/bundle/`.
 
 Scope, roadmap and feature notes are in [docs/planning](docs/planning/README.md).
 
+## Contributing
+
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+
 ## License
 
-MIT
+MIT. Third-party license notices are generated into `src/lib/data/licenses.json` (`npm run licenses`).

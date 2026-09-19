@@ -1,0 +1,11 @@
+{
+  "dialect": "fanuc-gcode",
+  "items": [
+    {"id":"fanuc-cmt-1","line":1,"type":"comment","text":"(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)"},
+    {"id":"fanuc-cmt-4","line":4,"type":"comment","text":"(T1 M6)"},
+    {"id":"fanuc-cmt-5","line":5,"type":"comment","text":"(TOOL LIST: T1 M6 IN A COMMENT IS NOT A TOOL CHANGE)"},
+    {"id":"fanuc-tool-8","line":8,"type":"tool","text":"T2 M6 (D8 DRILL)"},
+    {"id":"fanuc-tool-13","line":13,"type":"tool","text":"G0 Z25. (NEXT: T1 M6)"},
+    {"id":"fanuc-cmt-17","line":17,"type":"comment","text":"(INDENTED COMMENT)"}
+  ]
+}

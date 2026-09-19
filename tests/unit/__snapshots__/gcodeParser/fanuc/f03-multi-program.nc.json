@@ -1,0 +1,8 @@
+{
+  "dialect": "fanuc-gcode",
+  "items": [
+    {"id":"fanuc-cmt-1","line":1,"type":"comment","text":"(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)"},
+    {"id":"fanuc-cmt-4","line":4,"type":"comment","text":"(T5  D12 FLAT END MILL)"},
+    {"id":"fanuc-cmt-5","line":5,"type":"comment","text":"(T6  D6 BALL END MILL)"}
+  ]
+}

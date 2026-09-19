@@ -1,0 +1,8 @@
+{
+  "dialect": "fanuc-gcode",
+  "items": [
+    {"id":"fanuc-cmt-1","line":1,"type":"comment","text":"(WRITTEN FOR GEDIT - SYNTHETIC FILE WITH COMMENTS ONLY)"},
+    {"id":"fanuc-cmt-2","line":2,"type":"comment","text":"(NO ADDRESS WORDS FOLLOW)"},
+    {"id":"fanuc-cmt-3","line":3,"type":"comment","text":"(OPERATOR NOTE: CHECK THE CLAMPING)"}
+  ]
+}

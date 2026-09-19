@@ -1,0 +1,25 @@
+# M0: the behaviour the Phase 1 rewrite must not change.
+# Run with: tests/runtime/suite.sh tests/runtime/suites/m0.txt
+
+# The app as a whole: startup, CSP, files, scripts, fs scope, the close guard.
+m0-main
+# Real mouse and keyboard input, including Cmd+S and Cmd+Q.
+m0-trusted
+
+# Closing and quitting, answered on the real alert.
+m0-native-answer
+m0-dirty-close
+m0-dirty-close-save
+m0-double-close
+m0-dirty-quit
+m0-clean-quit
+
+# Encodings, byte-exact round trips, and content gEdit refuses to edit.
+m0-encoding
+m0-fix3
+
+# Which Python runs a script.
+m0-py3-default
+m0-py3-zdotdir
+m0-py3-stub
+m0-py3-override

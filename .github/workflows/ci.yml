@@ -1,0 +1,169 @@
+# Continuous integration: type check, unit tests, frontend build and notices on Linux;
+# Rust checks and debug bundles on macOS, Windows and Linux.
+# The runtime harness (tests/runtime) drives native macOS UI and is run locally only.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Tauri's Linux build dependencies (WebKitGTK 4.1 and friends)
+  LINUX_PACKAGES: libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+jobs:
+  checks:
+    name: Checks
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      # licenses:check reads the crate graph with `cargo metadata --offline`, and the
+      # harness source is formatted with rustfmt
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-targets: false
+
+      - run: npm ci
+      - name: Fetch crates
+        run: cargo fetch --locked --manifest-path src-tauri/Cargo.toml
+
+      - name: Type check (svelte-check)
+        run: npm run check
+      - name: Unit tests (vitest)
+        run: npm test
+      - name: Build frontend
+        run: npm run build
+      - name: Third-party notices are current
+        run: npm run licenses:check
+      - name: Versions match
+        run: npm run versions:check
+      - name: Bundle has no eval and no test hook
+        shell: bash
+        run: |
+          # `Function(…)` counts with and without `new`: minifiers and globalThis
+          # polyfills drop the `new`, and the CSP refuses both.
+          if grep -rnE '(^|[^a-zA-Z0-9_.$])(Function|eval)[[:space:]]*\(' build/_app; then
+            echo "::error::The bundle contains eval or Function() (blocked by the CSP)."
+            exit 1
+          fi
+          if grep -rq '__gedit' build/_app; then
+            echo "::error::The production bundle contains the test hook (__gedit)."
+            exit 1
+          fi
+
+      # tests/runtime/harness/harness.rs is not part of the src-tauri crate, so the
+      # `rust` job's `cargo fmt` never sees it.
+      - name: Harness Rust is formatted
+        run: rustfmt --check --edition 2021 tests/runtime/harness/harness.rs
+
+  rust:
+    name: Rust (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $LINUX_PACKAGES
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      # generate_context! embeds the frontend, so build/ must exist before cargo runs
+      - run: npm ci
+      - run: npm run build
+
+      - name: cargo fmt
+        working-directory: src-tauri
+        run: cargo fmt --check
+      - name: cargo clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets --locked -- -D warnings
+      - name: cargo test
+        working-directory: src-tauri
+        run: cargo test --locked
+
+  bundle:
+    name: Debug bundle (${{ matrix.os }})
+    needs: checks
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      # patchelf is needed for the AppImage
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $LINUX_PACKAGES patchelf
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - run: npm ci
+      # Runs `npm run build` itself (beforeBuildCommand); unsigned debug bundles
+      - name: tauri build --debug
+        run: npx tauri build --debug
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: gedit-debug-${{ matrix.os }}
+          path: |
+            src-tauri/target/debug/bundle/dmg/*.dmg
+            src-tauri/target/debug/bundle/msi/*.msi
+            src-tauri/target/debug/bundle/nsis/*.exe
+            src-tauri/target/debug/bundle/deb/*.deb
+            src-tauri/target/debug/bundle/rpm/*.rpm
+            src-tauri/target/debug/bundle/appimage/*.AppImage
+          if-no-files-found: error
+          retention-days: 14

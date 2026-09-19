@@ -1,0 +1,9 @@
+{
+  "dialect": "heidenhain-klartext",
+  "items": [
+    {"id":"heid-cmt-2","line":2,"type":"comment","text":"1 ; WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"id":"heid-tool-6","line":6,"type":"tool","text":"5 TOOL CALL \"MILL_D10\" Z S5000 F800 DL+0.1"},
+    {"id":"heid-tool-15","line":15,"type":"tool","text":"14 TOOL CALL QS1 Z S2800"},
+    {"id":"heid-tool-21","line":21,"type":"tool","text":"20 TOOL CALL 12.1 Z S1800 DR-0.02"}
+  ]
+}
