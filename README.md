@@ -45,6 +45,10 @@ npm run tauri build
 
 Installers are written to `src-tauri/target/release/bundle/`.
 
+## Planning
+
+Scope, roadmap and feature notes are in [docs/planning](docs/planning/README.md).
+
 ## License
 
 MIT
