@@ -32,7 +32,7 @@
     <div class="panel-body">
       {#if isRunning}
         <div class="loading-state">
-          <Loader2 size={24} class="spinner text-[var(--accent)]" />
+          <Loader2 size={24} class="animate-spin text-[var(--accent)]" />
           <span>Running script...</span>
         </div>
       {:else if hasOutput}
@@ -188,19 +188,6 @@
     padding: 32px 16px;
     color: var(--text-muted);
     font-size: 12px;
-  }
-
-  .spinner {
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
   }
 
   .empty-state {

@@ -25,12 +25,12 @@ export function parseProgramStructure(code: string, language: string): Structure
         items.push({ id: `fanuc-tool-${lineNumber}`, line: lineNumber, type: 'tool', text: trimmed });
       }
     } else if (language === 'heidenhain-klartext') {
-      // Heidenhain Comment check: Line starts with ';' with no previous commands
-      if (trimmed.startsWith(';')) {
+      // Heidenhain Comment check: ';' with no previous commands (optionally after the block number)
+      if (/^(?:\d+\s*)?;/.test(trimmed)) {
         items.push({ id: `heid-cmt-${lineNumber}`, line: lineNumber, type: 'comment', text: trimmed });
       }
-      // Heidenhain Tool check: "TOOL CALL..."
-      else if (/^TOOL CALL/i.test(trimmed)) {
+      // Heidenhain Tool check: "TOOL CALL..." (optionally after the block number, e.g. "5 TOOL CALL 1 Z S3000")
+      else if (/^(?:\d+\s+)?TOOL\s+CALL\b/i.test(trimmed)) {
         items.push({ id: `heid-tool-${lineNumber}`, line: lineNumber, type: 'tool', text: trimmed });
       }
     }

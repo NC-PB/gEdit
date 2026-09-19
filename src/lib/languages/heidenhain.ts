@@ -1,4 +1,6 @@
-export const heidenhainLanguageDef = {
+import type * as Monaco from 'monaco-editor/esm/vs/editor/editor.api.js';
+
+export const heidenhainLanguageDef: Monaco.languages.IMonarchLanguage = {
   defaultToken: 'invalid',
   ignoreCase: true,
 
@@ -23,9 +25,11 @@ export const heidenhainLanguageDef = {
   }
 };
 
-export function getHeidenhainCompletions(monaco: any) {
+export function getHeidenhainCompletions(monaco: typeof Monaco): Monaco.languages.CompletionItemProvider {
   return {
-    provideCompletionItems: (model: any, position: any) => {
+    provideCompletionItems: (model, position) => {
+      const word = model.getWordUntilPosition(position);
+      const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
       const suggestions = [
         {
           label: 'CYCL DEF 200',
@@ -52,7 +56,7 @@ export function getHeidenhainCompletions(monaco: any) {
           detail: 'L X.. Y.. Z..'
         }
       ];
-      return { suggestions };
+      return { suggestions: suggestions.map((s) => ({ ...s, range })) };
     }
   };
 }

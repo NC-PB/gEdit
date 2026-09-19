@@ -1,18 +1,21 @@
 <script lang="ts">
-  import { FileUp, Save, Plus, Type, Code2, Settings, FolderOpen, ChevronDown, Play, FolderCog } from 'lucide-svelte';
+  import { FileUp, Save, FilePen, Plus, Type, Code2, Settings, FolderOpen, ChevronDown, Play, FolderCog } from 'lucide-svelte';
   import { activeBlocksLib } from '../data/blocks/index';
+  import type { Dialect } from '../utils/dialects';
+  import { shortcutLabel } from '../utils/platform';
 
-  export let activeLanguage: string = 'fanuc-gcode';
+  export let activeLanguage: Dialect = 'fanuc-gcode';
 
   export let onOpen: () => void;
   export let onSave: () => void;
+  export let onSaveAs: () => void;
   export let onInsertBlock: (blockType: string) => void;
   export let onSetScriptsFolder: () => void;
   export let onRunScript: (scriptName: string) => void;
   export let scriptsFolder: string = '';
   export let availableScripts: string[] = [];
   
-  const languages = [
+  const languages: { value: Dialect; label: string }[] = [
     { value: 'fanuc-gcode', label: 'Fanuc G-Code' },
     { value: 'heidenhain-klartext', label: 'Heidenhain Klartext' }
   ];
@@ -23,6 +26,12 @@
   $: currentBlocks = activeBlocksLib[activeLanguage] || {};
   $: primaryBlocks = Object.entries(currentBlocks).filter(([_, b]) => b.Button);
   $: secondaryBlocks = Object.entries(currentBlocks).filter(([_, b]) => !b.Button);
+
+  function handleMoreBlocks(e: Event & { currentTarget: HTMLSelectElement }) {
+    const select = e.currentTarget;
+    if (select.value) onInsertBlock(select.value);
+    select.value = '';
+  }
 </script>
 
 <style>
@@ -188,13 +197,17 @@
   <div class="ribbon-body">
     {#if activeTab === 'home'}
       <div class="ribbon-group">
-        <button class="ribbon-btn" on:click={onOpen} title="Open Workspace or File">
+        <button class="ribbon-btn" on:click={onOpen} title="Open File ({shortcutLabel('O')})">
           <FolderOpen size={24} class="btn-icon text-[#dcb67a]" />
           <span class="btn-label">Open</span>
         </button>
-        <button class="ribbon-btn" on:click={onSave} title="Save Current Document">
+        <button class="ribbon-btn" on:click={onSave} title="Save ({shortcutLabel('S')})">
           <Save size={24} class="btn-icon text-[#0078d4]" />
           <span class="btn-label">Save</span>
+        </button>
+        <button class="ribbon-btn" on:click={onSaveAs} title="Save As… ({shortcutLabel('S', true)})">
+          <FilePen size={24} class="btn-icon text-[#0078d4]" />
+          <span class="btn-label">Save As</span>
         </button>
         <div class="group-label">File</div>
       </div>
@@ -221,7 +234,7 @@
           <div class="flex items-center ml-2 border-l border-[var(--border-color)] pl-2 h-full pb-4">
             <div class="select-wrapper">
               <!-- svelte-ignore a11y-no-onchange -->
-              <select class="utility-select" style="padding-left: 8px; width: 140px;" on:change={(e) => { onInsertBlock(e.target.value); e.target.value = ''; }}>
+              <select class="utility-select" style="padding-left: 8px; width: 140px;" on:change={handleMoreBlocks}>
                 <option value="" disabled selected>More Blocks...</option>
                 {#each secondaryBlocks as [key, block]}
                   <option value={key} title={block.Description}>{block.Text}</option>

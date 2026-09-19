@@ -1,4 +1,6 @@
-export const fanucLanguageDef = {
+import type * as Monaco from 'monaco-editor/esm/vs/editor/editor.api.js';
+
+export const fanucLanguageDef: Monaco.languages.IMonarchLanguage = {
   defaultToken: 'invalid',
   ignoreCase: true,
 
@@ -16,9 +18,11 @@ export const fanucLanguageDef = {
   }
 };
 
-export function getFanucCompletions(monaco: any) {
+export function getFanucCompletions(monaco: typeof Monaco): Monaco.languages.CompletionItemProvider {
   return {
-    provideCompletionItems: (model: any, position: any) => {
+    provideCompletionItems: (model, position) => {
+      const word = model.getWordUntilPosition(position);
+      const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
       const suggestions = [
         {
           label: 'G81',
@@ -61,7 +65,7 @@ export function getFanucCompletions(monaco: any) {
           detail: 'G85 X.. Y.. Z.. R.. F..'
         }
       ];
-      return { suggestions };
+      return { suggestions: suggestions.map((s) => ({ ...s, range })) };
     }
   };
 }

@@ -2,7 +2,6 @@
 .DS_Store
 Thumbs.db
 *.swp
-*.lock
 *.log
 
 # Node
@@ -19,7 +18,6 @@ vite.config.ts.timestamp-*
 
 # Rust
 /src-tauri/target
-/src-tauri/Cargo.lock
 
 # Tauri
 /src-tauri/gen
@@ -37,3 +35,6 @@ vite.config.ts.timestamp-*
 *.njsproj
 *.sln
 *.sw?
+
+# Local tooling
+.codegraph/
