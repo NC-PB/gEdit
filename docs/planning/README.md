@@ -51,6 +51,7 @@ Not planned for now (full list in [roadmap.md](roadmap.md#not-planned)):
 | [scripting.md](scripting.md) | Script contract, metadata header, parameters, output modes, bundled library, external commands |
 | [settings-ui.md](settings-ui.md) | Preferences, storage layout, themes, shortcuts, UI layout |
 | [roadmap.md](roadmap.md) | Phases 0 to 3, backlog and not-planned list |
+| [phase-1-implementation.md](phase-1-implementation.md) | Execution plan for Phase 0 cleanup and Phase 1: architecture, milestones M0–M5, contracts, owner decisions |
 | [syntax/syntax-fanuc.md](syntax/syntax-fanuc.md) | Fanuc syntax notes for the CAM-output subset |
 | [syntax/syntax-heidenhain.md](syntax/syntax-heidenhain.md) | Heidenhain Klartext syntax notes |
 | [syntax/syntax-sinumerik.md](syntax/syntax-sinumerik.md) | Siemens Sinumerik syntax notes |
