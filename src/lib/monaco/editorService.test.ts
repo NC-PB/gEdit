@@ -186,6 +186,10 @@ interface FakeEditorInstance {
   model: FakeModel | null;
   position: { lineNumber: number; column: number };
   calls: string[];
+  /** The options `create()` was called with. */
+  createdWith: Record<string, unknown>;
+  /** One entry per `updateOptions()` call, in order. */
+  optionUpdates: Record<string, unknown>[];
   viewStates: string[];
   restored: string[];
   cursorListeners: (() => void)[];
@@ -203,7 +207,7 @@ interface FakeEditorInstance {
   focus(): void;
   hasTextFocus(): boolean;
   trigger(): void;
-  updateOptions(): void;
+  updateOptions(o: Record<string, unknown>): void;
   onDidChangeCursorPosition(cb: () => void): { dispose(): void };
   onDidChangeCursorSelection(cb: () => void): { dispose(): void };
   dispose(): void;
@@ -276,12 +280,14 @@ function fakeMonaco(): { api: Monaco; state: FakeMonaco } {
     return model;
   }
 
-  function makeEditor(): FakeEditorInstance {
+  function makeEditor(createdWith: Record<string, unknown>): FakeEditorInstance {
     let saved = 0;
     const editorInstance: FakeEditorInstance = {
       model: null,
       position: { lineNumber: 1, column: 1 },
       calls: [],
+      createdWith,
+      optionUpdates: [],
       viewStates: [],
       restored: [],
       cursorListeners: [],
@@ -315,7 +321,9 @@ function fakeMonaco(): { api: Monaco; state: FakeMonaco } {
       },
       hasTextFocus: () => false,
       trigger() {},
-      updateOptions() {},
+      updateOptions(o) {
+        editorInstance.optionUpdates.push(o);
+      },
       onDidChangeCursorPosition(cb) {
         editorInstance.cursorListeners.push(cb);
         return { dispose() {} };
@@ -346,9 +354,9 @@ function fakeMonaco(): { api: Monaco; state: FakeMonaco } {
       setModelLanguage(model: FakeModel, languageId: string) {
         model.languageId = languageId;
       },
-      create(element: unknown) {
+      create(element: unknown, options: Record<string, unknown>) {
         state.containers.push(element);
-        const instance = makeEditor();
+        const instance = makeEditor(options);
         state.editors.push(instance);
         return instance;
       },
@@ -578,6 +586,53 @@ describe('createEditorService with a fake Monaco', () => {
 
     expect(resolved).toBe(true);
     expect(h.state.editors).toHaveLength(1);
+  });
+
+  it('replays the editor options onto the editor a re-attach builds', async () => {
+    // G8 M2: the compare overlay unmounts `EditorHost` and mounts it again, so `attach()`
+    // runs a second time and `create()` starts from `EDITOR_OPTIONS`. Nothing re-applies
+    // the settings then — `installEditorSettings` and `setMonacoTheme` both hang off
+    // `ready`, which resolved on the first attach — so the theme and every settings-driven
+    // option used to revert until the user touched a setting.
+    const h = await attached();
+    const first = h.container();
+    await h.service.attach(first);
+    h.service.updateOptions({ theme: 'vs', fontSize: 22 });
+    h.service.updateOptions({ wordWrap: 'on' });
+
+    const second = h.container();
+    await h.service.attach(second);
+
+    expect(h.state.editors).toHaveLength(2);
+    // Every payload so far, shallow-merged, in one call on the new instance.
+    expect(h.state.editors[1].optionUpdates).toEqual([
+      { theme: 'vs', fontSize: 22, wordWrap: 'on' },
+    ]);
+    // A later change still reaches the current instance only.
+    h.service.updateOptions({ fontSize: 18 });
+    expect(h.state.editors[1].optionUpdates.at(-1)).toEqual({ fontSize: 18 });
+    expect(h.state.editors[0].optionUpdates).toEqual([
+      { theme: 'vs', fontSize: 22 },
+      { wordWrap: 'on' },
+    ]);
+  });
+
+  it('applies an option set before the first attach to the editor that appears', async () => {
+    // `app/theme.ts` runs during bootstrap, long before `EditorHost` has attached.
+    const h = await attached();
+    h.service.updateOptions({ theme: 'vs' });
+
+    await h.service.attach(h.container());
+
+    expect(h.state.editors[0].optionUpdates).toEqual([{ theme: 'vs' }]);
+    // The construction options are the fallback, not the settings (see EDITOR_OPTIONS).
+    expect(h.state.editors[0].createdWith.theme).toBe('vs-dark');
+  });
+
+  it('builds an editor with no option update when nothing was ever set', async () => {
+    const h = await attached();
+    await h.service.attach(h.container());
+    expect(h.state.editors[0].optionUpdates).toEqual([]);
   });
 
   it('answers from the queued text before Monaco is there, and from the model after', async () => {

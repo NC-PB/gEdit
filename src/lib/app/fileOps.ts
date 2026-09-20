@@ -646,6 +646,15 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
       await reportError(t('files.reloadFailed', { name: doc.title }), t(decoded.message.key, decoded.message.params));
       return;
     }
+    // The read above is an await, and on a share or a large file it is a long one. A
+    // reload that was started on a *clean* document — the AD-10 auto-reload — must not
+    // overwrite text the user typed while the file was being read: it is one undo step,
+    // but nothing would tell them it happened. The banner's explicit Reload starts on a
+    // dirty document and is meant to overwrite it, so it is unaffected. The caller sees
+    // the refusal in `doc.disk`, which has not moved (G8 M2).
+    const fresh = docs.get(id);
+    if (!fresh || fresh.path !== doc.path) return;
+    if (!doc.dirty && fresh.dirty) return;
     // One undo step, cursor line kept (§7.2).
     editor.replaceAll(id, decoded.text, { keepCursorLine: true });
     editor.markClean(id);

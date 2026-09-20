@@ -81,17 +81,24 @@ are a contract with the runtime harness: renaming one breaks scenarios in `tests
 
 ## Current files
 
-Each stub names its owning work package and what it must deliver. M1 fills in:
+Each stub names its owning work package and what it must deliver.
 
 | File | Owner | Feature |
 | --- | --- | --- |
 | `blocks.ts` | WP1.5 | Insert tab, built from the blocks JSON |
+| `compare.ts` | WP2.5 | compare with a document, a file or the saved version (overlay) |
 | `cursor.ts` | WP1.2 | cursor status item |
 | `encoding.ts` | WP1.6 | encoding and EOL status items and pickers |
+| `externalChange.ts` | WP2.3 | the external-change banner and the poll |
 | `files.ts` | WP1.6 | file commands, close guard, drag and drop, window title |
+| `help.ts` | WP2.4 | About and the shortcut reference |
+| `layoutPersist.ts` | WP2.3 | restores `ui.layout` and then follows it |
 | `palette.ts` | WP1.1 | `view.commandPalette` (F1) |
 | `profileSelect.ts` | WP1.6 | dialect profile status item and picker |
 | `programMap.ts` | WP1.5 | program map (left panel) |
+| `recent.ts` | WP2.3 | Recent dropdown, `file.openRecent`, `file.clearRecent` |
 | `scriptsV1.ts` | WP1.5 | v1 script UI in the bottom panel |
+| `settings.ts` | WP2.7 | the settings dialog, `settings.open` (Mod+,), reload on save |
 | `tabs.ts` | WP1.2 | next/previous/switch tab |
+| `theme.ts` | WP2.6 | `view.setTheme`, the settings → editor-option bridge |
 | `view.ts` | WP1.5 | panel toggles |

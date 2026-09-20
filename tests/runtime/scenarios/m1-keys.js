@@ -13,7 +13,11 @@
 
 import { scenario } from '../lib/index.js'
 
-/** §7.11 verbatim, for every command M1 registers with a key. */
+/**
+ * §7.11 verbatim, for every command M1 **and M2** register with a key. The check below is
+ * two-way, so every new default binding has to be added here (mergeA; WP2.5 §4.1).
+ * M2 is complete: `settings.open` (WP2.7) was the last unclaimed binding of §7.11.
+ */
 const SHORTCUTS = [
   ['file.new', 'Mod+N'],
   ['file.open', 'Mod+O'],
@@ -26,6 +30,8 @@ const SHORTCUTS = [
   ['view.prevTab', 'Ctrl+Shift+Tab'],
   ['view.switchTab', 'Mod+Alt+O'],
   ['view.commandPalette', 'F1'],
+  ['compare.with', 'Mod+Alt+C'],
+  ['settings.open', 'Mod+,'],
 ]
 
 scenario('m1-keys', { timeout: 180 }, async (h) => {

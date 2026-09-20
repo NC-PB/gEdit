@@ -128,19 +128,24 @@ scenario('m1-layout', { timeout: 180 }, async (h) => {
     max: vertical?.getAttribute('aria-valuemax'),
     tabIndex: vertical?.tabIndex,
   })
-  h.check('the panel is as wide as the splitter says', leftWidth() === now(vertical), { width: leftWidth(), valuenow: now(vertical) })
+  // The rendered width may land a fraction of a pixel under the value the splitter
+  // carries (`flex: 0 1 auto` next to a 1 px border), the same way the bottom panel's
+  // height does below: measured once at 291 px for a value of 292 (mergeA §3). The
+  // splitter's own value stays exact, so only the measurement gets the tolerance.
+  const asWideAs = (/** @type {number} */ target) => now(vertical) === target && Math.abs(leftWidth() - target) <= 1
+  h.check('the panel is as wide as the splitter says', asWideAs(now(vertical)), { width: leftWidth(), valuenow: now(vertical) })
 
   vertical?.focus()
   h.check('the splitter takes the focus', document.activeElement === vertical, document.activeElement?.getAttribute('role'))
   await h.nativeKeys([{ key: 'ArrowRight' }, { key: 'ArrowRight' }])
-  await h.waitFor(() => now(vertical) === 292, { timeout: 3000 })
-  h.check('two right arrows widen the side panel by two steps', now(vertical) === 292 && leftWidth() === 292, { valuenow: now(vertical), width: leftWidth() })
+  await h.waitFor(() => asWideAs(292), { timeout: 3000 })
+  h.check('two right arrows widen the side panel by two steps', asWideAs(292), { valuenow: now(vertical), width: leftWidth() })
   await h.nativeKeys([{ key: 'ArrowLeft' }])
-  await h.waitFor(() => now(vertical) === 276, { timeout: 3000 })
-  h.check('the left arrow narrows it again', now(vertical) === 276 && leftWidth() === 276, { valuenow: now(vertical), width: leftWidth() })
+  await h.waitFor(() => asWideAs(276), { timeout: 3000 })
+  h.check('the left arrow narrows it again', asWideAs(276), { valuenow: now(vertical), width: leftWidth() })
   await h.nativeKeys([{ key: 'Home' }])
-  await h.waitFor(() => now(vertical) === 160, { timeout: 3000 })
-  h.check('Home clamps it to the minimum', now(vertical) === 160 && leftWidth() === 160, { valuenow: now(vertical), width: leftWidth() })
+  await h.waitFor(() => asWideAs(160), { timeout: 3000 })
+  h.check('Home clamps it to the minimum', asWideAs(160), { valuenow: now(vertical), width: leftWidth() })
   await h.nativeKeys([{ key: 'End' }])
   await h.waitFor(() => now(vertical) === 640, { timeout: 3000 })
   h.check('End clamps it to the maximum, and the editor is still there', now(vertical) === 640 && !pageScrolls() && (h.q('editor-host')?.getBoundingClientRect().width ?? 0) > 100, {

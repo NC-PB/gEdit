@@ -1094,6 +1094,53 @@ describe('reloadFromDisk and readDisk', () => {
     expect(h.dialogs.calls.some((c) => c.kind === 'error')).toBe(true);
   });
 
+  it('abandons a reload of a clean document that went dirty while the file was read', async () => {
+    // G8 M2: the AD-10 auto-reload decides on a clean document and then awaits the read.
+    // On a share that is tens of milliseconds, and text typed in between used to be
+    // replaced with no warning at all (one undo step, but nothing says so).
+    const path = h.put('/nc/a.nc', 'nc/encoding/utf8-lf.nc');
+    const [id] = await h.files.open([path]);
+    const stamp = h.docs.get(id)?.disk;
+    h.fs.files.set(path, new TextEncoder().encode('G0 X5\nG0 X6\n'));
+    h.fs.mtimes.set(path, 9999);
+    const read = h.fs.readFile.bind(h.fs);
+    vi.spyOn(h.fs, 'readFile').mockImplementation(async (p: string) => {
+      const bytes = await read(p);
+      h.editor.type(id, 'typed while reading\n');
+      return bytes;
+    });
+
+    await h.files.reloadFromDisk(id);
+
+    expect(h.editor.getText(id)).toBe('typed while reading\n');
+    expect(h.docs.get(id)?.dirty).toBe(true);
+    // The stamp is the caller's signal that nothing happened (`app/external.ts`).
+    expect(h.docs.get(id)?.disk).toBe(stamp);
+    expect(h.dialogs.calls.some((c) => c.kind === 'error')).toBe(false);
+  });
+
+  it('still overwrites a document that was already modified when the reload was asked for', async () => {
+    // The banner's Reload: the user asked for the file to win, so an edit made while it
+    // was being read is not a reason to refuse.
+    const path = h.put('/nc/a.nc', 'nc/encoding/utf8-lf.nc');
+    const [id] = await h.files.open([path]);
+    h.editor.type(id, 'mine\n');
+    h.fs.files.set(path, new TextEncoder().encode('G0 X5\n'));
+    h.fs.mtimes.set(path, 9999);
+    const read = h.fs.readFile.bind(h.fs);
+    vi.spyOn(h.fs, 'readFile').mockImplementation(async (p: string) => {
+      const bytes = await read(p);
+      h.editor.type(id, 'mine, and more\n');
+      return bytes;
+    });
+
+    await h.files.reloadFromDisk(id);
+
+    expect(h.editor.getText(id)).toBe('G0 X5\n');
+    expect(h.docs.get(id)?.dirty).toBe(false);
+    expect(h.docs.get(id)?.disk?.mtimeMs).toBe(9999);
+  });
+
   it('readDisk decodes a file and answers null for one it cannot read', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const path = h.put('/nc/a.nc', 'nc/encoding/utf8-bom-crlf.nc');

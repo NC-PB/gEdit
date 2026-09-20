@@ -32,7 +32,16 @@ import type {
   Eol,
 } from '$lib/app/types';
 
-/** Editor construction options. WP2.6 replaces these with the settings-driven set. */
+/**
+ * Editor construction options: what the editor looks like for the few statements between
+ * `create()` and the replay of `updateOptions` below.
+ *
+ * They are **not** the app's settings. Every value here that a setting also drives
+ * (`theme`, `fontSize`, `fontFamily`, `minimap`) is overwritten synchronously at the end
+ * of `doAttach`, so these only decide the look of an editor that nobody ever configured —
+ * a unit test, or a build without `contrib/theme.ts`. `theme: 'vs-dark'` matches the
+ * `FALLBACK` of `app/theme.ts` and the dark palette on `:root` in `app.css`.
+ */
 const EDITOR_OPTIONS: MonacoApi.editor.IStandaloneEditorConstructionOptions = {
   model: null,
   theme: 'vs-dark',
@@ -208,6 +217,23 @@ export function createEditorService(deps: EditorServiceDeps): EditorService {
   let currentId: DocId | null = docs.getActiveId();
   let cursorScheduled = false;
 
+  /**
+   * Every option ever handed to `updateOptions`, shallow-merged, so that a new editor
+   * instance can be brought back to the state the old one was in (G8 M2).
+   *
+   * `attach()` runs more than once: the compare overlay unmounts `EditorHost` and mounts
+   * it again, and `doAttach` then builds a **second** `IStandaloneCodeEditor` from
+   * `EDITOR_OPTIONS`. Without this replay the user's theme and every settings-driven
+   * editor option silently fell back to the construction defaults until the next settings
+   * change — and because `create()` feeds its `theme` to the *global* standalone theme
+   * service, the whole app went back to `vs-dark`.
+   *
+   * The subscribers cannot do it themselves: `installEditorSettings` and `setMonacoTheme`
+   * hang off `ready`, which resolves on the FIRST attach only. Keeping the payload here is
+   * what makes the re-apply attach-scoped instead of first-attach-scoped.
+   */
+  let appliedOptions: Record<string, unknown> = {};
+
   const contentEvent = emitter<[DocId, ContentChange]>();
   const cursorEvent = emitter<[CursorInfo]>();
   const createEvent = emitter<[DocId]>();
@@ -354,6 +380,13 @@ export function createEditorService(deps: EditorServiceDeps): EditorService {
     for (const disposable of editorDisposables.splice(0)) disposable.dispose();
     instance?.dispose();
     instance = api.editor.create(element, EDITOR_OPTIONS);
+    // In the same synchronous block as `create`, so nothing is ever painted with the
+    // construction defaults over the user's settings (see `appliedOptions`).
+    if (Object.keys(appliedOptions).length > 0) {
+      instance.updateOptions(
+        appliedOptions as MonacoApi.editor.IEditorOptions & MonacoApi.editor.IGlobalEditorOptions,
+      );
+    }
     editorDisposables.push(
       instance.onDidChangeCursorPosition(scheduleCursor),
       instance.onDidChangeCursorSelection(scheduleCursor),
@@ -569,6 +602,9 @@ export function createEditorService(deps: EditorServiceDeps): EditorService {
     },
 
     updateOptions(o: Record<string, unknown>): void {
+      // Remembered before it is applied, so an option set while there is no editor (the
+      // theme, during startup) still reaches the one that appears later.
+      appliedOptions = { ...appliedOptions, ...o };
       instance?.updateOptions(
         o as MonacoApi.editor.IEditorOptions & MonacoApi.editor.IGlobalEditorOptions,
       );

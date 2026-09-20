@@ -15,7 +15,9 @@ import { commands } from '$lib/app/registry/commands';
 import { panels } from '$lib/app/registry/panels';
 import { ribbon } from '$lib/app/registry/ribbon';
 import { statusItems } from '$lib/app/registry/statusItems';
+import { compare } from '$lib/app/compare';
 import { dialogs } from '$lib/app/dialogs';
+import { external } from '$lib/app/external';
 import { files } from '$lib/app/fileOps';
 import { modals } from '$lib/app/modals';
 import { status } from '$lib/app/status';
@@ -23,6 +25,9 @@ import { editor } from '$lib/monaco/editorService';
 import { docs } from '$lib/stores/documents';
 import { layout } from '$lib/stores/layout';
 import { profiles } from '$lib/stores/profiles';
+import { recent } from '$lib/stores/recent';
+import { settings } from '$lib/stores/settings';
+import { uiState } from '$lib/stores/uiState';
 import { t } from '$lib/i18n';
 import type { AppContext } from '$lib/app/types';
 
@@ -40,4 +45,9 @@ export const ctx: AppContext = {
   layout,
   profiles,
   t,
+  settings,
+  uiState,
+  recent,
+  external,
+  compare,
 };

@@ -60,11 +60,18 @@
 
 {#if $currentModal}
   {@const request = $currentModal}
-  <!-- `data-modal` names the modal kind for the runtime harness (kebab-case, like the test ids). -->
+  <!--
+    `data-modal` names the modal kind for the runtime harness (kebab-case, like the test
+    ids). mergeA: only a QuickPick is addressed on the backdrop. A component modal draws
+    its own `Modal` frame (WP2.2), which carries `data-testid="modal"` with the dialog's
+    own `data-modal` ("about", "form", …); putting the id here as well nested two `modal`
+    elements and made a bare `h.q('modal')` find the backdrop instead of the dialog. The
+    backdrop keeps a test id of its own for the click-outside check.
+  -->
   <div
     class="modal-backdrop"
-    data-testid="modal"
-    data-modal={request.kind === 'quickPick' ? 'quick-pick' : 'component'}
+    data-testid={request.kind === 'quickPick' ? 'modal' : 'modal-backdrop'}
+    data-modal={request.kind === 'quickPick' ? 'quick-pick' : undefined}
   >
     <div class="modal-panel" bind:this={panel}>
       {#if request.kind === 'quickPick'}

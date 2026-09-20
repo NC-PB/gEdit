@@ -5,10 +5,15 @@
 @import "tailwindcss" source(none);
 @source "./**/*.{svelte,ts,js}";
 
-/* Every chrome colour is a token (plan §5 WP1.5). The values below are the dark theme;
-   WP2.6 adds the light set and the `gedit-dark` / `gedit-light` Monaco themes on top of
-   the same names, so no component has to change. Component styles use `var(--…)` only;
-   a literal colour outside this file is a bug.
+/* Every chrome colour is a token (plan §5 WP1.5). The values below are the dark theme,
+   which is also what a document without `data-theme` shows; `:root[data-theme='light']`
+   further down redefines the same names for the light one, so no component has to change.
+   M3 adds the `gedit-dark` / `gedit-light` Monaco themes on the same palette.
+   Component styles use `var(--…)` only; a literal colour outside this file is a bug.
+
+   `data-theme` is written by `app/theme.ts` (WP2.6): once from the system preference
+   while the bundle is evaluated, so a light desktop never sees the dark chrome, and again
+   from `appearance.theme` as soon as the settings are loaded.
 
    Names that existed before M1 (--bg-app, --bg-ribbon, --bg-panel, --text-main,
    --text-active, --text-muted, --accent, --accent-hover, --border-color, --success) keep
@@ -31,6 +36,10 @@
   /* Accent and lines */
   --accent: #0078d4;
   --accent-hover: #2b88d8;
+  /* Text drawn ON --accent (the primary modal button, the selected settings tab). It is a
+     token of its own because --text-active is chosen against --bg-*, and in the light
+     theme that is black — 3.3:1 on the blue, under AA (G8 M2). */
+  --text-on-accent: #ffffff;
   --border-color: #3e3e42;
 
   /* Feedback */
@@ -59,6 +68,57 @@
 
   font-family: var(--font-ui);
   color-scheme: dark;
+}
+
+/* The light theme: the same names, one level more specific, so `data-theme="light"` wins
+   over the dark block above and nothing else has to change. Text colours are kept at or
+   above the WCAG AA contrast ratio against the surface they are drawn on; `--danger`
+   stays the dark red of the dark theme because it is a *background* for white text, and
+   `--text-on-accent` is the one for `--accent`, for the same reason. */
+:root[data-theme='light'] {
+  /* Surfaces */
+  --bg-app: #ffffff;
+  --bg-ribbon: #f3f3f3;
+  --bg-panel: #f8f8f8;
+  --surface-hover: rgb(0 0 0 / 6%);
+  --surface-hover-border: rgb(0 0 0 / 12%);
+  --surface-active: rgb(0 0 0 / 10%);
+
+  /* Text */
+  --text-main: #1f1f1f;
+  --text-active: #000000;
+  --text-muted: #5f6368;
+  --text-disabled: #9a9a9a;
+
+  /* Accent and lines */
+  --accent: #005fb8;
+  --accent-hover: #004a93;
+  /* 6.3:1 on --accent, and 8.6:1 on --accent-hover. */
+  --text-on-accent: #ffffff;
+  --border-color: #d0d0d0;
+
+  /* Feedback */
+  --success: #0e7a43;
+  --info: #0b5cad;
+  --info-surface: rgb(11 92 173 / 8%);
+  --warning: #8a5300;
+  --danger: #c42b1c;
+  --danger-text: #b3261e;
+  --danger-surface: rgb(179 38 30 / 8%);
+
+  /* The status bar keeps its inverted contrast in both themes. */
+  --status-bg: #005fb8;
+  --status-text: #ffffff;
+
+  /* Program-map roles (the M3 profile palettes replace these). */
+  --nc-tool: #8a5300;
+  --nc-comment: #0e7a43;
+
+  /* Scrollbars */
+  --scrollbar-thumb: #c2c2c2;
+  --scrollbar-thumb-hover: #a6a6a6;
+
+  color-scheme: light;
 }
 
 body {

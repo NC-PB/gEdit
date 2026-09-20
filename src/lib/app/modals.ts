@@ -1,17 +1,21 @@
-// In-app modal UIs (plan §7.2, AD-6). Owner: WP1.1.
+// In-app modal UIs (plan §7.2, AD-6). Owner: WP1.1, with `prompt` and `form` from WP2.2.
 //
 // One modal at a time, rendered by `components/common/ModalHost.svelte`, which AppShell
 // mounts exactly once. `isOpen` suspends the key dispatcher while a modal is up.
-// M1 delivers `quickPick` and `open`; `prompt` and `form` arrive with the form framework
-// in M2 (WP2.2).
+// M1 delivered `quickPick` and `open`; M2 adds `prompt` and `form`, which are ordinary
+// `component` requests over `PromptInput` and `FormDialog` — the host needs no new kind,
+// and both dialogs are built on `Modal`, so Esc, Enter and the focus trap are the same
+// everywhere.
 //
 // A re-entrant call while a modal is open resolves `undefined` instead of queueing or
 // stealing the host, the same rule `dialogs.exclusive` follows for native dialogs.
 
 import { derived, writable, type Readable } from 'svelte/store';
 import type { Component } from 'svelte';
+import FormDialog from '$lib/components/forms/FormDialog.svelte';
+import PromptInput from '$lib/components/common/PromptInput.svelte';
 import type { FieldSpec } from '$lib/core/forms/types';
-import type { Modals, QuickPickItem } from '$lib/app/types';
+import type { Modals, Msg, QuickPickItem } from '$lib/app/types';
 
 /** What ModalHost renders. `resolve` closes the modal and settles the caller's promise. */
 export type ModalRequest =
@@ -54,8 +58,9 @@ function openModal<T>(build: (resolve: (value?: unknown) => void) => ModalReques
   });
 }
 
-function notUntil(milestone: string): never {
-  throw new Error(`not implemented: ${milestone}`);
+/** A dialog component of ours, seen through the erased prop type the host renders with. */
+function asModalComponent(c: unknown): Component<Record<string, unknown>> {
+  return c as Component<Record<string, unknown>>;
 }
 
 export const modals: Modals = {
@@ -72,23 +77,44 @@ export const modals: Modals = {
     }));
   },
 
-  async prompt(_o: {
+  prompt(o: {
     title: string;
     placeholder?: string;
     initial?: string;
-    validate?: (v: string) => string | null;
+    validate?: (v: string) => Msg | null;
   }): Promise<string | undefined> {
-    return notUntil('M2');
+    return openModal<string>((resolve) => ({
+      kind: 'component',
+      component: asModalComponent(PromptInput),
+      props: {
+        title: o.title,
+        placeholder: o.placeholder,
+        initial: o.initial,
+        validate: o.validate,
+      },
+      resolve,
+    }));
   },
 
-  async form(_o: {
+  form(o: {
     title: string;
     fields: FieldSpec[];
     values?: Record<string, unknown>;
     okLabel?: string;
     context?: { addresses?: string[] };
   }): Promise<Record<string, unknown> | undefined> {
-    return notUntil('M2');
+    return openModal<Record<string, unknown>>((resolve) => ({
+      kind: 'component',
+      component: asModalComponent(FormDialog),
+      props: {
+        title: o.title,
+        fields: o.fields,
+        values: o.values,
+        okLabel: o.okLabel,
+        context: o.context,
+      },
+      resolve,
+    }));
   },
 
   open<P extends Record<string, unknown>, R>(

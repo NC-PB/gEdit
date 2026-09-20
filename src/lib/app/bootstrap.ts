@@ -3,13 +3,18 @@
 //
 // The order is fixed:
 //   1. set the command context provider
-//   2. load the contributions (this is where the initial untitled document appears, WP1.6)
-//   3. install the window key dispatcher
-//   4. watch the state behind the context, so the ribbon re-evaluates enablement
-//   5. install the test hook
-//   6. once Monaco is up, install the Monaco bridge and flip `appReady` (`data-ready="1"`)
+//   2. read settings.json and state.json (P2): the contributions build their commands and
+//      panels from the effective settings and restore the saved layout, so both have to
+//      be in memory first. Neither call may throw — a broken file falls back to the
+//      defaults and the store shows the notice — so a failure here is logged and startup
+//      continues.
+//   3. load the contributions (this is where the initial untitled document appears, WP1.6)
+//   4. install the window key dispatcher
+//   5. watch the state behind the context, so the ribbon re-evaluates enablement
+//   6. install the test hook
+//   7. once Monaco is up, install the Monaco bridge and flip `appReady` (`data-ready="1"`)
 //
-// Step 6 is deliberately NOT awaited before the rest: `editor.ready` only resolves after
+// Step 7 is deliberately NOT awaited before the rest: `editor.ready` only resolves after
 // `EditorHost` has called `attach()`, so awaiting it first would deadlock the shell it is
 // waiting for. It rejects when Monaco cannot load; the shell keeps working without an
 // editor and `data-ready` stays "0", which is what the M0 build did too.
@@ -30,6 +35,8 @@ import { getMonaco, type Monaco } from '$lib/monaco/setup';
 import { docs } from '$lib/stores/documents';
 import { layout } from '$lib/stores/layout';
 import { profiles } from '$lib/stores/profiles';
+import { settings } from '$lib/stores/settings';
+import { uiState } from '$lib/stores/uiState';
 import { files } from '$lib/app/fileOps';
 import { isScriptRunning, scriptRunning } from '$lib/components/panels/scriptsV1State';
 import type { CommandContext, Disposable } from '$lib/app/types';
@@ -118,6 +125,10 @@ export function buildTestHook(readyPromise: Promise<void>): GeditTestHook {
 export interface BootstrapDeps {
   setContextProvider: (fn: () => CommandContext) => void;
   commandContext: () => CommandContext;
+  /** `settings.load()` (WP2.6); the result is the store's to report, not ours. */
+  loadSettings: () => Promise<unknown>;
+  /** `uiState.load()` (WP2.3). */
+  loadUiState: () => Promise<unknown>;
   loadContributions: () => Promise<Disposable>;
   installDispatcher: () => Disposable;
   watchContext: (notify: () => void) => Disposable;
@@ -141,6 +152,24 @@ const EMPTY_CONTEXT: CommandContext = {
   scriptRunning: false,
 };
 
+/**
+ * Step 2: `settings.json` and `state.json`, in that order (settings decide how much of
+ * the UI state is honoured). A rejection is logged and swallowed, because the app has to
+ * start even when the config folder is unreadable.
+ */
+async function loadPersisted(deps: Pick<BootstrapDeps, 'loadSettings' | 'loadUiState'>): Promise<void> {
+  try {
+    await deps.loadSettings();
+  } catch (err) {
+    console.error('settings could not be loaded; using the defaults', err);
+  }
+  try {
+    await deps.loadUiState();
+  } catch (err) {
+    console.error('the saved UI state could not be loaded', err);
+  }
+}
+
 export function createStartApp(deps: BootstrapDeps): () => Promise<Disposable> {
   return async function startApp(): Promise<Disposable> {
     let disposed = false;
@@ -152,6 +181,12 @@ export function createStartApp(deps: BootstrapDeps): () => Promise<Disposable> {
 
     deps.setContextProvider(deps.commandContext);
     add(() => deps.setContextProvider(() => EMPTY_CONTEXT));
+
+    // Persisted state first: the contributions read the effective settings while they
+    // register, and `layoutPersist` (WP2.3) restores the layout from `uiState` in its
+    // `activate()`. Both loaders own their own error reporting and are contracted not to
+    // throw; a broken one must still leave a usable editor behind.
+    await loadPersisted(deps);
 
     add(await deps.loadContributions());
     add(deps.installDispatcher());
@@ -201,6 +236,8 @@ export function createStartApp(deps: BootstrapDeps): () => Promise<Disposable> {
 export const startApp: () => Promise<Disposable> = createStartApp({
   setContextProvider,
   commandContext,
+  loadSettings: () => settings.load(),
+  loadUiState: () => uiState.load(),
   loadContributions,
   installDispatcher,
   watchContext,

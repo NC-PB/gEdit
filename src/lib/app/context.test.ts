@@ -24,13 +24,18 @@ const M1_SERVICES = [
   't',
 ] as const;
 
+/** What P2 adds (plan §7.3). The singletons are stubs on `m2/base`; the keys are not. */
+const M2_SERVICES = ['settings', 'uiState', 'recent', 'external', 'compare'] as const;
+
+const SERVICES = [...M1_SERVICES, ...M2_SERVICES];
+
 describe('app context', () => {
-  it('exposes every M1 service', () => {
-    expect(Object.keys(ctx).sort()).toEqual([...M1_SERVICES].sort());
+  it('exposes every M1 and M2 service', () => {
+    expect(Object.keys(ctx).sort()).toEqual([...SERVICES].sort());
   });
 
   it('holds real singletons, not placeholders', () => {
-    for (const name of M1_SERVICES) {
+    for (const name of SERVICES) {
       expect(ctx[name], name).toBeTruthy();
     }
     expect(typeof ctx.t).toBe('function');

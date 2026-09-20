@@ -2625,6 +2625,14 @@
       "textId": "cargo:tauri@2.11.5"
     },
     {
+      "name": "tauri-plugin-window-state",
+      "version": "2.4.1",
+      "license": "Apache-2.0 OR MIT",
+      "repository": "https://github.com/tauri-apps/plugins-workspace",
+      "source": "cargo",
+      "textId": "cargo:tauri@2.11.5"
+    },
+    {
       "name": "tauri-runtime",
       "version": "2.11.3",
       "license": "Apache-2.0 OR MIT",

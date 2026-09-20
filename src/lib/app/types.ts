@@ -8,15 +8,18 @@
 // home and is imported only from it.
 //
 // Types that arrive in a later milestone live in their own home file and are imported
-// here as placeholders: `Profile`/`CompiledProfile` (core/profiles/types.ts, P3) and
-// `FieldSpec` (core/forms/types.ts, P2). The §7.3 service contracts (settings, uiState,
-// recent, external, compare, codes, outline, transforms, results, bookmarks, scripts)
-// are added to this file by the P2 to P5 preludes, together with `AppContext`'s fields.
+// here: `Profile`/`CompiledProfile` (core/profiles/types.ts, still a placeholder until
+// P3), `FieldSpec` (core/forms/types.ts, P2), `Settings` (core/settings/schema.ts, P2)
+// and the wire types of the Rust commands (platform/commands.ts). The §7.3 service
+// contracts for M3 to M5 (codes, outline, transforms, results, bookmarks, scripts) are
+// added to this file by the P3 to P5 preludes, together with `AppContext`'s fields.
 
 import type { Component } from 'svelte';
 import type { Readable } from 'svelte/store';
 import type { FieldSpec } from '$lib/core/forms/types';
+import type { Settings } from '$lib/core/settings/schema';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
+import type { ConfigPaths, RecentEntry } from '$lib/platform/commands';
 
 // ---------------------------------------------------------------------------
 // §7.1 Registries and contributions
@@ -364,7 +367,13 @@ export interface Modals {
     title: string;
     placeholder?: string;
     initial?: string;
-    validate?: (v: string) => string | null;
+    /**
+     * A `Msg` while the value is not acceptable, else null. A **key**, not display text:
+     * `PromptInput` puts `msg.key` in `data-error`, which is what §7.9 says that attribute
+     * carries everywhere else (`FormRenderer` does the same), so one runtime check works
+     * against both (G8 M2).
+     */
+    validate?: (v: string) => Msg | null;
   }): Promise<string | undefined>;
   form(o: {
     title: string;
@@ -453,13 +462,91 @@ export interface ProfileRegistry {
   compiled(id: string): CompiledProfile;
 }
 
+// ---------------------------------------------------------------------------
+// §7.3 Services added in M2: settings, UI state, recent files, external changes, compare
+// ---------------------------------------------------------------------------
+
+/** stores/settings.ts → `export const settings: SettingsStore` (owner: WP2.6) */
+export interface SettingsStore {
+  /** The effective values: `DEFAULTS` with the user's valid values applied. */
+  readonly values: Readable<Settings>;
+  get<K extends keyof Settings>(k: K): Settings[K];
+  /** Called once by `bootstrap`, before the contributions load. Never throws. */
+  load(): Promise<{ error?: string; warnings: string[] }>;
+  /** Applies `patch` and writes only the non-default values, with sorted keys and `$version`. */
+  save(patch: Partial<Settings>): Promise<void>;
+  /** Puts `keys` back to their defaults and writes the file ("Reset category"). */
+  reset(keys: (keyof Settings)[]): Promise<void>;
+  /** Re-reads the file, for when the user saved `settings.json` as a document (WP2.7). */
+  reloadFromDisk(): Promise<void>;
+  /** Where the app's files live; null until `load()` has answered. */
+  readonly paths: Readable<ConfigPaths | null>;
+}
+
+/** The `ui` member of `state.json` (plan §7.7). The webview owns it; Rust merges it in. */
+export interface UiState {
+  layout: Partial<LayoutState>;
+  /** Last-used form values, by form key: `transform:<id>`, `script:<scriptId>`, ... */
+  lastParams: Record<string, Record<string, unknown>>;
+  lastScript: string | null;
+}
+
+/** stores/uiState.ts → `export const uiState: UiStateStore` (owner: WP2.3) */
+export interface UiStateStore {
+  readonly state: Readable<UiState>;
+  /** Called once by `bootstrap`, before the contributions load. Never throws. */
+  load(): Promise<void>;
+  /** Replaces the state and schedules a save 1 s later, so dragging a splitter writes once. */
+  update(fn: (s: UiState) => UiState): void;
+  getLastParams(key: string): Record<string, unknown> | undefined;
+  setLastParams(key: string, v: Record<string, unknown>): void;
+  /** Writes a pending change now; `files.onWillQuit` awaits this. */
+  flush(): Promise<void>;
+}
+
+/** stores/recent.ts → `export const recent: RecentService` (owner: WP2.3) */
+export interface RecentService {
+  readonly list: Readable<RecentEntry[]>;
+  refresh(): Promise<void>;
+  /** Only for a path the fs scope already allows; Rust refuses anything else (AD-9). */
+  touch(path: string): Promise<void>;
+  remove(path: string): Promise<void>;
+  clear(): Promise<void>;
+}
+
+/** app/external.ts → `export const external: ExternalChangeService` (owner: WP2.3) */
+export interface ExternalChangeService {
+  /** Starts the poll (2 s while the window has focus, plus focus and visibility events). */
+  start(): Disposable;
+  checkNow(): Promise<void>;
+  /** Re-reads the file as one undo step, keeping the cursor line. */
+  reload(id: DocId): Promise<void>;
+  /** Keeps the buffer, sets `metaDirty` and restamps, so the banner does not come back. */
+  keepMine(id: DocId): void;
+}
+
+/** What the modified side of a comparison is held against. */
+export type CompareSource =
+  | { kind: 'document'; docId: DocId }
+  | { kind: 'file'; path: string }
+  | { kind: 'saved' };
+
+/** app/compare.ts → `export const compare: CompareService` (owner: WP2.5) */
+export interface CompareService {
+  /** The open comparison, or null. `title` is already translated. */
+  readonly session: Readable<{ docId: DocId; source: CompareSource; title: string } | null>;
+  /** False when the comparison cannot be built: over 50 MB (F8), missing file, ... */
+  open(docId: DocId, source: CompareSource): Promise<boolean>;
+  /** Disposes any temporary model and restores the editor's view state. */
+  close(): void;
+}
+
 /**
  * app/context.ts → `export const ctx: AppContext`
  *
  * The aggregate the test hook exposes (§7.9). It only collects the singletons; features
  * import the service modules they need directly. Later preludes add:
- * P2 settings, uiState, recent, external, compare; P3 codes, outline;
- * P4 transforms, results, bookmarks; P5 scripts.
+ * P3 codes, outline; P4 transforms, results, bookmarks; P5 scripts.
  */
 export interface AppContext {
   commands: CommandRegistry;
@@ -475,4 +562,10 @@ export interface AppContext {
   layout: LayoutStore;
   profiles: ProfileRegistry;
   t: Translate;
+  // P2
+  settings: SettingsStore;
+  uiState: UiStateStore;
+  recent: RecentService;
+  external: ExternalChangeService;
+  compare: CompareService;
 }

@@ -1,6 +1,6 @@
-// Startup (plan §5 WP1.5): the fixed order of the six steps, the disposer, and the two
-// pieces that can be checked against the real singletons in node - the command context
-// and the test hook - before any document or editor exists.
+// Startup (plan §5 WP1.5, P2): the fixed order of the seven steps, the disposer, and the
+// two pieces that can be checked against the real singletons in node - the command
+// context and the test hook - before any document or editor exists.
 
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -46,6 +46,8 @@ function harness(over: Partial<BootstrapDeps> = {}): Harness {
   const deps: BootstrapDeps = {
     setContextProvider: () => log.push('setContextProvider'),
     commandContext: () => CONTEXT,
+    loadSettings: async () => log.push('loadSettings'),
+    loadUiState: async () => log.push('loadUiState'),
     loadContributions: async () => step('loadContributions'),
     installDispatcher: () => step('installDispatcher'),
     watchContext: () => step('watchContext'),
@@ -68,11 +70,13 @@ function harness(over: Partial<BootstrapDeps> = {}): Harness {
 }
 
 describe('startApp', () => {
-  it('runs the six steps in the order the plan fixes', async () => {
+  it('runs the seven steps in the order the plan fixes', async () => {
     const h = harness();
     await createStartApp(h.deps)();
     expect(h.log).toEqual([
       'setContextProvider',
+      'loadSettings',
+      'loadUiState',
       'loadContributions',
       'installDispatcher',
       'watchContext',
@@ -150,6 +154,19 @@ describe('startApp', () => {
       'dispose loadContributions',
       'setContextProvider',
     ]);
+  });
+
+  // A config folder that cannot be read must not cost the user their editor.
+  it('starts anyway when the persisted state cannot be read', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const h = harness({
+      loadSettings: () => Promise.reject(new Error('EACCES settings.json')),
+      loadUiState: () => Promise.reject(new Error('EACCES state.json')),
+    });
+    await createStartApp(h.deps)();
+    expect(h.log).toContain('loadContributions');
+    expect(error).toHaveBeenCalledTimes(2);
+    error.mockRestore();
   });
 
   it('disposes a bridge that arrives after the shutdown', async () => {

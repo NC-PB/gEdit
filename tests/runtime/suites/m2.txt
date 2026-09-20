@@ -1,0 +1,31 @@
+# M2: persistence and chrome — the settings, the state file, the recent files, the
+# external-change banner, comparing, the themes and About.
+# Run with: tests/runtime/suite.sh tests/runtime/suites/m0.txt tests/runtime/suites/m1.txt tests/runtime/suites/m2.txt
+
+# The settings file and the dialog: only the changed keys are written, a new value is
+# live, and a broken file costs the defaults plus a notice rather than the start.
+m2-settings
+
+# Light, dark and system: the CSS variables, Monaco and the native window.
+m2-theme
+
+# About, the third-party notices and the shortcut reference.
+m2-about
+
+# A file that changes under the editor: the silent reload, the banner and its three
+# answers, and the file that is taken away.
+m2-external
+
+# Comparing with the saved version, another tab and a file; the toolbar; the temporary
+# models; and the 50 MB guard. Slower: it generates a 56 MB file.
+m2-compare
+
+# Two runs sharing a HOME: the recent files come back and reopen without a dialog, and
+# a missing entry is marked. `-1` writes what `-2` reads, so keep them in this order.
+m2-recent-restart-1
+m2-recent-restart-2
+
+# Two runs sharing a HOME: the window geometry is written at exit and read at the next
+# start, and the settings, the ui state and the recent list survive side by side.
+m2-window-state-1
+m2-window-state-2
