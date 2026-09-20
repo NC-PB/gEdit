@@ -1,0 +1,9 @@
+{
+  "profile": "fanuc-gcode",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"program","line":3,"text":"O1234","endLine":14},
+    {"kind":"tool","line":4,"text":"T1","tool":"1","endLine":14},
+      {"kind":"end","line":12,"text":"M30"}
+  ]
+}

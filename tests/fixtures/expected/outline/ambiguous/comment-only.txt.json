@@ -1,0 +1,8 @@
+{
+  "profile": "fanuc-gcode",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC FILE WITH COMMENTS ONLY"},
+    {"kind":"comment","line":2,"text":"NO ADDRESS WORDS FOLLOW"},
+    {"kind":"comment","line":3,"text":"OPERATOR NOTE: CHECK THE CLAMPING"}
+  ]
+}

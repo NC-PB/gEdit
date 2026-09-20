@@ -14,7 +14,9 @@ scenario('m2-about', { timeout: 180 }, async (h) => {
   const ctx = /** @type {any} */ (h.app.ctx)
   const openFromRibbon = async (/** @type {string} */ command, /** @type {string} */ id) => {
     h.click(h.q('ribbon-tab', { tab: 'view' }))
-    await h.sleep(120)
+    // Wait for the button the tab switch is supposed to bring in, not for a fixed span:
+    // 120 ms is enough on an idle Mac and a guess on a loaded one.
+    await h.waitFor(() => !!h.q('cmd-button', { command }), { timeout: 5000 })
     const button = h.q('cmd-button', { command })
     if (!button) throw new Error(`no ribbon button for ${command}`)
     h.click(button)

@@ -1,0 +1,15 @@
+{
+  "profile": "heidenhain-klartext",
+  "items": [
+    {"kind":"program","line":1,"text":"BEGIN PGM H02_TOOL_NAMES MM","endLine":26},
+    {"kind":"comment","line":2,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"section","line":5,"text":"NAMED TOOL","endLine":5},
+    {"kind":"tool","line":6,"text":"MILL_D10 — NAMED TOOL","tool":"\"MILL_D10\"","endLine":14},
+      {"kind":"section","line":13,"text":"TOOL NAME FROM A STRING PARAMETER","endLine":14},
+    {"kind":"tool","line":15,"text":"QS1 — TOOL NAME FROM A STRING PARAMETER","tool":"QS1","endLine":20},
+      {"kind":"section","line":20,"text":"INDEXED TOOL","endLine":20},
+    {"kind":"tool","line":21,"text":"T12.1 — INDEXED TOOL","tool":"12.1","endLine":26},
+      {"kind":"end","line":24,"text":"M30"},
+      {"kind":"end","line":25,"text":"END PGM"}
+  ]
+}

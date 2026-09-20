@@ -29,8 +29,12 @@ below.
 - Hand-written files use LF, except the two CRLF files named below. Save them with an
   editor that keeps line endings.
 - New fixtures need a line in this file and, for `nc/`, an expectation in
-  `src/lib/utils/detectLanguage.test.ts` and a program-map snapshot
-  (`npx vitest run -u`, then review `tests/unit/__snapshots__/gcodeParser/`).
+  `expected/detect/fixtures.json` (read by `src/lib/core/profiles/detect.test.ts`, which
+  fails on a file it has no answer for) and an outline golden in
+  `tests/fixtures/expected/outline/`. `src/lib/core/profiles/outline.test.ts` walks every
+  openable `nc/` fixture, so a new one gets a golden of its own: run
+  `npx vitest run outline -u`, review the generated file, and commit it — CI fails on a
+  fixture whose golden is missing.
 
 ## `nc/fanuc/`: Fanuc-style ISO programs
 
@@ -80,6 +84,19 @@ All of them hold the same short milling program.
 | `nul-heavy.bin` | A comment line, then 512 bytes of which half are NUL: binary data. |
 | `utf16le-bom.nc` | UTF-16 LE with BOM (`FF FE`), CRLF. |
 | `utf16be-bom.nc` | UTF-16 BE with BOM (`FE FF`), CRLF. |
+
+## Expectations and golden files (M3)
+
+Not NC programs: tables that say what a module must answer. The sample lines in them are
+synthetic too, written for gEdit from `docs/planning/syntax/`. `tests/unit/fixtures.test.ts`
+walks `nc/` only, so these files are checked by the tests that read them.
+
+| File | Read by | Contents |
+|---|---|---|
+| `expected/detect/fixtures.json` | `src/lib/core/profiles/detect.test.ts` | The expected profile for every file under `nc/` (`fallback` and `refused` are answers too), plus `improvements`: the hand-written cases whose answer AD-11 detection changed against M0. The test asserts the key list equals the `nc/` listing, so a new fixture without an entry fails. |
+| `tokens/fanuc-gcode.json` | `src/lib/core/nc/tokenizer.test.ts` | 68 golden lines, 184 tokens. Each entry is `{ line, tokens }` plus an optional `prev` (the incoming `LineState`, default not-a-continuation) and an optional `state` (the expected outgoing one). An entry is compared on the fields it lists; whitespace tokens are left out. |
+| `tokens/heidenhain-klartext.json` | same | 67 golden lines, 323 tokens, same format. |
+| `numberformat.cases.json` | `src/lib/core/nc/numberFormat.test.ts` | 57 `formatNumber` cases: the decimal string, the written literal `original` (or `null`, parsed through `parseNumber`), the `NumberFormatOptions`, the expected text, and an optional `note`. |
 
 ## Generated at run time
 

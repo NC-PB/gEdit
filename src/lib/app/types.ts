@@ -8,16 +8,21 @@
 // home and is imported only from it.
 //
 // Types that arrive in a later milestone live in their own home file and are imported
-// here: `Profile`/`CompiledProfile` (core/profiles/types.ts, still a placeholder until
-// P3), `FieldSpec` (core/forms/types.ts, P2), `Settings` (core/settings/schema.ts, P2)
-// and the wire types of the Rust commands (platform/commands.ts). The §7.3 service
-// contracts for M3 to M5 (codes, outline, transforms, results, bookmarks, scripts) are
-// added to this file by the P3 to P5 preludes, together with `AppContext`'s fields.
+// here: `Profile`/`CompiledProfile` (core/profiles/types.ts, P3), `FieldSpec`
+// (core/forms/types.ts, P2), `Settings` (core/settings/schema.ts, P2), `NcToken`
+// (core/nc/types.ts, P3), the code database types (core/codes/types.ts, P3),
+// `OutlineItem` (core/profiles/outline.ts, P3) and the wire types of the Rust commands
+// (platform/commands.ts). The §7.3 service contracts for M4 and M5 (transforms, results,
+// bookmarks, scripts) are added to this file by the P4 and P5 preludes, together with
+// `AppContext`'s fields.
 
 import type { Component } from 'svelte';
 import type { Readable } from 'svelte/store';
+import type { CodeDb, CodeEntry, CodeLookup } from '$lib/core/codes/types';
 import type { FieldSpec } from '$lib/core/forms/types';
+import type { NcToken } from '$lib/core/nc/types';
 import type { Settings } from '$lib/core/settings/schema';
+import type { OutlineItem } from '$lib/core/profiles/outline';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
 import type { ConfigPaths, RecentEntry } from '$lib/platform/commands';
 
@@ -456,9 +461,9 @@ export interface ProfileRegistry {
   /** `[]` on macOS (F7). */
   openFilters(): DialogFilter[];
   saveFilters(id: string): DialogFilter[];
-  /** M3; throws in M1. */
+  /** The profile as it was read from JSON. Implemented by WP3.1; throws until then. */
   profile(id: string): Profile;
-  /** M3; throws in M1. */
+  /** The compiled profile every NC feature reads. Implemented by WP3.1; throws until then. */
   compiled(id: string): CompiledProfile;
 }
 
@@ -541,12 +546,51 @@ export interface CompareService {
   close(): void;
 }
 
+// ---------------------------------------------------------------------------
+// §7.3 Services added in M3: the code database and the outline
+// ---------------------------------------------------------------------------
+
+/**
+ * stores/codes.ts → `export const codes: CodeDbService` (owner: WP3.3)
+ *
+ * One database per dialect, shared by every profile that names it in `profile.codes`.
+ * Files are loaded once and cached, so a hover is a map lookup.
+ */
+export interface CodeDbService {
+  /** The database the profile points at; it is always there, if only empty. */
+  forProfile(profileId: string): CodeDb;
+  /** What the database knows about one token of a block (hover, inspector). */
+  lookupWord(profileId: string, token: NcToken): CodeLookup | null;
+  /** Entries whose code starts with `prefix`; `atBlockStart` gates Klartext keywords. */
+  completions(profileId: string, prefix: string, atBlockStart: boolean): CodeEntry[];
+  /** The flat list handed to a script's context (M4). */
+  forScripts(profileId: string): CodeEntry[];
+}
+
+/**
+ * app/outlineService.ts → `export const outline: OutlineService` (owner: WP3.5)
+ *
+ * Holds one `OutlineIndex` per open document. The first build runs after the first
+ * render, in 20k-line chunks; `applyChange` runs on every content change and the
+ * aggregation is debounced by 150 ms, so typing never waits for the map.
+ */
+export interface OutlineService {
+  /** The program map's rows for a document; empty until the first build finishes. */
+  items(id: DocId): Readable<OutlineItem[]>;
+  /** The tool-change lines, ascending (F7 / Shift+F7). */
+  toolLines(id: DocId): number[];
+  /** The item that covers `line`, for the row the map highlights. */
+  itemAt(id: DocId, line: number): OutlineItem | null;
+  /** Resolves once the first full build for `id` is done (tests and the harness). */
+  whenReady(id: DocId): Promise<void>;
+}
+
 /**
  * app/context.ts → `export const ctx: AppContext`
  *
  * The aggregate the test hook exposes (§7.9). It only collects the singletons; features
  * import the service modules they need directly. Later preludes add:
- * P3 codes, outline; P4 transforms, results, bookmarks; P5 scripts.
+ * P4 transforms, results, bookmarks; P5 scripts.
  */
 export interface AppContext {
   commands: CommandRegistry;
@@ -568,4 +612,7 @@ export interface AppContext {
   recent: RecentService;
   external: ExternalChangeService;
   compare: CompareService;
+  // P3
+  codes: CodeDbService;
+  outline: OutlineService;
 }

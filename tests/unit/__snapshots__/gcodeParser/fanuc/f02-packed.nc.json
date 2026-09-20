@@ -1,6 +1,0 @@
-{
-  "dialect": "fanuc-gcode",
-  "items": [
-    {"id":"fanuc-cmt-1","line":1,"type":"comment","text":"(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)"}
-  ]
-}

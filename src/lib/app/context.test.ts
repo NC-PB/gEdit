@@ -27,10 +27,13 @@ const M1_SERVICES = [
 /** What P2 adds (plan §7.3). The singletons are stubs on `m2/base`; the keys are not. */
 const M2_SERVICES = ['settings', 'uiState', 'recent', 'external', 'compare'] as const;
 
-const SERVICES = [...M1_SERVICES, ...M2_SERVICES];
+/** What P3 adds (plan §7.3). The singletons are stubs on `m3/base`; the keys are not. */
+const M3_SERVICES = ['codes', 'outline'] as const;
+
+const SERVICES = [...M1_SERVICES, ...M2_SERVICES, ...M3_SERVICES];
 
 describe('app context', () => {
-  it('exposes every M1 and M2 service', () => {
+  it('exposes every M1, M2 and M3 service', () => {
     expect(Object.keys(ctx).sort()).toEqual([...SERVICES].sort());
   });
 

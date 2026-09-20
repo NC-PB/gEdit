@@ -86,7 +86,14 @@ scenario('m0-main', { timeout: 180 }, async (h) => {
     cursor: h.q('status-item', { item: 'cursor' })?.textContent,
   })
   h.check('the first document has an id', h.q('editor-host')?.dataset.docId === 'd1')
-  h.check('the program map is empty for the starter program', h.qa('program-map-item').length === 0)
+  // The starter buffer is `% / O1000 / G0 X0 Y0 / M30 / %`, so the map has two rows: the
+  // program on line 2 and its end on line 4. Nothing else in it is an outline item.
+  const starterMap = await h.waitFor(() => (h.q('program-map-item', { line: 4, kind: 'end' }) ? h.qa('program-map-item') : undefined), { timeout: 3000 })
+  h.check(
+    'the program map lists the starter program and its end, and nothing else',
+    (starterMap?.length ?? 0) === 2 && !!h.q('program-map-item', { line: 2, kind: 'program' }),
+    h.qa('program-map-item').map((e) => e.dataset.line + ':' + e.dataset.kind),
+  )
   h.check('the Home tab is selected', h.q('ribbon-tab', { tab: 'home', 'aria-selected': 'true' }) !== null)
 
   // The hook switches the profile the same way the picker does. The store changes in the

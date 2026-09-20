@@ -1,6 +1,0 @@
-{
-  "dialect": "heidenhain-klartext",
-  "items": [
-    {"id":"heid-cmt-1","line":1,"type":"comment","text":"; WRITTEN FOR GEDIT - SYNTHETIC FRAGMENT WITHOUT A PROGRAM FRAME"}
-  ]
-}

@@ -60,6 +60,14 @@ command id stays visible in this file.
    slow belongs behind a command or a panel's own `onMount`.
 10. **No Monaco import at module level.** Go through `$lib/monaco/editorService`; the
     Monaco bundle is loaded dynamically (see `monaco/core.ts`).
+
+    A contribution that registers a *language provider* (hover, completion, symbols,
+    folding) needs the Monaco namespace itself, and `await getMonaco()` from
+    `$lib/monaco/setup` is the way to it: it is the same promise `EditorService` holds, so
+    awaiting it inside `activate()` loads nothing early and nothing twice. What stays
+    forbidden is a static `import … from '$lib/monaco/core'` (or from `monaco-editor`),
+    which would put the editor in the initial bundle and evaluate it during prerender.
+    `contrib/programMap.ts` and `contrib/assistant.ts` are the two examples.
 11. **Icons go through `asIcon`** (`$lib/app/icons`), and are imported from
     `lucide-svelte/icons/<name>`, never from the `lucide-svelte` barrel:
 

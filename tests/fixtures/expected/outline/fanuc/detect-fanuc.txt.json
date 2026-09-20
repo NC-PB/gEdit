@@ -1,0 +1,10 @@
+{
+  "profile": "fanuc-gcode",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":2,"text":"PLAIN TEXT FILE: THE DIALECT COMES FROM THE CONTENT"},
+    {"kind":"program","line":4,"text":"O1008","endLine":18},
+    {"kind":"tool","line":6,"text":"T1","tool":"1","endLine":18},
+      {"kind":"end","line":16,"text":"M30"}
+  ]
+}

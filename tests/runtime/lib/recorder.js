@@ -28,7 +28,7 @@
  * @property {Violation[]} violations
  * @property {string[]} errors console.error calls, uncaught errors and unhandled rejections
  * @property {string[]} warnings console.warn calls
- * @property {{ calls: Record<string, number>, ok: number, err: number, netFail: number }} ipc
+ * @property {{ calls: Record<string, number>, ok: number, err: number, netFail: number, inflight: number }} ipc
  * @property {string[]} otherFetches fetches that did not go to the IPC endpoint
  * @property {{ t: number, url: string, error: string | null, messages: number }[]} workers
  * @property {DialogCall[]} dialogCalls
@@ -67,7 +67,7 @@ export function installRecorder(send) {
     violations: [],
     errors: [],
     warnings: [],
-    ipc: { calls: {}, ok: 0, err: 0, netFail: 0 },
+    ipc: { calls: {}, ok: 0, err: 0, netFail: 0, inflight: 0 },
     otherFetches: [],
     workers: [],
     dialogCalls: [],
@@ -152,6 +152,11 @@ export function installRecorder(send) {
     const base = url.slice(0, url.lastIndexOf('/') + 1)
     const cmd = decodeURIComponent(url.slice(base.length))
     rec.ipc.calls[cmd] = (rec.ipc.calls[cmd] || 0) + 1
+    // h.idle() waits for this to reach zero: while a backend call is out, the app is
+    // still working even if the DOM is quiet. The harness's own calls do not count -
+    // h.idle() itself runs while one is in flight.
+    const counts = !cmd.startsWith('h_')
+    if (counts) rec.ipc.inflight++
     const m = DIALOG_CMD.exec(cmd)
     /** @type {DialogCall | null} */
     let call = null
@@ -181,6 +186,7 @@ export function installRecorder(send) {
     }
     p.then(
       (r) => {
+        if (counts) rec.ipc.inflight--
         if (call) {
           const c = call
           r.clone()
@@ -196,7 +202,10 @@ export function installRecorder(send) {
         if (r.headers.get('Tauri-Response') === 'ok') rec.ipc.ok++
         else rec.ipc.err++
       },
-      () => rec.ipc.netFail++,
+      () => {
+        if (counts) rec.ipc.inflight--
+        rec.ipc.netFail++
+      },
     )
     return p
   }

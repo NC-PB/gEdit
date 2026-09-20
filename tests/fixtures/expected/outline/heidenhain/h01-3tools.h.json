@@ -1,0 +1,18 @@
+{
+  "profile": "heidenhain-klartext",
+  "items": [
+    {"kind":"program","line":1,"text":"BEGIN PGM H01_3TOOLS MM","endLine":52},
+    {"kind":"comment","line":2,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"section","line":5,"text":"ROUGH","endLine":5},
+    {"kind":"tool","line":6,"text":"T1 — D10 END MILL","tool":"1","endLine":16},
+      {"kind":"section","line":15,"text":"DRILL","endLine":16},
+      {"kind":"comment","line":16,"text":"FOUR HOLES D8.5"},
+    {"kind":"tool","line":17,"text":"T2 — FOUR HOLES D8.5","tool":"2","endLine":34},
+      {"kind":"subprogram-call","line":32,"text":"CALL LBL 1"},
+      {"kind":"section","line":34,"text":"FINISH","endLine":34},
+    {"kind":"tool","line":35,"text":"T3 — FINISH","tool":"3","endLine":52},
+      {"kind":"end","line":46,"text":"M30"},
+      {"kind":"label","line":47,"text":"LBL 1"},
+      {"kind":"end","line":51,"text":"END PGM"}
+  ]
+}

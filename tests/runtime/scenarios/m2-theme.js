@@ -39,7 +39,9 @@ scenario('m2-theme', { timeout: 180 }, async (h) => {
 
   // ------------------------------------------------------------ light, through the ribbon
   h.click(h.q('ribbon-tab', { tab: 'view' }))
-  await h.sleep(150)
+  // The next check is that the button is there at all, so wait for the ribbon to settle
+  // rather than for the button itself, and keep the check able to report a real absence.
+  await h.idle()
   const button = h.q('cmd-button', { command: 'view.setTheme' })
   h.check('the View tab offers the theme button', !!button, h.qa('cmd-button').map((e) => e.dataset.command))
   h.click(button)

@@ -1,0 +1,12 @@
+{
+  "profile": "fanuc-gcode",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"program","line":3,"text":"O1005","endLine":20},
+    {"kind":"comment","line":4,"text":"T1 M6"},
+    {"kind":"comment","line":5,"text":"TOOL LIST: T1 M6 IN A COMMENT IS NOT A TOOL CHANGE"},
+    {"kind":"tool","line":8,"text":"T2 — D8 DRILL","tool":"2","endLine":20},
+      {"kind":"comment","line":17,"text":"INDENTED COMMENT"},
+      {"kind":"end","line":18,"text":"M30"}
+  ]
+}

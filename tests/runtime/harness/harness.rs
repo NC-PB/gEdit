@@ -113,16 +113,33 @@ fn prepare_main_window<R: Runtime>(webview: &tauri::Webview<R>) {
         diag(format!("occlusion detection disabled: {ok}"));
     });
     let _ = window.show();
-    // Best effort: macOS may refuse to activate an app launched in the background.
-    // Native key events work either way; native clicks need an active window.
+    // macOS may refuse to activate an app launched in the background, and the answer
+    // arrives a run-loop turn later, so this waits for the confirmation off the main
+    // thread instead of assuming it worked. Not being able to activate here is not yet a
+    // blocked run: plenty of scenarios never post native input.
     #[cfg(target_os = "macos")]
-    let _ = window.run_on_main_thread(|| unsafe {
-        use objc2::msg_send;
-        use objc2::runtime::{AnyClass, AnyObject};
-        let app: *mut AnyObject =
-            msg_send![AnyClass::get(c"NSApplication").unwrap(), sharedApplication];
-        let _: () = msg_send![app, activateIgnoringOtherApps: true];
-    });
+    {
+        let app = webview.app_handle().clone();
+        let robust = robust();
+        std::thread::spawn(move || {
+            if !robust {
+                // What the harness did before WP3.0: ask once, hope, and carry on.
+                let a = app.clone();
+                let _ = on_main(&app, move || activate(&a, false));
+                std::thread::sleep(Duration::from_millis(300));
+                if let Ok((ok, _, state, reason)) = focus_probe(&app) {
+                    diag(format!("startup focus: ok={ok} {reason} ({state})"));
+                }
+                return;
+            }
+            match ensure_front(&app, Duration::from_millis(3000)) {
+                Ok(state) => diag(format!("frontmost at startup: {state}")),
+                Err((state, reason)) => {
+                    diag(format!("not frontmost at startup: {reason} ({state})"))
+                }
+            }
+        });
+    }
 }
 
 fn log_run_event(event: &RunEvent) {
@@ -159,6 +176,295 @@ fn on_main<R: Runtime, T: Send + 'static>(
     .map_err(|e| e.to_string())?;
     rx.recv_timeout(Duration::from_secs(3))
         .map_err(|_| "the main thread did not answer within 3 s".to_string())
+}
+
+// ---------------------------------------------------------------- focus and activation
+
+/// How long a native input waits for the app to own the keyboard before it gives up and
+/// the run is reported as blocked rather than failed. Long enough to sit out a
+/// notification banner or a Spotlight panel, short enough that a scenario driven by an
+/// app that is genuinely gone does not spend its whole timeout waiting.
+/// `GEDIT_RH_FOCUS_TIMEOUT_MS` overrides it.
+const FOCUS_TIMEOUT_MS: u64 = 2500;
+
+fn focus_timeout() -> Duration {
+    let ms = std::env::var("GEDIT_RH_FOCUS_TIMEOUT_MS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(FOCUS_TIMEOUT_MS);
+    Duration::from_millis(ms)
+}
+
+/// Whether the activation gate is on. `GEDIT_RH_ROBUST=0` turns it off (and the page's
+/// frame-synced waits with it), which is how the harness is measured against itself.
+fn robust() -> bool {
+    !matches!(std::env::var("GEDIT_RH_ROBUST").as_deref(), Ok("0"))
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn ns_str(o: *mut objc2::runtime::AnyObject) -> String {
+    use objc2::msg_send;
+    use std::ffi::{c_char, CStr};
+    if o.is_null() {
+        return String::new();
+    }
+    let p: *const c_char = msg_send![o, UTF8String];
+    if p.is_null() {
+        String::new()
+    } else {
+        CStr::from_ptr(p).to_string_lossy().into_owned()
+    }
+}
+
+/// What AppKit and the window server think about who owns the keyboard right now.
+#[cfg(target_os = "macos")]
+struct Focus {
+    /// `[NSApp isActive]`: the app owns the menu bar and the keyboard.
+    active: bool,
+    /// `[NSApp keyWindow]` is set - some window of ours takes key events.
+    key: bool,
+    /// The main window itself is the key window (false while an alert is up).
+    main_key: bool,
+    visible: bool,
+    key_window: String,
+    front_pid: i32,
+    front_app: String,
+    our_pid: i32,
+    alerts: usize,
+}
+
+#[cfg(target_os = "macos")]
+impl Focus {
+    /// Native input reaches the app: it is frontmost, active, and one of its windows is
+    /// key. An open alert panel counts - that is where the keys belong then.
+    fn deliverable(&self) -> bool {
+        self.active && self.key && self.front_pid == self.our_pid
+    }
+
+    fn json(&self) -> Value {
+        json!({ "active": self.active, "key": self.key, "mainKey": self.main_key,
+                "visible": self.visible, "keyWindow": self.key_window,
+                "frontPid": self.front_pid, "frontApp": self.front_app,
+                "ourPid": self.our_pid, "alerts": self.alerts })
+    }
+
+    fn reason(&self) -> String {
+        if self.front_pid != self.our_pid {
+            let name = if self.front_app.is_empty() {
+                "?"
+            } else {
+                &self.front_app
+            };
+            format!("{name} (pid {}) is frontmost", self.front_pid)
+        } else if !self.active {
+            "the app is not active".to_string()
+        } else if !self.visible {
+            "the window is not visible".to_string()
+        } else {
+            "no window of the app is the key window".to_string()
+        }
+    }
+}
+
+/// Reads the focus state. Must run on the main thread.
+#[cfg(target_os = "macos")]
+fn read_focus<R: Runtime>(app: &AppHandle<R>) -> Focus {
+    use objc2::msg_send;
+    use objc2::runtime::{AnyClass, AnyObject};
+    unsafe {
+        let nsapp: *mut AnyObject =
+            msg_send![AnyClass::get(c"NSApplication").unwrap(), sharedApplication];
+        let active: bool = msg_send![nsapp, isActive];
+        let kw: *mut AnyObject = msg_send![nsapp, keyWindow];
+        let key_window = if kw.is_null() {
+            String::new()
+        } else {
+            (*kw).class().name().to_string_lossy().into_owned()
+        };
+        let (mut main_key, mut visible) = (false, false);
+        if let Some(Ok(nsw)) = app.get_webview_window(MAIN).map(|w| w.ns_window()) {
+            let nsw = nsw as *mut AnyObject;
+            main_key = msg_send![nsw, isKeyWindow];
+            visible = msg_send![nsw, isVisible];
+        }
+        let ws: *mut AnyObject = msg_send![AnyClass::get(c"NSWorkspace").unwrap(), sharedWorkspace];
+        let front: *mut AnyObject = msg_send![ws, frontmostApplication];
+        let (front_pid, front_app) = if front.is_null() {
+            (-1, String::new())
+        } else {
+            let pid: i32 = msg_send![front, processIdentifier];
+            let name: *mut AnyObject = msg_send![front, localizedName];
+            (pid, ns_str(name))
+        };
+        Focus {
+            active,
+            key: !kw.is_null(),
+            main_key,
+            visible,
+            key_window,
+            front_pid,
+            front_app,
+            our_pid: std::process::id() as i32,
+            alerts: alert_panels().len(),
+        }
+    }
+}
+
+/// Asks macOS for the keyboard. Must run on the main thread; it only starts the move,
+/// the window server answers a run-loop turn later. With an alert up the main window is
+/// left alone, so the alert keeps key and its buttons stay reachable.
+#[cfg(target_os = "macos")]
+fn activate<R: Runtime>(app: &AppHandle<R>, keep_alert: bool) {
+    use objc2::msg_send;
+    use objc2::runtime::{AnyClass, AnyObject};
+    unsafe {
+        let nsapp: *mut AnyObject =
+            msg_send![AnyClass::get(c"NSApplication").unwrap(), sharedApplication];
+        let _: () = msg_send![nsapp, unhide: std::ptr::null_mut::<AnyObject>()];
+        let _: () = msg_send![nsapp, activateIgnoringOtherApps: true];
+        // NSApplicationActivateAllWindows | NSApplicationActivateIgnoringOtherApps
+        let running: *mut AnyObject = msg_send![
+            AnyClass::get(c"NSRunningApplication").unwrap(),
+            currentApplication
+        ];
+        if !running.is_null() {
+            let _: bool = msg_send![running, activateWithOptions: 3usize];
+            // macOS 14 replaced "take the keyboard" with "the app in front hands it
+            // over". Naming the frontmost app as the source is the only spelling that is
+            // still granted once someone else owns it; on older systems it is a no-op.
+            let ws: *mut AnyObject =
+                msg_send![AnyClass::get(c"NSWorkspace").unwrap(), sharedWorkspace];
+            let front: *mut AnyObject = msg_send![ws, frontmostApplication];
+            let sel = objc2::runtime::Sel::register(c"activateFromApplication:options:");
+            let known: bool = msg_send![running, respondsToSelector: sel];
+            if known && !front.is_null() {
+                let _: bool = msg_send![running, activateFromApplication: front, options: 3usize];
+            }
+        }
+        if !keep_alert {
+            if let Some(Ok(nsw)) = app.get_webview_window(MAIN).map(|w| w.ns_window()) {
+                let nsw = nsw as *mut AnyObject;
+                let _: () = msg_send![nsw, orderFrontRegardless];
+                let _: () = msg_send![nsw, makeKeyAndOrderFront: std::ptr::null_mut::<AnyObject>()];
+            }
+        }
+    }
+}
+
+/// The focus state plus `deliverable`, read in one main-thread hop.
+#[cfg(target_os = "macos")]
+fn focus_probe<R: Runtime>(app: &AppHandle<R>) -> Result<(bool, bool, Value, String), String> {
+    let a = app.clone();
+    on_main(app, move || {
+        let f = read_focus(&a);
+        (f.deliverable(), f.alerts > 0, f.json(), f.reason())
+    })
+}
+
+/// Makes sure the app is frontmost and key before input is posted, and says why not
+/// when it cannot be. Re-activating takes a run-loop turn, so this polls with a bounded
+/// deadline instead of guessing a sleep, and backs off: the first few asks cover a
+/// window that is merely a frame behind, the slower ones sit out a banner or a panel
+/// without occupying the main thread while they wait.
+#[cfg(target_os = "macos")]
+fn ensure_front<R: Runtime>(
+    app: &AppHandle<R>,
+    timeout: Duration,
+) -> Result<Value, (Value, String)> {
+    const BACKOFF_MS: [u64; 5] = [30, 60, 120, 200, 300];
+    let t0 = Instant::now();
+    let deadline = t0 + timeout;
+    let mut tries = 0usize;
+    loop {
+        let (ok, alert, state, reason) = match focus_probe(app) {
+            Ok(v) => v,
+            Err(e) => return Err((Value::Null, e)),
+        };
+        if ok {
+            if tries > 0 {
+                rh(&json!({ "kind": "focus", "event": "regained",
+                            "afterMs": t0.elapsed().as_millis() as u64,
+                            "tries": tries, "state": state }));
+            }
+            return Ok(state);
+        }
+        if tries == 0 {
+            rh(&json!({ "kind": "focus", "event": "lost", "reason": reason, "state": state }));
+        }
+        if Instant::now() >= deadline {
+            rh(&json!({ "kind": "focus", "event": "gave-up",
+                        "afterMs": t0.elapsed().as_millis() as u64,
+                        "tries": tries, "reason": reason, "state": state }));
+            return Err((state, reason));
+        }
+        let a = app.clone();
+        let _ = on_main(app, move || activate(&a, alert));
+        let wait = BACKOFF_MS[tries.min(BACKOFF_MS.len() - 1)];
+        tries += 1;
+        std::thread::sleep(Duration::from_millis(wait));
+    }
+}
+
+/// Reports that the run could not be carried out for a reason outside the app; the
+/// runner turns this into BLOCKED rather than a failure.
+fn blocked(reason: &str, whence: &str, state: Value) {
+    rh(&json!({ "kind": "blocked", "reason": reason, "where": whence, "state": state }));
+}
+
+/// Who owns the keyboard, and whether native input would reach the app.
+#[tauri::command(async)]
+pub fn h_focus_state(app: AppHandle) -> Result<Value, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let a = app.clone();
+        on_main(&app, move || {
+            let f = read_focus(&a);
+            let mut j = f.json();
+            j["deliverable"] = json!(f.deliverable());
+            j["reason"] = json!(if f.deliverable() {
+                String::new()
+            } else {
+                f.reason()
+            });
+            j
+        })
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+        Ok(json!({ "deliverable": false, "reason": "native input is macOS only" }))
+    }
+}
+
+/// Brings the app to the front and waits until it owns the keyboard; rejects with the
+/// reason when it cannot (and reports the run as blocked).
+#[tauri::command(async)]
+pub fn h_ensure_front(app: AppHandle, timeout_ms: Option<u64>) -> Result<Value, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let timeout = timeout_ms
+            .map(Duration::from_millis)
+            .unwrap_or_else(focus_timeout);
+        match ensure_front(&app, timeout) {
+            Ok(state) => Ok(state),
+            Err((state, reason)) => {
+                let msg = format!("the app could not take the keyboard: {reason}");
+                blocked(&msg, "h_ensure_front", state);
+                Err(msg)
+            }
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (app, timeout_ms);
+        Ok(Value::Null)
+    }
+}
+
+/// Lets the page report a blocked run (screen locked, no key focus, missing tool).
+#[tauri::command]
+pub fn h_blocked(reason: String, state: Option<Value>) {
+    blocked(&reason, "page", state.unwrap_or(Value::Null));
 }
 
 // ---------------------------------------------------------------- reporting and control
@@ -647,7 +953,7 @@ pub fn h_window_state(app: AppHandle) -> Result<Value, String> {
     Ok(json!({ "exists": exists }))
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeEv {
     kind: String, // "click" | "key"
@@ -673,21 +979,129 @@ pub struct NativeEv {
     function: bool,
 }
 
+impl NativeEv {
+    /// Whether this event is lost when the app does not own the keyboard.
+    ///
+    /// Measured, not assumed (WP3.0, a cumulative suite run against a locked screen):
+    ///
+    /// - A **plain key** carries our window number, and `NSApp.sendEvent` delivers it to
+    ///   that window's first responder whether or not the app is active. `m1-tabs` typed
+    ///   and moved the cursor through 53 key events with `isActive == false` and no key
+    ///   window, and every one of its 36 checks passed.
+    /// - A **Cmd key** is a main-menu key equivalent, and the menu is only offered the
+    ///   event while the app is active. `m0-fix3` lost exactly its two Cmd+S checks.
+    /// - A **click** on a window that is not key is spent on activating it: `m0-trusted`
+    ///   lost the cursor position its click was supposed to set.
+    ///
+    /// So only these two wait for the keyboard. Blocking a plain key would throw away
+    /// the scenarios that still run perfectly well behind someone else's window.
+    fn needs_front(&self) -> bool {
+        self.kind == "click" || self.cmd
+    }
+
+    fn describe(&self) -> String {
+        if self.kind == "click" {
+            "click".to_string()
+        } else {
+            let mods = [
+                (self.cmd, "cmd"),
+                (self.ctrl, "ctrl"),
+                (self.alt, "alt"),
+                (self.shift, "shift"),
+            ]
+            .into_iter()
+            .filter_map(|(on, name)| on.then_some(name))
+            .collect::<Vec<_>>()
+            .join("+");
+            if mods.is_empty() {
+                format!("key {:?}", self.chars)
+            } else {
+                format!("key {mods}+{:?}", self.chars)
+            }
+        }
+    }
+}
+
 /// Synthesizes real (trusted) NSEvents, one after another, and returns once all are
 /// delivered. Clicks go to the main NSWindow (`x`/`y` in window points from the bottom
 /// left); keys go through `NSApp.sendEvent`: key window -> WKWebView -> page, then key
 /// equivalents and the main menu, like hardware input.
+///
+/// A click, and a Cmd key on its way to the main menu, are lost unless the app owns the
+/// keyboard - see `NativeEv::needs_front` for what was measured. So the app is brought to
+/// the front and the confirmation waited for (bounded) before such an event, and the
+/// event is posted in the same main-thread hop that re-reads the focus, so nothing can
+/// slip in between. When the keyboard cannot be had at all, the run is reported blocked
+/// rather than failed: nothing was learned about the app. A plain key needs none of this
+/// and is never blocked by it.
 #[tauri::command(async)]
-pub fn h_native_input(app: AppHandle, events: Vec<NativeEv>) -> Vec<String> {
+pub fn h_native_input(app: AppHandle, events: Vec<NativeEv>) -> Result<Vec<String>, String> {
     let mut results = Vec::new();
+    #[cfg(target_os = "macos")]
+    let mut said_no_focus = false;
     for ev in events {
-        let a = app.clone();
         #[cfg(target_os = "macos")]
-        let r = on_main(&app, move || native_event(&a, &ev)).unwrap_or_else(|e| e);
+        let r = {
+            let needs_front = ev.needs_front();
+            let mut attempt = 0usize;
+            loop {
+                if robust() {
+                    if needs_front {
+                        if let Err((state, reason)) = ensure_front(&app, focus_timeout()) {
+                            let msg = format!("{} cannot be delivered: {reason}", ev.describe());
+                            blocked(&msg, "h_native_input", state);
+                            return Err(msg);
+                        }
+                    } else if let Ok((ok, alert, _, reason)) = focus_probe(&app) {
+                        // A plain key lands either way, so this asks for the keyboard
+                        // without waiting for the answer: the next event benefits, this
+                        // one is not held up, and a long `nativeType` is not turned into
+                        // one timeout per character.
+                        if !ok {
+                            let a = app.clone();
+                            let _ = on_main(&app, move || activate(&a, alert));
+                            if !said_no_focus {
+                                said_no_focus = true;
+                                rh(&json!({ "kind": "focus", "event": "posted-without-focus",
+                                            "input": ev.describe(), "reason": reason }));
+                            }
+                        }
+                    }
+                }
+                let (a, e) = (app.clone(), ev.clone());
+                let sent = on_main(&app, move || {
+                    let f = read_focus(&a);
+                    if f.deliverable() || !e.needs_front() {
+                        (true, native_event(&a, &e))
+                    } else {
+                        (false, f.reason())
+                    }
+                });
+                match sent {
+                    Err(e) => break e,
+                    Ok((true, detail)) => break detail,
+                    Ok((false, why)) => {
+                        // Focus went away between the gate and the post. Robust runs try
+                        // once more; a measurement run records what the old harness lost.
+                        rh(&json!({ "kind": "focus", "event": "dropped",
+                                    "input": ev.describe(), "reason": why, "attempt": attempt }));
+                        if !robust() {
+                            break native_event_unchecked(&app, &ev);
+                        }
+                        if attempt >= 1 {
+                            let msg = format!("{} cannot be delivered: {why}", ev.describe());
+                            blocked(&msg, "h_native_input", Value::Null);
+                            return Err(msg);
+                        }
+                        attempt += 1;
+                    }
+                }
+            }
+        };
         #[cfg(not(target_os = "macos"))]
         let r = {
             let _ = (
-                &a,
+                &app,
                 &ev.kind,
                 ev.x,
                 ev.y,
@@ -701,7 +1115,15 @@ pub fn h_native_input(app: AppHandle, events: Vec<NativeEv>) -> Vec<String> {
         results.push(r);
         std::thread::sleep(Duration::from_millis(30));
     }
-    results
+    Ok(results)
+}
+
+/// Posts the event without the focus gate: what the harness did before WP3.0, kept for
+/// `GEDIT_RH_ROBUST=0` measurement runs.
+#[cfg(target_os = "macos")]
+fn native_event_unchecked<R: Runtime>(app: &AppHandle<R>, ev: &NativeEv) -> String {
+    let (a, e) = (app.clone(), ev.clone());
+    on_main(app, move || native_event(&a, &e)).unwrap_or_else(|e| e)
 }
 
 #[cfg(target_os = "macos")]
@@ -799,7 +1221,17 @@ fn native_event<R: Runtime>(app: &AppHandle<R>, ev: &NativeEv) -> String {
                 ];
                 let _: () = msg_send![nsapp, sendEvent: e];
             }
-            format!("key {:?} code={} flags={flags:#x}", ev.chars, ev.key_code)
+            // `NSApp.sendEvent` routes a key event to the key window; say which one took it.
+            let kw: *mut AnyObject = msg_send![nsapp, keyWindow];
+            let to = if kw.is_null() {
+                "nothing".to_string()
+            } else {
+                (*kw).class().name().to_string_lossy().into_owned()
+            };
+            format!(
+                "key {:?} code={} flags={flags:#x} to={to}",
+                ev.chars, ev.key_code
+            )
         }
     }
 }
@@ -864,6 +1296,14 @@ pub fn h_alert_click(
     timeout_ms: Option<u64>,
 ) -> Result<Value, String> {
     let deadline = Instant::now() + Duration::from_millis(timeout_ms.unwrap_or(5000));
+    // A button is pressed with `performClick:`, which lands whether or not we are
+    // frontmost - but what the app does next (focus the editor, take the next key) only
+    // works from the front, so ask for the keyboard first. The alert keeps key.
+    #[cfg(target_os = "macos")]
+    if robust() {
+        let a = app.clone();
+        let _ = on_main(&app, move || activate(&a, true));
+    }
     loop {
         #[cfg(target_os = "macos")]
         {
@@ -925,18 +1365,6 @@ fn window_classes() -> Vec<String> {
 fn alert_panels() -> Vec<AlertPanel> {
     use objc2::msg_send;
     use objc2::runtime::{AnyClass, AnyObject};
-    use std::ffi::{c_char, CStr};
-    unsafe fn ns_str(o: *mut AnyObject) -> String {
-        if o.is_null() {
-            return String::new();
-        }
-        let p: *const c_char = msg_send![o, UTF8String];
-        if p.is_null() {
-            String::new()
-        } else {
-            CStr::from_ptr(p).to_string_lossy().into_owned()
-        }
-    }
     unsafe fn walk(view: *mut AnyObject, panel: &mut AlertPanel) {
         let tf = AnyClass::get(c"NSTextField").unwrap();
         let btn = AnyClass::get(c"NSButton").unwrap();

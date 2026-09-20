@@ -1,0 +1,16 @@
+{
+  "profile": "heidenhain-klartext",
+  "items": [
+    {"kind":"program","line":1,"text":"BEGIN PGM H04_CYCLE_FEEDS MM","endLine":53},
+    {"kind":"comment","line":2,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"section","line":4,"text":"DRILL WITH A NUMERIC Q206","endLine":4},
+    {"kind":"tool","line":5,"text":"T6 — DRILL WITH A NUMERIC Q206","tool":"6","endLine":31},
+      {"kind":"section","line":19,"text":"DRILL WITH FEED FROM THE TOOL CALL","endLine":30},
+      {"kind":"section","line":31,"text":"RIGID TAP M8X1.25","endLine":31},
+    {"kind":"tool","line":32,"text":"T7 — RIGID TAP M8X1.25","tool":"7","endLine":41},
+      {"kind":"section","line":41,"text":"MILL WITH FEED PER TOOTH AND PER REVOLUTION","endLine":41},
+    {"kind":"tool","line":42,"text":"T8 — MILL WITH FEED PER TOOTH AND PER REVOLUTION","tool":"8","endLine":53},
+      {"kind":"end","line":51,"text":"M30"},
+      {"kind":"end","line":52,"text":"END PGM"}
+  ]
+}

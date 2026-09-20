@@ -1,6 +1,5 @@
 import type * as MonacoApi from 'monaco-editor/esm/vs/editor/editor.api.js';
-import { fanucLanguageDef, getFanucCompletions } from '$lib/languages/fanuc';
-import { heidenhainLanguageDef, getHeidenhainCompletions } from '$lib/languages/heidenhain';
+import { registerAll } from '$lib/monaco/languages';
 
 export type Monaco = typeof MonacoApi;
 
@@ -9,7 +8,7 @@ let monacoPromise: Promise<Monaco> | null = null;
 /**
  * Returns the locally bundled Monaco instance (no CDN, no AMD loader).
  * The first call loads Monaco, wires up the editor web worker and registers
- * the custom G-code languages; every later call returns the same promise.
+ * the profiles as languages; every later call returns the same promise.
  * Browser-only: call it from onMount (or other client-only code).
  */
 export function getMonaco(): Promise<Monaco> {
@@ -35,13 +34,10 @@ async function loadMonaco(): Promise<Monaco> {
     getWorker: () => new EditorWorker(),
   };
 
-  monaco.languages.register({ id: 'fanuc-gcode' });
-  monaco.languages.setMonarchTokensProvider('fanuc-gcode', fanucLanguageDef);
-  monaco.languages.registerCompletionItemProvider('fanuc-gcode', getFanucCompletions(monaco));
-
-  monaco.languages.register({ id: 'heidenhain-klartext' });
-  monaco.languages.setMonarchTokensProvider('heidenhain-klartext', heidenhainLanguageDef);
-  monaco.languages.registerCompletionItemProvider('heidenhain-klartext', getHeidenhainCompletions(monaco));
+  // One language per dialect profile, with its generated grammar, plus the two generated
+  // themes. Everything a dialect needs is data now, so a new profile needs no code here
+  // (plan §5 WP3.4; M0's hand-written `src/lib/languages/**` is gone).
+  registerAll(monaco);
 
   return monaco;
 }

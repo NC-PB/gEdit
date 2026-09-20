@@ -1,0 +1,14 @@
+{
+  "profile": "fanuc-gcode",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"program","line":3,"text":"O1004","endLine":48},
+    {"kind":"comment","line":4,"text":"T1  D10 FLAT END MILL"},
+    {"kind":"comment","line":5,"text":"T2  M8X1.25 TAP"},
+    {"kind":"comment","line":6,"text":"T3  TURNING TOOL ON A MILL-TURN"},
+    {"kind":"tool","line":8,"text":"T1 — D10 FLAT END MILL","tool":"1","endLine":22},
+    {"kind":"tool","line":23,"text":"T2 — M8X1.25 TAP","tool":"2","endLine":33},
+    {"kind":"tool","line":34,"text":"T3 — TURNING TOOL ON A MILL-TURN","tool":"3","endLine":48},
+      {"kind":"end","line":46,"text":"M30"}
+  ]
+}

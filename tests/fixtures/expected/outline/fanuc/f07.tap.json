@@ -1,0 +1,10 @@
+{
+  "profile": "fanuc-gcode",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"program","line":3,"text":"O1007","endLine":21},
+    {"kind":"comment","line":4,"text":"T4  D16 FACE MILL"},
+    {"kind":"tool","line":6,"text":"T4 — D16 FACE MILL","tool":"4","endLine":21},
+      {"kind":"end","line":19,"text":"M30"}
+  ]
+}

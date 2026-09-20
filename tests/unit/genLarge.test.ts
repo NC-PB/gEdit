@@ -6,11 +6,36 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { detectLanguage } from '$lib/utils/detectLanguage';
-import { parseProgramStructure } from '$lib/utils/gcodeParser';
+import { BUILTIN_PROFILE_JSON } from '$lib/data/profiles';
+import { compileProfile } from '$lib/core/profiles/compile';
+import { detectProfile } from '$lib/core/profiles/detect';
+import { OutlineIndex } from '$lib/core/profiles/outline';
+import { validateProfile } from '$lib/core/profiles/validate';
 import { generateLarge } from '../gen/gen-large.mjs';
+import type { CompiledProfile } from '$lib/core/profiles/types';
 
 const MIB = 1024 * 1024;
+
+/** The built-ins, through the same gate the profile registry uses (M3: WP3.1). */
+const BUILTINS: CompiledProfile[] = BUILTIN_PROFILE_JSON.map((raw) => {
+  const checked = validateProfile(raw);
+  if (!checked.ok) throw new Error(checked.errors.join('; '));
+  return compileProfile(checked.profile);
+});
+
+/** Which profile the content picks, given the other one as the fallback. */
+function detect(path: string, text: string, fallback: string): string {
+  return detectProfile(BUILTINS, path, text, fallback);
+}
+
+/** The tool calls the program map lists, as `T<n>` labels. */
+function toolItems(text: string, profileId: string) {
+  const cp = BUILTINS.find((entry) => entry.profile.id === profileId);
+  if (!cp) throw new Error(`no profile ${profileId}`);
+  const outline = new OutlineIndex(cp);
+  outline.reset(text.split(/\r\n|\n/));
+  return outline.items().filter((item) => item.kind === 'tool');
+}
 
 /** Lines of a generated text, which always ends with a line break. */
 function rows(text: string, eol = '\r\n'): string[] {
@@ -42,9 +67,8 @@ describe('generateLarge: Fanuc', () => {
   });
 
   it('is Fanuc by content and lists every tool change of the fixture', () => {
-    expect(detectLanguage('/work/big.txt', text, 'heidenhain-klartext')).toBe('fanuc-gcode');
-    const tools = parseProgramStructure(text, 'fanuc-gcode').filter((item) => item.type === 'tool');
-    expect(tools.map((item) => item.text)).toEqual(['T1 M6', 'T2 M6', 'T3 M6']);
+    expect(detect('/work/big.txt', text, 'heidenhain-klartext')).toBe('fanuc-gcode');
+    expect(toolItems(text, 'fanuc-gcode').map((item) => item.tool)).toEqual(['1', '2', '3']);
   });
 
   it('renumbers tools and offsets in later copies of the segments', () => {
@@ -74,9 +98,8 @@ describe('generateLarge: Klartext', () => {
   });
 
   it('is Klartext by content and lists its tool calls', () => {
-    expect(detectLanguage('/work/big.txt', text, 'fanuc-gcode')).toBe('heidenhain-klartext');
-    const tools = parseProgramStructure(text, 'heidenhain-klartext').filter((item) => item.type === 'tool');
-    expect(tools.length).toBeGreaterThanOrEqual(3);
+    expect(detect('/work/big.txt', text, 'fanuc-gcode')).toBe('heidenhain-klartext');
+    expect(toolItems(text, 'heidenhain-klartext').length).toBeGreaterThanOrEqual(3);
   });
 });
 

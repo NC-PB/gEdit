@@ -1,9 +1,0 @@
-{
-  "dialect": "heidenhain-klartext",
-  "items": [
-    {"id":"heid-cmt-2","line":2,"type":"comment","text":"1 ; WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
-    {"id":"heid-tool-5","line":5,"type":"tool","text":"4 TOOL CALL 6 Z S2000 F400"},
-    {"id":"heid-tool-32","line":32,"type":"tool","text":"13 TOOL CALL 7 Z S600"},
-    {"id":"heid-tool-42","line":42,"type":"tool","text":"18 TOOL CALL 8 Z S4000 FZ0.05"}
-  ]
-}

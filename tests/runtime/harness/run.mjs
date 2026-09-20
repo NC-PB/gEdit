@@ -33,4 +33,6 @@ if (!known.has(name)) {
 const result = await withLock(rh, `run ${name}`, () => runScenario(rh, name, known, opts))
 console.log(summarize(result))
 console.log(`result: ${rh}/out/${name}.json`)
-process.exit(result.pass ? 0 : 1)
+// One run is one run: it is never retried here, so a failure stays a failure. A run that
+// could not take the keyboard is BLOCKED, and exits nonzero as well - nothing was proven.
+process.exit(result.status === 'pass' ? 0 : 1)

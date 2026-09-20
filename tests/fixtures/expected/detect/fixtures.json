@@ -1,0 +1,62 @@
+{
+  "note": [
+    "Expected profile detection (plan §5 WP3.1, AD-11), read by src/lib/core/profiles/detect.test.ts.",
+    "`fixtures` has one entry for every file under tests/fixtures/nc; the test fails when a fixture is added without one.",
+    "A value is a profile id, or 'fallback' when the content is inconclusive and the current profile stays,",
+    "or 'refused' when decodeFile does not open the file at all, so detection never runs.",
+    "`improvements` lists the cases whose answer moved from the M0 characterization (utils/detectLanguage.ts).",
+    "Every fixture above answers exactly as it did at M0: only the hand-written cases below moved."
+  ],
+  "fixtures": {
+    "nc/ambiguous/comment-only.txt": "fanuc-gcode",
+    "nc/ambiguous/empty.txt": "fallback",
+    "nc/ambiguous/fanuc-fragment.txt": "fanuc-gcode",
+    "nc/ambiguous/heidenhain-fragment.txt": "heidenhain-klartext",
+    "nc/encoding/cp1252-crlf.nc": "fanuc-gcode",
+    "nc/encoding/cr-only.nc": "fanuc-gcode",
+    "nc/encoding/mixed-eol.nc": "fanuc-gcode",
+    "nc/encoding/nul-heavy.bin": "refused",
+    "nc/encoding/nul-inside.nc": "fanuc-gcode",
+    "nc/encoding/nul-leader-trailer.nc": "fanuc-gcode",
+    "nc/encoding/utf16be-bom.nc": "fanuc-gcode",
+    "nc/encoding/utf16le-bom.nc": "fanuc-gcode",
+    "nc/encoding/utf8-bom-crlf.nc": "fanuc-gcode",
+    "nc/encoding/utf8-lf.nc": "fanuc-gcode",
+    "nc/fanuc/O1234": "fanuc-gcode",
+    "nc/fanuc/detect-fanuc.txt": "fanuc-gcode",
+    "nc/fanuc/f01-mill-3tools.nc": "fanuc-gcode",
+    "nc/fanuc/f02-packed.nc": "fanuc-gcode",
+    "nc/fanuc/f03-multi-program.nc": "fanuc-gcode",
+    "nc/fanuc/f04-feed-modes.nc": "fanuc-gcode",
+    "nc/fanuc/f05-comments-edge.nc": "fanuc-gcode",
+    "nc/fanuc/f07.tap": "fanuc-gcode",
+    "nc/heidenhain/detect-heidenhain.txt": "heidenhain-klartext",
+    "nc/heidenhain/h01-3tools.h": "heidenhain-klartext",
+    "nc/heidenhain/h02-tool-names.h": "heidenhain-klartext",
+    "nc/heidenhain/h03-speed-only.h": "heidenhain-klartext",
+    "nc/heidenhain/h04-cycle-feeds.h": "heidenhain-klartext"
+  },
+  "improvements": [
+    {
+      "case": "a Klartext program saved with a Fanuc extension: the content outvotes the extension weight",
+      "path": "/work/prog.nc",
+      "text": "0 BEGIN PGM PROG MM\n1 TOOL CALL 5 Z S2000\n2 L Z+100 R0 FMAX\n3 END PGM PROG MM\n",
+      "m0": "fanuc-gcode",
+      "expected": "heidenhain-klartext"
+    },
+    {
+      "case": "a Fanuc program saved as .h: the same rule the other way round",
+      "path": "/work/prog.h",
+      "text": "%\nO1234\nN10 G0 X0\nN20 M30\n%\n",
+      "m0": "heidenhain-klartext",
+      "expected": "fanuc-gcode"
+    },
+    {
+      "case": "a program number of more than five digits is still a program number (the profile allows eight)",
+      "path": "/work/a.txt",
+      "text": "O123456\n",
+      "m0": "fallback",
+      "expected": "fanuc-gcode"
+    }
+  ]
+}

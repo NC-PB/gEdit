@@ -1,0 +1,11 @@
+{
+  "profile": "heidenhain-klartext",
+  "items": [
+    {"kind":"program","line":1,"text":"BEGIN PGM DETECT_ME MM","endLine":14},
+    {"kind":"comment","line":2,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":3,"text":"PLAIN TEXT FILE: THE DIALECT COMES FROM THE CONTENT"},
+    {"kind":"tool","line":6,"text":"T1 — PLAIN TEXT FILE: THE DIALECT COMES FROM THE CONTENT","tool":"1","endLine":14},
+      {"kind":"end","line":12,"text":"M30"},
+      {"kind":"end","line":13,"text":"END PGM"}
+  ]
+}

@@ -20,8 +20,10 @@ import { dialogs } from '$lib/app/dialogs';
 import { external } from '$lib/app/external';
 import { files } from '$lib/app/fileOps';
 import { modals } from '$lib/app/modals';
+import { outline } from '$lib/app/outlineService';
 import { status } from '$lib/app/status';
 import { editor } from '$lib/monaco/editorService';
+import { codes } from '$lib/stores/codes';
 import { docs } from '$lib/stores/documents';
 import { layout } from '$lib/stores/layout';
 import { profiles } from '$lib/stores/profiles';
@@ -50,4 +52,6 @@ export const ctx: AppContext = {
   recent,
   external,
   compare,
+  codes,
+  outline,
 };

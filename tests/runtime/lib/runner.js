@@ -125,10 +125,16 @@ async function waitForApp(h) {
   if (!app) throw new Error('window.__gedit did not appear within 30 s (not a VITE_GEDIT_TEST=1 build?)')
   const ready = await Promise.race([app.ready.then(() => true), sleep(30000).then(() => false)])
   if (!ready) throw new Error('window.__gedit.ready did not resolve within 30 s')
-  const shell = await h.waitFor(() => h.q('app-shell', { ready: '1' }), { timeout: 5000 })
-  const painted = await h.waitFor(() => h.q('editor-host')?.querySelector('.view-line'), { timeout: 5000 })
+  // Generous, because the first paint is the part of startup a loaded Mac slows down
+  // most, and waiting longer costs nothing when it is already there.
+  const shell = await h.waitFor(() => h.q('app-shell', { ready: '1' }), { timeout: 20000 })
+  const painted = await h.waitFor(() => h.q('editor-host')?.querySelector('.view-line'), { timeout: 20000 })
   if (!shell || !painted) throw new Error('app-shell is not ready or the editor did not paint')
   h.log(`app ready after ${Math.round(performance.now() - t0)} ms (document ${document.visibilityState})`)
+  // Say who owns the keyboard at the start of every run, whether or not this scenario
+  // posts native input: it is the first thing to look at when one of them misbehaves.
+  const focus = await h.window.focus().catch(() => null)
+  if (focus) h.log(`focus at start: ${focus.deliverable ? 'ours' : `not ours - ${focus.reason}`} (${focus.frontApp}, key ${focus.keyWindow || 'none'})`)
 }
 
 /**

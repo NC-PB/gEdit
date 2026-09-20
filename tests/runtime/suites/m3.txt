@@ -1,0 +1,20 @@
+# M3: the dialect profiles and the NC language — detection, the generated grammars, the
+# code database, the program map, navigation, hover and completion.
+# Run with: tests/runtime/suite.sh tests/runtime/suites/m0.txt tests/runtime/suites/m1.txt tests/runtime/suites/m2.txt tests/runtime/suites/m3.txt
+
+# Detection through the real file operations, the profile id as the Monaco language id,
+# and the generated grammar painting both dialects in both themes. Run it first: every
+# other M3 scenario assumes the right profile is on the document.
+m3-profiles
+
+# The outline index behind the program map, the quick outline, folding and sticky scroll.
+m3-outline
+
+# F7, Shift+F7 and Ctrl+G, with real key presses — the bindings are what is under test.
+m3-nav
+
+# Hover and completion from the code database, and the two `assist.*` settings.
+m3-assistant
+
+# G7: keypress to render and the outline update on a 10 MB / 300k-line program.
+m3-perf

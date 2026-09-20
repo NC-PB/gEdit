@@ -1,0 +1,16 @@
+{
+  "profile": "fanuc-gcode",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"program","line":3,"text":"O3001","endLine":33},
+    {"kind":"comment","line":4,"text":"T5  D12 FLAT END MILL"},
+    {"kind":"comment","line":5,"text":"T6  D6 BALL END MILL"},
+    {"kind":"tool","line":8,"text":"T5 — D12 FLAT END MILL","tool":"5","endLine":21},
+      {"kind":"subprogram-call","line":14,"text":"M98 P3002 L2"},
+      {"kind":"subprogram-call","line":16,"text":"M98 P3002 L2"},
+    {"kind":"tool","line":22,"text":"T6 — D6 BALL END MILL","tool":"6","endLine":33},
+      {"kind":"end","line":33,"text":"M30"},
+    {"kind":"program","line":34,"text":"O3002","endLine":43},
+    {"kind":"end","line":41,"text":"M99"}
+  ]
+}

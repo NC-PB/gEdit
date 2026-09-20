@@ -15,6 +15,8 @@ import { keyEvent, typeEvents } from './keys.js'
  * @property {string} home HOME of the app
  * @property {string} python interpreter the harness uses for GEDIT_PYTHON by default
  * @property {string} appVersion version in the synced package.json
+ * @property {boolean} [robust] false with `GEDIT_RH_ROBUST=0`: the activation gate and
+ *   the frame-synced waits are off, so a run can be measured against the old harness
  */
 
 /**
@@ -26,6 +28,22 @@ import { keyEvent, typeEvents } from './keys.js'
  * @property {string[]} [events] run events the app must have printed, e.g. `MenuEvent quit`
  */
 
+/**
+ * What AppKit and the window server say about who owns the keyboard.
+ * @typedef {object} FocusState
+ * @property {boolean} active `[NSApp isActive]`
+ * @property {boolean} key some window of the app is the key window
+ * @property {boolean} mainKey the main window itself is key (false while an alert is up)
+ * @property {boolean} visible
+ * @property {string} keyWindow class of `[NSApp keyWindow]`, empty when there is none
+ * @property {number} frontPid pid of the frontmost application
+ * @property {string} frontApp its name
+ * @property {number} ourPid
+ * @property {number} alerts visible alert panels
+ * @property {boolean} [deliverable] whether native input would reach the app
+ * @property {string} [reason] why it would not
+ */
+
 /** @typedef {{ len: number, mtimeMs: number, mode: number, isFile: boolean, isDir: boolean }} Stat */
 /** @typedef {{ texts: string[], buttons: string[], count: number }} AlertInfo */
 /** @typedef {Record<string, string | number | boolean>} Attrs */
@@ -35,6 +53,29 @@ const PLAIN_ATTRS = new Set(['disabled', 'role', 'title', 'hidden', 'checked', '
 
 /** @param {number} ms */
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/**
+ * Resolves after the browser has rendered a frame, so what is read next is what is on
+ * the screen. Two `requestAnimationFrame`s: the first runs before the paint of the frame
+ * the pending work belongs to, the second after it. Guarded by a timeout, because a page
+ * that WebKit decides not to draw (an occluded window, a background tab) would otherwise
+ * never call back.
+ * @param {number} [timeout] ms
+ * @returns {Promise<boolean>} whether a frame was actually rendered
+ */
+export function nextFrame(timeout = 250) {
+  return new Promise((resolve) => {
+    let settled = false
+    const done = (/** @type {boolean} */ drawn) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(drawn)
+    }
+    const timer = setTimeout(() => done(false), timeout)
+    requestAnimationFrame(() => requestAnimationFrame(() => done(true)))
+  })
+}
 
 /**
  * Calls a backend command through Tauri's IPC.
@@ -78,8 +119,14 @@ export function createHarness(cfg, rec, send) {
   const checks = []
   /** @type {ExitExpectation | null} */
   let exitExpected = null
+  const robust = cfg.robust !== false
 
   /**
+   * Waits for a condition. The first sample is taken straight away, so a condition that
+   * already holds costs nothing; every later one is taken **after a rendered frame**, so
+   * a DOM read never lands in the frame the app is still building. That closes the
+   * commonest timing flake: `waitFor` returning on a state Svelte had written but the
+   * editor had not laid out yet.
    * @template T
    * @param {() => T | Promise<T>} fn
    * @param {{ timeout?: number, interval?: number }} [opts]
@@ -87,9 +134,9 @@ export function createHarness(cfg, rec, send) {
    */
   async function waitFor(fn, { timeout = 5000, interval = 50 } = {}) {
     const end = performance.now() + timeout
+    /** @type {T | undefined} */
+    let v
     for (;;) {
-      /** @type {T | undefined} */
-      let v
       try {
         v = await fn()
       } catch {
@@ -97,6 +144,33 @@ export function createHarness(cfg, rec, send) {
       }
       if (v || performance.now() >= end) return v
       await sleep(interval)
+      if (robust) await nextFrame()
+    }
+  }
+
+  /**
+   * Waits until the page stops changing: no DOM mutation and no backend call in flight
+   * for `quiet` ms in a row, sampled once per rendered frame. Use it after an action
+   * whose effect has no single element to wait for (a theme change, a panel toggle, a
+   * document switch), instead of a fixed sleep.
+   * @param {{ quiet?: number, timeout?: number }} [opts]
+   * @returns {Promise<boolean>} false when it was still busy at the timeout
+   */
+  async function idle({ quiet = 150, timeout = 5000 } = {}) {
+    const end = performance.now() + timeout
+    let last = performance.now()
+    const observer = new MutationObserver(() => (last = performance.now()))
+    observer.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true })
+    try {
+      for (;;) {
+        await nextFrame()
+        if (rec.ipc.inflight > 0) last = performance.now()
+        if (performance.now() - last >= quiet) return true
+        if (performance.now() >= end) return false
+        await sleep(20)
+      }
+    } finally {
+      observer.disconnect()
     }
   }
 
@@ -150,7 +224,22 @@ export function createHarness(cfg, rec, send) {
     /** Checks recorded so far. */
     checks: () => checks.slice(),
 
+    /**
+     * Reports that this run could not be carried out for a reason outside the app - the
+     * screen is locked, another app holds the keyboard, a tool is missing. The runner
+     * reports BLOCKED instead of a failure, and the suite does not retry it.
+     * @param {string} reason
+     * @param {unknown} [detail]
+     */
+    blocked(reason, detail) {
+      send({ kind: 'log', msg: `blocked: ${reason}` })
+      return invoke('h_blocked', { reason, state: detail ?? null })
+    },
+
     waitFor,
+    idle,
+    /** Resolves once the browser has rendered a frame. @returns {Promise<boolean>} */
+    frame: nextFrame,
     q,
     qa,
 
@@ -192,14 +281,17 @@ export function createHarness(cfg, rec, send) {
     nativeType: (text) => invoke('h_native_input', { events: typeEvents(text) }),
 
     /**
-     * A real mouse click at the element's center. macOS only delivers it when the app
-     * could be activated; see h.window.state().active.
+     * A real mouse click at the element's center. The harness brings the app to the
+     * front first (a click on a window that is not key only activates it), and the
+     * element is measured after a rendered frame, so the coordinates are the ones on
+     * the screen rather than the ones from a layout that was still settling.
      * @param {HTMLElement | null | undefined} el
      * @param {{ dx?: number, dy?: number, clickCount?: number }} [opts] offset from the center
      * @returns {Promise<string[]>}
      */
-    nativeClick(el, { dx = 0, dy = 0, clickCount = 1 } = {}) {
+    async nativeClick(el, { dx = 0, dy = 0, clickCount = 1 } = {}) {
       if (!el) throw new Error('h.nativeClick: no element')
+      if (robust) await nextFrame()
       const r = el.getBoundingClientRect()
       const x = r.left + r.width / 2 + dx
       const y = window.innerHeight - (r.top + r.height / 2 + dy)
@@ -240,11 +332,13 @@ export function createHarness(cfg, rec, send) {
       /** The front-most visible NSAlert, or null. @returns {Promise<AlertInfo | null>} */
       visible: () => invoke('h_alert_info'),
       /**
-       * Waits for an NSAlert to appear.
+       * Waits for an NSAlert to appear. The default is generous because a loaded Mac can
+       * take seconds to put the panel up, and every caller is waiting for one it expects:
+       * a longer wait only lengthens the path where none arrives.
        * @param {{ timeout?: number }} [opts]
        * @returns {Promise<AlertInfo | null>}
        */
-      wait: ({ timeout = 5000 } = {}) => waitFor(() => invoke('h_alert_info'), { timeout, interval: 100 }),
+      wait: ({ timeout = 10000 } = {}) => waitFor(() => invoke('h_alert_info'), { timeout, interval: 100 }),
       /**
        * Clicks a button of the real NSAlert (alternatives: `'OK|Ok'`), waiting up to
        * `timeout` ms for it; rejects when no such button shows up.
@@ -252,7 +346,7 @@ export function createHarness(cfg, rec, send) {
        * @param {{ timeout?: number }} [opts]
        * @returns {Promise<{ texts: string[], buttons: string[], clicked: string }>}
        */
-      click: (label, { timeout = 5000 } = {}) => invoke('h_alert_click', { label, timeoutMs: timeout }),
+      click: (label, { timeout = 10000 } = {}) => invoke('h_alert_click', { label, timeoutMs: timeout }),
     },
 
     disk: {
@@ -335,6 +429,22 @@ export function createHarness(cfg, rec, send) {
        * @returns {Promise<{ exists: boolean, active?: boolean, key?: boolean, visible?: boolean, sheet?: boolean, alerts?: number }>}
        */
       state: () => invoke('h_window_state'),
+
+      /**
+       * Who owns the keyboard, and whether native input would reach the app
+       * (`deliverable`, with a `reason` when it would not).
+       * @returns {Promise<FocusState>}
+       */
+      focus: () => invoke('h_focus_state'),
+
+      /**
+       * Brings the app to the front and waits until it owns the keyboard. Native input
+       * does this on its own; call it directly before reading something that only holds
+       * from the front, or to fail early with a clear reason.
+       * @param {{ timeout?: number }} [opts]
+       * @returns {Promise<FocusState>} rejects with the reason, and marks the run BLOCKED
+       */
+      ensureFront: ({ timeout } = {}) => invoke('h_ensure_front', { timeoutMs: timeout }),
     },
 
     /**

@@ -1,0 +1,111 @@
+{
+  "id": "heidenhain-klartext",
+  "name": "Heidenhain Klartext",
+  "shortName": "Heidenhain",
+  "version": 1,
+  "grammar": "klartext",
+  "codes": "heidenhain",
+  "files": {
+    "extensions": ["h"],
+    "defaultExtension": "h",
+    "filterName": "Heidenhain Klartext",
+    "encoding": "keep",
+    "lineEnding": "keep",
+    "newFileLineEnding": "crlf"
+  },
+  "detect": {
+    "extensions": { "h": 10 },
+    "content": [
+      { "pattern": "^\\s*(\\d+\\s+)?BEGIN\\s+PGM\\b", "weight": 5 },
+      { "pattern": "^\\s*(\\d+\\s+)?TOOL\\s+CALL\\b", "weight": 5 },
+      { "pattern": "^\\s*\\d+\\s+(L|CC|C|CR|LBL)\\b", "weight": 1 },
+      { "pattern": "\\bFMAX\\b", "weight": 1 }
+    ]
+  },
+  "syntax": {
+    "comments": [{ "start": ";", "end": null }],
+    "strings": true,
+    "sectionHeading": "^\\s*\\d+\\s+\\*",
+    "continuation": "~\\s*$",
+    "continuationMark": "~",
+    "blockSkip": { "chars": "/", "position": "after-number" },
+    "blockNumber": { "mode": "leading-integer", "mandatory": true },
+    "decimalSeparator": ".",
+    "decimalPointSignificant": false,
+    "wordSeparatorRequired": true,
+    "incrementalPrefix": "I",
+    "variables": "Q[LRS]?\\d+",
+    "keywords": [
+      "BEGIN PGM",
+      "END PGM",
+      "BLK FORM",
+      "TOOL CALL",
+      "TOOL DEF",
+      "CYCL DEF",
+      "CYCL CALL PAT",
+      "CYCL CALL POS",
+      "CYCL CALL",
+      "CALL LBL",
+      "CALL PGM",
+      "SEL PGM",
+      "LBL",
+      "REP",
+      "APPR LT",
+      "APPR LN",
+      "APPR CT",
+      "APPR LCT",
+      "DEP LT",
+      "DEP LN",
+      "DEP CT",
+      "DEP LCT",
+      "RND",
+      "CHF",
+      "CTP",
+      "CT",
+      "CP",
+      "CC",
+      "CR",
+      "LP",
+      "LN",
+      "L",
+      "C",
+      "FMAX",
+      "FAUTO",
+      "FN",
+      "STOP",
+      "PLANE SPATIAL",
+      "PLANE RESET",
+      "FUNCTION TCPM",
+      "FUNCTION RESET TCPM",
+      "TRANS DATUM",
+      "MM",
+      "INCH"
+    ]
+  },
+  "addresses": {
+    "feed": "F",
+    "rapid": "FMAX",
+    "spindle": "S",
+    "axes": ["X", "Y", "Z", "A", "B", "C", "U", "V", "W"]
+  },
+  "toolCall": {
+    "trigger": "\\bTOOL\\s+CALL\\s+(\\d|\"|QS\\d)",
+    "tool": "TOOL\\s+CALL\\s+(?<tool>\\d+(\\.\\d)?|\"[^\"]+\"|QS\\d+)",
+    "toolFrom": "same-line"
+  },
+  "program": {
+    "start": ["\\bBEGIN\\s+PGM\\s+(?<name>\\S+)"],
+    "end": ["\\bEND\\s+PGM\\b"]
+  },
+  "outline": [
+    { "kind": "section", "pattern": "^\\s*\\d+\\s+\\*\\s*-?\\s*(?<text>.*)$" },
+    { "kind": "comment", "pattern": "^\\s*\\d+\\s*;\\s*(?<text>.*)$" },
+    { "kind": "program", "pattern": "^\\s*\\d+\\s+(?<text>BEGIN\\s+PGM\\s+(?<name>\\S+)(?:\\s+(?:MM|INCH))?)" },
+    { "kind": "label", "pattern": "^\\s*\\d+\\s+(?:/\\s*)?(?<text>LBL\\s+(?<name>(?!0(?![\\d.]))\\S+))" },
+    { "kind": "subprogram-call", "pattern": "\\b(?<text>(?:CALL\\s+(?:LBL|PGM)|SEL\\s+PGM)\\s+\\S+(?:\\s+REP\\s+\\S+)?)" },
+    { "kind": "stop", "pattern": "\\b(STOP|M0?[01])\\b" },
+    { "kind": "end", "pattern": "\\bEND\\s+PGM\\b|\\bM(?:30|2)\\b" }
+  ],
+  "numbering": { "mode": "consecutive", "start": 0, "step": 1 },
+  "editing": { "forceUppercase": false, "preventLineJoin": true }
+}

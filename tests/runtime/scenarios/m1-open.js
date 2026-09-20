@@ -109,7 +109,10 @@ scenario('m1-dnd', { timeout: 120 }, async (h) => {
   // `tauri-plugin-fs` grants every dropped path before the event reaches the page (F2),
   // and `files_stat` is what tells a folder from a file.
   await h.drop([nc, klartext, folder], { x: 300, y: 300 })
-  await h.waitFor(() => tabs().length === 2, { timeout: 10000 })
+  // The files arrive one by one and the starter buffer is dropped once the last one has
+  // taken its place, so "two tabs" is true mid-transition, on `['', nc]`. Wait for the end
+  // state, the way `m1-open-multi` does, or the checks below race the second file in.
+  await h.waitFor(() => !!h.q('doc-tab', { path: klartext }) && !h.q('doc-tab', { path: '' }), { timeout: 10000 })
   h.check('dropping two files and a folder opens the two files', JSON.stringify(paths()) === JSON.stringify([nc, klartext]), paths())
   h.check('the dropped folder is not opened as a document', paths().every((p) => p !== folder), paths())
   await h.waitFor(() => h.q('status-message')?.textContent === '1 folder was ignored: only files can be opened', { timeout: 3000 })

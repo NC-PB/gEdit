@@ -1,0 +1,22 @@
+{
+  "profile": "fanuc-gcode",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"program","line":3,"text":"O1001","endLine":68},
+    {"kind":"comment","line":4,"text":"POST: SYNTHETIC 3-AXIS MILL"},
+    {"kind":"comment","line":5,"text":"STOCK 100 X 80 X 20 MM"},
+    {"kind":"comment","line":6,"text":"T1  D10 FLAT END MILL"},
+    {"kind":"comment","line":7,"text":"T2  D8.5 DRILL"},
+    {"kind":"comment","line":8,"text":"T3  M10X1.5 TAP"},
+    {"kind":"comment","line":10,"text":"CONTOUR ROUGH"},
+    {"kind":"tool","line":11,"text":"T1 — CONTOUR ROUGH","tool":"1","endLine":29},
+      {"kind":"stop","line":28,"text":"M1"},
+      {"kind":"comment","line":29,"text":"SPOT AND PECK DRILL"},
+    {"kind":"tool","line":30,"text":"T2 — SPOT AND PECK DRILL","tool":"2","endLine":48},
+      {"kind":"stop","line":47,"text":"M1"},
+      {"kind":"comment","line":48,"text":"TAP M10X1.5"},
+    {"kind":"tool","line":49,"text":"T3 — TAP M10X1.5","tool":"3","endLine":68},
+      {"kind":"subprogram-call","line":65,"text":"M98 P2000"},
+      {"kind":"end","line":66,"text":"M30"}
+  ]
+}

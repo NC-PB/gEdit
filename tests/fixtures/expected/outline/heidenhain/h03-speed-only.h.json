@@ -1,0 +1,12 @@
+{
+  "profile": "heidenhain-klartext",
+  "items": [
+    {"kind":"program","line":1,"text":"BEGIN PGM H03_SPEED_ONLY MM","endLine":18},
+    {"kind":"comment","line":2,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"section","line":3,"text":"ONE TOOL, TWO SPEEDS","endLine":3},
+    {"kind":"tool","line":4,"text":"T4 — ONE TOOL, TWO SPEEDS","tool":"4","endLine":18},
+      {"kind":"comment","line":9,"text":"SPEED CHANGE ONLY, SAME TOOL"},
+      {"kind":"end","line":16,"text":"M30"},
+      {"kind":"end","line":17,"text":"END PGM"}
+  ]
+}

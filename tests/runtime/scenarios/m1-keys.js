@@ -32,6 +32,9 @@ const SHORTCUTS = [
   ['view.commandPalette', 'F1'],
   ['compare.with', 'Mod+Alt+C'],
   ['settings.open', 'Mod+,'],
+  ['nav.goto', 'Ctrl+G'],
+  ['nav.nextTool', 'F7'],
+  ['nav.prevTool', 'Shift+F7'],
 ]
 
 scenario('m1-keys', { timeout: 180 }, async (h) => {

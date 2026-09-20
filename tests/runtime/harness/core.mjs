@@ -36,6 +36,24 @@ export function rhDir() {
 
 export const binaryPath = (rh) => path.join(rh, 'target', 'debug', 'gedit')
 
+/**
+ * Whether the WP3.0 robustness layer is on: the activation gate in harness.rs, the
+ * frame-synced waits in lib/api.js and the retry in suite.sh. `GEDIT_RH_ROBUST=0` turns
+ * all three off, which is how the harness is measured against its earlier self.
+ */
+export const robustEnabled = () => process.env.GEDIT_RH_ROBUST !== '0'
+
+/**
+ * True while the Mac's screen is locked. Native input needs a real key window, so a
+ * scenario that posts keys or clicks cannot run then - it is blocked, not broken.
+ */
+export function screenLocked() {
+  if (process.platform !== 'darwin') return false
+  const r = spawnSync('/usr/sbin/ioreg', ['-n', 'Root', '-d1', '-r', '-k', 'IOConsoleUsers'], { encoding: 'utf8' })
+  if (r.status !== 0 || !r.stdout) return false
+  return /CGSSessionScreenIsLocked"\s*=\s*Yes/.test(r.stdout)
+}
+
 // ---------------------------------------------------------------- lock
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -50,11 +68,43 @@ function alive(pid) {
 }
 
 /**
+ * Keeps the display awake while a suite runs. A cumulative suite takes minutes; when the
+ * idle timer locks the screen halfway through, `loginwindow` takes the keyboard and every
+ * scenario left is blocked. `caffeinate` is a process, not a setting: it asserts only
+ * while it runs and it is told to exit with us, so nothing is left changed on the Mac.
+ * `GEDIT_RH_NO_CAFFEINATE=1` leaves the idle timer alone.
+ * @returns {() => void} stops the assertion
+ */
+function keepDisplayAwake() {
+  if (process.platform !== 'darwin' || process.env.GEDIT_RH_NO_CAFFEINATE === '1') return () => {}
+  try {
+    const child = spawn('/usr/bin/caffeinate', ['-d', '-i', '-u', '-w', String(process.pid)], { stdio: 'ignore', detached: true })
+    child.unref()
+    return () => {
+      try {
+        child.kill()
+      } catch {
+        // It exits with us anyway.
+      }
+    }
+  } catch {
+    return () => {}
+  }
+}
+
+/**
+ * Where the run lock lives. It guards the screen, not the build, so two harness folders
+ * on one Mac must share it: `GEDIT_RH_LOCK=<dir>` points them at the same one.
+ */
+export const lockPath = (rh) => (process.env.GEDIT_RH_LOCK ? path.resolve(process.env.GEDIT_RH_LOCK) : path.join(rh, 'lock'))
+
+/**
  * Serializes syncs and runs: the window takes over the screen, and a sync replaces
  * the binary. Stale locks (dead owner) are taken over.
  */
 export async function withLock(rh, what, fn) {
-  const lock = path.join(rh, 'lock')
+  const lock = lockPath(rh)
+  fs.mkdirSync(path.dirname(lock), { recursive: true })
   const waitSecs = Number(process.env.GEDIT_RH_LOCK_WAIT || 1800)
   const deadline = Date.now() + waitSecs * 1000
   let told = false
@@ -85,9 +135,11 @@ export async function withLock(rh, what, fn) {
   }
   process.once('SIGINT', onSignal)
   process.once('SIGTERM', onSignal)
+  const wake = keepDisplayAwake()
   try {
     return await fn()
   } finally {
+    wake()
     process.off('SIGINT', onSignal)
     process.off('SIGTERM', onSignal)
     release()
@@ -209,6 +261,9 @@ export async function runScenario(rh, name, known, opts = {}) {
   const result = {
     scenario: name,
     pass: false,
+    /** 'pass' | 'fail' | 'blocked'; judge() decides, suite.sh turns it into a row. */
+    status: 'fail',
+    attempt: opts.attempt ?? 1,
     checks: [],
     violations: [],
     errors: [],
@@ -216,6 +271,12 @@ export async function runScenario(rh, name, known, opts = {}) {
     warnings: [],
     unexpectedDialogs: [],
     events: [],
+    /** Reasons the run could not be carried out (screen locked, focus stolen). */
+    blocked: [],
+    /** What the activation gate saw: lost / regained / dropped / gave-up. */
+    focus: [],
+    robust: robustEnabled(),
+    screenLocked: false,
     exit: null,
     timedOut: false,
     durationMs: 0,
@@ -224,6 +285,12 @@ export async function runScenario(rh, name, known, opts = {}) {
   }
   const finish = () => {
     result.durationMs = Date.now() - t0
+    // A locked screen is a reason, not a verdict. Only a run that actually asked for the
+    // keyboard and did not get it is blocked - saying "blocked" because the screen
+    // happened to be locked would hide a real failure in a scenario that never needed it.
+    if (result.blocked.length && result.screenLocked) {
+      result.blocked.push({ reason: 'the screen was locked, so only loginwindow could be the key window', where: 'runner' })
+    }
     fs.writeFileSync(path.join(outDir, `${name}.json`), JSON.stringify(result, null, 2) + '\n')
     return result
   }
@@ -268,7 +335,9 @@ export async function runScenario(rh, name, known, opts = {}) {
   }
 
   const timeout = Number(opts.timeout ?? o.timeout ?? 90)
-  const cfg = { scenario: name, run, home, python, appVersion: appVersion(rh) }
+  const cfg = { scenario: name, run, home, python, appVersion: appVersion(rh), robust: robustEnabled() }
+  result.screenLocked = screenLocked()
+  if (result.screenLocked) result.notes.push('the screen was locked when the run started')
   const bundlePath = path.join(run, 'bundle.js')
   fs.writeFileSync(bundlePath, await bundle(entry.file, cfg))
 
@@ -297,6 +366,8 @@ export async function runScenario(rh, name, known, opts = {}) {
     HARNESS_RUN_DIR: run,
     HARNESS_REPO: REPO,
     HARNESS_TIMEOUT: String(timeout + 5),
+    // `env: 'finder'` starts from a minimal environment, so pass the flag on explicitly.
+    GEDIT_RH_ROBUST: robustEnabled() ? '1' : '0',
   })
   result.notes.push(`GEDIT_PYTHON=${env.GEDIT_PYTHON ?? '(unset)'}`)
 
@@ -374,6 +445,12 @@ function judge(result, records) {
       case 'event':
         result.events.push([r.event, r.id ?? r.label].filter(Boolean).join(' '))
         break
+      case 'blocked':
+        result.blocked.push({ reason: r.reason, where: r.where, state: r.state })
+        break
+      case 'focus':
+        result.focus.push({ event: r.event, reason: r.reason, afterMs: r.afterMs, tries: r.tries, input: r.input, state: r.state })
+        break
       case 'done':
         done = true
         break
@@ -406,6 +483,9 @@ function judge(result, records) {
   add('no unexpected console errors', unexpectedErrors.length === 0, unexpectedErrors)
   add('no unexpected file dialogs', result.unexpectedDialogs.length === 0, result.unexpectedDialogs)
   result.pass = result.checks.every((c) => c.pass) && !result.timedOut
+  // A run that could not take the keyboard says nothing about the app, so it is blocked
+  // rather than failed - and a retry of it would say nothing either.
+  result.status = result.pass ? 'pass' : result.blocked.length ? 'blocked' : 'fail'
 }
 
 function checkFile(add, f) {
@@ -437,8 +517,18 @@ function checkFile(add, f) {
   }
 }
 
+/** How many native inputs the activation gate had to rescue, and how many it lost. */
+export function focusStats(r) {
+  const of = (event) => (r.focus ?? []).filter((f) => f.event === event).length
+  return { lost: of('lost'), regained: of('regained'), dropped: of('dropped'), gaveUp: of('gave-up') }
+}
+
 /** One line per run for the console. */
 export function summarize(r) {
   const failed = r.checks.filter((c) => !c.pass).map((c) => c.name)
-  return `${r.pass ? 'PASS' : 'FAIL'} ${r.scenario} (${(r.durationMs / 1000).toFixed(1)} s, ${r.checks.filter((c) => c.pass).length}/${r.checks.length} checks)${failed.length ? '\n  failed: ' + failed.join('\n  failed: ') : ''}${r.notes.length && !r.pass ? '\n  notes: ' + r.notes.join('; ') : ''}`
+  const word = r.status === 'pass' ? 'PASS' : r.status === 'blocked' ? 'BLOCKED' : 'FAIL'
+  const f = focusStats(r)
+  const focus = f.lost ? `\n  focus: lost ${f.lost}x, regained ${f.regained}x, dropped ${f.dropped}x` : ''
+  const why = r.blocked.length ? '\n  blocked: ' + r.blocked.map((b) => `${b.reason} (${b.where})`).join('; ') : ''
+  return `${word} ${r.scenario} (${(r.durationMs / 1000).toFixed(1)} s, ${r.checks.filter((c) => c.pass).length}/${r.checks.length} checks)${failed.length ? '\n  failed: ' + failed.join('\n  failed: ') : ''}${why}${focus}${r.notes.length && !r.pass ? '\n  notes: ' + r.notes.join('; ') : ''}`
 }
