@@ -1,7 +1,16 @@
 // Real (trusted) input: mouse clicks and key presses that macOS delivers exactly like
 // hardware input, including Cmd+S and Cmd+Q through the main menu.
+//
+// This scenario needs a free screen: its first check is that macOS activated the
+// harness window, and nothing below works without that.
+//
+// M1: the window's first buffer is `Untitled-1`, and a new document is written with the
+// profile's CRLF line endings while the hook reports LF (§7.9, owner decision D17).
 
 import { scenario } from '../lib/index.js'
+
+/** The bytes a new document is written with: the hook's LF text, with CRLF breaks. */
+const onDisk = (/** @type {string} */ text) => text.replace(/\n/g, '\r\n')
 
 scenario('m0-trusted', { timeout: 120 }, async (h) => {
   const state = await h.window.state()
@@ -26,7 +35,7 @@ scenario('m0-trusted', { timeout: 120 }, async (h) => {
   h.check('a real click at the start of line 1 goes there', JSON.stringify(h.app.cursor()) === '{"line":1,"column":1}', h.app.cursor())
 
   await h.nativeType('T7 M6\n')
-  await h.waitFor(async () => (await h.title()) === '● Untitled — gEdit')
+  await h.waitFor(async () => (await h.title()) === '● Untitled-1 — gEdit')
   h.check('real key presses type into the editor and mark it modified', h.app.text().startsWith('T7 M6\n% \n'), {
     text: h.app.text().slice(0, 20),
     title: await h.title(),
@@ -41,7 +50,7 @@ scenario('m0-trusted', { timeout: 120 }, async (h) => {
   await h.waitFor(async () => (await h.title()) === 'trusted.nc — gEdit')
   h.check(
     'a real Cmd+S saves once and types no "s" into the buffer',
-    h.dialogs.calls().length === before + 1 && (await h.disk.read(saved)) === h.app.text() && h.app.text().startsWith('T7 M6\n'),
+    h.dialogs.calls().length === before + 1 && (await h.disk.read(saved)) === onDisk(h.app.text()) && h.app.text().startsWith('T7 M6\n'),
     { dialogs: h.dialogs.calls().slice(before).map((c) => c.kind), text: h.app.text().slice(0, 20) },
   )
 

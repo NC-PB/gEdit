@@ -17,6 +17,13 @@ export const KNOWN_NOISE = [
   /NotAllowedError/,
   // Monaco cancels pending async work (e.g. hovers, delayed tokenization) with this.
   /^unhandledrejection: (Canceled|Error: Canceled)/,
+  // Monaco's `automaticLayout` ResizeObserver against the M1 shell (added at I2, merge B;
+  // predicted by mergeA 5.2/9 and WP1.5 8/5). Per the ResizeObserver spec this is a
+  // notification that the observation loop deferred the rest of its callbacks to the next
+  // frame, not an exception - the layout still converges. Measured on `m1/int`: startup is
+  // clean (`i2-boot-only`: 0 errors) and it appears only while a panel toggle resizes the
+  // editor, after which the editor and the panels are in the right state.
+  /^uncaught: ResizeObserver loop (completed with undelivered notifications|limit exceeded)/,
 ]
 
 /** The harness state folder: builds, run folders, results. */

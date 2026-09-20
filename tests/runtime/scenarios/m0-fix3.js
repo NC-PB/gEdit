@@ -1,14 +1,28 @@
 // Content gEdit refuses to edit as text, and saves that must not touch the file:
-// UTF-16 and binary files leave the open document alone, and saving an unchanged
-// buffer writes nothing, whichever way it is triggered.
+// a refused file leaves the open document alone, and saving an unchanged buffer writes
+// nothing, whichever way it is triggered.
+//
+// M1: the codec decodes what M0 refused. UTF-16 with a byte order mark is read and
+// written back (§7.2), and so is a punched-tape program with NUL bytes inside it — those
+// are stripped with a count and the document is marked modified. What is left is the
+// AD-7 rule: a file whose NUL share between leader and trailer is above 10 % is data,
+// not a program. `m1-encoding2` covers the files that now open; this scenario keeps the
+// refusal and the "a save must not touch the file" half.
+//
+// NEEDS A FREE SCREEN, for the undo check near the end: Cmd+Z is a key equivalent of the
+// macOS Edit menu, so the event only reaches Monaco while the app is the active
+// application. It fails the same way on M0 (see the H1 hand-off note).
 
 import { scenario } from '../lib/index.js'
 
-const REFUSED = [
-  { file: 'utf16le-bom.nc', why: /UTF-16 encoded/ },
-  { file: 'utf16be-bom.nc', why: /UTF-16 encoded/ },
-  { file: 'nul-inside.nc', why: /binary data \(NUL bytes\)/ },
-  { file: 'nul-heavy.bin', why: /binary data \(NUL bytes\)/ },
+const REFUSED = [{ file: 'nul-heavy.bin', why: /% NUL bytes/ }]
+
+/** Files M0 refused and M1 reads. Their round trip belongs to `m1-encoding2`. */
+const NO_LONGER_REFUSED = [
+  { file: 'utf16le-bom.nc', label: 'UTF-16 LE', stripped: false },
+  { file: 'utf16be-bom.nc', label: 'UTF-16 BE', stripped: false },
+  // Inner NULs are stripped with a count, which marks the document modified (AD-7).
+  { file: 'nul-inside.nc', label: 'UTF-8', stripped: true },
 ]
 
 scenario('m0-fix3', { timeout: 180 }, async (h) => {
@@ -84,29 +98,63 @@ scenario('m0-fix3', { timeout: 180 }, async (h) => {
     h.check(`${bad.file}: the open document is still the one from before`, (await currentPath()) === baseline)
   }
 
-  // A refusal after "Don't Save" must not throw the edits away either.
+  // M1: the three files M0 refused are read now. They open in their own tab, keep the
+  // document that was active before, and report their encoding.
+  for (const good of NO_LONGER_REFUSED) {
+    const path = await h.fixture(`nc/encoding/${good.file}`)
+    const hexBefore = await h.disk.hex(path)
+    const tabs = h.qa('doc-tab').length
+    await h.dialogs.queue('open', path)
+    await h.nativeKeys([{ key: 'o', mods: ['cmd'] }])
+    const opened = await h.waitFor(() => h.q('doc-tab', { path, active: '1' }), { timeout: 8000 })
+    h.check(
+      `${good.file}: opens as ${good.label} in a tab of its own, without a dialog`,
+      !!opened && encodingLabel() === good.label && h.qa('doc-tab').length === tabs + 1 && (await h.alert.visible()) === null,
+      { title: await h.title(), label: encodingLabel(), tabs: h.qa('doc-tab').length, alert: await h.alert.visible() },
+    )
+    h.check(
+      good.stripped ? `${good.file}: the stripped NULs mark it modified` : `${good.file}: it opens unmodified`,
+      (opened?.dataset.dirty === '1') === good.stripped,
+      { dirty: opened?.dataset.dirty, status: h.q('status-message')?.textContent },
+    )
+    // Close it again, so exactly one document is unsaved when the run quits below.
+    await h.nativeKeys([{ key: 'w', mods: ['cmd'] }])
+    if (good.stripped) await h.alert.click("Don't Save")
+    await h.waitFor(() => h.q('doc-tab', { path }) === null, { timeout: 4000 })
+    h.check(`${good.file}: closing it wrote nothing`, (await h.disk.hex(path)) === hexBefore)
+  }
+
+  // A refused file must not throw away the edits of the document that stays open.
+  h.click(h.q('doc-tab', { path: baseline }))
+  await h.waitFor(async () => (await h.title()) === 'utf8-lf.nc — gEdit')
   h.focusEditor()
   await h.nativeType('(EDIT A)\n')
   await h.waitFor(async () => (await h.title()) === '● utf8-lf.nc — gEdit')
   const edited = await state()
-  const utf16 = `${run}/fixtures/nc/encoding/utf16le-bom.nc`
-  await h.dialogs.queue('open', utf16)
+  const tabsBeforeRefusal = h.qa('doc-tab').length
+  await h.dialogs.queue('open', `${run}/fixtures/nc/encoding/nul-heavy.bin`)
   await h.nativeKeys([{ key: 'o', mods: ['cmd'] }])
-  await h.alert.click("Don't Save")
   await h.alert.click('OK|Ok')
   await h.sleep(400)
   h.check(
-    'a refused file after "Don\'t Save" leaves the edited buffer as it was',
-    JSON.stringify(await state()) === JSON.stringify(edited) && h.app.text().startsWith('(EDIT A)'),
-    { edited, now: await state() },
+    'a refused file leaves the edited buffer as it was and opens no tab',
+    JSON.stringify(await state()) === JSON.stringify(edited) && h.app.text().startsWith('(EDIT A)') && h.qa('doc-tab').length === tabsBeforeRefusal,
+    { edited, now: await state(), tabs: h.qa('doc-tab').length },
   )
+
+  // Drop the edit again, so exactly one document is unsaved when the run quits below.
+  await h.nativeKeys([{ key: 'w', mods: ['cmd'] }])
+  await h.alert.click("Don't Save")
+  await h.waitFor(() => h.q('doc-tab', { path: baseline }) === null, { timeout: 4000 })
+  h.check('closing the edited document with "Don\'t Save" leaves its file alone', (await h.disk.hex(baseline)) === baselineHex, {
+    tabs: h.qa('doc-tab').map((e) => e.dataset.path),
+  })
 
   // ---------------------------------------------------------------- saving an unchanged file
   const cp = await h.fixture('nc/encoding/cp1252-crlf.nc')
   const cpHex = await h.disk.hex(cp)
   await h.dialogs.queue('open', cp)
   await h.nativeKeys([{ key: 'o', mods: ['cmd'] }])
-  await h.alert.click("Don't Save")
   await h.waitFor(async () => (await h.title()) === 'cp1252-crlf.nc — gEdit')
   const cpStat = await h.disk.stat(cp)
   const opened = h.app.text()

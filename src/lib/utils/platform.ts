@@ -9,10 +9,10 @@ export function isMacPlatform(): boolean {
   return /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
 }
 
-/** Human-readable shortcut, e.g. shortcutLabel('S', true) -> "⇧⌘S" on macOS, "Ctrl+Shift+S" elsewhere. */
-export function shortcutLabel(key: string, shift = false): string {
-  if (isMacPlatform()) return `${shift ? '⇧' : ''}⌘${key}`;
-  return `Ctrl+${shift ? 'Shift+' : ''}${key}`;
+/** True on Windows, where paths are case-insensitive (as they are on macOS). */
+export function isWindowsPlatform(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /Win/i.test(navigator.platform || navigator.userAgent);
 }
 
 /** Last path segment ("C:\\nc\\a.h" and "/nc/a.h" both give "a.h"). */

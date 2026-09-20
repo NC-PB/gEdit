@@ -1,10 +1,26 @@
 // The broad M0 regression: what the app looks like when it starts, that the webview
 // runs under the production CSP, the file operations behind the ribbon and the
 // shortcuts, the script backend, the fs scope, and the unsaved-changes guard.
+//
+// Updated for the three intentional M1 behaviour changes (plan §5 M1):
+//   1. Open adds a tab instead of replacing the document, so the "open with unsaved
+//      changes" prompt is gone — and the lone untouched starter buffer is the scratch
+//      document a first open (or drop) takes the place of.
+//   2. The script output lives in the bottom panel, which `scripts.run` opens itself.
+//   3. The ribbon `profile-select` dropdown became the `profile` status-bar item
+//      (§7.9 marks `profile-select` M0-only).
+// Everything else is the M0 behaviour, unchanged.
 
 import { scenario } from '../lib/index.js'
 
 const INITIAL = '% \nO1000\nG0 X0 Y0\nM30 \n%'
+
+/**
+ * The bytes a new document is written with: the hook's LF text, with the CRLF breaks
+ * every P1 profile gives a new file (`newFileLineEnding`, plan §2 and D17).
+ * @param {string} text
+ */
+const onDisk = (text) => text.replace(/\n/g, '\r\n')
 
 scenario('m0-main', { timeout: 180 }, async (h) => {
   const run = h.cfg.run
@@ -50,11 +66,19 @@ scenario('m0-main', { timeout: 180 }, async (h) => {
   h.check('nothing is loaded from outside the app', external.length === 0, { external, total: resources.length })
 
   // ---------------------------------------------------------------- the initial document
-  h.check('the window title names the untitled buffer', (await h.title()) === 'Untitled — gEdit', await h.title())
+  h.check('the window title names the untitled buffer', (await h.title()) === 'Untitled-1 — gEdit', await h.title())
   h.check('the editor holds the starter program', h.app.text() === INITIAL, h.app.text())
   h.check('the cursor starts at 1:1', JSON.stringify(h.app.cursor()) === '{"line":1,"column":1}', h.app.cursor())
-  h.check('the Fanuc profile is active', h.app.activeProfile() === 'fanuc-gcode' && h.q('profile-select')?.getAttribute('data-testid') === 'profile-select')
-  h.check('the profile selector shows it', /** @type {HTMLSelectElement} */ (h.q('profile-select'))?.value === 'fanuc-gcode')
+  // M1 change 3: the dropdown is gone; the same profile is read off the status bar.
+  h.check('the Fanuc profile is active', h.app.activeProfile() === 'fanuc-gcode' && h.q('profile-select') === null, {
+    profile: h.app.activeProfile(),
+    legacySelect: h.q('profile-select'),
+  })
+  h.check(
+    'the profile status item shows it',
+    h.q('status-item', { item: 'profile' })?.textContent === 'Fanuc',
+    h.q('status-item', { item: 'profile' })?.textContent,
+  )
   h.check('the status bar shows the encoding and the cursor', h.q('status-item', { item: 'encoding' })?.textContent === 'UTF-8' && h.q('status-item', { item: 'cursor' })?.textContent === 'Ln 1, Col 1', {
     file: h.q('status-item', { item: 'file' })?.textContent,
     profile: h.q('status-item', { item: 'profile' })?.textContent,
@@ -65,20 +89,17 @@ scenario('m0-main', { timeout: 180 }, async (h) => {
   h.check('the program map is empty for the starter program', h.qa('program-map-item').length === 0)
   h.check('the Home tab is selected', h.q('ribbon-tab', { tab: 'home', 'aria-selected': 'true' }) !== null)
 
-  // The hook switches the profile the same way the selector does, and does it at once.
+  // The hook switches the profile the same way the picker does. The store changes in the
+  // same tick; the status item is Svelte state, so it repaints on the next frame.
   const profileLabel = () => h.q('status-item', { item: 'profile' })?.textContent
   const fanucLabel = profileLabel()
   h.app.setProfile('heidenhain-klartext')
-  const switched = {
-    profile: h.app.activeProfile(),
-    select: /** @type {HTMLSelectElement} */ (h.q('profile-select'))?.value,
-    label: profileLabel(),
-  }
-  h.check(
-    'setProfile() switches the profile and the UI follows without a wait',
-    switched.profile === 'heidenhain-klartext' && switched.select === 'heidenhain-klartext' && switched.label !== fanucLabel,
-    switched,
-  )
+  h.check('setProfile() switches the profile at once', h.app.activeProfile() === 'heidenhain-klartext', h.app.activeProfile())
+  await h.waitFor(() => profileLabel() === 'Heidenhain', { timeout: 2000 })
+  h.check('the profile status item follows', profileLabel() === 'Heidenhain' && fanucLabel === 'Fanuc', {
+    before: fanucLabel,
+    now: profileLabel(),
+  })
   let refused = false
   try {
     h.app.setProfile('no-such-profile')
@@ -87,7 +108,11 @@ scenario('m0-main', { timeout: 180 }, async (h) => {
   }
   h.check('setProfile() refuses an unknown profile', refused && h.app.activeProfile() === 'heidenhain-klartext')
   h.app.setProfile('fanuc-gcode')
-  h.check('setProfile() switches back', h.app.activeProfile() === 'fanuc-gcode' && profileLabel() === fanucLabel)
+  await h.waitFor(() => profileLabel() === fanucLabel, { timeout: 2000 })
+  h.check('setProfile() switches back', h.app.activeProfile() === 'fanuc-gcode' && profileLabel() === fanucLabel, {
+    profile: h.app.activeProfile(),
+    label: profileLabel(),
+  })
 
   const menu = await h.menu()
   h.check(
@@ -171,13 +196,23 @@ scenario('m0-main', { timeout: 180 }, async (h) => {
   h.check('the picked folder fills the script list', !!select)
   if (select) {
     h.select(select, 'a_echo.py')
-    h.click(h.q('script-run'))
+    // M1: the Run button carries `disabled` until the picked script reaches the store,
+    // and Svelte flushes that one microtask later — a user cannot click faster.
+    const runButton = await h.waitFor(() => h.q('script-run', { disabled: false }), { timeout: 2000 })
+    h.check('picking a script enables the Run button', !!runButton, h.q('script-run')?.outerHTML?.slice(0, 120))
+    h.click(runButton)
+    // M1 change 2: the output is a bottom-region panel, which `scripts.run` opens itself.
     await h.waitFor(() => h.q('output-panel', { running: '0' }) && h.q('output-json'), { timeout: 10000 })
     const shown = JSON.parse(h.q('output-json')?.textContent ?? 'null')
     h.check(
       'the output panel shows the result of the run',
       shown?.len === INITIAL.length && shown.upper === INITIAL.toUpperCase() && !!h.q('status-message', { error: '0' }),
       { shown, status: h.q('status-message')?.textContent },
+    )
+    h.check(
+      'the output panel sits in the bottom region',
+      !!h.q('panel', { region: 'bottom', panel: 'output' }),
+      h.qa('panel').map((e) => `${e.dataset.region}/${e.dataset.panel}`),
     )
   }
   h.click(h.q('ribbon-tab', { tab: 'home' }))
@@ -218,6 +253,16 @@ scenario('m0-main', { timeout: 180 }, async (h) => {
   const afterDrop = await readFile(dropped)
   h.check('a dropped file is granted like the fs plugin grants it', !beforeDrop.ok && afterDrop.ok && afterDrop.value === 'G0 X5\n', { beforeDrop, afterDrop })
 
+  // M1 change 1: a drop opens the file. The starter buffer has not been touched, so it
+  // is the scratch document and the dropped file takes its place instead of leaving an
+  // empty tab behind; the window keeps exactly one tab.
+  await h.waitFor(async () => (await h.title()) === 'dropped.nc — gEdit', { timeout: 8000 })
+  h.check(
+    'the dropped file becomes the open document, replacing the untouched starter buffer',
+    h.qa('doc-tab').length === 1 && !!h.q('doc-tab', { path: dropped, active: '1' }) && h.app.text() === 'G0 X5\n',
+    { tabs: h.qa('doc-tab').map((e) => e.dataset.path), title: await h.title(), text: h.app.text() },
+  )
+
   // The harness can set a file's time, which the external-change checks need later.
   await h.disk.touch(dropped, 1700000000)
   h.check('the harness can set a modification time', (await h.disk.stat(dropped))?.mtimeMs === 1700000000000, await h.disk.stat(dropped))
@@ -235,10 +280,21 @@ scenario('m0-main', { timeout: 180 }, async (h) => {
   h.check('commands the capability does not grant are denied', Object.values(acl).every((r) => !r.ok), acl)
 
   // ---------------------------------------------------------------- editing and saving
+  // The starter buffer is gone (the drop took its place), so the Save As path below needs
+  // a fresh untitled document. `file.new` opens an empty one and reuses the free index 1.
+  await h.nativeKeys([{ key: 'n', mods: ['cmd'] }])
+  await h.waitFor(async () => (await h.title()) === 'Untitled-1 — gEdit', { timeout: 4000 })
+  const untitledId = h.q('editor-host')?.dataset.docId
+  h.check('Cmd+N opens a second, empty untitled document', h.qa('doc-tab').length === 2 && h.app.text() === '' && untitledId !== 'd1', {
+    tabs: h.qa('doc-tab').map((e) => e.dataset.docId),
+    docId: untitledId,
+    title: await h.title(),
+  })
+
   h.check('the editor takes focus', h.focusEditor())
   await h.nativeType('T5 M6\n')
-  await h.waitFor(async () => (await h.title()) === '● Untitled — gEdit')
-  h.check('typing edits the buffer and marks it modified', h.app.text() === `T5 M6\n${INITIAL}` && (await h.title()) === '● Untitled — gEdit', {
+  await h.waitFor(async () => (await h.title()) === '● Untitled-1 — gEdit')
+  h.check('typing edits the buffer and marks it modified', h.app.text() === 'T5 M6\n' && (await h.title()) === '● Untitled-1 — gEdit', {
     text: h.app.text(),
     title: await h.title(),
   })
@@ -258,10 +314,13 @@ scenario('m0-main', { timeout: 180 }, async (h) => {
   const saveCall = h.dialogs.calls().slice(calls)
   h.check(
     'Cmd+S on the untitled buffer asks once and writes the file',
-    saveCall.length === 1 && saveCall[0].kind === 'save' && saveCall[0].args.options.defaultPath === 'program.nc' && saveCall[0].args.options.filters[0].extensions.includes('nc') && (await h.disk.read(savedPath)) === h.app.text(),
+    saveCall.length === 1 && saveCall[0].kind === 'save' && saveCall[0].args.options.defaultPath === 'program.nc' && (await h.disk.read(savedPath)) === onDisk(h.app.text()),
     { saveCall, title: await h.title(), disk: await h.disk.read(savedPath).catch((e) => String(e)) },
   )
-  h.check('saving keeps the document id', h.q('editor-host')?.dataset.docId === 'd1')
+  // M1/AD-7 (F7): rfd merges every filter into one `allowedFileTypes` list on macOS,
+  // which hides extension-less programs, so macOS gets no filters at all.
+  h.check('the save dialog carries no filters on macOS', saveCall[0].args.options.filters === undefined, saveCall[0].args.options)
+  h.check('saving keeps the document id', h.q('editor-host')?.dataset.docId === untitledId, h.q('editor-host')?.dataset.docId)
 
   await h.nativeType('(SECOND)\n')
   await h.waitFor(async () => (await h.title()) === '● saved.nc — gEdit')
@@ -275,16 +334,22 @@ scenario('m0-main', { timeout: 180 }, async (h) => {
   )
 
   // ---------------------------------------------------------------- opening
+  const tabsBeforeOpen = h.qa('doc-tab').length
   await h.dialogs.queue('open', sampleH)
   await h.nativeKeys([{ key: 'o', mods: ['cmd'] }])
   await h.waitFor(async () => (await h.title()) === 'h01-3tools.h — gEdit')
+  await h.waitFor(() => h.q('status-item', { item: 'profile' })?.textContent === 'Heidenhain', { timeout: 2000 })
   const tools = h.qa('program-map-item', { kind: 'tool' }).map((e) => e.dataset.line)
   h.check(
     'opening a Klartext file switches the profile and the program map',
-    h.app.activeProfile() === 'heidenhain-klartext' && /** @type {HTMLSelectElement} */ (h.q('profile-select'))?.value === 'heidenhain-klartext' && JSON.stringify(tools) === '["6","17","35"]',
+    h.app.activeProfile() === 'heidenhain-klartext' && h.q('status-item', { item: 'profile' })?.textContent === 'Heidenhain' && JSON.stringify(tools) === '["6","17","35"]',
     { title: await h.title(), profile: h.app.activeProfile(), tools, status: h.q('status-item', { item: 'profile' })?.textContent },
   )
-  h.check('the opened document gets a new id', h.q('editor-host')?.dataset.docId === 'd2')
+  const klartextId = h.q('editor-host')?.dataset.docId
+  h.check('the opened document gets a new id and its own tab', klartextId !== untitledId && /^d\d+$/.test(klartextId ?? '') && h.qa('doc-tab').length === tabsBeforeOpen + 1, {
+    docId: klartextId,
+    tabs: h.qa('doc-tab').map((e) => e.dataset.docId),
+  })
   h.check('the hook returns the text with LF line breaks', !h.app.text().includes('\r') && h.app.text().startsWith('0 BEGIN PGM'), h.app.text().slice(0, 40))
 
   const copyPath = `${run}/h01-copy.h`
@@ -294,52 +359,53 @@ scenario('m0-main', { timeout: 180 }, async (h) => {
   await h.waitFor(async () => (await h.title()) === 'h01-copy.h — gEdit')
   const saveAs = h.dialogs.calls().slice(calls)
   h.check(
-    'Save As suggests the current file, offers the Klartext filter first and keeps the bytes',
-    saveAs.length === 1 && saveAs[0].args.options.defaultPath === sampleH && saveAs[0].args.options.filters[0].extensions.includes('h') && (await h.disk.hex(copyPath)) === (await h.disk.hex(sampleH)),
+    'Save As suggests the current file, carries no macOS filter and keeps the bytes',
+    saveAs.length === 1 && saveAs[0].args.options.defaultPath === sampleH && saveAs[0].args.options.filters === undefined && (await h.disk.hex(copyPath)) === (await h.disk.hex(sampleH)),
     { saveAs, hexEqual: (await h.disk.hex(copyPath)) === (await h.disk.hex(sampleH)) },
   )
 
-  // ---------------------------------------------------------------- the unsaved-changes prompt
-  await h.dialogs.queue('open', sampleH)
-  await h.nativeKeys([{ key: 'o', mods: ['cmd'] }])
-  await h.waitFor(async () => (await h.title()) === 'h01-3tools.h — gEdit')
+  // ------------------------------------------------- opening no longer asks about edits
+  // M1 change 1: Open adds a tab, so it never replaces a modified buffer and the M0
+  // "unsaved changes" prompt on Open is gone. The edited document keeps its changes and
+  // its file on disk; both documents stay open.
   h.focusEditor()
   await h.nativeType('; EDITED\n')
-  await h.waitFor(async () => (await h.title()) === '● h01-3tools.h — gEdit')
+  await h.waitFor(async () => (await h.title()) === '● h01-copy.h — gEdit')
 
+  const tabsBeforeSecondOpen = h.qa('doc-tab').length
+  const messagesBefore = h.dialogs.calls().filter((c) => c.kind === 'message').length
   await h.dialogs.queue('open', fanucTxt)
   await h.nativeKeys([{ key: 'o', mods: ['cmd'] }])
-  const prompt = await h.alert.wait()
-  h.check('the unsaved-changes prompt offers Save, Don\'t Save and Cancel', JSON.stringify(prompt?.buttons) === JSON.stringify(['Save', "Don't Save", 'Cancel']), prompt)
-  await h.alert.click('Cancel')
+  await h.waitFor(async () => (await h.title()) === 'detect-fanuc.txt — gEdit')
   await h.sleep(500)
   h.check(
-    'Cancel keeps the edited buffer',
-    (await h.title()) === '● h01-3tools.h — gEdit' && h.app.activeProfile() === 'heidenhain-klartext' && h.app.text().startsWith('; EDITED'),
-    { title: await h.title(), text: h.app.text().slice(0, 30) },
+    'opening a file while another one is modified asks nothing and adds a tab',
+    (await h.alert.visible()) === null &&
+      h.dialogs.calls().filter((c) => c.kind === 'message').length === messagesBefore &&
+      h.qa('doc-tab').length === tabsBeforeSecondOpen + 1,
+    { tabs: h.qa('doc-tab').map((e) => e.dataset.path), alert: await h.alert.visible() },
+  )
+  h.check(
+    'the edited document keeps its changes and its file on disk',
+    !!h.q('doc-tab', { docId: klartextId ?? '', dirty: '1' }) && !(await h.disk.read(copyPath)).includes('EDITED'),
+    { tab: h.q('doc-tab', { docId: klartextId ?? '' })?.dataset.dirty, disk: (await h.disk.read(copyPath)).slice(0, 40) },
+  )
+  await h.waitFor(() => h.q('status-item', { item: 'profile' })?.textContent === 'Fanuc', { timeout: 2000 })
+  h.check(
+    'the newly opened file is the active document, with its own profile',
+    h.app.activeProfile() === 'fanuc-gcode' && h.q('editor-host')?.dataset.docId !== klartextId,
+    { profile: h.app.activeProfile(), docId: h.q('editor-host')?.dataset.docId },
   )
 
-  await h.dialogs.queue('open', fanucTxt)
+  // Opening a file that is already open focuses its tab instead of adding a second one.
+  const tabsBeforeRefocus = h.qa('doc-tab').length
+  await h.dialogs.queue('open', copyPath)
   await h.nativeKeys([{ key: 'o', mods: ['cmd'] }])
-  await h.alert.click("Don't Save")
-  await h.waitFor(async () => (await h.title()) === 'detect-fanuc.txt — gEdit')
+  await h.waitFor(async () => (await h.title()) === '● h01-copy.h — gEdit')
   h.check(
-    'Don\'t Save opens the other file and leaves the edited one on disk alone',
-    h.app.activeProfile() === 'fanuc-gcode' && !(await h.disk.read(sampleH)).includes('EDITED'),
-    { title: await h.title(), profile: h.app.activeProfile() },
-  )
-
-  h.focusEditor()
-  await h.nativeType('(SAVED BY THE PROMPT)\n')
-  await h.waitFor(async () => (await h.title()) === '● detect-fanuc.txt — gEdit')
-  await h.dialogs.queue('open', sampleH)
-  await h.nativeKeys([{ key: 'o', mods: ['cmd'] }])
-  await h.alert.click('Save')
-  await h.waitFor(async () => (await h.title()) === 'h01-3tools.h — gEdit')
-  h.check(
-    'Save writes the current file before the other one is opened',
-    (await h.disk.read(fanucTxt)).startsWith('(SAVED BY THE PROMPT)') && h.app.text().startsWith('0 BEGIN PGM'),
-    { fanucTxt: (await h.disk.read(fanucTxt)).slice(0, 40), title: await h.title() },
+    'opening a file that is already open focuses its tab',
+    h.qa('doc-tab').length === tabsBeforeRefocus && h.q('editor-host')?.dataset.docId === klartextId && h.app.text().startsWith('; EDITED'),
+    { tabs: h.qa('doc-tab').length, docId: h.q('editor-host')?.dataset.docId, status: h.q('status-message')?.textContent },
   )
 
   // ---------------------------------------------------------------- errors
@@ -352,21 +418,23 @@ scenario('m0-main', { timeout: 180 }, async (h) => {
   await h.sleep(300)
   h.check(
     'the failed open shows an error in the status bar and keeps the document',
-    !!h.q('status-message', { error: '1' }) && (await h.title()) === 'h01-3tools.h — gEdit',
+    !!h.q('status-message', { error: '1' }) && (await h.title()) === '● h01-copy.h — gEdit',
     { status: h.q('status-message')?.textContent, title: await h.title() },
   )
 
   // ---------------------------------------------------------------- the close guard
+  // Exactly one document is unsaved, so the alert keeps the single-document wording.
   h.focusEditor()
   await h.nativeType('; DIRTY FOR CLOSE\n')
-  await h.waitFor(async () => (await h.title()) === '● h01-3tools.h — gEdit')
+  await h.waitFor(async () => (await h.title()) === '● h01-copy.h — gEdit')
+  h.check('only the edited document is unsaved', h.qa('doc-tab', { dirty: '1' }).length === 1, h.qa('doc-tab').map((e) => `${e.dataset.path}:${e.dataset.dirty}`))
   await h.window.close()
   const closePrompt = await h.alert.wait()
   h.check('closing a modified buffer asks first', JSON.stringify(closePrompt?.buttons) === JSON.stringify(['Save', "Don't Save", 'Cancel']), closePrompt)
   await h.alert.click('Cancel')
   await h.sleep(1500)
   const state = await h.window.state()
-  h.check('Cancel keeps the window open', state.exists && state.visible && (await h.title()) === '● h01-3tools.h — gEdit', state)
+  h.check('Cancel keeps the window open', state.exists && state.visible && (await h.title()) === '● h01-copy.h — gEdit', state)
 
   // ---------------------------------------------------------------- the CSP
   h.check('nothing violated the CSP so far', h.rec.violations.length === 0, h.rec.violations)
@@ -408,6 +476,8 @@ scenario('m0-main', { timeout: 180 }, async (h) => {
   })
 
   // Leave a clean buffer, so the run ends without a prompt.
+  h.focusEditor()
   await h.nativeKeys([{ key: 's', mods: ['cmd'] }])
-  await h.waitFor(async () => (await h.title()) === 'h01-3tools.h — gEdit')
+  await h.waitFor(async () => (await h.title()) === 'h01-copy.h — gEdit')
+  h.check('every document is saved when the run ends', h.qa('doc-tab', { dirty: '1' }).length === 0, h.qa('doc-tab').map((e) => `${e.dataset.path}:${e.dataset.dirty}`))
 })

@@ -5,29 +5,81 @@
 @import "tailwindcss" source(none);
 @source "./**/*.{svelte,ts,js}";
 
+/* Every chrome colour is a token (plan §5 WP1.5). The values below are the dark theme;
+   WP2.6 adds the light set and the `gedit-dark` / `gedit-light` Monaco themes on top of
+   the same names, so no component has to change. Component styles use `var(--…)` only;
+   a literal colour outside this file is a bug.
+
+   Names that existed before M1 (--bg-app, --bg-ribbon, --bg-panel, --text-main,
+   --text-active, --text-muted, --accent, --accent-hover, --border-color, --success) keep
+   their meaning: WP1.1's and WP1.2's components already use them. */
 :root {
+  /* Surfaces */
   --bg-app: #1e1e1e;
   --bg-ribbon: #2d2d2d;
   --bg-panel: #252526;
+  --surface-hover: rgb(255 255 255 / 8%);
+  --surface-hover-border: rgb(255 255 255 / 10%);
+  --surface-active: rgb(0 0 0 / 20%);
+
+  /* Text */
   --text-main: #cccccc;
   --text-active: #ffffff;
   --text-muted: #808080;
+  --text-disabled: #5a5a5a;
+
+  /* Accent and lines */
   --accent: #0078d4;
   --accent-hover: #2b88d8;
   --border-color: #3e3e42;
+
+  /* Feedback */
   --success: #10b981;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  --info: #89b4fa;
+  --info-surface: rgb(137 180 250 / 8%);
+  --warning: #dcb67a;
+  --danger: #c42b1c;
+  --danger-text: #f38ba8;
+  --danger-surface: rgb(243 139 168 / 8%);
+
+  /* The status bar is the one chrome element with an inverted contrast. */
+  --status-bg: #0078d4;
+  --status-text: #ffffff;
+
+  /* Program-map roles (the M3 profile palettes replace these). */
+  --nc-tool: #dcb67a;
+  --nc-comment: #10b981;
+
+  /* Scrollbars */
+  --scrollbar-thumb: #424242;
+  --scrollbar-thumb-hover: #4f4f4f;
+
+  --font-ui: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  --font-mono: "Fira Code", Consolas, monospace;
+
+  font-family: var(--font-ui);
+  color-scheme: dark;
 }
 
 body {
+  width: 100vw;
+  height: 100vh;
   margin: 0;
   padding: 0;
-  background-color: var(--bg-app);
-  color: var(--text-main);
-  height: 100vh;
-  width: 100vw;
   overflow: hidden;
+  color: var(--text-main);
+  background-color: var(--bg-app);
   @apply antialiased;
+}
+
+/* Keyboard focus must always be visible (WP1.5 acceptance). Monaco draws its own, so the
+   editor's internals are left alone. */
+:focus-visible {
+  outline: 2px solid var(--accent-hover);
+  outline-offset: -2px;
+}
+.monaco-editor :focus-visible {
+  outline: none;
 }
 
 /* Scrollbar styling for CAD feel */
@@ -40,11 +92,11 @@ body {
   border-left: 1px solid var(--border-color);
 }
 ::-webkit-scrollbar-thumb {
-  background: #424242;
+  background: var(--scrollbar-thumb);
   border: 1px solid var(--bg-panel); /* Give it a little padding feel */
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #4f4f4f;
+  background: var(--scrollbar-thumb-hover);
 }
 ::-webkit-scrollbar-corner {
   background: var(--bg-panel);

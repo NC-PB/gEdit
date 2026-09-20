@@ -16,7 +16,7 @@ function detectBoth(path: string, text: string): [Dialect, Dialect] {
 }
 
 // 'fallback': the content was inconclusive and the current dialect stays.
-// 'refused': the app does not open the file, so detection never runs.
+// 'refused': `decodeFile` does not open the file, so detection never runs.
 const EXPECTED: Record<string, Dialect | 'fallback' | 'refused'> = {
   // Today a whole-line ( ) comment counts as a Fanuc marker.
   'nc/ambiguous/comment-only.txt': FANUC,
@@ -26,12 +26,14 @@ const EXPECTED: Record<string, Dialect | 'fallback' | 'refused'> = {
   'nc/encoding/cp1252-crlf.nc': FANUC,
   'nc/encoding/cr-only.nc': FANUC,
   'nc/encoding/mixed-eol.nc': FANUC,
+  // The only refusal left: over 10 % inner NUL bytes is data, not a program.
   'nc/encoding/nul-heavy.bin': 'refused',
-  // KNOWN GAP (M1): inner NULs and UTF-16 are refused; the M1 codec opens these files.
-  'nc/encoding/nul-inside.nc': 'refused',
+  // I2: these three used to be 'refused' by the pre-M1 `utils/textCodec` shim. The M1
+  // codec strips inner NULs and decodes UTF-16, so detection now runs on all of them.
+  'nc/encoding/nul-inside.nc': FANUC,
   'nc/encoding/nul-leader-trailer.nc': FANUC,
-  'nc/encoding/utf16be-bom.nc': 'refused',
-  'nc/encoding/utf16le-bom.nc': 'refused',
+  'nc/encoding/utf16be-bom.nc': FANUC,
+  'nc/encoding/utf16le-bom.nc': FANUC,
   'nc/encoding/utf8-bom-crlf.nc': FANUC,
   'nc/encoding/utf8-lf.nc': FANUC,
   'nc/fanuc/O1234': FANUC,

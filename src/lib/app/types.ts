@@ -1,0 +1,478 @@
+// Shared contracts for the whole app (plan §7.1 and §7.2). Written by the milestone
+// preludes and binding for every work package: an implementation may change, a signature
+// here may not (a deviation needs a hand-off note and integration approval).
+//
+// This file holds *types only*, so it is erased at build time and may be imported from
+// anywhere, including `core/` (AD-1 allows type-only imports there). The comment above
+// each group names the module that exports the matching value; a type has exactly one
+// home and is imported only from it.
+//
+// Types that arrive in a later milestone live in their own home file and are imported
+// here as placeholders: `Profile`/`CompiledProfile` (core/profiles/types.ts, P3) and
+// `FieldSpec` (core/forms/types.ts, P2). The §7.3 service contracts (settings, uiState,
+// recent, external, compare, codes, outline, transforms, results, bookmarks, scripts)
+// are added to this file by the P2 to P5 preludes, together with `AppContext`'s fields.
+
+import type { Component } from 'svelte';
+import type { Readable } from 'svelte/store';
+import type { FieldSpec } from '$lib/core/forms/types';
+import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
+
+// ---------------------------------------------------------------------------
+// §7.1 Registries and contributions
+// ---------------------------------------------------------------------------
+
+/** Undoes a registration. Calling it twice must be harmless. */
+export type Disposable = () => void;
+
+/** A translatable message: an i18n key plus its placeholder values. */
+export interface Msg {
+  key: string;
+  params?: Record<string, string | number>;
+}
+
+/** A message tied to a line of a document (transform skips, script findings, ...). */
+export interface Located {
+  line: number;
+  message: string;
+  severity?: 'info' | 'warning' | 'error';
+  document?: string;
+}
+
+/** `t()` from `$lib/i18n`, as a dependency. */
+export type Translate = (key: string, params?: Record<string, string | number>) => string;
+
+/** The state a command's `enabled` and `run` see. Rebuilt by the context provider on every read. */
+export interface CommandContext {
+  activeDocId: string | null;
+  profileId: string | null;
+  hasSelection: boolean;
+  editorFocused: boolean;
+  compareOpen: boolean;
+  modalOpen: boolean;
+  scriptRunning: boolean;
+}
+
+/**
+ * A shortcut, e.g. 'Mod+S', 'Ctrl+G', 'F7', 'Shift+F7', 'Mod+Alt+S', 'Mod+,'.
+ * `Mod` is Cmd on macOS and Ctrl elsewhere; `Ctrl` is always the literal Control key.
+ */
+export type KeySpec = string;
+
+export interface CommandDef {
+  /** Stable dotted id, e.g. 'file.save'. The palette action id is `'gedit.' + id`. */
+  id: string;
+  /** i18n key. */
+  title: string;
+  /** i18n key; the palette label is `${t(category)}: ${t(title)}`. */
+  category?: string;
+  icon?: Component;
+  keys?: KeySpec | { mac?: KeySpec; other?: KeySpec };
+  /** Also dispatched by the window handler when focus is outside Monaco. */
+  global?: boolean;
+  /** Registered as a Monaco editor action; default true. */
+  palette?: boolean;
+  /** Default: always enabled. */
+  enabled?: (c: CommandContext) => boolean;
+  run: (c: CommandContext, arg?: unknown) => unknown | Promise<unknown>;
+}
+
+export type RibbonTab = 'home' | 'insert' | 'nc' | 'tools' | 'view';
+
+export interface RibbonItemDef {
+  tab: RibbonTab;
+  /** i18n key of the group caption. */
+  group: string;
+  /** Command id. */
+  command: string;
+  order: number;
+  size?: 'large' | 'small';
+}
+
+/** A ribbon group that renders its own component instead of command buttons. */
+export interface RibbonGroupDef {
+  tab: RibbonTab;
+  group: string;
+  order: number;
+  component: Component;
+}
+
+export type PanelRegion = 'left' | 'bottom' | 'overlay' | 'banner';
+
+export interface PanelDef {
+  id: string;
+  region: PanelRegion;
+  /** i18n key. */
+  title: string;
+  icon?: Component;
+  component: Component;
+  order: number;
+}
+
+export interface StatusItemDef {
+  id: string;
+  side: 'left' | 'right';
+  order: number;
+  component: Component;
+}
+
+/**
+ * One feature, in `src/lib/contrib/<name>.ts`:
+ * `export default { id: '<name>', ... } satisfies Contribution;`
+ * See `src/lib/contrib/README.md`.
+ */
+export interface Contribution {
+  id: string;
+  commands?: CommandDef[];
+  ribbon?: RibbonItemDef[];
+  ribbonGroups?: RibbonGroupDef[];
+  panels?: PanelDef[];
+  statusItems?: StatusItemDef[];
+  /** Default Monaco bindings to drop, e.g. `{ keys: 'F2', command: 'editor.action.rename' }`. */
+  keybindingRemovals?: { keys: KeySpec; command: string }[];
+  activate?(): void | Disposable | Promise<void | Disposable>;
+}
+
+export interface CommandRegistry {
+  /** Duplicate id throws; a key conflict logs `console.error`. */
+  register(defs: CommandDef | CommandDef[]): Disposable;
+  has(id: string): boolean;
+  get(id: string): CommandDef | undefined;
+  list(): CommandDef[];
+  isEnabled(id: string): boolean;
+  /** False when the id is unknown or the command is disabled (a status message is shown); an error becomes a status error plus `console.error`. */
+  run(id: string, arg?: unknown): Promise<boolean>;
+  context(): CommandContext;
+  /** Bumps on (un)register and on context changes. */
+  readonly changed: Readable<number>;
+}
+
+export interface RibbonRegistry {
+  add(items: RibbonItemDef[]): Disposable;
+  addGroup(g: RibbonGroupDef): Disposable;
+  readonly entries: Readable<(RibbonItemDef | RibbonGroupDef)[]>;
+}
+
+export interface PanelRegistry {
+  add(p: PanelDef): Disposable;
+  readonly panels: Readable<PanelDef[]>;
+}
+
+export interface StatusItemRegistry {
+  add(s: StatusItemDef): Disposable;
+  readonly items: Readable<StatusItemDef[]>;
+}
+
+// ---------------------------------------------------------------------------
+// §7.2 Documents, editor, files, dialogs, status, layout
+// ---------------------------------------------------------------------------
+
+/** 'd1', 'd2', ... never reused within a session. */
+export type DocId = string;
+export type Eol = 'crlf' | 'lf' | 'cr';
+export type EncodingName = 'utf-8' | 'windows-1252' | 'utf-16le' | 'utf-16be';
+
+/** For `utf-16le` and `utf-16be`, `hasBom` is always true. */
+export interface FileEncoding {
+  encoding: EncodingName;
+  hasBom: boolean;
+}
+
+/** Tape leader and trailer (NUL runs kept outside the editor text) and NULs stripped from inside it. */
+export interface NulInfo {
+  leader: number;
+  trailer: number;
+  stripped: number;
+}
+
+/** What the file on disk looked like when it was last read or written. `hash` is `fnv1a32(bytes)`. */
+export interface DiskStamp {
+  mtimeMs: number | null;
+  size: number;
+  hash: number;
+}
+
+export interface CursorInfo {
+  line: number;
+  column: number;
+  /** Characters selected across all selections (0 when nothing is selected). */
+  selectedChars: number;
+  /** Number of cursors / selections (1 unless multi-cursor is in use). */
+  selections: number;
+}
+
+export interface DocMeta {
+  id: DocId;
+  path: string | null;
+  untitledIndex: number | null;
+  /** Derived by the store: basename(path) or `Untitled-${n}`. */
+  title: string;
+  /** Also the Monaco language id. */
+  profileId: string;
+  encoding: FileEncoding;
+  eol: Eol;
+  eolMixedOnLoad: boolean;
+  nul: NulInfo;
+  /** Written by EditorService, on flips only. */
+  textDirty: boolean;
+  /** Encoding or EOL change, NUL strip, keep-mine, deleted on disk. */
+  metaDirty: boolean;
+  /** Derived by the store: `textDirty || metaDirty`. */
+  dirty: boolean;
+  disk: DiskStamp | null;
+  external: 'none' | 'changed' | 'deleted';
+}
+
+export type NewDocMeta = Omit<DocMeta, 'id' | 'title' | 'dirty'>;
+
+/** stores/documents.ts → `export const docs: DocumentStore` */
+export interface DocumentStore {
+  /** Tab order. */
+  readonly list: Readable<DocMeta[]>;
+  readonly activeId: Readable<DocId | null>;
+  readonly active: Readable<DocMeta | null>;
+  all(): DocMeta[];
+  get(id: DocId): DocMeta | undefined;
+  getActiveId(): DocId | null;
+  add(meta: NewDocMeta, o?: { activate?: boolean; index?: number }): DocId;
+  update(id: DocId, patch: Partial<NewDocMeta>): void;
+  /** Activates the right neighbour, else the left, else null. */
+  remove(id: DocId): void;
+  activate(id: DocId): void;
+  move(id: DocId, toIndex: number): void;
+  /** Case-insensitive on macOS and Windows. */
+  byPath(path: string): DocMeta | undefined;
+  /** Lowest free index >= 1. */
+  nextUntitledIndex(): number;
+}
+
+/**
+ * One spanning range per Monaco content event, 1-based inclusive, in old and new
+ * coordinates. `flush` is true for setValue-like events.
+ */
+export interface ContentChange {
+  startLine: number;
+  endLineOld: number;
+  endLineNew: number;
+  flush: boolean;
+  versionId: number;
+}
+
+/** monaco/editorService.ts → `export const editor: EditorService` */
+export interface EditorService {
+  attach(container: HTMLElement): Promise<void>;
+  readonly ready: Promise<void>;
+  createModel(id: DocId, textLF: string, languageId: string, eol: Eol): void;
+  disposeModel(id: DocId): void;
+  hasModel(id: DocId): boolean;
+  /** LF-joined. */
+  getText(id: DocId): string;
+  getLineCount(id: DocId): number;
+  /** 1-based inclusive. */
+  getLines(id: DocId, startLine: number, endLine: number): string[];
+  /** `alternativeVersionId`. */
+  versionId(id: DocId): number;
+  markClean(id: DocId): void;
+  setLanguage(id: DocId, languageId: string): void;
+  /** `pushEOL` (undoable) between crlf and lf; 'cr' keeps an LF model. */
+  setModelEol(id: DocId, eol: Eol): void;
+  /** One undo step. */
+  replaceAll(id: DocId, textLF: string, o?: { keepCursorLine?: boolean }): void;
+  /** Active document, at the selections, one undo step. */
+  insertText(text: string): void;
+  focus(): void;
+  hasFocus(): boolean;
+  /** Activates the document if needed, sets the cursor, centers and focuses. */
+  reveal(id: DocId, line: number, column?: number): void;
+  cursor(): CursorInfo | null;
+  selectionLines(): { startLine: number; endLine: number; empty: boolean } | null;
+  selectedText(): string;
+  triggerAction(actionId: string, payload?: unknown): void;
+  updateOptions(o: Record<string, unknown>): void;
+  onDidChangeContent(cb: (id: DocId, c: ContentChange) => void): Disposable;
+  onDidChangeCursor(cb: (c: CursorInfo) => void): Disposable;
+  onDidCreateModel(cb: (id: DocId) => void): Disposable;
+  onDidActivate(cb: (id: DocId | null) => void): Disposable;
+  /** Escape hatches: only `src/lib/monaco/**` may call these. */
+  model(id: DocId): import('$lib/monaco/core').editor.ITextModel | undefined;
+  editorInstance(): import('$lib/monaco/core').editor.IStandaloneCodeEditor | undefined;
+}
+
+/** `text` is LF-joined; `eol` is null when the file has no line break. */
+export type DecodeResult =
+  | {
+      ok: true;
+      text: string;
+      encoding: FileEncoding;
+      eol: Eol | null;
+      eolMixed: boolean;
+      nul: NulInfo;
+    }
+  | { ok: false; reason: 'binary'; message: Msg };
+
+/** `line` and `column` are 1-based (UTF-16 columns, as in Monaco). */
+export type EncodeResult =
+  | { ok: true; bytes: Uint8Array }
+  | { ok: false; badChar: string; line: number; column: number };
+
+export interface DialogFilter {
+  name: string;
+  extensions: string[];
+}
+
+/** app/dialogs.ts → `export const dialogs: NativeDialogs` */
+export interface NativeDialogs {
+  ask3(o: {
+    title: string;
+    message: string;
+    yes: string;
+    no: string;
+    cancel: string;
+    kind?: 'warning' | 'info';
+  }): Promise<'yes' | 'no' | 'cancel'>;
+  confirm(o: {
+    title: string;
+    message: string;
+    ok: string;
+    cancel?: string;
+    kind?: 'warning' | 'info';
+  }): Promise<boolean>;
+  error(summary: string, detail: unknown): Promise<void>;
+  /** Filters per AD-7: none on macOS. */
+  openFiles(o?: { multiple?: boolean }): Promise<string[]>;
+  saveFile(o: { defaultPath: string; profileId?: string }): Promise<string | null>;
+  pickFolder(o?: { title?: string }): Promise<string | null>;
+  pickFile(o?: { title?: string }): Promise<string | null>;
+  /** One chain at a time; a re-entrant call resolves `undefined`. */
+  exclusive<T>(op: () => Promise<T>): Promise<T | undefined>;
+}
+
+export interface QuickPickItem<T> {
+  label: string;
+  description?: string;
+  detail?: string;
+  value: T;
+}
+
+/** app/modals.ts → `export const modals: Modals` (quickPick in M1; prompt and form in M2) */
+export interface Modals {
+  quickPick<T>(
+    items: QuickPickItem<T>[],
+    o?: { placeholder?: string; initialIndex?: number },
+  ): Promise<T | undefined>;
+  prompt(o: {
+    title: string;
+    placeholder?: string;
+    initial?: string;
+    validate?: (v: string) => string | null;
+  }): Promise<string | undefined>;
+  form(o: {
+    title: string;
+    fields: FieldSpec[];
+    values?: Record<string, unknown>;
+    okLabel?: string;
+    context?: { addresses?: string[] };
+  }): Promise<Record<string, unknown> | undefined>;
+  open<P extends Record<string, unknown>, R>(
+    c: Component<P & { close: (r?: R) => void }>,
+    props: P,
+  ): Promise<R | undefined>;
+  readonly isOpen: Readable<boolean>;
+}
+
+/** app/fileOps.ts → `createFileOps(deps)` plus `export const files: FileOps` */
+export interface FileOps {
+  newUntitled(o?: { profileId?: string; text?: string; activate?: boolean }): DocId;
+  /** No paths: multi-select dialog. Already-open documents are focused instead of reopened. */
+  open(paths?: string[]): Promise<DocId[]>;
+  save(id?: DocId): Promise<boolean>;
+  saveAs(id?: DocId): Promise<boolean>;
+  saveAll(): Promise<boolean>;
+  close(id?: DocId): Promise<boolean>;
+  closeAll(): Promise<boolean>;
+  confirmQuit(): Promise<boolean>;
+  setEncoding(id: DocId, e: FileEncoding): void;
+  setEol(id: DocId, eol: Eol): void;
+  setProfile(id: DocId, profileId: string): void;
+  /** One undo step, keeps the cursor line, marks clean and restamps. */
+  reloadFromDisk(id: DocId): Promise<void>;
+  readDisk(path: string): Promise<DecodeResult | null>;
+  onDidOpen(cb: (id: DocId, path: string) => void): Disposable;
+  onDidSave(cb: (id: DocId, path: string) => void): Disposable;
+  onWillQuit(cb: () => Promise<void> | void): Disposable;
+}
+
+/** app/status.ts → `export const status: StatusService` */
+export interface StatusService {
+  readonly current: Readable<{ text: string; error: boolean; detail?: string } | null>;
+  /** `text` is already translated. Messages clear after 4 s, errors after 8 s. */
+  show(text: string, o?: { error?: boolean; sticky?: boolean; detail?: string }): void;
+  clear(): void;
+}
+
+export interface LayoutState {
+  left: { visible: boolean; width: number; active: string | null };
+  bottom: { visible: boolean; height: number; active: string | null };
+  overlay: string | null;
+}
+
+/** stores/layout.ts → `export const layout: LayoutStore` */
+export interface LayoutStore {
+  readonly state: Readable<LayoutState>;
+  show(panelId: string): void;
+  hide(region: 'left' | 'bottom'): void;
+  toggle(region: 'left' | 'bottom'): void;
+  setSize(region: 'left' | 'bottom', px: number): void;
+  openOverlay(panelId: string): void;
+  closeOverlay(): void;
+  restore(s: Partial<LayoutState>): void;
+}
+
+export interface ProfileInfo {
+  id: string;
+  name: string;
+  shortName: string;
+  extensions: string[];
+  defaultFileName: string;
+  newFileEol: Eol;
+}
+
+/** stores/profiles.ts → `export const profiles: ProfileRegistry` (M1 adapter, M3 real) */
+export interface ProfileRegistry {
+  readonly all: Readable<ProfileInfo[]>;
+  list(): ProfileInfo[];
+  get(id: string): ProfileInfo | undefined;
+  defaultId(): string;
+  detect(path: string | null, text: string, fallback: string): string;
+  /** `[]` on macOS (F7). */
+  openFilters(): DialogFilter[];
+  saveFilters(id: string): DialogFilter[];
+  /** M3; throws in M1. */
+  profile(id: string): Profile;
+  /** M3; throws in M1. */
+  compiled(id: string): CompiledProfile;
+}
+
+/**
+ * app/context.ts → `export const ctx: AppContext`
+ *
+ * The aggregate the test hook exposes (§7.9). It only collects the singletons; features
+ * import the service modules they need directly. Later preludes add:
+ * P2 settings, uiState, recent, external, compare; P3 codes, outline;
+ * P4 transforms, results, bookmarks; P5 scripts.
+ */
+export interface AppContext {
+  commands: CommandRegistry;
+  ribbon: RibbonRegistry;
+  panels: PanelRegistry;
+  statusItems: StatusItemRegistry;
+  docs: DocumentStore;
+  editor: EditorService;
+  files: FileOps;
+  dialogs: NativeDialogs;
+  modals: Modals;
+  status: StatusService;
+  layout: LayoutStore;
+  profiles: ProfileRegistry;
+  t: Translate;
+}

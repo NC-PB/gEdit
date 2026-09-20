@@ -1,6 +1,8 @@
-// Test hook for the runtime harness (plan §7.9). +page registers it; M1 adds `ctx`.
+// Test hook for the runtime harness (plan §7.9). `app/bootstrap.ts` registers it.
 // Only harness builds (`VITE_GEDIT_TEST=1`) expose it. Vite inlines the flag, so in a
 // normal build the assignment below is dead code and the bundle never names the hook.
+
+import type { AppContext } from './types';
 
 export interface GeditTestHook {
   /** Resolves once the editor and the initial document are ready. */
@@ -15,6 +17,12 @@ export interface GeditTestHook {
   activeProfile(): string;
   /** Switches the active profile, like the profile selector does; throws on an unknown id. */
   setProfile(id: string): void;
+  /**
+   * The service aggregate (`$lib/app/context`), so a scenario can drive documents,
+   * commands and file operations without going through the DOM. Present from M1 on;
+   * optional so that an M0 scenario still type-checks.
+   */
+  ctx?: AppContext;
 }
 
 /** Exposes `h` as `window.__gedit`, only when `import.meta.env.VITE_GEDIT_TEST === '1'`. */

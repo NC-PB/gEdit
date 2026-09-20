@@ -1,0 +1,32 @@
+# M1: the multi-document core — registries, documents and tabs, the shell, the file
+# operations and the encodings.
+# Run with: tests/runtime/suite.sh tests/runtime/suites/m0.txt tests/runtime/suites/m1.txt
+
+# The whole wiring: bootstrap, the registries, the shell, and a file through the real
+# dialogs, file operations and codec. Run it first — everything else builds on it.
+m1-smoke
+
+# Opening: a multi-select gives one tab per file, an open file is focused, a drop opens
+# what it can and says what it ignored.
+m1-open-multi
+m1-dnd
+
+# The tabs themselves: untitled numbering, per-document undo and cursor, reorder,
+# Ctrl+Tab, the switch-tab picker, and the three ways to close one.
+m1-tabs
+
+# Byte-exact round trips for every encoding fixture, the mixed-EOL rule, inner NULs,
+# and the file that is data rather than a program.
+m1-encoding2
+
+# The default shortcuts of §7.11, where they are dispatched from, and the command palette.
+m1-keys
+
+# Quitting with more than one unsaved document: one combined question, every way out.
+m1-quit-multi
+
+# The shell layout: no window scrollbar, the panel regions, the splitters.
+m1-layout
+
+# G7: a generated 10 MB / 300k-line program. Slow; keep it last.
+m1-perf-open

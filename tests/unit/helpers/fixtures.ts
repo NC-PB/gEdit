@@ -3,7 +3,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { decodeBytes, unsupportedContent, type DecodedText } from '$lib/utils/textCodec';
+import { decodeFile } from '$lib/core/text';
+import type { Eol, FileEncoding, NulInfo } from '$lib/app/types';
 
 export const FIXTURES_DIR = fileURLToPath(new URL('../../fixtures/', import.meta.url));
 
@@ -20,18 +21,37 @@ export function readFixture(rel: string): Uint8Array {
   return new Uint8Array(readFileSync(join(FIXTURES_DIR, rel)));
 }
 
-export type OpenedFixture = ({ refused: null } & DecodedText) | { refused: string };
+/** What a fixture looks like once opened; `refused` carries the i18n key of the refusal. */
+export type OpenedFixture =
+  | {
+      refused: null;
+      /** Editor text: LF endings, BOM and NUL leader/trailer removed (see `decodeFile`). */
+      text: string;
+      encoding: FileEncoding;
+      eol: Eol | null;
+      eolMixed: boolean;
+      nul: NulInfo;
+    }
+  | { refused: string };
 
-/** Reads a fixture like the app's Open command: refused, or decoded to the editor text. */
+/**
+ * Reads a fixture the way the app's Open command does, through the production decoder
+ * (`$lib/core/text`, plan §7.2/AD-7): refused, or decoded to the editor text.
+ *
+ * I2: this used to call the pre-M1 `utils/textCodec` shim, which refused UTF-16 and any
+ * inner NUL. That shim is gone, so the characterization baselines below now describe the
+ * decoder the app actually ships.
+ */
 export function openFixture(rel: string): OpenedFixture {
-  const bytes = readFixture(rel);
-  const refused = unsupportedContent(bytes);
-  return refused ? { refused } : { refused: null, ...decodeBytes(bytes) };
+  const result = decodeFile(readFixture(rel));
+  if (!result.ok) return { refused: result.message.key };
+  const { text, encoding, eol, eolMixed, nul } = result;
+  return { refused: null, text, encoding, eol, eolMixed, nul };
 }
 
 /**
- * The text the program map sees. Monaco normalizes every line break of a loaded file
- * to LF or CRLF and the parser trims each line, so this equals LF-only text.
+ * The text the program map sees. `decodeFile` already normalizes every line break to LF,
+ * so this is a no-op guard for fixture text and only does work for hand-written strings.
  */
 export function editorText(text: string): string {
   return text.replace(/\r\n?/g, '\n');

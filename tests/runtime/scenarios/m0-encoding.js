@@ -1,6 +1,10 @@
 // Encodings end to end: what the editor shows for each byte-level fixture, that an
 // unchanged file is never rewritten, and that an edit is written back in the file's
 // own encoding — or in UTF-8 after the user agrees.
+//
+// M1: every open adds a tab (the first one takes the untouched starter buffer's place),
+// and re-opening a path focuses the tab that already holds it. Only the last document is
+// left unsaved, so the quit alert keeps the single-document wording.
 
 import { scenario } from '../lib/index.js'
 
@@ -10,7 +14,9 @@ const CASES = [
   { file: 'cp1252-crlf.nc', label: 'Windows-1252', encoding: 'windows-1252' },
   { file: 'cr-only.nc', label: 'UTF-8', encoding: 'utf-8' },
   { file: 'mixed-eol.nc', label: 'UTF-8', encoding: 'utf-8' },
-  { file: 'nul-leader-trailer.nc', label: 'UTF-8', encoding: 'utf-8' },
+  // The punched-tape leader and trailer are metadata, not text (§7.2), so the editor
+  // shows the program between them — they are written back unchanged on save.
+  { file: 'nul-leader-trailer.nc', label: 'UTF-8', encoding: 'utf-8', tape: true },
 ]
 
 /**
@@ -21,6 +27,14 @@ const CASES = [
 function decode(hex, encoding) {
   const bytes = Uint8Array.from(hex.split(' ').map((/** @type {string} */ b) => parseInt(b, 16)))
   return new TextDecoder(encoding).decode(bytes).replace(/\r\n?/g, '\n')
+}
+
+/** Drops the NUL runs at both ends, which the codec keeps out of the editor text. */
+function withoutTape(/** @type {string} */ hex) {
+  const bytes = hex.split(' ')
+  while (bytes.length > 0 && bytes[0] === '00') bytes.shift()
+  while (bytes.length > 0 && bytes[bytes.length - 1] === '00') bytes.pop()
+  return bytes.join(' ')
 }
 
 /** @param {string} hex @param {number} at @param {string} insert */
@@ -55,7 +69,7 @@ scenario('m0-encoding', { timeout: 180 }, async (h) => {
     const text = h.app.text()
     h.check(
       `${c.file}: opens as ${c.label} with the file's text`,
-      !!opened && encodingLabel() === c.label && text === decode(hex, c.encoding) && !text.includes('\r'),
+      !!opened && encodingLabel() === c.label && text === decode(c.tape ? withoutTape(hex) : hex, c.encoding) && !text.includes('\r'),
       { title: await h.title(), label: encodingLabel(), lines: text.split('\n').length, head: text.slice(0, 40), status: h.q('status-message')?.textContent },
     )
     const calls = h.dialogs.calls().length
@@ -140,6 +154,13 @@ scenario('m0-encoding', { timeout: 180 }, async (h) => {
   )
 
   // ---------------------------------------------------------------- the guard on top of it
+  // M1: `open` focuses a document that is already open instead of re-reading the file,
+  // so the converted document has to go before the fixture is restored on disk.
+  h.focusEditor()
+  await h.nativeKeys([{ key: 'w', mods: ['cmd'] }])
+  await h.waitFor(() => h.q('doc-tab', { path: cp }) === null, { timeout: 4000 })
+  h.check('closing the converted document leaves no tab on that path', h.q('doc-tab', { path: cp }) === null, h.qa('doc-tab').map((e) => e.dataset.path))
+
   const guard = await h.fixture('nc/encoding/cp1252-crlf.nc')
   const guardHex = await h.disk.hex(guard)
   await open(guard, 'cp1252-crlf.nc')

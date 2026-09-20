@@ -55,6 +55,10 @@ Known console noise, allowed in every run:
 
 - `NotAllowedError` from Monaco's clipboard workaround under synthetic events.
 - `Canceled` rejections: how Monaco ends work it no longer needs.
+- `ResizeObserver loop completed with undelivered notifications`, from Monaco's
+  `automaticLayout` while a panel toggle resizes the editor. It is a spec notification
+  that the loop deferred callbacks to the next frame, not an exception; startup itself
+  is clean.
 
 ## Writing a scenario
 

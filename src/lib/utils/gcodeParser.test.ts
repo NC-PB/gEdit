@@ -102,11 +102,15 @@ describe('parseProgramStructure known behavior', () => {
     expect(typeAt(rel, content)).toBeNull();
   });
 
-  // KNOWN GAP (M1): the NUL leader stays in the editor text, so the first line is not a comment.
-  it('misses the first comment behind a NUL leader', () => {
+  // GAP CLOSED (M1, verified at I2): the pre-M1 shim left the 40-byte NUL leader inside
+  // the editor text, so line 1 read as NULs rather than a comment and the map skipped it.
+  // `decodeFile` keeps the leader and trailer as metadata (`nul.leader` / `nul.trailer`),
+  // so the tape file now parses exactly like the same program without a leader.
+  it('lists the first comment of a tape file with a NUL leader', () => {
     const { text, items } = programMap('nc/encoding/nul-leader-trailer.nc');
-    expect(text.startsWith('\0'.repeat(40) + '(')).toBe(true);
-    expect(items.some((item) => item.line === 1)).toBe(false);
+    expect(text.startsWith('\0')).toBe(false);
+    expect(text.startsWith('(')).toBe(true);
+    expect(items.some((item) => item.line === 1)).toBe(true);
     expect(typeAt('nc/encoding/nul-leader-trailer.nc', 'T1 M6')).toBe('tool');
   });
 });
