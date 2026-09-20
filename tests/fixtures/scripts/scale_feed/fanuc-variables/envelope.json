@@ -1,0 +1,25 @@
+{
+  "message": "Scaled 1 of 5 feed rates to 90 %; 4 left as a variable or an expression.",
+  "findings": [
+    {
+      "line": 7,
+      "severity": "warning",
+      "message": "F#101 is not a plain number, so it is not scaled."
+    },
+    {
+      "line": 8,
+      "severity": "warning",
+      "message": "F[#101*0.5] is not a plain number, so it is not scaled."
+    },
+    {
+      "line": 9,
+      "severity": "warning",
+      "message": "F is not a plain number, so it is not scaled."
+    },
+    {
+      "line": 12,
+      "severity": "warning",
+      "message": "F is not a plain number, so it is not scaled."
+    }
+  ]
+}

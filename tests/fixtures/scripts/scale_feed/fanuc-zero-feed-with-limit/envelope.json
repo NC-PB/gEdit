@@ -1,0 +1,20 @@
+{
+  "message": "Scaled 2 of 4 feed rates to 80 %; 2 left as written (zero or negative), 1 clamped to a limit.",
+  "findings": [
+    {
+      "line": 6,
+      "severity": "warning",
+      "message": "F0. is not a feed this run can scale or raise to a limit, so it is left as it is."
+    },
+    {
+      "line": 7,
+      "severity": "warning",
+      "message": "F-100 is not a feed this run can scale or raise to a limit, so it is left as it is."
+    },
+    {
+      "line": 8,
+      "severity": "info",
+      "message": "F250. would become 200.; the smallest feed (700) was used instead."
+    }
+  ]
+}

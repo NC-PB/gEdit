@@ -1,0 +1,10 @@
+{
+  "message": "Scaled 1 feed rate to 110 %; 1 cycle feed left unchanged.",
+  "findings": [
+    {
+      "line": 17,
+      "severity": "info",
+      "message": "Q206 is a feed of CYCL DEF 206 and is left unchanged."
+    }
+  ]
+}

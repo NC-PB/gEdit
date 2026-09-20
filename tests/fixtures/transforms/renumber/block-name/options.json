@@ -1,0 +1,21 @@
+{
+  "note": "An alphanumeric block name is a jump target, not a counter: it keeps its name and gets no number in front of it.",
+  "profile": "fanuc-gcode",
+  "options": {
+    "start": 10,
+    "step": 10,
+    "skipStartingWith": "",
+    "restartAtProgramStart": false
+  },
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      {
+        "line": 1,
+        "severity": "info"
+      }
+    ],
+    "warnings": [],
+    "preflight": null
+  }
+}

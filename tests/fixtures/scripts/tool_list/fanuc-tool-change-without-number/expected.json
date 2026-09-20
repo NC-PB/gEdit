@@ -1,0 +1,38 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [],
+  "message": "No tool numbers found.",
+  "findings": [
+    {
+      "line": 4,
+      "severity": "warning",
+      "message": "Tool change without a tool number."
+    }
+  ]
+}

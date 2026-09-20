@@ -70,7 +70,7 @@
     "references": [
       { "trigger": "(?<![A-Z])M99(?!\\d)", "addresses": ["P"] },
       { "trigger": "(?<![A-Z])M0*98(?=[^)]*Q\\d)", "addresses": ["Q"] },
-      { "trigger": "(?<![A-Z])G7[0-3](?!\\d)", "addresses": ["P", "Q"] },
+      { "trigger": "(?<![A-Z])G7[0-3](?!\\d)(?=[^)]*P\\d)(?=[^)]*Q\\d)", "addresses": ["P", "Q"] },
       { "trigger": "(?<![A-Z])GOTO", "addresses": ["GOTO"] }
     ]
   },

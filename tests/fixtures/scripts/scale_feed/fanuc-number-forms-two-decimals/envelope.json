@@ -1,0 +1,10 @@
+{
+  "message": "Scaled 6 feed rates to 90 %; 1 kept whole.",
+  "findings": [
+    {
+      "line": 6,
+      "severity": "info",
+      "message": "1 feed rate without a decimal point: rounded whole rather than to 2 decimals, because in this dialect the point changes the value."
+    }
+  ]
+}

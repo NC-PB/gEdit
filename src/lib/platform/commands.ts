@@ -6,10 +6,11 @@
 // are the wire format. A command that takes a struct passes it as `{ req }`.
 //
 // M1: `files_stat` (implemented by WP1.4). M2: the config, state and recent-files
-// commands (implemented by WP2.1). The result types of the M4 and M5 commands are
-// placeholders at the bottom of this file and are filled in by the P4 / P5 preludes.
+// commands (implemented by WP2.1). M4: the scripting commands (implemented by WP4.5).
+// M5 removes the two v1 script commands, which never had a wrapper here.
 
 import { invoke } from '@tauri-apps/api/core';
+import type { FieldSpec } from '$lib/core/forms/types';
 
 /**
  * One entry of `files_stat`. A path the fs scope does not allow comes back with
@@ -128,31 +129,165 @@ export function recentClear(): Promise<RecentEntry[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Placeholders for later milestones (§7 preamble): the home file exists from M1 on,
-// so imports resolve; the P4 / P5 preludes replace these with the §7.6 definitions
-// and add the matching wrappers.
+// M4: scripting (src-tauri/src/scripts/*)
+//
+// The webview sends a script **id** and never a path, never an interpreter and never a
+// folder (plan §3, AD-13). Rust resolves the id against the three known roots, refuses
+// `..`, separators and anything that canonicalizes out of its root, and reads the
+// interpreter and the folder list from `settings.json` itself. That is what replaces the
+// v1 `run_python_script(folder, name)` surface, which M5 removes.
+//
+// Only `scriptNew`, `scriptCopyToUser` and `scriptSourcePath` widen the fs scope, and
+// only for a file the user may edit; a `bundled:` id is refused.
+//
+// What the id grammar buys is **which file** runs: no path traversal, no editing of a
+// bundled script, one source of truth for the interpreter and a bounded deadline. It says
+// nothing about what is *in* that file — `scriptNew` hands back a writable path in the
+// user folder on purpose, and that path runs by id. A script is an ordinary program with
+// the user's rights (`src-tauri/src/scripts/mod.rs` spells this out; G8 M4 corrected the
+// stronger claim that used to stand here).
 // ---------------------------------------------------------------------------
 
-/** One discovered script (M4). Placeholder until P4. */
-export interface ScriptEntry {
-  id: string;
-  [field: string]: unknown;
-}
+/** Where a script wants its stdin from. */
+export type ScriptInputMode = 'selection-or-document' | 'selection' | 'document' | 'none';
 
-/** The TOML header of a script (M4). Placeholder until P4. */
+/** What the app does with a script's stdout. */
+export type ScriptOutputMode = 'panel' | 'replace' | 'new-document' | 'report';
+
+/** Which documents the context carries. P1 only supports `active`. */
+export type ScriptDocumentsMode = 'active' | 'all-open' | 'pick';
+
+/**
+ * A script's `# /// gedit` TOML header, as Rust parsed it.
+ *
+ * `name`, `description` and every parameter `label` are **data and stay untranslated**
+ * (AD-14). `warnings` are unknown fields and downgraded values; they do not stop the
+ * script from running, unlike `ScriptEntry.headerError`.
+ */
 export interface ScriptMeta {
   name: string;
-  [field: string]: unknown;
+  description: string;
+  /** null means "offered for every profile". */
+  profiles: string[] | null;
+  input: ScriptInputMode;
+  output: ScriptOutputMode;
+  /** Seconds; null falls back to `scripts.timeoutSeconds`. */
+  timeout: number | null;
+  /** stdout is `{ text, message, findings }` rather than plain text. */
+  envelope: boolean;
+  documents: ScriptDocumentsMode;
+  /** Rendered by `modals.form()` exactly like a transform's options. */
+  params: FieldSpec[];
+  warnings: string[];
 }
 
-/** The outcome of one script run (M4). Placeholder until P4. */
+/** One discovered script. */
+export interface ScriptEntry {
+  /** `bundled:x.py`, `user:grp/x.py`, `extra0:x.py`. The only thing that goes back to Rust. */
+  id: string;
+  /** `bundled`, `user` or `extra<N>`. */
+  root: string;
+  /** The one subfolder level, when the script sits in one; it becomes a menu group. */
+  group: string | null;
+  fileName: string;
+  /** null when the file has no header: the script runs in v1 (panel) mode. */
+  meta: ScriptMeta | null;
+  /** A header that is there but unusable. English detail text (AD-14). */
+  headerError: string | null;
+  /** A script of a later root has the same file name and wins. */
+  shadowed: boolean;
+  /** False for `bundled:`; the UI offers "Copy to user folder" instead of "Edit". */
+  editable: boolean;
+}
+
+/** One script folder, for the settings UI and the empty-state hint. */
+export interface FolderInfo {
+  root: string;
+  path: string;
+  exists: boolean;
+}
+
+export interface ScriptList {
+  scripts: ScriptEntry[];
+  folders: FolderInfo[];
+}
+
+/** What `scriptRun` is asked to do. */
+export interface RunRequest {
+  /** The webview's id for this run; `scriptCancel` uses it. */
+  runId: string;
+  scriptId: string;
+  /** The text for stdin, LF-joined. */
+  stdin: string;
+  /** `ScriptContextV2` (plan §7.5); Rust writes it to the `GEDIT_CONTEXT` file as-is. */
+  context: unknown;
+  /** Overrides the header's `timeout` and `scripts.timeoutSeconds`. */
+  timeoutSecs: number | null;
+}
+
+/** The outcome of one run. A run that never started rejects instead. */
 export interface RunResult {
+  /** null when the process was killed by a signal. */
+  exitCode: number | null;
+  /** Exit code 0, and neither timed out nor cancelled. */
   success: boolean;
-  [field: string]: unknown;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+  cancelled: boolean;
+  /** stdout hit the runner's 64 MiB cap; what came after it was dropped. */
+  stdoutTruncated: boolean;
+  durationMs: number;
+  /** The interpreter that ran it, for the output panel's header line. */
+  interpreter: string;
 }
 
-/** Result of the Python interpreter probe (M4). Placeholder until P4. */
+/** The Python probe. `message` is English detail shown under a translated summary. */
 export interface PythonStatus {
   ok: boolean;
-  [field: string]: unknown;
+  interpreter: string | null;
+  version: string | null;
+  message: string | null;
+}
+
+/** Every script in every root, with its header already parsed. */
+export function scriptsList(): Promise<ScriptList> {
+  return invoke<ScriptList>('scripts_list');
+}
+
+/**
+ * Runs a script and answers with everything the output panel needs. It rejects only when
+ * nothing ran (no such id, no interpreter); a script that exited non-zero is a resolved
+ * `RunResult` with `success: false`.
+ */
+export function scriptRun(req: RunRequest): Promise<RunResult> {
+  return invoke<RunResult>('script_run', { req });
+}
+
+/** Asks a run to stop. False when it had already finished. */
+export function scriptCancel(runId: string): Promise<boolean> {
+  return invoke<boolean>('script_cancel', { runId });
+}
+
+/** Whether there is a usable Python (3.9 or newer), and which one. Never rejects. */
+export function pythonCheck(): Promise<PythonStatus> {
+  return invoke<PythonStatus>('python_check');
+}
+
+/**
+ * Creates `<config>/scripts/<name>.py` from the commented template, grants that one file
+ * and returns its path, so it can be opened as a document.
+ */
+export function scriptNew(name: string): Promise<string> {
+  return invoke<string>('script_new', { name });
+}
+
+/** Copies a bundled script into the user folder (where it shadows it) and grants the copy. */
+export function scriptCopyToUser(scriptId: string): Promise<string> {
+  return invoke<string>('script_copy_to_user', { scriptId });
+}
+
+/** The granted path behind an id, for editing. A `bundled:` id is refused. */
+export function scriptSourcePath(scriptId: string): Promise<string> {
+  return invoke<string>('script_source_path', { scriptId });
 }

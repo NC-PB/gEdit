@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 2 of 3 feed rates to 90 %; 1 left as a thread pitch.",
+  "findings": [
+    {
+      "line": 40,
+      "severity": "warning",
+      "message": "This run saw only the selection, from line 40, so the feed mode and any cycle set above it are unknown: a thread pitch in a tapping or threading cycle that starts higher up cannot be recognised here and may have been scaled. Run the command on the whole program, or check these blocks by hand."
+    },
+    {
+      "line": 41,
+      "severity": "warning",
+      "message": "F625. is a thread pitch (G84), so it is not scaled."
+    }
+  ]
+}

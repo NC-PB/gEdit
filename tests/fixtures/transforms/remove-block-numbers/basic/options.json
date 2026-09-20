@@ -1,0 +1,10 @@
+{
+  "note": "The number and the space behind it go; the tape marker and the program number stay.",
+  "profile": "fanuc-gcode",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.removeBlockNumbers.summary",
+    "skipped": [],
+    "warnings": []
+  }
+}

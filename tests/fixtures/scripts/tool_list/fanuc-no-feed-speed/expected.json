@@ -1,0 +1,31 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    }
+  ],
+  "rows": [
+    {
+      "tool": "T1",
+      "description": "ROUGH",
+      "line": 5,
+      "calls": 1
+    }
+  ],
+  "message": "1 tool",
+  "findings": []
+}

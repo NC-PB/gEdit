@@ -98,6 +98,84 @@ walks `nc/` only, so these files are checked by the tests that read them.
 | `tokens/heidenhain-klartext.json` | same | 67 golden lines, 323 tokens, same format. |
 | `numberformat.cases.json` | `src/lib/core/nc/numberFormat.test.ts` | 57 `formatNumber` cases: the decimal string, the written literal `original` (or `null`, parsed through `parseNumber`), the `NumberFormatOptions`, the expected text, and an optional `note`. |
 
+## Transform and script cases (M4)
+
+Case folders, not single files: one folder per case, discovered by the test that reads
+them, so adding a case is adding a folder and nothing else. The programs in them are
+synthetic and written for gEdit like everything else here, but they carry **no**
+`WRITTEN FOR GEDIT` marker line: the marker is a comment, and `remove-comments` and
+`convert-case` would rewrite it into the golden. The provenance statement lives in the
+header of each reading test instead, the way `tokenizer.test.ts` does it for the token
+goldens. `tests/unit/fixtures.test.ts` walks `nc/` only and does not look at these.
+
+| Folder | Read by | Layout |
+|---|---|---|
+| `transforms/<id>/<case>/` | `src/lib/core/transforms/<id>.test.ts` | `input.nc`, `options.json`, `expected.nc` (§8.2). `<id>` is the `TransformDef.id`. |
+| `scripts/<script>/<case>/` | `tests/python/test_<script>.py` | `input.nc` (stdin), the golden (below), optionally `params.json`, and a `case.json` naming the profile or replacing a member of the script context. |
+
+A script's golden has one of two shapes, decided by what the script's header declares as
+its `output` (`src-tauri/resources/scripts/README.md`):
+
+- **a `report` script (`tool_list.py`)** writes `expected.json`: the whole stdout envelope,
+  compared field for field.
+- **a `replace` script (`scale_feed.py`, `scale_speed.py`)** writes `expected.nc` — the
+  program text the script hands back, byte for byte — plus `envelope.json` for the rest of
+  the envelope (`message` and `findings`). The text is split out because a golden of a
+  transform is read by diffing it against its `input.nc`, and inside a JSON string it would
+  be one escaped line with `\n` in it. `helpers.script_cases()` wants exactly one
+  `expected.*` per folder, which `envelope.json` does not disturb; both test modules assert
+  the full stdout all the same (`sorted(payload) == ["findings", "message", "text"]`).
+
+`options.json` comes in two shapes, one per work package, and the reading test knows
+which it expects:
+
+- **`renumber` and `remove-block-numbers` (WP4.2)** wrap the run: `{ note, profile,
+  scope | firstLine, options, expect }`. `expect` may name the `summary` key, the
+  `skipped` lines with their severity, the `warnings` keys and the `preflight`; what it
+  does not list is not checked.
+
+  A case places its input inside a document in one of two ways, and which one it picks is
+  part of what it tests:
+
+  - **`scope: { startLine, endLine }`** — `input.nc` and `expected.nc` are the whole
+    program, and the transform is handed the slice *plus the document*, exactly as
+    `app/transforms.ts` does it for a selection. The test also asserts that the lines
+    outside the scope are unchanged. This is the shape a selection case wants: a `GOTO`
+    above the selection and a Klartext `~` block the selection starts inside are only
+    visible to a run that has the document (G8 M4).
+  - **`firstLine`** — a bare fragment and no document, which is what a headless caller
+    hands over. Such a run must say that it could not look outside its own lines rather
+    than report that it found nothing.
+- **The five cleanup transforms (WP4.3)** hold the bare `TransformContext.options`
+  (`{}` when there are none). The dialect comes from the case folder name — `klartext-…`
+  is `heidenhain-klartext`, anything else `fanuc-gcode` — and `firstLine` is 1.
+
+Unifying the two on the WP4.2 shape, and with it hoisting the loader both test files
+repeat, is a cleanup for a later milestone; it would rewrite every golden's sidecar, so it
+did not belong in the M4 merge. The WP4.2 cases are additionally asserted **idempotent**
+(running the transform on its own `expected.nc` changes nothing) and to return an identity
+`lineMap`.
+
+51 transform cases: `renumber` 21, `remove-block-numbers` 8, `remove-comments` 7,
+`insert-spaces` 5, `convert-case` 4, `remove-empty-lines` 3, `remove-spaces` 3.
+47 script cases: `tool_list` 18, `scale_feed` 17, `scale_speed` 12.
+
+Ten of them were added by the M4 review, and each one is a program the code used to get
+wrong rather than a rule it already kept:
+
+| Case | What it used to do |
+|---|---|
+| `renumber/program-markers` | wrote `N10 :1000` in front of a colon-form program number |
+| `renumber/selection-goto-above` | rewrote a jump target with no warning at all |
+| `renumber/klartext-selection-continuation` | wrote a block number into a cycle parameter line |
+| `renumber/mill-peck-cycle` | raised the reference confirmation on an ordinary G73 peck cycle |
+| `remove-block-numbers/references` | deleted `GOTO` / `M99 P` / `G71 P-Q` targets in silence |
+| `insert-spaces/klartext-keyword-values` | split `REP5` into `REP 5` on a dialect it claims to leave alone |
+| `scale_feed/fanuc-lathe-threading` | multiplied the thread lead of every `G76` and `G92` block |
+| `scale_feed/fanuc-zero-feed-with-limit` | raised `F0.` to the "smallest feed" and started cutting |
+| `scale_feed/fanuc-lathe-decimals` | rounded a lathe feed back to itself and said nothing |
+| `tool_list/fanuc-lathe-turret` | answered "No tool changes found." for a six-tool program |
+
 ## Generated at run time
 
 `tests/gen/gen-large.mjs` writes large programs to `.perf/` (gitignored), built from

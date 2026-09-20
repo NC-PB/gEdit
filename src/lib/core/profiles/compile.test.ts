@@ -176,6 +176,15 @@ describe('the dialect the built-in profiles describe', () => {
     expect(fired('N70 IF[#1EQ2]GOTO100')).toEqual(['GOTO']);
     // A program call is not a block reference, so renumbering must leave it alone.
     expect(fired('N10 M98 P2000')).toEqual([]);
+    // Nor is a peck depth. `G7[0-3]` names block numbers only in the lathe cycles, which
+    // carry **both** P and Q (`syntax-fanuc` §6: `G71 P100 Q200 U0.4 W0.1 F0.25`). This
+    // profile is a mill dialect, where G73 is the chip-break peck cycle and its Q is a
+    // depth — the code database says so — so an everyday drilling block used to raise
+    // the one confirmation that protects the user (G8 M4).
+    expect(fired('N30 G73 Z-30. R2. Q3. F150.')).toEqual([]);
+    expect(fired('N30 G83 Z-30. R2. Q3. F150.')).toEqual([]);
+    // The first block of the two-line lathe form has neither, and names nothing.
+    expect(fired('N20 G71 U1.5 R0.5')).toEqual([]);
   });
 
   it('offers the extensions the syntax notes list', () => {

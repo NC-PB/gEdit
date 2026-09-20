@@ -145,6 +145,7 @@ function readEntry(
   if (group) entry.group = group;
   if (bool(raw.modal)) entry.modal = true;
   if (bool(raw.pitchFeed)) entry.pitchFeed = true;
+  if (bool(raw.pitchFeedAmbiguous)) entry.pitchFeedAmbiguous = true;
   if (bool(raw.verify)) entry.verify = true;
   const description = str(raw.description);
   if (description) entry.description = description;

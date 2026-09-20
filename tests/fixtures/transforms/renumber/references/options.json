@@ -1,0 +1,39 @@
+{
+  "note": "GOTO, M98 Q, M99 P and a lathe G71 P/Q point at block numbers: the preflight asks, the numbers change and the references do not.",
+  "profile": "fanuc-gcode",
+  "options": {
+    "start": 10,
+    "step": 10,
+    "skipStartingWith": "(",
+    "restartAtProgramStart": false
+  },
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      {
+        "line": 2,
+        "severity": "warning"
+      },
+      {
+        "line": 3,
+        "severity": "warning"
+      },
+      {
+        "line": 5,
+        "severity": "warning"
+      },
+      {
+        "line": 6,
+        "severity": "warning"
+      },
+      {
+        "line": 7,
+        "severity": "info"
+      }
+    ],
+    "warnings": [
+      "ncNumbering.renumber.referencesKept"
+    ],
+    "preflight": "ncNumbering.renumber.references"
+  }
+}

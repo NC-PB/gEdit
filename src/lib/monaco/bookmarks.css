@@ -1,0 +1,25 @@
+/* Bookmark decorations (plan §5 WP4.4). Owner: WP4.4.
+
+   Imported by `bookmarks.ts` so that the feature carries its own styles: the rules are
+   useless without the decorations, and the decorations are invisible without the rules.
+
+   Both selectors are scoped to `.monaco-editor`, because the class names reach the DOM
+   through `IModelDecorationOptions` and Monaco applies them inside the editor only. The
+   colours are the chrome tokens of `src/app.css`, so the glyph follows the theme without
+   this file knowing which one is on. The overview-ruler mark is NOT here: Monaco paints
+   the ruler on a canvas from a JavaScript colour (see `RULER_COLOR` in `bookmarks.ts`).
+
+   Monaco composes the glyph element's class as `cgmr codicon <glyphMarginClassName>` and
+   already centres it, so nothing here touches the layout: a font-size or a display of our
+   own would fight `.codicon[class*='codicon-']`, whose rules are injected at runtime and
+   therefore win a specificity tie. */
+
+.monaco-editor .glyph-margin-widgets .cgmr.gedit-bookmark-glyph {
+  color: var(--accent-hover);
+}
+
+/* A whole-line tint, kept at the strength of a hover so that it reads as "marked" without
+   competing with the current-line highlight or with the selection. */
+.monaco-editor .gedit-bookmark-line {
+  background-color: var(--surface-hover);
+}

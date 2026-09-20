@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 3 spindle speeds to 200 %; 2 clamped to a limit.",
+  "findings": [
+    {
+      "line": 4,
+      "severity": "info",
+      "message": "S300 would become 600; the smallest speed (800) was used instead."
+    },
+    {
+      "line": 8,
+      "severity": "info",
+      "message": "S4000 would become 8000; the largest speed (6000) was used instead."
+    }
+  ]
+}

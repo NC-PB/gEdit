@@ -9,7 +9,10 @@
 //   - `SettingsDialog.svelte` (WP2.7) renders `SETTING_FIELDS` with `dialog: true`
 //   - `monaco/editorOptions.ts` (WP2.6) maps the effective values onto Monaco
 // Rust reads the four `scripts.*` keys straight from the file (AD-8); they are never
-// passed over IPC.
+// passed as arguments of a `script_run`. They are still ordinary settings — the dialog
+// offers `scripts.python` and `scripts.folders`, and the dialog saves through
+// `settings_save` like every other key — so this is one source of truth for them, not a
+// boundary against the webview (`src-tauri/src/scripts/settings.rs`).
 //
 // i18n: `SETTING_FIELDS` is a static table, so it cannot hold translated text. Every
 // label, help text and choice label is an **i18n key** in the `settings` namespace

@@ -1,0 +1,16 @@
+{
+  "note": "Packed CAM output: only the block number moves, the words behind it stay packed.",
+  "profile": "fanuc-gcode",
+  "options": {
+    "start": 10,
+    "step": 10,
+    "skipStartingWith": "",
+    "restartAtProgramStart": false
+  },
+  "expect": {
+    "summary": "ncNumbering.renumber.summary",
+    "skipped": [],
+    "warnings": [],
+    "preflight": null
+  }
+}

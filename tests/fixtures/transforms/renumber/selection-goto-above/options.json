@@ -1,0 +1,17 @@
+{
+  "note": "G8 M4: the selection holds the jump target N100 but not the 'GOTO 100' above it. The preflight used to scan only the selected lines, find nothing, and let the run rewrite the target in silence; it now scans the document and the run counts the pointer it cannot see.",
+  "profile": "fanuc-gcode",
+  "scope": { "startLine": 3, "endLine": 5 },
+  "options": {
+    "start": 10,
+    "step": 10,
+    "skipStartingWith": "",
+    "restartAtProgramStart": false
+  },
+  "expect": {
+    "summary": "ncNumbering.renumber.summary",
+    "skipped": [],
+    "warnings": ["ncNumbering.renumber.referencesKept"],
+    "preflight": "ncNumbering.renumber.references"
+  }
+}

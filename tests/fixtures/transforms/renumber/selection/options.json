@@ -1,0 +1,22 @@
+{
+  "note": "A bare fragment with no document behind it — a headless caller. The reported line numbers are document lines, and the preflight says outright that it could not look for a jump into these blocks rather than reporting none.",
+  "profile": "fanuc-gcode",
+  "firstLine": 12,
+  "options": {
+    "start": 10,
+    "step": 10,
+    "skipStartingWith": "(",
+    "restartAtProgramStart": false
+  },
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      {
+        "line": 13,
+        "severity": "info"
+      }
+    ],
+    "warnings": [],
+    "preflight": "ncNumbering.renumber.referencesUnchecked"
+  }
+}

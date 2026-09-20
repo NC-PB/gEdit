@@ -1,0 +1,20 @@
+{
+  "message": "Scaled 3 of 5 feed rates to 110 %; 2 left in another feed mode, 1 cycle feed left unchanged.",
+  "findings": [
+    {
+      "line": 10,
+      "severity": "info",
+      "message": "Q206 is a feed of CYCL DEF 200 and is left unchanged."
+    },
+    {
+      "line": 18,
+      "severity": "info",
+      "message": "FZ0.05 is a feed per tooth, so it is not scaled."
+    },
+    {
+      "line": 19,
+      "severity": "info",
+      "message": "FU0.12 is a feed per revolution, so it is not scaled."
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [
+    {
+      "tool": "T7",
+      "description": "RIGID TAP M8X1.25",
+      "line": 4,
+      "calls": 1,
+      "feed": "",
+      "speed": "600"
+    },
+    {
+      "tool": "T8",
+      "description": "MILL WITH FEED PER TOOTH",
+      "line": 12,
+      "calls": 1,
+      "feed": "800",
+      "speed": "4000"
+    }
+  ],
+  "message": "2 tools",
+  "findings": [
+    {
+      "line": 12,
+      "severity": "info",
+      "message": "T8: the feed of 2 blocks is in FZ, not per minute, so it is not in the range."
+    },
+    {
+      "line": 15,
+      "severity": "info",
+      "message": "T8: the feed of 1 block is in FU, not per minute, so it is not in the range."
+    }
+  ]
+}

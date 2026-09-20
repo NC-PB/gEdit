@@ -1,0 +1,25 @@
+{
+  "message": "Scaled 2 of 5 feed rates to 80 %; 1 left as a thread pitch, 2 left because the code means a threading cycle in another G-code system, 1 rounded to the decimals it was written with.",
+  "findings": [
+    {
+      "line": 6,
+      "severity": "warning",
+      "message": "F2.0 is a thread pitch (G32), so it is not scaled."
+    },
+    {
+      "line": 7,
+      "severity": "warning",
+      "message": "F2.0 is not scaled: G76 is a threading cycle in another G-code system of this dialect, where this F is the thread lead and not a feed rate. Check the block and scale it by hand if it really is a feed."
+    },
+    {
+      "line": 8,
+      "severity": "warning",
+      "message": "F2.0 is not scaled: G92 is a threading cycle in another G-code system of this dialect, where this F is the thread lead and not a feed rate. Check the block and scale it by hand if it really is a feed."
+    },
+    {
+      "line": 9,
+      "severity": "warning",
+      "message": "F0.3 becomes 0.2, not 0.24: this value is written with 1 decimal and the result was rounded to it. Ask for more decimal places if that is too coarse."
+    }
+  ]
+}

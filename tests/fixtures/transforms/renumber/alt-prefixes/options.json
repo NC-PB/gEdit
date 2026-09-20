@@ -1,0 +1,17 @@
+{
+  "note": "A punched-tape sequence number counts as a block number when the run says so; the new number is written with the profile prefix.",
+  "profile": "fanuc-gcode",
+  "options": {
+    "start": 10,
+    "step": 10,
+    "altPrefixes": ":",
+    "skipStartingWith": "",
+    "restartAtProgramStart": false
+  },
+  "expect": {
+    "summary": "ncNumbering.renumber.summary",
+    "skipped": [],
+    "warnings": [],
+    "preflight": null
+  }
+}

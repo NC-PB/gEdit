@@ -1,0 +1,3 @@
+G0 X0
+(A COMMENT)
+G1 X10.

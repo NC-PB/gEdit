@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 2 of 3 spindle speeds to 90 %; 1 left as a surface speed.",
+  "findings": [
+    {
+      "line": 40,
+      "severity": "warning",
+      "message": "This run saw only the selection, from line 40, so G96 / G97 and any cycle set above it are unknown: a surface speed may have been read as rpm, and a thread cut with one of these speeds cannot be recognised here. Run the command on the whole program, or check these blocks by hand."
+    },
+    {
+      "line": 41,
+      "severity": "info",
+      "message": "S180 is a surface speed (G96), so it is not scaled."
+    }
+  ]
+}

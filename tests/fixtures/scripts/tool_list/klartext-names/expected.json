@@ -1,0 +1,57 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [
+    {
+      "tool": "MILL_D10",
+      "description": "NAMED TOOL",
+      "line": 4,
+      "calls": 1,
+      "feed": "300-800",
+      "speed": "5000"
+    },
+    {
+      "tool": "QS1",
+      "description": "TOOL NAME FROM A STRING PARAMETER",
+      "line": 9,
+      "calls": 1,
+      "feed": "120",
+      "speed": "2800"
+    },
+    {
+      "tool": "T12.1",
+      "description": "INDEXED TOOL",
+      "line": 12,
+      "calls": 1,
+      "feed": "",
+      "speed": "1800"
+    }
+  ],
+  "message": "3 tools",
+  "findings": []
+}

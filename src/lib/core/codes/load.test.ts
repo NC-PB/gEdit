@@ -83,10 +83,10 @@ describe('built-in code databases', () => {
     }
   });
 
-  // G76 is not in the list although the plan names it: the entry shipped here is the
-  // *mill* fine-boring cycle, whose F is a boring feed and carries no thread pitch. The
-  // flag belongs to the lathe G76 (multi-pass threading), which gets its own entry when
-  // the lathe profile arrives.
+  // G76 is not in the `pitchFeed` list although the plan names it: the entry shipped
+  // here is the *mill* fine-boring cycle, whose F is a boring feed. It is in the
+  // `pitchFeedAmbiguous` list below instead, which is what a scaling script needs to
+  // refuse it while no lathe profile exists.
   it('marks the tapping and threading codes the plan names as pitchFeed', () => {
     const fanucPitch = fanuc.db.codes.filter((e) => e.pitchFeed).map((e) => e.code);
     expect(fanucPitch.sort()).toEqual(['G32', 'G33', 'G74', 'G84']);
@@ -94,6 +94,25 @@ describe('built-in code databases', () => {
 
     const klartextPitch = heidenhain.db.codes.filter((e) => e.pitchFeed).map((e) => e.code);
     expect(klartextPitch.sort()).toEqual(['CYCL DEF 206', 'CYCL DEF 207', 'CYCL DEF 209']);
+  });
+
+  it('marks the codes whose number is a threading cycle in another G-code system', () => {
+    // G8 M4: `scale_feed` multiplied the thread lead of every G76 and G92 block on a
+    // lathe program, because the hazard was written in the entry's prose and nowhere a
+    // machine could read it. `fanuc-gcode` is the only G-code profile that ships, so a
+    // lathe program lands on it.
+    const ambiguous = fanuc.db.codes.filter((e) => e.pitchFeedAmbiguous).map((e) => e.code);
+    expect(ambiguous.sort()).toEqual(['G76', 'G92']);
+    // Every one of them says so in its own description as well, which is where the
+    // reviewer found it.
+    for (const code of ambiguous) {
+      const entry = fanuc.db.codes.find((e) => e.code === code);
+      expect(entry?.description, code).toMatch(/system A/);
+    }
+    // The flag is about a code that means two things, not about a code that is a pitch:
+    // the two lists do not overlap, and Klartext has no second G-code system.
+    expect(fanuc.db.codes.some((e) => e.pitchFeed && e.pitchFeedAmbiguous)).toBe(false);
+    expect(heidenhain.db.codes.some((e) => e.pitchFeedAmbiguous)).toBe(false);
   });
 
   it('ships the Fanuc CAM subset the plan lists', () => {
@@ -281,13 +300,16 @@ describe('loadCodeDb', () => {
       version: 1,
       codes: [
         { code: 'G84', label: 'Tap', modal: true, pitchFeed: true, verify: true, group: 'cycle' },
-        { code: 'G0', label: 'Rapid', modal: false, pitchFeed: 'yes' },
+        { code: 'G0', label: 'Rapid', modal: false, pitchFeed: 'yes', pitchFeedAmbiguous: 1 },
+        { code: 'G76', label: 'Bore', pitchFeedAmbiguous: true, group: 'cycle' },
       ],
     });
     expect(db.codes[0]).toMatchObject({ modal: true, pitchFeed: true, verify: true, group: 'cycle' });
     expect(db.codes[1].modal).toBeUndefined();
     expect(db.codes[1].pitchFeed).toBeUndefined();
+    expect(db.codes[1].pitchFeedAmbiguous).toBeUndefined();
     expect(db.codes[1].group).toBeUndefined();
+    expect(db.codes[2].pitchFeedAmbiguous).toBe(true);
   });
 
   it('builds an empty database for a dialect with no file', () => {

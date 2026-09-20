@@ -1,0 +1,41 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [
+    {
+      "tool": "T1",
+      "description": "ROUGH",
+      "line": 41,
+      "calls": 1,
+      "feed": "100.",
+      "speed": "1000"
+    }
+  ],
+  "message": "1 tool",
+  "findings": []
+}

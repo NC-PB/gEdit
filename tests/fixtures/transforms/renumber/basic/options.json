@@ -1,0 +1,28 @@
+{
+  "note": "The profile defaults: start 10, step 10, one space, %/O/( skipped, empty lines skipped, restart at each program start.",
+  "profile": "fanuc-gcode",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      {
+        "line": 1,
+        "severity": "info"
+      },
+      {
+        "line": 2,
+        "severity": "info"
+      },
+      {
+        "line": 3,
+        "severity": "info"
+      },
+      {
+        "line": 10,
+        "severity": "info"
+      }
+    ],
+    "warnings": [],
+    "preflight": null
+  }
+}

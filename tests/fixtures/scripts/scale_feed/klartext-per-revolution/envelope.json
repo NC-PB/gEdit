@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 5 feed rates to 110 %; 1 rounded to the decimals it was written with, 1 cycle feed left unchanged.",
+  "findings": [
+    {
+      "line": 10,
+      "severity": "info",
+      "message": "Q206 is a feed of CYCL DEF 200 and is left unchanged."
+    },
+    {
+      "line": 18,
+      "severity": "warning",
+      "message": "FZ0.05 becomes 0.06, not 0.055: this value is written with 2 decimals and the result was rounded to it. Ask for more decimal places if that is too coarse."
+    }
+  ]
+}

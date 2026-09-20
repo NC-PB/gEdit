@@ -1,0 +1,17 @@
+{
+  "note": "Zero padding to a fixed width.",
+  "profile": "fanuc-gcode",
+  "options": {
+    "start": 10,
+    "step": 10,
+    "digits": 4,
+    "skipStartingWith": "",
+    "restartAtProgramStart": false
+  },
+  "expect": {
+    "summary": "ncNumbering.renumber.summary",
+    "skipped": [],
+    "warnings": [],
+    "preflight": null
+  }
+}

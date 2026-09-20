@@ -1,0 +1,38 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [],
+  "message": "No tool change found, but 6 tool words were seen. This profile reads a tool change as a code of its own; a lathe program that changes tool with a bare T word needs a lathe profile.",
+  "findings": [
+    {
+      "line": 7,
+      "severity": "warning",
+      "message": "6 tool words here, but no tool change: this dialect marks a tool change with a code of its own (M6 on the shipped Fanuc mill profile), and each of them was written without one. A turret lathe changes tool with a bare T word and needs a lathe profile, which gEdit does not ship yet."
+    }
+  ]
+}

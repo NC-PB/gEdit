@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 3 feed rates to 150 %; 2 clamped to a limit.",
+  "findings": [
+    {
+      "line": 5,
+      "severity": "info",
+      "message": "F100. would become 150.; the smallest feed (200) was used instead."
+    },
+    {
+      "line": 7,
+      "severity": "info",
+      "message": "F2000. would become 3000.; the largest feed (2500) was used instead."
+    }
+  ]
+}

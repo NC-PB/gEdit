@@ -1,0 +1,20 @@
+{
+  "note": "G8 M4: the tape marker and the colon-form program number are program markers, not blocks. The shipped skipStartingWith list holds % O ( and not ':', so the defaults used to write 'N10 :1000 (COLON PROGRAM)' and the control lost the program number. The list is cleared here so that nothing but the tokenizer's own answer protects them.",
+  "profile": "fanuc-gcode",
+  "options": {
+    "start": 10,
+    "step": 10,
+    "skipStartingWith": "",
+    "restartAtProgramStart": false
+  },
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      { "line": 1, "severity": "info" },
+      { "line": 2, "severity": "info" },
+      { "line": 5, "severity": "info" }
+    ],
+    "warnings": [],
+    "preflight": null
+  }
+}

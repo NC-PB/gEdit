@@ -1,0 +1,12 @@
+{
+  "note": "G8 M4: a selection that starts inside a CYCL DEF ~ block. The run used to begin at the start-of-document state, read the cycle's parameter tails as block heads, and write '  0 Q201=-20 ;TIEFE ~' — a literal 0 between the indentation and the first cycle parameter. With the state of the line above the scope it knows the first two lines are a continuation tail and leaves them alone. The one block it does number still gets a number that does not fit the program, which is what the consecutiveSelection confirmation is for.",
+  "profile": "heidenhain-klartext",
+  "scope": { "startLine": 6, "endLine": 8 },
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summary",
+    "skipped": [],
+    "warnings": [],
+    "preflight": "ncNumbering.renumber.consecutiveSelection"
+  }
+}

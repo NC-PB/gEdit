@@ -1,0 +1,10 @@
+{
+  "note": "Packed words keep their packing; there was no space behind the number to remove.",
+  "profile": "fanuc-gcode",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.removeBlockNumbers.summary",
+    "skipped": [],
+    "warnings": []
+  }
+}

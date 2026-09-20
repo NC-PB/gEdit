@@ -1,4 +1,5 @@
 # Continuous integration: type check, unit tests, frontend build and notices on Linux;
+# the bundled Python scripts on the oldest and the newest supported interpreter;
 # Rust checks and debug bundles on macOS, Windows and Linux.
 # The runtime harness (tests/runtime) drives native macOS UI and is run locally only.
 
@@ -77,6 +78,29 @@ jobs:
       # `rust` job's `cargo fmt` never sees it.
       - name: Harness Rust is formatted
         run: rustfmt --check --edition 2021 tests/runtime/harness/harness.rs
+
+  # Gate G4. The bundled scripts are standard library only and have to run on the oldest
+  # interpreter gEdit supports (3.9, which is what macOS still ships) as well as on a
+  # current one, so both ends of the range are checked and nothing in between can drift.
+  python:
+    name: Python ${{ matrix.python }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.9', '3.12']
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      # No `pip install`: a dependency here would mean an NC programmer cannot run the
+      # bundled scripts on a fresh machine.
+      - name: Bundled scripts (unittest)
+        run: python -m unittest discover -s tests/python -t .
 
   rust:
     name: Rust (${{ matrix.os }})

@@ -1,0 +1,20 @@
+{
+  "message": "Scaled 3 of 6 feed rates to 90 %; 3 left in another feed mode.",
+  "findings": [
+    {
+      "line": 7,
+      "severity": "info",
+      "message": "F0.15 is a feed per revolution (G95), so it is not scaled."
+    },
+    {
+      "line": 8,
+      "severity": "info",
+      "message": "F0.2 is a feed per revolution (G95), so it is not scaled."
+    },
+    {
+      "line": 9,
+      "severity": "info",
+      "message": "F12.5 is an inverse-time feed (G93), so it is not scaled."
+    }
+  ]
+}

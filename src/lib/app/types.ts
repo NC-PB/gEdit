@@ -11,10 +11,10 @@
 // here: `Profile`/`CompiledProfile` (core/profiles/types.ts, P3), `FieldSpec`
 // (core/forms/types.ts, P2), `Settings` (core/settings/schema.ts, P2), `NcToken`
 // (core/nc/types.ts, P3), the code database types (core/codes/types.ts, P3),
-// `OutlineItem` (core/profiles/outline.ts, P3) and the wire types of the Rust commands
-// (platform/commands.ts). The §7.3 service contracts for M4 and M5 (transforms, results,
-// bookmarks, scripts) are added to this file by the P4 and P5 preludes, together with
-// `AppContext`'s fields.
+// `OutlineItem` (core/profiles/outline.ts, P3), `TransformDef`/`TransformResult`
+// (core/transforms/types.ts, P4) and the wire types of the Rust commands
+// (platform/commands.ts). The §7.3 service contracts for M5 (scripts) are added to this
+// file by the P5 prelude, together with `AppContext`'s fields.
 
 import type { Component } from 'svelte';
 import type { Readable } from 'svelte/store';
@@ -24,6 +24,7 @@ import type { NcToken } from '$lib/core/nc/types';
 import type { Settings } from '$lib/core/settings/schema';
 import type { OutlineItem } from '$lib/core/profiles/outline';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
+import type { TransformDef, TransformResult } from '$lib/core/transforms/types';
 import type { ConfigPaths, RecentEntry } from '$lib/platform/commands';
 
 // ---------------------------------------------------------------------------
@@ -585,12 +586,96 @@ export interface OutlineService {
   whenReady(id: DocId): Promise<void>;
 }
 
+// ---------------------------------------------------------------------------
+// §7.3 Services added in M4: transforms, results and bookmarks
+// ---------------------------------------------------------------------------
+
+/**
+ * app/transforms.ts → `export const transforms: TransformService` (owner: WP4.1)
+ *
+ * The whole of "run a transform", in one place, so that every transform behaves the same
+ * and no `contrib/` file re-implements the sequence:
+ *
+ *  1. `def.available(cp)` — a `Msg` goes to the status bar and nothing else happens.
+ *  2. `def.options(cp)` — the form, pre-filled from `uiState.lastParams['transform:'+id]`;
+ *     cancel means cancel. Skipped when there are no options or `skipForm` is set.
+ *  3. `def.preflight(lines, ctx)` — a `Msg` becomes a confirmation dialog.
+ *  4. `def.run(lines, ctx)` on the scope (the selection extended to whole lines, or the
+ *     whole document).
+ *  5. The output: replace the scope as **one undo step** (`applyLines`), or open a new
+ *     untitled document with the same profile holding only the transformed lines.
+ *  6. `result.summary` in the status bar.
+ *  7. `result.skipped` and `result.warnings` in the Results panel.
+ *
+ * It answers `null` when nothing ran: unavailable, the form was cancelled, or the
+ * preflight was declined.
+ */
+export interface TransformService {
+  run(
+    def: TransformDef,
+    o?: {
+      /** Default `replace`. */
+      target?: 'replace' | 'new-document';
+      /** Skips the remembered values as well as the form when `skipForm` is set. */
+      options?: Record<string, unknown>;
+      skipForm?: boolean;
+    },
+  ): Promise<TransformResult | null>;
+}
+
+/**
+ * A table plus findings, shown in the Results panel. It is what a transform's skipped
+ * lines, a script's `report` output and (later) find-all all turn into.
+ *
+ * A row or finding that carries `line` is clickable: the panel reveals it, switching
+ * document by `docId`, or by matching `Located.document` against the open documents'
+ * names when the report came from a script that named them.
+ */
+export interface ReportData {
+  /** Already-translated display text; script reports bring their own (AD-14). */
+  title: string;
+  message?: string;
+  /** Display order; `key` indexes into each row. */
+  columns: { key: string; label: string }[];
+  rows: Record<string, unknown>[];
+  findings?: Located[];
+  /** The document the lines refer to; the active one when it is missing. */
+  docId?: DocId;
+}
+
+/** stores/results.ts → `export const results: ResultsService` (owner: WP4.1) */
+export interface ResultsService {
+  /** The report on show, or null when the panel is empty. */
+  readonly current: Readable<ReportData | null>;
+  /** Replaces what the panel shows; the caller decides whether to reveal the panel. */
+  show(r: ReportData): void;
+  clear(): void;
+}
+
+/**
+ * monaco/bookmarks.ts → `export const bookmarks: BookmarkService` (owner: WP4.4)
+ *
+ * Whole-line decorations, one set per model, session only (nothing is written to disk).
+ * They are `NeverGrowsWhenTypingAtEdges`, and because transforms apply minimal edits
+ * (AD-12), a bookmark on a line a transform did not touch survives the run.
+ *
+ * Every argument defaults to "the active document" and "the cursor's line". `next` and
+ * `prev` wrap around the ends.
+ */
+export interface BookmarkService {
+  toggle(id?: DocId, line?: number): void;
+  next(): void;
+  prev(): void;
+  clear(id?: DocId): void;
+  /** Ascending, 1-based. Empty for a document with no bookmarks or no model. */
+  lines(id: DocId): number[];
+}
+
 /**
  * app/context.ts → `export const ctx: AppContext`
  *
  * The aggregate the test hook exposes (§7.9). It only collects the singletons; features
- * import the service modules they need directly. Later preludes add:
- * P4 transforms, results, bookmarks; P5 scripts.
+ * import the service modules they need directly. The P5 prelude adds `scripts`.
  */
 export interface AppContext {
   commands: CommandRegistry;
@@ -615,4 +700,8 @@ export interface AppContext {
   // P3
   codes: CodeDbService;
   outline: OutlineService;
+  // P4
+  transforms: TransformService;
+  results: ResultsService;
+  bookmarks: BookmarkService;
 }

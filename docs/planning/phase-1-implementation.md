@@ -200,7 +200,7 @@ tests/         fixtures/ gen/ unit/ python/ runtime/ perf/
   - JS sends only a script **id**, never a path or interpreter.
   - Context goes into a 0700 temp folder that is deleted after the run.
   - Environment: `PYTHONUTF8`, `PYTHONIOENCODING`, `PYTHONDONTWRITEBYTECODE`, and `PYTHONPATH=<bundled>`.
-  - The runner checks `try_wait` every 20 ms against a deadline and a cancel flag. stdout is capped at 200 MiB and stderr at 1 MiB.
+  - The runner checks `try_wait` every 20 ms against a deadline and a cancel flag. stdout is capped at 64 MiB (above `MAX_OPEN_BYTES`, and small enough that the four copies on the way to the webview cannot fill memory — G8 M4) and stderr at 1 MiB.
   - On Unix the script runs in its own process group, and `killpg` kills the group. On Windows only the child is killed.
   - `kill_all` runs on `RunEvent::Exit`.
   - Interpreter order: the `GEDIT_PYTHON` environment variable, then `scripts.python` from settings (must be an existing file), then the existing resolver.
@@ -1199,7 +1199,7 @@ H1 updates the M0 scenarios for exactly these changes.
     - cwd is the script's folder
     - the environment from AD-13
     - on Unix, `process_group(0)` and `killpg`
-    - stdout capped at 200 MiB (it keeps draining past the cap) and stderr at 1 MiB
+    - stdout capped at 64 MiB (it keeps draining past the cap) and stderr at 1 MiB
     - `try_wait` every 20 ms
     - timeout and cancel through `RunRegistry`
     - a 300 ms drain grace

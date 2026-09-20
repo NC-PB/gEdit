@@ -2754,6 +2754,14 @@
     },
     {
       "name": "toml",
+      "version": "0.9.12+spec-1.1.0",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/toml-rs/toml",
+      "source": "cargo",
+      "textId": "cargo:serde_spanned@0.6.9"
+    },
+    {
+      "name": "toml",
       "version": "1.1.6+spec-1.1.0",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/toml-rs/toml",
@@ -2767,6 +2775,14 @@
       "repository": "https://github.com/toml-rs/toml",
       "source": "cargo",
       "textId": "cargo:cfg-if@1.0.5"
+    },
+    {
+      "name": "toml_datetime",
+      "version": "0.7.5+spec-1.1.0",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/toml-rs/toml",
+      "source": "cargo",
+      "textId": "cargo:serde_spanned@0.6.9"
     },
     {
       "name": "toml_datetime",
@@ -3531,6 +3547,14 @@
     {
       "name": "winnow",
       "version": "0.5.40",
+      "license": "MIT",
+      "repository": "https://github.com/winnow-rs/winnow",
+      "source": "cargo",
+      "textId": "cargo:winnow@0.5.40"
+    },
+    {
+      "name": "winnow",
+      "version": "0.7.15",
       "license": "MIT",
       "repository": "https://github.com/winnow-rs/winnow",
       "source": "cargo",

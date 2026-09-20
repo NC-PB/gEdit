@@ -89,22 +89,29 @@ are a contract with the runtime harness: renaming one breaks scenarios in `tests
 
 ## Current files
 
-Each stub names its owning work package and what it must deliver.
+Each row names the owning work package and the feature.
 
 | File | Owner | Feature |
 | --- | --- | --- |
+| `assistant.ts` | WP3.6 | hover and completion providers over the code database |
 | `blocks.ts` | WP1.5 | Insert tab, built from the blocks JSON |
+| `bookmarks.ts` | WP4.4 | `bookmark.toggle` / `next` / `prev` / `clear` and the F2 removals |
 | `compare.ts` | WP2.5 | compare with a document, a file or the saved version (overlay) |
 | `cursor.ts` | WP1.2 | cursor status item |
+| `editing.ts` | WP4.4 | Home "Edit" and View-tab wrappers around Monaco actions |
 | `encoding.ts` | WP1.6 | encoding and EOL status items and pickers |
 | `externalChange.ts` | WP2.3 | the external-change banner and the poll |
 | `files.ts` | WP1.6 | file commands, close guard, drag and drop, window title |
 | `help.ts` | WP2.4 | About and the shortcut reference |
 | `layoutPersist.ts` | WP2.3 | restores `ui.layout` and then follows it |
+| `navigation.ts` | WP3.5 | `nav.goto` (Ctrl+G), `nav.nextTool` / `nav.prevTool` (F7 / Shift+F7) |
+| `ncCleanup.ts` | WP4.3 | NC tab "Cleanup": spaces, empty lines, comments, case |
+| `ncNumbering.ts` | WP4.2 | NC tab "Numbering": `nc.renumber`, `nc.removeBlockNumbers` |
 | `palette.ts` | WP1.1 | `view.commandPalette` (F1) |
 | `profileSelect.ts` | WP1.6 | dialect profile status item and picker |
 | `programMap.ts` | WP1.5 | program map (left panel) |
 | `recent.ts` | WP2.3 | Recent dropdown, `file.openRecent`, `file.clearRecent` |
+| `results.ts` | WP4.1 | the Results panel (bottom region) |
 | `scriptsV1.ts` | WP1.5 | v1 script UI in the bottom panel |
 | `settings.ts` | WP2.7 | the settings dialog, `settings.open` (Mod+,), reload on save |
 | `tabs.ts` | WP1.2 | next/previous/switch tab |

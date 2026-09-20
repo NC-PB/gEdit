@@ -41,6 +41,20 @@ export interface CodeEntry {
   modal?: boolean;
   /** Feed is tied to the thread pitch here, so feed scaling has to skip the block. */
   pitchFeed?: boolean;
+  /**
+   * The same number means a threading cycle in another G-code system of this dialect, so
+   * whether `F` is a feed rate or a thread lead cannot be decided from the code alone.
+   *
+   * Fanuc `G76` is a fine boring cycle on a mill and a multi-pass threading cycle on a
+   * lathe in G-code system A; `G92` sets the coordinate system on a mill and is the
+   * single-pass threading cycle on that same lathe. Until a lathe profile ships, a lathe
+   * program is opened with the mill profile, and `scale_feed` multiplied thread leads
+   * (G8 M4). Anything that scales a feed treats this like [`pitchFeed`] — it refuses —
+   * but says that it refused because the meaning is ambiguous, not because it knows the
+   * value is a pitch. Refusing a real fine-boring feed costs one manual edit; scaling a
+   * thread lead scraps the part.
+   */
+  pitchFeedAmbiguous?: boolean;
   label: string;
   description?: string;
   params?: CodeParam[];

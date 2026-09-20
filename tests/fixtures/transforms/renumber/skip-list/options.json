@@ -1,0 +1,21 @@
+{
+  "note": "The skip list matches the line as it is written: a comment behind a block-skip mark does not start with `(`, so it is a block and gets a number.",
+  "profile": "fanuc-gcode",
+  "options": {
+    "start": 10,
+    "step": 10,
+    "skipStartingWith": "(",
+    "restartAtProgramStart": false
+  },
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      {
+        "line": 1,
+        "severity": "info"
+      }
+    ],
+    "warnings": [],
+    "preflight": null
+  }
+}

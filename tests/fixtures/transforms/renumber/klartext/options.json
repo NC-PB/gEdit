@@ -1,0 +1,11 @@
+{
+  "note": "Consecutive numbering from 0 with no options at all; the tail of a `~` block is not a block and gets no number.",
+  "profile": "heidenhain-klartext",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summary",
+    "skipped": [],
+    "warnings": [],
+    "preflight": null
+  }
+}

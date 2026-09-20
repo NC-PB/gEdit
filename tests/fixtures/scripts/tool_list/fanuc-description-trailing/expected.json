@@ -1,0 +1,49 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [
+    {
+      "tool": "T1",
+      "description": "TRAILING T1",
+      "line": 5,
+      "calls": 1,
+      "feed": "100.",
+      "speed": "1000"
+    },
+    {
+      "tool": "T2",
+      "description": "",
+      "line": 11,
+      "calls": 1,
+      "feed": "200.",
+      "speed": "2000"
+    }
+  ],
+  "message": "2 tools, 1 without a description",
+  "findings": []
+}

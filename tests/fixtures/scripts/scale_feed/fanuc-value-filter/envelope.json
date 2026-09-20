@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 2 of 4 feed rates to 50 %; 2 left by the value filter.",
+  "findings": [
+    {
+      "line": 5,
+      "severity": "info",
+      "message": "F100. is at or below the \"only feeds above\" value (500), so it is left as it is."
+    },
+    {
+      "line": 8,
+      "severity": "info",
+      "message": "F1500. is at or above the \"only feeds below\" value (1500), so it is left as it is."
+    }
+  ]
+}

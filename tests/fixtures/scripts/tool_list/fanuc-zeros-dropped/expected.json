@@ -1,0 +1,41 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [
+    {
+      "tool": "T1",
+      "description": "SPOT DRILL",
+      "line": 5,
+      "calls": 2,
+      "feed": "100.-120.",
+      "speed": "1000-1200"
+    }
+  ],
+  "message": "1 tool",
+  "findings": []
+}

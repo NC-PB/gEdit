@@ -1,0 +1,70 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [
+    {
+      "tool": "T1",
+      "description": "D10 FLAT END MILL",
+      "line": 7,
+      "calls": 1,
+      "feed": "250.-1200.",
+      "speed": "3000"
+    },
+    {
+      "tool": "T2",
+      "description": "M8X1.25 TAP",
+      "line": 15,
+      "calls": 1,
+      "feed": "",
+      "speed": "500-1200"
+    }
+  ],
+  "message": "2 tools",
+  "findings": [
+    {
+      "line": 11,
+      "severity": "info",
+      "message": "T1: the feed of 1 block is in G95, not per minute, so it is not in the range."
+    },
+    {
+      "line": 17,
+      "severity": "info",
+      "message": "T2: the S of 1 block is a speed limit, not a spindle speed, so it is not in the range."
+    },
+    {
+      "line": 18,
+      "severity": "info",
+      "message": "T2: the S of 1 block is a surface speed (G96), not a spindle speed, so it is not in the range."
+    },
+    {
+      "line": 20,
+      "severity": "info",
+      "message": "T2: the F of 1 block is a thread pitch, not a feed rate, so it is not in the range."
+    }
+  ]
+}

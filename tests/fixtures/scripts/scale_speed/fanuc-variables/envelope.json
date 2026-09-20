@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 1 of 3 spindle speeds to 90 %; 2 left as a variable or an expression.",
+  "findings": [
+    {
+      "line": 5,
+      "severity": "warning",
+      "message": "S#500 is not a plain number, so it is not scaled."
+    },
+    {
+      "line": 6,
+      "severity": "warning",
+      "message": "S[#500*0.5] is not a plain number, so it is not scaled."
+    }
+  ]
+}

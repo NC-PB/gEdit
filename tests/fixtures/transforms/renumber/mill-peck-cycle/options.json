@@ -1,0 +1,13 @@
+{
+  "note": "G8 M4: the Q of a mill G73 is a peck depth, not a block number — the code database declares it as one. The profile's G7[0-3] P/Q rule is a lathe rule, and it used to fire on every chip-break peck cycle, which taught users to click through the one dialog that protects them. It now needs both P and Q, as the lathe cycles have.",
+  "profile": "fanuc-gcode",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      { "line": 1, "severity": "info" }
+    ],
+    "warnings": [],
+    "preflight": null
+  }
+}

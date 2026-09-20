@@ -1,0 +1,49 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [
+    {
+      "tool": "T1",
+      "description": "D10 END MILL",
+      "line": 6,
+      "calls": 2,
+      "feed": "300-900",
+      "speed": "3000-3200"
+    },
+    {
+      "tool": "T2",
+      "description": "FOUR HOLES D8.5",
+      "line": 12,
+      "calls": 1,
+      "feed": "",
+      "speed": "2400"
+    }
+  ],
+  "message": "2 tools",
+  "findings": []
+}

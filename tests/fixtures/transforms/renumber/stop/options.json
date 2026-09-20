@@ -1,0 +1,29 @@
+{
+  "note": "Above the maximum numbering stops; the lines from there on keep what they had.",
+  "profile": "fanuc-gcode",
+  "options": {
+    "start": 10,
+    "step": 10,
+    "max": 30,
+    "onOverflow": "stop",
+    "skipStartingWith": "",
+    "restartAtProgramStart": false
+  },
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      {
+        "line": 4,
+        "severity": "info"
+      },
+      {
+        "line": 5,
+        "severity": "info"
+      }
+    ],
+    "warnings": [
+      "ncNumbering.renumber.overflowStopped"
+    ],
+    "preflight": null
+  }
+}

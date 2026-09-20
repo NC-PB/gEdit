@@ -17,6 +17,13 @@ const {
   recentTouch,
   recentRemove,
   recentClear,
+  scriptsList,
+  scriptRun,
+  scriptCancel,
+  pythonCheck,
+  scriptNew,
+  scriptCopyToUser,
+  scriptSourcePath,
 } = await import('./commands');
 
 beforeEach(() => {
@@ -89,5 +96,58 @@ describe('the M2 config, state and recent commands', () => {
     invoke.mockResolvedValue([]);
     await recentRemove('/nc/gone.nc');
     expect(invoke).toHaveBeenCalledWith('recent_remove', { path: '/nc/gone.nc' });
+  });
+});
+
+// M4 (plan §7.6): the scripting commands. Two things are pinned here, and both are
+// security properties rather than conveniences: the argument of `script_run` is named
+// `req` (the struct Rust deserializes), and every other command takes a script **id** —
+// never a path, never a folder and never an interpreter (plan §3, AD-13).
+describe('the M4 scripting commands', () => {
+  it('asks for the script list and the Python probe without arguments', async () => {
+    invoke.mockResolvedValue({ scripts: [], folders: [] });
+    await expect(scriptsList()).resolves.toEqual({ scripts: [], folders: [] });
+    expect(invoke).toHaveBeenCalledWith('scripts_list');
+    invoke.mockReset();
+
+    const status = { ok: true, interpreter: '/usr/bin/python3', version: '3.12.4', message: null };
+    invoke.mockResolvedValue(status);
+    await expect(pythonCheck()).resolves.toEqual(status);
+    expect(invoke).toHaveBeenCalledWith('python_check');
+  });
+
+  it('wraps a run request in the `req` argument', async () => {
+    const req = {
+      runId: 'r1',
+      scriptId: 'bundled:tool_list.py',
+      stdin: 'G0 X0\n',
+      context: { contract: 2 },
+      timeoutSecs: null,
+    };
+    invoke.mockResolvedValue({ success: true });
+    await scriptRun(req);
+    expect(invoke).toHaveBeenCalledWith('script_run', { req });
+  });
+
+  it('cancels by run id', async () => {
+    invoke.mockResolvedValue(true);
+    await expect(scriptCancel('r1')).resolves.toBe(true);
+    expect(invoke).toHaveBeenCalledWith('script_cancel', { runId: 'r1' });
+  });
+
+  it('sends only ids and names to the three path commands', async () => {
+    invoke.mockResolvedValue('/cfg/scripts/mine.py');
+    await expect(scriptNew('mine')).resolves.toBe('/cfg/scripts/mine.py');
+    expect(invoke).toHaveBeenCalledWith('script_new', { name: 'mine' });
+    invoke.mockReset();
+
+    invoke.mockResolvedValue('/cfg/scripts/tool_list.py');
+    await scriptCopyToUser('bundled:tool_list.py');
+    expect(invoke).toHaveBeenCalledWith('script_copy_to_user', { scriptId: 'bundled:tool_list.py' });
+    invoke.mockReset();
+
+    invoke.mockResolvedValue('/cfg/scripts/grp/mine.py');
+    await scriptSourcePath('user:grp/mine.py');
+    expect(invoke).toHaveBeenCalledWith('script_source_path', { scriptId: 'user:grp/mine.py' });
   });
 });

@@ -12,6 +12,7 @@
 //! - [`menu`] — the macOS menu and the two window-closing requests (macOS only)
 //! - [`python`] — finding the user's Python interpreter
 //! - [`scripts_v1`] — the Phase 0 scripting commands
+//! - [`scripts`] — the v2 scripting backend: discovery, the TOML header and the runner
 //!
 //! Window geometry is not ours: `tauri-plugin-window-state` saves and restores it
 //! into `.window-state.json` next to `settings.json` in the config folder. Its
@@ -30,6 +31,7 @@ mod files;
 mod menu;
 mod paths;
 mod python;
+pub mod scripts;
 mod scripts_v1;
 mod state;
 
@@ -47,8 +49,15 @@ fn setup_app(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Called for every event of the running app (`ExitRequested`, `Exit`, window and
-/// menu events). M4 uses it to kill script processes on exit.
-fn on_run_event(_app: &AppHandle, _event: RunEvent) {}
+/// menu events).
+///
+/// On `Exit` every script process is stopped (plan AD-13), so a `while True:` script
+/// cannot outlive the window. `RunEvent` is `#[non_exhaustive]`, hence the `matches!`.
+fn on_run_event(app: &AppHandle, event: RunEvent) {
+    if matches!(event, RunEvent::Exit) {
+        scripts::kill_all(app);
+    }
+}
 
 /// Everything the window-state plugin tracks except `VISIBLE` (plan AD-9): size,
 /// position, maximized, decorations and fullscreen.
@@ -66,6 +75,9 @@ pub fn run() {
                 .with_state_flags(window_state_flags())
                 .build(),
         )
+        // The in-flight script runs, so that `script_cancel` and `kill_all` reach the
+        // same registry the runner polls (plan AD-13).
+        .manage(scripts::RunRegistry::default())
         .setup(setup_app)
         .invoke_handler(tauri::generate_handler![
             files::files_stat,
@@ -77,6 +89,13 @@ pub fn run() {
             state::recent_touch,
             state::recent_remove,
             state::recent_clear,
+            scripts::discovery::scripts_list,
+            scripts::discovery::script_new,
+            scripts::discovery::script_copy_to_user,
+            scripts::discovery::script_source_path,
+            scripts::runner::script_run,
+            scripts::runner::script_cancel,
+            scripts::runner::python_check,
             scripts_v1::run_python_script,
             scripts_v1::list_python_scripts
         ]);

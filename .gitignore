@@ -16,6 +16,11 @@ node_modules
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
+# Python (tests/python and the bundled scripts; PYTHONDONTWRITEBYTECODE is set at
+# runtime, but a plain `python3 -m unittest` from a shell still writes these)
+__pycache__/
+*.py[cod]
+
 # Rust
 /src-tauri/target
 

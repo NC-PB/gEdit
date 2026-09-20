@@ -1,0 +1,25 @@
+{
+  "note": "An N inside a comment is text: it is neither read as a block number nor rewritten.",
+  "profile": "fanuc-gcode",
+  "options": {
+    "start": 100,
+    "step": 5,
+    "skipStartingWith": "(",
+    "restartAtProgramStart": false
+  },
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      {
+        "line": 1,
+        "severity": "info"
+      },
+      {
+        "line": 4,
+        "severity": "info"
+      }
+    ],
+    "warnings": [],
+    "preflight": null
+  }
+}

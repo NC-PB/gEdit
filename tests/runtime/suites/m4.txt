@@ -1,0 +1,33 @@
+# M4: NC editing and the scripting backend — the transforms and how their edit lands,
+# bookmarks, the Monaco commands in the ribbon, and the Rust script runner.
+# Run with: tests/runtime/suite.sh tests/runtime/suites/m0.txt tests/runtime/suites/m1.txt tests/runtime/suites/m2.txt tests/runtime/suites/m3.txt tests/runtime/suites/m4.txt
+
+# Every transform on its own golden, the scope of a selection, the new-document target
+# and the Results panel. Run it first: it is the milestone.
+m4-transforms
+
+# How the edit lands: one Cmd+Z takes a whole run back, a bookmark stays on its block,
+# and the save afterwards writes the file in its own encoding and line ending.
+m4-apply
+
+# Toggle, next and previous with wrap, on the three real key presses, and the two Monaco
+# actions those keys used to belong to.
+m4-bookmarks
+
+# The 22 Monaco wrappers in the ribbon, each judged by what it did, plus the clipboard.
+m4-editing-cmds
+
+# The backend at the IPC level: discovery, the three bundled scripts on their goldens,
+# the refused ids, the timeout and the cancel.
+m4-scripts-backend
+
+# A GEDIT_PYTHON that points at nothing: a message, not a hang.
+m4-python-missing
+
+# A script that is still running when the window closes. `-1` starts it and quits, `-2`
+# looks for what is left; keep them in this order and next to each other.
+m4-scripts-quit-1
+m4-scripts-quit-2
+
+# G7: renumber and remove-block-numbers on 100,000 lines, with the undo. Slow; keep it last.
+m4-perf-transform

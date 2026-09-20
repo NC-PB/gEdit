@@ -1,0 +1,25 @@
+{
+  "message": "Scaled 3 of 7 feed rates to 80 %; 4 left as a thread pitch.",
+  "findings": [
+    {
+      "line": 10,
+      "severity": "warning",
+      "message": "F625. is a thread pitch (G84), so it is not scaled."
+    },
+    {
+      "line": 14,
+      "severity": "warning",
+      "message": "F625. is a thread pitch (G74), so it is not scaled."
+    },
+    {
+      "line": 19,
+      "severity": "warning",
+      "message": "F1.5 is a thread pitch (G33), so it is not scaled."
+    },
+    {
+      "line": 21,
+      "severity": "warning",
+      "message": "F1.5 is a thread pitch (G32), so it is not scaled."
+    }
+  ]
+}

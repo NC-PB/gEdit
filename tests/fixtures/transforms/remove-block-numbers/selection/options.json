@@ -1,0 +1,19 @@
+{
+  "note": "A bare fragment with no document behind it — a headless caller. The reported line numbers are document lines, and the confirmation says outright that it could not look for a jump into these blocks rather than reporting none. N100 is a jump target on its own line and is emptied, which is the case this fixture was written for.",
+  "profile": "fanuc-gcode",
+  "firstLine": 40,
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.removeBlockNumbers.summary",
+    "skipped": [
+      {
+        "line": 41,
+        "severity": "warning"
+      }
+    ],
+    "warnings": [
+      "ncNumbering.removeBlockNumbers.emptied"
+    ],
+    "preflight": "ncNumbering.removeBlockNumbers.referencesUnchecked"
+  }
+}

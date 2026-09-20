@@ -22,12 +22,15 @@ import { files } from '$lib/app/fileOps';
 import { modals } from '$lib/app/modals';
 import { outline } from '$lib/app/outlineService';
 import { status } from '$lib/app/status';
+import { transforms } from '$lib/app/transforms';
+import { bookmarks } from '$lib/monaco/bookmarks';
 import { editor } from '$lib/monaco/editorService';
 import { codes } from '$lib/stores/codes';
 import { docs } from '$lib/stores/documents';
 import { layout } from '$lib/stores/layout';
 import { profiles } from '$lib/stores/profiles';
 import { recent } from '$lib/stores/recent';
+import { results } from '$lib/stores/results';
 import { settings } from '$lib/stores/settings';
 import { uiState } from '$lib/stores/uiState';
 import { t } from '$lib/i18n';
@@ -54,4 +57,7 @@ export const ctx: AppContext = {
   compare,
   codes,
   outline,
+  transforms,
+  results,
+  bookmarks,
 };

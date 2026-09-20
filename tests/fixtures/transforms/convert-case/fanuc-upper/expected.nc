@@ -1,0 +1,6 @@
+%
+O1001 (bracket)
+N10 G0 X0 Y0
+N20 (setup) G1 X10. F500
+#101=[#1+2.]
+IF[#101GT5.]GOTO200

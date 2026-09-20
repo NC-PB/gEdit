@@ -1,0 +1,23 @@
+{
+  "note": "Above the maximum the sequence starts over at the start value, which writes a block number a second time. That is a defect in the program, not a formatting choice, so the run warns and lists the line it wrapped at (G8 M4).",
+  "profile": "fanuc-gcode",
+  "options": {
+    "start": 10,
+    "step": 10,
+    "max": 30,
+    "onOverflow": "wrap",
+    "skipStartingWith": "",
+    "restartAtProgramStart": false
+  },
+  "expect": {
+    "summary": "ncNumbering.renumber.summary",
+    "skipped": [
+      {
+        "line": 4,
+        "severity": "warning"
+      }
+    ],
+    "warnings": ["ncNumbering.renumber.wrapped"],
+    "preflight": null
+  }
+}

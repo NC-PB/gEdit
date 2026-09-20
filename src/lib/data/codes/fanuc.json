@@ -422,6 +422,7 @@
       "code": "G76",
       "group": "cycle",
       "modal": true,
+      "pitchFeedAmbiguous": true,
       "label": "Fine boring cycle",
       "description": "Bores to depth, turns the spindle to a fixed angle and shifts the tool by Q clear of the wall before retracting. On lathes in G-code system A, G76 is a multi-pass threading cycle whose F is the thread lead.",
       "params": [
@@ -827,6 +828,7 @@
       "code": "G92",
       "group": "nonmodal",
       "verify": true,
+      "pitchFeedAmbiguous": true,
       "label": "Coordinate set, spindle speed clamp",
       "description": "The same job as G50 on lathes in G-code system B and C: set the coordinate system, and with an S word clamp the top spindle speed. In system A this number is the single-pass threading cycle instead."
     },

@@ -1,0 +1,10 @@
+{
+  "note": "Nothing to do: the lines come back untouched.",
+  "profile": "fanuc-gcode",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.removeBlockNumbers.nothing",
+    "skipped": [],
+    "warnings": []
+  }
+}
