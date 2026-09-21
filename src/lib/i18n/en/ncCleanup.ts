@@ -74,7 +74,7 @@ export default {
     skipped: 'Left as written: the converted line would read back differently.',
     /** Confirmation before writing lower case for a control that only reads upper case. */
     lowerOnUppercaseControl:
-      '{profile} expects programs in upper case, and this editor upper-cases what you type for that reason. A program in lower case may be refused when it is loaded. Convert to lower case anyway?',
+      '{profile} expects programs in upper case, and a control that expects it may refuse a program written any other way. Convert to lower case anyway?',
     /** Results row: `ß` → `SS` and the like, where the conversion would change the length. */
     lengthChanged: 'Left as written: converting the case of this text would change its length, and the offsets behind it.',
   },

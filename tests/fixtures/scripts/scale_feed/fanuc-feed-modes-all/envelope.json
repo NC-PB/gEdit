@@ -4,7 +4,7 @@
     {
       "line": 8,
       "severity": "info",
-      "message": "F0.2 stays as it is: 90 % of 0.2 is 0.18, which is written 0.2 with the decimals this value has. Ask for more decimal places to scale it."
+      "message": "F0.2 stays as it is: 90 % of 0.2 is 0.18, which written with 1 decimal is 0.2. Ask for more decimal places to scale it."
     }
   ]
 }

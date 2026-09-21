@@ -8,7 +8,7 @@ fixture changes with it and both sides are re-run — never one side alone.
 
 Everything else below is about a rule that is easier to read as a sentence than as a
 fixture line: the profile patterns compiling in Python at all, the feed-mode interpreter,
-and the two output shapes.
+the two ways a selection run is primed from the lines above it, and the two output shapes.
 """
 
 from __future__ import annotations
@@ -453,6 +453,140 @@ class TestFeedModeTracker(unittest.TestCase):
         self.assertFalse(states[0][3])
         # The feed modes are named by §7.10 itself, so they work without a database too.
         self.assertEqual(self.walk(self.fanuc, {"codes": ""}, ["G95 F0.15"])[0][0], "G95")
+
+
+class TestPrecedingLines(unittest.TestCase):
+    """Which contexts may prime a tracker, and which may not (WP5.4).
+
+    `input.precedingLines` is optional, and the answer to "may I use it" has to be one
+    place, because three bundled scripts and every user script ask it. A field that is
+    there but not trustworthy has to read as absent: an absent one keeps the loud "this
+    run could not see above the selection" warning, while a half-filled one primes the
+    tracker with the tail of a program and is confidently wrong.
+    """
+
+    def context(self, **input_fields):
+        context = helpers.make_context()
+        context["input"] = input_fields
+        return context
+
+    def test_all_the_lines_above_a_selection_are_used(self):
+        context = self.context(
+            scope="selection", startLine=4, endLine=6, precedingLines=["%", "O1000", "G95"]
+        )
+        self.assertEqual(gedit_nc.preceding_lines(context), ["%", "O1000", "G95"])
+
+    def test_a_field_that_is_short_of_start_line_minus_one_is_refused(self):
+        # The contract says to omit the field rather than truncate it; this is where that
+        # rule is enforced on the Python side.
+        context = self.context(scope="selection", startLine=40, endLine=42, precedingLines=["G95"])
+        self.assertEqual(gedit_nc.preceding_lines(context), [])
+
+    def test_a_field_that_is_longer_than_start_line_minus_one_is_refused(self):
+        context = self.context(
+            scope="selection", startLine=2, endLine=3, precedingLines=["%", "O1000"]
+        )
+        self.assertEqual(gedit_nc.preceding_lines(context), [])
+
+    def test_a_document_or_none_run_never_uses_it(self):
+        for scope in ("document", "none"):
+            with self.subTest(scope=scope):
+                context = self.context(
+                    scope=scope, startLine=1, endLine=9, precedingLines=["G95"]
+                )
+                self.assertEqual(gedit_nc.preceding_lines(context), [])
+
+    def test_anything_that_is_not_a_list_of_strings_is_refused(self):
+        for value in (None, "G95", [1, 2], ["G95", 7], {}, []):
+            with self.subTest(value=value):
+                context = self.context(
+                    scope="selection", startLine=3, endLine=4, precedingLines=value
+                )
+                self.assertEqual(gedit_nc.preceding_lines(context), [])
+
+    def test_a_v1_context_answers_nothing_rather_than_raising(self):
+        for context in ({}, {"input": None}, {"input": {"scope": "selection"}}):
+            with self.subTest(context=context):
+                self.assertEqual(gedit_nc.preceding_lines(context), [])
+
+
+class TestPrimeTracker(unittest.TestCase):
+    """The lines above a selection, walked into a tracker (WP5.4)."""
+
+    def setUp(self):
+        self.profile = helpers.load_profile("fanuc-gcode")
+        self.codes = helpers.load_codes(self.profile)
+        self.cp = gedit_nc.compile_profile(self.profile)
+        self.klartext_profile = helpers.load_profile("heidenhain-klartext")
+        self.klartext = gedit_nc.compile_profile(self.klartext_profile)
+
+    def primed(self, lines, cp=None, codes=None):
+        tracker = gedit_nc.FeedModeTracker(self.codes if codes is None else codes)
+        state = gedit_nc.prime_tracker(tracker, lines, cp or self.cp)
+        return tracker, state
+
+    def test_a_feed_mode_set_above_the_selection_is_in_force_after_priming(self):
+        tracker, _ = self.primed(["%", "O1000", "G21 G90", "G95"])
+        self.assertEqual(tracker.feed_mode, "G95")
+
+    def test_an_open_cycle_and_its_thread_pitch_survive(self):
+        tracker, _ = self.primed(["M29 S500", "G98 G84 X20. Z-12. R3. F625."])
+        self.assertEqual((tracker.active_cycle, tracker.pitch_feed), ("G84", True))
+
+    def test_constant_surface_speed_survives(self):
+        tracker, _ = self.primed(["G50 S2500", "G96 S180 M3"])
+        self.assertTrue(tracker.css)
+
+    def test_a_cancelled_cycle_does_not(self):
+        tracker, _ = self.primed(["G98 G84 X20. Z-12. R3. F625.", "G80"])
+        self.assertEqual((tracker.active_cycle, tracker.pitch_feed), (None, False))
+
+    def test_a_modal_ambiguity_survives_and_a_non_modal_one_does_not(self):
+        # G76 is a modal cycle: it is still open at the first selected block. G92 is not,
+        # so its ambiguity belonged to the block that wrote it and to no other — and the
+        # first selected line is a different block.
+        modal, _ = self.primed(["G76 X18.16 Z-20. P1190 Q350 F2.0"])
+        self.assertEqual((modal.pitch_feed_ambiguous, modal.ambiguous_code), (True, "G76"))
+        block, _ = self.primed(["G92 X19.5 F2.0"])
+        self.assertEqual((block.pitch_feed_ambiguous, block.ambiguous_code), (False, None))
+
+    def test_it_answers_the_line_state_the_next_line_begins_in(self):
+        _, state = self.primed(
+            ["4 CYCL DEF 200 DRILLING ~", "   Q200=2 ;CLEARANCE ~"],
+            cp=self.klartext,
+            codes=helpers.load_codes(self.klartext_profile),
+        )
+        self.assertTrue(state.continuation)
+        _, ended = self.primed(
+            ["4 CYCL DEF 200 DRILLING ~", "   Q204=50 ;2ND CLEARANCE"],
+            cp=self.klartext,
+            codes=helpers.load_codes(self.klartext_profile),
+        )
+        self.assertFalse(ended.continuation)
+
+    def test_no_lines_leave_the_tracker_at_the_top_of_a_program(self):
+        tracker, state = self.primed([])
+        self.assertEqual((tracker.feed_mode, tracker.css, tracker.active_cycle), ("G94", False, None))
+        self.assertIsNone(state)
+
+    def test_priming_reaches_the_same_state_as_walking_the_whole_program(self):
+        """The property that makes this a fix and not a heuristic.
+
+        A primed run over lines 5..6 has to stand exactly where a run over 1..6 stands
+        when it reaches line 5 — otherwise the selection is read in a third state that is
+        neither the fragment's nor the document's.
+        """
+        program = ["%", "O1000", "G21 G90", "G95", "M29 S500", "G98 G84 X20. Z-12. R3. F625."]
+        whole = gedit_nc.FeedModeTracker(self.codes)
+        state = None
+        for line in program:
+            tokens, state = gedit_nc.tokenize_line(line, self.cp, state)
+            whole.update(tokens)
+        part, _ = self.primed(program)
+        self.assertEqual(
+            (part.feed_mode, part.css, part.active_cycle, part.pitch_feed),
+            (whole.feed_mode, whole.css, whole.active_cycle, whole.pitch_feed),
+        )
 
 
 class TestBundledFolderStaysShippable(unittest.TestCase):

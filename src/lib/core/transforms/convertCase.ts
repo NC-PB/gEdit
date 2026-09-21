@@ -22,10 +22,14 @@
 //    and listed in the results panel.
 //
 // **Lower case on a control that only reads upper case.** Where the profile sets
-// `editing.forceUppercase`, the editor itself upper-cases what the user types, and the
-// control refuses a program written any other way — `o1002`, `n10 g0` and `m30` are not
-// a cosmetic change, they are a file that alarms on load. The choice is still offered,
-// because the document may be on its way somewhere else, but the run asks first (G8 M4).
+// `editing.forceUppercase`, the control refuses a program written any other way —
+// `o1002`, `n10 g0` and `m30` are not a cosmetic change, they are a file that alarms on
+// load. The choice is still offered, because the document may be on its way somewhere
+// else, but the run asks first (G8 M4).
+//
+// `editing.forceUppercase` is read **here and nowhere else** in Phase 1. The rest of
+// `profile.editing` is a later-phase field, and no typing path upper-cases anything: the
+// message must not promise that it does (I5, from the WP5.3 review).
 
 import type { Located, Msg } from '$lib/app/types';
 import type { FieldSpec } from '$lib/core/forms/types';

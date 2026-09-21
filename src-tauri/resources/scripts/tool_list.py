@@ -67,8 +67,16 @@ Two rules keep the answer honest:
   comment never becomes a tool change, and the feed and speed ranges are read off the
   **tokens**, so an `F` inside a comment or a string is not a feed.
 * An `F` in a block whose cycle carries a thread pitch (`G84`, `CYCL DEF 207`) is a pitch,
-  not a feed. Those blocks are left out of the feed range and reported as findings, the
-  same rule scale-feed follows: a number that is not a feed must not be shown as one.
+  not a feed. So is the `F` of a block whose code is a threading cycle in another G-code
+  system of this dialect (`pitchFeedAmbiguous`: Fanuc `G76`, `G92`) — nothing in the block
+  says which reading applies, and gEdit ships no lathe profile. Both are left out of the
+  feed range and reported as findings, the same rule scale-feed follows: a number that may
+  not be a feed must not be shown as one.
+
+A run over a **selection** is primed from `input.precedingLines` when the context carries
+them (`gedit_nc.prime_tracker`), so a `G95` or a `G96` that starts above the selection is
+in force here too and its values stay out of the per-minute and rpm ranges. Without the
+field the run starts from the top-of-program state, which is what it always did.
 
 This script never changes the document.
 """
@@ -418,12 +426,20 @@ def build(
     spec: Spec,
     codes: Sequence[Dict[str, Any]],
     base_line: int,
+    preceding: Optional[Sequence[str]] = None,
 ) -> Tuple[List[Row], List[Dict[str, Any]], int, int]:
     """Walks the program once.
 
     Returns the rows in order of first use, the findings, how many tool changes carried
     no tool number at all, and how many tool words were seen anywhere — the last of which
     is what tells an empty report apart from a program that really uses no tools.
+
+    ``preceding`` are the document lines above a selection
+    (``gedit_nc.preceding_lines`` of the context). They prime the feed-mode tracker, so a
+    ``G95`` or ``G96`` set above the selection keeps its values out of the per-minute feed
+    range and the rpm range instead of quietly widening them. They are **not** scanned for
+    tool calls: a tool changed above the selection is not called inside it, and inventing a
+    row for it would report a tool the user did not select.
     """
     marks: List[Optional[Mark]] = [classify(line, cp, spec) for line in lines]
 
@@ -441,6 +457,8 @@ def build(
 
     tracker = gedit_nc.FeedModeTracker(codes)
     state: Optional[gedit_nc.LineState] = None
+    if preceding:
+        state = gedit_nc.prime_tracker(tracker, preceding, cp)
 
     for i, line in enumerate(lines):
         tokens, state = gedit_nc.tokenize_line(line, cp, state)
@@ -544,6 +562,13 @@ def collect(
     feed_reason: Optional[str] = None
     if tracker.pitch_feed:
         feed_reason = "pitch"
+    elif tracker.pitch_feed_ambiguous:
+        # The block's code is a threading cycle in another G-code system of this dialect
+        # (G8 M4 finding 7). On a lathe this `F` is a thread lead, on a mill it is a
+        # boring feed, and nothing in the block says which — so it stays out of the range
+        # and is named, rather than widening a feed range with a number that may not be a
+        # feed at all.
+        feed_reason = "ambiguous"
     elif tracker.feed_mode != PER_MINUTE:
         feed_reason = "mode:" + tracker.feed_mode
 
@@ -587,6 +612,12 @@ def findings_of(row: Row) -> List[Dict[str, Any]]:
     for reason, (line, count) in sorted(row.skipped.items()):
         if reason == "pitch":
             text = "the F of %s is a thread pitch, not a feed rate" % blocks(count)
+        elif reason == "ambiguous":
+            text = (
+                "the F of %s may be a thread lead rather than a feed rate, because its "
+                "code is a threading cycle in another G-code system of this dialect"
+                % blocks(count)
+            )
         elif reason == "css":
             text = "the S of %s is a surface speed (G96), not a spindle speed" % blocks(count)
         elif reason == "limit":
@@ -649,7 +680,10 @@ def main() -> int:
     base_line = start if isinstance(start, int) and start >= 1 else 1
 
     spec = Spec(cp, params)
-    rows, findings, unnamed, tool_words = build(lines, cp, spec, codes, base_line)
+    # The lines above a selection, when the context carries all of them; they prime the
+    # feed-mode tracker and are not scanned for tool calls. See `build`.
+    preceding = gedit_nc.preceding_lines(context)
+    rows, findings, unnamed, tool_words = build(lines, cp, spec, codes, base_line, preceding)
 
     columns = [
         {"key": "tool", "label": "Tool"},

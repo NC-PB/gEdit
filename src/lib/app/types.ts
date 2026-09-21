@@ -12,9 +12,8 @@
 // (core/forms/types.ts, P2), `Settings` (core/settings/schema.ts, P2), `NcToken`
 // (core/nc/types.ts, P3), the code database types (core/codes/types.ts, P3),
 // `OutlineItem` (core/profiles/outline.ts, P3), `TransformDef`/`TransformResult`
-// (core/transforms/types.ts, P4) and the wire types of the Rust commands
-// (platform/commands.ts). The §7.3 service contracts for M5 (scripts) are added to this
-// file by the P5 prelude, together with `AppContext`'s fields.
+// (core/transforms/types.ts, P4), the scripting contract (core/scripting/types.ts, P5)
+// and the wire types of the Rust commands (platform/commands.ts).
 
 import type { Component } from 'svelte';
 import type { Readable } from 'svelte/store';
@@ -25,7 +24,12 @@ import type { Settings } from '$lib/core/settings/schema';
 import type { OutlineItem } from '$lib/core/profiles/outline';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
 import type { TransformDef, TransformResult } from '$lib/core/transforms/types';
-import type { ConfigPaths, RecentEntry } from '$lib/platform/commands';
+import type {
+  ConfigPaths,
+  PythonStatus,
+  RecentEntry,
+  ScriptEntry,
+} from '$lib/platform/commands';
 
 // ---------------------------------------------------------------------------
 // §7.1 Registries and contributions
@@ -641,6 +645,16 @@ export interface ReportData {
   findings?: Located[];
   /** The document the lines refer to; the active one when it is missing. */
   docId?: DocId;
+  /**
+   * How many rows and findings were left out, or 0/absent when none were.
+   *
+   * Added in M5: a script's output is capped where it stops being trusted
+   * (`core/scripting/apply.ts`, `MAX_FINDINGS`/`MAX_ROWS`), because the panel renders one
+   * `<button>` per entry and a script may return one per line of a 300k-line program. The
+   * panel says how many are not shown; nothing is dropped silently. The app's own
+   * transforms never set it — their findings are bounded by the document.
+   */
+  dropped?: number;
 }
 
 /** stores/results.ts → `export const results: ResultsService` (owner: WP4.1) */
@@ -671,11 +685,72 @@ export interface BookmarkService {
   lines(id: DocId): number[];
 }
 
+// ---------------------------------------------------------------------------
+// §7.3 Services added in M5: scripting
+// ---------------------------------------------------------------------------
+
+/**
+ * app/scripts.ts → `export const scripts: ScriptService` (owner: WP5.1)
+ *
+ * The whole of "run a script", in one place, so that every script behaves the same and no
+ * `contrib/` file re-implements the sequence. `run()` does these, **in this order**
+ * (plan §5 WP5.1):
+ *
+ *  1. the profile filter — a script that is not offered for the active profile does not
+ *     run, whether it was reached from the ribbon, the palette or `script.run:<id>`.
+ *  2. the parameter form (`modals.form`), pre-filled from
+ *     `uiState.lastParams['script:'+id]`; cancel means cancel. A script with no
+ *     parameters runs immediately, with no modal at all.
+ *  3. the input scope — the header's `selection-or-document` resolved against the current
+ *     selection, extended to whole lines; stdin is that text, LF-joined.
+ *  4. the context (`buildContext`, §7.5), written to the `GEDIT_CONTEXT` file by Rust.
+ *  5. `editor.versionId(docId)` **before** stdin is built, kept for step 7.
+ *  6. `scriptRun(req)`.
+ *  7. `decideApply(meta, result, versionAtStart, versionNow, inputEndedWithLf)` (§7.5).
+ *  8. the decision:
+ *     - `replace` → `applyLines`, one undo step;
+ *     - `new-document` → `files.newUntitled` with the same profile;
+ *     - `report` → the Results panel;
+ *     - `panel` → the Output panel (the v1 behaviour);
+ *     - `stale` → nothing is applied, and "Open result in new tab" is offered;
+ *     - `error` → nothing is applied, and the reason plus stderr are visible.
+ *
+ * It never rejects for a script that merely failed — a failure is a visible state, not an
+ * exception. It rejects only when the app itself could not do its part.
+ */
+export interface ScriptService {
+  /** Everything `scripts_list` found; `rescan()` refills it. */
+  readonly list: Readable<ScriptEntry[]>;
+  /**
+   * The interpreter probe. **null means "not asked yet"**, not "missing": `bootstrap.ts`
+   * fires the check detached after the first render, so there is a window at startup where
+   * the answer is unknown. The script commands are disabled for both, but only `ok: false`
+   * shows the "Python not found" message.
+   */
+  readonly python: Readable<PythonStatus | null>;
+  /** The run in flight, or null. Exactly one run at a time in P1. */
+  readonly running: Readable<{ runId: string; scriptId: string; startedAt: number } | null>;
+  rescan(): Promise<void>;
+  /** `params` with `skipForm` runs the script with exactly those values and no modal. */
+  run(scriptId: string, o?: { params?: Record<string, unknown>; skipForm?: boolean }): Promise<void>;
+  /** `ui.lastScript`, or nothing when no script has run on this machine yet. */
+  runLast(): Promise<void>;
+  /** Asks the run in flight to stop. Harmless when there is none. */
+  cancel(): Promise<void>;
+  /**
+   * Probes the interpreter and publishes the answer on `python`. **P5 addition to §7.3**:
+   * the plan's "`bootstrap.ts`: run `pythonCheck()` after the first render" needs a method
+   * to call, and `rescan()` is the script list, not the interpreter. Never rejects; it
+   * answers null outside the Tauri runtime.
+   */
+  checkPython(): Promise<PythonStatus | null>;
+}
+
 /**
  * app/context.ts → `export const ctx: AppContext`
  *
  * The aggregate the test hook exposes (§7.9). It only collects the singletons; features
- * import the service modules they need directly. The P5 prelude adds `scripts`.
+ * import the service modules they need directly.
  */
 export interface AppContext {
   commands: CommandRegistry;
@@ -704,4 +779,6 @@ export interface AppContext {
   transforms: TransformService;
   results: ResultsService;
   bookmarks: BookmarkService;
+  // P5
+  scripts: ScriptService;
 }

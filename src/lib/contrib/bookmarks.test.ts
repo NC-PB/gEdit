@@ -12,7 +12,8 @@ const fake = vi.hoisted(() => {
   let lines: number[] = [];
   return {
     activeId: 'd1' as DocId | null,
-    messages: [] as string[],
+    /** `null` is a `status.clear()`: the bar was emptied, not written to. */
+    messages: [] as (string | null)[],
     calls: [] as string[],
     installs: 0,
     uninstalls: 0,
@@ -62,7 +63,15 @@ vi.mock('$lib/monaco/setup', () => ({
   },
 }));
 vi.mock('$lib/stores/documents', () => ({ docs: { getActiveId: (): DocId | null => fake.activeId } }));
-vi.mock('$lib/app/status', () => ({ status: { show: (text: string) => fake.messages.push(text) } }));
+vi.mock('$lib/app/status', () => ({
+  status: {
+    show: (text: string) => fake.messages.push(text),
+    // A jump that worked clears whatever was on the bar, so an older error is
+    // never left standing as the answer to it (G8 M5). `null` is what the tests
+    // read as "nothing is showing".
+    clear: () => fake.messages.push(null),
+  },
+}));
 
 const bookmarksContrib = (await import('./bookmarks')).default;
 const { hasKey, t } = await import('$lib/i18n');
@@ -158,7 +167,9 @@ describe('next and previous', () => {
     await run('bookmark.next');
     await run('bookmark.prev');
     expect(fake.calls).toEqual(['next', 'prev']);
-    expect(fake.messages).toEqual([]);
+    // Each jump clears the bar instead of saying anything, so "Bookmark set." from the
+    // command before it does not sit there reading as the answer (G8 M5).
+    expect(fake.messages).toEqual([null, null]);
   });
 
   it('say so instead of doing nothing when the document has none', async () => {

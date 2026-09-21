@@ -37,7 +37,8 @@ const fake = vi.hoisted(() => {
     },
     ready: Promise.resolve(),
     revealed: [] as number[],
-    messages: [] as string[],
+    /** `null` is a `status.clear()`: the bar was emptied, not written to. */
+    messages: [] as (string | null)[],
     outline: {
       items: () => ({ subscribe: () => () => {} }),
       toolLines: (): number[] => (built ? lines : []),
@@ -57,7 +58,15 @@ vi.mock('$lib/monaco/editorService', () => ({
     getLines: () => [],
   },
 }));
-vi.mock('$lib/app/status', () => ({ status: { show: (text: string) => fake.messages.push(text) } }));
+vi.mock('$lib/app/status', () => ({
+  status: {
+    show: (text: string) => fake.messages.push(text),
+    // A jump that worked clears whatever was on the bar, so an older error is
+    // never left standing as the answer to it (G8 M5). `null` is what the tests
+    // read as "nothing is showing".
+    clear: () => fake.messages.push(null),
+  },
+}));
 
 const navigation = (await import('./navigation')).default;
 const { hasKey, t } = await import('$lib/i18n');
@@ -130,7 +139,9 @@ describe('stepping through the tool changes', () => {
     expect(fake.messages, 'F7 answered before the index was built').toEqual([]);
     fake.finish();
     await running;
-    expect(fake.messages).toEqual([]);
+    // A jump that worked clears the bar rather than writing to it, so an older error is
+    // not left standing as the answer to it (G8 M5).
+    expect(fake.messages).toEqual([null]);
     expect(fake.revealed).toEqual([4]);
   });
 

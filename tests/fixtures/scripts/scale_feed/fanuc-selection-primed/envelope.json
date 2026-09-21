@@ -1,0 +1,20 @@
+{
+  "message": "Scaled 1 of 3 feed rates to 80 %; 2 left as a thread pitch.",
+  "findings": [
+    {
+      "line": 8,
+      "severity": "info",
+      "message": "This run saw only the selection, from line 8, but the 7 lines above it were read for the modal state: the thread-pitch cycle G84 is in force here."
+    },
+    {
+      "line": 8,
+      "severity": "warning",
+      "message": "F625. is a thread pitch (G84), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    },
+    {
+      "line": 9,
+      "severity": "warning",
+      "message": "F625. is a thread pitch (G84), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    }
+  ]
+}

@@ -4,7 +4,7 @@
     {
       "line": 6,
       "severity": "warning",
-      "message": "F2.0 is a thread pitch (G32), so it is not scaled."
+      "message": "F2.0 is a thread pitch (G32), not a feed rate, so it is not scaled: scaling it would cut a different thread."
     },
     {
       "line": 7,
@@ -19,7 +19,7 @@
     {
       "line": 9,
       "severity": "warning",
-      "message": "F0.3 becomes 0.2, not 0.24: this value is written with 1 decimal and the result was rounded to it. Ask for more decimal places if that is too coarse."
+      "message": "F0.3 becomes 0.2, not 0.24: the result was rounded to 1 decimal. Ask for more decimal places if that is too coarse."
     }
   ]
 }

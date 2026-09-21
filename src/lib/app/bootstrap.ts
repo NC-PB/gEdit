@@ -12,9 +12,16 @@
 //   4. install the window key dispatcher
 //   5. watch the state behind the context, so the ribbon re-evaluates enablement
 //   6. install the test hook
-//   7. once Monaco is up, install the Monaco bridge and flip `appReady` (`data-ready="1"`)
+//   7. probe Python (P5), detached
+//   8. once Monaco is up, install the Monaco bridge and flip `appReady` (`data-ready="1"`)
 //
-// Step 7 is deliberately NOT awaited before the rest: `editor.ready` only resolves after
+// Step 7 spawns a process, so it is fired and not awaited: it must not delay `data-ready`,
+// and its answer only decides whether the script commands are enabled. It runs after the
+// first render and even when Monaco never loads, because "is there a Python" is shell
+// state, not editor state. `ScriptService.checkPython` is contracted never to reject; the
+// `catch` here is the belt to that braces.
+//
+// Step 8 is deliberately NOT awaited before the rest: `editor.ready` only resolves after
 // `EditorHost` has called `attach()`, so awaiting it first would deadlock the shell it is
 // waiting for. It rejects when Monaco cannot load; the shell keeps working without an
 // editor and `data-ready` stays "0", which is what the M0 build did too.
@@ -38,7 +45,8 @@ import { profiles } from '$lib/stores/profiles';
 import { settings } from '$lib/stores/settings';
 import { uiState } from '$lib/stores/uiState';
 import { files } from '$lib/app/fileOps';
-import { isScriptRunning, scriptRunning } from '$lib/components/panels/scriptsV1State';
+import { scripts } from '$lib/app/scripts';
+import { isScriptRunning, runningScript } from '$lib/stores/scripts';
 import type { CommandContext, Disposable } from '$lib/app/types';
 
 const ready = writable(false);
@@ -78,7 +86,7 @@ export function watchContext(notify: () => void): Disposable {
     docs.activeId.subscribe(notify),
     layout.state.subscribe(notify),
     modals.isOpen.subscribe(notify),
-    scriptRunning.subscribe(notify),
+    runningScript.subscribe(notify),
     editor.onDidChangeCursor(notify),
     editor.onDidActivate(notify),
   ];
@@ -138,6 +146,8 @@ export interface BootstrapDeps {
   installMonacoBridge: (monaco: Monaco) => Disposable;
   installTestHook: (hook: GeditTestHook) => void;
   buildTestHook: (ready: Promise<void>) => GeditTestHook;
+  /** `scripts.checkPython()` (WP5.1). Fired, not awaited; see the header. */
+  checkPython: () => Promise<unknown>;
   setReady: (value: boolean) => void;
 }
 
@@ -203,6 +213,14 @@ export function createStartApp(deps: BootstrapDeps): () => Promise<Disposable> {
 
     deps.installTestHook(deps.buildTestHook(readyPromise));
 
+    // Step 7: the interpreter probe. Detached on purpose — it spawns a process, and
+    // nothing before `data-ready` depends on the answer.
+    void Promise.resolve()
+      .then(() => deps.checkPython())
+      .catch((err: unknown) => {
+        console.error('the Python check failed', err);
+      });
+
     void deps.monacoReady().then(
       (monaco) => {
         add(deps.installMonacoBridge(monaco));
@@ -254,5 +272,6 @@ export const startApp: () => Promise<Disposable> = createStartApp({
   installMonacoBridge,
   installTestHook,
   buildTestHook,
+  checkPython: () => scripts.checkPython(),
   setReady: (value) => ready.set(value),
 });

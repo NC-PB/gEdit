@@ -1,4 +1,15 @@
 {
   "message": "Scaled 1 of 3 spindle speeds to 50 %; 2 left by the value filter.",
-  "findings": []
+  "findings": [
+    {
+      "line": 4,
+      "severity": "info",
+      "message": "S400 is at or below the \"only speeds above\" value (500), so it is left as it is."
+    },
+    {
+      "line": 8,
+      "severity": "info",
+      "message": "S6000 is at or above the \"only speeds below\" value (5000), so it is left as it is."
+    }
+  ]
 }

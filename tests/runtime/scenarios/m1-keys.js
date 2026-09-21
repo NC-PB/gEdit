@@ -17,8 +17,9 @@ import { scenario } from '../lib/index.js'
  * §7.11 verbatim, for every command M1 **and M2** register with a key. The check below is
  * two-way, so every new default binding has to be added here (mergeA; WP2.5 §4.1).
  * M2 is complete: `settings.open` (WP2.7) was the last unclaimed binding of §7.11.
- * M3 added the three `nav.*` bindings; M4 the three `bookmark.*` ones (WP4.4). The
- * remaining unclaimed §7.11 bindings are F9 / Mod+F9, which M5 (WP5.2) registers.
+ * M3 added the three `nav.*` bindings; M4 the three `bookmark.*` ones (WP4.4); M5 (WP5.2)
+ * the last two, F9 and Mod+F9. **§7.11 is now claimed in full** — so from here a new row
+ * is a new binding the plan has to gain first, not a gap being closed.
  */
 const SHORTCUTS = [
   ['file.new', 'Mod+N'],
@@ -40,6 +41,8 @@ const SHORTCUTS = [
   ['bookmark.toggle', 'Mod+F2'],
   ['bookmark.next', 'F2'],
   ['bookmark.prev', 'Shift+F2'],
+  ['script.runPicker', 'F9'],
+  ['script.runLast', 'Mod+F9'],
 ]
 
 scenario('m1-keys', { timeout: 180 }, async (h) => {

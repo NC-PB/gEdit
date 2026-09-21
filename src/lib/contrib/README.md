@@ -112,7 +112,7 @@ Each row names the owning work package and the feature.
 | `programMap.ts` | WP1.5 | program map (left panel) |
 | `recent.ts` | WP2.3 | Recent dropdown, `file.openRecent`, `file.clearRecent` |
 | `results.ts` | WP4.1 | the Results panel (bottom region) |
-| `scriptsV1.ts` | WP1.5 | v1 script UI in the bottom panel |
+| `scripts.ts` | WP5.2 | the script UI: Tools group, `script.*` commands, Output panel, status item |
 | `settings.ts` | WP2.7 | the settings dialog, `settings.open` (Mod+,), reload on save |
 | `tabs.ts` | WP1.2 | next/previous/switch tab |
 | `theme.ts` | WP2.6 | `view.setTheme`, the settings → editor-option bridge |

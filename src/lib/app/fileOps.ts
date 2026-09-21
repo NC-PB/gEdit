@@ -86,6 +86,17 @@ export const EOL_LABELS: Record<Eol, string> = { crlf: 'CRLF', lf: 'LF', cr: 'CR
 const MAX_LISTED = 10;
 
 /**
+ * Why one document's save ended the way it did.
+ *
+ * `save()` and `saveAs()` answer `boolean` (§7.2) and always will; internally the three
+ * cases have to be told apart, because **Save All treats them differently**: a *cancel* is
+ * a decision the user made about that one document, a *failure* is usually the disk or the
+ * share and will meet the next file too. Collapsing them was what let a cancelled Save As
+ * on an untitled scratch note silently skip the rest of a Save All (G8 M5).
+ */
+type SaveOutcome = 'saved' | 'cancelled' | 'failed';
+
+/**
  * The largest file that may be pulled through IPC into the webview (G8 F4). Above this
  * there is nothing useful left to do with it: Monaco stops syncing a model to its worker
  * at 50 MB (F8), so compare and every worker-backed feature are out, while decoding walks
@@ -234,16 +245,29 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
 
   // -- open -----------------------------------------------------------------
 
-  /** Reads and decodes one file into a new document. Returns null when it was refused. */
-  async function openOne(path: string, notices: string[]): Promise<DocId | null> {
+  /**
+   * Reads and decodes one file into a new document. Returns null when it was refused.
+   *
+   * `refuse` is how the refusal is shown, and the caller picks it: one file gets the
+   * blocking error box, which is the right affordance for the thing the user just asked
+   * for; a multi-file Open collects the refusals instead and shows **one** box at the end.
+   * A select-all in a job directory — up to `MAX_OPEN_AT_ONCE` paths, with a scanned setup
+   * sheet and a binary tool file among them — used to be N identical native alerts to
+   * click through before the good programs were usable (G8 M5).
+   */
+  async function openOne(
+    path: string,
+    notices: string[],
+    refuse: (name: string, detail: string) => Promise<void>,
+  ): Promise<DocId | null> {
     const name = baseName(path);
     // The stat runs BEFORE the read: reading first would mean a multi-gigabyte file is
     // already in the webview by the time its size is known (G8 F4). The same answer is
     // the disk stamp below, so this costs no extra round trip.
     const [stat] = await statOf([path]);
     if (stat && stat.size !== null && stat.size > MAX_OPEN_BYTES) {
-      await reportError(
-        t('files.openFailed', { name }),
+      await refuse(
+        name,
         t('files.tooLarge', {
           name,
           size: formatBytes(stat.size),
@@ -257,14 +281,14 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     try {
       bytes = await deps.fs.readFile(path);
     } catch (err) {
-      await reportError(t('files.openFailed', { name }), err);
+      await refuse(name, errorText(err));
       return null;
     }
 
     const decoded = decodeFile(bytes);
     if (!decoded.ok) {
       // AD-7: more than 10 % inner NUL bytes is data, not a program.
-      await reportError(t('files.openFailed', { name }), t(decoded.message.key, decoded.message.params));
+      await refuse(name, t(decoded.message.key, decoded.message.params));
       return null;
     }
 
@@ -318,13 +342,21 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     const opened: DocId[] = [];
     const notices: string[] = [];
     let created = 0;
-    let failed = 0;
 
     // A drop of a whole folder tree, or a select-all in a job directory (G8 F4).
     if (wanted.length > MAX_OPEN_AT_ONCE) {
       notices.push(t('files.tooManyAtOnce', { count: MAX_OPEN_AT_ONCE, total: wanted.length }));
       wanted = wanted.slice(0, MAX_OPEN_AT_ONCE);
     }
+
+    // One file: the blocking box, unchanged, because it is the thing the user asked for.
+    // Several: collect, and show one box after the loop (G8 M5).
+    const single = wanted.length === 1;
+    const refusals: string[] = [];
+    const refuse = async (name: string, detail: string): Promise<void> => {
+      if (single) await reportError(t('files.openFailed', { name }), detail);
+      else refusals.push(`${name}: ${detail}`);
+    };
 
     for (const path of wanted) {
       const existing = docs.byPath(path);
@@ -334,9 +366,8 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
         notices.push(t('files.focused', { name: existing.title }));
         continue;
       }
-      const id = await openOne(path, notices);
-      if (id === null) failed++;
-      else {
+      const id = await openOne(path, notices, refuse);
+      if (id !== null) {
         opened.push(id);
         created++;
       }
@@ -345,20 +376,26 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     // Only once something took its place, and never when it is what the user asked for.
     if (created > 0 && scratch !== null && !opened.includes(scratch)) drop(scratch);
 
-    if (opened.length > 0) {
-      // A failure already put an error on the status bar; do not paint over it.
-      if (failed === 0) {
-        const parts: string[] = [];
-        if (created === 1 && opened.length === 1) {
-          parts.push(t('files.opened', { name: docs.get(opened[0])?.title ?? baseName(wanted[0]) }));
-        } else if (created > 0) {
-          parts.push(t('files.openedMany', { count: created }));
-        }
-        parts.push(...notices);
-        if (parts.length > 0) status.show(parts.join(' · '));
-      }
-      editor.focus();
+    if (refusals.length > 0) {
+      // One alert for the whole Open, listing every file and why. The programs that did
+      // open are already on screen behind it.
+      notices.push(t('files.openFailedMany', { count: refusals.length }));
+      await dialogs.error(t('files.openFailedMany', { count: refusals.length }), refusals.join('\n'));
     }
+
+    // The summary is shown even when something was refused: the refusal has its own box
+    // and its own line in this message, so "Opened 3 files" is no longer suppressed by it.
+    const parts: string[] = [];
+    if (created === 1 && opened.length === 1) {
+      parts.push(t('files.opened', { name: docs.get(opened[0])?.title ?? baseName(wanted[0]) }));
+    } else if (created > 0) {
+      parts.push(t('files.openedMany', { count: created }));
+    }
+    parts.push(...notices);
+    if (parts.length > 0) {
+      status.show(parts.join(' · '), refusals.length > 0 ? { error: true } : undefined);
+    }
+    if (opened.length > 0) editor.focus();
     return opened;
   }
 
@@ -398,7 +435,7 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
    * the new one lands (AD-7 writes in place on purpose, for identity and ACLs on shares).
    * The buffer can be the only full copy left, so the failure offers Save As.
    */
-  async function reportWriteFailure(id: DocId, name: string, err: unknown): Promise<boolean> {
+  async function reportWriteFailure(id: DocId, name: string, err: unknown): Promise<SaveOutcome> {
     const summary = t('files.saveFailed', { name });
     const detail = errorText(err);
     status.show(`${summary}: ${detail}`, { error: true, detail });
@@ -409,7 +446,7 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
       cancel: t('common.cancel'),
       kind: 'warning',
     });
-    return elsewhere ? saveAs(id) : false;
+    return elsewhere ? saveAsOutcome(id) : 'failed';
   }
 
   /**
@@ -417,9 +454,9 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
    * a share, and restamps the document. An edit made while the write was in flight leaves
    * the document dirty: what reached the disk is the older text.
    */
-  async function write(id: DocId, path: string): Promise<boolean> {
+  async function write(id: DocId, path: string): Promise<SaveOutcome> {
     const doc = docs.get(id);
-    if (!doc) return false;
+    if (!doc) return 'failed';
     const name = baseName(path);
     const textLF = editor.getText(id);
     const versionBefore = editor.versionId(id);
@@ -431,7 +468,9 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     // just picked and confirmed in the native dialog.
     if (doc.path === path && doc.disk) {
       const [before] = await statOf([path]);
-      if (before && diskChanged(doc.disk, before) && !(await confirmOverwrite(name))) return false;
+      if (before && diskChanged(doc.disk, before) && !(await confirmOverwrite(name))) {
+        return 'cancelled';
+      }
     }
 
     let encoding = doc.encoding;
@@ -441,11 +480,11 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     if (encoded.ok) {
       bytes = encoded.bytes;
     } else {
-      if (!(await confirmUtf8(path, encoded))) return false;
+      if (!(await confirmUtf8(path, encoded))) return 'cancelled';
       encoding = UTF8;
       switchedToUtf8 = true;
       const retry = encodeFile(textLF, { encoding, eol: doc.eol, nul: doc.nul });
-      if (!retry.ok) return false; // unreachable: UTF-8 stores every character
+      if (!retry.ok) return 'failed'; // unreachable: UTF-8 stores every character
       bytes = retry.bytes;
     }
 
@@ -483,13 +522,18 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     if (editor.versionId(id) === versionBefore) editor.markClean(id);
     saveEvent.fire(id, path);
     const saved = switchedToUtf8 ? t('files.savedAsUtf8', { name }) : t('files.saved', { name });
-    status.show(tapeDropped ? `${saved} · ${t('files.tapeDropped')}` : saved);
-    return true;
+    // The dropped tape leader is a loss, not a footnote: `{ error: true }` gives it the
+    // warning styling and the 8 s an error gets, because the 4 s a plain "Saved …" lives
+    // for is not enough to notice that the punched-tape framing has just gone (G8 M5).
+    // `contrib/encoding.ts` also asks before the fact, when the encoding is picked.
+    if (tapeDropped) status.show(`${saved} · ${t('files.tapeDropped')}`, { error: true });
+    else status.show(saved);
+    return 'saved';
   }
 
-  async function saveAs(id?: DocId): Promise<boolean> {
+  async function saveAsOutcome(id?: DocId): Promise<SaveOutcome> {
     const doc = resolve(id);
-    if (!doc || !haveDisk()) return false;
+    if (!doc || !haveDisk()) return 'failed';
 
     const defaultPath = doc.path ?? profiles.get(doc.profileId)?.defaultFileName ?? doc.title;
     let path: string | null;
@@ -497,48 +541,94 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
       path = await dialogs.saveFile({ defaultPath, profileId: doc.profileId });
     } catch (err) {
       await reportError(t('files.saveDialogFailed'), err);
-      return false;
+      return 'failed';
     }
-    if (!path) return false; // cancelled
+    if (!path) return 'cancelled';
 
     // Two tabs on one file would each believe they own it.
     const other = docs.byPath(path);
     if (other && other.id !== doc.id) {
       const name = baseName(path);
       await reportError(t('files.saveFailed', { name }), t('files.alreadyOpen', { name }));
-      return false;
+      return 'failed';
     }
     return write(doc.id, path);
   }
 
-  async function save(id?: DocId): Promise<boolean> {
+  async function saveOutcome(id?: DocId): Promise<SaveOutcome> {
     const doc = resolve(id);
-    if (!doc) return false;
-    if (!doc.path) return saveAs(doc.id);
-    if (!haveDisk()) return false;
+    if (!doc) return 'failed';
+    if (!doc.path) return saveAsOutcome(doc.id);
+    if (!haveDisk()) return 'failed';
 
     // Rewriting an unchanged file could only alter it, unless it has disappeared since.
     if (!doc.dirty) {
       const [stat] = await statOf([doc.path]);
       if (stat?.exists) {
         status.show(t('files.unchanged', { name: doc.title }));
-        return true;
+        return 'saved';
       }
     }
     return write(doc.id, doc.path);
   }
 
-  async function saveAll(): Promise<boolean> {
+  const saveAs = async (id?: DocId): Promise<boolean> => (await saveAsOutcome(id)) === 'saved';
+  const save = async (id?: DocId): Promise<boolean> => (await saveOutcome(id)) === 'saved';
+
+  /**
+   * Saves every dirty document, and names what it did not save.
+   *
+   * **`stopOnCancel` is the difference between the command and the close paths.** Save All
+   * over three dirty tabs, one of them an untitled scratch note, used to abort at that
+   * note's cancelled Save As: the third tab — a real program with a shift's edits in it —
+   * was never written, and the status bar read "Saved <the first file>", which looks like
+   * success (G8 M5). For the command the answer is to carry on: "save all" on a named file
+   * is unambiguous, and only the untitled one needed a decision. `closeAll` and
+   * `confirmQuit` then **throw the document away**, so for them a cancelled Save As must
+   * still abort the whole thing, or the note the user declined to save is lost without a
+   * word.
+   *
+   * A write that *failed* stops either way: a full disk or a lost share fails for the next
+   * file too, and it has already shown its own error box.
+   *
+   * The boolean is "everything dirty is now on disk", which is what the close paths ask.
+   */
+  async function saveAll(o?: { stopOnCancel?: boolean }): Promise<boolean> {
+    const stopOnCancel = o?.stopOnCancel === true;
     let saved = 0;
+    const skipped: string[] = [];
+    let stopped = false;
     for (const doc of [...docs.all()]) {
       const current = docs.get(doc.id);
       if (!current?.dirty) continue;
-      const ok = current.path ? await save(current.id) : await saveAs(current.id);
-      if (!ok) return false; // Cancel or a failure aborts the rest
-      saved++;
+      if (stopped) {
+        skipped.push(current.title);
+        continue;
+      }
+      const outcome = current.path
+        ? await saveOutcome(current.id)
+        : await saveAsOutcome(current.id);
+      if (outcome === 'saved') {
+        saved++;
+        continue;
+      }
+      skipped.push(current.title);
+      if (outcome === 'failed' || stopOnCancel) stopped = true;
     }
-    if (saved > 1) status.show(t('files.savedAll', { count: saved }));
-    return true;
+
+    if (skipped.length === 0) {
+      if (saved > 1) status.show(t('files.savedAll', { count: saved }));
+      return true;
+    }
+    // Never silent: the one thing the old code did not do. The names are what makes it
+    // actionable — "two of them" is not something a programmer can act on at shift end.
+    const names = skipped.slice(0, MAX_LISTED).join(', ');
+    const list =
+      skipped.length > MAX_LISTED
+        ? `${names}, ${t('files.unsavedMore', { count: skipped.length - MAX_LISTED })}`
+        : names;
+    status.show(t('files.savedAllPartial', { saved, list }), { error: true });
+    return false;
   }
 
   // -- close ----------------------------------------------------------------
@@ -583,7 +673,9 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
   async function closeAll(): Promise<boolean> {
     const decision = await askUnsaved(docs.all().filter((doc) => doc.dirty));
     if (decision === 'cancel') return false;
-    if (decision === 'save' && !(await saveAll())) return false;
+    // `stopOnCancel`: everything here is about to be dropped, so a Save As the user
+    // cancelled has to stop the close rather than be skipped over.
+    if (decision === 'save' && !(await saveAll({ stopOnCancel: true }))) return false;
     for (const doc of [...docs.all()]) drop(doc.id);
     newUntitled();
     return true;
@@ -592,7 +684,8 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
   async function confirmQuit(): Promise<boolean> {
     const decision = await askUnsaved(docs.all().filter((doc) => doc.dirty));
     if (decision === 'cancel') return false;
-    if (decision === 'save') return saveAll();
+    // Same as `closeAll`: the window is about to go.
+    if (decision === 'save') return saveAll({ stopOnCancel: true });
     return true;
   }
 

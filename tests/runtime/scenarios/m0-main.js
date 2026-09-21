@@ -129,31 +129,64 @@ scenario('m0-main', { timeout: 180 }, async (h) => {
   )
 
   // ---------------------------------------------------------------- the script backend
-  const list = await h.attempt('list_python_scripts', { folderPath: scripts })
+  //
+  // M5 (plan D14): the v1 commands are gone. A folder of scripts is reached by making it
+  // a **script root** — which is what `script.addFolder` does, and it still asks for the
+  // folder with the same native dialog the M0 "Scripts Dir" button used — and a script is
+  // then run by its **id**, never by a path (§3, AD-13). The claims are the M0 ones.
+  const ctx = /** @type {any} */ (h.app.ctx)
+  await h.dialogs.queue('folder', scripts)
+  const added = await ctx.commands.run('script.addFolder')
+  const inRoot = await h.waitFor(async () => {
+    const r = await h.attempt('scripts_list')
+    if (!r.ok) return null
+    const ids = r.value.scripts.filter((/** @type {any} */ s) => s.root === 'extra0').map((/** @type {any} */ s) => s.id).sort()
+    return ids.length > 0 ? ids : null
+  }, { timeout: 20000, interval: 100 })
+  h.check('adding a folder makes it a script root', added === true, { added, message: h.q('status-message')?.textContent })
   h.check(
-    'the script list holds the .py files of the folder only',
-    list.ok && JSON.stringify(list.value) === JSON.stringify(['a_echo.py', 'b_fail.py', 'c_sleep.py', 'pyexe.py']),
-    list,
+    'the script list holds the .py files of the folder and of one subfolder, and nothing else',
+    JSON.stringify(inRoot) === JSON.stringify(['extra0:a_echo.py', 'extra0:b_fail.py', 'extra0:c_sleep.py', 'extra0:pyexe.py', 'extra0:sub/x.py']),
+    inRoot,
   )
+
   const input = 'G0 X0\nG1 Y5\n'
-  const echo = await h.attempt('run_python_script', { folderPath: scripts, scriptName: 'a_echo.py', inputText: input })
+  /** @param {string} id @param {string} stdin @param {number} [timeoutSecs] */
+  const runById = (id, stdin, timeoutSecs = 30) =>
+    h.attempt('script_run', { req: { runId: `m0-${id}-${Date.now()}`, scriptId: id, stdin, context: {}, timeoutSecs } })
+  const echo = await runById('extra0:a_echo.py', input)
+  const echoed = echo.ok ? JSON.parse(echo.value.stdout || 'null') : null
   h.check(
-    'a script reads stdin, answers JSON and runs in the scripts folder',
-    echo.ok && echo.value.success && echo.value.data.len === input.length && echo.value.data.upper === input.toUpperCase() && echo.value.data.cwd === scripts,
-    echo,
+    'a script reads stdin, answers on stdout and runs in its own folder',
+    echo.ok && echo.value.success === true && echoed?.len === input.length && echoed?.upper === input.toUpperCase() && echoed?.cwd === scripts,
+    { ok: echo.ok, echoed, stderr: echo.ok ? echo.value.stderr.slice(0, 200) : echo },
   )
-  const failing = await h.attempt('run_python_script', { folderPath: scripts, scriptName: 'b_fail.py', inputText: 'x' })
+  const failing = await runById('extra0:b_fail.py', 'x')
   h.check('a failing script reports stderr and success:false', failing.ok && failing.value.success === false && /boom on stderr/.test(failing.value.stderr), failing)
 
   /** @type {Record<string, unknown>} */
   const rejected = {}
-  for (const name of ['../evil.py', 'sub/x.py', '/etc/x.py', 'x.txt', 'missing.py', `${scripts}/a_echo.py`, '..\\evil.py', '.py', '..', 'dir.py']) {
-    rejected[name] = await h.attempt('run_python_script', { folderPath: scripts, scriptName: name, inputText: '' })
+  for (const id of [
+    'extra0:../evil.py',
+    'extra0:sub/../a_echo.py',
+    'extra0:/etc/x.py',
+    'extra0:x.txt',
+    'extra0:missing.py',
+    `extra0:${scripts}/a_echo.py`,
+    'extra0:..\\evil.py',
+    'extra0:.py',
+    'extra0:..',
+    'extra0:dir.py',
+    'nowhere:a_echo.py',
+    'a_echo.py',
+  ]) {
+    rejected[id] = await runById(id, '', 5)
   }
-  h.check('script names that are not a plain .py file in the folder are refused', Object.values(rejected).every((r) => !(/** @type {any} */ (r).ok)), rejected)
+  h.check('a script id that is not a plain .py file inside a root is refused', Object.values(rejected).every((r) => !(/** @type {any} */ (r).ok)), rejected)
   h.check('no trap script ran', (await h.disk.stat(pwned)) === null)
-  const oldCall = await h.attempt('run_python_script', { scriptPath: `${scripts}/a_echo.py`, inputText: 'x' })
-  h.check('the removed v1 call shape is refused', !oldCall.ok, oldCall)
+  for (const command of ['run_python_script', 'list_python_scripts']) {
+    h.check(`the v1 command ${command} is gone (plan D14)`, !(await h.attempt(command, {})).ok)
+  }
   h.check('the sample command of the template is gone', !(await h.attempt('greet', { name: 'x' })).ok)
 
   // A script must not block the main thread; the same probe with a blocking command calibrates it.
@@ -188,34 +221,30 @@ scenario('m0-main', { timeout: 180 }, async (h) => {
     return { label, durationMs, frames, maxPingMs: Math.max(...pings), value }
   }
   const blocked = await probe('main thread blocked for 2 s', () => h.invoke('h_block_main_sync', { ms: 2000 }))
-  const script = await probe('c_sleep.py (2 s)', () => h.attempt('run_python_script', { folderPath: scripts, scriptName: 'c_sleep.py', inputText: '' }))
+  const script = await probe('c_sleep.py (2 s)', () => runById('extra0:c_sleep.py', ''))
   h.check(
     'a running script keeps the UI responsive',
     script.value.ok && script.durationMs >= 1900 && script.maxPingMs < 500 && blocked.maxPingMs >= 1500,
     { script, calibration: blocked },
   )
 
-  // The ribbon path: Tools -> Scripts Dir -> pick a script -> Run
+  // The ribbon path, v2: Tools -> the Scripts group -> click the script -> the Output panel.
+  // A script with no header runs in panel mode (`decideApply` step 4, the v1 fallback), so
+  // its stdout lands in the panel rather than in the program.
   h.click(h.q('ribbon-tab', { tab: 'tools' }))
-  await h.dialogs.queue('folder', scripts)
-  h.click(h.q('scripts-folder'))
-  const select = await h.waitFor(() => h.q('script-select'))
-  h.check('the picked folder fills the script list', !!select)
-  if (select) {
-    h.select(select, 'a_echo.py')
-    // M1: the Run button carries `disabled` until the picked script reaches the store,
-    // and Svelte flushes that one microtask later — a user cannot click faster.
-    const runButton = await h.waitFor(() => h.q('script-run', { disabled: false }), { timeout: 2000 })
-    h.check('picking a script enables the Run button', !!runButton, h.q('script-run')?.outerHTML?.slice(0, 120))
-    h.click(runButton)
-    // M1 change 2: the output is a bottom-region panel, which `scripts.run` opens itself.
-    await h.waitFor(() => h.q('output-panel', { running: '0' }) && h.q('output-json'), { timeout: 10000 })
+  const item = await h.waitFor(() => h.q('script-item', { scriptId: 'extra0:a_echo.py' }), { timeout: 15000 })
+  h.check('the folder’s scripts are offered in the Tools group', !!item && item.getAttribute('data-command') === 'script.run:extra0:a_echo.py', item?.outerHTML?.slice(0, 160))
+  const docText = h.app.text()
+  if (item) {
+    h.click(item)
+    await h.waitFor(() => h.q('output-panel', { running: '0' }) && h.q('output-json'), { timeout: 20000 })
     const shown = JSON.parse(h.q('output-json')?.textContent ?? 'null')
     h.check(
       'the output panel shows the result of the run',
-      shown?.len === INITIAL.length && shown.upper === INITIAL.toUpperCase() && !!h.q('status-message', { error: '0' }),
+      shown?.len === docText.length && shown.upper === docText.toUpperCase() && !!h.q('status-message', { error: '0' }),
       { shown, status: h.q('status-message')?.textContent },
     )
+    h.check('a header-less script left the program alone', h.app.text() === docText, h.app.text())
     h.check(
       'the output panel sits in the bottom region',
       !!h.q('panel', { region: 'bottom', panel: 'output' }),

@@ -4,12 +4,12 @@
     {
       "line": 6,
       "severity": "warning",
-      "message": "F0. is not a feed this run can scale or raise to a limit, so it is left as it is."
+      "message": "F0. is a feed of zero, which is a block that does not cut, so it is left exactly as written and the percentage is not applied. The smallest feed (700) is not applied to it either: a limit bounds a scaled feed, it does not invent one."
     },
     {
       "line": 7,
       "severity": "warning",
-      "message": "F-100 is not a feed this run can scale or raise to a limit, so it is left as it is."
+      "message": "F-100 is negative, which is not a feed rate, so it is left exactly as written and the percentage is not applied. The smallest feed (700) is not applied to it either: a limit bounds a scaled feed, it does not invent one."
     },
     {
       "line": 8,

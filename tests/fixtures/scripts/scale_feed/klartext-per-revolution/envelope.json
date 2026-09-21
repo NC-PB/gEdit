@@ -9,7 +9,7 @@
     {
       "line": 18,
       "severity": "warning",
-      "message": "FZ0.05 becomes 0.06, not 0.055: this value is written with 2 decimals and the result was rounded to it. Ask for more decimal places if that is too coarse."
+      "message": "FZ0.05 becomes 0.06, not 0.055: the result was rounded to 2 decimals. Ask for more decimal places if that is too coarse."
     }
   ]
 }

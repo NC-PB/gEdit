@@ -12,9 +12,10 @@
 import EncodingStatus from '$lib/components/status/EncodingStatus.svelte';
 import EolStatus from '$lib/components/status/EolStatus.svelte';
 import { files, EOL_LABELS } from '$lib/app/fileOps';
+import { dialogs } from '$lib/app/dialogs';
 import { modals } from '$lib/app/modals';
 import { status } from '$lib/app/status';
-import { encodingLabel } from '$lib/core/text';
+import { encodingLabel, keepsNulLeader } from '$lib/core/text';
 import { docs } from '$lib/stores/documents';
 import { t } from '$lib/i18n';
 import type { Contribution, DocMeta, Eol, FileEncoding, QuickPickItem } from '$lib/app/types';
@@ -75,6 +76,29 @@ async function pickEncoding(): Promise<void> {
     ),
   });
   if (!picked || sameEncoding(picked, doc.encoding)) return;
+
+  // A UTF-16 file has to begin with its byte order mark, so it cannot carry a punched-tape
+  // leader — and the save resets the document's NUL record, so switching back afterwards
+  // cannot bring one back. That is a destructive change to a program read off a DNC line,
+  // and it used to be announced only by a four-second, non-error status line *after* the
+  // bytes were written (G8 M5). It is asked about here, at the moment of choice, while the
+  // answer still costs nothing.
+  if (!keepsNulLeader(picked) && (doc.nul.leader > 0 || doc.nul.trailer > 0)) {
+    const ok = await dialogs.confirm({
+      title: t('encoding.tapeTitle'),
+      message: t('encoding.tapeMessage', {
+        name: doc.title,
+        encoding: encodingLabel(picked),
+        leader: doc.nul.leader,
+        trailer: doc.nul.trailer,
+      }),
+      ok: t('encoding.tapeDropButton'),
+      cancel: t('common.cancel'),
+      kind: 'warning',
+    });
+    if (!ok) return;
+  }
+
   files.setEncoding(doc.id, picked);
   status.show(t('encoding.encodingChanged', { name: doc.title, encoding: encodingLabel(picked) }));
 }

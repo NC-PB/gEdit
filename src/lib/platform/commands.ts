@@ -134,8 +134,8 @@ export function recentClear(): Promise<RecentEntry[]> {
 // The webview sends a script **id** and never a path, never an interpreter and never a
 // folder (plan §3, AD-13). Rust resolves the id against the three known roots, refuses
 // `..`, separators and anything that canonicalizes out of its root, and reads the
-// interpreter and the folder list from `settings.json` itself. That is what replaces the
-// v1 `run_python_script(folder, name)` surface, which M5 removes.
+// interpreter and the folder list from `settings.json` itself. That is what replaced the
+// v1 `run_python_script(folder, name)` surface, removed at I5 (plan D14).
 //
 // Only `scriptNew`, `scriptCopyToUser` and `scriptSourcePath` widen the fs scope, and
 // only for a file the user may edit; a `bundled:` id is refused.

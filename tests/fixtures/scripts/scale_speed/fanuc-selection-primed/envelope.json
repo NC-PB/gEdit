@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 2 of 3 spindle speeds to 90 %; 1 left as a surface speed.",
+  "findings": [
+    {
+      "line": 7,
+      "severity": "info",
+      "message": "This run saw only the selection, from line 7, but the 6 lines above it were read for the modal state: constant surface speed (G96) is in force here."
+    },
+    {
+      "line": 8,
+      "severity": "info",
+      "message": "S200 is a surface speed (G96), so it is not scaled."
+    }
+  ]
+}

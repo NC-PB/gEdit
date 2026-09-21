@@ -4,22 +4,22 @@
     {
       "line": 10,
       "severity": "warning",
-      "message": "F625. is a thread pitch (G84), so it is not scaled."
+      "message": "F625. is a thread pitch (G84), not a feed rate, so it is not scaled: scaling it would cut a different thread."
     },
     {
       "line": 14,
       "severity": "warning",
-      "message": "F625. is a thread pitch (G74), so it is not scaled."
+      "message": "F625. is a thread pitch (G74), not a feed rate, so it is not scaled: scaling it would cut a different thread."
     },
     {
       "line": 19,
       "severity": "warning",
-      "message": "F1.5 is a thread pitch (G33), so it is not scaled."
+      "message": "F1.5 is a thread pitch (G33), not a feed rate, so it is not scaled: scaling it would cut a different thread."
     },
     {
       "line": 21,
       "severity": "warning",
-      "message": "F1.5 is a thread pitch (G32), so it is not scaled."
+      "message": "F1.5 is a thread pitch (G32), not a feed rate, so it is not scaled: scaling it would cut a different thread."
     }
   ]
 }

@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 1 feed rate to 110 %; 1 cycle feed left unchanged.",
+  "findings": [
+    {
+      "line": 7,
+      "severity": "info",
+      "message": "This run saw only the selection, from line 7, but the 6 lines above it were read for the modal state: the cycle CYCL DEF 200 is in force here."
+    },
+    {
+      "line": 8,
+      "severity": "info",
+      "message": "Q206 is a feed of CYCL DEF 200 and is left unchanged."
+    }
+  ]
+}

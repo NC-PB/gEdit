@@ -114,6 +114,13 @@ class ScriptCase:
     than what the script is asked to do: ``profile`` names the dialect (default
     ``fanuc-gcode``) and every other key replaces that member of the context, so a case
     can be a selection that starts at line 40 rather than a whole document.
+
+    ``preceding_file`` is the optional ``preceding.nc``: the part of the document that
+    stands **above** ``input.nc``. Its presence makes the case a selection that starts
+    just below it and fills ``input.precedingLines`` (plan section 7.5), which is how a
+    fixture proves that the modal state above a selection is carried into it. Writing it
+    as a plain NC file rather than as a JSON array inside ``case.json`` keeps it readable
+    and diffable, which is the whole point of a golden.
     """
 
     script: str
@@ -123,6 +130,7 @@ class ScriptCase:
     expected_file: Path
     params: Dict[str, Any]
     options: Dict[str, Any] = dataclass_field(default_factory=dict)
+    preceding_file: Optional[Path] = None
 
     @property
     def expects_json(self) -> bool:
@@ -145,6 +153,23 @@ class ScriptCase:
     def expected_json(self) -> Any:
         return load_json(self.expected_file)
 
+    def preceding_lines(self) -> List[str]:
+        """``preceding.nc`` as ``input.precedingLines``, or ``[]``.
+
+        The file holds the text above the selection **including** its final line ending,
+        the way it stands in the document, so splitting it leaves one empty element at the
+        end that is not a line of the document. It is dropped here: the contract wants the
+        lines above ``startLine``, and an extra empty one would put the selection a line
+        too low and make the length check in ``gedit_nc.preceding_lines`` reject the whole
+        field.
+        """
+        if self.preceding_file is None:
+            return []
+        lines = read_lines(self.preceding_file)
+        if lines and lines[-1] == "":
+            lines.pop()
+        return lines
+
     def context(self) -> Dict[str, Any]:
         """The ``ScriptContextV2`` this case runs with (plan §7.5)."""
         profile = load_profile(self.profile_id)
@@ -152,6 +177,17 @@ class ScriptCase:
         context = make_context(params=self.params, profile=profile, codes=load_codes(profile))
         context["document"]["name"] = self.input_file.name
         context["input"]["endLine"] = len(lines)
+        # A `preceding.nc` makes the case a selection that starts right below it. It is
+        # applied before `case.json`, so a case can still override any of it by hand.
+        above = self.preceding_lines()
+        if above:
+            start = len(above) + 1
+            context["input"] = {
+                "scope": "selection",
+                "startLine": start,
+                "endLine": start + len(lines) - 1,
+                "precedingLines": above,
+            }
         for key, value in self.options.items():
             if key != "profile":
                 context[key] = value
@@ -178,6 +214,7 @@ def script_cases(script: str) -> List[ScriptCase]:
             )
         params_file = directory / "params.json"
         options_file = directory / "case.json"
+        preceding_file = directory / "preceding.nc"
         cases.append(
             ScriptCase(
                 script=script,
@@ -187,6 +224,7 @@ def script_cases(script: str) -> List[ScriptCase]:
                 expected_file=expected[0],
                 params=load_json(params_file) if params_file.is_file() else {},
                 options=load_json(options_file) if options_file.is_file() else {},
+                preceding_file=preceding_file if preceding_file.is_file() else None,
             )
         )
     return cases

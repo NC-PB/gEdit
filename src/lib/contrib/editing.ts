@@ -98,6 +98,12 @@ const EDIT: ActionSpec[] = [
   { id: 'edit.redo', title: 'editing.redo', icon: asIcon(Redo2), action: 'redo', palette: true },
   { id: 'edit.find', title: 'editing.find', icon: asIcon(Search), action: 'actions.find' },
   {
+    // Monaco's own widget. It does **not** report how many blocks a replace-all changed:
+    // the replace-all is not a standalone editor action and there is no public event for
+    // it, so the count (and the NC-aware options next to it on `editor-core.md`'s
+    // find/replace row) are Phase 2 — plan §10 item 23, recorded at G8 M5 rather than
+    // faked with an `onDidChangeModelContent` heuristic that cannot tell a replacement
+    // from ordinary typing.
     id: 'edit.replace',
     title: 'editing.replace',
     icon: asIcon(Replace),

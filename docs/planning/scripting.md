@@ -4,17 +4,19 @@ Scripting is gEdit's main extension mechanism. Users write small Python scripts 
 
 Tag format: `Priority · Size · Delivery`.
 
-## Current contract (v1)
+## The v1 contract, and what became of it
 
-As implemented in `src-tauri/src/lib.rs` (`run_python_script`, `list_python_scripts`) and `+page.svelte`:
+Phase 0 shipped a first scripting pass: the user picked a folder in the ribbon, the app
+listed the `*.py` files directly in it, stdin got the selection or the whole document, and
+stdout went to the Script Output panel. Nothing was written back, and there were no
+parameters, no timeout and no cancel.
 
-- The user picks a scripts folder in the ribbon. The app lists the `*.py` files directly in it.
-- Running a script starts `python3` (`python` on Windows) with the working directory set to the scripts folder, so helper modules next to the script can be imported.
-- stdin receives the selected text, or the whole document if nothing is selected.
-- stdout is shown in the Script Output panel. If stdout parses as JSON, it is also shown as a structured result. stderr and the exit status are shown too.
-- Nothing is written back to the document. There are no parameters, timeout or cancel.
-
-v1 scripts keep working unchanged. Everything below is opt-in through a metadata header.
+**It was removed at the end of Phase 1** (plan D14), together with its two Tauri commands
+`run_python_script` and `list_python_scripts`, its contribution and its ribbon group. What
+replaced it is the contract below, and a script that has no header still behaves the way a
+v1 script did: it reads stdin, prints, and its output goes to the panel. What it no longer
+does is take a folder from the webview — the app discovers scripts itself, and the webview
+sends an **id** (§3, AD-13).
 
 ## Contract v2
 
@@ -48,7 +50,7 @@ A comment block at the top of the script, in the style of Python's inline script
 # ///
 ```
 
-Fields: `name`, `description`, `profiles`, `input`, `output`, `timeout`, `envelope` (see [output modes](#output-modes)), `documents` (`active` \| `all-open` \| `pick`), `params`. A script without a header runs in v1 mode.
+Fields: `name`, `description`, `profiles`, `input`, `output`, `timeout`, `envelope` (see [output modes](#output-modes)), `documents` (`active` \| `all-open` \| `pick`), `params`. A script without a header runs in `panel` mode with the default scope, which is what a v1 script did.
 
 ### Parameters
 `P1 · M · Core`
@@ -63,7 +65,7 @@ Declared parameters produce a form before the script runs. The form engine is th
 ### Script context
 `P1 · S · Core`
 
-The script gets its context through the environment variable `GEDIT_CONTEXT`, which holds the path to a temporary JSON file (deleted after the run). stdin stays plain text, so v1 habits and simple scripts still work.
+The script gets its context through the environment variable `GEDIT_CONTEXT`, which holds the path to a temporary JSON file (deleted after the run). stdin stays plain text, so a script that only reads stdin and prints still works.
 
 ```json
 {
@@ -72,7 +74,10 @@ The script gets its context through the environment variable `GEDIT_CONTEXT`, wh
     "path": "/jobs/part42.nc", "name": "part42.nc", "profile": "fanuc-gcode",
     "encoding": "latin1", "lineEnding": "crlf", "modified": true
   },
-  "input": { "scope": "selection", "startLine": 120, "endLine": 180 },
+  "input": {
+    "scope": "selection", "startLine": 120, "endLine": 180,
+    "precedingLines": ["…", "…"]
+  },
   "cursor": { "line": 130, "column": 5 },
   "params": { "percent": 90, "max_feed": null },
   "profile": { "id": "fanuc-gcode", "syntax": {}, "addresses": {}, "numbering": {} },
@@ -84,6 +89,13 @@ The script gets its context through the environment variable `GEDIT_CONTEXT`, wh
 ```
 
 - `profile` is the fully resolved profile (with `extends` already merged), so scripts can use comment syntax, addresses and numbering without hardcoding them ([dialect-profiles.md](dialect-profiles.md)).
+- `input.precedingLines` is present **only** for a `selection` run that does not start at
+  line 1, and then holds exactly the `startLine - 1` lines above it, so a script can prime
+  its modal state (feed mode, an active cycle, a thread lead) before the first line it may
+  edit. Past the runner's size caps the field is **omitted rather than truncated**: a
+  half-primed tracker gives a wrong number with no sign that it is wrong. `gedit_nc`'s
+  `preceding_lines()` is the one place that checks this, and answers `[]` when it does not
+  hold.
 - `codes` is the profile's code dictionary without templates ([code database](code-assistant.md#code-database-format)), so scripts can look up what a code means in this dialect instead of assuming Fanuc numbers.
 - `documents` is filled only when the header asks for `all-open` or `pick`. Each document's text is in a temp file. It is used by the combined tool list and join programs.
 - stdin/stdout are UTF-8. The app sets `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8`, so Windows console code pages do not garble comments. Text is sent with LF line endings, and the document keeps its own line ending on save.
@@ -96,7 +108,7 @@ The script gets its context through the environment variable `GEDIT_CONTEXT`, wh
 | `replace` | New text for the input range | Applies it as one undo step, changing only the lines that differ |
 | `new-document` | Text for a new document | Opens an untitled tab with the same profile |
 | `report` | JSON report (below) | Shows a table and findings in the results panel. Rows with a line are clickable. |
-| `panel` | Anything | v1 behavior: shows raw output and JSON |
+| `panel` | Anything | Shows raw stdout, stderr and, when stdout is JSON, a structured result. The default, and what a header-less script gets |
 
 With `envelope = true`, stdout is always JSON: `{"text": "...", "message": "...", "findings": [...]}`. This lets a script return new text and a summary or warnings together.
 

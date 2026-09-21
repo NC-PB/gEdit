@@ -17,6 +17,17 @@ What the cases cover, in the plan's words:
 * tapping blocks get a warning (`fanuc-tapping`)
 * Klartext `S` in `TOOL CALL` is scaled (`klartext-tool-call`)
 * speeds are integers by default (`fanuc-number-forms`, `fanuc-number-forms-as-written`)
+
+And the three WP5.4 added:
+
+* a selection under a `G96` set above it inherits constant surface speed, because its
+  case folder carries a `preceding.nc` (`input.precedingLines`, plan section 7.5) —
+  `fanuc-selection-primed`
+* a speed that is already zero or negative is never raised to the "smallest speed" limit
+  (`fanuc-zero-speed-with-limit`) — the defect G8 M4 finding 11 fixed in `scale_feed.py`
+  and left standing here
+* a block whose code is a threading cycle in another G-code system is named when the
+  speed it runs at was changed (`fanuc-lathe-threading`)
 """
 
 from __future__ import annotations
@@ -39,13 +50,16 @@ REQUIRED_CASES = [
     "fanuc-clamped",
     "fanuc-number-forms",
     "fanuc-number-forms-as-written",
+    "fanuc-lathe-threading",
     "fanuc-selection",
+    "fanuc-selection-primed",
     "fanuc-surface-speed-and-limit",
     "fanuc-surface-speed-and-limit-all",
     "fanuc-tapping",
     "fanuc-unchanged",
     "fanuc-value-filter",
     "fanuc-variables",
+    "fanuc-zero-speed-with-limit",
     "klartext-tool-call",
 ]
 
@@ -409,6 +423,183 @@ class TestHeader(unittest.TestCase):
                 self.assertIn('"%s"' % name, body)
 
 
+class TestSelectionPriming(unittest.TestCase):
+    """The M4 carry-over, fixed: a selection run reads the state above the selection.
+
+    `ScriptContextInput.precedingLines` (plan section 7.5) carries the document lines above
+    `startLine`; `gedit_nc.prime_tracker` walks them into the `FeedModeTracker` before the
+    first editable block. The case is checked twice — as it ships, and with the field taken
+    back out, which is what the run used to do and still does without it.
+    """
+
+    def case(self, name):
+        return next(case for case in helpers.script_cases("scale_speed") if case.name == name)
+
+    def primed(self, name):
+        case = self.case(name)
+        result = run_case(case)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], case.expected_text())
+        return payload
+
+    def unprimed(self, name):
+        case = self.case(name)
+        context = case.context()
+        self.assertIn("precedingLines", context["input"], "this case is not a primed one")
+        context["input"] = {
+            key: value for key, value in context["input"].items() if key != "precedingLines"
+        }
+        result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context)
+        self.assertTrue(result.ok, result.stderr)
+        return result.json()
+
+    def test_a_selection_under_a_g96_inherits_constant_surface_speed(self):
+        payload = self.primed("fanuc-selection-primed")
+        lines = payload["text"].split("\n")
+        # G96 stands on line 6, above the selection: S200 is metres per minute, not rpm.
+        self.assertIn("S200", lines)
+        # G97 inside the selection ends it, so the two speeds after it are scaled.
+        self.assertIn("G97 S1080", lines)
+        self.assertIn("S1350", lines)
+        first = payload["findings"][0]
+        self.assertEqual(first["severity"], "info")
+        self.assertIn("constant surface speed (G96)", first["message"])
+        self.assertIn("were read for the modal state", first["message"])
+
+    def test_without_the_lines_above_it_the_surface_speed_is_scaled_as_rpm(self):
+        payload = self.unprimed("fanuc-selection-primed")
+        self.assertIn("S180", payload["text"].split("\n"))
+        self.assertIn("only the selection", payload["findings"][0]["message"])
+        self.assertEqual(payload["findings"][0]["severity"], "warning")
+
+    def test_preceding_lines_that_are_not_all_the_lines_above_are_refused(self):
+        """A truncated field is a wrong answer; an absent one is an honest warning."""
+        case = self.case("fanuc-selection-primed")
+        context = case.context()
+        context["input"]["precedingLines"] = context["input"]["precedingLines"][-2:]
+        result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertIn("only the selection", payload["findings"][0]["message"])
+        self.assertEqual(payload["text"], self.unprimed("fanuc-selection-primed")["text"])
+
+
+class TestZeroAndLimits(unittest.TestCase):
+    """A limit bounds a scaled speed; it never invents one (G8 M4 finding 11).
+
+    `scale_feed.py` got this in M4. `scale_speed.py` did not: its zero check ran **after**
+    `clamp()` and skipped a value that was already zero, so `S0` with a smallest speed of
+    500 came back as `S500` and a spindle the program had stopped started turning.
+    """
+
+    def context(self, params):
+        profile = helpers.load_profile("fanuc-gcode")
+        return helpers.make_context(params=params, profile=profile, codes=helpers.load_codes(profile))
+
+    def test_a_stopped_spindle_is_never_raised_to_the_smallest_speed(self):
+        case = next(c for c in helpers.script_cases("scale_speed") if c.name == "fanuc-zero-speed-with-limit")
+        result = run_case(case)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        lines = payload["text"].split("\n")
+        self.assertIn("M5 S0", lines)
+        self.assertIn("S-500", lines)
+        # A real speed below the limit is raised, which is what the limit is for.
+        self.assertIn("S500 M3", lines)
+        self.assertIn("S3200", lines)
+        self.assertEqual(payload["text"], case.expected_text())
+
+    def test_the_finding_says_which_value_was_skipped_and_why(self):
+        result = helpers.run_script(
+            SCRIPT, stdin="M5 S0\n", context=self.context({"percent": 80, "minSpeed": 500})
+        )
+        self.assertTrue(result.ok, result.stderr)
+        finding = result.json()["findings"][0]
+        self.assertEqual(finding["severity"], "warning")
+        self.assertEqual(
+            finding["message"],
+            "S0 is a speed of zero, which is a spindle that does not turn, so it is left "
+            "exactly as written and the percentage is not applied. The smallest speed "
+            "(500) is not applied to it either: a limit bounds a scaled speed, it does "
+            "not invent one.",
+        )
+
+    def test_without_a_limit_a_zero_speed_is_still_left_alone(self):
+        result = helpers.run_script(SCRIPT, stdin="M5 S0\n", context=self.context({"percent": 80}))
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], "M5 S0\n")
+        self.assertIn("zero or negative", payload["message"])
+
+    def test_a_value_the_run_rounds_further_than_asked_is_named(self):
+        # The same rule as `scale_feed.py`: 150 % of S0.1 written with one decimal is 0.2,
+        # which is twice the speed, not half again. Rounding to the written precision is
+        # right; being quiet about it is not.
+        result = helpers.run_script(
+            SCRIPT, stdin="S0.1 M3\n", context=self.context({"percent": 150, "decimals": "keep"})
+        )
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], "S0.2 M3\n")
+        self.assertEqual(
+            payload["findings"][0]["message"],
+            "S0.1 becomes 0.2, not 0.15: the result was rounded to 1 decimal. Ask for "
+            "more decimal places if that is too coarse.",
+        )
+
+
+class TestAmbiguousThreadingCodes(unittest.TestCase):
+    """`pitchFeedAmbiguous` on the speed side (G8 M4 finding 7).
+
+    `scale_feed.py` **refuses** the `F` of a `G76` or `G92` block, because it may be a
+    thread lead. The `S` of such a block is a spindle speed in either reading, so it is
+    scaled — but if the lathe reading is the right one, the thread is cut at the changed
+    speed while its lead was deliberately left alone, and the pair has to be looked at
+    together. So it is scaled and named, never scaled in silence.
+    """
+
+    def run_program(self, program, params=None):
+        profile = helpers.load_profile("fanuc-gcode")
+        context = helpers.make_context(
+            params=params or {"percent": 90}, profile=profile, codes=helpers.load_codes(profile)
+        )
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        return result.json()
+
+    def test_a_threading_cycle_that_starts_after_a_changed_speed_is_named(self):
+        case = next(c for c in helpers.script_cases("scale_speed") if c.name == "fanuc-lathe-threading")
+        payload = self.run_program(case.input_text())
+        self.assertEqual(payload["text"], case.expected_text())
+        self.assertIn("G97 S720 M3", payload["text"].split("\n"))
+        finding = payload["findings"][0]
+        self.assertEqual(finding["severity"], "warning")
+        self.assertEqual(finding["line"], 7)
+        self.assertIn("G76", finding["message"])
+        self.assertIn("another G-code system", finding["message"])
+        self.assertIn("1 thread block to check by hand", payload["message"])
+
+    def test_a_speed_inside_an_ambiguous_cycle_is_scaled_and_named(self):
+        # G76 is modal, so the block after it is still inside the cycle.
+        payload = self.run_program("G76 X18.16 Z-20. P1190 Q350 F2.0\nG97 S650\nG80\nS1000\n")
+        self.assertEqual(
+            payload["text"].splitlines(), ["G76 X18.16 Z-20. P1190 Q350 F2.0", "G97 S585", "G80", "S900"]
+        )
+        named = [f for f in payload["findings"] if "S650" in f["message"]]
+        self.assertEqual(len(named), 1)
+        self.assertIn("threading cycle in another G-code system", named[0]["message"])
+        # G80 cancels it, so the speed after it is scaled without a word.
+        self.assertFalse(any("S1000" in f["message"] for f in payload["findings"]))
+
+    def test_the_s_of_a_g92_block_is_still_read_as_a_speed_limit(self):
+        # `G92 S` clamps the top speed in G-code systems B and C, which is the mill
+        # reading of the same code, and that rule is unchanged.
+        payload = self.run_program("G92 S2000\nS1200 M3\n")
+        self.assertEqual(payload["text"].splitlines(), ["G92 S2000", "S1080 M3"])
+        self.assertIn("speed limit (G92)", payload["findings"][0]["message"])
+
+
 class TestRunEnvironment(unittest.TestCase):
     def context(self, params):
         profile = helpers.load_profile("fanuc-gcode")
@@ -483,7 +674,14 @@ class TestRunEnvironment(unittest.TestCase):
         payload = result.json()
         self.assertEqual(payload["text"], "S10 M3\nS40\n")
         self.assertEqual(payload["findings"][0]["severity"], "warning")
-        self.assertIn("would become 0", payload["findings"][0]["message"])
+        # The finding names what was skipped and how the run got to zero, because the two
+        # ways out are different: more decimal places, or a different limit.
+        self.assertEqual(
+            payload["findings"][0]["message"],
+            "S10 is not scaled: 4 % of 10 is 0.4, which written with no decimals is 0, "
+            "and a speed of zero is a spindle that does not turn, not a slow one. Ask "
+            "for more decimal places to scale it.",
+        )
 
     def test_the_findings_are_capped_and_the_message_says_how_many_were_left_out(self):
         lines = ["G96 S100 M3"] + ["G96 S%d M3" % (100 + n) for n in range(300)]

@@ -15,7 +15,7 @@ import { t } from '$lib/i18n';
 import { get } from 'svelte/store';
 import type { Contribution } from '$lib/app/types';
 
-/** The id the v1 script output registers under (`contrib/scriptsV1.ts`). */
+/** The id the script output panel registers under (`contrib/scripts.ts`, §7.9 `output-*`). */
 const OUTPUT_PANEL = 'output';
 
 function hasPanels(region: 'left' | 'bottom'): boolean {

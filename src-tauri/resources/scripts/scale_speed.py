@@ -108,6 +108,12 @@ Tapping and threading
 Klartext
     the speed sits in the `TOOL CALL` line (`TOOL CALL 5 Z S5000`), which is an ordinary
     `S` word to the tokenizer and is scaled like any other.
+Selections
+    `G96` / `G97` and the cycles are modal, so a run over a selection starts in the middle
+    of a sentence. When the context carries `input.precedingLines` the run is **primed**
+    from the lines above it (`gedit_nc.prime_tracker`), so a `G96` that starts higher up is
+    in force here as well; when it does not, the run starts from the top of a program and
+    says so at its first line.
 
 Numbers
 -------
@@ -123,6 +129,10 @@ Two rules protect the value itself:
   values whole instead of rewriting what the control reads.
 * A value that would round to **zero** is left as it was and reported. `S0` is not a slow
   spindle, it is a spindle that does not turn.
+* A value that is **already** zero or negative is left exactly as written, before the
+  limits are even looked at. A limit bounds a scaled speed; it must not invent one.
+  `S0` with a smallest speed of 500 must not come back as `S500` and start a spindle the
+  program had stopped.
 
 Everything outside the values it scales — line endings, encoding, the trailing newline,
 spacing, block numbers, skip marks and comments — is handed back byte for byte, because
@@ -147,6 +157,13 @@ SPEED_LIMIT_CODES = ("G50", "G92")
 #: At most this many findings; the rest are counted in the message. A 100k-line program
 #: under G96 would otherwise hand the results panel tens of thousands of rows.
 MAX_FINDINGS = 200
+
+#: How far the written value may sit from the exact scaled one before the run says so, as
+#: a fraction of the exact value. The same rule, and the same reason, as `scale_feed.py`:
+#: a speed asked to move by 10 % that rounding moves by 50 % is a number the user has to
+#: be told about. It almost never fires on the default whole-number output, where speeds
+#: are in the hundreds or thousands; it is "As written" on a small value that needs it.
+ROUNDING_NOTICE = Decimal("0.05")
 
 
 def as_dict(value: Any) -> Dict[str, Any]:
@@ -311,11 +328,16 @@ class Counts:
         #: Thread blocks to look at: a speed scaled inside one, or one that starts while a
         #: scaled speed is in force.
         self.thread = 0
+        #: Written further from the exact scaled value than ROUNDING_NOTICE allows.
+        self.rounded = 0
         #: Rounded whole because the dialect's decimal point is significant.
         self.whole = 0
         self.whole_line = 0
         #: Left alone because the run would have written a zero speed.
         self.zero = 0
+        #: The value was already zero or negative: a limit bounds a speed, it does not
+        #: invent one, so neither the scaling nor the limits touch such a block.
+        self.nonpositive = 0
         self.skipped: Dict[str, int] = {}
 
     def skip(self, reason: str) -> None:
@@ -384,27 +406,98 @@ def scale_token(
     value = Decimal(token.value.raw)
     if params.only_above is not None and value <= params.only_above:
         counts.filtered += 1
+        findings.add(
+            line,
+            "info",
+            "%s is at or below the \"only speeds above\" value (%s), so it is left as it is."
+            % (word, trim(params.only_above)),
+        )
         return None
     if params.only_below is not None and value >= params.only_below:
         counts.filtered += 1
+        findings.add(
+            line,
+            "info",
+            "%s is at or above the \"only speeds below\" value (%s), so it is left as it is."
+            % (word, trim(params.only_below)),
+        )
         return None
 
     scaled = gedit_nc.scale_decimal(token.value.raw, params.percent_text)
+
+    # The zero/negative guard comes **before** the limits. A limit bounds a scaled speed;
+    # it must not invent one. `S0` with a smallest speed of 500 came back as `S500` and a
+    # spindle the program had stopped started turning — the same defect G8 M4 finding 11
+    # fixed in `scale_feed.py`, which was left standing here.
+    if value <= 0:
+        counts.nonpositive += 1
+        what = (
+            "a speed of zero, which is a spindle that does not turn"
+            if value == 0
+            else "negative, which is not a spindle speed"
+        )
+        limit = (
+            " The smallest speed (%s) is not applied to it either: a limit bounds a "
+            "scaled speed, it does not invent one." % params.min_text
+            if params.min_speed is not None
+            else ""
+        )
+        findings.add(
+            line,
+            "warning",
+            "%s is %s, so it is left exactly as written and the percentage is not "
+            "applied.%s" % (word, what, limit),
+        )
+        return None
+
     limited, limit_text, limit_label = clamp(scaled, params)
     new_text, whole = write(limited, token, params)
 
     # A spindle speed of zero is not a slow spindle, it is a spindle that does not turn.
-    if value != 0 and Decimal(new_text) == 0:
+    # The finding names which of the two ways the run got there: a value rounded away
+    # needs more decimal places, a zero limit needs a different limit.
+    if Decimal(new_text) == 0:
         counts.zero += 1
+        if limit_text is not None:
+            why = "the %s is %s" % (limit_label, limit_text)
+            advice = ""
+        else:
+            why = "%s %% of %s is %s, which written with %s is %s" % (
+                trim(params.percent),
+                token.value_text,
+                trim(Decimal(limited)),
+                result_precision(token, params),
+                new_text,
+            )
+            advice = " Ask for more decimal places to scale it."
         findings.add(
             line,
             "warning",
-            "%s would become %s, so it is left as it is." % (word, new_text),
+            "%s is not scaled: %s, and a speed of zero is a spindle that does not turn, "
+            "not a slow one.%s" % (word, why, advice),
         )
         return None
 
     if new_text == token.value_text:
         counts.same += 1
+        # Rounding swallowed a real change, and a count in the summary is not something a
+        # user can find in a 20,000-line program; a row is. A value the run did not change
+        # at all — 100 %, or a speed already at the limit — is not reported.
+        if Decimal(limited) != value:
+            findings.add(
+                line,
+                "info",
+                "%s stays as it is: %s %% of %s is %s, which written with %s is %s. "
+                "Ask for more decimal places to scale it."
+                % (
+                    word,
+                    trim(params.percent),
+                    token.value_text,
+                    trim(Decimal(limited)),
+                    result_precision(token, params),
+                    new_text,
+                ),
+            )
         return None
 
     if limit_text is not None:
@@ -415,6 +508,19 @@ def scale_token(
             "%s would become %s; the %s (%s) was used instead."
             % (word, write(scaled, token, params)[0], limit_label, limit_text),
         )
+    else:
+        # The value moved, but rounding moved it further than was asked for.
+        exact = Decimal(limited)
+        written = Decimal(new_text)
+        if exact != 0 and abs(written - exact) > ROUNDING_NOTICE * abs(exact):
+            counts.rounded += 1
+            findings.add(
+                line,
+                "warning",
+                "%s becomes %s, not %s: the result was rounded to %s. Ask for more "
+                "decimal places if that is too coarse."
+                % (word, new_text, trim(exact), result_precision(token, params)),
+            )
     if whole:
         counts.whole += 1
         counts.whole_line = counts.whole_line or line
@@ -427,9 +533,54 @@ def scale_token(
             "%s was scaled in a thread block (%s): the feed follows from the speed and the "
             "pitch, so check this block by hand." % (word, tracker.active_cycle),
         )
+    elif tracker.pitch_feed_ambiguous:
+        # The block's code is a threading cycle in another G-code system of this dialect
+        # (`pitchFeedAmbiguous`: Fanuc G76 and G92). `scale_feed.py` refuses such a block's
+        # F outright; here the S really is a spindle speed in either reading, so it is
+        # scaled — but if this is the lathe reading, it is the speed a thread is cut at
+        # and the pair has to be looked at together.
+        counts.thread += 1
+        findings.add(
+            line,
+            "warning",
+            "%s was scaled in a %s block: that code is a threading cycle in another "
+            "G-code system of this dialect, where this block cuts a thread at this speed "
+            "and its F is the thread lead. Check the block by hand."
+            % (word, tracker.ambiguous_code),
+        )
 
     counts.changed += 1
     return (token.end - len(token.value_text), token.end, new_text)
+
+
+def decimals_text(count: int) -> str:
+    """``no decimals`` / ``1 decimal`` / ``3 decimals``."""
+    if count <= 0:
+        return "no decimals"
+    return "1 decimal" if count == 1 else "%d decimals" % count
+
+
+def written_precision(token: gedit_nc.Token) -> str:
+    """How this value was written: ``no decimals``, ``1 decimal`` ..."""
+    if token.value is None or not token.value.has_point:
+        return "no decimals"
+    return decimals_text(len(token.value.frac_part or ""))
+
+
+def result_precision(token: gedit_nc.Token, params: Params) -> str:
+    """How the **result** was written, which is what a finding has to name.
+
+    With ``decimals = "keep"`` that is the precision the value already had; otherwise it is
+    the run's count, unless the count had to be dropped to keep a point-less value
+    point-less (:meth:`Params.format_for`). Naming the wrong one turns an honest warning
+    into a wrong explanation of a right number.
+    """
+    _, whole = params.format_for(token)
+    if whole:
+        return "no decimals"
+    if params.decimals == "keep":
+        return written_precision(token)
+    return decimals_text(params.decimals)
 
 
 def clamp(scaled: str, params: Params) -> Tuple[str, Optional[str], str]:
@@ -452,6 +603,28 @@ def write(value: str, token: gedit_nc.Token, params: Params) -> Tuple[str, bool]
     return gedit_nc.format_number(value, token.value, fmt, params.decimal_point_significant), whole
 
 
+def inherited_text(tracker: gedit_nc.FeedModeTracker) -> Optional[str]:
+    """What a primed run starts with, or ``None`` when that is the top-of-program state.
+
+    Only the parts that change what this script does are named: constant surface speed
+    decides whether an ``S`` is scaled at all, and a thread cycle decides whether the block
+    has to be looked at by hand.
+    """
+    parts: List[str] = []
+    if tracker.css:
+        parts.append("constant surface speed (G96)")
+    if tracker.pitch_feed and tracker.active_cycle is not None:
+        parts.append("the thread-pitch cycle %s" % tracker.active_cycle)
+    elif tracker.pitch_feed_ambiguous and tracker.ambiguous_code is not None:
+        parts.append(
+            "%s, which is a threading cycle in another G-code system of this dialect"
+            % tracker.ambiguous_code
+        )
+    if not parts:
+        return None
+    return parts[0] if len(parts) == 1 else "%s and %s" % (parts[0], parts[1])
+
+
 def run(
     lines: Sequence[str],
     cp: gedit_nc.CompiledProfile,
@@ -459,20 +632,29 @@ def run(
     params: Params,
     base_line: int,
     fragment: bool = False,
+    preceding: Optional[Sequence[str]] = None,
 ) -> Tuple[str, Counts, Findings]:
     """Walks the program once and returns the new text, the counts and the findings.
 
     ``fragment`` says that these lines are a **selection**, not the whole program.
     ``G96`` / ``G97`` and a threading cycle are modal, so a selection that starts below
-    them reads an rpm as a surface speed or the other way round, and cannot tell that a
-    speed it changed is the one a thread further down is cut at (G8 M4). The run says so
-    at its first line.
+    them reads an rpm as a surface speed or the other way round.
+
+    ``preceding`` are the document lines above it (``gedit_nc.preceding_lines`` of the
+    context). When they are there the run is **primed** with them and reads the selection
+    in the state it is really written in; when they are not, it starts from the
+    top-of-program state, cannot tell that a speed it changed is the one a thread further
+    down is cut at (G8 M4 finding 6), and says so at its first line.
     """
     tracker = gedit_nc.FeedModeTracker(codes)
     findings = Findings()
     counts = Counts()
     out: List[str] = []
     state: Optional[gedit_nc.LineState] = None
+
+    primed = fragment and bool(preceding)
+    if primed:
+        state = gedit_nc.prime_tracker(tracker, preceding or (), cp)
 
     if not codes:
         findings.add(
@@ -481,7 +663,17 @@ def run(
             "This run had no code database, so constant surface speed and thread blocks "
             "could not be recognised: check their speeds by hand.",
         )
-    if fragment:
+    if primed:
+        inherited = inherited_text(tracker)
+        if inherited is not None:
+            findings.add(
+                base_line,
+                "info",
+                "This run saw only the selection, from line %d, but the %d lines above it "
+                "were read for the modal state: %s is in force here."
+                % (base_line, len(preceding or ()), inherited),
+            )
+    elif fragment:
         findings.add(
             base_line,
             "warning",
@@ -493,7 +685,8 @@ def run(
 
     #: The last speed this run changed, which is the one a later thread block runs at.
     last_speed: Optional[Tuple[int, str]] = None
-    thread_block = False
+    #: True while a block that cuts a thread is in force, whichever way it is recognised.
+    thread_block = primed and (tracker.pitch_feed or tracker.pitch_feed_ambiguous)
 
     for index, line in enumerate(lines):
         tokens, state = gedit_nc.tokenize_line(line, cp, state)
@@ -503,16 +696,28 @@ def run(
 
         # A thread block that starts while a changed speed is in force: the speed that
         # cuts the thread was set further up, so the warning has to point here.
-        if tracker.pitch_feed and not thread_block and last_speed is not None:
+        thread_now = tracker.pitch_feed or tracker.pitch_feed_ambiguous
+        if thread_now and not thread_block and last_speed is not None:
             counts.thread += 1
-            findings.add(
-                number,
-                "warning",
-                "This thread block (%s) runs at %s, which was scaled on line %d: the feed "
-                "follows from the speed and the pitch, so check this block by hand."
-                % (tracker.active_cycle, last_speed[1], last_speed[0]),
-            )
-        thread_block = tracker.pitch_feed
+            if tracker.pitch_feed:
+                findings.add(
+                    number,
+                    "warning",
+                    "This thread block (%s) runs at %s, which was scaled on line %d: the "
+                    "feed follows from the speed and the pitch, so check this block by "
+                    "hand." % (tracker.active_cycle, last_speed[1], last_speed[0]),
+                )
+            else:
+                findings.add(
+                    number,
+                    "warning",
+                    "This block runs at %s, which was scaled on line %d, and its code (%s) "
+                    "is a threading cycle in another G-code system of this dialect: if "
+                    "this is a lathe program the thread is cut at the changed speed, so "
+                    "check the block by hand."
+                    % (last_speed[1], last_speed[0], tracker.ambiguous_code),
+                )
+        thread_block = thread_now
 
         edits: List[Tuple[int, int, str]] = []
         for token in tokens:
@@ -565,12 +770,16 @@ def summary(counts: Counts, findings: Findings, params: Params) -> str:
             parts.append("%s %s" % ("{:,}".format(count), text))
     if counts.zero:
         parts.append("%s not scaled (would become zero)" % "{:,}".format(counts.zero))
+    if counts.nonpositive:
+        parts.append("%s left as written (zero or negative)" % "{:,}".format(counts.nonpositive))
     if counts.filtered:
         parts.append("%s left by the value filter" % "{:,}".format(counts.filtered))
     if counts.same:
         parts.append("%s already written that way" % "{:,}".format(counts.same))
     if counts.clamped:
         parts.append("%s clamped to a limit" % "{:,}".format(counts.clamped))
+    if counts.rounded:
+        parts.append("%s rounded to the decimals the result is written with" % "{:,}".format(counts.rounded))
     if counts.whole:
         parts.append("%s kept whole" % "{:,}".format(counts.whole))
     if counts.thread:
@@ -612,8 +821,11 @@ def main() -> int:
     base_line = start if isinstance(start, int) and start >= 1 else 1
     # A selection is a fragment of a modal language; see `run`.
     fragment = scope.get("scope") == "selection" and base_line > 1
+    # The lines above the selection, when the context carries them and they are all of
+    # them; `gedit_nc.preceding_lines` is where that "all of them" is decided.
+    preceding = gedit_nc.preceding_lines(context)
 
-    text, counts, findings = run(lines, cp, codes, params, base_line, fragment)
+    text, counts, findings = run(lines, cp, codes, params, base_line, fragment, preceding)
     gedit_nc.envelope(text, summary(counts, findings, params), findings.in_line_order())
     return 0
 

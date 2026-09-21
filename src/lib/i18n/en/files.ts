@@ -58,8 +58,13 @@ export default {
   dropRefused_other: '{count} items could not be opened: they are gone, or gEdit was not given access to them',
   tooManyAtOnce: 'Only the first {count} of {total} files were opened',
 
+  savedAllPartial: 'Saved {saved} · not saved: {list}',
+
   // Errors
   openFailed: 'Could not open {name}',
+  /** A multi-file Open collects its refusals and names them once (G8 M5). */
+  openFailedMany_one: '1 file could not be opened',
+  openFailedMany_other: '{count} files could not be opened',
   saveFailed: 'Could not save {name}',
   tooLarge: '{name} is {size}, which is more than the {limit} gEdit can open',
   reloadFailed: 'Could not reload {name}',

@@ -14,7 +14,7 @@ import { resetStatusItemsForTest, statusItems } from '$lib/app/registry/statusIt
 import { layout } from '$lib/stores/layout';
 import ProgramMapPanel from '$lib/components/panels/ProgramMapPanel.svelte';
 import ScriptOutputPanel from '$lib/components/panels/ScriptOutputPanel.svelte';
-import ScriptStatus from '$lib/components/panels/ScriptStatus.svelte';
+import ScriptStatusItem from '$lib/components/status/ScriptStatusItem.svelte';
 import FileStatus from '$lib/components/status/FileStatus.svelte';
 import AppShell from './AppShell.svelte';
 import Ribbon from './Ribbon.svelte';
@@ -41,7 +41,7 @@ function contribute(): void {
   ]);
   panels.add({ id: 'programMap', region: 'left', title: 'programMap.title', component: ProgramMapPanel, order: 10 });
   panels.add({ id: 'output', region: 'bottom', title: 'scripts.outputTitle', component: ScriptOutputPanel, order: 10 });
-  statusItems.add({ id: 'script', side: 'right', order: 50, component: ScriptStatus });
+  statusItems.add({ id: 'script', side: 'right', order: 50, component: ScriptStatusItem });
 }
 
 beforeEach(reset);

@@ -1,6 +1,8 @@
 # Contributing to gEdit
 
-Thanks for helping. gEdit is a small project run by part-time contributors, so focused pull requests with tests are the easiest to review. What we plan to build, and why, is in [docs/planning](docs/planning/README.md). The current execution plan (architecture, contracts, milestones) is [phase-1-implementation.md](docs/planning/phase-1-implementation.md).
+Thanks for helping. gEdit is a small project run by part-time contributors, so focused pull requests with tests are the easiest to review.
+
+Three documents to know about before you start: [docs/user](docs/user/README.md) is what the app does today, from a CNC programmer's point of view; [docs/planning](docs/planning/README.md) is what we plan to build and why; and [phase-1-implementation.md](docs/planning/phase-1-implementation.md) is the executed plan for Phase 1 — architecture, the binding contracts in §7, and the decisions behind them.
 
 ## Setup
 
@@ -12,7 +14,7 @@ You need:
   ```sh
   sudo apt-get install libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
   ```
-- **Python 3** only for the script features and their tests.
+- **Python 3.9 or newer**, only for the script features and their tests. CI runs them on 3.9 and 3.12, so do not use syntax the older one rejects.
 
 Then:
 
@@ -44,25 +46,24 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-Python tests (once `tests/python/` exists): `python3 -m unittest discover -s tests/python -t .`
+Python tests (the bundled scripts and their shared library): `python3 -m unittest discover -s tests/python -t .`
 
 ### Before you open a pull request
 
-Run what CI runs: `npm run check`, `npm test`, `npm run build`, `npm run licenses:check`, `npm run versions:check`, and the three cargo commands above. If your change touches the window, dialogs, file handling or keyboard handling, also run the runtime harness on a Mac (see below) or ask a maintainer to run it.
+Run what CI runs: `npm run check`, `npm test`, `npm run build`, `npm run licenses:check`, `npm run versions:check`, and the three cargo commands above. `npm run check` must report **0 errors and 0 warnings**. If you touched `src-tauri/resources/scripts/` or `tests/python/`, run the Python tests too. If your change touches the window, dialogs, file handling or keyboard handling, also run the runtime harness on a Mac (see below) or ask a maintainer to run it.
 
 ## Continuous integration
 
 `.github/workflows/ci.yml` runs on pushes to `main` and on every pull request:
 
 - **checks** (Linux): type check, unit tests, frontend build, license notices, versions, a scan of the built bundle for `eval`, `Function(…)` and the test hook, and `rustfmt --check` on the harness source.
+- **python** (Linux, on 3.9 and 3.12): the bundled scripts' tests. The 3.9 leg is what keeps the oldest supported interpreter honest.
 - **rust** (macOS, Windows, Linux): `cargo fmt`, `clippy` with warnings as errors, `cargo test`.
 - **bundle** (macOS, Windows, Linux): an unsigned debug build of the installers, uploaded as workflow artifacts for manual smoke tests.
 
 The runtime harness is not part of CI, because it needs a real macOS desktop.
 
 ## Folder layout
-
-This is the layout Phase 1 is moving towards. Some folders only appear with later milestones.
 
 ```
 src/lib/
@@ -79,8 +80,9 @@ src/lib/
   i18n/        t() and the English message files, one namespace per feature.
   data/        Profiles, code database, blocks, and the generated licenses.json.
 src-tauri/src/ Rust: a thin lib.rs plus one module per concern (menu, files, config, state, scripts, ...).
-src-tauri/resources/scripts/  Bundled Python scripts.
+src-tauri/resources/scripts/  Bundled Python scripts and gedit_nc.py (see its README.md).
 tests/         fixtures/ gen/ unit/ python/ runtime/ perf/
+docs/user/     The user guide. docs/planning/ is the design and roadmap notes.
 ```
 
 ## Conventions
@@ -128,6 +130,20 @@ tests/         fixtures/ gen/ unit/ python/ runtime/ perf/
 
 Completion texts, code descriptions, templates, help and documentation are written by contributors in their own words. Control manuals are a source of facts only; do not copy their text, tables or illustrations, and do not copy text from other editors' documentation.
 
+### Bundled Python scripts
+
+`src-tauri/resources/scripts/` ships with the app, and a script there is a user-visible feature with a public contract. Read [its README](src-tauri/resources/scripts/README.md) before adding or changing one. In short: standard library only, it has to run on Python 3.9 as well as on the newest release, work on tokens from `gedit_nc.tokenize_line` rather than on a regex over raw lines, and use `scale_decimal` / `format_number` for every number. `gedit_nc.py`'s tokenizer and number formatting are ports of `src/lib/core/nc/*.ts` and are held to the same goldens under `tests/fixtures/`: when one side changes, the fixture changes with it and **both** sides are re-run.
+
+### Documentation
+
+Three audiences, three places. Keep them apart.
+
+- **`docs/user/`** — the user guide, written for a CNC programmer, not for a developer. No file paths, no module names, no milestone numbers. It describes what the shipped app does, and it is honest about what it does not do: the limits section is as much a part of it as the feature list. A pull request that changes behaviour a user can see updates it in the same change.
+- **`docs/planning/`** — design notes and the roadmap: what we intend, why, and what is deferred. [phase-1-implementation.md](docs/planning/phase-1-implementation.md) additionally carries the binding contracts (§7) and the record of where the implementation deviated from them.
+- **Module headers** — why this code is shaped this way. They are the first thing to read before changing a module, and the place a decision belongs when it would otherwise be lost.
+
+The generated surfaces are not documentation to maintain by hand: the shortcut dialog is built from the command registry, and the About dialog's notices from `licenses.json`. `docs/user/shortcuts.md` mirrors the dialog for people who want to read it before installing, and says the dialog wins if the two disagree.
+
 ### Test fixtures are synthetic
 
 - Every NC program under `tests/fixtures/` is written for gEdit and says so in a comment at the top. Never commit real customer or shop programs, not even anonymized ones. The rules and a description of every file are in [tests/fixtures/README.md](tests/fixtures/README.md).
@@ -143,14 +159,14 @@ Completion texts, code descriptions, templates, help and documentation are writt
 
 These rules are checked in review. Changing one needs a discussion first.
 
-1. The CSP stays as it is, and capabilities are not widened. Do not add fs, shell, opener or similar permissions. (The one planned addition is `core:window:allow-set-theme`, so the title bar follows the theme.) Paths reach the fs scope through the dialogs, drag and drop, or a Rust command that grants exactly one file.
+1. The CSP stays as it is, and capabilities are not widened. Do not add fs, shell, opener or similar permissions. (`core:window:allow-set-theme`, so the title bar follows the theme, is the only one Phase 1 added.) Paths reach the fs scope through the dialogs, drag and drop, or a Rust command that grants exactly one file.
 2. Never add `src-tauri/permissions/` or an app ACL manifest. Custom commands work without one, and adding it would change how every command is authorized.
 3. Every Rust command that takes a path checks `fs_scope().is_allowed(path)`, or it takes an id and resolves it against fixed roots (rejecting `..`, separators and symlink escapes).
 4. No `{@html}` with content from files, scripts or profiles. Monaco hovers use `isTrusted: false` and `supportHtml: false`.
 5. No dependency that uses `eval` or `Function(…)`, with or without `new`.
 6. Scripts never run automatically. The webview sends a script id, never a script path or an interpreter path.
 
-The first script runner (`run_python_script` and `list_python_scripts`, which take a folder) predates rules 3 and 6. It is replaced during Phase 1; do not build on it.
+Scripts go through `src-tauri/src/scripts/`, whose module documentation states both what those rules buy (no path traversal, no editable bundled script, no shell, a bounded deadline, capped output, killed on exit) and what they do not: a script is an ordinary program with the user's rights, and gEdit cannot sandbox it. Do not restate that guarantee more strongly than the module does — the user guide's "only run scripts you trust" is the actual security model, and the CSP is the primary barrier. The first script runner (`run_python_script` and `list_python_scripts`, which take a folder) predates rules 3 and 6 and is removed at the end of Phase 1; do not build on it.
 
 ## Tests
 

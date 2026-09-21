@@ -1,0 +1,47 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [
+    {
+      "tool": "T3",
+      "description": "D8 FLAT END MILL",
+      "line": 7,
+      "calls": 1,
+      "feed": "300.",
+      "speed": "2500"
+    }
+  ],
+  "message": "1 tool",
+  "findings": [
+    {
+      "line": 9,
+      "severity": "info",
+      "message": "T3: the feed of 2 blocks is in G95, not per minute, so it is not in the range."
+    }
+  ]
+}

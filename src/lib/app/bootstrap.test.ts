@@ -63,6 +63,7 @@ function harness(over: Partial<BootstrapDeps> = {}): Harness {
       activeProfile: () => '',
       setProfile: () => {},
     }),
+    checkPython: async () => log.push('checkPython'),
     setReady: (value) => log.push(`ready=${value}`),
     ...over,
   };
@@ -70,7 +71,7 @@ function harness(over: Partial<BootstrapDeps> = {}): Harness {
 }
 
 describe('startApp', () => {
-  it('runs the seven steps in the order the plan fixes', async () => {
+  it('runs the steps in the order the plan fixes', async () => {
     const h = harness();
     await createStartApp(h.deps)();
     expect(h.log).toEqual([
@@ -81,6 +82,7 @@ describe('startApp', () => {
       'installDispatcher',
       'watchContext',
       'installTestHook',
+      'checkPython',
     ]);
     h.resolveMonaco();
     await vi.waitFor(() => expect(h.log).toContain('ready=true'));
@@ -93,6 +95,35 @@ describe('startApp', () => {
     // would deadlock the shell that is calling this.
     await expect(createStartApp(h.deps)()).resolves.toBeTypeOf('function');
     expect(h.log).not.toContain('ready=true');
+  });
+
+  // Step 7 (P5): the probe spawns a process. It is fired, never awaited — an interpreter
+  // that takes ten seconds to answer must not hold up `data-ready`.
+  it('does not wait for the Python check', async () => {
+    const h = harness({ checkPython: () => new Promise(() => {}) });
+    await expect(createStartApp(h.deps)()).resolves.toBeTypeOf('function');
+    h.resolveMonaco();
+    await vi.waitFor(() => expect(h.log).toContain('ready=true'));
+  });
+
+  // And it still happens when Monaco never loads: "is there a Python" is shell state, so
+  // the script commands must be able to say why they are disabled without an editor.
+  it('probes Python even when Monaco fails', async () => {
+    const h = harness();
+    const dispose = await createStartApp(h.deps)();
+    h.rejectMonaco(new Error('no worker'));
+    await vi.waitFor(() => expect(h.log).toContain('checkPython'));
+    expect(h.log).not.toContain('ready=true');
+    dispose();
+  });
+
+  it('logs a rejected Python check and starts anyway', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const h = harness({ checkPython: () => Promise.reject(new Error('no such command')) });
+    await createStartApp(h.deps)();
+    await vi.waitFor(() => expect(error).toHaveBeenCalledOnce());
+    expect(h.log).toContain('installTestHook');
+    error.mockRestore();
   });
 
   it('resolves the hook promise when the editor is up', async () => {

@@ -21,6 +21,7 @@ import { external } from '$lib/app/external';
 import { files } from '$lib/app/fileOps';
 import { modals } from '$lib/app/modals';
 import { outline } from '$lib/app/outlineService';
+import { scripts } from '$lib/app/scripts';
 import { status } from '$lib/app/status';
 import { transforms } from '$lib/app/transforms';
 import { bookmarks } from '$lib/monaco/bookmarks';
@@ -60,4 +61,5 @@ export const ctx: AppContext = {
   transforms,
   results,
   bookmarks,
+  scripts,
 };

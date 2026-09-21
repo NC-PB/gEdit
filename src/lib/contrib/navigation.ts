@@ -65,6 +65,11 @@ async function goto(context: CommandContext): Promise<void> {
       return;
     }
     editor.reveal(id, target.line);
+    // A jump that worked says nothing — but it must not leave the *previous* command's
+    // red error standing either, because for eight seconds that message reads as the
+    // answer to this jump while the cursor says the opposite (G8 M5). Clearing is honest;
+    // a confirmation for every jump would be noise.
+    status.clear();
     return;
   }
 
@@ -79,6 +84,7 @@ async function goto(context: CommandContext): Promise<void> {
     return;
   }
   editor.reveal(id, line);
+  status.clear();
 }
 
 async function stepTool(dir: 1 | -1): Promise<void> {
@@ -98,7 +104,10 @@ async function stepTool(dir: 1 | -1): Promise<void> {
   const next = nextInList(lines, editor.cursor()?.line ?? 0, dir);
   if (next === null) return;
   editor.reveal(id, next.line);
+  // The wrap is the only thing worth saying; otherwise clear, so an older error is not
+  // left standing over a jump that worked. Same rule as `goto` above.
   if (next.wrapped) status.show(t(dir === 1 ? 'navigation.wrappedToFirst' : 'navigation.wrappedToLast'));
+  else status.clear();
 }
 
 export default {

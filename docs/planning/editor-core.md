@@ -12,7 +12,7 @@ Monaco already provides many standard editor functions. Our work is to expose th
 |---|---|---|
 | Clipboard, select all, column (box) selection, multi-cursor | Built in | Test with the Tauri clipboard on all three platforms |
 | Unlimited undo/redo | Built in | Apply all transforms and script results with `executeEdits`/`pushEditOperations`, never `setValue`, so each one is one undo step |
-| Find/replace with case, whole word, regex, `$1` groups, preserve case, in-selection, wrap-around, multi-line | Built in (find widget) | Show the replace count; add NC-aware options (see [Search](#search)) |
+| Find/replace with case, whole word, regex, `$1` groups, preserve case, in-selection, wrap-around, multi-line | Built in (find widget) | Both deferred: the replace count and the NC-aware options (see [Search](#search)) |
 | Go to line | Built in | Add block-number mode ([Go to line or block number](#go-to-line-or-block-number)) |
 | Command palette (F1) | Built in | Register every gEdit command as a Monaco action with its shortcut |
 | Quick outline / go to symbol | Built in, needs a `DocumentSymbolProvider` | Feed it from the program map: tool calls, operations, sections |
@@ -157,7 +157,12 @@ The existing panel lists tool calls and comments. Changes:
 
 ## Search
 
-Monaco's find widget covers the basics (see the table above). The following features are NC-specific.
+Monaco's find widget covers the basics (see the table above). The following features are NC-specific, except the first, which is a gap in what Monaco exposes rather than an NC feature.
+
+### The replace count
+`P2 · S · Core`
+
+After a replace-all the editor says nothing about how many blocks it changed, so a programmer who replaced every `M8` with `M88` across a program cannot check the number against the tool count. Monaco's find widget has no public event for a completed replace-all: the action is not a standalone editor action, and an `onDidChangeModelContent` heuristic cannot tell one replacement from ordinary typing. Doing it properly means either reaching into the `editor.contrib.findController` contribution (not in the public typings) or gEdit running the replace itself through `executeEdits`, which is the same path the transforms already take and would also give ["Replace into a new document"](#replace-into-a-new-document) for free. Phase 1 exposes the widget and leaves both to Phase 2 (plan §10 item 23).
 
 ### NC-aware whole-address match
 `P2 · S · Core`

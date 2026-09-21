@@ -21,6 +21,8 @@ export default {
   sortBy: 'Sort by {column}',
   goToLine: 'Go to line {line}',
   noLine: 'No line',
+  dropped_one: '1 more entry was produced and is not shown.',
+  dropped_other: '{count} more entries were produced and are not shown.',
   columnLine: 'Line',
   columnSeverity: 'Severity',
   columnMessage: 'Message',

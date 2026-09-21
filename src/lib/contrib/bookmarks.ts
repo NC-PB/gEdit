@@ -46,6 +46,10 @@ function step(dir: 1 | -1): void {
   }
   if (dir === 1) bookmarks.next();
   else bookmarks.prev();
+  // The cursor is the feedback. What must not stay on screen is the *previous* command's
+  // message — "Bookmark set." after a jump, or a red "The program ends at line 38." — which
+  // for its whole timeout reads as the answer to the jump just made (G8 M5).
+  status.clear();
 }
 
 function toggle(): void {

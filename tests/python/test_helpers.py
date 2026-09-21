@@ -31,6 +31,11 @@ API_NAMES = [
     "envelope",
 ]
 
+#: Beyond §7.10, and just as load-bearing for a selection run: the M5 carry-over
+#: (`input.precedingLines`, plan §7.5). Renaming one of these breaks all three bundled
+#: scripts at once, so it is pinned next to the §7.10 names rather than inside them.
+CARRY_OVER_NAMES = ["preceding_lines", "prime_tracker"]
+
 #: The parameter names of the functions whose call sites are spread over several scripts.
 API_SIGNATURES = {
     "to_py_regex": ["pattern"],
@@ -41,6 +46,8 @@ API_SIGNATURES = {
     "scale_decimal": ["raw", "percent"],
     "report": ["title", "columns", "rows", "message", "findings"],
     "envelope": ["text", "message", "findings"],
+    "preceding_lines": ["context"],
+    "prime_tracker": ["tracker", "lines", "cp"],
 }
 
 
@@ -72,6 +79,13 @@ class TestGeditNcApi(unittest.TestCase):
             with self.subTest(name=name):
                 parameters = list(inspect.signature(getattr(self.gedit_nc, name)).parameters)
                 self.assertEqual(parameters, expected)
+
+    def test_the_carry_over_names_are_exported_too(self) -> None:
+        missing = [name for name in CARRY_OVER_NAMES if not hasattr(self.gedit_nc, name)]
+        self.assertEqual(missing, [])
+        self.assertEqual(
+            sorted(set(self.gedit_nc.__all__) & set(CARRY_OVER_NAMES)), sorted(CARRY_OVER_NAMES)
+        )
 
     def test_feed_mode_tracker_exposes_the_four_modal_attributes(self) -> None:
         tracker = self.gedit_nc.FeedModeTracker
@@ -117,6 +131,46 @@ class TestContext(unittest.TestCase):
     def test_overrides_replace_whole_members(self) -> None:
         context = helpers.make_context(input={"scope": "selection", "startLine": 12, "endLine": 20})
         self.assertEqual(context["input"]["startLine"], 12)
+
+
+class TestPrecedingFixtureFile(unittest.TestCase):
+    """A case folder's `preceding.nc` is the text above the selection (WP5.4).
+
+    The rules are asserted here rather than in each script's own tests, because a case
+    that builds a context the runner would never produce proves nothing about the script.
+    """
+
+    def cases_with_preceding(self):
+        out = []
+        for script in ("scale_feed", "scale_speed", "tool_list"):
+            out += [case for case in helpers.script_cases(script) if case.preceding_file]
+        return out
+
+    def test_there_are_cases_that_use_it(self) -> None:
+        self.assertTrue(self.cases_with_preceding(), "no primed fixture case found")
+
+    def test_it_makes_the_case_a_selection_that_starts_right_below_it(self) -> None:
+        for case in self.cases_with_preceding():
+            with self.subTest(case="%s/%s" % (case.script, case.name)):
+                scope = case.context()["input"]
+                above = case.preceding_lines()
+                self.assertEqual(scope["scope"], "selection")
+                self.assertEqual(scope["startLine"], len(above) + 1)
+                self.assertEqual(scope["endLine"], scope["startLine"] + len(case.input_lines()) - 1)
+                self.assertEqual(scope["precedingLines"], above)
+
+    def test_the_context_it_builds_is_one_gedit_nc_accepts(self) -> None:
+        gedit_nc = helpers.import_gedit_nc()
+        for case in self.cases_with_preceding():
+            with self.subTest(case="%s/%s" % (case.script, case.name)):
+                self.assertEqual(gedit_nc.preceding_lines(case.context()), case.preceding_lines())
+
+    def test_the_final_line_ending_does_not_become_an_extra_line(self) -> None:
+        for case in self.cases_with_preceding():
+            with self.subTest(case="%s/%s" % (case.script, case.name)):
+                text = helpers.read_text(case.preceding_file)
+                self.assertTrue(text.endswith("\n"), "the text above a selection ends a line")
+                self.assertNotEqual(case.preceding_lines()[-1], "")
 
 
 if __name__ == "__main__":  # pragma: no cover

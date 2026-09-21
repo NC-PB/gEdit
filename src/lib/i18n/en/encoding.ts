@@ -37,6 +37,13 @@ export default {
   lf: 'Unix and macOS',
   cr: 'Classic Mac and some punched-tape posts',
 
+  // A UTF-16 file has to start with its byte order mark, so it cannot carry a punched-tape
+  // NUL leader. Asked before the change, not reported after the save (G8 M5).
+  tapeTitle: 'Punched-Tape Leader',
+  tapeMessage:
+    '{name} was read with a {leader}-byte NUL leader and a {trailer}-byte NUL trailer.\n\n{encoding} has to begin with a byte order mark, so it cannot carry them: saving as {encoding} writes the program without its tape framing, and switching the encoding back afterwards will not bring it back.',
+  tapeDropButton: 'Drop the leader',
+
   // Status messages
   encodingChanged: '{name} will be written as {encoding}',
   eolChanged: '{name} will be written with {eol} line endings',

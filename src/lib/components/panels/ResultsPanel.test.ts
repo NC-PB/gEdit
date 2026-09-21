@@ -314,6 +314,29 @@ describe('ResultsPanel markup', () => {
     expect(html).toContain(t('common.lineNumber', { line: 20 }));
   });
 
+  // G8 M5: a script may return a finding per line of a 300k-line program, and every one
+  // of them would be a real `<button>` here. `decideApply` caps what arrives; the panel
+  // is where the user is told that it did.
+  it('says how many entries were left out, rather than losing them quietly', () => {
+    const docId = docs.add(newDoc());
+    results.show({
+      title: 'Scan',
+      columns: [],
+      rows: [],
+      findings: [{ line: 1, message: 'one of very many' }],
+      dropped: 1234,
+      docId,
+    });
+    const html = render(ResultsPanel).body;
+    expect(html).toContain('data-testid="results-dropped"');
+    expect(html).toContain(t('results.dropped', { count: 1234 }));
+  });
+
+  it('says nothing about dropping when nothing was dropped', () => {
+    results.show(TOOL_LIST);
+    expect(render(ResultsPanel).body).not.toContain('data-testid="results-dropped"');
+  });
+
   it('points a finding at the document it names', () => {
     const other = docs.add(newDoc({ path: '/tmp/part.nc', untitledIndex: null }));
     const active = docs.add(newDoc({ untitledIndex: 2 }));

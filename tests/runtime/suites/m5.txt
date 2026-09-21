@@ -1,0 +1,40 @@
+# M5: the scripting UI, the performance pass and the Phase 1 exit criteria.
+# Run with: tests/runtime/suite.sh tests/runtime/suites/m0.txt tests/runtime/suites/m1.txt tests/runtime/suites/m2.txt tests/runtime/suites/m3.txt tests/runtime/suites/m4.txt tests/runtime/suites/m5.txt
+#
+# The two exit-criteria scenarios are what Phase 1 is judged by (plan §5 M5), so they come
+# before the budgets: a suite that runs out of time must have answered them.
+
+# The Tools surface, the parameter form, the apply and its one undo, the report rows, a
+# non-zero exit and Cancel from the Output panel. Run it first: it is the milestone.
+m5-scripts-ui
+
+# The safety bar's hardest sentence: an edit made *while* the script ran means nothing is
+# applied, and the result is offered as a new tab instead.
+m5-scripts-guard
+
+# `timeout = 1` in a script's own header, and what the deadline leaves behind.
+m5-scripts-timeout
+
+# Cancel from the status item — the control that is reachable when the Output panel is not.
+m5-scripts-cancel
+
+# What the webview may and may not ask the backend for: the id grammar, the two path
+# commands, the interpreter and the folder list never crossing IPC, and the v1 surface gone.
+m5-scripts-security
+
+# A script that is still running when the window closes. `-1` starts it and closes, `-2`
+# looks for what is left; keep them in this order and next to each other.
+m5-scripts-exitkill-1
+m5-scripts-exitkill-2
+
+# GEDIT_PYTHON pointing at nothing: the run commands go off with a message, everything else
+# works, and fixing the interpreter in the settings brings them back with no restart.
+m5-no-python
+
+# The Phase 1 exit criteria: a posted program opened, navigated, cleaned up, renumbered,
+# scaled, listed, compared and saved — with the saved bytes checked against the goldens.
+m5-exit-criteria
+m5-exit-criteria-nopython
+
+# G7: the M1 open budget again, with every M2-M5 feature switched on. Slow; keep it last.
+m5-perf-open

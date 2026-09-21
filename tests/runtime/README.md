@@ -16,6 +16,17 @@ a real macOS desktop.
   visible, takes over the keyboard focus and receives native events. An **unlocked**
   screen — a locked one gives the keyboard to `loginwindow`, and every scenario that
   posts input is reported BLOCKED.
+
+  Check it before starting a cumulative suite; half an hour of BLOCKED answers nothing:
+
+  ```sh
+  ioreg -n Root -d1 | grep -q 'CGSSessionScreenIsLocked[^,}]*Yes' && echo locked || echo unlocked
+  ```
+
+  The key is absent altogether while the screen is unlocked, so "no match" is the good
+  answer. Match the value with a character class rather than a literal `"=Yes`: the
+  spacing around `=` is not guaranteed, and `ioreg -a` prints a plist in which the value
+  is a separate `<true/>` element and no substring of this shape occurs at all.
 - Node and Rust as for a normal build (`npm install` once; `cargo` on PATH).
 - Python 3 for the script scenarios. Every run passes an explicit `GEDIT_PYTHON`
   unless the scenario tests the lookup itself, so your shell setup does not change

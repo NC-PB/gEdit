@@ -11,7 +11,6 @@
 //! - [`state`] — `state.json`: the recent-files list and the webview's UI state
 //! - [`menu`] — the macOS menu and the two window-closing requests (macOS only)
 //! - [`python`] — finding the user's Python interpreter
-//! - [`scripts_v1`] — the Phase 0 scripting commands
 //! - [`scripts`] — the v2 scripting backend: discovery, the TOML header and the runner
 //!
 //! Window geometry is not ours: `tauri-plugin-window-state` saves and restores it
@@ -32,7 +31,6 @@ mod menu;
 mod paths;
 mod python;
 pub mod scripts;
-mod scripts_v1;
 mod state;
 
 use tauri::{App, AppHandle, RunEvent};
@@ -95,9 +93,7 @@ pub fn run() {
             scripts::discovery::script_source_path,
             scripts::runner::script_run,
             scripts::runner::script_cancel,
-            scripts::runner::python_check,
-            scripts_v1::run_python_script,
-            scripts_v1::list_python_scripts
+            scripts::runner::python_check
         ]);
 
     #[cfg(target_os = "macos")]

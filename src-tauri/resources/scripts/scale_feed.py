@@ -106,9 +106,13 @@ Codes that mean two things
     with a warning rather than multiplying what may be a thread lead. Refusing a real
     boring feed costs one manual edit; scaling a lead scraps the part.
 Selections
-    feed modes and cycles are modal, so a run over a selection cannot know what is in
-    force above it and cannot recognise a thread pitch set further up. Such a run still
-    happens — it is what the user asked for — but it opens with a warning that says so.
+    feed modes and cycles are modal, so a run over a selection starts in the middle of a
+    sentence. When the context carries `input.precedingLines` the run is **primed** from
+    the lines above the selection (`gedit_nc.prime_tracker`), so a `G95` or a `G84` that
+    starts higher up is in force here exactly as it would be in a whole-document run, and
+    the run says at its first line what it inherited. When the field is absent — which is
+    a supported context, not a fault — the run still happens, from the top-of-program
+    state, and opens with a warning saying what it could not see.
 Rapid
     Klartext `FMAX` and `FAUTO` are keywords, not numbers, so they are never touched.
 Feed modes
@@ -492,7 +496,8 @@ def scale_token(
         findings.add(
             line,
             "warning",
-            "%s is a thread pitch (%s), so it is not scaled." % (word, tracker.active_cycle),
+            "%s is a thread pitch (%s), not a feed rate, so it is not scaled: scaling it "
+            "would cut a different thread." % (word, tracker.active_cycle),
         )
         return None
 
@@ -552,24 +557,50 @@ def scale_token(
     # which is not a feed rate at all.
     if value <= 0:
         counts.nonpositive += 1
+        what = (
+            "a feed of zero, which is a block that does not cut"
+            if value == 0
+            else "negative, which is not a feed rate"
+        )
+        limit = (
+            " The smallest feed (%s) is not applied to it either: a limit bounds a "
+            "scaled feed, it does not invent one." % params.min_text
+            if params.min_feed is not None
+            else ""
+        )
         findings.add(
             line,
             "warning",
-            "%s is not a feed this run can scale%s, so it is left as it is."
-            % (word, " or raise to a limit" if params.min_feed is not None else ""),
+            "%s is %s, so it is left exactly as written and the percentage is not "
+            "applied.%s" % (word, what, limit),
         )
         return None
 
     limited, limit_text, limit_label = clamp(scaled, params)
     new_text, whole = write(limited, token, params)
 
-    # A feed of zero is not a slow feed, it is a block that does not cut.
+    # A feed of zero is not a slow feed, it is a block that does not cut. The finding has
+    # to name which of the two ways the run got there, because the fix is different: a
+    # rounded-away value needs more decimal places, a zero limit needs a different limit.
     if Decimal(new_text) == 0:
         counts.zero += 1
+        if limit_text is not None:
+            why = "the %s is %s" % (limit_label, limit_text)
+            advice = ""
+        else:
+            why = "%s %% of %s is %s, which written with %s is %s" % (
+                trim(params.percent),
+                token.value_text,
+                trim(Decimal(limited)),
+                result_precision(token, params),
+                new_text,
+            )
+            advice = " Ask for more decimal places to scale it."
         findings.add(
             line,
             "warning",
-            "%s would become %s, so it is left as it is." % (word, new_text),
+            "%s is not scaled: %s, and a feed of zero is a block that does not cut, not "
+            "a slow one.%s" % (word, why, advice),
         )
         return None
 
@@ -586,9 +617,16 @@ def scale_token(
             findings.add(
                 line,
                 "info",
-                "%s stays as it is: %s %% of %s is %s, which is written %s with the "
-                "decimals this value has. Ask for more decimal places to scale it."
-                % (word, trim(params.percent), token.value_text, trim(Decimal(limited)), new_text),
+                "%s stays as it is: %s %% of %s is %s, which written with %s is %s. "
+                "Ask for more decimal places to scale it."
+                % (
+                    word,
+                    trim(params.percent),
+                    token.value_text,
+                    trim(Decimal(limited)),
+                    result_precision(token, params),
+                    new_text,
+                ),
             )
         return None
 
@@ -610,13 +648,13 @@ def scale_token(
             findings.add(
                 line,
                 "warning",
-                "%s becomes %s, not %s: this value is written with %s and the result was "
-                "rounded to it. Ask for more decimal places if that is too coarse."
+                "%s becomes %s, not %s: the result was rounded to %s. Ask for more "
+                "decimal places if that is too coarse."
                 % (
                     word,
                     new_text,
                     trim(exact),
-                    written_precision(token),
+                    result_precision(token, params),
                 ),
             )
     if whole:
@@ -627,12 +665,34 @@ def scale_token(
     return (token.end - len(token.value_text), token.end, new_text)
 
 
+def decimals_text(count: int) -> str:
+    """``no decimals`` / ``1 decimal`` / ``3 decimals``."""
+    if count <= 0:
+        return "no decimals"
+    return "1 decimal" if count == 1 else "%d decimals" % count
+
+
 def written_precision(token: gedit_nc.Token) -> str:
     """How this value was written, for a finding: ``no decimals``, ``1 decimal`` ..."""
     if token.value is None or not token.value.has_point:
         return "no decimals"
-    count = len(token.value.frac_part or "")
-    return "1 decimal" if count == 1 else "%d decimals" % count
+    return decimals_text(len(token.value.frac_part or ""))
+
+
+def result_precision(token: gedit_nc.Token, params: Params) -> str:
+    """How the **result** was written, which is what a finding has to name.
+
+    With ``decimals = "keep"`` that is the precision the value already had; with a fixed
+    count it is the run's, unless the count had to be dropped to keep a point-less value
+    point-less (:meth:`Params.format_for`). Naming the wrong one turns an honest warning
+    into a wrong explanation of a right number.
+    """
+    _, whole = params.format_for(token)
+    if whole:
+        return "no decimals"
+    if params.decimals == "keep":
+        return written_precision(token)
+    return decimals_text(params.decimals)
 
 
 def clamp(scaled: str, params: Params) -> Tuple[str, Optional[str], str]:
@@ -655,6 +715,30 @@ def write(value: str, token: gedit_nc.Token, params: Params) -> Tuple[str, bool]
     return gedit_nc.format_number(value, token.value, fmt, params.decimal_point_significant), whole
 
 
+def inherited_text(tracker: gedit_nc.FeedModeTracker) -> Optional[str]:
+    """What a primed run starts with, or ``None`` when that is the top-of-program state.
+
+    Only the parts that change what this script does are named: the feed mode decides
+    whether a value is scaled at all, and an active cycle decides whether its ``F`` is a
+    pitch or a lead. A run that inherits nothing says nothing.
+    """
+    parts: List[str] = []
+    if tracker.feed_mode != PER_MINUTE:
+        parts.append(MODE_TEXT.get(tracker.feed_mode, "the feed mode " + tracker.feed_mode))
+    if tracker.pitch_feed and tracker.active_cycle is not None:
+        parts.append("the thread-pitch cycle %s" % tracker.active_cycle)
+    elif tracker.pitch_feed_ambiguous and tracker.ambiguous_code is not None:
+        parts.append(
+            "%s, which is a threading cycle in another G-code system of this dialect"
+            % tracker.ambiguous_code
+        )
+    elif tracker.active_cycle is not None:
+        parts.append("the cycle %s" % tracker.active_cycle)
+    if not parts:
+        return None
+    return parts[0] if len(parts) == 1 else "%s and %s" % (parts[0], parts[1])
+
+
 def run(
     lines: Sequence[str],
     cp: gedit_nc.CompiledProfile,
@@ -662,15 +746,22 @@ def run(
     params: Params,
     base_line: int,
     fragment: bool = False,
+    preceding: Optional[Sequence[str]] = None,
 ) -> Tuple[str, Counts, Findings]:
     """Walks the program once and returns the new text, the counts and the findings.
 
     ``fragment`` says that these lines are a **selection**, not the whole program. Feed
-    modes and cycles are modal: ``G95`` and a ``G84`` tapping cycle set further up are
-    still in force inside the selection, and this run cannot see them. It starts from the
-    top-of-program state instead, and a thread pitch it would have recognised in a whole
-    document is then scaled like an ordinary feed (G8 M4). The run says so, loudly, at
-    its first line.
+    modes and cycles are modal: a ``G95`` or a ``G84`` tapping cycle set further up is
+    still in force inside the selection.
+
+    ``preceding`` are the document lines above it (``gedit_nc.preceding_lines`` of the
+    context). When they are there the run is **primed** with them, so the selection is
+    read in the state it is really written in, and the first finding names what was
+    inherited when that changes what this script does. When they are not — an older
+    runner, or text too large for the context to carry — the run starts from the
+    top-of-program state instead, a thread pitch it would have recognised in a whole
+    document is then scaled like an ordinary feed (G8 M4 finding 6), and the run says so,
+    loudly, at its first line.
     """
     tracker = gedit_nc.FeedModeTracker(codes)
     findings = Findings()
@@ -679,6 +770,18 @@ def run(
     state: Optional[gedit_nc.LineState] = None
     cycle: Optional[Dict[str, Any]] = None
 
+    primed = fragment and bool(preceding)
+    if primed:
+        state = gedit_nc.prime_tracker(tracker, preceding or (), cp)
+        # A selection that starts inside the parameter block of a Klartext cycle: the
+        # `CYCL DEF` keyword stands above it, so `cycle_definition` below never sees it
+        # and the cycle's Q feeds would go unlisted. The tracker knows which cycle is
+        # open; take the entry from there instead.
+        if state is not None and state.continuation and tracker.active_cycle is not None:
+            entry = tracker.entry(tracker.active_cycle)
+            if entry is not None and entry.get("params"):
+                cycle = entry
+
     if not codes:
         findings.add(
             base_line,
@@ -686,7 +789,17 @@ def run(
             "This run had no code database, so tapping and threading blocks could not be "
             "recognised: check their feeds by hand.",
         )
-    if fragment:
+    if primed:
+        inherited = inherited_text(tracker)
+        if inherited is not None:
+            findings.add(
+                base_line,
+                "info",
+                "This run saw only the selection, from line %d, but the %d lines above it "
+                "were read for the modal state: %s is in force here."
+                % (base_line, len(preceding or ()), inherited),
+            )
+    elif fragment:
         findings.add(
             base_line,
             "warning",
@@ -812,8 +925,11 @@ def main() -> int:
     # A selection is a fragment of a modal language; see `run`. A run that starts at
     # line 1 is the program from the top even when the user selected it by hand.
     fragment = scope.get("scope") == "selection" and base_line > 1
+    # The lines above the selection, when the context carries them and they are all of
+    # them; `gedit_nc.preceding_lines` is where that "all of them" is decided.
+    preceding = gedit_nc.preceding_lines(context)
 
-    text, counts, findings = run(lines, cp, codes, params, base_line, fragment)
+    text, counts, findings = run(lines, cp, codes, params, base_line, fragment, preceding)
     gedit_nc.envelope(text, summary(counts, findings, params), findings.in_line_order())
     return 0
 

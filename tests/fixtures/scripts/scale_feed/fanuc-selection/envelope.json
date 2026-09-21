@@ -9,7 +9,7 @@
     {
       "line": 41,
       "severity": "warning",
-      "message": "F625. is a thread pitch (G84), so it is not scaled."
+      "message": "F625. is a thread pitch (G84), not a feed rate, so it is not scaled: scaling it would cut a different thread."
     }
   ]
 }

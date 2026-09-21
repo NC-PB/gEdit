@@ -13,6 +13,15 @@ What the cases cover, in the plan's words:
 * the description modes (`fanuc-description-*`)
 * Klartext by number and by name (`klartext-numbers`, `klartext-names`)
 * `TOOL CALL Z S5000` is not a tool change (`klartext-speed-only`)
+
+And the two WP5.4 added, both about a range that would otherwise carry a number that is
+not what the column says it is:
+
+* a selection under a `G95` set above it inherits the feed mode, because its case folder
+  carries a `preceding.nc` (`input.precedingLines`, plan section 7.5) —
+  `fanuc-selection-primed`
+* the `F` of a block whose code is a threading cycle in another G-code system stays out
+  of the feed range (`fanuc-lathe-ambiguous`)
 """
 
 from __future__ import annotations
@@ -35,9 +44,11 @@ REQUIRED_CASES = [
     "fanuc-description-below",
     "fanuc-description-trailing",
     "fanuc-feed-modes",
+    "fanuc-lathe-ambiguous",
     "fanuc-lathe-turret",
     "fanuc-packed",
     "fanuc-preselect",
+    "fanuc-selection-primed",
     "klartext-names",
     "klartext-numbers",
     "klartext-speed-only",
@@ -248,6 +259,95 @@ class TestHeader(unittest.TestCase):
                         self.assertEqual(sorted(choice), ["label", "value"])
                     values = [choice["value"] for choice in param["choices"]]
                     self.assertIn(param["default"], values)
+
+
+class TestModalStateOfASelection(unittest.TestCase):
+    """A range only means something inside one mode, and the mode may be set above.
+
+    A report is not an edit, so a wrong number here does not damage the program — it tells
+    a machinist that a tool runs between 0.12 and 300 mm/min when half of that range is
+    millimetres per revolution. Priming (`gedit_nc.prime_tracker`) keeps the two apart.
+    """
+
+    def case(self, name):
+        return next(case for case in helpers.script_cases("tool_list") if case.name == name)
+
+    def test_a_selection_under_a_feed_mode_set_above_it_keeps_it_out_of_the_range(self):
+        case = self.case("fanuc-selection-primed")
+        result = run_case(case)
+        self.assertTrue(result.ok, result.stderr)
+        report = result.json()
+        self.assertEqual(report, case.expected_json())
+        self.assertEqual(report["rows"][0]["feed"], "300.")
+        self.assertIn("is in G95, not per minute", report["findings"][0]["message"])
+
+    def test_without_the_lines_above_it_the_per_revolution_feeds_widen_the_range(self):
+        case = self.case("fanuc-selection-primed")
+        context = case.context()
+        context["input"] = {
+            key: value for key, value in context["input"].items() if key != "precedingLines"
+        }
+        result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context)
+        self.assertTrue(result.ok, result.stderr)
+        report = result.json()
+        self.assertEqual(report["rows"][0]["feed"], "0.12-300.")
+        self.assertEqual(report["findings"], [])
+
+    def test_the_lines_above_a_selection_are_not_scanned_for_tool_calls(self):
+        """They prime the modal state and nothing else.
+
+        A tool changed above the selection is not called inside it, so a row for it would
+        report a tool the user did not select.
+        """
+        profile = helpers.load_profile("fanuc-gcode")
+        context = helpers.make_context(
+            profile=profile,
+            codes=helpers.load_codes(profile),
+            input={
+                "scope": "selection",
+                "startLine": 3,
+                "endLine": 4,
+                "precedingLines": ["(T9  A TOOL ABOVE THE SELECTION)", "T9 M6"],
+            },
+        )
+        result = helpers.run_script(SCRIPT, stdin="T4 M6\nG1 Z-1. F250.", context=context)
+        self.assertTrue(result.ok, result.stderr)
+        self.assertEqual([row["tool"] for row in result.json()["rows"]], ["T4"])
+
+
+class TestAmbiguousThreadingCodes(unittest.TestCase):
+    """`pitchFeedAmbiguous` (G8 M4 finding 7) on the report side.
+
+    `G76` is a fine boring cycle on the shipped mill dialect and a multi-pass threading
+    cycle on a lathe in G-code system A, where its `F` is the thread lead. Nothing in the
+    block says which, and gEdit ships no lathe profile, so the value stays out of the feed
+    range and is named — the same direction `scale_feed.py` takes when it refuses to scale
+    it. A range is a number a machinist reads off and uses.
+    """
+
+    def report_of(self, program):
+        profile = helpers.load_profile("fanuc-gcode")
+        context = helpers.make_context(profile=profile, codes=helpers.load_codes(profile))
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        return result.json()
+
+    def test_the_f_of_an_ambiguous_block_is_not_in_the_feed_range(self):
+        case = next(c for c in helpers.script_cases("tool_list") if c.name == "fanuc-lathe-ambiguous")
+        result = run_case(case)
+        self.assertTrue(result.ok, result.stderr)
+        report = result.json()
+        self.assertEqual(report, case.expected_json())
+        self.assertEqual(report["rows"][0]["feed"], "0.25")
+        self.assertIn("may be a thread lead", report["findings"][0]["message"])
+
+    def test_a_non_modal_ambiguity_ends_with_its_own_block(self):
+        # G92 is non-modal: the block after it is an ordinary move again, and its feed is
+        # an ordinary feed.
+        report = self.report_of("T1 M6\nG92 X19.5 F2.0\nG1 X30. F400.\n")
+        self.assertEqual(report["rows"][0]["feed"], "400.")
+        self.assertEqual(len(report["findings"]), 1)
+        self.assertIn("may be a thread lead", report["findings"][0]["message"])
 
 
 class TestRunEnvironment(unittest.TestCase):

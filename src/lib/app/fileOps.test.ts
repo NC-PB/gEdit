@@ -448,6 +448,55 @@ describe('open', () => {
     expect(h.docs.all().map((d) => d.title)).toEqual(['b.h']);
   });
 
+  // G8 M5: a select-all in a job directory with a scanned setup sheet and a binary tool
+  // file in it popped one blocking NSAlert per refused file, to be clicked through before
+  // the good programs were usable — and then suppressed the "Opened N files" summary.
+  describe('a multi-file Open with refusals in it', () => {
+    async function openThree(): Promise<void> {
+      await h.files.open([
+        h.put('/nc/bad-a.bin', 'nc/encoding/nul-heavy.bin'),
+        h.put('/nc/bad-b.bin', 'nc/encoding/nul-heavy.bin'),
+        h.put('/nc/good.nc', 'nc/fanuc/f01-mill-3tools.nc'),
+      ]);
+    }
+
+    it('shows one dialog for the whole Open, not one per file', async () => {
+      await openThree();
+      const errors = h.dialogs.calls.filter((c) => c.kind === 'error');
+      expect(errors).toHaveLength(1);
+      expect(errors[0].args.summary).toBe(t('files.openFailedMany', { count: 2 }));
+    });
+
+    it('names every refused file and why, in that one dialog', async () => {
+      await openThree();
+      const detail = String(h.dialogs.calls.find((c) => c.kind === 'error')?.args.detail);
+      expect(detail).toContain('bad-a.bin');
+      expect(detail).toContain('bad-b.bin');
+      expect(detail).toContain('NUL bytes');
+      expect(detail.split('\n')).toHaveLength(2);
+    });
+
+    it('still opens the programs that are programs', async () => {
+      await openThree();
+      expect(h.docs.all().map((d) => d.title)).toEqual(['good.nc']);
+    });
+
+    it('still summarises what was opened, and marks the message as a failure', async () => {
+      await openThree();
+      const last = h.status.messages.at(-1);
+      expect(last?.text).toContain(t('files.opened', { name: 'good.nc' }));
+      expect(last?.text).toContain(t('files.openFailedMany', { count: 2 }));
+      expect(last?.error).toBe(true);
+    });
+
+    it('keeps the blocking box for a single file, which is what the user asked for', async () => {
+      await h.files.open([h.put('/nc/only.bin', 'nc/encoding/nul-heavy.bin')]);
+      const errors = h.dialogs.calls.filter((c) => c.kind === 'error');
+      expect(errors).toHaveLength(1);
+      expect(errors[0].args.summary).toBe(t('files.openFailed', { name: 'only.bin' }));
+    });
+  });
+
   it('asks for the files when no path is given, with multi-select', async () => {
     h.put('/nc/a.nc', 'nc/fanuc/f01-mill-3tools.nc');
     h.dialogs.answers.openFiles.push(['/nc/a.nc']);
@@ -568,7 +617,18 @@ describe('save', () => {
     // The document has to stop claiming a leader, or saving it back as UTF-8 later would
     // write one the file no longer has.
     expect(h.docs.get(id)?.nul).toEqual({ leader: 0, trailer: 0, stripped: 0 });
-    expect(h.status.last()).toBe(`${t('files.saved', { name: 'tape.nc' })} · ${t('files.tapeDropped')}`);
+    // G8 M5: a lost tape leader is a loss, not a footnote. It carries the warning
+    // styling and an error's 8 s, because the 4 s a plain "Saved …" lives for is not
+    // enough to notice that the punched-tape framing has gone.
+    const last = h.status.messages.at(-1);
+    expect(last?.text).toBe(`${t('files.saved', { name: 'tape.nc' })} · ${t('files.tapeDropped')}`);
+    expect(last?.error).toBe(true);
+  });
+
+  it('shows an ordinary save without the warning styling', async () => {
+    const id = await openDirty('/nc/plain.nc', 'nc/encoding/utf8-lf.nc');
+    await h.files.save(id);
+    expect(h.status.messages.at(-1)?.error).toBe(false);
   });
 
   it('keeps the CR line endings of an edited tape file', async () => {
@@ -843,17 +903,75 @@ describe('saveAll', () => {
     expect(h.status.last()).toBe(t('files.savedAll', { count: 3 }));
   });
 
-  it('aborts the rest when one Save As is cancelled', async () => {
-    const b = h.files.newUntitled({ text: '' });
-    h.editor.type(b, 'G0 X1\n');
+  // G8 M5: Save All used to stop at the first cancelled Save As and then report
+  // "Saved <the one file>", with nothing anywhere saying the rest had been skipped —
+  // so a real program with a shift's edits in it was silently left unwritten.
+  it('carries on past a cancelled Save As, and names what it did not save', async () => {
+    const a = await (async () => {
+      const path = h.put('/nc/a.nc', 'nc/encoding/utf8-lf.nc');
+      const [id] = await h.files.open([path]);
+      h.editor.type(id, 'G0 X9\n');
+      return id;
+    })();
+    const scratch = h.files.newUntitled({ text: '' });
+    h.editor.type(scratch, 'G0 X1\n');
     const c = h.files.newUntitled({ text: '' });
     h.editor.type(c, 'G0 X2\n');
-    h.dialogs.answers.saveFile.push(null);
+    // The scratch note's Save As is cancelled; the third document still has a name to
+    // be picked for it.
+    h.dialogs.answers.saveFile.push(null, '/nc/c.nc');
+
+    expect(await h.files.saveAll()).toBe(false);
+
+    expect(h.fs.writes).toEqual(['/nc/a.nc', '/nc/c.nc']);
+    expect(h.docs.get(a)?.dirty).toBe(false);
+    expect(h.docs.get(c)?.dirty).toBe(false);
+    expect(h.docs.get(scratch)?.dirty).toBe(true);
+    // Not a success, and it names the document it left behind.
+    const last = h.status.messages.at(-1);
+    expect(last?.error).toBe(true);
+    expect(last?.text).toBe(t('files.savedAllPartial', { saved: 2, list: 'Untitled-1' }));
+  });
+
+  it('stops at a write that failed, because the next one will fail too', async () => {
+    const a = await (async () => {
+      const path = h.put('/nc/a.nc', 'nc/encoding/utf8-lf.nc');
+      const [id] = await h.files.open([path]);
+      h.editor.type(id, 'G0 X9\n');
+      return id;
+    })();
+    const b = await (async () => {
+      const path = h.put('/nc/b.nc', 'nc/encoding/utf8-lf.nc');
+      const [id] = await h.files.open([path]);
+      h.editor.type(id, 'G0 X8\n');
+      return id;
+    })();
+    h.fs.writeFailures.add('/nc/a.nc');
+    h.dialogs.answers.confirm.push(false); // "save it somewhere else?" — no
 
     expect(await h.files.saveAll()).toBe(false);
 
     expect(h.fs.writes).toEqual([]);
+    expect(h.docs.get(a)?.dirty).toBe(true);
+    expect(h.docs.get(b)?.dirty).toBe(true);
+    expect(h.status.messages.at(-1)?.error).toBe(true);
+  });
+
+  // The close and quit paths are the other half of the rule: they throw the document
+  // away next, so there a cancelled Save As has to abort everything.
+  it('aborts the whole Close All when a Save As is cancelled', async () => {
+    const b = h.files.newUntitled({ text: '' });
+    h.editor.type(b, 'G0 X1\n');
+    const c = h.files.newUntitled({ text: '' });
+    h.editor.type(c, 'G0 X2\n');
+    h.dialogs.answers.ask3.push('yes'); // Save All
+    h.dialogs.answers.saveFile.push(null);
+
+    expect(await h.files.closeAll()).toBe(false);
+
+    expect(h.fs.writes).toEqual([]);
     expect(h.dialogs.calls.filter((call) => call.kind === 'saveFile')).toHaveLength(1);
+    expect(h.docs.get(b)?.dirty).toBe(true);
     expect(h.docs.get(c)?.dirty).toBe(true);
   });
 

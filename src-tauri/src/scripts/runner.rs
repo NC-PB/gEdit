@@ -740,8 +740,15 @@ pub fn script_cancel(runs: State<'_, RunRegistry>, run_id: String) -> bool {
 }
 
 /// Whether there is a usable Python, and which one.
+///
+/// This is the one place the user asks gEdit to *look*, so it forgets the cached
+/// interpreter first: an install made since the app started, or a changed setting, has to
+/// win here or it would not win until a restart. Every other caller — `script_run` above —
+/// takes the cached answer, which is what keeps the login-shell lookup to once per app
+/// (`crate::python`).
 #[tauri::command(async)]
 pub fn python_check(app: AppHandle) -> PythonStatus {
+    crate::python::forget();
     probe(&interpreter(&ScriptSettings::load(&app)))
 }
 

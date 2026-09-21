@@ -1,0 +1,20 @@
+{
+  "message": "Scaled 1 of 3 feed rates to 80 %; 2 left in another feed mode.",
+  "findings": [
+    {
+      "line": 7,
+      "severity": "info",
+      "message": "This run saw only the selection, from line 7, but the 6 lines above it were read for the modal state: a feed per revolution (G95) is in force here."
+    },
+    {
+      "line": 7,
+      "severity": "info",
+      "message": "F0.15 is a feed per revolution (G95), so it is not scaled."
+    },
+    {
+      "line": 8,
+      "severity": "info",
+      "message": "F0.2 is a feed per revolution (G95), so it is not scaled."
+    }
+  ]
+}

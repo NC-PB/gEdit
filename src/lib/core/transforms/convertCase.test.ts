@@ -85,7 +85,8 @@ describe('convertCase options', () => {
   it('asks before writing lower case for a control that only reads upper case', () => {
     // G8 M4: `Convert case -> lower case` on a Fanuc program produces `o1002`, `n10 g0`
     // and `m30`, which the control refuses on load. `fanuc-gcode` says as much in
-    // `editing.forceUppercase`, and the editor already upper-cases what the user types.
+    // `editing.forceUppercase` — which P1 reads only here; nothing upper-cases what the
+    // user types (I5).
     expect(fanuc.profile.editing).toEqual({ forceUppercase: true, preventLineJoin: true, tabWidth: 4 });
     expect(convertCase.preflight?.([], context(fanuc, { case: 'lower' }))).toEqual({
       key: 'ncCleanup.convertCase.lowerOnUppercaseControl',

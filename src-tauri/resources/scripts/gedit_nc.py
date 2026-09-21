@@ -56,12 +56,30 @@ units and Python counts code points, so ``Token.start`` / ``Token.end`` differ f
 that holds a character outside the basic plane (an emoji in a comment). Within Python the
 offsets are always consistent with the string they came from.
 
+Selections and modal state
+--------------------------
+NC is a modal language: ``G95``, a ``G84`` tapping cycle or ``G96`` stays in force until
+something cancels it. A run over a **selection** therefore starts in the middle of a
+sentence, and a script that begins at the top-of-program state reads the fragment wrong —
+it scales a thread pitch it cannot recognise, or a per-revolution feed as a per-minute one
+(G8 M4 finding 6).
+
+The context carries the cure: ``input.precedingLines``, the document lines above
+``input.startLine``. :func:`preceding_lines` reads that field **and decides whether it may
+be trusted**, and :func:`prime_tracker` walks it into a :class:`FeedModeTracker` and hands
+back the :class:`LineState` the first selected line begins in. Two lines at the top of a
+``run()`` and the selection is read in the state it is really written in.
+
+The field is optional, and absent is a correct, supported context: a script must keep the
+behaviour it had without it (say what it could not see) rather than assume the state.
+
 Beyond section 7.10
 -------------------
-:func:`mask_comments`, :func:`block_number_of`, :func:`normalize_code` and
-:func:`number_format_of` are not in the section 7.10 list. They are ports of code the
-TypeScript side has as well, and a bundled script needs them; they are public, documented
-and covered by the tests, but the contract that may not move is the section 7.10 one.
+:func:`mask_comments`, :func:`block_number_of`, :func:`normalize_code`,
+:func:`number_format_of`, :func:`preceding_lines` and :func:`prime_tracker` are not in the
+section 7.10 list. The first four are ports of code the TypeScript side has as well; the
+last two are the M5 carry-over above. They are public, documented and covered by the
+tests, but the contract that may not move is the section 7.10 one.
 """
 
 from __future__ import annotations
@@ -84,6 +102,8 @@ __all__ = [
     "read_input",
     "to_py_regex",
     "compile_profile",
+    "preceding_lines",
+    "prime_tracker",
     "tokenize_line",
     "parse_number",
     "format_number",
@@ -325,6 +345,43 @@ def read_input() -> List[str]:
     stream = getattr(sys.stdin, "buffer", None)
     raw = stream.read() if stream is not None else sys.stdin.read().encode("utf-8")
     return raw.decode("utf-8").split("\n")
+
+
+def preceding_lines(context: Dict[str, Any]) -> List[str]:
+    """The document lines **above** ``input.startLine``, or ``[]`` when they cannot be used.
+
+    ``ScriptContextV2.input.precedingLines`` (plan section 7.5) is optional, and an empty
+    answer here means "run as if it were not there" — which is exactly the behaviour every
+    bundled script had before M5. Feed the answer to :func:`prime_tracker`.
+
+    It is used only when **all** of these hold, and ignored in one piece otherwise:
+
+    * ``input.scope`` is ``"selection"``. A whole-document run already starts at the top of
+      the program, and a ``none`` run has no lines to be above.
+    * the field is a list and every element is a string.
+    * ``len(precedingLines) == input.startLine - 1``, so the lines really are *all* the
+      lines above the first editable one.
+
+    That last rule is the one that matters. The contract tells the runner to **omit** the
+    field rather than truncate it when the text above the selection is too large to send,
+    because a tracker primed with half the program is a confident wrong answer, while an
+    absent field keeps the loud "this run could not see above the selection" warning. The
+    length check enforces that rule on this side as well, so a runner that truncates anyway
+    — or a hand-written context, or a v1-shaped one — degrades to the honest warning
+    instead of to a silent mis-scale.
+    """
+    scope = context.get("input")
+    if not isinstance(scope, dict) or scope.get("scope") != "selection":
+        return []
+    lines = scope.get("precedingLines")
+    if not isinstance(lines, list) or not lines:
+        return []
+    if not all(isinstance(line, str) for line in lines):
+        return []
+    start = scope.get("startLine")
+    if not isinstance(start, int) or isinstance(start, bool) or len(lines) != start - 1:
+        return []
+    return list(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -1451,7 +1508,10 @@ class FeedModeTracker:
     """Which feed and speed modes are active, block by block.
 
     Feed a line's tokens to :meth:`update` in program order and read the attributes
-    afterwards. What it tracks:
+    afterwards. A run over a **selection** does not start at the top of the program:
+    prime the tracker with :func:`prime_tracker` before the first :meth:`update`, or the
+    state above the selection is read as the state at the top of a program. What it
+    tracks:
 
     * ``feed_mode`` — ``'G94'`` (units per minute, the default), ``'G95'`` (per
       revolution), ``'G93'`` (inverse time), or Klartext's ``'FU'`` / ``'FZ'``. A plain
@@ -1602,6 +1662,46 @@ def _next_code_token(tokens: Sequence[Token], start: int, count: int) -> Optiona
         if tokens[i].kind != "whitespace":
             return tokens[i]
     return None
+
+
+def prime_tracker(
+    tracker: FeedModeTracker,
+    lines: Sequence[str],
+    cp: CompiledProfile,
+) -> Optional[LineState]:
+    """Runs ``lines`` through ``tracker`` and answers the state the next line begins in.
+
+    ``lines`` are the lines above a selection — :func:`preceding_lines` of the context.
+    Afterwards ``tracker`` holds the feed mode, the constant-surface-speed flag, the active
+    cycle and the thread-pitch flags that are in force at the first selected block, exactly
+    as a run over the whole document would have had them there.
+
+    The answer is the :class:`LineState` to pass to the first :func:`tokenize_line` of the
+    selection, so a Klartext ``~`` continuation that begins above the selection is still a
+    continuation inside it. ``None`` when there was nothing to walk, which
+    :func:`tokenize_line` reads as "the top of a program" — the same thing.
+
+    It produces no output and no findings: what a script *says* about the state it
+    inherited is the script's own decision, because it is the script that knows whether the
+    state changes what it does.
+
+    Nothing here resets the tracker first. Prime a tracker once, before its first
+    :meth:`FeedModeTracker.update`; priming one that has already walked a program would
+    layer two programs on top of each other.
+    """
+    state: Optional[LineState] = None
+    for line in lines:
+        tokens, state = tokenize_line(line, cp, state)
+        tracker.update(tokens)
+    # A non-modal ambiguity (Fanuc `G92`) belongs to the block that wrote it. If the last
+    # line above the selection was such a block, the flag it raised must not still be
+    # standing when the caller looks at what it inherited — the selection's first line is
+    # a different block. `update()` clears it for every block it walks; the last primed
+    # block has no successor here, so it is cleared on the way out.
+    tracker._block_ambiguous = None
+    tracker.ambiguous_code = tracker._modal_ambiguous
+    tracker.pitch_feed_ambiguous = tracker.ambiguous_code is not None
+    return state
 
 
 # ---------------------------------------------------------------------------

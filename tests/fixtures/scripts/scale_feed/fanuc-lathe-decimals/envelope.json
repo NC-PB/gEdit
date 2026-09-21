@@ -4,27 +4,27 @@
     {
       "line": 5,
       "severity": "info",
-      "message": "F0.1 stays as it is: 90 % of 0.1 is 0.09, which is written 0.1 with the decimals this value has. Ask for more decimal places to scale it."
+      "message": "F0.1 stays as it is: 90 % of 0.1 is 0.09, which written with 1 decimal is 0.1. Ask for more decimal places to scale it."
     },
     {
       "line": 7,
       "severity": "info",
-      "message": "F0.2 stays as it is: 90 % of 0.2 is 0.18, which is written 0.2 with the decimals this value has. Ask for more decimal places to scale it."
+      "message": "F0.2 stays as it is: 90 % of 0.2 is 0.18, which written with 1 decimal is 0.2. Ask for more decimal places to scale it."
     },
     {
       "line": 8,
       "severity": "info",
-      "message": "F.5 stays as it is: 90 % of .5 is 0.45, which is written .5 with the decimals this value has. Ask for more decimal places to scale it."
+      "message": "F.5 stays as it is: 90 % of .5 is 0.45, which written with 1 decimal is .5. Ask for more decimal places to scale it."
     },
     {
       "line": 9,
       "severity": "info",
-      "message": "F1 stays as it is: 90 % of 1 is 0.9, which is written 1 with the decimals this value has. Ask for more decimal places to scale it."
+      "message": "F1 stays as it is: 90 % of 1 is 0.9, which written with no decimals is 1. Ask for more decimal places to scale it."
     },
     {
       "line": 12,
       "severity": "info",
-      "message": "F0.05 stays as it is: 90 % of 0.05 is 0.045, which is written 0.05 with the decimals this value has. Ask for more decimal places to scale it."
+      "message": "F0.05 stays as it is: 90 % of 0.05 is 0.045, which written with 2 decimals is 0.05. Ask for more decimal places to scale it."
     }
   ]
 }

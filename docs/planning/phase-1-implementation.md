@@ -2036,7 +2036,6 @@ export function installTestHook(h: GeditTestHook): void;
 | `ribbon`, `ribbon-tab` | ribbon, tab | `data-tab`, `aria-selected` | M0 |
 | `cmd-button` | every command button | `data-command`, `disabled` | M0 (legacy buttons get fixed ids: `file.open`, `file.save`, `file.saveAs`, `insert.block:<id>`) |
 | `profile-select` | legacy `<select>` | value = profile id | M0 only |
-| `scripts-folder`, `script-select`, `script-run` | v1 script UI | | M0–M4 |
 | `editor-host` | editor container | `data-doc-id` | M0 |
 | `program-map`, `program-map-item` | map and row | `data-line`, `data-kind`, `data-active` (M3) | M0 |
 | `output-panel`, `output-stdout`, `output-stderr`, `output-json`, `output-cancel` | output | `data-running` | M0 (cancel M5) |
@@ -2083,6 +2082,15 @@ def scale_decimal(raw: str, percent: str) -> str   # exact Decimal arithmetic, r
 class FeedModeTracker:                  # update(tokens) per line; .feed_mode ('G94'|'G95'|'G93'|'FZ'|'FU'), .css, .active_cycle, .pitch_feed
 def report(title: str, columns: list, rows: list, message: str | None = None, findings: list | None = None) -> None
 def envelope(text: str, message: str | None = None, findings: list | None = None) -> None
+
+# Added in M5 (WP5.4) for `input.precedingLines`; additive, like `mask_comments`:
+def preceding_lines(context: dict) -> list[str]
+    # the lines above a selection, or [] unless scope == 'selection' and
+    # len(precedingLines) == startLine - 1 — a truncated or hand-written context
+    # degrades to the M4 warning rather than to a wrongly primed tracker
+def prime_tracker(tracker: FeedModeTracker, lines, cp) -> "LineState | None"
+    # feeds those lines through the tracker and returns the state the first
+    # selected line begins in
 ```
 
 ### 7.11 Command ids and default shortcuts
@@ -2105,6 +2113,52 @@ def envelope(text: str, message: str | None = None, findings: list | None = None
 The other command ids are listed in each WP.
 
 The dispatcher ignores `AltGraph`, because Ctrl+Alt equals AltGr on some Windows layouts (D21).
+
+### 7.12 Where Phase 1 deviated from these contracts
+
+Recorded at M5, from the milestone hand-off notes. Every one of them is **additive or a
+narrowing of one platform's behaviour**; no §7 signature was replaced, and nothing here
+changes a type another milestone was written against. WP-local decisions that are not §7
+contracts — helper exports, injection interfaces such as `CompareDeps`, where a component
+file lives — stay in the hand-off notes and are not repeated here.
+
+| # | Contract | What was done instead | Why | M |
+|---|---|---|---|---|
+| 1 | §7.2 `Modals.prompt` | `validate?: (v: string) => Msg \| null`, not `=> string \| null` | §7.9 pins `data-error` to the **message key** everywhere else (`FormRenderer` does the same). With display text here, one runtime check could not serve both. No caller existed yet | M2 |
+| 2 | §7.11 Close Window | The macOS menu item carries **no accelerator**; `Mod+Shift+W` is bound in the webview (`contrib/files.ts`) instead | muda lower-cases the key equivalent while AppKit takes Shift from its case, so an item declared `CmdOrCtrl+Shift+W` answers to **Cmd+W** — the key the webview needs for closing a tab. Measured; see the note in `src-tauri/src/menu.rs` (D-WP1.4-1) | M1 |
+| 3 | §7.5 `FieldType` | Not extended for a list-valued setting. `scripts.folders` keeps `type: 'folder'` in `SETTING_FIELDS`; the settings dialog renders it with its own add/remove control and keeps the key out of `validateFields` | A new field type for one settings row would have been a §7.5 change with no other user. `editor.rulers` has the same shape and is `dialog: false` | M2 |
+| 4 | §7.1 registries | A duplicate **panel** id or **status-item** id throws, as a duplicate command id does; `loadContributions` logs and skips the contribution that threw | §7.1 specified only the command case, but all three ids address something (`layout.show(panelId)`, `data-item`), so a duplicate is a defect either way (D5) | M1 |
+| 5 | §7.3 `ScriptService` | `checkPython(): Promise<PythonStatus \| null>` added | P5's "`bootstrap.ts`: run `pythonCheck()` after the first render" needs a method to call, and `rescan()` is the script list, not the interpreter. The alternative was `bootstrap.ts` reaching past the service into `platform/commands.ts`. Every other member is unchanged | M5 |
+| 6 | §7.5 `ScriptContextInput` | Optional `precedingLines?: string[]` added | The pinned slot for priming a script's modal state above a selection (G8 M4 finding 6). Optional on purpose: **absent is exactly the M4 behaviour**, so it costs nothing until it is filled | M5 |
+| 7 | §7.5 applied text | Every text a script hands back is normalised to LF before anything else — before the trailing-LF rule, and for an envelope's `text` too | On Windows `print()` writes through a text stream that turns `\n` into `\r\n`, and `PYTHONIOENCODING=utf-8` does not switch that off. A document is LF in memory and gets its own ending back on save (AD-7), so an un-normalised CR would reach the model as a control character inside a block: the same script would be right on macOS and corrupt every line on Windows | M5 |
+| 8 | §7.5 `decideApply` | A header with `input = "none"` **and** `output = "replace"` is refused before the parameter form | Its range is `0..0`, which `applyLines` clamps to line 1, so the script would silently overwrite the first block. Rust validates the header but not this pair (`scripts/meta.rs`); no bundled script declares it. If Rust ever rejects it as a `headerError`, the TS guard is one `if` to delete | M5 |
+| 9 | §7.10 `gedit_nc` | `preceding_lines()` and `prime_tracker()` added (listed in §7.10) | What makes `precedingLines` usable from a script, and the single place that decides the field may be trusted (`len == startLine - 1`, or `[]`). Additive, like `mask_comments` | M5 |
+| 10 | §7.2 `ReportData` | Optional `dropped?: number` added | The count behind the boundary cap of row 12. A report that lost entries has to be able to say so; the app's own transforms never set it, because their findings are bounded by the document | M5 (G8) |
+| 11 | §7.5 `ApplyDecision` | Optional `dropped?: number` on `replace` and `new-document` | How the cap's count reaches the caller, which is what builds the `ReportData`. `report` carries it inside its own `ReportData` already | M5 (G8) |
+| 12 | §7.5 `decideApply` | An envelope's `findings`, and a report's `rows` and `findings`, are capped (`MAX_FINDINGS` = 1000, `MAX_ROWS` = 5000) | This is where a script's output stops being trusted, and the Results panel renders one `<button>` per entry with no virtualisation. A user script returning a finding per line of a 300k-line program — bounded only by the 64 MiB stdout cap — stalled the UI thread. The two bundled `Findings` classes cap at 200 and report what they dropped; this is the same promise made where copying a script to My Scripts cannot remove it | M5 (G8) |
+| 13 | §7.5 `decideApply` order | The `stdoutTruncated` check moved from step 7b to just after the mode is resolved, i.e. above the report and envelope parses | The pinned order exists so the reason names the **cause**. Parsing first meant a payload cut mid-JSON was reported as `scripts.errEnvelope` ("not a valid result") or `scripts.errReport`, when the cause was that the output had been cut off — a different problem with a different fix. Nothing was applied either way. `panel` still returns before it: raw output is what a panel run is, and the panel flags the cut itself. The order in `core/scripting/apply.ts`'s header and in `docs/user/scripts.md` now agree with the code | M5 (G8) |
+
+§7.6's M5 entry is a **removal, not a deviation**: `list_python_scripts` and
+`run_python_script` went with the rest of the v1 script surface at I5 (D14). No capability and no
+dependency changed anywhere in Phase 1 beyond the `core:window:allow-set-theme` that §3
+already names.
+
+Two things that read like contract deviations and are not:
+
+- **§7.7's `scripts.*` keys are ordinary settings.** Rust reads them straight from
+  `settings.json` so that there is one source of truth (AD-8) — that is about *who owns
+  the value*, not a boundary against the webview. The settings dialog writes them through
+  `settings_save` like every other key, and `script_new` hands back a writable, runnable
+  path by design (AD-13). The script-id grammar bounds *which file* runs, never what is in
+  it; the CSP is the primary barrier and the user guide's "only run scripts you trust" is
+  the security model. Comments that claimed more than this were corrected in M4.
+- **Profile fields of later phases are carried, not implemented.** `editing`, `onSave`,
+  `compare`, `highlight`, `colors` and `extends` survive a round trip through the app
+  untouched (§7.4). The one exception is `editing.forceUppercase`, which
+  `core/transforms/convertCase.ts` reads to decide whether converting to lower case needs a
+  confirmation — and that is all it does: P1 does **not** upper-case what the user types.
+  The confirmation's English claimed that it did; I5 corrected the string and the two
+  comments that repeated it (found in the WP5.3 documentation review).
 
 ---
 
@@ -2208,6 +2262,7 @@ All fixtures are synthetic, written for gEdit, and marked `-text`.
 20. Quick switcher in most-recently-used order: P1 uses tab order.
 21. Command palette while the editor is not focused: the palette button focuses the editor first.
 22. The harness in CI: macOS native UI only, so it stays out of CI.
+23. The replace count after a replace-all: P2, with the NC-aware search options on the same row of `editor-core.md`. P1 wraps Monaco's find widget (`contrib/editing.ts`) and Monaco exposes no public event for a completed replace-all — the action is not a standalone editor action, and counting model changes cannot tell a replacement from typing. Reported at G8 M5 as the one sub-item of "Monaco features exposed" that was claimed but not delivered; the row now says so.
 
 ---
 
@@ -2245,3 +2300,11 @@ All fixtures are synthetic, written for gEdit, and marked `-text`.
 - On Windows with an AltGr layout (for example Swiss German), Mod+Alt shortcuts do not steal AltGr characters.
 - F-key shortcuts on a Mac laptop keyboard (Fn behavior).
 - Review the code database content (M3) and the exit-criteria goldens (M5).
+- **Retake the README screenshots.** The three that were there showed the pre-Phase-1 app —
+  a three-tab ribbon, no tab bar, the M0-only profile `<select>`, and the v1 script runner
+  that I5 deleted — so they were removed rather than shipped as a picture of a UI that no
+  longer exists (G8 M5). New ones want the merged build: five ribbon tabs, the tab bar, the
+  Tools script group, the Results and Output panels and the full status bar. Use one of
+  `tests/fixtures/exit/*` as the program on screen, so the code in the picture is the
+  project's own synthetic sample and not something that looks like a customer's program
+  (`tests/fixtures/README.md`). They belong in `docs/screenshots/`, which went with them.

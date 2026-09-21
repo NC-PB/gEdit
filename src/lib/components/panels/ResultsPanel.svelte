@@ -361,6 +361,14 @@
         </ul>
       </section>
     {/if}
+
+    {#if (report.dropped ?? 0) > 0}
+      <!-- A script may return a finding per line of a 300k-line program; `decideApply`
+           caps what reaches this panel, and this is where the user is told it did. -->
+      <p class="dropped" data-testid="results-dropped">
+        {t('results.dropped', { count: report.dropped ?? 0 })}
+      </p>
+    {/if}
   {/if}
 </div>
 
@@ -376,6 +384,13 @@
     margin: 6px 2px;
     color: var(--text-muted);
     font-size: 12px;
+    font-style: italic;
+  }
+
+  .dropped {
+    margin: 2px 2px 0;
+    color: var(--text-muted);
+    font-size: 11px;
     font-style: italic;
   }
 

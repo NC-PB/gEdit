@@ -40,6 +40,21 @@ wrong:
 * a value the written precision rounds back to itself, or further than asked, is named
   line by line instead of only counted (`fanuc-lathe-decimals`)
 * a run over a selection says which modal state it could not see (`fanuc-selection`)
+
+And the three WP5.4 added, which are the same modal-state hazard **fixed** rather than
+warned about: a selection whose case folder carries a `preceding.nc` is primed from the
+lines above it (`input.precedingLines`, plan section 7.5), so the run reads the fragment
+in the state it is really written in.
+
+* a selection that starts inside a `G84` tapping cycle refuses its pitches
+  (`fanuc-selection-primed`)
+* a selection under a `G95` inherits the feed mode (`fanuc-selection-per-revolution`)
+* a Klartext selection that starts inside a cycle's parameter block inherits the cycle
+  **and** the `~` continuation (`klartext-selection-primed`)
+
+Each of the three is checked twice: once against its golden, and once with
+`precedingLines` taken back out, which is what the run used to do and what it still does
+when the context does not carry the field.
 """
 
 from __future__ import annotations
@@ -68,12 +83,15 @@ REQUIRED_CASES = [
     "fanuc-number-forms-two-decimals",
     "fanuc-pitch-feed",
     "fanuc-selection",
+    "fanuc-selection-per-revolution",
+    "fanuc-selection-primed",
     "fanuc-unchanged",
     "fanuc-value-filter",
     "fanuc-variables",
     "fanuc-zero-feed-with-limit",
     "klartext-basic",
     "klartext-per-revolution",
+    "klartext-selection-primed",
     "klartext-tapping",
 ]
 
@@ -251,6 +269,46 @@ class TestRules(unittest.TestCase):
             self.assertIn("thread lead", finding["message"])
         self.assertIn("another G-code system", result.json()["message"])
 
+    def test_the_ambiguous_code_is_recognised_however_the_block_is_written(self):
+        """The refusal has to survive the ways a post actually writes a code.
+
+        It is a code-database lookup through `normalize_code`, not a string match, so
+        leading zeros, lower case and a packed block all reach the same entry. A refusal
+        that only fired on `G76 ` would be a refusal a real program walks straight past.
+        """
+        profile = helpers.load_profile("fanuc-gcode")
+        for program, code in (
+            ("G076 X18.16 Z-20. F2.0\n", "G76"),
+            ("g76 X18.16 Z-20. F2.0\n", "G76"),
+            ("N10G76X18.16Z-20.F2.0\n", "G76"),
+            ("N10 G92X19.5F2.0\n", "G92"),
+        ):
+            with self.subTest(program=program.strip()):
+                context = helpers.make_context(
+                    params={"percent": 80}, profile=profile, codes=helpers.load_codes(profile)
+                )
+                result = helpers.run_script(SCRIPT, stdin=program, context=context)
+                self.assertTrue(result.ok, result.stderr)
+                payload = result.json()
+                self.assertEqual(payload["text"], program, "the block was rewritten")
+                self.assertEqual(len(payload["findings"]), 1)
+                self.assertIn(code, payload["findings"][0]["message"])
+                self.assertIn("thread lead", payload["findings"][0]["message"])
+
+    def test_the_refusal_says_the_value_the_code_and_what_to_do(self):
+        profile = helpers.load_profile("fanuc-gcode")
+        context = helpers.make_context(
+            params={"percent": 80}, profile=profile, codes=helpers.load_codes(profile)
+        )
+        result = helpers.run_script(SCRIPT, stdin="G76 X18.16 Z-20. F2.0\n", context=context)
+        self.assertTrue(result.ok, result.stderr)
+        self.assertEqual(
+            result.json()["findings"][0]["message"],
+            "F2.0 is not scaled: G76 is a threading cycle in another G-code system of "
+            "this dialect, where this F is the thread lead and not a feed rate. Check "
+            "the block and scale it by hand if it really is a feed.",
+        )
+
     def test_the_ambiguity_of_a_non_modal_code_ends_with_its_own_block(self):
         # G92 is non-modal, so the block after it is an ordinary move again. G76 is a
         # modal cycle and stays in force until G80 cancels it.
@@ -422,6 +480,171 @@ class TestRules(unittest.TestCase):
         listed = [f for f in tapping["findings"] if f["message"].startswith("Q")]
         self.assertEqual([f["message"].split(" ")[0] for f in listed], ["Q206"])
         self.assertIn("   Q239=+1.25 ;THREAD PITCH ~", tapping["text"].split("\n"))
+
+
+class TestSelectionPriming(unittest.TestCase):
+    """The M4 carry-over, fixed: a selection run reads the state above the selection.
+
+    `ScriptContextInput.precedingLines` (plan section 7.5) carries the document lines above
+    `startLine`. `gedit_nc.prime_tracker` walks them into the `FeedModeTracker` before the
+    first editable block, so a `G95` or a `G84` that starts higher up is in force inside
+    the selection exactly as it would be in a whole-document run.
+
+    Every case here is checked **twice**: once as it ships, and once with the field taken
+    back out. The second half is what makes these cases evidence — without it a golden
+    proves only that the script is self-consistent, not that the priming does anything.
+    """
+
+    def case(self, name):
+        return next(case for case in helpers.script_cases("scale_feed") if case.name == name)
+
+    def primed(self, name):
+        case = self.case(name)
+        result = run_case(case)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], case.expected_text())
+        return payload
+
+    def unprimed(self, name):
+        """The same run with `precedingLines` taken back out: the M4 behaviour."""
+        case = self.case(name)
+        context = case.context()
+        self.assertIn("precedingLines", context["input"], "this case is not a primed one")
+        context["input"] = {
+            key: value for key, value in context["input"].items() if key != "precedingLines"
+        }
+        result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context)
+        self.assertTrue(result.ok, result.stderr)
+        return result.json()
+
+    def test_a_selection_inside_a_tapping_cycle_refuses_the_pitches_it_inherited(self):
+        payload = self.primed("fanuc-selection-primed")
+        lines = payload["text"].split("\n")
+        # The G84 stands on line 7, above the selection. Its repeat blocks carry the pitch.
+        self.assertIn("X40. F625.", lines)
+        self.assertIn("X60. F625.", lines)
+        # G80 cancels the cycle inside the selection, so the feed after it is scaled.
+        self.assertIn("G1 X80. F320.", lines)
+        pitches = [f for f in payload["findings"] if "thread pitch (G84)" in f["message"]]
+        self.assertEqual([f["line"] for f in pitches], [8, 9])
+
+    def test_without_the_lines_above_it_the_same_selection_scales_those_pitches(self):
+        payload = self.unprimed("fanuc-selection-primed")
+        lines = payload["text"].split("\n")
+        # 80 % of a 1.25 mm pitch tapped at 500 rpm: the thread is scrapped in silence
+        # apart from the warning. This is the defect the priming removes.
+        self.assertIn("X40. F500.", lines)
+        self.assertIn("X60. F500.", lines)
+        self.assertIn("only the selection", payload["findings"][0]["message"])
+        self.assertEqual(payload["findings"][0]["severity"], "warning")
+
+    def test_a_selection_under_a_feed_mode_set_above_it_inherits_the_mode(self):
+        payload = self.primed("fanuc-selection-per-revolution")
+        lines = payload["text"].split("\n")
+        self.assertIn("G1 X20. F0.15", lines)
+        self.assertIn("X40. F0.2", lines)
+        self.assertIn("G1 X60. F200.", lines)  # after the G94 inside the selection
+        self.assertIn("2 left in another feed mode", payload["message"])
+
+    def test_without_the_lines_above_it_the_same_selection_scales_the_per_revolution_feeds(self):
+        payload = self.unprimed("fanuc-selection-per-revolution")
+        lines = payload["text"].split("\n")
+        # Read as feed per minute: 80 % of 0.15 mm/rev is written straight into the file.
+        self.assertIn("G1 X20. F0.12", lines)
+        # And 0.2 is scaled too — one written decimal rounds 0.16 back to 0.2, which the
+        # run reports as a value it could not move rather than as a value it left alone.
+        self.assertIn("X40. F0.2", lines)
+        self.assertTrue(any("stays as it is" in f["message"] for f in payload["findings"]))
+        self.assertFalse(any("feed per revolution" in f["message"] for f in payload["findings"]))
+
+    def test_a_klartext_selection_inherits_the_cycle_and_the_continuation(self):
+        payload = self.primed("klartext-selection-primed")
+        # `CYCL DEF 200` stands above the selection and the selection begins in the middle
+        # of its `~` parameter block: the cycle feed is still recognised and left alone.
+        listed = [f for f in payload["findings"] if f["message"].startswith("Q206")]
+        self.assertEqual(len(listed), 1)
+        self.assertIn("CYCL DEF 200", listed[0]["message"])
+        self.assertIn("6 L Z-2 R0 F550", payload["text"].split("\n"))
+
+    def test_without_the_lines_above_it_the_klartext_cycle_feed_is_not_recognised(self):
+        payload = self.unprimed("klartext-selection-primed")
+        self.assertEqual([f for f in payload["findings"] if f["message"].startswith("Q206")], [])
+
+    def test_a_primed_run_names_what_it_inherited_instead_of_warning(self):
+        for name, needle in (
+            ("fanuc-selection-primed", "the thread-pitch cycle G84"),
+            ("fanuc-selection-per-revolution", "a feed per revolution (G95)"),
+            ("klartext-selection-primed", "the cycle CYCL DEF 200"),
+        ):
+            with self.subTest(case=name):
+                payload = self.primed(name)
+                first = payload["findings"][0]
+                self.assertEqual(first["severity"], "info")
+                self.assertEqual(first["line"], self.case(name).context()["input"]["startLine"])
+                self.assertIn("were read for the modal state", first["message"])
+                self.assertIn(needle, first["message"])
+                self.assertFalse(
+                    any("cannot be recognised here" in f["message"] for f in payload["findings"]),
+                    "a primed run has nothing to warn about",
+                )
+
+    def test_a_primed_run_that_inherited_nothing_says_nothing(self):
+        """Above the selection is an ordinary G94 program: there is nothing to report."""
+        profile = helpers.load_profile("fanuc-gcode")
+        context = helpers.make_context(
+            params={"percent": 90},
+            profile=profile,
+            codes=helpers.load_codes(profile),
+            input={
+                "scope": "selection",
+                "startLine": 4,
+                "endLine": 4,
+                "precedingLines": ["%", "O1000", "G21 G90 G94"],
+            },
+        )
+        result = helpers.run_script(SCRIPT, stdin="G1 X10. F200.", context=context)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], "G1 X10. F180.")
+        self.assertEqual(payload["findings"], [])
+
+    def test_preceding_lines_that_are_not_all_the_lines_above_are_refused(self):
+        """A truncated field is a wrong answer; an absent one is an honest warning.
+
+        The contract tells the runner to omit `precedingLines` rather than truncate them
+        when the text above the selection is too large to send. A tracker primed with the
+        tail of a program is confidently wrong — here the `G84` fell off the front, so the
+        pitch would be scaled while the run claimed to know the state. The length check in
+        `gedit_nc.preceding_lines` turns that back into the M4 warning.
+        """
+        case = self.case("fanuc-selection-primed")
+        context = case.context()
+        context["input"]["precedingLines"] = context["input"]["precedingLines"][-3:]
+        result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertIn("only the selection", payload["findings"][0]["message"])
+        self.assertEqual(payload["findings"][0]["severity"], "warning")
+        self.assertEqual(payload["text"], self.unprimed("fanuc-selection-primed")["text"])
+
+    def test_preceding_lines_are_ignored_when_the_run_is_not_a_selection(self):
+        """A document run already starts at the top of the program."""
+        profile = helpers.load_profile("fanuc-gcode")
+        context = helpers.make_context(
+            params={"percent": 80},
+            profile=profile,
+            codes=helpers.load_codes(profile),
+            input={
+                "scope": "document",
+                "startLine": 1,
+                "endLine": 1,
+                "precedingLines": ["G98 G84 X20. Z-12. R3. F625."],
+            },
+        )
+        result = helpers.run_script(SCRIPT, stdin="G1 X10. F200.", context=context)
+        self.assertTrue(result.ok, result.stderr)
+        self.assertEqual(result.json()["text"], "G1 X10. F160.")
 
 
 class TestCodeDatabase(unittest.TestCase):
@@ -609,7 +832,27 @@ class TestRunEnvironment(unittest.TestCase):
         payload = result.json()
         self.assertEqual(payload["text"], "G1 F5\nG1 F25\n")
         self.assertEqual(payload["findings"][0]["severity"], "warning")
-        self.assertIn("would become 0", payload["findings"][0]["message"])
+        # The finding names what was skipped and how the run got to zero, because the two
+        # ways out are different: more decimal places, or a different limit.
+        self.assertEqual(
+            payload["findings"][0]["message"],
+            "F5 is not scaled: 5 % of 5 is 0.25, which written with no decimals is 0, and "
+            "a feed of zero is a block that does not cut, not a slow one. Ask for more "
+            "decimal places to scale it.",
+        )
+
+    def test_a_value_a_zero_limit_would_zero_names_the_limit_and_not_the_rounding(self):
+        result = helpers.run_script(
+            SCRIPT, stdin="G1 F500.\n", context=self.context({"percent": 90, "maxFeed": 0})
+        )
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], "G1 F500.\n")
+        self.assertEqual(
+            payload["findings"][0]["message"],
+            "F500. is not scaled: the largest feed is 0, and a feed of zero is a block "
+            "that does not cut, not a slow one.",
+        )
 
     def test_the_findings_are_capped_and_the_message_says_how_many_were_left_out(self):
         lines = ["G95"] + ["G1 X%d. F0.2" % n for n in range(300)]
