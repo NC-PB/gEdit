@@ -2300,11 +2300,15 @@ All fixtures are synthetic, written for gEdit, and marked `-text`.
 - On Windows with an AltGr layout (for example Swiss German), Mod+Alt shortcuts do not steal AltGr characters.
 - F-key shortcuts on a Mac laptop keyboard (Fn behavior).
 - Review the code database content (M3) and the exit-criteria goldens (M5).
-- **Retake the README screenshots.** The three that were there showed the pre-Phase-1 app —
-  a three-tab ribbon, no tab bar, the M0-only profile `<select>`, and the v1 script runner
-  that I5 deleted — so they were removed rather than shipped as a picture of a UI that no
-  longer exists (G8 M5). New ones want the merged build: five ribbon tabs, the tab bar, the
-  Tools script group, the Results and Output panels and the full status bar. Use one of
-  `tests/fixtures/exit/*` as the program on screen, so the code in the picture is the
-  project's own synthetic sample and not something that looks like a customer's program
-  (`tests/fixtures/README.md`). They belong in `docs/screenshots/`, which went with them.
+- **The README screenshots — retaken; only look them over.** The three that were there
+  showed the pre-Phase-1 app — a three-tab ribbon, no tab bar, the M0-only profile
+  `<select>`, and the v1 script runner that I5 deleted — so they were removed rather than
+  shipped as a picture of a UI that no longer exists (G8 M5). The new ones are in
+  `docs/screenshots/`, taken on the merged build in the dark theme at 1520×900 points on a
+  2× display, with `tests/fixtures/exit/*` as the programs on screen so the code in the
+  picture is the project's own synthetic sample (`tests/fixtures/README.md`):
+  `main-window.png` (five ribbon tabs, the tab bar with a Fanuc and a Klartext program, the
+  program map with its tool entries, highlighted NC code and the full status bar),
+  `hover.png` (the code database's hover on `G81`) and `script-run.png` (the Tools tab's
+  script group, and the bundled tool list reported into the Results panel). What is left
+  for the owner is to look at them. The Output panel and the light theme are not pictured.

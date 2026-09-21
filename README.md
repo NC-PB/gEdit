@@ -13,6 +13,14 @@ Two dialects:
 - **Fanuc (ISO) mill** — `.nc`, `.tap`, `.cnc`, `.eia`, `.iso`, `.min`, `.ncc`, `.ptp`, `.txt`
 - **Heidenhain Klartext** — `.h`
 
+![The gEdit main window in the dark theme](docs/screenshots/main-window.png)
+
+*A Fanuc mill program and a Klartext program open in tabs. On the left the program map —
+the program name, the header comments, the three tool calls with the comment that describes
+each one, and the program end — with the entry the cursor is in marked. At the bottom the
+status bar: the file, the dialect, the encoding, the line ending and the cursor position.
+The programs are the project's own synthetic samples from `tests/fixtures/exit/`.*
+
 ## Features
 
 **Files that survive the round trip.** Several files open at once, in tabs, by dialog or by
@@ -31,6 +39,12 @@ comments, labels, stops and subprogram calls; go to line or block number (`Ctrl+
 and previous tool change (`F7`); bookmarks; folding and a sticky section heading; hover
 help and completion from a code database written for the subset of code CAM systems emit.
 
+![Hover help on a G code](docs/screenshots/hover.png)
+
+*The hover on `G81`: what the code does, that it is a modal cycle, and the words it needs.
+It comes from the code database, not from the program on screen, and a code the database
+does not describe says so rather than guessing.*
+
 **NC transformations.** Renumber blocks and remove block numbers, insert or remove the
 spaces between words, remove empty lines, remove comments (keeping the program name and
 your header), convert case. Each one runs on the selection or the whole program, is one
@@ -46,6 +60,15 @@ context. Its result can replace the input as one undo step, open in a new tab, o
 as a clickable table of findings. Parameters declared in the script become a form. Runs
 have a time limit and a Cancel button. Three scripts ship with the app — scale feed rates,
 scale spindle speeds, tool list — and they use the same contract as one you write yourself.
+
+![A script run reported in the Results panel](docs/screenshots/script-run.png)
+
+*The Tools tab, with the three bundled scripts in the Python Scripts group, just after the
+tool list ran over the program in the editor. Its table is in the Results panel — the
+tools in order of first use, with the comment that describes each one, the line it is first
+called on, the number of calls and the feed and speed range — and under it the one finding:
+the `F` of the tapping block is a thread pitch, so it is not counted as a feed rate. A row
+with a line number jumps there when you click it.*
 
 **The rest.** Ready-made code blocks per dialect (program header, drilling cycle) from the
 Insert tab; light, dark or system theme; a settings dialog; recent files; a command palette

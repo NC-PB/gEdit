@@ -21,6 +21,11 @@ the machine, not for the person who builds the editor — the build and design n
 
 ## The window
 
+![The gEdit window: ribbon, tabs, program map, editor and status bar](../screenshots/main-window.png)
+
+*The Home tab of the ribbon, two open programs in the tab bar, the Program Map on the left
+and the status bar along the bottom. The theme here is the dark one.*
+
 Across the top is the **ribbon**, with five tabs:
 
 | Tab | What it holds |
@@ -131,6 +136,10 @@ Hold the pointer over a word and gEdit explains it: what the code does, which gr
 belongs to, whether it stays active until something replaces it, and which addresses it
 needs. Where the feed carries a thread pitch rather than a feed rate, the hover says so —
 that is exactly the place where scaling a feed would cut a different thread.
+
+![The hover on a G code](../screenshots/hover.png)
+
+*`G81`: what it does, that it is a cycle and modal, and that it wants Z, R and F.*
 
 Typing offers completions from the same database: the codes of the active dialect with
 their descriptions. Both are switched in `Settings ▸ Assistance`, and completion can be
