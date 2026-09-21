@@ -84,6 +84,12 @@ scenario('m2-compare', { timeout: 300 }, async (h) => {
   await h.waitFor(() => !!view()?.querySelector('.monaco-diff-editor'), { timeout: 15000 })
   h.check('a diff editor is mounted', !!view()?.querySelector('.monaco-diff-editor'))
   h.check('the diff really has two sides', (view()?.querySelectorAll('.monaco-diff-editor .editor').length ?? 0) >= 2, view()?.querySelectorAll('.monaco-diff-editor .editor').length)
+  // The diff must fill the overlay, not collapse to its content height (it has none):
+  // a regression once left a strip of a few pixels with everything else blank.
+  const heightOf = (/** @type {Element | null | undefined} */ el) => el?.getBoundingClientRect().height ?? 0
+  const diffHeight = heightOf(view()?.querySelector('.monaco-diff-editor'))
+  const viewHeight = heightOf(view())
+  h.check('the diff editor fills the comparison instead of a strip', diffHeight > 200 && diffHeight >= viewHeight * 0.8, { diffHeight, viewHeight })
 
   // ------------------------------------------------------------ Esc, and the find widget first
   // The find widget owns the first Esc, because Monaco's keybinding service matched

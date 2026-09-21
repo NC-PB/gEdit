@@ -94,6 +94,13 @@
   .panel-host.overlay {
     flex: 1 1 auto;
   }
+  /* An overlay panel (the compare view) fills the region instead of taking its content
+     height: the diff editor inside has none of its own and would collapse to a strip. */
+  .panel-host.overlay .panel-body {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
 
   .panel-header {
     display: flex;
