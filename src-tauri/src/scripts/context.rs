@@ -109,6 +109,8 @@ fn next_name() -> String {
 
 /// Creates one directory, owner-only on Unix, and fails when it already exists.
 fn create_private_dir(dir: &Path) -> std::io::Result<()> {
+    // `mut` is only needed for the Unix `mode` call below.
+    #[cfg_attr(not(unix), allow(unused_mut))]
     let mut builder = fs::DirBuilder::new();
     #[cfg(unix)]
     {
