@@ -164,11 +164,13 @@ mod tests {
             data: PathBuf::from("/d"),
         };
         let paths = dirs.to_config_paths();
+        // Built with join, like the code under test: Windows joins with a backslash.
+        let under = |dir: &str, name: &str| PathBuf::from(dir).join(name).display().to_string();
         assert_eq!(paths.config_dir, "/c");
         assert_eq!(paths.data_dir, "/d");
-        assert_eq!(paths.settings_file, "/c/settings.json");
-        assert_eq!(paths.state_file, "/d/state.json");
-        assert_eq!(paths.user_scripts_dir, "/c/scripts");
+        assert_eq!(paths.settings_file, under("/c", "settings.json"));
+        assert_eq!(paths.state_file, under("/d", "state.json"));
+        assert_eq!(paths.user_scripts_dir, under("/c", "scripts"));
     }
 
     #[test]
