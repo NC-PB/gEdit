@@ -1,6 +1,19 @@
 # Auto detect text files and perform LF normalization
 * text=auto
 
+# `text=auto` only decides what is *stored*; what is *checked out* is still up to
+# `core.autocrlf`, which Git for Windows turns on by default — so on Windows these
+# files would arrive with CRLF. Two things read them as bytes and must not care
+# which machine the checkout happened on:
+#   - the tests that read their own file with `include_str!` and search it (they
+#     fold CRLF away themselves as well, so neither half alone can break them);
+#   - `src-tauri/src/scripts/template.py`, which is embedded in the binary and
+#     handed to the user as the starting point for a script.
+# `eol=lf` pins the working tree too, so every platform sees the same bytes.
+*.rs text eol=lf
+*.ts text eol=lf
+*.py text eol=lf
+
 # Test fixtures are byte-exact (CRLF, CR-only, Latin-1, NUL, UTF-16): never normalize
 tests/fixtures/** -text
 tests/runtime/fixtures/** -text

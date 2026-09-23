@@ -101,6 +101,7 @@ pub fn machines_open_file(app: AppHandle) -> Result<String, String> {
 mod tests {
     use super::*;
     use crate::config::{bak_path, MAX_FILE_BYTES};
+    use crate::source_scan;
     use std::fs;
     use std::path::PathBuf;
 
@@ -137,7 +138,7 @@ mod tests {
     /// would read a file it is not allowed to write (AD-31 Storage).
     #[test]
     fn the_version_matches_the_typescript_constant() {
-        let ts = include_str!("../../src/lib/core/machines/types.ts");
+        let ts = source_scan::lf(include_str!("../../src/lib/core/machines/types.ts"));
         assert!(
             ts.contains(&format!(
                 "export const MACHINES_VERSION = {MACHINES_VERSION}"
@@ -298,7 +299,7 @@ mod tests {
     /// is `paths::MACHINES_FILE_NAME` and the folder is the app's own.
     #[test]
     fn no_command_here_takes_a_path_from_the_webview() {
-        let source = include_str!("machines.rs");
+        let source = source_scan::lf(include_str!("machines.rs"));
         for command in [
             "pub fn machines_save(app: AppHandle, machines: Value)",
             "pub fn machines_open_file(app: AppHandle)",

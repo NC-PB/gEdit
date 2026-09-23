@@ -187,6 +187,7 @@ pub fn grant_on_startup(app: &AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::source_scan;
     use std::fs;
     use std::path::PathBuf;
 
@@ -226,7 +227,7 @@ mod tests {
     /// the scope before it builds anything out of what it was sent.
     #[test]
     fn the_commands_keep_their_pinned_signatures() {
-        let source = include_str!("session.rs");
+        let source = source_scan::lf(include_str!("session.rs"));
         for command in [
             concat!(
                 "pub fn session_",

@@ -287,14 +287,20 @@ fn sibling_target(source: &Path) -> Result<PathBuf, String> {
 
 // --- history mode ---------------------------------------------------------
 
-/// FNV-1a over the folder's normalized (and, where the platform folds case, lowered)
-/// path, as eight lowercase hex digits.
+/// [`fnv32`] over the folder's normalized (and, where the platform folds case,
+/// lowered) path.
 ///
 /// It names a folder, so it has to be short and legal on every platform; it is not a
 /// checksum of anything and nothing is verified against it. A collision between two
 /// source folders means their two histories share a parent — the `<file name>` level
 /// below still separates them unless the names collide too, and even then the entries
 /// are distinct files with distinct stamps.
+///
+/// Normalizing means [`Path::components`], so the text that is hashed is the folder
+/// as *this* platform spells it: `/nc/jobs` is `\nc\jobs` on Windows, and the digits
+/// there are the digits of that. That is right rather than merely tolerable — the key
+/// points at a folder on the user's own disk, it never travels between machines, and
+/// a path only means anything on the platform that spelled it.
 pub fn folder_key(folder: &Path) -> String {
     let normalized: PathBuf = folder.components().collect();
     let text = normalized.to_string_lossy();
@@ -303,6 +309,15 @@ pub fn folder_key(folder: &Path) -> String {
     } else {
         text.into_owned()
     };
+    fnv32(&text)
+}
+
+/// FNV-1a over `text`, as eight lowercase hex digits.
+///
+/// Named on its own so that a test can pin its digits for a string it chooses: the
+/// path a key is derived from is spelled per platform, the hash over a given string
+/// is not, and the hash is the half that must never change quietly.
+fn fnv32(text: &str) -> String {
     let mut hash: u32 = 0x811c_9dc5;
     for byte in text.as_bytes() {
         hash ^= u32::from(*byte);
@@ -607,6 +622,7 @@ fn temp_path(target: &Path, parent: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::source_scan;
     use std::time::Duration;
 
     /// The mode names are a contract with `core/settings/schema.ts`: Rust reads the
@@ -614,7 +630,7 @@ mod tests {
     /// backups off (AD-8 keeps the setting in one place, not in two spellings).
     #[test]
     fn the_mode_names_match_the_typescript_schema() {
-        let ts = include_str!("../../src/lib/core/settings/schema.ts");
+        let ts = source_scan::lf(include_str!("../../src/lib/core/settings/schema.ts"));
         assert!(
             ts.contains("'files.backup': 'off' | 'sibling' | 'history';"),
             "core/settings/schema.ts must declare files.backup as off | sibling | history"
@@ -683,7 +699,7 @@ mod tests {
     /// compile time so this test's own text is not one of their hits.
     #[test]
     fn the_command_asks_the_fs_scope_and_touches_nothing_itself() {
-        let source = include_str!("backup.rs");
+        let source = source_scan::lf(include_str!("backup.rs"));
         let signature = concat!(
             "pub fn files_",
             "backup(app: AppHandle, path: String) -> Result<Option<String>, String> {"
@@ -1057,11 +1073,22 @@ mod tests {
         assert!(key
             .chars()
             .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
-        // Pinned, and the same on every platform because this path is already
-        // lower case: the key names a folder on the user's own disk. Changing the
-        // hash would lose no backup, but it would hide every one that is already
-        // there behind a folder nothing ever looks in again.
-        assert_eq!(key, "fff5fc22");
+        // The pin is on the hash rather than on the key, because those two are not
+        // the same digits everywhere: `folder_key` hashes the path as `Path` spells
+        // it once normalized, and Windows spells `/nc/jobs` as `\nc\jobs`. Pinning
+        // the digits of one spelling would only record which platform ran the test.
+        // Pinning `fnv32` records the thing that must not move: swap FNV-1a for
+        // another hash, or change its seed or its prime, and every key changes at
+        // once. No backup would be lost, but every one already on disk would end up
+        // behind a folder nothing ever looks in again.
+        assert_eq!(fnv32("/nc/jobs"), "fff5fc22");
+        // And this folder's key is that hash over the name this platform gives the
+        // folder, with nothing else done to it on the way: no trailing separator, no
+        // case change (this path is already lower case), no rewritten root. On a
+        // platform whose separator is `/` the two assertions together are the old
+        // `key == "fff5fc22"`, spelled so that Windows can hold it too.
+        let spelled = format!("{sep}nc{sep}jobs", sep = std::path::MAIN_SEPARATOR);
+        assert_eq!(key, fnv32(&spelled));
         assert_eq!(key, folder_key(Path::new("/nc//./jobs")));
         assert_ne!(key, folder_key(Path::new("/nc/other")));
         assert_eq!(

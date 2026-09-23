@@ -870,6 +870,7 @@ pub fn start_session(app: &AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::source_scan;
 
     /// The alphabet is the whole of the path defence, so the cases that matter are
     /// the ones that would escape the session folder.
@@ -904,7 +905,7 @@ mod tests {
     /// anything else — that check has to survive WP7.2 filling the bodies in.
     #[test]
     fn every_command_that_takes_a_name_validates_it_first() {
-        let source = include_str!("recovery.rs");
+        let source = source_scan::lf(include_str!("recovery.rs"));
         for (signature, check) in [
             (
                 concat!("pub fn recovery_", "drop(app: AppHandle, key: String)"),
@@ -956,7 +957,7 @@ mod tests {
     /// written with no metadata and could never be restored.
     #[test]
     fn the_header_name_matches_the_typescript_wrapper() {
-        let ts = include_str!("../../src/lib/platform/commands.ts");
+        let ts = source_scan::lf(include_str!("../../src/lib/platform/commands.ts"));
         assert!(
             ts.contains(&format!("'{RECOVERY_HEADER}'")),
             "platform/commands.ts must send the {RECOVERY_HEADER} header"
@@ -1286,7 +1287,7 @@ mod tests {
     /// order, because it writes the halves by hand. This is what makes the swap fail.
     #[test]
     fn the_pair_is_written_in_the_order_that_survives_a_kill() {
-        let source = include_str!("recovery.rs");
+        let source = source_scan::lf(include_str!("recovery.rs"));
         let at = source
             .find(concat!("pub fn put_", "in(root: &Path"))
             .expect("put_in changed");
@@ -1674,7 +1675,7 @@ mod tests {
     /// recovery at all — the webview clears, after the user's own quit decision.
     #[test]
     fn the_exit_path_never_clears_the_snapshots() {
-        let lib = include_str!("lib.rs");
+        let lib = source_scan::lf(include_str!("lib.rs"));
         let at = lib
             .find(concat!("fn on_run_", "event(app: &AppHandle"))
             .expect("on_run_event changed");

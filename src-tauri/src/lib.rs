@@ -41,6 +41,10 @@ mod quit;
 mod recovery;
 pub mod scripts;
 mod session;
+/// Test-only: how the tests that read their own file with `include_str!` read it,
+/// so that the checkout's line endings cannot decide whether they pass.
+#[cfg(test)]
+mod source_scan;
 mod state;
 
 use tauri::{App, AppHandle, RunEvent};
