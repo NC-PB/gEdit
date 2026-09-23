@@ -11,9 +11,15 @@
 //! from the last session reopens without a dialog (D6, a bounded widening of the
 //! fs scope), and [`recent_touch`] refuses a path the scope does not already
 //! allow, so the webview cannot smuggle an arbitrary path into that list.
+//!
+//! M7 adds a third owner, [`crate::session`], writing `session`. Every write of
+//! this file is therefore a read-modify-write of a document three owners share,
+//! and they go through [`update_state`] under one lock — see its own note for
+//! what the lock is for.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use serde_json::{Map, Value};
 use tauri::AppHandle;
@@ -34,10 +40,13 @@ pub const MAX_RECENT: usize = 50;
 const RECENT_KEY: &str = "recent";
 /// The webview's member of `state.json`.
 const UI_KEY: &str = "ui";
+/// Rust's other member (M7, AD-22): the files that were open at the last quit.
+/// [`crate::session`] owns its shape; this module only knows where it lives.
+pub const SESSION_KEY: &str = "session";
 
 /// Whether the platform's file names are case-insensitive, which decides how the
 /// recent list deduplicates (AD-9). Linux compares byte for byte.
-const FOLD_CASE: bool = cfg!(any(target_os = "macos", target_os = "windows"));
+const FOLD_CASE: bool = paths::FOLD_CASE;
 
 /// One entry of the recent-files list (plan §7.6). Serialized in camelCase,
 /// matching `RecentEntry` in `src/lib/platform/commands.ts`.
@@ -98,22 +107,75 @@ pub fn read_state(path: &Path) -> StateFile {
     StateFile { file, recent, ui }
 }
 
-/// Writes `recent` and `ui` back into `state.json`, keeping every other member
+/// What one write of `state.json` replaces. Every other member of the document
+/// — including one a newer build wrote — is kept exactly as it was read.
+///
+/// `session` is an `Option` because a build that never saves a session has to
+/// leave the file as it found it: `None` keeps whatever is on disk (usually
+/// nothing at all), `Some` replaces it. Without that, the first splitter drag of
+/// a fresh install would write an empty `session` member and `state.json` would
+/// grow a key nobody set.
+#[derive(Debug, Clone)]
+pub struct StateWrite {
+    pub recent: Vec<String>,
+    pub ui: Map<String, Value>,
+    pub session: Option<Value>,
+}
+
+/// Writes the owned members back into `state.json`, keeping every other member
 /// of the document. Refuses a file written by a newer build, and rescues an
 /// unusable one as `state.json.bak` first (both in [`config::save_json_object`]).
-fn write_state(
-    path: &Path,
-    state: &StateFile,
-    recent: &[String],
-    ui: &Map<String, Value>,
-) -> Result<(), String> {
+fn write_state(path: &Path, state: &StateFile, write: &StateWrite) -> Result<(), String> {
     let mut object = state.file.value.clone();
     object.insert(
         RECENT_KEY.to_owned(),
-        Value::Array(recent.iter().cloned().map(Value::String).collect()),
+        Value::Array(write.recent.iter().cloned().map(Value::String).collect()),
     );
-    object.insert(UI_KEY.to_owned(), Value::Object(ui.clone()));
+    object.insert(UI_KEY.to_owned(), Value::Object(write.ui.clone()));
+    if let Some(session) = &write.session {
+        object.insert(SESSION_KEY.to_owned(), session.clone());
+    }
     config::save_json_object(path, STATE_FILE_NAME, object, &state.file)
+}
+
+/// The process-wide lock around every read-modify-write of `state.json`.
+///
+/// Three owners write this one file: the recent list, the webview's `ui` and
+/// (M7) the session. Each reads the whole document, changes its own member and
+/// writes the result back, so two that overlap each save a copy of what *they*
+/// read — and the second write puts the first writer's member back to the value
+/// it had before. `ui_state_save` runs a second after every splitter drag and
+/// `session_save` a second after every tab change (AD-22), so the two overlap in
+/// ordinary use, and losing the race silently costs a whole session list or the
+/// window layout.
+///
+/// Tauri runs each command on its own task, so the lock belongs here and not in
+/// any one caller. It serializes this process only: two gEdit instances sharing
+/// one home directory still race, but each write is atomic
+/// ([`crate::atomic::write_atomic`]), so the loser of *that* race is a stale
+/// document, never a torn one.
+static STATE_LOCK: Mutex<()> = Mutex::new(());
+
+/// Reads `state.json`, lets `change` decide from what was on disk what to write,
+/// and writes it back — with [`STATE_LOCK`] held across the whole round trip.
+///
+/// `change` also answers with a value of its own, so a caller that needs to
+/// report what it wrote (the recent list) gets it from inside the lock instead
+/// of reading the file a second time.
+pub fn update_state<T>(
+    path: &Path,
+    change: impl FnOnce(&StateFile) -> Result<(StateWrite, T), String>,
+) -> Result<T, String> {
+    // A panic in another writer poisons the lock. What it guards is a file that
+    // is replaced atomically, so a poisoned lock says nothing about the file: the
+    // next writer reads what is on disk and may safely go ahead.
+    let _guard = STATE_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let state = read_state(path);
+    let (write, answer) = change(&state)?;
+    write_state(path, &state, &write)?;
+    Ok(answer)
 }
 
 /// Merges the webview's `ui` into what is on disk: a member that is present
@@ -230,13 +292,18 @@ pub fn grant_file(app: &AppHandle, path: &Path) {
     grant_in(&app.fs_scope(), path);
 }
 
-/// Grants the recent entries that still exist, newest first, at most
-/// [`MAX_GRANTED_ON_STARTUP`] of them. Answers with how many were granted.
-pub fn grant_recent(scope: &tauri::fs::Scope, recent: &[String]) -> usize {
-    let existing = recent
+/// Grants the entries of `paths` that still exist, in order, at most `max` of
+/// them. Answers with how many were granted.
+///
+/// `paths` must already be bounded by its reader (both callers truncate at read
+/// time): `max` stops counting once that many entries have *passed*, so a
+/// hand-edited list of 100,000 names would still be walked and stat'd in full
+/// before the window appears.
+pub fn grant_paths(scope: &tauri::fs::Scope, paths: &[String], max: usize) -> usize {
+    let existing = paths
         .iter()
         .filter(|path| Path::new(path).exists())
-        .take(MAX_GRANTED_ON_STARTUP);
+        .take(max);
     let mut granted = 0;
     for path in existing {
         grant_in(scope, Path::new(path));
@@ -245,16 +312,29 @@ pub fn grant_recent(scope: &tauri::fs::Scope, recent: &[String]) -> usize {
     granted
 }
 
+/// Grants the recent entries that still exist, newest first, at most
+/// [`MAX_GRANTED_ON_STARTUP`] of them. Answers with how many were granted.
+pub fn grant_recent(scope: &tauri::fs::Scope, recent: &[String]) -> usize {
+    grant_paths(scope, recent, MAX_GRANTED_ON_STARTUP)
+}
+
 // --- the command bodies, split from the commands so that the whole round trip
 // --- can be tested against a scratch folder instead of an app handle.
 
-/// The body of [`ui_state_save`].
+/// The body of [`ui_state_save`]. The payload is judged before the lock is
+/// taken, so a refused one neither waits for another writer nor creates a file.
 pub fn save_ui(dirs: &AppDirs, ui: Value) -> Result<(), String> {
-    let path = dirs.state_file();
     let incoming = config::as_object(ui, STATE_FILE_NAME)?;
-    let state = read_state(&path);
-    let merged = merge_ui(state.ui.clone(), incoming);
-    write_state(&path, &state, &state.recent, &merged)
+    update_state(&dirs.state_file(), move |state| {
+        Ok((
+            StateWrite {
+                recent: state.recent.clone(),
+                ui: merge_ui(state.ui.clone(), incoming),
+                session: None,
+            },
+            (),
+        ))
+    })
 }
 
 /// The body of [`recent_list`].
@@ -265,10 +345,19 @@ pub fn list_recent(dirs: &AppDirs) -> Vec<RecentEntry> {
 /// The body of [`recent_touch`], without the fs-scope check: that one needs the
 /// app handle and is the command's own first step.
 pub fn touch_recent(dirs: &AppDirs, path: &str, max: u32) -> Result<Vec<RecentEntry>, String> {
-    let file = dirs.state_file();
-    let state = read_state(&file);
-    let recent = touch(&state.recent, path, max as usize);
-    write_state(&file, &state, &recent, &state.ui)?;
+    let recent = update_state(&dirs.state_file(), |state| {
+        let recent = touch(&state.recent, path, max as usize);
+        Ok((
+            StateWrite {
+                recent: recent.clone(),
+                ui: state.ui.clone(),
+                session: None,
+            },
+            recent,
+        ))
+    })?;
+    // Outside the lock: `entries` stats every path, and one of them can be on a
+    // share that has gone away.
     Ok(entries(&recent))
 }
 
@@ -281,13 +370,23 @@ pub fn change_recent(
     change: impl FnOnce(&[String]) -> Vec<String>,
 ) -> Vec<RecentEntry> {
     let file = dirs.state_file();
-    let state = read_state(&file);
-    let recent = change(&state.recent);
-    match write_state(&file, &state, &recent, &state.ui) {
-        Ok(()) => entries(&recent),
+    let written = update_state(&file, |state| {
+        let recent = change(&state.recent);
+        Ok((
+            StateWrite {
+                recent: recent.clone(),
+                ui: state.ui.clone(),
+                session: None,
+            },
+            recent,
+        ))
+    });
+    match written {
+        Ok(recent) => entries(&recent),
         Err(err) => {
             eprintln!("gEdit: {err}");
-            entries(&state.recent)
+            // Nothing was written, so what is on disk is still the answer.
+            entries(&read_state(&file).recent)
         }
     }
 }
@@ -551,7 +650,16 @@ mod tests {
             state.ui.clone(),
             serde_json::from_str(r#"{"lastScript":"s"}"#).unwrap(),
         );
-        write_state(&path, &state, &state.recent, &merged).unwrap();
+        write_state(
+            &path,
+            &state,
+            &StateWrite {
+                recent: state.recent.clone(),
+                ui: merged,
+                session: None,
+            },
+        )
+        .unwrap();
 
         assert_eq!(
             written(&path),
@@ -585,7 +693,16 @@ mod tests {
         fs::write(&path, before).unwrap();
         let state = read_state(&path);
         assert_eq!(state.recent, list(&["/a.nc"]));
-        let err = write_state(&path, &state, &[], &Map::new()).expect_err("the write went through");
+        let err = write_state(
+            &path,
+            &state,
+            &StateWrite {
+                recent: Vec::new(),
+                ui: Map::new(),
+                session: None,
+            },
+        )
+        .expect_err("the write went through");
         assert!(err.contains("newer gEdit"), "{err}");
         assert_eq!(fs::read_to_string(&path).unwrap(), before);
         let _ = fs::remove_dir_all(&dir);
@@ -759,6 +876,103 @@ mod tests {
             "[]"
         );
         assert_eq!(config::load(&dirs).state_error, None);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    // --- the lock around the read-modify-write (M7) --------------------------
+
+    /// A write that does not mean to touch the session must not invent one: a
+    /// fresh install's `state.json` has the two members P1 wrote and no more.
+    #[test]
+    fn a_write_without_a_session_never_creates_the_member() {
+        let (root, dirs) = scratch_dirs("no-session");
+        save_ui(&dirs, serde_json::json!({"layout": 1})).unwrap();
+        let mut members: Vec<String> = written(&dirs.state_file())
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
+        members.sort();
+        assert_eq!(members, vec!["$version", "recent", "ui"]);
+
+        // And a write that does mean to adds exactly one member.
+        update_state(&dirs.state_file(), |state| {
+            Ok((
+                StateWrite {
+                    recent: state.recent.clone(),
+                    ui: state.ui.clone(),
+                    session: Some(serde_json::json!({"paths": ["/a.nc"], "active": 0})),
+                },
+                (),
+            ))
+        })
+        .unwrap();
+        let after = written(&dirs.state_file());
+        assert_eq!(
+            after.get("session"),
+            Some(&serde_json::json!({"paths": ["/a.nc"], "active": 0}))
+        );
+        assert_eq!(after.get("ui"), Some(&serde_json::json!({"layout": 1})));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// The whole point of [`STATE_LOCK`]. Two owners of this file write it a
+    /// second after the same gesture (a tab change moves both `ui` and the
+    /// session), and each of them writes back a copy of everything it read. The
+    /// thread below stops **after its read**, lets the other one run a complete
+    /// read-modify-write, and only then writes.
+    ///
+    /// Without the lock the second writer gets in during that window and the
+    /// first writer's write puts `state.json` back to what it read: its `b` is
+    /// gone, silently. With the lock the second writer cannot start until the
+    /// first has finished, so both members survive. Removing the lock from
+    /// `update_state` makes this fail.
+    #[test]
+    fn two_writers_of_state_json_do_not_lose_each_others_member() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let (root, dirs) = scratch_dirs("lock");
+        save_ui(&dirs, serde_json::json!({"start": true})).unwrap();
+
+        let (has_read, read_happened) = mpsc::channel::<()>();
+        let (b_done, b_finished) = mpsc::channel::<()>();
+
+        let second = {
+            let dirs = dirs.clone();
+            std::thread::spawn(move || {
+                // Only start once the first writer has read the file.
+                read_happened.recv().expect("the first writer never read");
+                save_ui(&dirs, serde_json::json!({"b": 2})).unwrap();
+                let _ = b_done.send(());
+            })
+        };
+
+        update_state(&dirs.state_file(), |state| {
+            has_read.send(()).unwrap();
+            // With the lock held, the other writer is blocked and this times out;
+            // without it, it finishes here and this returns at once.
+            let _ = b_finished.recv_timeout(Duration::from_secs(2));
+            let mut ui = state.ui.clone();
+            ui.insert("a".to_owned(), Value::from(1));
+            Ok((
+                StateWrite {
+                    recent: state.recent.clone(),
+                    ui,
+                    session: None,
+                },
+                (),
+            ))
+        })
+        .unwrap();
+        second.join().unwrap();
+
+        assert_eq!(
+            config::load(&dirs).ui,
+            serde_json::json!({"start": true, "a": 1, "b": 2}),
+            "a write built from a stale read overwrote the other writer"
+        );
         let _ = fs::remove_dir_all(&root);
     }
 }

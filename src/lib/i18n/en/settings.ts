@@ -130,6 +130,31 @@ export default {
       label: 'Default dialect',
       help: 'Used for a new file and for a file whose dialect cannot be recognized.',
     },
+    backup: {
+      label: 'Keep a copy before saving',
+      help: 'The copy is made from what is on disk just before gEdit writes over it, so the previous version of the program is never gone.',
+      choices: {
+        history: 'In gEdit (keeps several versions)',
+        sibling: 'Next to the file (.bak)',
+        off: 'Do not keep one',
+      },
+    },
+    backupCount: {
+      label: 'Versions to keep',
+      help: 'How many earlier versions of each file gEdit keeps. Only for copies kept in gEdit.',
+    },
+    recovery: {
+      label: 'Recover unsaved changes after a crash',
+      help: 'Unsaved work is written aside every half minute and offered back the next time gEdit starts. Nothing is sent anywhere.',
+    },
+    restoreSession: {
+      label: 'Reopen the last files at start',
+      help: 'The files that were open when gEdit was closed come back, with the one you were on in front.',
+    },
+    rememberPerFile: {
+      label: 'Remember where you were in each file',
+      help: 'The cursor line, the bookmarks, and a dialect or machine you chose by hand come back when you open the file again.',
+    },
   },
 
   scripts: {

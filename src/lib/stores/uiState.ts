@@ -19,14 +19,24 @@ import { status as appStatus } from '$lib/app/status';
 import { configLoad, uiStateSave, type ConfigLoad } from '$lib/platform/commands';
 import { isTauriRuntime } from '$lib/utils/platform';
 import { t } from '$lib/i18n';
-import type { LayoutState, UiState, UiStateStore } from '$lib/app/types';
+import type { FileMemo, LayoutState, UiState, UiStateStore } from '$lib/app/types';
 
 /** How long a change waits before it reaches the disk (§7.3: "1 s debounced save"). */
 export const SAVE_DEBOUNCE_MS = 1000;
 
 /** What a window with no saved state looks like. */
 export function emptyUiState(): UiState {
-  return { layout: {}, lastParams: {}, lastScript: null };
+  return { layout: {}, lastParams: {}, lastScript: null, files: {} };
+}
+
+/**
+ * Rust's own English text out of an IPC rejection, for the status item's tooltip
+ * (AD-14). Written out here rather than imported from `app/dialogs.ts`, whose import
+ * graph reaches the Tauri dialog plugin — nothing in a store's may.
+ */
+function detailOf(err: unknown): string {
+  if (typeof err === 'string') return err;
+  return err instanceof Error ? err.message : String(err);
 }
 
 // ---------------------------------------------------------------------------
@@ -111,11 +121,7 @@ function layoutOf(value: unknown): Partial<LayoutState> {
  * then answer with a value inherited from that prototype (G8 M2). Both sides are fixed:
  * this writes an own property, and the getter below only reads own ones.
  */
-function put(
-  params: Record<string, Record<string, unknown>>,
-  key: string,
-  entry: Record<string, unknown>,
-): void {
+function put(params: Record<string, unknown>, key: string, entry: unknown): void {
   Object.defineProperty(params, key, {
     value: entry,
     enumerable: true,
@@ -133,6 +139,42 @@ function lastParamsOf(value: unknown): Record<string, Record<string, unknown>> {
   return params;
 }
 
+function isLine(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1;
+}
+
+/**
+ * The per-file memory of `ui.files` (§7.9, AD-22), path by path.
+ *
+ * Two rules, and they pull in opposite directions on purpose:
+ *
+ *  - an entry that does not carry the four members every reader relies on (`line`,
+ *    `column`, `top`, `at`) is **dropped**, because a half memo would have to be
+ *    guessed at by every consumer;
+ *  - an entry that does is **kept whole**, unknown members included. A later
+ *    milestone adds one (M10's `channelId`, §7.14), and a user who runs that build,
+ *    then this one, then that one again must get their channel assignments back
+ *    rather than have them quietly erased in between.
+ *
+ * `machineId` is deliberately not defaulted: `undefined` ("follow the profile") and
+ * `null` ("none") are different answers (AD-31), and only the entry itself knows
+ * which one was meant.
+ */
+function filesOf(value: unknown): Record<string, FileMemo> {
+  if (!isRecord(value)) return {};
+  const files: Record<string, FileMemo> = {};
+  for (const [path, entry] of Object.entries(value)) {
+    if (!isRecord(entry)) continue;
+    if (!isLine(entry.line) || !isLine(entry.column) || !isLine(entry.top)) continue;
+    if (typeof entry.at !== 'number' || !Number.isFinite(entry.at)) continue;
+    const bookmarks = Array.isArray(entry.bookmarks) ? entry.bookmarks.filter(isLine) : [];
+    // `put` writes an own property, so a path spelled `__proto__` cannot reach
+    // `Object.prototype`'s setter (the G8 M2 finding, same fix as `lastParams`).
+    put(files, path, { ...entry, bookmarks });
+  }
+  return files;
+}
+
 /** A `ui` member straight from disk, reduced to the shape `UiState` promises. */
 export function sanitizeUiState(raw: unknown): UiState {
   const source = isRecord(raw) ? raw : {};
@@ -140,6 +182,7 @@ export function sanitizeUiState(raw: unknown): UiState {
     layout: layoutOf(source.layout),
     lastParams: lastParamsOf(source.lastParams),
     lastScript: typeof source.lastScript === 'string' ? source.lastScript : null,
+    files: filesOf(source.files),
   };
 }
 
@@ -170,6 +213,8 @@ export function createUiStateStore(deps: UiStateDeps): UiStateStore {
   /** Set by the first `update()`; a late `load()` must not undo the user's layout. */
   let touched = false;
   let loaded = false;
+  /** Whether the user has been told, once, that `state.json` cannot be written. */
+  let told = false;
 
   function set(next: UiState): void {
     current = next;
@@ -183,16 +228,25 @@ export function createUiStateStore(deps: UiStateDeps): UiStateStore {
       layout: current.layout,
       lastParams: current.lastParams,
       lastScript: current.lastScript,
+      files: current.files,
     };
     writing = writing.then(() => deps.save(payload)).catch((err: unknown) => {
       // A warning, not an error: the runtime harness fails a scenario on a console error,
       // and a state file that cannot be written must not take a run down (AD-8).
-      //
-      // And no status notice: this runs a second after every splitter drag and panel
-      // toggle, so a config folder that cannot be written would paint the status bar red
-      // over and over, hiding the messages that matter. The user loses a remembered
-      // layout, not their work.
       console.warn('the UI state could not be saved', err);
+      // **Once**, and only once, in the status bar. This runs a second after every
+      // splitter drag and panel toggle, so notifying every time would paint the status
+      // bar red over and over and hide the messages that matter — which is why it used
+      // to say nothing at all. But saying nothing at all was wrong too (G8 M7):
+      // `state.json` is the one file the session list, the recent list, the layout and
+      // the per-file memory all share, and Rust refuses to write any of it once the
+      // whole is over 1 MiB. Everything the user asked gEdit to remember would then
+      // stop being remembered in silence. `detail` carries Rust's own English text,
+      // which names the limit (AD-14).
+      if (!told) {
+        told = true;
+        deps.notify(t('uiState.saveFailed'), detailOf(err));
+      }
     });
     return writing;
   }

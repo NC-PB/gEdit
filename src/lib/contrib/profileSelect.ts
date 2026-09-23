@@ -10,6 +10,7 @@ import { files } from '$lib/app/fileOps';
 import { modals } from '$lib/app/modals';
 import { status } from '$lib/app/status';
 import { docs } from '$lib/stores/documents';
+import { fileMemory } from '$lib/stores/fileMemory';
 import { profiles } from '$lib/stores/profiles';
 import { t } from '$lib/i18n';
 import type { Contribution, ProfileInfo, QuickPickItem } from '$lib/app/types';
@@ -108,6 +109,12 @@ async function pickProfile(): Promise<void> {
   });
   if (picked === undefined || picked === doc.profileId) return;
   files.setProfile(doc.id, picked);
+  // AD-22: a dialect picked by hand is remembered for the file and wins over detection
+  // the next time it is opened (M7). It is recorded **here** and not in
+  // `files.setProfile`, because only this path is a decision the user made — the same
+  // call also carries a detection result and a restored session, and remembering either
+  // of those would turn a guess into a setting.
+  if (doc.path !== null) fileMemory.remember(doc.path, { profileId: picked });
   status.show(t('profiles.changed', { name: doc.title, profile: profiles.get(picked)?.shortName ?? picked }));
 }
 

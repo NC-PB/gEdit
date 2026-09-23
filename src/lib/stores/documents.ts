@@ -53,9 +53,18 @@ function clamp(value: number, min: number, max: number): number {
   return value < min ? min : value > max ? max : value;
 }
 
-/** `basename(path)`, or `Untitled-<n>` for a document that has no path yet. */
-function titleOf(meta: Pick<NewDocMeta, 'path' | 'untitledIndex'>): string {
+/**
+ * `basename(path)`, or `Untitled-<n>` for a document that has no path yet.
+ *
+ * `proposedPath` sits between the two (M7, AD-21): a restored crash snapshot that could
+ * not be bound to its file is untitled, but it is not nameless — the tab has to read
+ * `Welle.nc`, or the one thing that says which program the recovered text belongs to is
+ * gone. It is deliberately **only** a name here; nothing in the app treats it as a path,
+ * because `path` is still null.
+ */
+function titleOf(meta: Pick<NewDocMeta, 'path' | 'untitledIndex' | 'proposedPath'>): string {
   if (meta.path) return baseName(meta.path);
+  if (meta.proposedPath) return baseName(meta.proposedPath);
   return meta.untitledIndex === null ? UNTITLED : `${UNTITLED}-${meta.untitledIndex}`;
 }
 

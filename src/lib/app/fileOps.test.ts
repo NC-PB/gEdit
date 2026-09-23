@@ -18,9 +18,12 @@ import {
   type FileOpsDeps,
   type FileSystemAccess,
 } from './fileOps';
+import { createExternalChangeService } from './external';
+import { outlookOf } from './recovery';
 import { createDocumentStore } from '$lib/stores/documents';
 import { decodeFile } from '$lib/core/text';
 import { createProfileRegistry } from '$lib/stores/profiles';
+import { baseName } from '$lib/utils/platform';
 import { t } from '$lib/i18n';
 import type { FileStat } from '$lib/platform/commands';
 import type {
@@ -31,7 +34,10 @@ import type {
   DocumentStore,
   EditorService,
   Eol,
+  ExternalChangeService,
+  FileMemoryStore,
   NativeDialogs,
+  RecoveryEntry,
   StatusService,
 } from '$lib/app/types';
 
@@ -242,6 +248,10 @@ function createFakeFs(): FileSystemAccess & {
   writes: string[];
   readFailures: Set<string>;
   writeFailures: Set<string>;
+  /** Paths whose `files_stat` answers `readonly: true` (M7, AD-23). */
+  readOnly: Set<string>;
+  /** Paths the fs scope does not allow, so `files_stat` answers `allowed: false`. */
+  forbidden: Set<string>;
 } {
   const files = new Map<string, Uint8Array>();
   const mtimes = new Map<string, number>();
@@ -249,6 +259,8 @@ function createFakeFs(): FileSystemAccess & {
   const writes: string[] = [];
   const readFailures = new Set<string>();
   const writeFailures = new Set<string>();
+  const readOnly = new Set<string>();
+  const forbidden = new Set<string>();
   let clock = 1000;
   return {
     files,
@@ -257,6 +269,8 @@ function createFakeFs(): FileSystemAccess & {
     writes,
     readFailures,
     writeFailures,
+    readOnly,
+    forbidden,
     async readFile(path) {
       if (readFailures.has(path)) throw new Error(`cannot read ${path}`);
       const bytes = files.get(path);
@@ -272,13 +286,73 @@ function createFakeFs(): FileSystemAccess & {
   };
 }
 
+/**
+ * The Rust `files_backup` (M7, AD-21), as a fake: it records the order it was called in
+ * against the writes, and `failures` makes the copy fail the way a full disk or a lost
+ * share would.
+ */
+interface FakeBackup {
+  calls: string[];
+  /** Paths whose backup rejects. */
+  failures: Set<string>;
+  /** Paths with nothing to copy — `files.backup` is off, or the file is new. */
+  nothing: Set<string>;
+  backup(path: string): Promise<string | null>;
+}
+
+function createFakeBackup(trace: string[]): FakeBackup {
+  const fake: FakeBackup = {
+    calls: [],
+    failures: new Set<string>(),
+    nothing: new Set<string>(),
+    async backup(path) {
+      fake.calls.push(path);
+      trace.push(`backup:${path}`);
+      if (fake.failures.has(path)) throw new Error(`cannot copy ${path}`);
+      return fake.nothing.has(path) ? null : `/backups/${baseName(path)}`;
+    },
+  };
+  return fake;
+}
+
+/** Per-file memory (M7, AD-22) as two lookup tables; WP7.5 owns the real one. */
+interface FakeMemory {
+  profiles: Map<string, string>;
+  /** `null` is a remembered "none", a missing key is "nothing remembered" (AD-31). */
+  machines: Map<string, string | null>;
+  store: Pick<FileMemoryStore, 'profileFor' | 'machineFor'>;
+}
+
+function createFakeMemory(): FakeMemory {
+  const fake: FakeMemory = {
+    profiles: new Map<string, string>(),
+    machines: new Map<string, string | null>(),
+    store: {
+      profileFor: (path) => fake.profiles.get(path),
+      machineFor: (path) => (fake.machines.has(path) ? fake.machines.get(path) : undefined),
+    },
+  };
+  return fake;
+}
+
 interface Harness {
   docs: DocumentStore;
   editor: FakeEditor;
   dialogs: FakeDialogs;
   status: FakeStatus;
   fs: ReturnType<typeof createFakeFs>;
+  backup: FakeBackup;
+  memory: FakeMemory;
+  /** `backup:<path>` and `write:<path>`, in the order they happened. */
+  trace: string[];
   files: ReturnType<typeof createFileOps>;
+  /**
+   * The real AD-10 poll over the same fake disk, so the cases where the two modules
+   * disagree about a document can be driven end to end (G8 M7).
+   */
+  external: ExternalChangeService;
+  /** Makes every `files_stat` reject, the way a dropped IPC call does. */
+  statFails: { now: boolean };
   put(path: string, rel: string): string;
 }
 
@@ -288,20 +362,37 @@ function setup(o: { isTauri?: boolean; filtersSupported?: boolean } = {}): Harne
   const dialogs = createFakeDialogs();
   const status = createFakeStatus();
   const fs = createFakeFs();
+  const trace: string[] = [];
+  const backup = createFakeBackup(trace);
+  const memory = createFakeMemory();
   const profiles = createProfileRegistry({ filtersSupported: o.filtersSupported ?? true });
 
-  const filesStat: FileOpsDeps['filesStat'] = async (paths) =>
-    paths.map(
-      (path): FileStat => ({
+  const write = fs.writeFile;
+  fs.writeFile = async (path, bytes) => {
+    trace.push(`write:${path}`);
+    await write(path, bytes);
+  };
+
+  const statFails = { now: false };
+  const filesStat: FileOpsDeps['filesStat'] = async (paths) => {
+    if (statFails.now) throw new Error('files_stat: the IPC call failed');
+    return paths.map((path): FileStat => {
+      // A forbidden path answers `allowed: false` and nothing else, so a caller never
+      // learns whether it exists (§7.6).
+      if (fs.forbidden.has(path)) {
+        return { path, allowed: false, exists: false, isDir: false, mtimeMs: null, size: null, readonly: false };
+      }
+      return {
         path,
         allowed: true,
         exists: fs.files.has(path),
         isDir: false,
         mtimeMs: fs.mtimes.get(path) ?? null,
         size: fs.sizes.get(path) ?? fs.files.get(path)?.length ?? null,
-        readonly: false,
-      }),
-    );
+        readonly: fs.readOnly.has(path),
+      };
+    });
+  };
 
   const files = createFileOps({
     docs,
@@ -311,7 +402,21 @@ function setup(o: { isTauri?: boolean; filtersSupported?: boolean } = {}): Harne
     profiles,
     fs,
     filesStat,
+    backup: (path) => backup.backup(path),
+    fileMemory: memory.store,
     isTauri: () => o.isTauri ?? true,
+  });
+
+  const external = createExternalChangeService({
+    docs,
+    files,
+    status,
+    filesStat,
+    readFile: (path) => fs.readFile(path),
+    policy: () => 'ask',
+    hasFocus: () => true,
+    watchFocus: () => () => {},
+    intervalMs: 2000,
   });
 
   return {
@@ -320,7 +425,12 @@ function setup(o: { isTauri?: boolean; filtersSupported?: boolean } = {}): Harne
     dialogs,
     status,
     fs,
+    backup,
+    memory,
+    trace,
     files,
+    external,
+    statFails,
     put(path, rel) {
       fs.files.set(path, fixture(rel));
       fs.mtimes.set(path, 500);
@@ -1058,6 +1168,50 @@ describe('close', () => {
   });
 });
 
+// M7, AD-22 (P7). Per-file memory reads the cursor, the top line and the bookmarks out
+// of the Monaco model when a tab closes, so the ordering below is the whole mechanism:
+// after `disposeModel` there is nothing left to read, and the memory would silently be
+// the last one written instead of the one for this close.
+describe('onWillClose', () => {
+  it('fires before the model is disposed, and only for the document that closes', async () => {
+    const path = h.put('/nc/a.nc', 'nc/encoding/utf8-lf.nc');
+    const [id] = await h.files.open([path]);
+    const other = h.files.newUntitled();
+    const seen: string[] = [];
+    const stop = h.files.onWillClose((closing) => {
+      seen.push(`willClose:${closing}`);
+      // The evidence that the model is still there: reading it here must work.
+      seen.push(`text:${h.editor.getText(closing).length > 0}`);
+    });
+
+    expect(await h.files.close(id)).toBe(true);
+
+    expect(seen).toEqual([`willClose:${id}`, 'text:true']);
+    const disposedAt = h.editor.calls.indexOf(`disposeModel:${id}`);
+    expect(disposedAt).toBeGreaterThanOrEqual(0);
+    stop();
+    expect(await h.files.close(other)).toBe(true);
+    // The listener was removed, so the second close added nothing.
+    expect(seen).toHaveLength(2);
+  });
+
+  it('is not stopped by a listener that throws', async () => {
+    const path = h.put('/nc/a.nc', 'nc/encoding/utf8-lf.nc');
+    const [id] = await h.files.open([path]);
+    h.files.newUntitled();
+    const failing = vi.spyOn(console, 'error').mockImplementation(() => {});
+    h.files.onWillClose(() => {
+      throw new Error('memory is full of chips');
+    });
+
+    expect(await h.files.close(id)).toBe(true);
+
+    expect(h.docs.get(id)).toBeUndefined();
+    expect(h.editor.calls).toContain(`disposeModel:${id}`);
+    failing.mockRestore();
+  });
+});
+
 describe('closeAll and confirmQuit', () => {
   async function twoDirty(): Promise<void> {
     const a = h.put('/nc/a.nc', 'nc/encoding/utf8-lf.nc');
@@ -1304,5 +1458,655 @@ describe('events', () => {
     });
     await expect(h.files.runWillQuit()).resolves.toBeUndefined();
     expect(spy).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M7 (WP7.3): the backup before a write, read-only documents, restored snapshots
+// and what per-file memory decides at open
+// ---------------------------------------------------------------------------
+
+describe('the backup before a write (AD-21)', () => {
+  /** Opens a fixture and makes the buffer dirty without changing a single byte. */
+  async function openDirty(path: string, rel = 'nc/encoding/utf8-lf.nc'): Promise<DocId> {
+    h.put(path, rel);
+    const [id] = await h.files.open([path]);
+    h.editor.type(id, h.editor.getText(id));
+    return id;
+  }
+
+  it('copies the file aside before the write, and stamps the document after it', async () => {
+    const path = '/nc/a.nc';
+    const id = await openDirty(path);
+
+    expect(await h.files.save(id)).toBe(true);
+
+    // The order is the whole mechanism: a copy taken after the write would be a copy of
+    // the new text, which is exactly the version that is not worth keeping.
+    expect(h.trace).toEqual([`backup:${path}`, `write:${path}`]);
+    expect(h.backup.calls).toEqual([path]);
+    expect(h.docs.get(id)?.disk?.size).toBe(h.fs.files.get(path)?.length);
+    expect(h.docs.get(id)?.dirty).toBe(false);
+  });
+
+  it('asks before the write, so a Cancel leaves the file and the buffer untouched', async () => {
+    // Without the question this save would replace a good program with the new text and
+    // leave no previous version anywhere.
+    const path = '/nc/a.nc';
+    const id = await openDirty(path);
+    const before = hex(h.fs.files.get(path) as Uint8Array);
+    h.editor.type(id, 'G0 X99\n');
+    h.backup.failures.add(path);
+    h.dialogs.answers.confirm.push(false);
+
+    expect(await h.files.save(id)).toBe(false);
+
+    expect(h.fs.writes).toEqual([]);
+    expect(hex(h.fs.files.get(path) as Uint8Array)).toBe(before);
+    expect(h.editor.getText(id)).toBe('G0 X99\n');
+    expect(h.docs.get(id)?.dirty).toBe(true);
+    const asked = h.dialogs.calls.filter((call) => call.kind === 'confirm');
+    expect(asked).toHaveLength(1);
+    expect(asked[0].args.title).toBe(t('files.backupFailedTitle'));
+    expect(asked[0].args.ok).toBe(t('files.saveWithoutBackupButton'));
+    expect(String(asked[0].args.message)).toContain('cannot copy /nc/a.nc');
+    // The reason outlives the dialog, and nothing reached the console: a failure the
+    // user has just been asked about is not an unhandled one, and the runtime harness
+    // counts a console error as a failed scenario.
+    expect(h.status.messages.at(-1)?.text).toContain(t('files.backupFailed', { name: 'a.nc' }));
+    expect(h.status.messages.at(-1)?.error).toBe(true);
+  });
+
+  it('writes when the user accepts it, and says that there is no previous version', async () => {
+    const path = '/nc/a.nc';
+    const id = await openDirty(path);
+    h.editor.type(id, 'G0 X99\n');
+    h.backup.failures.add(path);
+    h.dialogs.answers.confirm.push(true);
+
+    expect(await h.files.save(id)).toBe(true);
+
+    expect(h.fs.writes).toEqual([path]);
+    expect(h.status.last()).toContain(t('files.savedWithoutBackup'));
+    expect(h.status.messages.at(-1)?.error).toBe(true);
+  });
+
+  it('does not ask when there was nothing to copy', async () => {
+    // `files.backup: off` and a Save As to a new file both answer null, and neither is a
+    // failure: the save goes ahead without a word.
+    const path = '/nc/a.nc';
+    const id = await openDirty(path);
+    h.backup.nothing.add(path);
+
+    expect(await h.files.save(id)).toBe(true);
+
+    expect(h.dialogs.calls.filter((call) => call.kind === 'confirm')).toEqual([]);
+    expect(h.trace).toEqual([`backup:${path}`, `write:${path}`]);
+  });
+
+  it('is not taken for a save that writes nothing', async () => {
+    // The P1 rule stands: an unchanged file is not rewritten, so there is nothing to
+    // copy aside either — five saves in a row must not push the real backup out of the
+    // history with five copies of the same bytes.
+    const path = '/nc/a.nc';
+    h.put(path, 'nc/encoding/utf8-lf.nc');
+    const [id] = await h.files.open([path]);
+
+    expect(await h.files.save(id)).toBe(true);
+
+    expect(h.backup.calls).toEqual([]);
+    expect(h.fs.writes).toEqual([]);
+    expect(h.status.last()).toBe(t('files.unchanged', { name: 'a.nc' }));
+  });
+
+  it('is not taken when the user cancels the encoding fallback', async () => {
+    // A question that can still end in "no" comes first: a backup of a save that never
+    // happened would be a second copy of the bytes that are already on disk.
+    const path = '/nc/cp1252.nc';
+    const id = await openDirty(path, 'nc/encoding/cp1252-crlf.nc');
+    h.editor.type(id, 'G0 X0 ☂\n');
+    h.dialogs.answers.confirm.push(false);
+
+    expect(await h.files.save(id)).toBe(false);
+
+    expect(h.backup.calls).toEqual([]);
+    expect(h.fs.writes).toEqual([]);
+  });
+
+  it('names the copy when the write itself fails, so the truncated file can be repaired', async () => {
+    // AD-7 writes in place, so a failed write has already truncated the file. This is the
+    // moment the copy exists for, and "the file may now be incomplete" is useless without
+    // saying where the previous version went.
+    const path = '/nc/a.nc';
+    const id = await openDirty(path);
+    h.editor.type(id, 'G0 X99\n');
+    h.fs.writeFailures.add(path);
+    h.dialogs.answers.confirm.push(false);
+
+    expect(await h.files.save(id)).toBe(false);
+
+    const asked = h.dialogs.calls.filter((call) => call.kind === 'confirm');
+    expect(asked).toHaveLength(1);
+    expect(asked[0].args.title).toBe(t('files.saveFailedTitle'));
+    expect(String(asked[0].args.message)).toContain('/backups/a.nc');
+    // The buffer still holds the full text, whatever happened to the file.
+    expect(h.editor.getText(id)).toBe('G0 X99\n');
+    expect(h.docs.get(id)?.dirty).toBe(true);
+  });
+
+  it('says nothing about a copy that was not made', async () => {
+    const path = '/nc/a.nc';
+    const id = await openDirty(path);
+    h.editor.type(id, 'G0 X99\n');
+    h.backup.nothing.add(path);
+    h.fs.writeFailures.add(path);
+    h.dialogs.answers.confirm.push(false);
+
+    expect(await h.files.save(id)).toBe(false);
+
+    const asked = h.dialogs.calls.filter((call) => call.kind === 'confirm');
+    expect(String(asked[0].args.message)).not.toContain('/backups/');
+  });
+
+  it('is taken for a Save As that overwrites an existing file', async () => {
+    // The overwrite was confirmed in the native dialog, which says nothing about the
+    // file that is about to be replaced.
+    const other = h.put('/nc/old.nc', 'nc/encoding/utf8-lf.nc');
+    const id = h.files.newUntitled({ text: 'G0 X1\n' });
+    h.dialogs.answers.saveFile.push(other);
+
+    expect(await h.files.saveAs(id)).toBe(true);
+
+    expect(h.trace).toEqual([`backup:${other}`, `write:${other}`]);
+  });
+});
+
+describe('read-only documents (AD-23)', () => {
+  it('opens a file with the read-only attribute locked, and says so', async () => {
+    const path = h.put('/nc/locked.nc', 'nc/encoding/utf8-lf.nc');
+    h.fs.readOnly.add(path);
+
+    const [id] = await h.files.open([path]);
+
+    expect(h.docs.get(id)?.readOnly).toBe(true);
+    expect(h.docs.get(id)?.readOnlyReason).toBe('attribute');
+    expect(h.status.last()).toContain(t('readOnly.opened', { name: 'locked.nc' }));
+  });
+
+  it('opens a writable file unlocked', async () => {
+    const path = h.put('/nc/a.nc', 'nc/encoding/utf8-lf.nc');
+    const [id] = await h.files.open([path]);
+    expect(h.docs.get(id)?.readOnly).toBe(false);
+    expect(h.docs.get(id)?.readOnlyReason).toBeNull();
+  });
+
+  it('locks and unlocks a document by hand, and records which lock it was', () => {
+    const id = h.files.newUntitled();
+
+    h.files.setReadOnly(id, true);
+    expect(h.docs.get(id)?.readOnly).toBe(true);
+    expect(h.docs.get(id)?.readOnlyReason).toBe('user');
+
+    h.files.setReadOnly(id, false);
+    expect(h.docs.get(id)?.readOnly).toBe(false);
+    expect(h.docs.get(id)?.readOnlyReason).toBeNull();
+  });
+
+  it('ignores a lock that changes nothing and an id that is not a document', () => {
+    const id = h.files.newUntitled();
+    h.files.setReadOnly(id, false);
+    expect(h.docs.get(id)?.readOnlyReason).toBeNull();
+    expect(() => h.files.setReadOnly('d404', true)).not.toThrow();
+  });
+
+  it.each([
+    ['the file is read-only and the buffer is locked', true, true],
+    ['the file is read-only and the user unlocked the buffer', true, false],
+    ['the file is writable and the user locked the buffer', false, true],
+  ])('sends Save to Save As when %s', async (_name, attribute, locked) => {
+    const path = h.put('/nc/p.nc', 'nc/encoding/utf8-lf.nc');
+    if (attribute) h.fs.readOnly.add(path);
+    const [id] = await h.files.open([path]);
+    h.files.setReadOnly(id, locked);
+    h.editor.type(id, 'G0 X5\n');
+    h.dialogs.answers.saveFile.push('/nc/copy.nc');
+
+    expect(await h.files.save(id)).toBe(true);
+
+    // The original is untouched; the text went to the file the user picked.
+    expect(h.fs.writes).toEqual(['/nc/copy.nc']);
+    expect(h.docs.get(id)?.path).toBe('/nc/copy.nc');
+    expect(h.status.messages.map((m) => m.text)).toContain(t('readOnly.saveAsInstead', { name: 'p.nc' }));
+  });
+
+  it('answers "unchanged" rather than opening Save As for a clean locked document', async () => {
+    // Cmd+S on a program that was opened to be read has nothing to write, so it needs
+    // neither a copy nor a different file. A Save As dialog here would be a no-op with
+    // a native dialog in front of it.
+    const path = h.put('/nc/p.nc', 'nc/encoding/utf8-lf.nc');
+    h.fs.readOnly.add(path);
+    const [id] = await h.files.open([path]);
+
+    expect(await h.files.save(id)).toBe(true);
+
+    expect(h.dialogs.calls.filter((call) => call.kind === 'saveFile')).toEqual([]);
+    expect(h.fs.writes).toEqual([]);
+    expect(h.backup.calls).toEqual([]);
+    expect(h.status.last()).toBe(t('files.unchanged', { name: 'p.nc' }));
+  });
+
+  it('writes nothing when the Save As of a read-only document is cancelled', async () => {
+    const path = h.put('/nc/p.nc', 'nc/encoding/utf8-lf.nc');
+    h.fs.readOnly.add(path);
+    const [id] = await h.files.open([path]);
+    h.editor.type(id, 'G0 X5\n');
+    h.dialogs.answers.saveFile.push(null);
+
+    expect(await h.files.save(id)).toBe(false);
+
+    expect(h.fs.writes).toEqual([]);
+    expect(h.backup.calls).toEqual([]);
+  });
+
+  it('sends Save to Save As when the file was write-protected while the tab sat open', async () => {
+    // Remembering the answer from open would mean finding this out by trying, and a
+    // failed in-place write has already truncated the file (AD-7).
+    const path = h.put('/nc/p.nc', 'nc/encoding/utf8-lf.nc');
+    const [id] = await h.files.open([path]);
+    h.editor.type(id, 'G0 X5\n');
+    h.fs.readOnly.add(path);
+    h.dialogs.answers.saveFile.push('/nc/copy.nc');
+
+    expect(await h.files.save(id)).toBe(true);
+
+    expect(h.fs.writes).toEqual(['/nc/copy.nc']);
+  });
+
+  it('saves a document the user unlocked whose file is writable', async () => {
+    const path = h.put('/nc/p.nc', 'nc/encoding/utf8-lf.nc');
+    const [id] = await h.files.open([path]);
+    h.files.setReadOnly(id, true);
+    h.files.setReadOnly(id, false);
+    h.editor.type(id, 'G0 X5\n');
+
+    expect(await h.files.save(id)).toBe(true);
+
+    expect(h.fs.writes).toEqual([path]);
+  });
+});
+
+describe('restoreDocument (AD-21)', () => {
+  const SNAPSHOT = {
+    title: 'welle.nc',
+    profileId: 'fanuc-gcode',
+    encoding: { encoding: 'utf-8', hasBom: false } as const,
+    eol: 'crlf' as const,
+    nul: { leader: 0, trailer: 0, stripped: 0 },
+    textLF: 'G0 X1\nG0 X2\n',
+    diskStamp: { mtimeMs: 500, size: 12, hash: 7 },
+  };
+
+  /** The binding runs one `files_stat` after the document appears. */
+  const settled = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it('binds the document to a path the fs scope allows, with the snapshot stamp', async () => {
+    const path = h.put('/nc/welle.nc', 'nc/encoding/utf8-lf.nc');
+
+    const id = h.files.restoreDocument({ ...SNAPSHOT, path });
+    await settled();
+
+    const doc = h.docs.get(id);
+    expect(doc?.path).toBe(path);
+    expect(doc?.title).toBe('welle.nc');
+    expect(doc?.dirty).toBe(true);
+    // The stamp is the file as it was when the snapshot was taken, so the external-change
+    // check of AD-10 sees a file that has moved on since.
+    expect(doc?.disk).toEqual(SNAPSHOT.diskStamp);
+    expect(doc?.proposedPath).toBeNull();
+    expect(h.editor.getText(id)).toBe(SNAPSHOT.textLF);
+    expect(h.editor.eols.get(id)).toBe('crlf');
+  });
+
+  it('takes the place of the empty document the window started with', async () => {
+    // M7 integration (mergeA): the rule `open()` follows and AD-22 asks of the session
+    // restore. Recovered work handed back beside a stray `Untitled-1` is not what a
+    // window that has just come up after a crash should look like.
+    const scratch = h.files.newUntitled();
+    expect(h.docs.all()).toHaveLength(1);
+
+    const id = h.files.restoreDocument({ ...SNAPSHOT, path: null });
+
+    expect(h.docs.all().map((doc) => doc.id)).toEqual([id]);
+    expect(h.docs.get(scratch)).toBeUndefined();
+  });
+
+  it('keeps a document the user has already typed in', async () => {
+    const mine = h.files.newUntitled();
+    h.editor.type(mine, 'G0 X1');
+    expect(h.docs.get(mine)?.dirty).toBe(true);
+
+    const id = h.files.restoreDocument({ ...SNAPSHOT, path: null });
+
+    expect(h.docs.all().map((doc) => doc.id)).toContain(mine);
+    expect(h.docs.get(id)).toBeDefined();
+  });
+
+  it('announces the binding, so the recovered program joins the per-file memory', async () => {
+    // M7 integration (mergeA): `onDidOpen` is what `createFileTracker` and the Recent
+    // list hang from. Without it a recovered program is the one tab whose cursor and
+    // bookmarks are neither put back nor written down.
+    const path = h.put('/nc/welle.nc', 'nc/encoding/utf8-lf.nc');
+    const opened: string[] = [];
+    h.files.onDidOpen((_id, p) => opened.push(p));
+
+    const id = h.files.restoreDocument({ ...SNAPSHOT, path });
+    // Not before the binding: a listener told about a document that is still unbound
+    // would read `path: null` off it.
+    expect(opened).toEqual([]);
+    await settled();
+
+    expect(opened).toEqual([path]);
+    expect(h.docs.get(id)?.path).toBe(path);
+  });
+
+  it('announces nothing when the binding was refused', async () => {
+    const path = '/elsewhere/welle.nc';
+    h.fs.forbidden.add(path);
+    const opened: string[] = [];
+    h.files.onDidOpen((_id, p) => opened.push(p));
+
+    h.files.restoreDocument({ ...SNAPSHOT, path });
+    await settled();
+
+    expect(opened).toEqual([]);
+  });
+
+  it('leaves a path the fs scope does not allow untitled, named after the file', async () => {
+    // Nothing in a snapshot's metadata is ever granted: a path that was not re-granted
+    // at startup is a name here and nothing else.
+    const path = '/elsewhere/welle.nc';
+    h.fs.forbidden.add(path);
+
+    const id = h.files.restoreDocument({ ...SNAPSHOT, path });
+    await settled();
+
+    const doc = h.docs.get(id);
+    expect(doc?.path).toBeNull();
+    expect(doc?.proposedPath).toBe(path);
+    // The tab still says which program this is; `Untitled-1` would not.
+    expect(doc?.title).toBe('welle.nc');
+    expect(doc?.dirty).toBe(true);
+    expect(doc?.disk).toBeNull();
+  });
+
+  it('proposes the original path in Save As, and forgets it once the file is written', async () => {
+    const path = '/elsewhere/welle.nc';
+    h.fs.forbidden.add(path);
+    const id = h.files.restoreDocument({ ...SNAPSHOT, path });
+    await settled();
+    h.dialogs.answers.saveFile.push('/nc/welle.nc');
+
+    expect(await h.files.saveAs(id)).toBe(true);
+
+    const dialog = h.dialogs.calls.find((call) => call.kind === 'saveFile');
+    expect(dialog?.args.defaultPath).toBe(path);
+    expect(h.docs.get(id)?.path).toBe('/nc/welle.nc');
+    expect(h.docs.get(id)?.proposedPath).toBeNull();
+    expect(h.docs.get(id)?.dirty).toBe(false);
+  });
+
+  it('never binds a path a second tab already owns', async () => {
+    // Two tabs on one file each believe they own it, and the second save discards the
+    // first (the P1 `alreadyOpen` guard, reached from the other side).
+    const path = h.put('/nc/welle.nc', 'nc/encoding/utf8-lf.nc');
+    const [open] = await h.files.open([path]);
+
+    const id = h.files.restoreDocument({ ...SNAPSHOT, path });
+    await settled();
+
+    expect(h.docs.get(id)?.path).toBeNull();
+    expect(h.docs.get(id)?.proposedPath).toBe(path);
+    expect(h.docs.byPath(path)?.id).toBe(open);
+  });
+
+  it('does not resurrect a document that was closed while the stat was in flight', async () => {
+    const path = h.put('/nc/welle.nc', 'nc/encoding/utf8-lf.nc');
+    const id = h.files.restoreDocument({ ...SNAPSHOT, path });
+
+    h.docs.remove(id);
+    await settled();
+
+    expect(h.docs.get(id)).toBeUndefined();
+    expect(h.docs.byPath(path)).toBeUndefined();
+  });
+
+  it('leaves a document that was saved elsewhere in the meantime where the user put it', async () => {
+    const path = h.put('/nc/welle.nc', 'nc/encoding/utf8-lf.nc');
+    const id = h.files.restoreDocument({ ...SNAPSHOT, path });
+    h.dialogs.answers.saveFile.push('/nc/other.nc');
+
+    await h.files.saveAs(id);
+    await settled();
+
+    expect(h.docs.get(id)?.path).toBe('/nc/other.nc');
+    expect(h.docs.byPath(path)).toBeUndefined();
+  });
+
+  it('gives an untitled snapshot a fresh index', () => {
+    h.files.newUntitled();
+    const id = h.files.restoreDocument({ ...SNAPSHOT, path: null, title: 'Untitled-7' });
+    expect(h.docs.get(id)?.path).toBeNull();
+    expect(h.docs.get(id)?.title).toBe('Untitled-2');
+    expect(h.docs.get(id)?.dirty).toBe(true);
+  });
+
+  it.each([
+    ['a machine id', 'lathe-2' as string | null, 'lathe-2' as string | null | undefined],
+    ['an explicit none', null, null],
+  ])('keeps %s from the snapshot', (_name, machineId, expected) => {
+    const id = h.files.restoreDocument({ ...SNAPSHOT, path: null, machineId });
+    expect(h.docs.get(id)?.machineId).toBe(expected);
+  });
+
+  it('leaves the machine unset when the snapshot remembered none', () => {
+    // `undefined` is "follow the profile's default machine" and is not the same answer
+    // as `null` (AD-31), so it must not be written as one.
+    const id = h.files.restoreDocument({ ...SNAPSHOT, path: null });
+    expect(h.docs.get(id)?.machineId).toBeUndefined();
+  });
+
+  it('falls back to the default dialect when the snapshot names one that is gone', () => {
+    const id = h.files.restoreDocument({ ...SNAPSHOT, path: null, profileId: 'shop-special-2019' });
+    expect(h.docs.get(id)?.profileId).toBe('fanuc-gcode');
+    expect(h.editor.languages.get(id)).toBe('fanuc-gcode');
+  });
+
+  it('opens editable even when the file it came from is read-only', async () => {
+    // The lock belongs to the file; the buffer is the only copy of the recovered work.
+    const path = h.put('/nc/welle.nc', 'nc/encoding/utf8-lf.nc');
+    h.fs.readOnly.add(path);
+
+    const id = h.files.restoreDocument({ ...SNAPSHOT, path });
+    await settled();
+
+    expect(h.docs.get(id)?.readOnly).toBe(false);
+    expect(h.docs.get(id)?.path).toBe(path);
+  });
+
+  it('stays dirty through an undo back to the snapshot text', () => {
+    // A dirty flag the editor recomputes would be cleared here, and the tab would claim
+    // the file on disk already holds this text.
+    const id = h.files.restoreDocument({ ...SNAPSHOT, path: null });
+    h.editor.type(id, 'G0 X3\n');
+    h.editor.type(id, SNAPSHOT.textLF);
+    h.editor.markClean(id);
+    expect(h.docs.get(id)?.dirty).toBe(true);
+  });
+});
+
+describe('per-file memory at open (AD-22)', () => {
+  it('uses the dialect the user chose for this file instead of detection', async () => {
+    const path = h.put('/nc/mill-looking.nc', 'nc/encoding/utf8-lf.nc');
+    h.memory.profiles.set(path, 'heidenhain-klartext');
+
+    const [id] = await h.files.open([path]);
+
+    expect(h.docs.get(id)?.profileId).toBe('heidenhain-klartext');
+    expect(h.editor.languages.get(id)).toBe('heidenhain-klartext');
+  });
+
+  it('ignores a remembered dialect that no longer exists', async () => {
+    const path = h.put('/nc/a.nc', 'nc/encoding/utf8-lf.nc');
+    h.memory.profiles.set(path, 'shop-special-2019');
+
+    const [id] = await h.files.open([path]);
+
+    expect(h.docs.get(id)?.profileId).toBe('fanuc-gcode');
+  });
+
+  it.each([
+    ['a machine id', 'lathe-2' as string | null, 'lathe-2' as string | null | undefined],
+    ['an explicit none', null, null],
+  ])('applies %s remembered for the file', async (_name, remembered, expected) => {
+    const path = h.put('/nc/a.nc', 'nc/encoding/utf8-lf.nc');
+    h.memory.machines.set(path, remembered);
+
+    const [id] = await h.files.open([path]);
+
+    expect(h.docs.get(id)?.machineId).toBe(expected);
+  });
+
+  it('leaves the machine unset when nothing is remembered', async () => {
+    const path = h.put('/nc/a.nc', 'nc/encoding/utf8-lf.nc');
+    const [id] = await h.files.open([path]);
+    expect(h.docs.get(id)?.machineId).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// G8 M7: the guards that used to fail open
+// ---------------------------------------------------------------------------
+
+/**
+ * Three ways a document could end up bound to a file it had never compared with
+ * anything, and in all three the next Cmd+S replaced a CAM post's program with no
+ * question asked. The fix is one sentence in `write`: **nothing to compare is not the
+ * same as unchanged**, so it asks.
+ */
+describe('a save over a file the document cannot vouch for (G8 M7)', () => {
+  const settled = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+  const text = (path: string): string => new TextDecoder().decode(h.fs.files.get(path));
+  const confirms = (): number => h.dialogs.calls.filter((c) => c.kind === 'confirm').length;
+
+  it('asks after a "Keep mine" on a file a post deleted and rewrote', async () => {
+    const path = h.put('/nc/welle.nc', 'nc/encoding/utf8-lf.nc');
+    const [id] = await h.files.open([path]);
+    h.editor.type(id, 'G0 X1 (my edit)\n');
+
+    // A CAM post regenerates the program the usual way: delete, then write.
+    h.fs.files.delete(path);
+    await h.external.checkNow();
+    expect(h.docs.get(id)?.external).toBe('deleted');
+
+    // "Keep mine" is the only button the banner offers for a deleted file.
+    h.external.keepMine(id);
+    expect(h.docs.get(id)?.path).toBe(path);
+    expect(h.docs.get(id)?.disk).not.toBeNull();
+
+    // The post finishes: a brand new program is at that path.
+    h.fs.files.set(path, new TextEncoder().encode('G0 X999 (the new post)\n'));
+    h.fs.mtimes.set(path, 90_000);
+
+    // The poll notices it again …
+    await h.external.checkNow();
+    expect(h.docs.get(id)?.external).toBe('changed');
+
+    // … and the save asks before it overwrites it. Cancel writes nothing at all.
+    h.dialogs.answers.confirm.push(false);
+    expect(await h.files.save(id)).toBe(false);
+    expect(confirms()).toBe(1);
+    expect(text(path)).toContain('the new post');
+    expect(h.fs.writes).toEqual([]);
+  });
+
+  it('asks for a restored snapshot whose sidecar carried no stamp', async () => {
+    const path = h.put('/nc/welle.nc', 'nc/encoding/utf8-lf.nc');
+    // What `app/recovery.ts` writes for a document whose stamp had been cleared.
+    const entry = {
+      session: 's-1',
+      key: 'd1',
+      bytes: 20,
+      path,
+      title: 'welle.nc',
+      profileId: 'fanuc-gcode',
+      encoding: { encoding: 'utf-8', hasBom: false },
+      eol: 'crlf',
+      nul: { leader: 0, trailer: 0, stripped: 0 },
+      diskStamp: null,
+      savedAt: 1,
+    } as unknown as RecoveryEntry;
+
+    // The dialog says as much, before anything is opened.
+    expect(
+      outlookOf(entry, {
+        path,
+        allowed: true,
+        exists: true,
+        isDir: false,
+        mtimeMs: 500,
+        size: 12,
+        readonly: false,
+      }),
+    ).toBe('unknown');
+
+    const id = h.files.restoreDocument({
+      path: entry.path,
+      title: entry.title,
+      profileId: entry.profileId,
+      encoding: entry.encoding,
+      eol: entry.eol,
+      nul: entry.nul,
+      textLF: 'G0 X1 (my edit)\n',
+      diskStamp: entry.diskStamp,
+    });
+    await settled();
+
+    // Bound — the work belongs to that program — but bound with the banner up.
+    expect(h.docs.get(id)?.path).toBe(path);
+    expect(h.docs.get(id)?.external).toBe('changed');
+
+    h.dialogs.answers.confirm.push(false);
+    expect(await h.files.save(id)).toBe(false);
+    expect(confirms()).toBe(1);
+    expect(h.fs.writes).toEqual([]);
+  });
+
+  it('asks when files_stat stops answering, and keeps the mtime it had', async () => {
+    const path = h.put('/nc/welle.nc', 'nc/encoding/utf8-lf.nc');
+    const [id] = await h.files.open([path]);
+    const before = h.docs.get(id)?.disk?.mtimeMs;
+    h.editor.type(id, 'G0 X1 (my edit)\n');
+    h.fs.files.set(path, new TextEncoder().encode('G0 X999 (the new post)\n'));
+    h.fs.mtimes.set(path, 90_000);
+    h.fs.readOnly.add(path);
+
+    // A dropped IPC call: neither the read-only attribute nor the file's new stamp can
+    // be read, and `files_stat` used to answer `[]` for both. The console line is the
+    // one `statOf` logs on purpose, and it is expected here.
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    h.statFails.now = true;
+    h.dialogs.answers.confirm.push(false);
+    expect(await h.files.save(id)).toBe(false);
+    expect(confirms()).toBe(1);
+    expect(text(path)).toContain('the new post');
+    expect(h.fs.writes).toEqual([]);
+
+    // And when the user does say "overwrite", the document keeps the time it had rather
+    // than being restamped with `mtimeMs: null` — which would leave it watching for size
+    // changes alone for the rest of the session.
+    h.dialogs.answers.confirm.push(true);
+    expect(await h.files.save(id)).toBe(true);
+    expect(h.docs.get(id)?.disk?.mtimeMs).toBe(before);
+    expect(text(path)).toContain('my edit');
   });
 });

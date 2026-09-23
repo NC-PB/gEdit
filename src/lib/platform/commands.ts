@@ -11,6 +11,11 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import type { FieldSpec } from '$lib/core/forms/types';
+// Type-only, and the one import that points "up" from this module: the M7 snapshot
+// metadata is made of the document types of §7.2 (`FileEncoding`, `Eol`, `NulInfo`,
+// `DiskStamp`), whose home is `app/types.ts`. `import type` is erased at build time,
+// so there is no import cycle in the bundle.
+import type { DiskStamp, Eol, FileEncoding, NulInfo, RecoveryEntry } from '$lib/app/types';
 
 /**
  * One entry of `files_stat`. A path the fs scope does not allow comes back with
@@ -176,6 +181,151 @@ export function recentRemove(path: string): Promise<RecentEntry[]> {
 /** Empties the list. */
 export function recentClear(): Promise<RecentEntry[]> {
   return invoke<RecentEntry[]>('recent_clear');
+}
+
+// ---------------------------------------------------------------------------
+// M7: backup, session and crash recovery (src-tauri/src/{backup,session,recovery}.rs)
+//
+// Three separate promises, and they fail separately on purpose:
+//
+//   - `filesBackup` is the copy made **before** a save overwrites a file. It is the
+//     only one of the three whose failure is a question to the user, because the
+//     alternative is to overwrite the previous version with nothing to fall back to.
+//   - `sessionSave`/`sessionLoad` are which files were open. Losing them costs a
+//     convenience.
+//   - the `recovery*` pair is unsaved text. It has to survive a process that is
+//     killed without warning, which is why the write is a raw body and why Rust,
+//     not the webview, decides where it lands.
+//
+// No path from the webview is trusted anywhere here: `filesBackup` is refused unless
+// the fs scope already allows the file, and a recovery snapshot is addressed by a
+// session and a key (`^[a-z0-9-]{1,64}$`), never by a path. Nothing in a snapshot's
+// metadata is granted when it is restored.
+// ---------------------------------------------------------------------------
+
+/**
+ * Copies `path` aside according to `files.backup`, before the save that overwrites it.
+ *
+ * Answers with where the copy went, or `null` when there was nothing to copy — the
+ * setting is `off`, or the file does not exist yet (Save As). **Rejects** when the
+ * copy was wanted and could not be made; the caller asks the user whether to save
+ * without one, and a Cancel writes nothing.
+ *
+ * Rust reads `files.backup` and `files.backupCount` from `settings.json` itself, so
+ * neither is an argument here (AD-8) and a webview bug cannot skip a backup.
+ */
+export function filesBackup(path: string): Promise<string | null> {
+  return invoke<string | null>('files_backup', { path });
+}
+
+/** `state.json` → `session`. `active` is an index into `paths`, not a document id. */
+export interface SessionState {
+  paths: string[];
+  active: number | null;
+}
+
+/**
+ * Replaces the stored session list. Rust keeps only paths the fs scope already allows
+ * and truncates to 50, so this cannot be used to have a path granted at the next start.
+ */
+export function sessionSave(paths: string[], active: number | null): Promise<void> {
+  return invoke<void>('session_save', { paths, active });
+}
+
+/** The stored session. Never rejects: a broken state file answers with an empty one. */
+export function sessionLoad(): Promise<SessionState> {
+  return invoke<SessionState>('session_load');
+}
+
+/**
+ * The metadata of one crash-recovery snapshot, as it goes over the wire in the
+ * `x-gedit-recovery` header. It is everything needed to rebuild the document
+ * **except** its text, which is the raw body.
+ *
+ * `key` identifies the snapshot within the session and becomes its file name, so it
+ * has to match `^[a-z0-9-]{1,64}$`; the document id (`d7`) does.
+ */
+export interface RecoveryMeta {
+  key: string;
+  path: string | null;
+  title: string;
+  profileId: string;
+  machineId?: string | null;
+  encoding: FileEncoding;
+  eol: Eol;
+  nul: NulInfo;
+  diskStamp: DiskStamp | null;
+  savedAt: number;
+}
+
+/** The header the snapshot metadata travels in; must match `RECOVERY_HEADER` in Rust. */
+export const RECOVERY_HEADER = 'x-gedit-recovery';
+
+/**
+ * The metadata as a header value: JSON with every non-ASCII character escaped.
+ *
+ * A header value may only hold visible ASCII, and a program path can perfectly well
+ * be `/Aufträge/Welle.nc`. `JSON.stringify` would put that Umlaut in raw and the
+ * whole snapshot would fail at the fetch, so the escaping is not cosmetic — it is the
+ * difference between "the crash cost nothing" and "the crash cost everything the user
+ * typed since the last save".
+ *
+ * A **lone surrogate** in a path is escaped the same way but does not survive the other
+ * end: `serde_json` rejects `\ud800` as invalid JSON, so the snapshot is refused rather
+ * than stored (WP7.2). That is the safe failure — a refusal with a message, never a
+ * half-written file — and no macOS path can reach it today, since a path arrives here
+ * as valid UTF-8 from Rust.
+ */
+export function recoveryHeader(meta: RecoveryMeta): string {
+  return JSON.stringify(meta).replace(/[^\x20-\x7e]/g, (c) =>
+    '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'),
+  );
+}
+
+/**
+ * Writes one snapshot: `textLF` as the raw body, `meta` in the header.
+ *
+ * Raw rather than an argument because the text is a whole program — up to 64 MiB —
+ * and the argument path would JSON-escape and re-parse every byte of it on a timer
+ * (F30). Rust writes `<data>/recovery/<session>/<key>.{txt,json}` atomically.
+ */
+export function recoveryPut(meta: RecoveryMeta, textLF: string): Promise<void> {
+  return invoke<void>('recovery_put', new TextEncoder().encode(textLF), {
+    headers: { [RECOVERY_HEADER]: recoveryHeader(meta) },
+  });
+}
+
+/** Forgets one snapshot of the current session: the document was saved or closed. */
+export function recoveryDrop(key: string): Promise<void> {
+  return invoke<void>('recovery_drop', { key });
+}
+
+/**
+ * Empties the current session's folder. Called from `files.onWillQuit`, **after** the
+ * user's quit decision — never on exit, because a Windows logoff also ends there and
+ * a logoff is exactly what the snapshots are for (F29, AD-21).
+ */
+export function recoveryClearCurrent(): Promise<void> {
+  return invoke<void>('recovery_clear_current');
+}
+
+/**
+ * The snapshots of sessions that are no longer alive, newest first. The current
+ * session is never in it, so a second running gEdit is never offered as a crash.
+ */
+export function recoveryList(): Promise<RecoveryEntry[]> {
+  return invoke<RecoveryEntry[]>('recovery_list');
+}
+
+/** The text of one snapshot, as raw bytes (UTF-8). */
+export async function recoveryRead(session: string, key: string): Promise<string> {
+  const bytes = await invoke<ArrayBuffer>('recovery_read', { session, key });
+  return new TextDecoder().decode(bytes);
+}
+
+/** Removes a whole leftover session ("Discard" in the restore dialog). */
+export function recoveryDiscard(session: string): Promise<void> {
+  return invoke<void>('recovery_discard', { session });
 }
 
 // ---------------------------------------------------------------------------

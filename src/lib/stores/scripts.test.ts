@@ -43,7 +43,7 @@ describe('script stores', () => {
 
   it('reports the running flag the command context reads', () => {
     expect(isScriptRunning()).toBe(false);
-    runningScript.set({ runId: 'r1', scriptId: 'bundled:tool_list.py', startedAt: 1 });
+    runningScript.set({ runId: 'r1', scriptId: 'bundled:tool_list.py', docId: 'd1', startedAt: 1 });
     expect(isScriptRunning()).toBe(true);
     runningScript.set(null);
     expect(isScriptRunning()).toBe(false);
@@ -77,7 +77,7 @@ describe('script stores', () => {
   it('the test seam puts every store back to a fresh app', () => {
     pythonStatus.set({ ok: true, interpreter: 'python3', version: '3.12.1', message: null });
     lastScriptId.set('user:x.py');
-    runningScript.set({ runId: 'r1', scriptId: 'user:x.py', startedAt: 1 });
+    runningScript.set({ runId: 'r1', scriptId: 'user:x.py', docId: 'd1', startedAt: 1 });
     resetScriptsForTest();
     expect(get(pythonStatus)).toBeNull();
     expect(get(lastScriptId)).toBeNull();

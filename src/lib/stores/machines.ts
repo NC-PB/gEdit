@@ -22,10 +22,12 @@
 //  4. **A hand edit wins.** Saving the machines document runs `reloadFromDisk()`, so the
 //     next page action writes over fresh data and never over a stale in-memory copy.
 //
-// What is *not* here: how a number is read (`core/machines/numbers.ts`, WP6.9), the status
-// item and the page (WP6.10), and the per-file memory of a choice (M7, WP7.5). The choice
-// itself lives in this service and is mirrored into `DocMeta.machineId`, which is what
-// WP7.5 persists.
+// What is *not* here: how a number is read (`core/machines/numbers.ts`, WP6.9) and the
+// status item and the page (WP6.10). The choice itself lives in this service and is
+// mirrored into `DocMeta.machineId`; from M7 `setForDoc` also hands it to per-file memory
+// (`deps.remember`, WP7.5), so a machine picked for a program is still that machine after
+// a restart — and picking "follow the profile's default" forgets it rather than leaving
+// the old id behind.
 
 import { writable } from 'svelte/store';
 import { applyMachine, compatible, effectiveMachine } from '$lib/core/machines/effective';
@@ -40,6 +42,7 @@ import { MACHINES_VERSION } from '$lib/core/machines/types';
 import { MAX_ID_LENGTH, MAX_MACHINES, validateMachine } from '$lib/core/machines/validate';
 import { codes as appCodes } from '$lib/stores/codes';
 import { docs as appDocs } from '$lib/stores/documents';
+import { fileMemory as appFileMemory } from '$lib/stores/fileMemory';
 import { profiles as appProfiles } from '$lib/stores/profiles';
 import { status as appStatus } from '$lib/app/status';
 import { configLoad, machinesOpenFile, machinesSave, type ConfigLoad } from '$lib/platform/commands';
@@ -60,11 +63,19 @@ import type {
 /** Everything the service reaches for, so a unit test never needs Tauri (AD-2). */
 export interface MachineServiceDeps {
   docs: {
-    get(id: DocId): { profileId: string; machineId?: string | null } | undefined;
+    /** `path` is the key per-file memory stores the choice under (M7); null = untitled. */
+    get(id: DocId): { profileId: string; machineId?: string | null; path?: string | null } | undefined;
     byPath(path: string): { id: DocId } | undefined;
     all(): { id: DocId; profileId: string }[];
     update(id: DocId, patch: { machineId?: string | null }): void;
   };
+  /**
+   * M7, AD-22: records the explicit machine choice of a file, so it is still that
+   * machine at the next start. `undefined` **forgets** it, which is what "follow the
+   * profile's default machine" has to do — a memo that kept the old id would hand the
+   * choice straight back (`FOLLOW_DEFAULT` below).
+   */
+  remember(path: string, machineId: string | null | undefined): void;
   profiles: {
     defaultId(): string;
     get(id: string): { chain: string[] } | undefined;
@@ -158,8 +169,9 @@ function freeId(name: string, taken: ReadonlySet<string>): string {
  * (P1 store rule), so the mirror cannot be cleared through it; the service therefore
  * keeps the authority, and `choiceOf` maps this back to `undefined` for every reader.
  *
- * **M7/WP7.5**, which persists `DocMeta.machineId`, has to clear the mirror when it
- * writes a reset, or the choice comes back with the next start of the application.
+ * **M7/WP7.5** therefore persists the argument of `setForDoc` and not the mirror: a reset
+ * deletes `machineId` from the file's memo, and the choice does not come back with the
+ * next start of the application.
  */
 const FOLLOW_DEFAULT = Symbol('follow the profile default');
 
@@ -727,6 +739,12 @@ export function createMachineService(deps: MachineServiceDeps): MachineService {
       // `DocMeta.machineId` is the mirror WP7.5 persists; the service keeps the authority,
       // because `docs.update` cannot put a member back to `undefined` (P1 store rule).
       if (id !== undefined) deps.docs.update(docId, { machineId: id });
+      // M7, AD-22: the choice is remembered for the *file*, and the memo is written from
+      // `id` and not from the mirror — the mirror still carries the previous id when the
+      // document goes back to following its profile's default, and persisting that would
+      // make the reset last exactly until the next start.
+      const path = deps.docs.get(docId)?.path;
+      if (typeof path === 'string' && path !== '') deps.remember(path, id);
       views.delete(docId);
       warned.delete(docId);
       toldAboutFallback.delete(docId);
@@ -743,6 +761,9 @@ export const machines: MachineService = createMachineService({
     all: () => appDocs.all(),
     update: (id, patch) => appDocs.update(id, patch),
   },
+  // A present member with the value `undefined` is how `FileMemoryStore.remember`
+  // deletes one, which is exactly "forget the choice" (§7.9).
+  remember: (path, machineId) => appFileMemory.remember(path, { machineId }),
   profiles: appProfiles,
   codeDb: (dialect) => appCodes.byId(dialect),
   // The head of the document, not the whole of it: `detectVariants` stops after 400

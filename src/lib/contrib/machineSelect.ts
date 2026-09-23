@@ -19,6 +19,7 @@ import { files } from '$lib/app/fileOps';
 import { modals } from '$lib/app/modals';
 import { status } from '$lib/app/status';
 import { docs } from '$lib/stores/documents';
+import { fileMemory } from '$lib/stores/fileMemory';
 import { machines } from '$lib/stores/machines';
 import { profiles } from '$lib/stores/profiles';
 import { t } from '$lib/i18n';
@@ -130,6 +131,13 @@ async function pickOther(docId: DocId, title: string, profileId: string): Promis
   const machine = machines.get(picked);
   if (!machine) return;
   files.setProfile(docId, machine.profile);
+  // AD-22: picking a machine of another dialect changes the dialect too, and that is a
+  // decision the user made by hand — so it is remembered for the file exactly as the
+  // dialect picker's own choice is (`contrib/profileSelect.ts`). Without this line the
+  // file comes back next time with a detected dialect and a machine that does not fit
+  // it, and AD-31 drops the machine with a message (M7 integration, mergeA).
+  const path = docs.get(docId)?.path ?? null;
+  if (path !== null) fileMemory.remember(path, { profileId: machine.profile });
   machines.setForDoc(docId, machine.id);
   status.show(
     t('machines.changedProfile', {

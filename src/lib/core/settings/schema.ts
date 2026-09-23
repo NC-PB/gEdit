@@ -57,6 +57,27 @@ export interface Settings {
   'files.externalChange': 'ask' | 'reload';
   /** A profile id from the profile registry. */
   'files.defaultProfile': string;
+  /**
+   * M7, AD-21. Where the copy of a file goes that is made **before** a save
+   * overwrites it. `history` keeps the last `files.backupCount` versions under the
+   * app's own data folder, so the shop folder a DNC or CAM watcher looks at stays
+   * clean; `sibling` writes `<path>.bak` next to the file; `off` writes nothing.
+   *
+   * Rust reads this key and `files.backupCount` straight from the file (the AD-8
+   * pattern), so they are never arguments of `files_backup`.
+   */
+  'files.backup': 'off' | 'sibling' | 'history';
+  /** 1-50: how many versions `history` keeps per file. */
+  'files.backupCount': number;
+  /** M7, AD-21: snapshot dirty documents so a crash or a power cut costs at most 30 s. */
+  'files.recovery': boolean;
+  /** M7, AD-22: reopen the files that were open when gEdit was last closed. */
+  'files.restoreSession': boolean;
+  /**
+   * M7, AD-22: remember per file where the cursor was, which lines were bookmarked,
+   * and a dialect or machine chosen by hand.
+   */
+  'files.rememberPerFile': boolean;
   /** Absolute path of a Python interpreter; empty means "find one". */
   'scripts.python': string;
   /** Extra script folders, in order; they become the `extra<N>:` roots. */
@@ -97,6 +118,13 @@ export const DEFAULTS: Settings = freeze({
   'files.recentLength': 15,
   'files.externalChange': 'reload',
   'files.defaultProfile': 'fanuc-gcode',
+  // The default is `history`, not `off`: the one thing this milestone exists for is
+  // that the bytes a save replaced are still somewhere afterwards (AD-21).
+  'files.backup': 'history',
+  'files.backupCount': 5,
+  'files.recovery': true,
+  'files.restoreSession': true,
+  'files.rememberPerFile': true,
   'scripts.python': '',
   'scripts.folders': freeze<string[]>([]),
   'scripts.timeoutSeconds': 60,
@@ -196,6 +224,14 @@ export const SETTING_FIELDS: SettingFieldMeta[] = [
   }),
   // The choices come from the profile registry at render time (WP2.7).
   meta('files.defaultProfile', 'files', { type: 'choice', choices: [], required: true }),
+  meta('files.backup', 'files', {
+    type: 'choice',
+    choices: choice('files.backup', ['history', 'sibling', 'off']),
+  }),
+  meta('files.backupCount', 'files', { type: 'integer', min: 1, max: 50 }),
+  meta('files.recovery', 'files', { type: 'bool' }),
+  meta('files.restoreSession', 'files', { type: 'bool' }),
+  meta('files.rememberPerFile', 'files', { type: 'bool' }),
 
   // Scripts
   meta('scripts.python', 'scripts', { type: 'file' }),

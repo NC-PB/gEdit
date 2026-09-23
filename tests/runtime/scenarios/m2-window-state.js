@@ -78,10 +78,16 @@ scenario(
     // D5, asserted directly. The old form was `indexOf('width') === -1 || ui.layout.left.width
     // !== undefined`, and `layoutPersist` always writes `left.width`, so the second half was
     // unconditionally true and the check could never fail (G8 M2). `state.json` is Rust's
-    // `recent`, the webview's `ui` and the version stamp — the geometry is the plugin's own
-    // file, checked above.
+    // `recent`, the webview's `ui`, Rust's `session` (M7, AD-22) and the version stamp —
+    // the geometry is the plugin's own file, checked above.
+    //
+    // `session` is asserted as *allowed*, not as present: it is written 1 s after the last
+    // open or activation, and this scenario reads the file as soon as `uiState.flush()`
+    // comes back, so demanding it here would be a race. That it really lands is
+    // `m7-session-1/2`'s job; what D5 needs from this check is that nothing else appears.
     const members = Object.keys(state).sort()
-    h.check('state.json holds only $version, recent and ui (D5)', JSON.stringify(members) === JSON.stringify(['$version', 'recent', 'ui']), members)
+    const allowed = ['$version', 'recent', 'session', 'ui']
+    h.check('state.json holds only $version, recent, session and ui (D5)', members.every((name) => allowed.includes(name)) && ['$version', 'recent', 'ui'].every((name) => members.includes(name)), members)
     const withoutUi = JSON.stringify({ ...state, ui: undefined })
     h.check('the only geometry in it is the side panel’s, inside ui.layout (D5)', state.ui?.layout?.left?.width !== undefined && !/width|height|maximized|fullscreen/.test(withoutUi), {
       left: state.ui?.layout?.left,

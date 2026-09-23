@@ -84,7 +84,7 @@ export function start(cfg) {
 
   const run = async () => {
     const entry = scenarios.get(cfg.scenario)
-    const h = createHarness(cfg, rec, send)
+    const h = createHarness(cfg, rec, send, drain)
     if (!entry) {
       h.check(`scenario ${cfg.scenario} exists in the bundle`, false)
     } else {

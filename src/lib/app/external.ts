@@ -67,20 +67,33 @@ interface Seen {
   size: number | null;
 }
 
+/**
+ * The state of a file at the moment the user answered "Keep mine" about it, for the two
+ * cases where there was no stamp to adopt: the file was gone, or its new content was too
+ * large to hash. Without it the very next sweep would find the same difference and put
+ * the banner straight back up.
+ */
+interface Decided extends Seen {
+  exists: boolean;
+}
+
 export function createExternalChangeService(deps: ExternalChangeDeps): ExternalChangeService {
   /**
    * The stamp a "Keep mine" would apply, per document: the file as the poll last read it.
-   * `null` means the new content was too large to hash, so there is no stamp to keep and
-   * the document stops being watched instead.
+   * `null` means the new content was too large to hash, so there is no new stamp — the
+   * document keeps the one it had (see `keepMine`).
    */
   const pending = new Map<DocId, DiskStamp | null>();
   /** The `(mtime, size)` a banner is already up for, so the file is read only once. */
   const seen = new Map<DocId, Seen>();
+  /** Per document: the file state a "Keep mine" was answered about. See [`Decided`]. */
+  const kept = new Map<DocId, Decided>();
   let running = false;
 
   function forget(id: DocId): void {
     pending.delete(id);
     seen.delete(id);
+    kept.delete(id);
   }
 
   async function statOf(paths: string[]): Promise<FileStat[]> {
@@ -150,6 +163,19 @@ export function createExternalChangeService(deps: ExternalChangeDeps): ExternalC
     const doc = deps.docs.get(id);
     if (!doc?.path || !doc.disk) return;
     if (!stat.allowed) return;
+    // The user has already answered about the file in exactly this state, and there was
+    // no stamp for the document to adopt, so nothing here can decide it again: raising
+    // the banner once more every two seconds is not asking, it is nagging. Any further
+    // change moves `(mtime, size)` — or brings a deleted file back — and falls through.
+    const decided = kept.get(id);
+    if (
+      decided &&
+      decided.exists === stat.exists &&
+      decided.mtimeMs === stat.mtimeMs &&
+      decided.size === stat.size
+    ) {
+      return;
+    }
     if (!stat.exists) {
       reportDeleted(id);
       return;
@@ -163,7 +189,8 @@ export function createExternalChangeService(deps: ExternalChangeDeps): ExternalC
     if (last && last.mtimeMs === stat.mtimeMs && last.size === stat.size && doc.external !== 'none') return;
 
     // Above the IPC ceiling there is nothing useful to hash: report the change on the
-    // stat alone and let "Keep mine" stop watching the document (G8 F4).
+    // stat alone (G8 F4). `pending` is `null` — there is no stamp to hand a "Keep mine",
+    // which then keeps the document's old one and records the decision in `kept`.
     if (stat.size !== null && stat.size > MAX_OPEN_BYTES) {
       seen.set(id, { mtimeMs: stat.mtimeMs, size: stat.size });
       pending.set(id, null);
@@ -213,8 +240,9 @@ export function createExternalChangeService(deps: ExternalChangeDeps): ExternalC
   }
 
   async function sweep(): Promise<void> {
-    // A document with no stamp is untitled, or one whose file the user chose to keep
-    // after it was deleted; there is nothing to compare it against.
+    // A document with no stamp is untitled, or a restored snapshot whose sidecar carried
+    // none; there is nothing to compare it against. `fileOps.write` asks before it
+    // overwrites such a document's file, because "nothing to compare" is not "unchanged".
     const watched = deps.docs.all().filter((doc) => doc.path !== null && doc.disk !== null);
     if (watched.length === 0) return;
     const stats = await statOf(watched.map((doc) => doc.path as string));
@@ -256,20 +284,48 @@ export function createExternalChangeService(deps: ExternalChangeDeps): ExternalC
 
     /**
      * Keeps the buffer and restamps, so the banner does not come back: the document now
-     * claims the file as the poll last saw it, and the next save overwrites it. A file
-     * that is gone (or whose new content was too large to hash) loses its stamp instead,
-     * which stops the poll for that document until it is saved again.
+     * claims the file as the poll last saw it, and the next save overwrites it.
+     *
+     * **It never leaves a bound document without a stamp.** There are two cases where
+     * there is no new stamp to adopt — the file is gone, and a new content too large to
+     * hash — and both used to write `disk: null`, which switched three guards off at
+     * once and for good (G8 M7):
+     *
+     *  - `examine` returns early for a document with no stamp, so no banner ever came
+     *    back, not even when a post wrote a completely different program to that path;
+     *  - `fileOps.write`'s changed-on-disk question is guarded on the stamp, so the next
+     *    Cmd+S replaced whatever was there without asking;
+     *  - a crash snapshot of such a document carries `diskStamp: null`, so after a crash
+     *    the restore dialog could claim nothing about the file either, and the restored
+     *    tab saved over it in silence.
+     *
+     * So the document keeps the stamp it had. It no longer matches the file, which is
+     * the honest answer and the safe direction: `diskChanged` reports `changed` at the
+     * next poll and at the next save, and that asks rather than writes. What stops the
+     * banner coming straight back for the state the user has just decided about is
+     * [`kept`], not the loss of the stamp.
      */
     keepMine(id: DocId): void {
       const doc = deps.docs.get(id);
       if (!doc) return;
       const stamp = pending.get(id);
+      const state = seen.get(id);
+      const deleted = doc.external === 'deleted';
       forget(id);
       deps.docs.update(id, {
         external: 'none',
         metaDirty: true,
-        disk: stamp ?? null,
+        // Only when there is one. `??` would put `null` here for the two cases above.
+        ...(stamp ? { disk: stamp } : {}),
       });
+      if (!stamp) {
+        kept.set(
+          id,
+          deleted
+            ? { exists: false, mtimeMs: null, size: null }
+            : { exists: true, mtimeMs: state?.mtimeMs ?? null, size: state?.size ?? null },
+        );
+      }
       deps.status.show(t('external.keptStatus', { name: doc.title }));
     },
   };

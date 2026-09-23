@@ -924,6 +924,56 @@ pub fn h_quit(app: AppHandle, mode: String, delay_ms: Option<u64>) {
     });
 }
 
+/// Kills this process with `SIGKILL`, the way a power cut, a force-quit or an OOM
+/// killer does (M7, AD-21).
+///
+/// It is the only way to test the recovery promise honestly. Every softer exit —
+/// `window.close()`, `terminate:`, even a panic — runs *something* on the way out:
+/// `RunEvent::Exit`, a `Drop`, a flush. A snapshot that is only on disk because one of
+/// those ran is not a snapshot that survives a crash. `SIGKILL` runs nothing, so what
+/// the next run finds is exactly what was already on disk.
+///
+/// The signal comes from a short-lived child (`/bin/kill -9 <pid>`) rather than from
+/// `libc::kill`, so the app's own threads are not involved in its own death: there is
+/// no window in which this process could still write something after deciding to die.
+///
+/// The runner sees the exit as a signal, not a code, so a scenario declares it with
+/// `h.crash()` (which calls `h.expectExit({ signal: 'SIGKILL' })` first) rather than
+/// with a plain `expectExit`.
+#[tauri::command]
+pub fn h_crash() {
+    let pid = std::process::id();
+    rh(&json!({ "kind": "diag", "msg": format!("h_crash: SIGKILL to {pid}") }));
+    #[cfg(unix)]
+    {
+        match std::process::Command::new("/bin/kill")
+            .args(["-9", &pid.to_string()])
+            .spawn()
+        {
+            Ok(_) => {}
+            Err(err) => diag(format!("h_crash: could not spawn kill: {err}")),
+        }
+        // If the child has not landed within a second something is very wrong; say so
+        // rather than let the scenario hang until the watchdog fires.
+        std::thread::sleep(Duration::from_millis(1000));
+        diag("h_crash: still alive one second after SIGKILL");
+    }
+    #[cfg(not(unix))]
+    diag("h_crash: not supported on this platform");
+}
+
+/// `<data>/recovery`, the folder the crash-recovery snapshots live in (M7).
+///
+/// The harness resolves it the way the app does, so a scenario can look at what is on
+/// disk after a crash — the session folders, the `alive` heartbeat, the `<key>.txt` and
+/// `<key>.json` pairs — without knowing where `--home` put it. Reading a file under it
+/// is `h_read_disk`'s job; this only answers where to look.
+#[tauri::command(async)]
+pub fn h_recovery_dir(app: AppHandle) -> Result<String, String> {
+    let dirs = crate::paths::app_dirs(&app)?;
+    Ok(dirs.recovery_dir().to_string_lossy().into_owned())
+}
+
 /// One of the app's **own** JSON files, by name, parsed.
 ///
 /// `settings.json` and `machines.json` live in the config folder, `state.json` in the

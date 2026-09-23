@@ -19,6 +19,8 @@ function meta(patch: Partial<NewDocMeta> = {}): NewDocMeta {
     metaDirty: false,
     disk: null,
     external: 'none',
+    readOnly: false,
+    readOnlyReason: null,
     ...patch,
   };
 }
@@ -252,5 +254,39 @@ describe('untitled indices', () => {
   it('skips the indices of saved documents', () => {
     docs.add(file('/a.nc'));
     expect(docs.nextUntitledIndex()).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M7 (WP7.3): the file a restored snapshot is named after but not bound to (AD-21)
+// ---------------------------------------------------------------------------
+
+describe('proposedPath', () => {
+  it('names an untitled document after the file it was restored from', () => {
+    // Recovered text with `Untitled-1` on the tab says nothing about which program it
+    // belongs to, and that is the one thing the programmer needs to know at that moment.
+    const id = docs.add(meta({ untitledIndex: 1, proposedPath: '/jobs/2214/welle.nc' }));
+    expect(docs.get(id)?.title).toBe('welle.nc');
+    expect(docs.get(id)?.path).toBeNull();
+  });
+
+  it('is only a name: the document is not findable by that path', () => {
+    // A weaker `path` would be worse than none: the external-change poll, the save and
+    // the reload all key on `path`, and the fs scope may not allow this one at all.
+    docs.add(meta({ untitledIndex: 1, proposedPath: '/jobs/2214/welle.nc' }));
+    expect(docs.byPath('/jobs/2214/welle.nc')).toBeUndefined();
+  });
+
+  it('gives way to a real path, and the untitled index gives way to both', () => {
+    const id = docs.add(meta({ untitledIndex: 4, proposedPath: '/jobs/welle.nc' }));
+    docs.update(id, { path: '/nc/welle-copy.nc', untitledIndex: null, proposedPath: null });
+    expect(docs.get(id)?.title).toBe('welle-copy.nc');
+    expect(docs.byPath('/nc/welle-copy.nc')?.id).toBe(id);
+  });
+
+  it('falls back to the untitled index once it is cleared', () => {
+    const id = docs.add(meta({ untitledIndex: 4, proposedPath: '/jobs/welle.nc' }));
+    docs.update(id, { proposedPath: null });
+    expect(docs.get(id)?.title).toBe('Untitled-4');
   });
 });

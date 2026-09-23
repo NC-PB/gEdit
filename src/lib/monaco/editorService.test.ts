@@ -410,7 +410,7 @@ async function attached(o: { fail?: boolean } = {}) {
   return { docs, state, service, container: () => ({}) as HTMLElement, loads: () => loads };
 }
 
-function addDoc(docs: DocumentStore, id = 'a'): DocId {
+function addDoc(docs: DocumentStore, id = 'a', o: { readOnly?: boolean } = {}): DocId {
   return docs.add({
     path: `/nc/${id}.nc`,
     untitledIndex: null,
@@ -423,6 +423,8 @@ function addDoc(docs: DocumentStore, id = 'a'): DocId {
     metaDirty: false,
     disk: null,
     external: 'none',
+    readOnly: o.readOnly === true,
+    readOnlyReason: o.readOnly === true ? 'attribute' : null,
   });
 }
 
@@ -683,5 +685,95 @@ describe('createEditorService with a fake Monaco', () => {
     expect(model.languageId).toBe('heidenhain-klartext');
     expect(model.eol).toBe('lf');
     expect(h.service.versionId(id)).toBe(model.getAlternativeVersionId());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M7 (WP7.3): the read-only editor option (AD-23, F32)
+// ---------------------------------------------------------------------------
+
+describe('the read-only option', () => {
+  /** Every `readOnly` the editor was given, in order. */
+  function locks(instance: { optionUpdates: Record<string, unknown>[] }): unknown[] {
+    return instance.optionUpdates.filter((o) => 'readOnly' in o).map((o) => o.readOnly);
+  }
+
+  it('locks the editor for a read-only document, with the message a refused keystroke shows', async () => {
+    const h = await attached();
+    const locked = addDoc(h.docs, 'locked', { readOnly: true });
+    h.service.createModel(locked, 'N10\n', 'fanuc-gcode', 'lf');
+
+    await h.service.attach(h.container());
+
+    // `readOnly` is an editor option, not a model one: one editor shows every document
+    // in turn, so it has to be decided per activation (F32).
+    expect(locks(h.state.editors[0])).toEqual([true]);
+    const message = h.state.editors[0].optionUpdates.at(-1)?.readOnlyMessage;
+    expect(message).toEqual({ value: expect.stringContaining('locked') as unknown as string });
+  });
+
+  it('follows the tab switch, in the same block as the model', async () => {
+    const h = await attached();
+    const writable = addDoc(h.docs, 'writable');
+    const locked = addDoc(h.docs, 'locked', { readOnly: true });
+    h.service.createModel(writable, 'N10\n', 'fanuc-gcode', 'lf');
+    h.service.createModel(locked, 'N20\n', 'fanuc-gcode', 'lf');
+    await h.service.attach(h.container());
+    const instance = h.state.editors[0];
+    instance.optionUpdates.length = 0;
+    instance.calls.length = 0;
+
+    h.docs.activate(writable);
+    h.docs.activate(locked);
+
+    expect(locks(instance)).toEqual([false, true]);
+    // No paint may ever show a locked program in an editable editor, so the lock lands
+    // in the same synchronous block as `setModel`.
+    expect(instance.calls.filter((call) => call.startsWith('setModel'))).toHaveLength(2);
+  });
+
+  it('follows a lock put on the active document without a tab switch', async () => {
+    const h = await attached();
+    const id = addDoc(h.docs);
+    h.service.createModel(id, 'N10\n', 'fanuc-gcode', 'lf');
+    await h.service.attach(h.container());
+    const instance = h.state.editors[0];
+
+    h.docs.update(id, { readOnly: true, readOnlyReason: 'user' });
+    h.docs.update(id, { readOnly: false, readOnlyReason: null });
+
+    expect(locks(instance)).toEqual([true, false]);
+  });
+
+  it('says nothing for the rest of the traffic on the document store', async () => {
+    const h = await attached();
+    const id = addDoc(h.docs);
+    h.service.createModel(id, 'N10\n', 'fanuc-gcode', 'lf');
+    await h.service.attach(h.container());
+    const instance = h.state.editors[0];
+
+    h.docs.update(id, { textDirty: true });
+    h.docs.update(id, { textDirty: false });
+    h.docs.update(id, { external: 'changed' });
+
+    expect(locks(instance)).toEqual([]);
+  });
+
+  it('re-applies the lock onto the editor a re-attach builds', async () => {
+    // G8 M2 again: `create()` starts from `EDITOR_OPTIONS`, where nothing is locked, so
+    // a locked program would come back editable after the compare overlay closed.
+    const h = await attached();
+    const locked = addDoc(h.docs, 'locked', { readOnly: true });
+    h.service.createModel(locked, 'N10\n', 'fanuc-gcode', 'lf');
+    await h.service.attach(h.container());
+
+    await h.service.attach(h.container());
+
+    expect(h.state.editors).toHaveLength(2);
+    expect(locks(h.state.editors[1])).toEqual([true]);
+    // And it is not in the replayed options, or the next instance would start locked
+    // whatever document it happens to show.
+    h.service.updateOptions({ fontSize: 18 });
+    expect(h.state.editors[1].optionUpdates.at(-1)).toEqual({ fontSize: 18 });
   });
 });

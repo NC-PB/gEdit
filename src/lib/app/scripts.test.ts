@@ -116,6 +116,8 @@ function newDoc(over: Partial<NewDocMeta> = {}): NewDocMeta {
     metaDirty: false,
     disk: null,
     external: 'none',
+    readOnly: false,
+    readOnlyReason: null,
     ...over,
   };
 }
@@ -177,7 +179,7 @@ interface Harness {
 function harness(o: { profileId?: string; entries?: ScriptEntry[] } = {}): Harness {
   const docs = createDocumentStore({ caseInsensitivePaths: false });
   const docId = docs.add(newDoc({ profileId: o.profileId ?? 'fanuc-gcode' }));
-  const uiStore = writable<UiState>({ layout: {}, lastParams: {}, lastScript: null });
+  const uiStore = writable<UiState>({ layout: {}, lastParams: {}, lastScript: null, files: {} });
 
   const h: Harness = {
     service: undefined as unknown as ScriptService,
@@ -411,7 +413,7 @@ describe('ScriptService.run: the refusals before anything starts', () => {
 
   it('refuses a second run while one is in flight', async () => {
     const h = await ready();
-    runningScript.set({ runId: 'run-0', scriptId: 'user:other.py', startedAt: 1 });
+    runningScript.set({ runId: 'run-0', scriptId: 'user:other.py', docId: 'd1', startedAt: 1 });
     await h.service.run('bundled:scale_feed.py');
     expect(lastStatus(h).error).toBe(true);
     expect(h.requests).toHaveLength(0);

@@ -56,6 +56,8 @@ function newDoc(over: Partial<NewDocMeta> = {}): NewDocMeta {
     metaDirty: false,
     disk: null,
     external: 'none',
+    readOnly: false,
+    readOnlyReason: null,
     ...over,
   };
 }

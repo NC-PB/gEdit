@@ -13,6 +13,9 @@
 //   `pushStackElement`. `setValue` is used only while a model is being created.
 // - `onDidChangeContent` reports ONE spanning `ContentChange` per Monaco event.
 // - The cursor callback is throttled to one animation frame.
+// - `readOnly` is an editor option, not a model one (M7, AD-23, F32), so the lock of the
+//   active document is applied on every activation and whenever that document is locked
+//   or unlocked. `app/fileOps.ts` decides it; this module only puts it on the editor.
 //
 // IMPORTANT: Monaco is reached through `$lib/monaco/setup`, which imports
 // `$lib/monaco/core` *dynamically*. Nothing in this module may import `core` for a
@@ -22,6 +25,7 @@
 import type * as MonacoApi from 'monaco-editor/esm/vs/editor/editor.api.js';
 import { getMonaco, type Monaco } from '$lib/monaco/setup';
 import { docs as appDocs } from '$lib/stores/documents';
+import { t } from '$lib/i18n';
 import type {
   ContentChange,
   CursorInfo,
@@ -341,6 +345,30 @@ export function createEditorService(deps: EditorServiceDeps): EditorService {
 
   // -- the active model -----------------------------------------------------
 
+  /**
+   * `readOnly` is an **editor** option, not a model one (F32): one editor shows every
+   * document in turn, so the lock has to be re-decided whenever the active document
+   * changes — and whenever the active document itself is locked or unlocked.
+   *
+   * It runs inside `applyActive`, in the same synchronous block as `setModel`, so there
+   * is never a paint in which a locked program sits in an editable editor. `appliedReadOnly`
+   * starts as `false` because that is what `EDITOR_OPTIONS` leaves Monaco at; a re-attach
+   * builds a fresh instance and resets it, so the lock is re-applied onto the new editor.
+   *
+   * `updateOptions` is called on the instance rather than through the service's own
+   * `updateOptions`, which would put the lock into the replayed `appliedOptions` and make
+   * a later instance start read-only for whatever document it happens to show.
+   */
+  let appliedReadOnly = false;
+
+  function applyReadOnly(): void {
+    if (!instance) return;
+    const readOnly = (currentId === null ? undefined : docs.get(currentId))?.readOnly === true;
+    if (readOnly === appliedReadOnly) return;
+    appliedReadOnly = readOnly;
+    instance.updateOptions({ readOnly, readOnlyMessage: { value: t('readOnly.editorMessage') } });
+  }
+
   function applyActive(id: DocId | null): void {
     const previous = currentId;
     currentId = id;
@@ -355,6 +383,7 @@ export function createEditorService(deps: EditorServiceDeps): EditorService {
       const state = viewStates.get(id);
       if (state) instance.restoreViewState(state);
     }
+    applyReadOnly();
     scheduleCursor();
   }
 
@@ -365,6 +394,12 @@ export function createEditorService(deps: EditorServiceDeps): EditorService {
     applyActive(id);
     activateEvent.fire(id);
   });
+
+  // `fileOps.setReadOnly` changes the document without changing which one is active, and
+  // the lock has to follow it at once — the tab already shows the padlock. `applyReadOnly`
+  // compares against what the editor was last given, so the rest of the traffic on this
+  // store (every dirty flip) costs one comparison.
+  docs.active.subscribe(() => applyReadOnly());
 
   // -- cursor ---------------------------------------------------------------
 
@@ -432,6 +467,7 @@ export function createEditorService(deps: EditorServiceDeps): EditorService {
     }
     const active = currentId;
     currentId = null; // force applyActive to bind the model
+    appliedReadOnly = false; // a fresh instance starts from EDITOR_OPTIONS
     applyActive(active);
     markReady();
   }

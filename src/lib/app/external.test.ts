@@ -153,6 +153,8 @@ function harness(over: Partial<ExternalChangeDeps> = {}): Harness {
       metaDirty: false,
       disk: stampOf(text, mtimeMs),
       external: 'none',
+      readOnly: false,
+      readOnlyReason: null,
     });
   };
   return h;
@@ -286,6 +288,8 @@ describe('what is watched', () => {
       metaDirty: false,
       disk: null,
       external: 'none',
+      readOnly: false,
+      readOnlyReason: null,
     });
     await h.service.checkNow();
     expect(h.stats).toBe(0);
@@ -422,20 +426,74 @@ describe('keepMine', () => {
     expect(h.docs.get(id)?.external).toBe('none');
   });
 
-  it('stops watching a document whose file is gone', async () => {
+  // G8 M7. "Keep mine" on a deleted file used to write `disk: null`, and a document with
+  // no stamp is one nothing can compare: the poll drops it (`sweep`), the pre-save
+  // question is skipped (`fileOps.write`), and a crash snapshot of it carries
+  // `diskStamp: null` so the restore dialog can claim nothing either. A CAM post that
+  // regenerates a program the usual way — delete, then write — put the editor in exactly
+  // that state, and the next Cmd+S replaced the post's program without a word.
+  it('keeps the stamp of a file that is gone, and stays quiet while it is gone', async () => {
+    const h = harness();
+    const id = h.add();
+    const stamp = h.docs.get(id)?.disk;
+    h.disk.set(PATH, { text: null, mtimeMs: null });
+    await h.service.checkNow();
+    expect(h.docs.get(id)?.external).toBe('deleted');
+
+    h.service.keepMine(id);
+    const doc = h.docs.get(id);
+    expect(doc?.external).toBe('none');
+    expect(doc?.metaDirty).toBe(true);
+    // The stamp it was read at, not null: it no longer matches the file, which is the
+    // answer that makes the next poll and the next save ask.
+    expect(doc?.disk).toEqual(stamp);
+
+    // The document is still watched, and the answer the user gave is not asked again.
+    const before = h.stats;
+    await h.service.checkNow();
+    expect(h.stats).toBe(before + 1);
+    expect(h.docs.get(id)?.external).toBe('none');
+    expect(h.messages.filter((m) => m.text.includes('deleted') || m.error)).toHaveLength(1);
+  });
+
+  it('raises the banner again when a post writes the deleted file back', async () => {
     const h = harness();
     const id = h.add();
     h.disk.set(PATH, { text: null, mtimeMs: null });
     await h.service.checkNow();
     h.service.keepMine(id);
-    const doc = h.docs.get(id);
-    expect(doc?.external).toBe('none');
-    expect(doc?.metaDirty).toBe(true);
-    expect(doc?.disk).toBeNull();
 
-    const before = h.stats;
+    // The post finishes: a brand new program is at that path.
+    h.disk.set(PATH, { text: 'O2000 (the new post)', mtimeMs: 90_000 });
     await h.service.checkNow();
-    expect(h.stats).toBe(before); // nothing left to stat
+
+    expect(h.docs.get(id)?.external).toBe('changed');
+    // And "Keep mine" now has a real stamp to hand over.
+    h.service.keepMine(id);
+    expect(h.docs.get(id)?.disk).toEqual(stampOf('O2000 (the new post)', 90_000));
+  });
+
+  it('keeps the stamp of a file too large to hash, and does not nag about it', async () => {
+    const h = harness();
+    const id = h.add();
+    const stamp = h.docs.get(id)?.disk;
+    h.disk.set(PATH, { text: 'O2000', mtimeMs: 6000, size: MAX_OPEN_BYTES + 1 });
+    await h.service.checkNow();
+    expect(h.docs.get(id)?.external).toBe('changed');
+
+    h.service.keepMine(id);
+    expect(h.docs.get(id)?.disk).toEqual(stamp);
+    expect(h.docs.get(id)?.external).toBe('none');
+
+    // The same over-sized file, sweep after sweep: the user has answered about it.
+    await h.service.checkNow();
+    await h.service.checkNow();
+    expect(h.docs.get(id)?.external).toBe('none');
+
+    // It grows again — a different file now, and that is worth saying.
+    h.disk.set(PATH, { text: 'O2000', mtimeMs: 7000, size: MAX_OPEN_BYTES + 2 });
+    await h.service.checkNow();
+    expect(h.docs.get(id)?.external).toBe('changed');
   });
 
   it('does nothing for a document that is already closed', () => {

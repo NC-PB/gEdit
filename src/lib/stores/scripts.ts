@@ -21,12 +21,22 @@ import type {
   RunResult,
   ScriptEntry,
 } from '$lib/platform/commands';
+import type { DocId } from '$lib/app/types';
 
 /** The run in flight, as `ScriptService.running` reports it (plan §7.3). */
 export interface ScriptRun {
   /** The webview's id for this run; `scriptCancel(runId)` uses it. */
   runId: string;
   scriptId: string;
+  /**
+   * The document the run reads and may rewrite.
+   *
+   * `app/recovery.ts` is the reader: a crash snapshot taken across a `replace` run would
+   * serialise text that is about to be replaced, so that one document is skipped while
+   * the run is in flight — and only that one. Before this field the skip was app-wide,
+   * which left every other tab unprotected for the length of the run (G8 M7).
+   */
+  docId: DocId;
   /** `Date.now()` when the run started, for the "running for Ns" hint. */
   startedAt: number;
 }

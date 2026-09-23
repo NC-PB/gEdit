@@ -84,14 +84,14 @@ describe('structured output', () => {
 describe('ScriptOutputPanel', () => {
   it('reports whether a script is running', () => {
     expect(panel()).toContain('data-running="0"');
-    runningScript.set({ runId: 'r1', scriptId: 'bundled:x.py', startedAt: Date.now() });
+    runningScript.set({ runId: 'r1', scriptId: 'bundled:x.py', docId: 'd1', startedAt: Date.now() });
     expect(panel()).toContain('data-running="1"');
   });
 
   it('keeps Cancel in the DOM and enables it only while a script runs', () => {
     expect(panel()).toContain('data-testid="output-cancel"');
     expect(panel()).toMatch(/data-testid="output-cancel"[^>]*disabled/);
-    runningScript.set({ runId: 'r1', scriptId: 'bundled:x.py', startedAt: Date.now() });
+    runningScript.set({ runId: 'r1', scriptId: 'bundled:x.py', docId: 'd1', startedAt: Date.now() });
     expect(panel()).not.toMatch(/data-testid="output-cancel"[^>]*disabled/);
   });
 

@@ -248,6 +248,31 @@ export interface DocMeta {
   dirty: boolean;
   disk: DiskStamp | null;
   external: 'none' | 'changed' | 'deleted';
+  /**
+   * M7, AD-23: the buffer refuses edits. Not optional, so that no code path can
+   * create a document whose read-only state nobody decided.
+   */
+  readOnly: boolean;
+  /**
+   * Why it is locked: `attribute` came from the file's read-only bit
+   * (`files_stat.readonly`), `user` from the `file.toggleReadOnly` command. `null`
+   * whenever `readOnly` is false.
+   *
+   * Unlocking an `attribute` document makes the *buffer* editable; Save still goes to
+   * Save As, because gEdit never changes a file's attributes.
+   */
+  readOnlyReason: 'attribute' | 'user' | null;
+  /**
+   * M7, AD-21 (**added by WP7.3**, see the hand-off note): a file this document was made
+   * from but is **not** bound to — a restored crash snapshot whose path the fs scope does
+   * not allow. The tab shows that file's name instead of `Untitled-n`, and Save As
+   * proposes the path.
+   *
+   * It grants nothing and is not a weaker `path`: `path` is still null, so no save, stat,
+   * reload or external-change poll ever touches the file until the user picks it in the
+   * native dialog. A successful Save As clears it.
+   */
+  proposedPath?: string | null;
 }
 
 export type NewDocMeta = Omit<DocMeta, 'id' | 'title' | 'dirty'>;
@@ -430,8 +455,39 @@ export interface FileOps {
   /** One undo step, keeps the cursor line, marks clean and restamps. */
   reloadFromDisk(id: DocId): Promise<void>;
   readDisk(path: string): Promise<DecodeResult | null>;
+  /**
+   * M7, AD-21: opens a crash-recovery snapshot as a **dirty** document.
+   *
+   * It is bound to `path` only when that path is already allowed by the startup
+   * grants (recent and session, D6) — nothing in a snapshot's metadata is ever
+   * granted. When it is bound it carries `diskStamp`, the stamp the file had when the
+   * snapshot was taken, so the P1 external-change check shows its banner if the file
+   * changed afterwards. Otherwise the document opens untitled, named after the file,
+   * and Save As proposes the original path.
+   */
+  restoreDocument(o: {
+    path: string | null;
+    title: string;
+    profileId: string;
+    machineId?: string | null;
+    encoding: FileEncoding;
+    eol: Eol;
+    nul: NulInfo;
+    textLF: string;
+    diskStamp: DiskStamp | null;
+  }): DocId;
+  /** M7, AD-23. `false` clears `readOnlyReason`; `true` sets it to `user`. */
+  setReadOnly(id: DocId, readOnly: boolean): void;
   onDidOpen(cb: (id: DocId, path: string) => void): Disposable;
   onDidSave(cb: (id: DocId, path: string) => void): Disposable;
+  /**
+   * M7, AD-22: a document is about to be closed, **before** its model is disposed.
+   *
+   * That ordering is the whole point: per-file memory (cursor, top line, bookmarks)
+   * is read out of the model, and by the time the tab is gone there is nothing left
+   * to read. A handler that throws must not stop the close.
+   */
+  onWillClose(cb: (id: DocId) => void): Disposable;
   onWillQuit(cb: () => Promise<void> | void): Disposable;
 }
 
@@ -544,6 +600,8 @@ export interface UiState {
   /** Last-used form values, by form key: `transform:<id>`, `script:<scriptId>`, ... */
   lastParams: Record<string, Record<string, unknown>>;
   lastScript: string | null;
+  /** M7, AD-22: per-file memory, by absolute path. At most 500 entries (LRU). */
+  files: Record<string, FileMemo>;
 }
 
 /** stores/uiState.ts → `export const uiState: UiStateStore` (owner: WP2.3) */
@@ -733,6 +791,12 @@ export interface BookmarkService {
   clear(id?: DocId): void;
   /** Ascending, 1-based. Empty for a document with no bookmarks or no model. */
   lines(id: DocId): number[];
+  /**
+   * M7: replaces the document's bookmarks with `lines` (1-based). Used by per-file
+   * memory when a remembered file is reopened; lines outside the document are
+   * dropped, so a file that grew shorter since cannot produce a bookmark in nowhere.
+   */
+  set(id: DocId, lines: number[]): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -858,6 +922,155 @@ export interface MachineService {
   setForDoc(docId: DocId, id: string | null | undefined): void;
 }
 
+// ---------------------------------------------------------------------------
+// §7.9 The services added in M7: never lose work (AD-21, AD-22, AD-23)
+// ---------------------------------------------------------------------------
+
+/**
+ * What gEdit remembers about one file between sessions (AD-22).
+ *
+ * Keyed by absolute path in `UiState.files`. Everything here is a convenience: a memo
+ * that is missing, stale or points at a profile or machine that no longer exists is
+ * simply ignored, and the file opens the way it would have without one. Nothing in a
+ * memo is ever used to widen the fs scope.
+ */
+export interface FileMemo {
+  /** 1-based cursor position. */
+  line: number;
+  column: number;
+  /** 1-based first visible line, so the file comes back scrolled where it was. */
+  top: number;
+  /** 1-based, ascending, at most 200. */
+  bookmarks: number[];
+  /** A dialect the user picked by hand; it wins over detection when the file reopens. */
+  profileId?: string;
+  /**
+   * AD-31: a machine id, or `null` for an explicit "none (profile defaults)"; absent
+   * means "follow the profile's default machine". The three states are distinct — a
+   * `null` has to survive, or a document the user deliberately set to "none" would
+   * pick the default machine up again on the next open.
+   */
+  machineId?: string | null;
+  /**
+   * AD-32, written by M10's `channels.assign`: which channel of a `multi-file` set
+   * this document is, when no pattern says. Additive to the M7 record; an M7 build
+   * keeps it verbatim like any other member it does not know.
+   */
+  channelId?: string | null;
+  /** When it was last written, ms since the epoch. The LRU key. */
+  at: number;
+}
+
+/**
+ * stores/fileMemory.ts → `export const fileMemory: FileMemoryStore` (P7 stub; owner WP7.5)
+ *
+ * The memos live in `UiState.files` and reach disk through `uiState`, so they follow
+ * its 1 s debounce and its quit flush; this store is the rules on top of them: at most
+ * 500 paths (least recently used out), at most 200 bookmarks each.
+ */
+export interface FileMemoryStore {
+  get(path: string): FileMemo | undefined;
+  /** The manual dialect choice for `path`, if there is one. */
+  profileFor(path: string): string | undefined;
+  /**
+   * The machine choice for `path`. `undefined` and `null` mean different things —
+   * "nothing remembered" and "remembered as none" — so a caller must not collapse
+   * them with `??`.
+   */
+  machineFor(path: string): string | null | undefined;
+  /**
+   * Merges `patch` into the memo and moves it to the front of the LRU.
+   *
+   * A member that is **present in `patch` with the value `undefined` is deleted** from
+   * the memo, which is the only way to record "follow the profile's default machine"
+   * again: `docs.update` cannot put `DocMeta.machineId` back to `undefined`, so
+   * `remember(path, { machineId: undefined })` is what says it (WP7.5).
+   */
+  remember(path: string, patch: Partial<Omit<FileMemo, 'at'>>): void;
+  forget(path: string): void;
+}
+
+/**
+ * app/session.ts → `export const session: SessionService` (P7 stub; owner WP7.5)
+ *
+ * Rust owns the stored list (`state.json` → `session`) and the grants; this is the
+ * webview's half: which paths are in it, when it is written (1 s after any open, close
+ * or activation, and before quit), and how it comes back.
+ */
+export interface SessionService {
+  /** Starts following the documents. The disposer stops the tracking, not the file. */
+  start(): Disposable;
+  /**
+   * Reopens the stored session when `files.restoreSession` is set, and answers with
+   * how many documents were opened. Files that have gone are skipped with **one**
+   * status message, and the pristine initial untitled document is closed.
+   */
+  restore(): Promise<number>;
+}
+
+/**
+ * One crash-recovery snapshot, as the restore dialog reads it (AD-21).
+ *
+ * The members after `key` are the metadata the webview wrote when the snapshot was
+ * taken; Rust stores them verbatim and never interprets them.
+ */
+export interface RecoveryEntry {
+  /** The session folder it belongs to; `discard` takes it. */
+  session: string;
+  key: string;
+  /** Where the document came from, or null for an untitled one. Never granted by this. */
+  path: string | null;
+  title: string;
+  profileId: string;
+  machineId?: string | null;
+  encoding: FileEncoding;
+  eol: Eol;
+  nul: NulInfo;
+  /** What the file looked like when the snapshot was taken, for the external-change check. */
+  diskStamp: DiskStamp | null;
+  /**
+   * True when the snapshot's sidecar was never written or cannot be read, so every
+   * member above it is Rust's stand-in rather than what the webview sent: no path, no
+   * title, no stamp (`recovery.rs::orphan_meta`). It happens when the process dies
+   * between the two writes of a document's **first** snapshot, and the text is then
+   * the only copy of that work — so it is offered, and the dialog says what it is
+   * instead of claiming the document was never saved to a file.
+   *
+   * Added to §7.9's `RecoveryEntry` by the G8 M7 fixes; optional, because every
+   * snapshot that has its metadata leaves it out.
+   */
+  metaLost?: boolean;
+  /** ms since the epoch. */
+  savedAt: number;
+  /** Size of the stored text in bytes, so the dialog can say how much is at stake. */
+  bytes: number;
+}
+
+/**
+ * app/recovery.ts → `export const recovery: RecoveryService` (P7 stub; owner WP7.4)
+ *
+ * The webview half of AD-21: every dirty document whose version changed is sent at
+ * most every 30 s, and at once on blur and on `visibilitychange`, **from an idle
+ * callback** — never on the keystroke path, which is what the M7 performance budget
+ * measures.
+ */
+export interface RecoveryService {
+  /** Starts the throttle and the triggers. The disposer stops them. */
+  start(): Disposable;
+  /**
+   * Snapshots everything that is due right now and resolves once it is on disk. The
+   * harness calls it before a `kill -9`; `files.onWillQuit` does not — a clean quit
+   * clears the session instead.
+   */
+  flushNow(): Promise<void>;
+  /** The snapshots of sessions that are not alive any more. Never rejects. */
+  leftovers(): Promise<RecoveryEntry[]>;
+  /** Opens them as dirty documents (see `files.restoreDocument`) and drops them. */
+  restore(e: RecoveryEntry[]): Promise<DocId[]>;
+  /** Forgets a whole leftover session, which is what "Discard" does. */
+  discard(session: string): Promise<void>;
+}
+
 /**
  * app/context.ts → `export const ctx: AppContext`
  *
@@ -895,4 +1108,8 @@ export interface AppContext {
   scripts: ScriptService;
   // P6
   machines: MachineService;
+  // P7
+  fileMemory: FileMemoryStore;
+  session: SessionService;
+  recovery: RecoveryService;
 }

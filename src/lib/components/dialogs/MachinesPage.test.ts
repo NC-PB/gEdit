@@ -164,6 +164,8 @@ function addDoc(profileId: string, machineId?: string | null): DocId {
     metaDirty: false,
     disk: null,
     external: 'none',
+    readOnly: false,
+    readOnlyReason: null,
   };
   const id = docs.add(meta);
   if (machineId !== undefined) docs.update(id, { machineId });

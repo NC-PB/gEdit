@@ -34,7 +34,57 @@ pub struct FileStat {
     pub mtime_ms: Option<f64>,
     /// The size in bytes of a regular file; `None` for a directory.
     pub size: Option<u64>,
+    /// **Whether this user may not write the file**, which is the question AD-23
+    /// asks and not the one `Permissions::readonly()` answers. See [`not_writable`].
     pub readonly: bool,
+}
+
+/// Whether the file at `path` is one the process may not write.
+///
+/// On Windows this is the `FILE_ATTRIBUTE_READONLY` flag, which is exactly right:
+/// `std`'s `Permissions::readonly()` reads that attribute.
+///
+/// On macOS and Linux it is **not**. There `readonly()` is `mode & 0o222 == 0`, which
+/// asks "may *nobody* write this file" — so a program owned by another operator, or by
+/// root, or exported read-only by an NFS or SMB server, sits at mode 0644 and answers
+/// `false`. That is the commonest read-only case on a shop share, and it was the one
+/// AD-23 did not catch: the file opened unlocked with no padlock and no notice, typing
+/// was allowed, Save did not go to Save As, and the user found out when the write
+/// failed after a shift's editing (G8 M7). No file was damaged — `open(O_TRUNC)` is
+/// refused before it truncates — but "protects archive copies" was not true.
+///
+/// So on Unix the question is asked of the operating system, with the *effective* ids
+/// (`AT_EACCESS`) because that is who the write will be attempted as. Directories keep
+/// the attribute answer: `readonly` is consumed per file, and a directory nobody may
+/// write is not a locked document.
+#[cfg(unix)]
+fn not_writable(path: &str, meta: &Metadata) -> bool {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    if meta.is_dir() {
+        return meta.permissions().readonly();
+    }
+    let Ok(c_path) = CString::new(std::ffi::OsStr::new(path).as_bytes()) else {
+        // A path with an interior NUL cannot be a file we opened; fall back rather
+        // than claim anything about it.
+        return meta.permissions().readonly();
+    };
+    // SAFETY: `c_path` is a valid NUL-terminated C string for the length of the call,
+    // and `faccessat` only reads it.
+    let answer = unsafe {
+        libc::faccessat(
+            libc::AT_FDCWD,
+            c_path.as_ptr(),
+            libc::W_OK,
+            libc::AT_EACCESS,
+        )
+    };
+    answer != 0
+}
+
+#[cfg(not(unix))]
+fn not_writable(_path: &str, meta: &Metadata) -> bool {
+    meta.permissions().readonly()
 }
 
 /// Stats every path in one round trip. The answer has one entry per input, in the
@@ -75,6 +125,7 @@ pub fn stat_all(paths: Vec<String>, is_allowed: impl Fn(&Path) -> bool) -> Vec<F
 
 fn of_metadata(path: String, meta: &Metadata) -> FileStat {
     let is_dir = meta.is_dir();
+    let readonly = not_writable(&path, meta);
     FileStat {
         path,
         allowed: true,
@@ -82,7 +133,7 @@ fn of_metadata(path: String, meta: &Metadata) -> FileStat {
         is_dir,
         mtime_ms: mtime_ms(meta),
         size: (!is_dir).then_some(meta.len()),
-        readonly: meta.permissions().readonly(),
+        readonly,
     }
 }
 
@@ -215,6 +266,54 @@ mod tests {
         fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).unwrap();
         let stat = one(s(&file));
         assert!(!stat.readonly, "{stat:?}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// G8 M7. `Permissions::readonly()` asks "may **nobody** write this file", not
+    /// "may **I**". On a shop share the commonest read-only program is one at mode
+    /// 0644 owned by another operator, by root, or exported read-only by the server —
+    /// and every one of those answered `false`, so AD-23 opened it unlocked, let the
+    /// user type into it all shift, and found out at the write.
+    ///
+    /// A file owned by a second uid cannot be made here, but the discrepancy does not
+    /// need one: a file **this user owns** at mode 0424 is writable by its group and
+    /// not by its owner, and on Unix the owner's bits are the ones that apply to the
+    /// owner. So `permissions().readonly()` says `false` ("somebody may write it")
+    /// while the process may not write a byte of it — the same disagreement, the same
+    /// direction, reproducible. Root bypasses the check, so the case is skipped there.
+    #[cfg(unix)]
+    #[test]
+    fn readonly_answers_whether_this_user_may_write_it() {
+        use std::os::unix::fs::PermissionsExt;
+        // SAFETY: `geteuid` takes nothing, touches nothing and cannot fail.
+        if unsafe { libc::geteuid() } == 0 {
+            return;
+        }
+        let dir = scratch_dir("writable");
+        let file = dir.join("a.nc");
+
+        // Writable by its owner, which is us.
+        assert!(!one(s(&file)).readonly);
+
+        // Writable by the group and not by the owner. `readonly()` answers false here.
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o424)).unwrap();
+        let meta = fs::metadata(&file).unwrap();
+        assert!(
+            !meta.permissions().readonly(),
+            "the case this test exists for is not set up"
+        );
+        assert!(
+            fs::OpenOptions::new().write(true).open(&file).is_err(),
+            "the file really has to be one we cannot write"
+        );
+        assert!(
+            one(s(&file)).readonly,
+            "a file we may not write reads as writable"
+        );
+
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).unwrap();
+        // A directory keeps the attribute answer: `readonly` is about documents.
+        assert!(!one(s(&dir.join("sub"))).readonly);
         let _ = fs::remove_dir_all(&dir);
     }
 }

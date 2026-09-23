@@ -230,6 +230,22 @@ export function createBookmarks(deps: BookmarkDeps): BookmarkApi {
       return linesOf(id);
     },
 
+    /**
+     * Replaces the bookmarks of `id` (§7.9, M7). Used when a remembered file is
+     * reopened.
+     *
+     * Lines outside the document are dropped rather than clamped to the last line: a
+     * file that was shortened outside gEdit would otherwise pile every remembered
+     * bookmark onto its final block, which looks like a mark the user set and is not
+     * one. Duplicates and non-integers go the same way, so a hand-edited `state.json`
+     * cannot put a decoration anywhere surprising.
+     */
+    set(id: DocId, lines: number[]): void {
+      const count = deps.editor.model(id)?.getLineCount() ?? 0;
+      const wanted = lines.filter((line) => Number.isInteger(line) && line >= 1 && line <= count);
+      setLines(id, [...new Set(wanted)].sort((a, b) => a - b));
+    },
+
     install(monaco: BookmarkMonaco): Disposable {
       api = monaco;
       options = undefined;

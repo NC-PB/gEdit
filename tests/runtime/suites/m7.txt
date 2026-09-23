@@ -1,0 +1,42 @@
+# M7: never lose work — the copy before a save, the snapshot that survives a kill, the
+# session that comes back, and the programs that may not be changed.
+# Run with: tests/runtime/suite.sh tests/runtime/suites/m0.txt tests/runtime/suites/m1.txt tests/runtime/suites/m2.txt tests/runtime/suites/m3.txt tests/runtime/suites/m4.txt tests/runtime/suites/m5.txt tests/runtime/suites/m6.txt tests/runtime/suites/m7.txt
+#
+# Every scenario here answers a question of the form "what happened to the work?", so a
+# failure in this suite is never cosmetic. They are ordered by how much of the milestone
+# they assume: the copy first, because a save that makes no copy makes every check after
+# it meaningless.
+
+# The copy that is made before a save overwrites a program: the three modes, how many are
+# kept, and the file that has no previous version. Run it first — it is the mechanism the
+# save failures below are answered with.
+m7-backup
+
+# The two ways a save can go wrong: a write that fails after the copy exists (the old file
+# survives and the message names the copy), and a copy that cannot be made (Cancel writes
+# nothing at all; "save anyway" saves).
+m7-save-fail
+
+# A program that may not be changed: the file's own read-only bit and the lock a
+# programmer puts on a tab, kept apart in the tab, the status bar, the keyboard and Save.
+m7-readonly
+
+# A real SIGKILL and what is on disk afterwards. `-1` edits three programs, snapshots
+# them and kills the app; `-2` reads the same HOME, so keep them in this order and next to
+# each other.
+m7-recovery-1
+m7-recovery-2
+
+# Three tabs, their places, their marks, a hand-picked dialect and two different answers
+# about a machine, across a restart. `-1` writes the HOME `-2` reads, so keep them in this
+# order and next to each other.
+m7-session-1
+m7-session-2
+
+# G7, the three budgets of this milestone, slowest last: what a snapshot of a 10 MB
+# unsaved program costs the keyboard, what the copy before a save costs the save, and how
+# long ten tabs take to come back. All three bound a mechanism that is on by default, so
+# a failure here is a programmer about to switch the mechanism off.
+m7-perf-save
+m7-perf-session
+m7-perf-recovery

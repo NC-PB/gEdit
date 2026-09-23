@@ -10,6 +10,9 @@
 //! - [`config`] — `settings.json`
 //! - [`machines`] — `machines.json`: the user's machine configurations (M6)
 //! - [`quit`] — the macOS quit guard (M6)
+//! - [`backup`] — the copy made before a save overwrites a file (M7)
+//! - [`recovery`] — crash-recovery snapshots of unsaved documents (M7)
+//! - [`session`] — the files that were open when gEdit was last closed (M7)
 //! - [`state`] — `state.json`: the recent-files list and the webview's UI state
 //! - [`menu`] — the macOS menu and the two window-closing requests (macOS only)
 //! - [`python`] — finding the user's Python interpreter
@@ -26,6 +29,7 @@
 //! of them more than once — a mention in a comment counts.
 
 mod atomic;
+mod backup;
 mod config;
 mod files;
 mod machines;
@@ -34,7 +38,9 @@ mod menu;
 mod paths;
 mod python;
 mod quit;
+mod recovery;
 pub mod scripts;
+mod session;
 mod state;
 
 use tauri::{App, AppHandle, RunEvent};
@@ -47,6 +53,12 @@ fn setup_app(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     let handle = app.handle();
     paths::ensure_dirs(handle);
     state::grant_recent_on_startup(handle);
+    // M7, AD-22: the session's files have to be in the fs scope before the webview can
+    // ask to reopen them, exactly like the recent list above.
+    session::grant_on_startup(handle);
+    // M7, AD-21: this run's recovery folder and its `alive` heartbeat exist before the
+    // window does, because the first snapshot can follow the first keystroke.
+    recovery::start_session(handle);
     // macOS only in effect: Dock -> Quit and a logout never reach the window, so the
     // answer to "may I terminate?" has to be ready before one is asked (AD-20).
     quit::install(handle);
@@ -58,6 +70,11 @@ fn setup_app(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 ///
 /// On `Exit` every script process is stopped (plan AD-13), so a `while True:` script
 /// cannot outlive the window. `RunEvent` is `#[non_exhaustive]`, hence the `matches!`.
+///
+/// What deliberately does **not** happen here is clearing the recovery snapshots: a
+/// Windows logoff also ends in `Exit` (F29), and a logoff is exactly the case the
+/// snapshots are for. They are cleared from `files.onWillQuit`, after the user's own
+/// quit decision (AD-21).
 fn on_run_event(app: &AppHandle, event: RunEvent) {
     if matches!(event, RunEvent::Exit) {
         scripts::kill_all(app);
@@ -95,6 +112,15 @@ pub fn run() {
             machines::machines_save,
             machines::machines_open_file,
             quit::quit_guard_set_dirty,
+            backup::files_backup,
+            session::session_save,
+            session::session_load,
+            recovery::recovery_put,
+            recovery::recovery_drop,
+            recovery::recovery_clear_current,
+            recovery::recovery_list,
+            recovery::recovery_read,
+            recovery::recovery_discard,
             state::ui_state_save,
             state::recent_list,
             state::recent_touch,

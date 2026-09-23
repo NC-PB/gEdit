@@ -74,7 +74,14 @@ scenario('m1-perf-open', { timeout: 300 }, async (h) => {
   await h.nativeKeys([{ key: 'o', mods: ['cmd'] }])
   await h.waitFor(() => !!h.q('doc-tab', { path: small, active: '1' }), { timeout: 10000 })
   const smallId = h.q('doc-tab', { path: small })?.dataset.docId ?? ''
-  const smallFirst = firstDrawn()
+  // The tab goes active the moment the store changes; Monaco paints a frame or two
+  // later. Reading the first line in between answers `null`, and every later switch back
+  // to this document then waits 20 s for a blank editor that never comes — which is how
+  // this scenario failed at M7 integration, five times in one run, on a build in which
+  // nothing was wrong. Wait for the paint, and say so if it never arrives.
+  const painted = await h.waitFor(() => (host()?.dataset.docId === smallId ? (firstDrawn() ?? undefined) : undefined), { timeout: 15000, interval: 5 })
+  const smallFirst = painted ?? null
+  h.check('the small document is drawn before it is used as the reference for a switch', smallFirst !== null && smallFirst.length > 0, { smallFirst })
 
   // ------------------------------------------------------------ open to first render
   await h.dialogs.queue('open', path)

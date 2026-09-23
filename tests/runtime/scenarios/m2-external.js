@@ -162,8 +162,24 @@ scenario('m2-external', { timeout: 240 }, async (h) => {
   await h.waitFor(() => !banner(), { timeout: 5000 })
   await ctx.external.checkNow()
   await h.sleep(400)
-  h.check('Keep stops the watch for a file that is gone', !banner() && ctx.docs.get(id).disk === null && ctx.editor.getText(id).startsWith(mine), {
+  // G8 M7: the stamp is KEPT, where this used to become null. A bound document with no
+  // stamp is one nothing can compare — the poll drops it, `fileOps.write` skips its
+  // changed-on-disk question, and a crash snapshot of it carries `diskStamp: null` — so
+  // the program a post wrote back to that path was overwritten by the next Cmd+S with no
+  // dialog at all. What stops the banner coming back is the recorded answer, not the
+  // loss of the stamp.
+  h.check('Keep on a file that is gone keeps the stamp, and stays quiet about it', !banner() && ctx.docs.get(id).disk !== null && ctx.editor.getText(id).startsWith(mine), {
     disk: ctx.docs.get(id).disk,
     external: tab()?.dataset.external,
+  })
+
+  // The CAM post finishes and writes the program back: a different file at that path,
+  // and the user is told before their buffer can go over it.
+  await h.disk.write(file, `${original}\n(POST RAN A FIFTH TIME)\n`)
+  await ctx.external.checkNow()
+  await h.waitFor(() => !!banner(), { timeout: 5000 })
+  h.check('and the program a post writes back to that path is noticed', banner()?.dataset.external === 'changed' && tab()?.dataset.external === 'changed', {
+    banner: banner()?.dataset.external,
+    tab: tab()?.dataset.external,
   })
 })

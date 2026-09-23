@@ -139,6 +139,7 @@
       data-dirty={doc.dirty ? '1' : '0'}
       data-active={active ? '1' : '0'}
       data-external={doc.external}
+      data-readonly={doc.readOnly ? '1' : '0'}
       onclick={(event) => onClick(event, doc.id)}
       onauxclick={(event) => onAuxClick(event, doc.id)}
       onmousedown={onMouseDown}
@@ -152,6 +153,9 @@
         <span class="external" class:deleted={doc.external === 'deleted'} title={externalTitle(doc.external)}>
           {doc.external === 'deleted' ? '⚠' : '↻'}
         </span>
+      {/if}
+      {#if doc.readOnly}
+        <span class="locked" title={t('readOnly.tabTitle')}>🔒</span>
       {/if}
       <span class="name">{doc.title}</span>
       <span class="dirty" class:shown={doc.dirty} title={t('tabs.unsaved')} aria-hidden="true">●</span>
@@ -236,6 +240,11 @@
   }
   .external.deleted {
     color: #f38ba8;
+  }
+  .locked {
+    flex: 0 0 auto;
+    font-size: 10px;
+    line-height: 1;
   }
   .close {
     display: flex;

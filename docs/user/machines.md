@@ -182,6 +182,18 @@ list has to be believed; it says who claimed it.
 
 The item is not shown at all for a dialect that has no machine parameters.
 
+**The choice is remembered for that file.** Pick a machine for `WELLE.NC` and it is there
+again the next time you open `WELLE.NC`, this afternoon or next month — **None (dialect
+defaults)** included, which is why it is a choice of its own rather than the absence of
+one. gEdit keeps that for the last 500 files you opened, in its own state file; nothing is
+written into the program, and a copy of the file on another computer knows nothing about
+it. `Settings ▸ Files ▸ Remember where you were in each file` turns it off, and the
+dialect's default machine takes over again.
+
+A remembered machine that is no longer there — you removed it, or the file came from
+another computer — is ignored. The document falls back to the dialect's default, with the
+one notice it would give anyway, exactly as if nothing had been remembered.
+
 If the program's content and the machine disagree — a program that reads like G-code system
 B opened with a machine set to A — gEdit tells you once and **changes nothing**. The
 machine you chose wins. It is your machine; a text file does not get to overrule it.
@@ -304,9 +316,13 @@ then:
 Writes are atomic: the file is written whole or not at all, and a previous file that could
 not be used is rescued as `machines.json.bak` first.
 
-Which machine a document uses is **not** remembered between sessions in this version; you
-pick it per document, or set a default for the dialect. Remembering it per file comes with
-the file memory in a later step.
+Which machine a *document* uses is remembered per file, and that is kept somewhere else —
+in gEdit's own state file, not in `machines.json` (see
+[Choosing the machine for a document](#choosing-the-machine-for-a-document)). Copying
+`machines.json` to another computer therefore brings the machines and the dialect defaults
+across, but not "this program is for Lathe 2". A default for the dialect is the answer
+that does travel with that one file, which is what makes it the right setting for a shop
+where every lathe program goes to the same lathe.
 
 ## What gEdit assumes, and what it does not know
 

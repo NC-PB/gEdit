@@ -106,6 +106,8 @@ function addDoc(path: string): DocId {
     metaDirty: false,
     disk: null,
     external: 'none',
+    readOnly: false,
+    readOnlyReason: null,
   };
   return docs.add(meta);
 }

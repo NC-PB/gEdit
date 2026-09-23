@@ -63,6 +63,8 @@ const META: NewDocMeta = {
   metaDirty: false,
   disk: null,
   external: 'none',
+  readOnly: false,
+  readOnlyReason: null,
 };
 
 function harness(over: Partial<OutlineServiceDeps> = {}): Harness {

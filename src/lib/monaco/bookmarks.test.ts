@@ -31,9 +31,17 @@ function fakeModel() {
   const options = new Map<string, MonacoApi.editor.IModelDecorationOptions>();
   const calls: DeltaCall[] = [];
   let seq = 0;
+  /** How long the document is; only `set()` (M7) cares, so the default is generous. */
+  let lineCount = 1000;
 
   const model = {
     calls,
+    setLineCount(n: number): void {
+      lineCount = n;
+    },
+    getLineCount(): number {
+      return lineCount;
+    },
     /** Simulates an edit that pushed a decoration to another line, or removed its text. */
     moveTo(id: string, line: number | null): void {
       ranges.set(id, line);
@@ -361,5 +369,55 @@ describe('bookmarks', () => {
     uninstall();
     h.bookmarks.toggle('d1', 4);
     expect(h.bookmarks.lines('d1')).toEqual([]);
+  });
+});
+
+// M7, §7.9 (P7). Per-file memory hands back the lines it stored for a file that may have
+// been edited by someone else in the meantime, so `set` is the place where a remembered
+// line meets the document that is actually open.
+describe('set', () => {
+  it('replaces the bookmarks with the ones it is given, in order and without duplicates', () => {
+    const h = setup();
+    const model = h.addModel('d1');
+    h.bookmarks.install(MONACO);
+    h.bookmarks.toggle('d1', 4);
+
+    h.bookmarks.set('d1', [12, 3, 12, 7]);
+
+    expect(h.bookmarks.lines('d1')).toEqual([3, 7, 12]);
+    // One delta call, replacing what was there: the old decoration is handed back in.
+    const last = model.calls.at(-1);
+    expect(last?.lines).toEqual([3, 7, 12]);
+    expect(last?.old).toHaveLength(1);
+  });
+
+  it('drops a line the document no longer has instead of clamping it to the end', () => {
+    const h = setup();
+    const model = h.addModel('d1');
+    model.setLineCount(20);
+    h.bookmarks.install(MONACO);
+
+    // The file was 400 lines when it was closed and is 20 now.
+    h.bookmarks.set('d1', [5, 20, 21, 380]);
+
+    // 21 and 380 are gone, and nothing piled up on line 20 that the user did not set.
+    expect(h.bookmarks.lines('d1')).toEqual([5, 20]);
+  });
+
+  it('ignores lines that are not lines at all', () => {
+    const h = setup();
+    h.addModel('d1');
+    h.bookmarks.install(MONACO);
+
+    h.bookmarks.set('d1', [0, -3, 2.5, Number.NaN, Infinity, 6]);
+
+    expect(h.bookmarks.lines('d1')).toEqual([6]);
+  });
+
+  it('is a no-op for a document with no model', () => {
+    const h = setup();
+    h.bookmarks.install(MONACO);
+    expect(() => h.bookmarks.set('d9', [1, 2])).not.toThrow();
+    expect(h.bookmarks.lines('d9')).toEqual([]);
   });
 });

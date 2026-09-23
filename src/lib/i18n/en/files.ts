@@ -53,6 +53,9 @@ export default {
   /** A UTF-16 file has to start with its byte order mark, so it cannot carry a tape leader. */
   tapeDropped: 'the punched-tape leader and trailer were not written: UTF-16 cannot carry them',
 
+  /** The one save of this file whose previous version is nowhere (AD-21). */
+  savedWithoutBackup: 'no backup of the previous version was made',
+
   /** A drop or a multi-select that this app cannot reach at all (G8 F3). */
   dropRefused_one: '{count} item could not be opened: it is gone, or gEdit was not given access to it',
   dropRefused_other: '{count} items could not be opened: they are gone, or gEdit was not given access to them',
@@ -66,6 +69,7 @@ export default {
   openFailedMany_one: '1 file could not be opened',
   openFailedMany_other: '{count} files could not be opened',
   saveFailed: 'Could not save {name}',
+  backupFailed: 'Could not back up {name}',
   tooLarge: '{name} is {size}, which is more than the {limit} gEdit can open',
   reloadFailed: 'Could not reload {name}',
   dialogFailed: 'Could not open the file dialog',
@@ -99,6 +103,16 @@ export default {
   saveFailedTitle: 'Save Failed',
   saveFailedMessage:
     '{name} could not be written:\n{detail}\n\nThe file on disk may now be incomplete. This tab still holds the full text — save it somewhere else?',
+  /** Appended when the backup of AD-21 was made: the repair instruction, not a footnote. */
+  saveFailedBackup: 'The version that was on disk before this save is at:\n{path}',
+
+  // The copy that is made before a save overwrites a file could not be made (AD-21).
+  // Saving anyway is a real choice — the new text may be the important one — but it is
+  // the user's, never gEdit's, because the version on disk cannot be brought back.
+  backupFailedTitle: 'No Backup',
+  backupFailedMessage:
+    'The previous version of {name} could not be copied aside:\n{detail}\n\nSaving now replaces it with no copy to fall back to. Save anyway?',
+  saveWithoutBackupButton: 'Save Without a Backup',
 
   // Windows-1252 cannot store a character the buffer holds (AD-7)
   encodingTitle: 'Encoding',

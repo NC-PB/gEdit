@@ -81,6 +81,77 @@ describe('sanitizeUiState', () => {
       },
       lastParams: { 'transform:nc.renumber': { start: 10 } },
       lastScript: 'bundled:scale_feed.py',
+      files: {},
+    });
+  });
+
+  // M7, AD-22: `ui.files` is the per-file memory. It is a convenience, so a broken
+  // entry is dropped rather than repaired — but an entry that is whole is kept whole,
+  // unknown members included, because a later milestone writes some (§7.14).
+  describe('the per-file memory of ui.files', () => {
+    const memo = { line: 12, column: 3, top: 8, bookmarks: [4, 12], at: 1_700_000_000_000 };
+
+    it('keeps a whole memo, its manual choices included', () => {
+      const state = sanitizeUiState({
+        files: {
+          '/nc/a.nc': { ...memo, profileId: 'fanuc-lathe', machineId: 'lathe-2' },
+          // An explicit "none" is a different answer from "nothing remembered"
+          // (AD-31), so the null has to survive the round trip.
+          '/nc/b.nc': { ...memo, machineId: null },
+        },
+      });
+      expect(state.files['/nc/a.nc']).toEqual({ ...memo, profileId: 'fanuc-lathe', machineId: 'lathe-2' });
+      expect(state.files['/nc/b.nc']).toEqual({ ...memo, machineId: null });
+      expect('machineId' in state.files['/nc/b.nc']).toBe(true);
+    });
+
+    it('keeps members it does not know, so a later build does not lose them', () => {
+      // M10 writes `channelId` into the same record; a user who runs that build, then
+      // this one, then that one again must get the assignment back.
+      const state = sanitizeUiState({ files: { '/nc/a.nc': { ...memo, channelId: 'ch2', future: 7 } } });
+      expect(state.files['/nc/a.nc']).toEqual({ ...memo, channelId: 'ch2', future: 7 });
+    });
+
+    it('drops an entry that is missing what every reader needs', () => {
+      const state = sanitizeUiState({
+        files: {
+          '/nc/no-line.nc': { column: 1, top: 1, bookmarks: [], at: 1 },
+          '/nc/zero.nc': { ...memo, line: 0 },
+          '/nc/fractional.nc': { ...memo, top: 2.5 },
+          '/nc/no-at.nc': { line: 1, column: 1, top: 1, bookmarks: [] },
+          '/nc/not-a-record.nc': 'nope',
+          '/nc/good.nc': memo,
+        },
+      });
+      expect(Object.keys(state.files)).toEqual(['/nc/good.nc']);
+    });
+
+    it('drops bookmark lines that are not lines, and defaults a missing list', () => {
+      const state = sanitizeUiState({
+        files: {
+          '/nc/a.nc': { ...memo, bookmarks: [3, 0, -1, 2.5, 'x', 9] },
+          '/nc/b.nc': { ...memo, bookmarks: 'all of them' },
+        },
+      });
+      expect(state.files['/nc/a.nc'].bookmarks).toEqual([3, 9]);
+      expect(state.files['/nc/b.nc'].bookmarks).toEqual([]);
+    });
+
+    it('cannot be used to reach Object.prototype through a path', () => {
+      // A file literally called `__proto__` is silly but legal, and `state.json` is a
+      // hand-editable file: a bracket assignment would hand it to the prototype's
+      // setter rather than store it (the G8 M2 finding on `lastParams`).
+      const raw = JSON.parse(`{"files":{"__proto__":${JSON.stringify(memo)}}}`) as Record<string, unknown>;
+      const state = sanitizeUiState(raw);
+      expect(Object.getPrototypeOf(state.files)).toBe(Object.prototype);
+      expect(Object.prototype.hasOwnProperty.call(state.files, '__proto__')).toBe(true);
+      expect(({} as Record<string, unknown>).line).toBeUndefined();
+    });
+
+    it('is empty when the member is missing or the wrong type', () => {
+      expect(sanitizeUiState({}).files).toEqual({});
+      expect(sanitizeUiState({ files: [] }).files).toEqual({});
+      expect(sanitizeUiState({ files: 'a' }).files).toEqual({});
     });
   });
 
@@ -179,7 +250,12 @@ describe('the 1 s debounce', () => {
     h.store.setLastParams('transform:nc.renumber', { start: 10, step: 10 });
     await vi.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS);
     expect(h.saved).toEqual([
-      { layout: {}, lastParams: { 'transform:nc.renumber': { start: 10, step: 10 } }, lastScript: null },
+      {
+        layout: {},
+        lastParams: { 'transform:nc.renumber': { start: 10, step: 10 } },
+        lastScript: null,
+        files: {},
+      },
     ]);
   });
 
@@ -242,19 +318,30 @@ describe('flush', () => {
     expect(order).toEqual(['start 1', 'end 1', 'start 2', 'end 2', 'flush returned']);
   });
 
-  it('survives a write that fails, with a warning and no status notice', async () => {
+  // G8 M7. A write that fails used to reach the console and nothing else, on the
+  // reasoning that a red status bar after every splitter drag would hide the messages
+  // that matter. True — but `state.json` is the one file the session list, the recent
+  // list, the layout and the per-file memory share, and Rust refuses the whole of it
+  // once it is over 1 MiB, so "nothing gEdit remembers is being remembered" could be
+  // true for weeks with nothing on screen to say so. Once, therefore, and once only.
+  it('survives a write that fails, and says so exactly once', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const h = harness({ save: () => Promise.reject(new Error('read-only volume')) });
+    const h = harness({
+      save: () => Promise.reject('state.json: 1631525 bytes exceed the 1048576 byte limit'),
+    });
     h.store.update((s) => ({ ...s, lastScript: 'a' }));
     await expect(h.store.flush()).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalled();
-    // This runs a second after every splitter drag; a red status bar on repeat would hide
-    // the messages that matter, and the user loses a remembered layout, not their work.
-    expect(h.notices).toEqual([]);
+    expect(h.notices).toHaveLength(1);
+    // Rust's own English text is the tooltip, and it names the limit (AD-14).
+    expect(h.notices[0].detail).toContain('1048576');
 
-    // And the next change is still written.
-    h.store.update((s) => ({ ...s, lastScript: 'b' }));
-    await expect(h.store.flush()).resolves.toBeUndefined();
+    // The next twenty drags of a splitter say nothing more.
+    for (const value of ['b', 'c', 'd', 'e']) {
+      h.store.update((s) => ({ ...s, lastScript: value }));
+      await expect(h.store.flush()).resolves.toBeUndefined();
+    }
+    expect(h.notices).toHaveLength(1);
   });
 });
 

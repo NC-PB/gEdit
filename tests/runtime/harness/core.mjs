@@ -467,11 +467,21 @@ function judge(result, records) {
   const add = (name, pass, detail) => result.checks.push({ name, pass, detail, runner: true })
   if (!started) add('the page bundle started', false, 'no start record (bundle not injected?)')
   if (expectExit) {
-    const code = expectExit.code ?? 0
-    add(`the app exited with code ${code}`, result.exit.code === code && !done && !result.timedOut, {
-      exit: result.exit,
-      exitEventSeen: result.events.includes('Exit'),
-    })
+    // A crash (`h.crash()`, M7) ends with a signal and no exit code at all, so it is
+    // checked on the signal: `code: 0` would be a pass for an app that shut down
+    // cleanly, which is the one outcome a recovery scenario must not accept.
+    if (expectExit.signal) {
+      add(`the app was killed by ${expectExit.signal}`, result.exit.signal === expectExit.signal && !done && !result.timedOut, {
+        exit: result.exit,
+        exitEventSeen: result.events.includes('Exit'),
+      })
+    } else {
+      const code = expectExit.code ?? 0
+      add(`the app exited with code ${code}`, result.exit.code === code && !done && !result.timedOut, {
+        exit: result.exit,
+        exitEventSeen: result.events.includes('Exit'),
+      })
+    }
     for (const f of expectExit.files ?? []) checkFile(add, f)
     for (const e of expectExit.events ?? []) {
       add(`after exit: the app saw the run event ${e}`, result.events.includes(e), result.events)

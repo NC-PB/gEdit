@@ -21,13 +21,16 @@ import { external } from '$lib/app/external';
 import { files } from '$lib/app/fileOps';
 import { modals } from '$lib/app/modals';
 import { outline } from '$lib/app/outlineService';
+import { recovery } from '$lib/app/recovery';
 import { scripts } from '$lib/app/scripts';
+import { session } from '$lib/app/session';
 import { status } from '$lib/app/status';
 import { transforms } from '$lib/app/transforms';
 import { bookmarks } from '$lib/monaco/bookmarks';
 import { editor } from '$lib/monaco/editorService';
 import { codes } from '$lib/stores/codes';
 import { docs } from '$lib/stores/documents';
+import { fileMemory } from '$lib/stores/fileMemory';
 import { layout } from '$lib/stores/layout';
 import { machines } from '$lib/stores/machines';
 import { profiles } from '$lib/stores/profiles';
@@ -64,4 +67,7 @@ export const ctx: AppContext = {
   bookmarks,
   scripts,
   machines,
+  fileMemory,
+  session,
+  recovery,
 };

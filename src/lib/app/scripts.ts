@@ -512,7 +512,7 @@ export function createScriptService(deps: ScriptDeps): ScriptService {
 
     resetScriptOutput();
     cancelRequested = null;
-    runningScript.set({ runId, scriptId, startedAt: deps.now() });
+    runningScript.set({ runId, scriptId, docId, startedAt: deps.now() });
     lastScriptId.set(scriptId);
     deps.uiState.update((state) => ({ ...state, lastScript: scriptId }));
     // A panel-mode script *is* its output, so the panel opens with the run. Every other

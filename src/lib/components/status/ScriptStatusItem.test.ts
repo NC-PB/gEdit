@@ -49,7 +49,7 @@ describe('ScriptStatusItem', () => {
 
   it('names the running script, carries its id and becomes the Cancel control', () => {
     scriptList.set([entry('bundled:scale_feed.py', 'scale_feed.py')]);
-    runningScript.set({ runId: 'r1', scriptId: 'bundled:scale_feed.py', startedAt: Date.now() });
+    runningScript.set({ runId: 'r1', scriptId: 'bundled:scale_feed.py', docId: 'd1', startedAt: Date.now() });
     const html = item();
     expect(html).toContain('Script: scale_feed.py');
     expect(html).toContain('data-running="1"');
@@ -58,7 +58,7 @@ describe('ScriptStatusItem', () => {
   });
 
   it('falls back to the id when the script has left the list mid-run', () => {
-    runningScript.set({ runId: 'r1', scriptId: 'user:gone.py', startedAt: Date.now() });
+    runningScript.set({ runId: 'r1', scriptId: 'user:gone.py', docId: 'd1', startedAt: Date.now() });
     expect(item()).toContain('Script: user:gone.py');
   });
 });

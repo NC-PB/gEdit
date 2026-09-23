@@ -235,6 +235,8 @@ function addDoc(external: 'none' | 'changed' | 'deleted'): DocId {
     metaDirty: false,
     disk: null,
     external,
+    readOnly: false,
+    readOnlyReason: null,
   });
 }
 

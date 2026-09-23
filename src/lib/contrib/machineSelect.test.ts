@@ -57,6 +57,7 @@ const fake = vi.hoisted(() => {
     openFile: vi.fn(async (): Promise<void> => {}),
     setForDoc: vi.fn((): void => {}),
     setProfile: vi.fn((): void => {}),
+    remember: vi.fn((): void => {}),
     disposeSave: vi.fn((): void => {}),
     shown: [] as { text: string; error: boolean }[],
     opened: [] as unknown[],
@@ -92,6 +93,12 @@ vi.mock('$lib/app/modals', () => ({
       fake.openedWith.push(props);
       return undefined;
     },
+  },
+}));
+
+vi.mock('$lib/stores/fileMemory', () => ({
+  fileMemory: {
+    remember: (...args: unknown[]) => fake.remember(...(args as [])),
   },
 }));
 
@@ -166,6 +173,8 @@ function addDoc(path: string | null, profileId = 'fanuc-lathe'): DocId {
     metaDirty: false,
     disk: null,
     external: 'none',
+    readOnly: false,
+    readOnlyReason: null,
   };
   const id = docs.add(meta);
   docs.activate(id);
@@ -188,6 +197,7 @@ beforeEach(() => {
   fake.openFile.mockClear();
   fake.setForDoc.mockClear();
   fake.setProfile.mockClear();
+  fake.remember.mockClear();
   fake.disposeSave.mockClear();
 });
 
@@ -316,6 +326,10 @@ describe('picking a machine', () => {
     await contrib.commands[0].run();
     expect(fake.setProfile).toHaveBeenCalledWith(id, 'fanuc-lathe');
     expect(fake.setForDoc).toHaveBeenCalledWith(id, 'lathe-2');
+    // AD-22 (M7 integration, mergeA): the dialect this changed is the user's own choice
+    // and is remembered with the file. Without it the file is detected as a mill again
+    // next time and AD-31 then drops the lathe machine that no longer fits.
+    expect(fake.remember).toHaveBeenCalledWith('/nc/part.nc', { profileId: 'fanuc-lathe' });
     expect(fake.shown.at(-1)?.text).toContain('Lathe 2');
     // The second pick only offered the machines that do not fit this document.
     expect(fake.picks[1].map((entry) => (entry as QuickPickItem<string>).value)).toEqual(['lathe-2']);

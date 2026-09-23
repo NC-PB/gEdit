@@ -269,7 +269,7 @@ describe('canRun', () => {
     expect(canRun('d1')).toBe(true);
     expect(canRun(null)).toBe(false);
 
-    runningScript.set({ runId: 'r1', scriptId: 'bundled:a.py', startedAt: 0 });
+    runningScript.set({ runId: 'r1', scriptId: 'bundled:a.py', docId: 'd1', startedAt: 0 });
     expect(canRun('d1')).toBe(false);
     runningScript.set(null);
 
@@ -292,7 +292,7 @@ describe('canRun', () => {
   it('enables Cancel only while a run is in flight, whatever Python says', () => {
     const cancel = byId.get('script.cancel');
     expect(cancel?.enabled?.(ctx())).toBe(false);
-    runningScript.set({ runId: 'r1', scriptId: 'bundled:a.py', startedAt: 0 });
+    runningScript.set({ runId: 'r1', scriptId: 'bundled:a.py', docId: 'd1', startedAt: 0 });
     expect(cancel?.enabled?.(ctx())).toBe(true);
   });
 
@@ -396,7 +396,7 @@ describe('registration', () => {
   it('does not reveal the Output panel just because a run started', async () => {
     const dispose = await registerContributions([contribution]);
     expect(get(layout.state).bottom.active).toBeNull();
-    runningScript.set({ runId: 'r1', scriptId: 'bundled:a.py', startedAt: 0 });
+    runningScript.set({ runId: 'r1', scriptId: 'bundled:a.py', docId: 'd1', startedAt: 0 });
     expect(get(layout.state).bottom).toMatchObject({ visible: false, active: null });
     dispose();
   });
@@ -428,7 +428,7 @@ describe('running a script', () => {
 
   it('cancel goes through the service, which owns the message', async () => {
     scriptList.set([entry('user:a.py', { meta: meta({ name: 'Renumber' }) })]);
-    runningScript.set({ runId: 'r1', scriptId: 'user:a.py', startedAt: 0 });
+    runningScript.set({ runId: 'r1', scriptId: 'user:a.py', docId: 'd1', startedAt: 0 });
     await run('script.cancel');
     expect(fake.calls).toEqual(['cancel']);
     expect(fake.messages).toEqual([]);

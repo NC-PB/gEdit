@@ -22,6 +22,8 @@ import { keyEvent, typeEvents } from './keys.js'
 /**
  * @typedef {object} ExitExpectation
  * @property {number} [code] expected exit code (default 0)
+ * @property {string} [signal] expected signal instead of an exit code, e.g. `SIGKILL`
+ *   after `h.crash()`. When it is set the code is not checked: a killed process has none
  * @property {number} [within] ms to wait for the exit after the scenario returns (default 10000)
  * @property {{ path: string, includes?: string, excludes?: string, hex?: string, missing?: boolean }[]} [files]
  *   checked by the runner after the exit
@@ -112,9 +114,11 @@ export function selector(testid, attrs = {}) {
 /**
  * @param {RunConfig} cfg
  * @param {Recorder} rec
- * @param {Send} send
+ * @param {Send} send queues a record for the runner; it is **not** on stdout yet
+ * @param {() => Promise<void>} [drain] resolves once everything queued has reached Rust.
+ *   Only `h.crash()` needs it: every other end of a run drains in `runner.js`.
  */
-export function createHarness(cfg, rec, send) {
+export function createHarness(cfg, rec, send, drain = async () => {}) {
   /** @type {{ name: string, pass: boolean }[]} */
   const checks = []
   /** @type {ExitExpectation | null} */
@@ -407,6 +411,17 @@ export function createHarness(cfg, rec, send) {
     },
 
     /**
+     * `<data>/recovery`, where the crash-recovery snapshots live (M7, AD-21): one
+     * folder per session, each holding the `alive` heartbeat and the `<key>.txt` /
+     * `<key>.json` pairs. Read what is under it with `h.disk.read` / `h.disk.hex`.
+     *
+     * The harness resolves it the way the app does, so a scenario can assert on what
+     * survived a crash without knowing where `--home` put it.
+     * @returns {Promise<string>}
+     */
+    recoveryDir: () => invoke('h_recovery_dir'),
+
+    /**
      * Drops files or folders on the window: grants them like tauri-plugin-fs does and
      * emits `tauri://drag-drop`.
      * @param {string[]} paths
@@ -469,13 +484,42 @@ export function createHarness(cfg, rec, send) {
 
     /**
      * Declares that the app is about to exit. Call it before triggering the exit; the
-     * runner then counts the exit as a pass (with the expected code) and checks `files`.
+     * runner then counts the exit as a pass (with the expected code, or the expected
+     * `signal`) and checks `files`.
      * @param {ExitExpectation} [expectation]
      */
     expectExit(expectation = {}) {
-      exitExpected = { code: 0, within: 10000, files: [], ...expectation }
+      exitExpected = { within: 10000, files: [], ...(expectation.signal ? {} : { code: 0 }), ...expectation }
       send({ kind: 'expect-exit', ...exitExpected })
     },
+
+    /**
+     * Kills the app with SIGKILL, the way a power cut or a force-quit does (M7).
+     *
+     * Nothing runs on the way out — no `RunEvent::Exit`, no destructor, no flush — so
+     * whatever the next run finds on disk was already there. That is the only honest
+     * test of the recovery promise; `h.window.terminate()` and friends all give the app
+     * a chance to tidy up first and would pass even if nothing had been written.
+     *
+     * Declares the exit expectation itself, so the runner counts the kill as the
+     * expected end of the run. Snapshot what you want to survive **before** calling it
+     * (`h.app.ctx.recovery.flushNow()`); this promise never resolves.
+     *
+     * @param {Omit<ExitExpectation, 'code' | 'signal'>} [expectation] files to check after the kill
+     * @returns {Promise<void>} never resolves: the process is gone before it could
+     */
+    async crash(expectation = {}) {
+      // Set directly rather than through `h.expectExit`, so a destructured `crash`
+      // still declares the expectation instead of failing on `this`.
+      exitExpected = { within: 10000, files: [], ...expectation, signal: 'SIGKILL' }
+      send({ kind: 'expect-exit', ...exitExpected })
+      // `send` only queues, and the queue dies with the process: without this the
+      // expectation never reaches the runner and the kill is reported as a scenario
+      // that stopped halfway. The drain also flushes the checks made just before it.
+      await drain()
+      return invoke('h_crash')
+    },
+
     /** @returns {ExitExpectation | null} */
     exitExpectation: () => exitExpected,
 

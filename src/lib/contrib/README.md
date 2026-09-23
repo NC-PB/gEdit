@@ -112,9 +112,12 @@ Each row names the owning work package and the feature.
 | `profileSelect.ts` | WP1.6 | dialect profile status item and picker |
 | `programMap.ts` | WP1.5 | program map (left panel) |
 | `quitGuard.ts` | WP6.5 | reports "any document dirty" to the macOS quit guard |
+| `readOnly.ts` | WP7.3 | `file.toggleReadOnly` and the read-only status item |
 | `recent.ts` | WP2.3 | Recent dropdown, `file.openRecent`, `file.clearRecent` |
+| `recovery.ts` | WP7.4 | crash-recovery snapshots, the restore dialog, `recovery.showPending` |
 | `results.ts` | WP4.1 | the Results panel (bottom region) |
 | `scripts.ts` | WP5.2 | the script UI: Tools group, `script.*` commands, Output panel, status item |
+| `session.ts` | WP7.5 | session restore at start, and the per-file memory that follows the tabs |
 | `settings.ts` | WP2.7 | the settings dialog, `settings.open` (Mod+,), reload on save |
 | `tabs.ts` | WP1.2 | next/previous/switch tab |
 | `theme.ts` | WP2.6 | `view.setTheme`, the settings → editor-option bridge |

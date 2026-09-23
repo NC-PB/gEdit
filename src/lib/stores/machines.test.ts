@@ -62,6 +62,10 @@ interface Harness {
   setText(id: DocId, text: string): void;
   detect: Record<string, Record<string, { value: string; margin: number }>>;
   failNextSave: (reason: string | null) => void;
+  /** Every `remember` call, in order: what M7's per-file memory was told (WP7.5). */
+  remembered: { path: string; machineId: string | null | undefined }[];
+  /** The memo table those calls build up, so "is it still remembered" reads as one line. */
+  memory: Record<string, string | null>;
 }
 
 function harness(o: { docs?: FakeDoc[]; file?: Record<string, unknown>; machinesError?: string } = {}): Harness {
@@ -89,6 +93,8 @@ function harness(o: { docs?: FakeDoc[]; file?: Record<string, unknown>; machines
     failNextSave: (reason) => {
       failure = reason;
     },
+    remembered: [],
+    memory: {},
   };
   let failure: string | null = null;
 
@@ -101,6 +107,11 @@ function harness(o: { docs?: FakeDoc[]; file?: Record<string, unknown>; machines
         const doc = list.get(id);
         if (doc && patch.machineId !== undefined) doc.machineId = patch.machineId;
       },
+    },
+    remember: (path, machineId) => {
+      state.remembered.push({ path, machineId });
+      if (machineId === undefined) delete state.memory[path];
+      else state.memory[path] = machineId;
     },
     profiles: {
       defaultId: () => profiles.defaultId(),
@@ -245,6 +256,57 @@ describe('which machine a document uses (AD-31 order)', () => {
   it('answers "none" when there is no default either', () => {
     const h = harness({ docs: [{ id: 'd1', profileId: 'fanuc-gcode' }], file: FILE });
     expect(eff(h, 'd1')).toMatchObject({ id: null, choice: 'none' });
+  });
+
+  // -- M7, AD-22: the choice survives a restart (WP7.5) ---------------------
+  //
+  // The memo is written from the **argument** of `setForDoc` and not from the mirror in
+  // `DocMeta.machineId`, which `docs.update` cannot put back to `undefined`. Reading the
+  // mirror would make "follow the profile default" last exactly until the next start.
+
+  it('remembers an explicit machine for the file', () => {
+    const h = harness({ docs: [{ ...LATHE_DOC, path: '/jobs/welle.nc' }], file: FILE });
+    h.machines.setForDoc('d1', 'lathe-b');
+    expect(h.memory).toEqual({ '/jobs/welle.nc': 'lathe-b' });
+  });
+
+  it('remembers an explicit "none" as null, not as "nothing chosen"', () => {
+    const h = harness({ docs: [{ ...LATHE_DOC, path: '/jobs/welle.nc' }], file: FILE });
+    h.machines.setForDoc('d1', null);
+    expect(h.remembered).toEqual([{ path: '/jobs/welle.nc', machineId: null }]);
+    expect(h.memory['/jobs/welle.nc']).toBeNull();
+  });
+
+  it('forgets the machine when the document goes back to the profile default', () => {
+    const h = harness({ docs: [{ ...LATHE_DOC, path: '/jobs/welle.nc' }], file: FILE });
+    h.machines.setForDoc('d1', 'lathe-b');
+    h.machines.setForDoc('d1', undefined);
+    expect(h.remembered.at(-1)).toEqual({ path: '/jobs/welle.nc', machineId: undefined });
+    expect(h.memory).toEqual({});
+    // The mirror still carries the old id, which is exactly why it may not be the source.
+    expect(h.machines.get('lathe-b')?.id).toBe('lathe-b');
+  });
+
+  it('remembers nothing for an untitled document', () => {
+    const h = harness({ docs: [LATHE_DOC], file: FILE });
+    h.machines.setForDoc('d1', 'lathe-b');
+    expect(h.remembered).toEqual([]);
+  });
+
+  it('a machine that was sold since is ignored, and said once', async () => {
+    // A memo is never load-bearing: `fileOps.open` (WP7.3) puts the remembered id into
+    // `DocMeta.machineId` without checking it, and the fallback and the message are
+    // this service's job.
+    const h = harness({
+      docs: [{ ...LATHE_DOC, path: '/jobs/welle.nc', machineId: 'sold-last-year' }],
+      file: FILE,
+    });
+    expect(eff(h, 'd1')).toMatchObject({ id: 'lathe-a', choice: 'default' });
+    await said();
+    expect(h.notes).toHaveLength(1);
+    h.machines.effective('d1');
+    await said();
+    expect(h.notes).toHaveLength(1);
   });
 
   it('falls back to the default when the chosen id is gone, and says so once', async () => {

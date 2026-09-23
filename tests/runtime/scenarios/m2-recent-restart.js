@@ -80,9 +80,17 @@ scenario('m2-recent-restart-2', { timeout: 180, vars: { HOME: HOME_2 } }, async 
     throw new Error(`no state.json in ${paths.stateFile}: run m2-recent-restart-1 first (it writes the shared home)`)
   }
 
-  await h.waitFor(() => read(ctx.recent.list).length === 2, { timeout: 10000 })
+  // M7, AD-22: this pair shares a HOME, so run 2 now begins by restoring run 1's session.
+  // `keep` comes back as a tab; `gone` is not there any more and is skipped with one
+  // message instead of a dialog. Waiting for that first is what makes the list below
+  // stable — an open is an open, so `contrib/recent.ts` touches the file it reopened.
+  await h.waitFor(() => !!ctx.docs.byPath(keep), { timeout: 20000 })
+  h.check('the last session came back: the file that still exists is open again', h.qa('doc-tab').length === 1 && !!h.q('doc-tab', { path: keep }), h.qa('doc-tab').map((/** @type {any} */ e) => e.dataset.path))
+  h.check('the file that went away was skipped, not opened', !ctx.docs.byPath(gone), ctx.docs.all().map((/** @type {any} */ d) => d.title))
+
+  await h.waitFor(() => read(ctx.recent.list).length === 2 && read(ctx.recent.list)[0]?.path === keep, { timeout: 10000 })
   const list = read(ctx.recent.list)
-  h.check('the recent files came back from the last session', JSON.stringify(list.map((/** @type {any} */ e) => e.path)) === JSON.stringify([gone, keep]), list)
+  h.check('the recent files came back from the last session, the reopened one in front', JSON.stringify(list.map((/** @type {any} */ e) => e.path)) === JSON.stringify([keep, gone]), list)
   h.check('the file that is still there is marked as existing', list.find((/** @type {any} */ e) => e.path === keep)?.exists === true, list)
   h.check('the one that went away is marked as missing', list.find((/** @type {any} */ e) => e.path === gone)?.exists === false && (await h.disk.stat(gone)) === null, list)
   h.check('the dropdown says so in its label', /not found/.test(optionFor(h, gone)?.textContent ?? '') && !/not found/.test(optionFor(h, keep)?.textContent ?? ''), [...(menu(h)?.options ?? [])].map((o) => o.textContent))
@@ -92,6 +100,13 @@ scenario('m2-recent-restart-2', { timeout: 180, vars: { HOME: HOME_2 } }, async 
   await h.waitFor(() => !!h.q('doc-tab', { path: keep }), { timeout: 15000 })
   h.check('picking it opens the file again', !!ctx.docs.byPath(keep) && ctx.editor.getText(ctx.docs.byPath(keep).id).startsWith('(WRITTEN FOR GEDIT'), ctx.editor.getText(ctx.docs.byPath(keep).id).slice(0, 30))
   h.check('and it needed no file dialog at all', h.dialogs.calls().length === 0, h.dialogs.calls())
+
+  // M7: the tab was already on screen when this pick started, because the session
+  // restored it — so the `waitFor` above is no longer the end of the action, only its
+  // beginning. `file.openRecent` runs inside `dialogs.exclusive`, and a second pick
+  // while the first chain is still in flight resolves `undefined` and opens nothing at
+  // all. Wait for the app to go quiet instead.
+  await h.idle()
 
   // A missing entry offers to leave the list rather than failing to open.
   h.select(menu(h), gone)

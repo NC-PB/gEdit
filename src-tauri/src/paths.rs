@@ -35,6 +35,34 @@ pub const USER_SCRIPTS_DIR_NAME: &str = "scripts";
 /// default, while machines are user-owned records with ids, their own schema
 /// version and import/export.
 pub const MACHINES_FILE_NAME: &str = "machines.json";
+/// `<data>/backups`, the root of the history backups (M7, AD-21). One folder per
+/// source directory (`<fnv32 of the folder>`), one below that per file name.
+pub const BACKUPS_DIR_NAME: &str = "backups";
+/// `<data>/recovery`, the root of the crash-recovery snapshots (M7, AD-21). One
+/// folder per session, holding the `alive` heartbeat and the `<key>.{txt,json}`
+/// pairs.
+pub const RECOVERY_DIR_NAME: &str = "recovery";
+
+/// Whether this platform's file names are case-insensitive, and therefore
+/// whether two spellings of one path are the same file.
+///
+/// Two places need the same answer: the recent list deduplicates with it
+/// ([`crate::state`], AD-9) and the backup history derives one folder per source
+/// directory from it ([`crate::backup`], AD-21) — on macOS `/NC/` and `/nc/` are
+/// one folder and must not end up with two histories. Linux compares byte for
+/// byte. One constant, so the two can never disagree.
+pub const FOLD_CASE: bool = cfg!(any(target_os = "macos", target_os = "windows"));
+
+/// The mode the two M7 folders get on Unix: owner only.
+///
+/// They hold the **contents** of programs the user has not saved yet — a recovery
+/// snapshot is the whole buffer, and a backup is the previous version of a file
+/// the user may have put somewhere deliberately private. `<data>` itself inherits
+/// whatever the home directory allows, which on a shared machine can be
+/// world-readable, so these two are narrowed explicitly rather than trusted to
+/// their parent (AD-21).
+#[cfg(unix)]
+pub const OWNER_ONLY: u32 = 0o700;
 
 /// The absolute paths the webview is told about, once, as part of `config_load`
 /// (plan §7.6). Serialized in camelCase, matching `ConfigPaths` in
@@ -90,6 +118,18 @@ impl AppDirs {
         self.config.join(MACHINES_FILE_NAME)
     }
 
+    /// `<data>/backups` (M7). Not in [`ConfigPaths`]: the webview never names a
+    /// backup, it only asks `files_backup` to make one.
+    pub fn backups_dir(&self) -> PathBuf {
+        self.data.join(BACKUPS_DIR_NAME)
+    }
+
+    /// `<data>/recovery` (M7). Not in [`ConfigPaths`] either — the webview
+    /// addresses a snapshot by session and key, never by path.
+    pub fn recovery_dir(&self) -> PathBuf {
+        self.data.join(RECOVERY_DIR_NAME)
+    }
+
     /// The webview's view of these folders. Lossy conversion is deliberate: a
     /// home directory whose name is not valid UTF-8 still gives a usable, if
     /// imperfect, string to show, and nothing is ever read back from it.
@@ -104,11 +144,16 @@ impl AppDirs {
         }
     }
 
-    /// Creates the three folders if they are missing, reporting what failed.
-    /// Used by [`ensure_dirs`]; separate so that it can be tested without an
-    /// app handle.
+    /// Creates the folders gEdit writes to if they are missing, reporting what
+    /// failed. Used by [`ensure_dirs`]; separate so that it can be tested
+    /// without an app handle.
+    ///
+    /// `backups` and `recovery` are narrowed to [`OWNER_ONLY`] on Unix, on the
+    /// folder this call created **and** on one that was already there, because a
+    /// folder from an older build (or a careless umask) would otherwise keep a
+    /// mode that lets the rest of the machine read unsaved work.
     pub fn ensure(&self) -> Vec<String> {
-        [
+        let mut failures: Vec<String> = [
             self.config.clone(),
             self.data.clone(),
             self.user_scripts_dir(),
@@ -118,8 +163,28 @@ impl AppDirs {
             Ok(()) => None,
             Err(err) => Some(format!("{}: {err}", dir.display())),
         })
-        .collect()
+        .collect();
+        for dir in [self.backups_dir(), self.recovery_dir()] {
+            match std::fs::create_dir_all(&dir).and_then(|()| restrict(&dir)) {
+                Ok(()) => {}
+                Err(err) => failures.push(format!("{}: {err}", dir.display())),
+            }
+        }
+        failures
     }
+}
+
+/// Narrows one folder to the owner on Unix; a no-op everywhere else (Windows
+/// inherits the profile's ACL, which is already per-user).
+#[cfg(unix)]
+pub fn restrict(dir: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(OWNER_ONLY))
+}
+
+#[cfg(not(unix))]
+pub fn restrict(_dir: &Path) -> std::io::Result<()> {
+    Ok(())
 }
 
 fn text(path: &Path) -> String {
@@ -141,10 +206,11 @@ pub fn app_dirs(app: &AppHandle) -> Result<AppDirs, String> {
     })
 }
 
-/// Creates the config folder, the data folder and `<config>/scripts` if they are
-/// missing. Called from `setup_app` before the window appears, so that every
-/// later write finds its folder. Failures are logged, never fatal: a read-only
-/// home directory must still give a usable editor.
+/// Creates the config folder, the data folder, `<config>/scripts` and the two M7
+/// folders `<data>/backups` and `<data>/recovery` if they are missing. Called
+/// from `setup_app` before the window appears, so that every later write finds
+/// its folder. Failures are logged, never fatal: a read-only home directory must
+/// still give a usable editor.
 pub fn ensure_dirs(app: &AppHandle) {
     match app_dirs(app) {
         Ok(dirs) => {
@@ -187,6 +253,10 @@ mod tests {
         assert_eq!(paths.user_scripts_dir, under("/c", "scripts"));
         // M6: the machines file sits beside the settings, in the config folder.
         assert_eq!(paths.machines_file, under("/c", "machines.json"));
+        // M7: the two data folders are ours alone; the webview never gets their
+        // paths, so they are not part of `ConfigPaths`.
+        assert_eq!(dirs.backups_dir(), PathBuf::from("/d").join("backups"));
+        assert_eq!(dirs.recovery_dir(), PathBuf::from("/d").join("recovery"));
     }
 
     #[test]
@@ -196,8 +266,34 @@ mod tests {
         assert!(dirs.config.is_dir());
         assert!(dirs.data.is_dir());
         assert!(dirs.user_scripts_dir().is_dir());
+        // M7: the backup and recovery roots exist before the window does, so the
+        // first save and the first snapshot never have to create them.
+        assert!(dirs.backups_dir().is_dir());
+        assert!(dirs.recovery_dir().is_dir());
         // Idempotent: a second run over existing folders is not an error.
         assert_eq!(dirs.ensure(), Vec::<String>::new());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// AD-21: the two folders hold unsaved work, so nobody but the owner may read
+    /// them — including when they were created by an older build with a looser
+    /// umask, which is why `ensure` re-applies the mode every start.
+    #[cfg(unix)]
+    #[test]
+    fn the_backup_and_recovery_folders_are_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let (root, dirs) = scratch("mode");
+        // A folder that is already there, world-readable, as an older build left it.
+        std::fs::create_dir_all(dirs.recovery_dir()).unwrap();
+        std::fs::set_permissions(dirs.recovery_dir(), std::fs::Permissions::from_mode(0o755))
+            .unwrap();
+
+        assert_eq!(dirs.ensure(), Vec::<String>::new());
+
+        for dir in [dirs.backups_dir(), dirs.recovery_dir()] {
+            let mode = std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, OWNER_ONLY, "{} is {mode:o}", dir.display());
+        }
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -214,9 +310,11 @@ mod tests {
             data: root.join("data"),
         };
         let failures = dirs.ensure();
-        // The config folder and the scripts folder under it both fail; data works.
+        // The config folder and the scripts folder under it both fail; data works,
+        // and so do the two folders under it.
         assert_eq!(failures.len(), 2, "{failures:?}");
         assert!(dirs.data.is_dir());
+        assert!(dirs.backups_dir().is_dir() && dirs.recovery_dir().is_dir());
         let _ = std::fs::remove_dir_all(&root);
     }
 }

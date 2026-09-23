@@ -38,6 +38,8 @@ function doc(over: Partial<DocMeta> = {}): DocMeta {
     dirty: true,
     disk: null,
     external: 'none',
+    readOnly: false,
+    readOnlyReason: null,
     ...over,
   };
 }
