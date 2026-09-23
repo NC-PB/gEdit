@@ -1,4 +1,4 @@
-// Renumber blocks (plan §5 WP4.2). Owner: WP4.2.
+// Renumber blocks (plan §5 WP4.2 and WP6.3). Owner: WP6.3.
 //
 // The cases that matter are golden files, not strings in this test:
 // `tests/fixtures/transforms/renumber/<case>/{input.nc,options.json,expected.nc}` is
@@ -30,12 +30,13 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { noMachine } from '$lib/core/machines/effective';
 import { BUILTIN_PROFILE_JSON } from '$lib/data/profiles';
 import { compileProfile } from '$lib/core/profiles/compile';
 import { validateProfile } from '$lib/core/profiles/validate';
 import { renumber } from './renumber';
 import type { CodeDb } from '$lib/core/codes/types';
-import type { CompiledProfile } from '$lib/core/profiles/types';
+import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
 import type { TransformContext } from './types';
 
 const CASES_DIR = fileURLToPath(new URL('../../../../tests/fixtures/transforms/renumber/', import.meta.url));
@@ -65,7 +66,7 @@ function context(
   firstLine = 1,
   document?: readonly string[],
 ): TransformContext {
-  return { cp, codes: NO_CODES, options, firstLine, document };
+  return { cp, codes: NO_CODES, options, firstLine, document, machine: noMachine(cp.profile) };
 }
 
 interface CaseMeta {
@@ -318,8 +319,126 @@ describe('the results table', () => {
   });
 });
 
+describe('references', () => {
+  const fanuc = compiled(FANUC);
+
+  /** The shipped Fanuc profile with the reference rules replaced. */
+  function withReferences(references: NonNullable<Profile['numbering']['references']>): CompiledProfile {
+    return compileProfile({ ...fanuc.profile, numbering: { ...fanuc.profile.numbering, references } });
+  }
+
+  const M99 = '(?<![A-Z])M99(?!\\d)';
+  const FREE = { start: 10, step: 10, skipStartingWith: '', restartAtProgramStart: false };
+
+  it('rewrites a value whose block it can name, and only that value', () => {
+    const cp = withReferences([{ trigger: '(?<![A-Z])GOTO', addresses: ['GOTO'] }]);
+    const result = renumber.run(['N5 GOTO 7', 'N6 G0 X7. P7', 'N7 M30'], context(cp, FREE));
+    // The `X7.` and the `P7` are not references and must not move with the jump.
+    expect(result.lines).toEqual(['N10 GOTO 30', 'N20 G0 X7. P7', 'N30 M30']);
+    expect(result.warnings).toEqual([{ key: 'ncNumbering.renumber.referencesRewritten', params: { count: 1 } }]);
+  });
+
+  it('leaves a value alone where the rule says report only (F42)', () => {
+    // The shipped profiles carry `rewrite: false` on `M99 P` (WP6.2) and on a `M98` block
+    // that also names a program (I6), and the goldens `m99-p-caller` and
+    // `m98-subprogram-start` pin both. What this proves is the machinery underneath: with
+    // the flag set, the value is reported and never touched, although the number exists in
+    // this very program — which is the case that makes a silent rewrite dangerous.
+    const report = withReferences([{ trigger: M99, addresses: ['P'], rewrite: false }]);
+    const rewrite = withReferences([{ trigger: M99, addresses: ['P'] }]);
+    const lines = ['N5 G0 X0', 'N6 M99 P5'];
+
+    const kept = renumber.run(lines, context(report, FREE));
+    expect(kept.lines).toEqual(['N10 G0 X0', 'N20 M99 P5']);
+    expect(kept.warnings).toEqual([{ key: 'ncNumbering.renumber.referencesKept', params: { count: 1 } }]);
+    expect(kept.skipped.map((s) => [s.line, s.severity])).toEqual([[2, 'warning']]);
+
+    expect(renumber.run(lines, context(rewrite, FREE)).lines).toEqual(['N10 G0 X0', 'N20 M99 P10']);
+  });
+
+  it('says nothing about a reference whose block keeps its number', () => {
+    const cp = withReferences([{ trigger: '(?<![A-Z])GOTO', addresses: ['GOTO'] }]);
+    const result = renumber.run(['N10 GOTO 20', 'N20 M30'], context(cp, FREE));
+    expect(result.lines).toEqual(['N10 GOTO 20', 'N20 M30']);
+    expect(result.warnings).toEqual([]);
+    expect(result.skipped).toEqual([]);
+  });
+
+  it('rewrites several values on one line from the back, so the offsets hold', () => {
+    const cp = withReferences([{ trigger: '(?<![A-Z])G71(?!\\d)', addresses: ['P', 'Q'] }]);
+    const result = renumber.run(['N5 G71 P6 Q7 U0.4', 'N6 G0 X1.', 'N7 X2.'], context(cp, FREE));
+    expect(result.lines[0]).toBe('N10 G71 P20 Q30 U0.4');
+  });
+
+  it('lists a reference row next to the skipped line above it, not behind every one', () => {
+    const cp = withReferences([{ trigger: '(?<![A-Z])GOTO', addresses: ['GOTO'] }]);
+    const result = renumber.run(['(HEADER)', 'N5 GOTO 999', '(MIDDLE)', 'N6 M30'], context(cp, { ...FREE, skipStartingWith: '(' }));
+    expect(result.skipped.map((s) => [s.line, s.severity])).toEqual([
+      [1, 'info'],
+      [2, 'warning'],
+      [3, 'info'],
+    ]);
+  });
+
+  it('counts the references it rewrote, kept and could not follow, each on its own', () => {
+    const cp = withReferences([
+      { trigger: '(?<![A-Z])GOTO', addresses: ['GOTO'] },
+      { trigger: M99, addresses: ['P'], rewrite: false },
+    ]);
+    const result = renumber.run(['N5 GOTO 7', 'N6 GOTO 999', 'N7 M99 P7'], context(cp, FREE));
+    expect(result.warnings).toEqual([
+      { key: 'ncNumbering.renumber.referencesRewritten', params: { count: 1 } },
+      { key: 'ncNumbering.renumber.referencesKept', params: { count: 1 } },
+      { key: 'ncNumbering.renumber.referencesUnresolved', params: { count: 1 } },
+    ]);
+  });
+
+  it('asks only about the references it cannot follow', () => {
+    const cp = withReferences([{ trigger: '(?<![A-Z])GOTO', addresses: ['GOTO'] }]);
+    // Every jump lands: nothing to confirm.
+    expect(renumber.preflight?.(['N5 GOTO 7', 'N6 G0 X0', 'N7 M30'], context(cp, FREE))).toBeNull();
+    // One does not: the dialog names it.
+    const msg = renumber.preflight?.(['N5 GOTO 999', 'N6 G0 X0', 'N7 M30'], context(cp, FREE));
+    expect(msg?.key).toBe('ncNumbering.renumber.references');
+    expect(msg?.params).toEqual({ count: 1, first: 1 });
+  });
+
+  it('never writes a computed jump, and never keeps quiet about one', () => {
+    const cp = withReferences([{ trigger: '(?<![A-Z])GOTO', addresses: ['GOTO'] }]);
+    const result = renumber.run(['N5 GOTO #100', 'N6 M30'], context(cp, FREE));
+    expect(result.lines).toEqual(['N10 GOTO #100', 'N20 M30']);
+    expect(result.warnings).toEqual([{ key: 'ncNumbering.renumber.referencesUnresolved', params: { count: 1 } }]);
+  });
+
+  it('follows the block numbers of the program the jump stands in', () => {
+    const cp = withReferences([{ trigger: '(?<![A-Z])GOTO', addresses: ['GOTO'] }]);
+    const lines = ['O1000', 'N5 GOTO 9', 'N9 G0 X0', 'M30', 'O1001', 'N5 GOTO 9', 'N9 G0 Z5.', 'M30'];
+    const result = renumber.run(lines, context(cp, { start: 10, step: 10, skipStartingWith: '% O (', restartAtProgramStart: true }));
+    expect(result.lines[1]).toBe('N10 GOTO 20');
+    expect(result.lines[5]).toBe('N10 GOTO 20');
+  });
+});
+
 describe('performance', () => {
   const fanuc = compiled(FANUC);
+
+  it('renumbers 100k lines with a jump in every seventh block well inside a second', () => {
+    const cp = compiled(FANUC);
+    // One program, `GOTO`s that all land: the worst case for the reference pass, because
+    // every one of them is looked up and rewritten.
+    const lines: string[] = ['O1000'];
+    for (let i = 0; i < 100_000; i++) lines.push(i % 7 === 0 ? `N${i + 1} GOTO ${i + 2}` : `N${i + 1} G1 X${i}.`);
+
+    const started = performance.now();
+    const result = renumber.run(lines, context(cp, { start: 10, step: 10, max: null, skipStartingWith: '% O (', restartAtProgramStart: true }));
+    const ms = performance.now() - started;
+
+    expect(result.lines[1]).toBe('N10 GOTO 20');
+    const rewritten = result.warnings.find((w) => w.key === 'ncNumbering.renumber.referencesRewritten');
+    expect(rewritten?.params).toEqual({ count: 14_286 });
+    // The budget is 1 s; the assertion leaves room for a loaded CI machine.
+    expect(ms, `${Math.round(ms)} ms for 100k lines with references`).toBeLessThan(3000);
+  });
 
   it('renumbers 100k lines well inside a second', () => {
     const source = ['G0 G90 X0. Y0.', 'N5 T1 M6', 'G43 H1 Z50. (ROUGH)', 'G1 X10. Y10. F250.', '/N100 G0 Z5.', 'M98 P2000', ''];

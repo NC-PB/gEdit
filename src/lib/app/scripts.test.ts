@@ -18,6 +18,7 @@ import { get, writable, type Writable } from 'svelte/store';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createScriptService, formKey, SCRIPT_OUTPUT_PANEL, SCRIPT_STATUS_KEYS } from './scripts';
 import { createDocumentStore } from '$lib/stores/documents';
+import { noMachine } from '$lib/core/machines/effective';
 import { profiles } from '$lib/stores/profiles';
 import { results } from '$lib/stores/results';
 import {
@@ -220,8 +221,25 @@ function harness(o: { profileId?: string; entries?: ScriptEntry[] } = {}): Harne
       cursor: () => h.cursor,
       versionId: () => h.version,
     },
-    profiles,
-    codes: { forScripts: () => [{ code: 'G84', label: 'Tapping cycle', group: 'cycle', pitchFeed: true }] },
+    // The effective view of the document (AD-31): without a machine it is the profile's
+    // own compile and its own database, which is what this service used to ask for.
+    machines: {
+      effective: (id) => {
+        const profileId = docs.get(id)?.profileId ?? 'fanuc-gcode';
+        const profile = profiles.profile(profileId);
+        return {
+          profile,
+          cp: profiles.compiled(profileId),
+          codes: {
+            dialect: 'fanuc',
+            version: 1,
+            addresses: {},
+            codes: [{ code: 'G84', label: 'Tapping cycle', group: 'cycle', pitchFeed: true }],
+          },
+          machine: noMachine(profile),
+        };
+      },
+    },
     modals: {
       form: (request) => {
         h.forms.push(request);

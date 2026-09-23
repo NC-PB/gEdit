@@ -54,16 +54,51 @@ remember what you used last time:
 | **Only renumber blocks that already have a number** | Leaves unnumbered blocks unnumbered |
 | **Also read these as a block number** | Other prefixes in the file; the new numbers are always written with the profile's own |
 
-Before it runs it looks for **jumps that point at a block number** — `M99 P`, `M98 Q`, the
-`P`/`Q` of `G70`–`G73`, `GOTO`. Renumbering does not rewrite them, so if there are any you
-are asked whether to go ahead, and afterwards each one is listed in Results so you can
-check it.
+#### Jumps and cycles that point at a block number
+
+`GOTO 100`, `M98 Q100`, `M99 P100` and, on a lathe, the `P`/`Q` of `G70`–`G73` all name a
+block by its number. **Renumbering rewrites the ones it can prove and reports the rest.**
+
+A reference is rewritten when all four of these hold:
+
+1. Exactly one block in the program carries that number — a number used twice is an
+   ambiguity, not an answer.
+2. That block is in the **same program**. `GOTO 100` means the `N100` of the program it
+   stands in, and a file can hold several programs.
+3. That block is inside the lines this run renumbers. A jump that points at a block outside
+   the selection keeps its number, because that block keeps its number too.
+4. The rule allows it at all. `M99 P` returns to a block of the **calling** program, which
+   this file does not show, so it is never rewritten — a number from this program would
+   send the return somewhere else entirely. The same goes for `M98 P2000 Q50`: the `Q`
+   names a block of program 2000, not of this one.
+
+Anything else is left exactly as written and listed in Results with the reason: the target
+is missing, the target occurs twice — **before or after** the run — the target is outside
+the run, the reference is a variable or an expression (`GOTO #100`), the block carries the
+same address twice so nothing can say which word is meant, or the rule forbids it. A jump
+target rewritten wrongly is worse than one left behind — the program still runs, and lands
+in the wrong place.
+
+The rules do not care in which order a block writes its words, and they allow a space
+between an address and its value: `G71 P 100 Q 200` and `N50 P2000 M98 Q50` are read
+exactly like the forms without the space.
+
+The references it **can** follow are not worth a dialog, so it does not raise one for them.
+If there are any it cannot follow, you are asked before it starts, and afterwards the
+summary says how many were rewritten and how many need your eye. Those are worth checking
+before the program goes to the machine.
+
+The search is over the whole document, not over your selection: a `GOTO` *above* a selection
+points into it just as well.
 
 Other things it will tell you about:
 
 - If the numbers pass the maximum and start over, the program then has **duplicate block
   numbers** — the control takes the first match, and block search, `GOTO` and `M99 P`
-  become ambiguous. Use a larger maximum, a smaller increment, or "Stop and warn".
+  become ambiguous. You are asked before a run that might need more numbers than the
+  maximum allows, and no reference is rewritten in a program whose numbering repeats: a
+  value that names several blocks is not an answer. Use a larger maximum, a smaller
+  increment, or "Stop and warn".
 - On a dialect that numbers blocks consecutively (Klartext), renumbering only a selection
   does not fit the blocks around it, and you are asked first.
 - A selection that may start in the middle of a block is flagged rather than guessed at.
@@ -76,10 +111,24 @@ they kept their number.
 Takes the numbers off. Available only where the dialect does not insist on them, so it is
 offered on Fanuc and refused on Klartext with the reason.
 
-Removing a number that something jumps to deletes the target outright and the control will
-alarm, so the check for jumps here is blunter than the renumber one — you are asked, and
-every affected line is listed afterwards. Lines that held nothing but their block number
-end up empty; they are counted and listed.
+| Option | What it does |
+|---|---|
+| **Keep numbers that are pointed at** | On by default. A block number that a jump, a return or a turning cycle names stays where it is; everything else goes |
+
+Removing a number that something jumps to does not renumber the jump — it deletes the
+target outright, and the control alarms. That is why the option above exists and why it is
+on: with it, a program comes out clean except for the handful of blocks that have to keep
+their numbers, and each of those is listed in Results with the reason.
+
+Switch it off and every number goes. Then you are asked first, and afterwards every line
+that still points at a number which is now gone is listed so you can fix the jumps by hand.
+
+There is one pointer the option cannot keep: a **computed** jump such as `GOTO #100` works
+its target out while the program runs, so there is no number to hold on to and that block
+loses its number like any other. That case is asked about and listed whichever way the
+option stands.
+
+Lines that held nothing but their block number end up empty; they are counted and listed.
 
 ---
 

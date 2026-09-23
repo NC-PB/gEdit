@@ -52,6 +52,35 @@ describe('the built-in code database service', () => {
     expect(list).toBe(service.forProfile('fanuc-gcode').codes);
     expect(list.length).toBeGreaterThan(50);
   });
+
+  // M6, AD-17: a child database is written as the difference to its parent, so what the
+  // service serves has to be the **resolved** one — otherwise a lathe document would find
+  // four codes and call everything else unknown.
+  it('serves a child database with its parent merged in', () => {
+    const lathe = service.forProfile('fanuc-lathe');
+    expect(lathe.dialect).toBe('fanuc-lathe');
+    // I6: `G28` is inherited word for word, while `G83` is a **face** drilling cycle on a
+    // lathe and the child overrides it — so the inherited entry is the one that proves the
+    // merge, and the overridden one proves the child still wins.
+    expect(lathe.codes.find((entry) => entry.code === 'G28')?.label).toBe('Return to the reference point');
+    expect(lathe.codes.find((entry) => entry.code === 'G83')?.label).toBe('Drilling cycle on the face');
+    expect(lathe.codes.length).toBeGreaterThan(50);
+    expect(Object.keys(lathe.addresses).length).toBeGreaterThan(5);
+  });
+
+  it('serves a variant database by its own id, for a machine that switches to it', () => {
+    const b = service.byId('fanuc-lathe-b');
+    expect(b.dialect).toBe('fanuc-lathe-b');
+    expect(b.codes.find((entry) => entry.code === 'G95')?.group).toBe('feedmode');
+    // The same object every time; an empty id is the "no database" answer.
+    expect(service.byId('fanuc-lathe-b')).toBe(b);
+    expect(service.byId('')).toEqual({ dialect: '', version: 0, addresses: {}, codes: [] });
+  });
+
+  it('looks up and completes an inherited code through the child profile', () => {
+    expect(service.lookupWord('fanuc-lathe', word('G', '28'))?.entry?.label).toBe('Return to the reference point');
+    expect(service.completions('fanuc-lathe', 'G8', false).length).toBeGreaterThan(0);
+  });
 });
 
 describe('createCodeDbService', () => {

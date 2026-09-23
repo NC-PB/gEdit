@@ -109,14 +109,26 @@ Multiplies `F` values by a percentage.
 | Decimal places | As written, or 0 to 4 |
 | Smallest feed / Largest feed | A scaled feed outside the range is pulled back to it. Empty means no limit |
 | Only feeds above / Only feeds below | Leaves the others as they are |
+| Per-revolution feeds | Automatic, yes or no. **Automatic** scales them on a turning program and leaves them alone on a milling one, which is what each of them usually wants |
+| Inverse-time feeds | `G93`, where `F` is the reciprocal of the time the block may take. Off by default |
 
 It leaves alone, and reports, the feeds it must not touch: **thread leads** (in a tapping
-or threading cycle the `F` may be a lead rather than a feed rate — in `G76` and `G92`, and
-in whichever codes your dialect marks that way — so it is left alone rather than guessed
-at), feeds on rapid moves, and feeds written as a variable: the control works out those
-values, gEdit cannot.
+or threading cycle the `F` carries a lead rather than a feed rate — the finding names the
+code, so you can see which cycle it was), feeds on rapid moves, and feeds written as a
+variable: the control works out those values, gEdit cannot.
 
-Feed *mode* is tracked as it goes: `G93`, `G94` and `G95` mean different things by `F`.
+Feed *mode* is tracked as it goes, out of the dialect's own code database rather than out
+of a table in the script: on a mill that is `G93`/`G94`/`G95`, on a lathe `G98`/`G99` in
+G-code system A and `G94`/`G95` in system B. A feed inside the finishing profile of a
+`G71`–`G73` cycle is an ordinary feed and is scaled like one.
+
+**The limits are compared against real values.** If gEdit can work out what a feed is worth
+on this document's [machine](machines.md), your smallest and largest are compared against
+that value, and a feed that has to be clamped is written back in the form the word was
+written in. If it cannot — a feed whose reading depends on a machine nobody chose — the
+feed is still **scaled** and simply not compared, and the run says which ones those were.
+The summary names the machine it worked with, or says that none was chosen and the
+dialect's defaults were assumed.
 
 **A selection is read in the state it is really written in.** When you run the script on
 part of a program, the lines above the selection are read for their modal state before the
@@ -132,23 +144,40 @@ those blocks by hand.
 
 ### Scale spindle speeds
 
-The same, for `S`. Leaves alone, and reports, surface speeds (`G96`), speed limits and
-speeds written as a variable. Defaults to whole numbers, which is what nearly every
-control wants. A selection is primed from the lines above it in exactly the same way, and
-warns in exactly the same case.
+The same, for `S`. Leaves alone, and reports, speeds written as a variable, and by default
+surface speeds and speed limits as well.
+
+**Constant surface speeds** (`G96`) are a three-way choice like the per-revolution feeds:
+automatic, yes or no. Under `G96` the `S` word is a surface speed in metres or feet per
+minute, not revolutions per minute, so scaling it is a different decision from scaling an
+rpm — and one you should make deliberately.
+
+**A speed limit is not a speed.** The `S` of the block that clamps the top speed for
+constant surface speed — `G50 S` in G-code system A, `G92 S` in system B — is left alone by
+default and reported. Which code that is comes from the dialect's code database, so the
+script is right on both systems without knowing either of them.
+
+Defaults to whole numbers, which is what nearly every control wants. A selection is primed
+from the lines above it in exactly the same way, and warns in exactly the same case.
 
 ### Tool list
 
 One row per tool, in order of first use: the tool, the comment that describes it, the line
-of its first call, and how many times it is called. Optionally the range of feeds and
-speeds each tool is used with. Click a row to jump to the call.
+of its first call, and how many times it is called. Optionally the range of feeds and speeds
+each tool is used with. Click a row to jump to the call.
+
+On a turning program it lists the **turret stations**, and an extra column shows the
+offsets each station was called with (`01, 11`) — so a station used with two different
+offsets is one row and tells you both. `T0100`, which cancels the offset rather than
+changing the tool, is not a call.
 
 Where the description comes from is a parameter (the dialect's own rule, or the comment
 above, below or at the end of the call line), as is whether `T01` and `T1` are written the
 same way.
 
-On a turret lathe this list comes back empty, with a warning saying why: the mill profile
-recognises a tool change by `M6`. See [dialects.md](dialects.md#lathes-and-other-controls).
+If a program has `T` words but no tool change at all, the list says so rather than coming
+back silently empty. On a milling dialect that usually means the program is really a turning
+program opened with a mill profile — switch the dialect in the status bar.
 
 ## Where scripts live
 
@@ -242,14 +271,34 @@ values arrive in the context as `params`. Fields are remembered per script.
   "cursor":   { "line": 130, "column": 5 },
   "params":   { "percent": 90, "maxFeed": null },
   "profile":  { "id": "fanuc-gcode", "syntax": {}, "addresses": {}, "numbering": {} },
-  "codes":    [ { "code": "G84", "group": "cycle", "pitchFeed": true } ]
+  "codes":    [ { "code": "G84", "group": "cycle", "pitchFeed": true } ],
+  "machine":  { "id": "lathe-2", "name": "Lathe 2", "choice": "document",
+                "params": { "numberInput": { "mode": "increment", "incrementMm": "0.001" },
+                            "units": "mm", "diameter": "on",
+                            "variants": { "gcodeSystem": "B" },
+                            "modalInitial": { "feedmode": "G95" } },
+                "source": { "numberInput": "machine", "units": "profile",
+                            "diameter": "profile", "variants": { "gcodeSystem": "machine" },
+                            "modalInitial": { "feedmode": "machine" } } }
 }
 ```
 
-`profile` is the resolved dialect and `codes` is its code database, so a script can ask
-what a comment looks like, how blocks are numbered or what `G84` means **in this dialect**
-instead of assuming Fanuc. `contract: 2` marks the shape; a script started without a
-context gets `{}` and should fall back to defaults rather than fail.
+`profile` is the dialect and `codes` is its code database, so a script can ask what a
+comment looks like, how blocks are numbered or what `G84` means **in this dialect** instead
+of assuming Fanuc. `contract: 2` marks the shape; a script started without a context gets
+`{}` and should fall back to defaults rather than fail.
+
+Both of them arrive with the document's [machine](machines.md) **already applied**: the
+G-code system the machine is set to has picked the code database, its power-on modes are in
+the profile, and `syntax.decimalPointSignificant` follows how that control reads numbers. A
+script that only scales values never has to know that machines exist.
+
+`machine` is the machine itself, for the scripts that do. `source` says where each parameter
+came from — `"machine"`, `"detected"` or `"profile"` — so a script can tell a value it was
+told from one it is assuming. A document with no machine still gets the member, with the
+dialect's documented defaults and every source `"profile"`. Read it with
+`gedit_nc.machine_params(context)`, which answers the same thing for a context from an older
+version of gEdit that does not carry the member at all.
 
 `input.precedingLines` is what makes a selection run trustworthy: the document lines above
 `startLine`, so a script can work out the modal state — feed mode, the active cycle,
@@ -311,7 +360,12 @@ how the bundled scale scripts report the feeds they refused to touch.
 | `tokenize_line(line, cp, prev_state)` | one block's tokens, and the state the next line needs |
 | `mask_comments(line, cp)` | the line with comments blanked out, same offsets |
 | `parse_number`, `format_number`, `scale_decimal` | NC numbers as decimal strings, never as floats |
-| `FeedModeTracker(codes)` | `G93`/`G94`/`G95`, `G96`/`G97`, the active cycle, and whether its `F` is a thread pitch |
+| `ModalInterpreter(cp, codes)` | everything that is in force after a block: the code per modal group, the feed and speed units, distance, diameter, units, plane, the last tool, feed, speed and speed clamp, and the active cycle |
+| `FeedModeTracker(codes)` | the older, smaller view of the same thing: feed mode, `G96`/`G97`, the active cycle, and whether its `F` is a thread pitch |
+| `speed_limit_of(codes, tokens)` | the code in this block that makes its `S` a clamp rather than a speed, or `None` |
+| `machine_type_of`, `incremental_axes`, `diameter_axes` | `'mill'` or `'lathe'`, the `U`→`X` pairs, and the words written as a diameter |
+| `machine_params(context)` | the document's [machine](machines.md), with the source of each parameter |
+| `number_class_of`, `value_of`, `resolve_value`, `readings_of`, `write_back` | what a word's number actually **is** on this machine, and how to put a value back into it |
 | `preceding_lines(context)` | the lines above a selection, or `[]` when there are none to trust |
 | `prime_tracker(tracker, lines, cp)` | feeds those lines through a tracker and hands back the state the first selected line begins in |
 | `report(...)`, `envelope(...)` | the two JSON result shapes |
@@ -331,6 +385,36 @@ how the bundled scale scripts report the feeds they refused to touch.
 
 Write for Python 3.9 as well as for the newest release: no `match`, no `X | Y` outside
 annotations, and `from __future__ import annotations` at the top.
+
+### Numbers, and the machine
+
+`X50` is 50 mm on one control and 0.050 mm on the next, and which one it is depends on a
+machine parameter rather than on the dialect ([machines.md](machines.md)).
+
+A script that only **scales** can ignore all of it. Multiplying is unit-free: the same
+arithmetic is right in every reading, and `syntax.decimalPointSignificant` already follows
+the machine. A script that **compares** a value with a limit, or **computes** with one, has
+to ask:
+
+```python
+machine = gedit_nc.machine_params(context)
+cls = gedit_nc.number_class_of(token.address, context["profile"], tracker.feed_unit,
+                               block_codes, tracker.pitch_feed)
+value, readings = gedit_nc.resolve_value(token.value, cls, machine,
+                                         context["profile"], units)
+if value is None:
+    # No class, or a reading that depends on a machine nobody chose. Report the word —
+    # `readings` says what each preset would make of it — and leave it alone.
+    ...
+```
+
+`value` is decimal text in millimetres, inches, degrees or seconds. `write_back` puts a
+value back into the word it came from, keeping the word's own form — a point stays a point,
+a point-less word stays a count — and telling you when it had to round.
+
+**Never divide by a thousand yourself, and never assume a point-less word is a count.** The
+machine decides, and where no machine was chosen gEdit refuses to decide for it. Say so in a
+finding instead.
 
 ### A minimal example
 

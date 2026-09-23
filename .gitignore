@@ -46,3 +46,9 @@ __pycache__/
 
 # Generated large test programs (tests/gen/gen-large.mjs)
 .perf/
+
+# The owner's own NC programs (plan §9.2, D45). They are never committed, never pushed and
+# never seen by CI; only the README that says so is tracked. `GEDIT_REAL_FIXTURES` points
+# the same tests at a folder elsewhere.
+/tests/real/*
+!/tests/real/README.md

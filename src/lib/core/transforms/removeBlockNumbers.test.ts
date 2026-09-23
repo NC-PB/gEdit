@@ -1,14 +1,15 @@
-// Remove block numbers (plan §5 WP4.2). Owner: WP4.2.
+// Remove block numbers (plan §5 WP4.2 and WP6.3). Owner: WP6.3.
 //
 // Same shape as `renumber.test.ts`: the cases live in
 // `tests/fixtures/transforms/remove-block-numbers/<case>/`, and a case is added by adding
-// a folder. This transform has no options, so `options.json` only carries the profile,
-// the note and what to expect.
+// a folder. `options` is the one option this transform has (M6, WP6.3): `keepReferenced`,
+// which is on wherever the profile knows what a block-number reference looks like.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { noMachine } from '$lib/core/machines/effective';
 import { BUILTIN_PROFILE_JSON } from '$lib/data/profiles';
 import { compileProfile } from '$lib/core/profiles/compile';
 import { validateProfile } from '$lib/core/profiles/validate';
@@ -37,8 +38,13 @@ function compiled(id: string): CompiledProfile {
 
 const NO_CODES: CodeDb = { dialect: 'none', version: 1, addresses: {}, codes: [] };
 
-function context(cp: CompiledProfile, firstLine = 1, document?: readonly string[]): TransformContext {
-  return { cp, codes: NO_CODES, options: {}, firstLine, document };
+function context(
+  cp: CompiledProfile,
+  firstLine = 1,
+  document?: readonly string[],
+  options: Record<string, unknown> = {},
+): TransformContext {
+  return { cp, codes: NO_CODES, options, firstLine, document, machine: noMachine(cp.profile) };
 }
 
 interface CaseMeta {
@@ -48,6 +54,7 @@ interface CaseMeta {
   scope?: { startLine: number; endLine: number };
   /** A bare fragment with no document behind it. */
   firstLine?: number;
+  options?: Record<string, unknown>;
   expect?: {
     summary?: string;
     skipped?: { line: number; severity: string }[];
@@ -94,7 +101,7 @@ function goldenCases(): GoldenCase[] {
 const CASES = goldenCases();
 
 function contextOf(golden: GoldenCase): TransformContext {
-  return context(compiled(golden.meta.profile ?? FANUC), golden.firstLine, golden.document);
+  return context(compiled(golden.meta.profile ?? FANUC), golden.firstLine, golden.document, golden.meta.options ?? {});
 }
 
 describe('remove-block-numbers goldens', () => {
@@ -130,13 +137,19 @@ describe('remove-block-numbers goldens', () => {
   it('is idempotent: there is nothing left to remove', () => {
     for (const golden of CASES) {
       const cp = compiled(golden.meta.profile ?? FANUC);
-      const again = removeBlockNumbers.run(golden.expected, context(cp));
+      const again = removeBlockNumbers.run(golden.expected, context(cp, 1, undefined, golden.meta.options ?? {}));
       expect(again.lines, golden.name).toEqual(golden.expected);
-      expect(again.summary.key, golden.name).toBe('ncNumbering.removeBlockNumbers.nothing');
-      // And it says nothing else either: a run that removed no number must not report
-      // that the jumps point at numbers it removed.
-      expect(again.warnings, golden.name).toEqual([]);
-      expect(again.skipped, golden.name).toEqual([]);
+      // Either there was nothing left at all, or what is left is the numbers a jump
+      // points at, which is the answer this run gives every time.
+      if (again.summary.key === 'ncNumbering.removeBlockNumbers.nothing') {
+        // And it says nothing else either: a run that removed no number must not report
+        // that the jumps point at numbers it removed.
+        expect(again.warnings, golden.name).toEqual([]);
+        expect(again.skipped, golden.name).toEqual([]);
+      } else {
+        expect(again.summary.key, golden.name).toBe('ncNumbering.removeBlockNumbers.allKept');
+        expect(again.warnings.map((w) => w.key), golden.name).toEqual(['ncNumbering.removeBlockNumbers.keptReferenced']);
+      }
     }
   });
 
@@ -145,11 +158,58 @@ describe('remove-block-numbers goldens', () => {
     // numbers are already gone deletes none, so the question does not arise — and a
     // dialog that asks it anyway is one people learn to click through.
     const cp = compiled(FANUC);
+    const off = { keepReferenced: false };
     const gone = ['O1006', 'IF [#1 EQ 1] GOTO 100', 'G1 X10.', 'M99 P100', 'M30'];
-    expect(removeBlockNumbers.preflight?.(gone, context(cp))).toBeNull();
+    expect(removeBlockNumbers.preflight?.(gone, context(cp, 1, undefined, off))).toBeNull();
     // With the numbers still there, the same program does ask.
     const numbered = ['O1006', 'N10 IF [#1 EQ 1] GOTO 100', 'N100 G1 X10.', 'N300 M99 P100', 'N400 M30'];
-    expect(removeBlockNumbers.preflight?.(numbered, context(cp))?.key).toBe('ncNumbering.removeBlockNumbers.references');
+    expect(removeBlockNumbers.preflight?.(numbered, context(cp, 1, undefined, off))?.key).toBe('ncNumbering.removeBlockNumbers.references');
+    // And with the numbers kept there is nothing left to delete, so nothing to ask.
+    expect(removeBlockNumbers.preflight?.(numbered, context(cp))).toBeNull();
+  });
+});
+
+describe('keeping the numbers a reference points at', () => {
+  const cp = compiled(FANUC);
+  const program = ['O1080', 'N10 IF [#1 EQ 1] GOTO 100', 'N20 G0 X0', 'N100 G1 X10.', 'N110 M30'];
+
+  it('keeps the target and removes the rest', () => {
+    const result = removeBlockNumbers.run(program, context(cp));
+    expect(result.lines).toEqual(['O1080', 'IF [#1 EQ 1] GOTO 100', 'G0 X0', 'N100 G1 X10.', 'M30']);
+    expect(result.summary).toEqual({ key: 'ncNumbering.removeBlockNumbers.summary', params: { count: 3 } });
+    expect(result.warnings).toEqual([{ key: 'ncNumbering.removeBlockNumbers.keptReferenced', params: { count: 1 } }]);
+    expect(result.skipped.map((s) => [s.line, s.severity])).toEqual([[4, 'info']]);
+  });
+
+  it('removes the target as well when the option is off, and lists the broken jump', () => {
+    const result = removeBlockNumbers.run(program, context(cp, 1, undefined, { keepReferenced: false }));
+    expect(result.lines).toEqual(['O1080', 'IF [#1 EQ 1] GOTO 100', 'G0 X0', 'G1 X10.', 'M30']);
+    expect(result.warnings.map((w) => w.key)).toEqual(['ncNumbering.removeBlockNumbers.referencesKept']);
+    expect(result.skipped.map((s) => [s.line, s.severity])).toEqual([[2, 'warning']]);
+  });
+
+  it('keeps a number a jump outside the selection points at', () => {
+    // The `GOTO 100` is above the selection, so only the document says that N100 has to
+    // stay. A run that read its own lines only would delete it (G8 M4).
+    const result = removeBlockNumbers.run(program.slice(3), context(cp, 4, program));
+    expect(result.lines).toEqual(['N100 G1 X10.', 'M30']);
+  });
+
+  it('keeps the number a return names in the caller, which is another program', () => {
+    // `M99 P30` names N30 of the calling program, not of the subprogram it stands in
+    // (F42), so the answer is taken over the whole document and not per program.
+    const both = ['O1090', 'N30 G0 X0', 'N40 M98 P1091', 'N50 M30', 'O1091', 'N60 G0 Z5.', 'N70 M99 P30'];
+    const result = removeBlockNumbers.run(both, context(cp));
+    expect(result.lines[1]).toBe('N30 G0 X0');
+    expect(result.lines[5]).toBe('G0 Z5.');
+  });
+
+  it('says so when every number in the scope is a target', () => {
+    const all = ['N100 G1 X10.', 'N200 G1 X20.', 'G71 P100 Q200 U0.4 W0.1'];
+    const lathe = compiled('fanuc-lathe');
+    const result = removeBlockNumbers.run(all, context(lathe));
+    expect(result.lines).toEqual(all);
+    expect(result.summary).toEqual({ key: 'ncNumbering.removeBlockNumbers.allKept', params: { count: 2 } });
   });
 });
 
@@ -162,8 +222,13 @@ describe('availability', () => {
     expect(removeBlockNumbers.available(compiled(FANUC))).toBe(true);
   });
 
-  it('has no options', () => {
-    expect(removeBlockNumbers.options).toBeUndefined();
+  it('offers the one option, and only where the dialect has references', () => {
+    const fields = removeBlockNumbers.options?.(compiled(FANUC)) ?? [];
+    expect(fields.map((field) => field.id)).toEqual(['keepReferenced']);
+    expect(fields[0].default).toBe(true);
+    expect(fields[0].label.trim() !== '' && !fields[0].label.includes('ncNumbering.')).toBe(true);
+    // Klartext describes no references, so there is nothing to decide and no dialog.
+    expect(removeBlockNumbers.options?.(compiled(KLARTEXT))).toEqual([]);
   });
 
   it('has a preflight, because it deletes the blocks a jump points at', () => {
@@ -175,7 +240,13 @@ describe('together with renumber', () => {
   it('undoes what renumber wrote, down to the skip marks', () => {
     const cp = compiled(FANUC);
     const bare = ['/G0 X0', 'G1 X10. F100', '(A COMMENT)', 'M30'];
-    const numbered = renumber.run(bare, { cp, codes: NO_CODES, options: { skipStartingWith: '(', restartAtProgramStart: false }, firstLine: 1 });
+    const numbered = renumber.run(bare, {
+      cp,
+      codes: NO_CODES,
+      options: { skipStartingWith: '(', restartAtProgramStart: false },
+      firstLine: 1,
+      machine: noMachine(cp.profile),
+    });
     expect(numbered.lines).toEqual(['/N10 G0 X0', 'N20 G1 X10. F100', '(A COMMENT)', 'N30 M30']);
     expect(removeBlockNumbers.run(numbered.lines, context(cp)).lines).toEqual(bare);
   });

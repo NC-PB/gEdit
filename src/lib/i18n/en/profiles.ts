@@ -19,6 +19,10 @@ export default {
   // Picker
   placeholder: 'Read this document as…',
   extensions: 'Extensions: {list}',
+  // A dialect and the one it builds on are offered as one family, so "Fanuc (ISO) mill"
+  // and "Fanuc (ISO) lathe" read as two machines of the same control and not as two
+  // unrelated entries (M6, AD-16). `{group}` is what the two names have in common.
+  grouped: '{group} · {name}',
 
   // Status message
   changed: '{name} now uses the {profile} dialect',

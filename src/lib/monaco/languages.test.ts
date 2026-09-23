@@ -107,8 +107,12 @@ describe('registerAll', () => {
   it('wires the real registry and the real code databases to Monaco', () => {
     const { monaco, log } = fakeMonaco();
     registerAll(monaco);
-    expect(log.registered.map((entry) => entry.id)).toEqual(['fanuc-gcode', 'heidenhain-klartext']);
-    expect(log.grammars).toHaveLength(2);
+    expect(log.registered.map((entry) => entry.id)).toEqual([
+      'fanuc-gcode',
+      'fanuc-lathe',
+      'heidenhain-klartext',
+    ]);
+    expect(log.grammars).toHaveLength(3);
     expect(log.themes).toHaveLength(2);
   });
 });

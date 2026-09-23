@@ -12,7 +12,8 @@ the machine, not for the person who builds the editor — the build and design n
 | Page | What is in it |
 |---|---|
 | This page | The window, files, navigation, code help, comparing, settings, and the limits |
-| [dialects.md](dialects.md) | Dialect profiles: what they decide, which two ship, how the dialect is picked |
+| [dialects.md](dialects.md) | Dialect profiles: what they decide, which three ship, how the dialect is picked |
+| [machines.md](machines.md) | Machine configurations: what `X50` is worth on **your** control, and how to tell gEdit |
 | [transformations.md](transformations.md) | The NC tab: renumbering and the five cleanups |
 | [scripts.md](scripts.md) | Running Python scripts, and how to write one |
 | [shortcuts.md](shortcuts.md) | The keyboard |
@@ -37,11 +38,13 @@ Across the top is the **ribbon**, with five tabs:
 | **View** | The command palette, the panels, folding, display switches, zoom, theme, settings, the shortcut list and About |
 
 Below it are the **tabs**, one per open program, then the editor, and at the bottom the
-**status bar**: the file on the left, and on the right the dialect, the encoding, the line
-ending, the cursor position and — while one runs — the script.
+**status bar**: the file on the left, and on the right the dialect, the machine, the
+encoding, the line ending, the cursor position and — while one runs — the script.
 
-Three of those status fields are buttons. Click the dialect to change it, the encoding to
-change what the file is written as, the line ending to change that.
+Four of those status fields are buttons. Click the dialect to change it, the machine to say
+which control this program is for ([machines.md](machines.md)), the encoding to change what
+the file is written as, the line ending to change that. The machine field is not shown for
+a dialect that has no machine settings.
 
 There are three panels:
 
@@ -164,7 +167,7 @@ above 50 MB are refused.
 
 ## Settings
 
-`Cmd/Ctrl+,` opens the settings dialog. Five pages:
+`Cmd/Ctrl+,` opens the settings dialog. Six pages:
 
 | Page | What you can set |
 |---|---|
@@ -173,6 +176,10 @@ above 50 MB are refused.
 | **Assistance** | Hover help on or off; completion automatic, manual or off |
 | **Files** | Length of the recent list, what happens when a file changes outside gEdit, the dialect new files start in |
 | **Scripts** | The Python interpreter, extra script folders, the time limit for a run, whether the bundled scripts are listed — and the path of your own scripts folder |
+| **Machines** | Your machine configurations: add, edit, duplicate, remove, and which one is the default for a dialect — see [machines.md](machines.md) |
+
+The Machines page is not a page of settings. Machine configurations are records with names
+of their own, and they live in their own file (`machines.json`), not in `settings.json`.
 
 Settings are stored as a small JSON file that holds only what you changed, so a default
 that improves in a later version reaches you. `Open settings file` in the dialog opens it
@@ -190,20 +197,28 @@ Being clear about this saves disappointment on the shop floor.
   know where the tool is.
 - **No machine communication.** No DNC, no serial, no FTP, no drip feed.
 - **No program management.** No library, no job list, no PDM or ERP link.
-- **One mill dialect and one Klartext dialect.** A lathe program opens and edits fine, but
-  it is read with a mill profile — see [dialects.md](dialects.md).
+- **Three dialects: Fanuc mill, Fanuc lathe and Heidenhain Klartext.** Sinumerik and Okuma
+  are planned but not here yet; their programs open with the profile that fits best, which
+  gets the codes wrong — see [dialects.md](dialects.md).
+- **gEdit does not know your machine unless you tell it.** Whether `X50` is 50 mm or
+  0.050 mm, which G-code system a lathe uses, what is modal at power-on: all of that is a
+  machine setting, and with no machine configured gEdit says "assumed" and refuses to
+  compute the values that depend on it. It never reads a control, and it never imports a
+  parameter file — you type it in once. See [machines.md](machines.md).
 - **Python is needed only for the script features.** Everything on this page, and
   everything in [transformations.md](transformations.md), works without it. If Python is
   missing, the script commands are disabled with a message and nothing else changes.
 - **Scripts are not sandboxed.** A script is an ordinary program running with your rights.
   See the security section of [scripts.md](scripts.md).
-- **Quitting from the Dock icon's menu, logging out or shutting down skips the
-  unsaved-changes prompt.** Quit from the application menu or with `Cmd+Q` and you are
-  asked; quit from the Dock and the app is terminated with the changes still unsaved. Save
-  before you log out.
+- **On Windows and Linux, logging out or shutting down skips the unsaved-changes prompt.**
+  The operating system does not let an application hold up a session end, so unsaved work is
+  lost. Save before you log out. (On macOS gEdit is asked first, so quitting from the Dock
+  menu, from another application's menu or by logging out now stops at the same
+  unsaved-changes prompt as closing the window.)
 - **Nothing is restored between sessions** except the window size and position, the panel
-  layout, the recent files and your settings. Open tabs, bookmarks and cursor positions
-  are not remembered.
+  layout, the recent files, your settings and your machine configurations. Open tabs,
+  bookmarks, cursor positions and the machine you picked for a particular document are not
+  remembered — set a default machine for the dialect if you keep picking the same one.
 - **Saves are written in place**, not written to a temporary file and moved. A crash or a
   power cut in the middle of a save can leave a partial file. There is no backup copy.
 - **English only.** Every text in the program is English.
@@ -213,6 +228,7 @@ Being clear about this saves disappointment on the shop floor.
 | | |
 |---|---|
 | Settings | `<config>/settings.json` |
+| Machine configurations | `<config>/machines.json` |
 | Your own scripts | `<config>/scripts/` |
 | Recent files, panel sizes, remembered form values | `<data>/state.json` |
 | Window size and position | `<config>/.window-state.json` |

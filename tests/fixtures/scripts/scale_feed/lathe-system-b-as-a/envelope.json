@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 1 of 3 feed rates to 90 %; 1 left as a thread pitch, 1 left because the code means a threading cycle somewhere else. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 22,
+      "severity": "warning",
+      "message": "F2.0 is not scaled: G78 is a threading cycle on another kind of machine or in another G-code system, where this F is the thread lead and not a feed rate. Check the block and scale it by hand if it really is a feed."
+    },
+    {
+      "line": 26,
+      "severity": "warning",
+      "message": "F2.0 is a thread pitch (G33), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    }
+  ]
+}

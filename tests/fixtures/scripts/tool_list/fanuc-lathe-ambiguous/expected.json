@@ -41,7 +41,7 @@
     {
       "line": 9,
       "severity": "info",
-      "message": "T2: the F of 1 block may be a thread lead rather than a feed rate, because its code is a threading cycle in another G-code system of this dialect, so it is not in the range."
+      "message": "T2: the F of 1 block may be a thread lead rather than a feed rate, because its code is a threading cycle on another kind of machine or in another G-code system, so it is not in the range."
     }
   ]
 }

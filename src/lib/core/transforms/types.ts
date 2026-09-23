@@ -37,15 +37,23 @@
 
 import type { Located, Msg } from '$lib/app/types';
 import type { CodeDb } from '$lib/core/codes/types';
+import type { EffectiveMachine } from '$lib/core/machines/types';
 import type { FieldSpec } from '$lib/core/forms/types';
 import type { CompiledProfile } from '$lib/core/profiles/types';
 
 /** Everything a transform may read besides the lines themselves. */
 export interface TransformContext {
-  /** The active document's profile, patterns already compiled. */
+  /** The active document's profile, patterns already compiled — M6: the **effective** one. */
   cp: CompiledProfile;
-  /** The dialect's code database, for what a code *means* (a cycle, a pitch feed, ...). */
+  /** The document's effective code database, for what a code *means* (a cycle, a pitch feed, ...). */
   codes: CodeDb;
+  /**
+   * M6, AD-31: the document's effective machine. A transform that only rewrites text does
+   * not need it; one that **computes with values** — compares a feed against a limit,
+   * converts a depth — calls `resolveValue`/`writeBack` (§7.15) with it, so it never
+   * guesses what a point-less word means on a machine nobody chose.
+   */
+  machine: EffectiveMachine;
   /** The values of `options()`, already validated by the form. */
   options: Record<string, unknown>;
   /**

@@ -1,0 +1,18 @@
+{
+  "note": "G8 M6. A maximum of 30 in steps of 10 makes this six-block program wrap where the shipped defaults need ten thousand blocks, and the effect is the same: every number is handed out twice. The duplicate test only ever looked at the numbering the run replaced, found each target unique there, and wrote the target's new number — a value the program now carries twice, which a control resolves to the first block that matches, so a G71 P-Q can rough the wrong pass. Both values are reported and left as they are now, and the run is asked about before it happens.",
+  "profile": "fanuc-lathe",
+  "options": { "max": 30, "onOverflow": "wrap" },
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      { "line": 1, "severity": "info" },
+      { "line": 2, "severity": "info" },
+      { "line": 3, "severity": "warning" },
+      { "line": 6, "severity": "warning" },
+      { "line": 7, "severity": "warning" },
+      { "line": 9, "severity": "info" }
+    ],
+    "warnings": ["ncNumbering.renumber.wrapped", "ncNumbering.renumber.referencesUnresolved"],
+    "preflight": "ncNumbering.renumber.referencesMayWrap"
+  }
+}

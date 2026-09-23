@@ -1,0 +1,10 @@
+{
+  "profile": "fanuc-lathe",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":2,"text":"A TURNING PROGRAM IN A FILE WITHOUT AN EXTENSION"},
+    {"kind":"program","line":4,"text":"O2008","endLine":21},
+    {"kind":"tool","line":7,"text":"T1 — OD ROUGH","tool":"01","endLine":21},
+      {"kind":"end","line":19,"text":"M30"}
+  ]
+}

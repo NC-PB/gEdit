@@ -19,10 +19,8 @@
 
 import { completionsAt, type CompletionKind } from '$lib/core/codes/completionItems';
 import { t } from '$lib/i18n';
-import { codes } from '$lib/stores/codes';
-import { profiles } from '$lib/stores/profiles';
 import { settings } from '$lib/stores/settings';
-import { stateBefore } from './hover';
+import { stateBefore, viewOf } from './hover';
 import type { Monaco } from '$lib/monaco/setup';
 import type { Disposable } from '$lib/app/types';
 import type * as MonacoApi from 'monaco-editor/esm/vs/editor/editor.api.js';
@@ -41,9 +39,11 @@ export function registerCompletion(monaco: Monaco, profileId: string): Disposabl
     provideCompletionItems(model, position) {
       if (settings.get('assist.completion') === 'off') return empty;
 
-      const cp = profiles.compiled(profileId);
+      // The document's effective view (AD-31): a system-B lathe document is offered the
+      // codes of the database its machine selects, not the ones its profile id names.
+      const { cp, db } = viewOf(model, profileId);
       const line = model.getLineContent(position.lineNumber);
-      const result = completionsAt(line, position.column - 1, cp, codes.forProfile(profileId), {
+      const result = completionsAt(line, position.column - 1, cp, db, {
         t,
         prev: stateBefore(model, position.lineNumber, cp),
       });

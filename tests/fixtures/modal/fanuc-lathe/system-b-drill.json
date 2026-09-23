@@ -1,0 +1,61 @@
+{
+  "about": "The one program where reading the wrong G-code system is silent rather than loud: six `G99 G83` drilling blocks on a machine set to system B. There `G99` says the cycle returns to the R point and changes no unit at all, while in system A the same code is the feed mode itself. The feed of every one of these blocks is per revolution because the machine powers on that way, and never because the program said so.",
+  "machine": { "variants": { "gcodeSystem": "B" } },
+  "input": "../../nc/fanuc-lathe/l07-system-b-drill.nc",
+  "states": [
+    {
+      "line": 1,
+      "about": "Assumed from the machine, as in `system-b.json`.",
+      "after": { "groups": { "feedmode": "=G95@machine" }, "feedUnit": "per-rev", "distance": "unknown" }
+    },
+    {
+      "line": 5,
+      "about": "The program states absolute and millimetres and says nothing about the feed mode, which is the point of this case.",
+      "after": {
+        "groups": { "feedmode": "=G95@machine", "distance": "G90" },
+        "feedUnit": "per-rev",
+        "distance": "absolute",
+        "units": "mm"
+      }
+    },
+    {
+      "line": 8,
+      "after": { "speedLimit": "2000", "speed": null }
+    },
+    {
+      "line": 12,
+      "about": "G99 is the cycle-return code in this system: it sets the `cyclereturn` group and leaves the feed unit exactly where it was. F0.08 is 0.08 mm per revolution.",
+      "after": {
+        "groups": { "cyclereturn": "G99", "feedmode": "=G95@machine" },
+        "feedUnit": "per-rev",
+        "activeCycle": "G83",
+        "block": { "cycle": "G83", "pitchFeed": false },
+        "feed": "0.08"
+      }
+    },
+    {
+      "line": 17,
+      "about": "The last of the six: still the same cycle, still per revolution.",
+      "after": {
+        "groups": { "cyclereturn": "G99", "feedmode": "=G95@machine" },
+        "feedUnit": "per-rev",
+        "activeCycle": "G83",
+        "feed": "0.08"
+      }
+    },
+    {
+      "line": 18,
+      "after": { "activeCycle": null, "block": { "cycle": null } }
+    },
+    {
+      "line": 23,
+      "after": {
+        "groups": { "cyclereturn": "G99", "spindlemode": "G96" },
+        "speedUnit": "surface",
+        "speed": "120",
+        "speedLimit": "2000",
+        "tool": "06"
+      }
+    }
+  ]
+}

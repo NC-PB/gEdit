@@ -20,7 +20,9 @@ import { orderedKeywords, type GrammarAction, type GrammarRule } from './shared'
 import { ROLES } from './roles';
 import { compileProfile } from '$lib/core/profiles/compile';
 import { validateProfile } from '$lib/core/profiles/validate';
-import { loadCodeDb } from '$lib/core/codes/load';
+import { emptyCodeDb } from '$lib/core/codes/load';
+import { resolveCodeDbs } from '$lib/core/codes/resolve';
+import { unionCodeDb, variantDialects } from '$lib/monaco/languages';
 import { BUILTIN_CODE_DB_JSON } from '$lib/data/codes';
 import { BUILTIN_PROFILE_JSON } from '$lib/data/profiles';
 import { listFixtures, openFixture } from '../../../../tests/unit/helpers/fixtures';
@@ -33,12 +35,22 @@ interface Built {
   grammar: { defaultToken: string; ignoreCase: boolean; tokenizer: { root: GrammarRule[] } };
 }
 
-/** The built-in profiles, each with its code database and its generated grammar. */
+/**
+ * The built-in profiles, each with its code database and its generated grammar.
+ *
+ * M6: the database is built the way `monaco/languages.ts` builds it — resolved (AD-17, a
+ * child file holds only what differs from its parent) and, where a profile offers a
+ * machine parameter that swaps the database, the **union** of the choices (AD-31). A
+ * document is painted before anybody picks a machine, so one alphabet has to serve both
+ * G-code systems of the lathe; generating from the unresolved child file here would have
+ * described a grammar the app never builds.
+ */
+const RESOLVED = resolveCodeDbs(BUILTIN_CODE_DB_JSON);
 const BUILT: Built[] = BUILTIN_PROFILE_JSON.map((raw) => {
   const checked = validateProfile(raw);
   if (!checked.ok) throw new Error(`a built-in profile does not validate: ${checked.errors.join('; ')}`);
   const profile = checked.profile;
-  const db = loadCodeDb(BUILTIN_CODE_DB_JSON[profile.codes]);
+  const db = unionCodeDb(variantDialects(profile).map((dialect) => RESOLVED[dialect] ?? emptyCodeDb(dialect)));
   const grammar = generateGrammar(profile, db) as unknown as Built['grammar'];
   return { profile, db, grammar };
 });

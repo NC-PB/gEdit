@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 1 of 3 feed rates to 90 %; 2 left as a thread pitch. Machine 'Lathe B'.",
+  "findings": [
+    {
+      "line": 22,
+      "severity": "warning",
+      "message": "F2.0 is a thread pitch (G78), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    },
+    {
+      "line": 26,
+      "severity": "warning",
+      "message": "F2.0 is a thread pitch (G33), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    }
+  ]
+}

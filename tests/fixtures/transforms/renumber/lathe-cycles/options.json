@@ -1,0 +1,26 @@
+{
+  "note": "The case reference-aware renumbering exists for: a turning program whose G71 roughing, G70 finishing and G73 repeat cycles all name the profile between N100 and N200. Renumbering it with the profile defaults moves both blocks, and all six P/Q values follow. G71 U1.5 R0.5 is the cycle depth block and names no block, so it is left alone.",
+  "profile": "fanuc-lathe",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      {
+        "line": 1,
+        "severity": "info"
+      },
+      {
+        "line": 2,
+        "severity": "info"
+      },
+      {
+        "line": 17,
+        "severity": "info"
+      }
+    ],
+    "warnings": [
+      "ncNumbering.renumber.referencesRewritten"
+    ],
+    "preflight": null
+  }
+}

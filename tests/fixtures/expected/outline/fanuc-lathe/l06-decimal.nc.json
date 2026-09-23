@@ -1,0 +1,11 @@
+{
+  "profile": "fanuc-lathe",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":2,"text":"THE SAME VALUES WRITTEN WITH AND WITHOUT A DECIMAL POINT"},
+    {"kind":"program","line":4,"text":"O2006","endLine":29},
+    {"kind":"tool","line":7,"text":"T1 — OD ROUGH","tool":"01","endLine":17},
+    {"kind":"tool","line":18,"text":"T5 — DRILL","tool":"05","endLine":29},
+      {"kind":"end","line":27,"text":"M30"}
+  ]
+}

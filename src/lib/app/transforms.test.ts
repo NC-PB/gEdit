@@ -11,6 +11,7 @@ import { get } from 'svelte/store';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTransformService, formKey, type TransformDeps } from './transforms';
 import { createDocumentStore } from '$lib/stores/documents';
+import { noMachine } from '$lib/core/machines/effective';
 import { profiles } from '$lib/stores/profiles';
 import { results } from '$lib/stores/results';
 import { t } from '$lib/i18n';
@@ -92,8 +93,15 @@ function harness(o: { profileId?: string; lines?: string[] } = {}): Harness {
       getLines: (_id, startLine, endLine) => h.lines.slice(startLine - 1, endLine),
       selectionLines: () => h.selection,
     },
-    profiles,
-    codes: { forProfile: () => CODES },
+    // The effective view of the document (AD-31). Without a machine it is the profile's
+    // own compile, which is exactly what this service used to ask the registry for.
+    machines: {
+      effective: (id) => {
+        const profileId = docs.get(id)?.profileId ?? 'fanuc-gcode';
+        const profile = profiles.profile(profileId);
+        return { profile, cp: profiles.compiled(profileId), codes: CODES, machine: noMachine(profile) };
+      },
+    },
     modals: {
       form: (request) => {
         h.forms.push(request);

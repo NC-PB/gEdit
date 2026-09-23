@@ -1,5 +1,5 @@
 {
-  "message": "Scaled 3 of 8 feed rates to 90 %; 5 already written that way.",
+  "message": "Scaled 3 of 8 feed rates to 90 %; 5 already written that way. No machine: profile defaults assumed.",
   "findings": [
     {
       "line": 5,

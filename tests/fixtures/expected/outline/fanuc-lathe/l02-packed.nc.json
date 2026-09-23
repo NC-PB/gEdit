@@ -1,0 +1,13 @@
+{
+  "profile": "fanuc-lathe",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":2,"text":"PACKED WORDS, EVERY T FORM, AND A LOWER-CASE BLOCK"},
+    {"kind":"program","line":4,"text":"O2002","endLine":28},
+    {"kind":"tool","line":5,"text":"T1","tool":"01","endLine":11},
+    {"kind":"tool","line":12,"text":"T1","tool":"1","endLine":16},
+    {"kind":"tool","line":17,"text":"T1","tool":"1","endLine":20},
+    {"kind":"tool","line":21,"text":"T1","tool":"01","endLine":28},
+      {"kind":"end","line":26,"text":"M30"}
+  ]
+}

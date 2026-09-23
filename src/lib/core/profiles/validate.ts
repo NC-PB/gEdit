@@ -1,4 +1,5 @@
-// Profile validation (plan §7.4, AD-11). Owner: WP3.1.
+// Profile validation (plan §7.4, §7.1, AD-11, AD-31). Owner: WP3.1, and WP6.1 for the
+// M6 fields.
 //
 // Hand-written on purpose (no ajv, F6: the CSP has no `unsafe-eval`, so a generated
 // validator could not run, and the bundle stays free of a new dependency).
@@ -19,9 +20,39 @@
 //
 // It never throws and never mutates `raw`; the returned profile is the very object that
 // was passed in.
+//
+// M6 (WP6.1) adds the machine side (§7.1, §7.15, AD-31). Two things about it are worth
+// knowing before reading the code:
+//
+//   - **A profile is checked twice, in two different roles.** The registry checks it as it
+//     was *written* (built-in JSON, a user file, both after `extends` was merged), and
+//     again after `applyMachine` has written a machine's parameters into it. The second
+//     run passes `applied: true`, because three fields are then legitimately there that a
+//     profile file may not carry itself (`modal.units`, `modal.diameter`, `modal.sources`,
+//     all computed, AD-31) and because `syntax.decimalPointSignificant` then follows the
+//     **machine's** number input and not the profile's default preset any more.
+//   - **Two checks need the code databases** (a variant's `codes` names one, and
+//     `machineParams.modalGroups` names groups of the profile's own). Neither is knowable
+//     from the profile alone, so both are optional: the caller that has the databases in
+//     hand passes them, and a caller that does not simply does not get those two checks.
 
+import { normalizeCode } from '$lib/core/codes/lookup';
 import type { Eol } from '$lib/app/types';
+import type { NumberClass, NumberReading, ParamSource } from '$lib/core/machines/types';
 import type { OutlineKind, Profile, ProfileValidation } from './types';
+
+/** What `validateProfile` cannot see in the profile itself (see the header). */
+export interface ProfileValidationOptions {
+  /**
+   * The profile has been through `applyMachine` (AD-31), so the computed `modal` fields
+   * belong there and the decimal-point rule is the machine's, not the default preset's.
+   */
+  applied?: boolean;
+  /** Dialect ids that resolve; a variant choice's `codes` has to name one of them. */
+  codeDbs?: readonly string[];
+  /** The modal group names of the profile's own database; `machineParams.modalGroups` names these. */
+  modalGroups?: readonly string[];
+}
 
 /** An extension as it may be written in a profile: lower case, no dot, no separator. */
 const EXTENSION = /^[a-z0-9][a-z0-9_+-]*$/;
@@ -44,6 +75,42 @@ const OUTLINE_KINDS: readonly OutlineKind[] = [
   'end',
   'subprogram-call',
 ];
+
+/** The feed units a word may switch to by itself (`addresses.feedUnitWords`, §7.1). */
+const FEED_UNITS = ['per-minute', 'per-rev', 'per-tooth', 'inverse-time'] as const;
+
+/** Where an applied parameter came from (§7.15). */
+const PARAM_SOURCES: readonly ParamSource[] = ['machine', 'detected', 'profile'];
+
+/** How a control reads a numeric literal (§7.15). */
+const READINGS: readonly NumberReading[] = ['increment', 'calculator', 'scale'];
+
+/** The number classes a `NumberInput` may describe (§7.15). */
+const NUMBER_CLASSES: readonly NumberClass[] = ['length', 'angle', 'feedPerMin', 'feedPerRev', 'dwell'];
+
+/**
+ * The classes that follow the program's units, and therefore have an inch increment.
+ *
+ * `angle` is degrees and `dwell` is seconds in a metric and in an inch program alike
+ * (§7.15), so an inch increment on either is a mistake in the data, not a setting: it
+ * would be read by nothing and hide the fact that the author expected a conversion.
+ */
+const UNIT_CLASSES: readonly NumberClass[] = ['length', 'feedPerMin', 'feedPerRev'];
+
+/** A number-input preset id (`is-b`, `okuma-10um`): plain, because it is a stored key. */
+const PRESET_ID = /^[a-z0-9][a-z0-9-]*$/;
+
+/** A variant id (`gcodeSystem`): a member name of a machine's `params.variants`. */
+const VARIANT_ID = /^[A-Za-z][A-Za-z0-9]*$/;
+
+/**
+ * A least input increment, or the value of "1" in a scaling unit system: decimal text
+ * that is a power of ten no larger than one (`1`, `0.1`, `0.001`, `0.00001`).
+ *
+ * Text, not a number: `0.0001` as a JSON number is a binary float, and the value ends up
+ * in a `Decimal` multiplication that decides where a tool goes (F52).
+ */
+const INCREMENT = /^(?:1|0\.0*1)$/;
 
 // ---------------------------------------------------------------------------
 // The AD-11 pattern subset
@@ -367,6 +434,85 @@ function checkAddresses(value: unknown, p: Problems): void {
   strArr(addresses.axes, 'addresses.axes', p, { min: 1, allow: ADDRESS });
   optStrArr(addresses.arcCenter, 'addresses.arcCenter', p, { allow: ADDRESS });
   optEnum(addresses.arcCenterMode, 'addresses.arcCenterMode', p, ['incremental', 'absolute'] as const);
+
+  // M6 (§7.1). `incremental` says which axis an incremental address moves, so its value
+  // has to be one of the axes: `{ U: 'X' }` is what makes `U2.` a step along X, and a typo
+  // there would move the wrong axis in every extent and every arithmetic answer.
+  const axes = Array.isArray(addresses.axes) ? addresses.axes : [];
+  const incremental = optObj(addresses.incremental, 'addresses.incremental', p);
+  if (incremental) {
+    for (const [word, axis] of Object.entries(incremental)) {
+      const at = `addresses.incremental.${word}`;
+      if (!ADDRESS.test(word)) p.add(at, 'has to be an address letter');
+      const target = str(axis, at, p, ADDRESS);
+      if (target !== null && axes.length > 0 && !axes.includes(target)) {
+        p.add(at, `"${target}" is not in addresses.axes`);
+      }
+    }
+  }
+  optStrArr(addresses.diameter, 'addresses.diameter', p, { allow: ADDRESS });
+  optStrArr(addresses.angular, 'addresses.angular', p, { allow: ADDRESS });
+
+  const feedUnitWords = optObj(addresses.feedUnitWords, 'addresses.feedUnitWords', p);
+  if (feedUnitWords) {
+    for (const [word, unit] of Object.entries(feedUnitWords)) {
+      const at = `addresses.feedUnitWords.${word}`;
+      if (!ADDRESS.test(word)) p.add(at, 'has to be an address or a keyword');
+      enumOf(unit, at, p, FEED_UNITS);
+    }
+  }
+}
+
+/**
+ * `modal` (§7.1, AD-19 rule 8, AD-31).
+ *
+ * `initial` is the power-on state a profile documents. `units`, `diameter` and `sources`
+ * are **computed**: `applyMachine` writes them from the document's machine, and a profile
+ * file that carries them would state as a fact of the dialect what is a setting of one
+ * machine (AD-31). They are therefore accepted on the way in — the applied profile goes
+ * through this same validator — and reported when a profile file itself carries one.
+ */
+function checkModal(value: unknown, p: Problems, o: ProfileValidationOptions): void {
+  const modal = optObj(value, 'modal', p);
+  if (!modal) return;
+
+  const initial = optObj(modal.initial, 'modal.initial', p);
+  if (initial) {
+    for (const [group, code] of Object.entries(initial)) {
+      checkModalCode(group, code, 'modal.initial', p);
+    }
+  }
+
+  optEnum(modal.units, 'modal.units', p, ['mm', 'inch'] as const);
+  optEnum(modal.diameter, 'modal.diameter', p, ['on', 'off'] as const);
+  const sources = optObj(modal.sources, 'modal.sources', p);
+  if (sources) {
+    for (const [key, source] of Object.entries(sources)) {
+      enumOf(source, `modal.sources.${key}`, p, PARAM_SOURCES);
+    }
+  }
+
+  if (o.applied) return;
+  for (const field of ['units', 'diameter', 'sources'] as const) {
+    if (modal[field] !== undefined) {
+      p.add(
+        `modal.${field}`,
+        'is written by the document\'s machine, not by a profile (use machineParams instead)',
+      );
+    }
+  }
+}
+
+/** One `<group>: <code>` of a power-on state, wherever it is written. */
+function checkModalCode(group: string, code: unknown, path: string, p: Problems): void {
+  const at = `${path}.${group}`;
+  if (group.trim() === '') p.add(at, 'a modal group needs a name');
+  const written = str(code, at, p);
+  if (written === null) return;
+  // The interpreter matches this against the database's canonical codes, so a padded or
+  // lower-case spelling would silently match nothing and leave the group unset.
+  const canonical = normalizeCode(written);
+  if (canonical !== written) p.add(at, `has to be written as "${canonical}"`);
 }
 
 function checkToolCall(value: unknown, p: Problems): void {
@@ -379,6 +525,8 @@ function checkToolCall(value: unknown, p: Problems): void {
     p.add('toolCall.tool', 'has to carry the named group (?<tool>…)');
   }
   enumOf(toolCall.toolFrom, 'toolCall.toolFrom', p, ['same-line', 'same-line-or-last'] as const);
+  // M6 (§7.1): a trigger line whose masked text also matches this is not a tool change.
+  optPattern(toolCall.ignore, 'toolCall.ignore', p);
 }
 
 function checkOutline(value: unknown, p: Problems): void {
@@ -414,7 +562,236 @@ function checkNumbering(value: unknown, p: Problems): void {
       if (!rule) return;
       pattern(rule.trigger, `numbering.references[${i}].trigger`, p);
       strArr(rule.addresses, `numbering.references[${i}].addresses`, p, { min: 1, allow: ADDRESS });
+      // M6 (§7.1, F42): `false` means "report, do not rewrite" — a Fanuc `M99 P` may name
+      // a block in the caller, which a renumber of this file cannot see.
+      optBool(rule.rewrite, `numbering.references[${i}].rewrite`, p);
     });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The machine-parameter declaration (M6, §7.1, §7.15, §8.8, AD-31)
+// ---------------------------------------------------------------------------
+
+/** A `NumberInput`, wherever it is written: a preset's value, or a stored machine's own. */
+function checkNumberInput(value: unknown, path: string, p: Problems): void {
+  const input = obj(value, path, p);
+  if (!input) return;
+
+  enumOf(input.mode, `${path}.mode`, p, READINGS);
+  increment(input.incrementMm, `${path}.incrementMm`, p, true);
+  increment(input.incrementInch, `${path}.incrementInch`, p);
+  increment(input.incrementDeg, `${path}.incrementDeg`, p);
+  increment(input.incrementSec, `${path}.incrementSec`, p);
+
+  const classes = optObj(input.classes, `${path}.classes`, p);
+  if (!classes) return;
+  for (const [name, spec] of Object.entries(classes)) {
+    const at = `${path}.classes.${name}`;
+    if (!(NUMBER_CLASSES as readonly string[]).includes(name)) {
+      p.add(at, `"${name}" is not a number class (${NUMBER_CLASSES.join(', ')})`);
+      continue;
+    }
+    const entry = obj(spec, at, p);
+    if (!entry) continue;
+    if (entry.mode !== undefined) enumOf(entry.mode, `${at}.mode`, p, READINGS);
+    increment(entry.increment, `${at}.increment`, p);
+    if (entry.incrementInch !== undefined && !(UNIT_CLASSES as readonly string[]).includes(name)) {
+      p.add(`${at}.incrementInch`, `the ${name} class does not follow the program's units`);
+    } else {
+      increment(entry.incrementInch, `${at}.incrementInch`, p);
+    }
+  }
+}
+
+/** A least increment: decimal text, a power of ten no larger than one. */
+function increment(value: unknown, path: string, p: Problems, required = false): void {
+  if (value === undefined) {
+    if (required) p.add(path, 'is required');
+    return;
+  }
+  const text = str(value, path, p);
+  if (text !== null && !INCREMENT.test(text)) {
+    p.add(path, 'has to be decimal text such as "0.001" or "1"');
+  }
+}
+
+/**
+ * A variant overlay (§7.1): a partial profile, limited to the four members a variant may
+ * change. The limit is the point — a G-code system decides the power-on state, the tool
+ * rule, the numbering and the addresses, and nothing else. It is checked here and again in
+ * `applyMachine`, which drops anything else before it merges.
+ *
+ * The merge result goes through this validator in full when the variant is chosen, so this
+ * pass only checks what would otherwise first fail on the user's document: the members it
+ * may set, its power-on codes, and that its patterns compile.
+ */
+function checkOverlay(value: unknown, path: string, p: Problems): void {
+  const overlay = optObj(value, path, p);
+  if (!overlay) return;
+
+  for (const key of Object.keys(overlay)) {
+    if (key !== 'modal' && key !== 'toolCall' && key !== 'numbering' && key !== 'addresses') {
+      p.add(`${path}.${key}`, 'an overlay may only set modal, toolCall, numbering and addresses');
+    }
+  }
+
+  const modal = optObj(overlay.modal, `${path}.modal`, p);
+  const initial = modal === null ? null : optObj(modal.initial, `${path}.modal.initial`, p);
+  if (initial) {
+    for (const [group, code] of Object.entries(initial)) {
+      checkModalCode(group, code, `${path}.modal.initial`, p);
+    }
+  }
+
+  const toolCall = optObj(overlay.toolCall, `${path}.toolCall`, p);
+  if (toolCall) {
+    for (const key of ['trigger', 'tool', 'ignore'] as const) {
+      optPattern(toolCall[key], `${path}.toolCall.${key}`, p);
+    }
+  }
+
+  const numbering = optObj(overlay.numbering, `${path}.numbering`, p);
+  const references = numbering?.references;
+  if (Array.isArray(references)) {
+    references.forEach((entry, i) => {
+      if (isRecord(entry)) optPattern(entry.trigger, `${path}.numbering.references[${i}].trigger`, p);
+    });
+  }
+}
+
+/** One `machineParams.variants` entry (§7.15): the choices, their databases and their rules. */
+function checkVariant(value: unknown, path: string, p: Problems, o: ProfileValidationOptions): void {
+  const variant = obj(value, path, p);
+  if (!variant) return;
+
+  str(variant.id, `${path}.id`, p, VARIANT_ID);
+  str(variant.label, `${path}.label`, p);
+
+  const choices = arr(variant.choices, `${path}.choices`, p, 1);
+  const values = new Set<string>();
+  choices?.forEach((entry, i) => {
+    const at = `${path}.choices[${i}]`;
+    const choice = obj(entry, at, p);
+    if (!choice) return;
+    const value = str(choice.value, `${at}.value`, p);
+    if (value !== null) {
+      if (values.has(value)) p.add(`${at}.value`, `"${value}" is already taken`);
+      values.add(value);
+    }
+    str(choice.label, `${at}.label`, p);
+
+    if (choice.codes !== undefined) {
+      const dialect = str(choice.codes, `${at}.codes`, p, PROFILE_ID);
+      if (dialect !== null && o.codeDbs !== undefined && !o.codeDbs.includes(dialect)) {
+        p.add(`${at}.codes`, `the code database "${dialect}" was not found`);
+      }
+    }
+    checkOverlay(choice.overlay, `${at}.overlay`, p);
+
+    if (choice.detect !== undefined) {
+      const rules = arr(choice.detect, `${at}.detect`, p);
+      rules?.forEach((raw, j) => {
+        const rule = obj(raw, `${at}.detect[${j}]`, p);
+        if (!rule) return;
+        pattern(rule.pattern, `${at}.detect[${j}].pattern`, p);
+        num(rule.weight, `${at}.detect[${j}].weight`, p, { min: 0 });
+      });
+    }
+  });
+
+  const fallback = str(variant.default, `${path}.default`, p);
+  if (fallback !== null && choices !== null && !values.has(fallback)) {
+    p.add(`${path}.default`, `"${fallback}" is not one of the choices`);
+  }
+}
+
+/**
+ * `machineParams` (§7.1, §8.8): what a machine configuration of this profile may set.
+ *
+ * Everything here is **data about a documented default**, never a fact about anybody's
+ * machine (AD-31), which is why the checks are strict about the two things a reader cannot
+ * see: that the presets can be told apart by id, and that the profile's own
+ * `syntax.decimalPointSignificant` says the same as its default preset. The second one is
+ * what makes "no machine" behave exactly like Phase 1 — the JSON and the default reading
+ * of a number are then one statement, not two that may drift.
+ */
+function checkMachineParams(root: Record<string, unknown>, p: Problems, o: ProfileValidationOptions): void {
+  const decl = optObj(root.machineParams, 'machineParams', p);
+  if (!decl) return;
+
+  optEnum(decl.units, 'machineParams.units', p, ['mm', 'inch'] as const);
+  optEnum(decl.diameter, 'machineParams.diameter', p, ['on', 'off'] as const);
+
+  const groups = decl.modalGroups;
+  if (groups !== undefined) {
+    strArr(groups, 'machineParams.modalGroups', p);
+    if (Array.isArray(groups) && o.modalGroups !== undefined) {
+      groups.forEach((group, i) => {
+        if (typeof group === 'string' && !o.modalGroups?.includes(group)) {
+          p.add(`machineParams.modalGroups[${i}]`, `"${group}" is not a modal group of this profile's codes`);
+        }
+      });
+    }
+  }
+
+  const variants = decl.variants;
+  if (variants !== undefined) {
+    const list = arr(variants, 'machineParams.variants', p);
+    const ids = new Set<string>();
+    list?.forEach((entry, i) => {
+      checkVariant(entry, `machineParams.variants[${i}]`, p, o);
+      const id = isRecord(entry) && typeof entry.id === 'string' ? entry.id : null;
+      if (id === null) return;
+      if (ids.has(id)) p.add(`machineParams.variants[${i}].id`, `"${id}" is already taken`);
+      ids.add(id);
+    });
+  }
+
+  const numberInput = optObj(decl.numberInput, 'machineParams.numberInput', p);
+  if (!numberInput) return;
+
+  const presets = arr(numberInput.presets, 'machineParams.numberInput.presets', p, 1);
+  const ids = new Set<string>();
+  let defaultValue: unknown;
+  presets?.forEach((entry, i) => {
+    const at = `machineParams.numberInput.presets[${i}]`;
+    const preset = obj(entry, at, p);
+    if (!preset) return;
+    const id = str(preset.id, `${at}.id`, p, PRESET_ID);
+    if (id !== null) {
+      if (ids.has(id)) p.add(`${at}.id`, `"${id}" is already taken`);
+      ids.add(id);
+      if (id === numberInput.default) defaultValue = preset.value;
+    }
+    // The label is what the user picks by, so it says what the control does to a number.
+    str(preset.label, `${at}.label`, p);
+    optStr(preset.source, `${at}.source`, p);
+    optBool(preset.verify, `${at}.verify`, p);
+    checkNumberInput(preset.value, `${at}.value`, p);
+  });
+
+  const fallback = str(numberInput.default, 'machineParams.numberInput.default', p);
+  if (fallback !== null && presets !== null && !ids.has(fallback)) {
+    p.add('machineParams.numberInput.default', `"${fallback}" is not one of the presets`);
+    return;
+  }
+  if (o.applied || !isRecord(defaultValue)) return;
+
+  // "No machine" has to mean what the JSON says (X10): a point-less word is a count of
+  // increments exactly where the default preset reads it as one.
+  const classes = isRecord(defaultValue.classes) ? defaultValue.classes : {};
+  const length = isRecord(classes.length) ? classes.length : {};
+  const mode = typeof length.mode === 'string' ? length.mode : defaultValue.mode;
+  const significant = mode === 'increment';
+  const syntax = isRecord(root.syntax) ? root.syntax : {};
+  if (typeof syntax.decimalPointSignificant === 'boolean' && syntax.decimalPointSignificant !== significant) {
+    p.add(
+      'syntax.decimalPointSignificant',
+      `has to be ${significant} for the default number input "${String(numberInput.default)}", which reads a length ${
+        significant ? 'in increments' : 'as written'
+      }`,
+    );
   }
 }
 
@@ -441,12 +818,14 @@ function checkToolList(value: unknown, p: Problems): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Checks `raw` against the P1 profile schema (§7.4).
+ * Checks `raw` against the profile schema (§7.4 and the M6 fields of §7.1).
  *
  * On success the returned `profile` is `raw` itself, unknown fields included; on failure
  * every problem is listed as `<json.path>: <what is wrong>`. Never throws.
+ *
+ * `o` carries what the profile cannot say about itself; see [`ProfileValidationOptions`].
  */
-export function validateProfile(raw: unknown): ProfileValidation {
+export function validateProfile(raw: unknown, o: ProfileValidationOptions = {}): ProfileValidation {
   const p = new Problems();
   const root = obj(raw, '(profile)', p);
   if (!root) return { ok: false, errors: p.list };
@@ -457,6 +836,8 @@ export function validateProfile(raw: unknown): ProfileValidation {
   num(root.version, 'version', p, { int: true, min: 1 });
   enumOf(root.grammar, 'grammar', p, ['iso', 'klartext'] as const);
   str(root.codes, 'codes', p, PROFILE_ID);
+  optStr(root.extends, 'extends', p, PROFILE_ID);
+  optEnum(root.machineType, 'machineType', p, ['mill', 'lathe'] as const);
 
   checkFiles(root.files, p);
   checkDetect(root.detect, p);
@@ -473,6 +854,8 @@ export function validateProfile(raw: unknown): ProfileValidation {
   checkOutline(root.outline, p);
   checkNumbering(root.numbering, p);
   checkNumberFormat(root.numberFormat, p);
+  checkModal(root.modal, p, o);
+  checkMachineParams(root, p, o);
 
   const onLoad = optObj(root.onLoad, 'onLoad', p);
   if (onLoad) optBool(onLoad.stripNul, 'onLoad.stripNul', p);

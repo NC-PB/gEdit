@@ -15,6 +15,8 @@ import { tokenizeLine } from '$lib/core/nc/tokenizer';
 import { t } from '$lib/i18n';
 import { editorText, listFixtures, openFixture } from '../../../../tests/unit/helpers/fixtures';
 import { CodeDbError, emptyCodeDb, loadCodeDb, type CodeDbProblem } from './load';
+import { resolveCodeDbs } from './resolve';
+import { unionCodeDb, variantDialects } from '$lib/monaco/languages';
 import { lookupCode } from './lookup';
 import type { CompiledProfile } from '$lib/core/profiles/types';
 import type { LineState } from '$lib/core/nc/types';
@@ -31,8 +33,15 @@ const fanuc = load(fanucJson);
 const heidenhain = load(heidenhainJson);
 
 describe('built-in code databases', () => {
-  it('ships one database per P1 dialect, keyed by profile.codes', () => {
-    expect(Object.keys(BUILTIN_CODE_DB_JSON).sort()).toEqual(['fanuc', 'heidenhain']);
+  it('ships one database per dialect, keyed by profile.codes', () => {
+    // M6 adds the two Fanuc lathe databases: the system-A one a lathe document reads, and
+    // the system-B variant a machine can switch to (AD-17, AD-31).
+    expect(Object.keys(BUILTIN_CODE_DB_JSON).sort()).toEqual([
+      'fanuc',
+      'fanuc-lathe',
+      'fanuc-lathe-b',
+      'heidenhain',
+    ]);
     expect(fanuc.db.dialect).toBe('fanuc');
     expect(heidenhain.db.dialect).toBe('heidenhain');
   });
@@ -40,6 +49,21 @@ describe('built-in code databases', () => {
   it('loads without a single problem', () => {
     expect(fanuc.problems).toEqual([]);
     expect(heidenhain.problems).toEqual([]);
+  });
+
+  // M6: the loader used to drop `sets`, so the data said one thing and `codes.byId()`
+  // another. The interpreter reads the loaded database, not the file (AD-19).
+  it('carries what a code sets through to the loaded database', () => {
+    const setsOf = (db: CodeDb, code: string) => db.codes.find((entry) => entry.code === code)?.sets;
+    expect(setsOf(fanuc.db, 'G94')).toEqual({ feedUnit: 'per-minute' });
+    expect(setsOf(fanuc.db, 'G21')).toEqual({ units: 'mm' });
+    expect(setsOf(fanuc.db, 'G18')).toEqual({ plane: 'ZX' });
+    expect(setsOf(fanuc.db, 'G91')).toEqual({ distance: 'incremental' });
+    expect(setsOf(fanuc.db, 'G80')).toEqual({ cycle: 'cancel' });
+    expect(setsOf(fanuc.db, 'G83')).toEqual({ cycle: 'start' });
+    expect(setsOf(fanuc.db, 'G50')).toEqual({ speedLimit: true });
+    expect(setsOf(fanuc.db, 'G96')).toEqual({ speedUnit: 'surface' });
+    expect(setsOf(fanuc.db, 'G0')).toBeUndefined();
   });
 
   it('has no duplicate code and no duplicate alias', () => {
@@ -316,6 +340,79 @@ describe('loadCodeDb', () => {
     const db = emptyCodeDb('okuma');
     expect(db).toEqual({ dialect: 'okuma', version: 0, addresses: {}, codes: [] });
   });
+
+  // M6 (§7.2, AD-19): what a code switches on is the whole of what the modal interpreter
+  // reads, so a value it does not know has to be dropped and reported rather than carried
+  // into the interpreter, where it would silently leave the state unknown.
+  it('reads what a code sets, and drops a member it does not know', () => {
+    const { db, problems } = load({
+      dialect: 'x',
+      version: 1,
+      codes: [
+        {
+          code: 'G99',
+          label: 'Feed per revolution',
+          group: 'feedmode',
+          modal: true,
+          sets: { feedUnit: 'per-rev' },
+        },
+        { code: 'G18', label: 'ZX plane', sets: { plane: 'ZX', units: 'mm', distance: 'incremental' } },
+        { code: 'G50', label: 'Speed clamp', sets: { speedLimit: true } },
+        { code: 'G80', label: 'Cancel cycle', sets: { cycle: 'cancel' } },
+        { code: 'G96', label: 'Constant surface speed', sets: { speedUnit: 'surface', diameter: 'on' } },
+        { code: 'G1', label: 'Line', sets: { feedUnit: 'per-second', tool: 'next' } },
+        { code: 'G2', label: 'Arc', sets: 'per-rev' },
+        { code: 'G3', label: 'Arc', sets: { speedLimit: 'yes' } },
+      ],
+    });
+    expect(db.codes[0].sets).toEqual({ feedUnit: 'per-rev' });
+    expect(db.codes[1].sets).toEqual({ plane: 'ZX', units: 'mm', distance: 'incremental' });
+    expect(db.codes[2].sets).toEqual({ speedLimit: true });
+    expect(db.codes[3].sets).toEqual({ cycle: 'cancel' });
+    expect(db.codes[4].sets).toEqual({ speedUnit: 'surface', diameter: 'on' });
+    // The broken ones keep their label and lose only what was wrong.
+    expect(db.codes[5]).toEqual({ code: 'G1', label: 'Line' });
+    expect(db.codes[6]).toEqual({ code: 'G2', label: 'Arc' });
+    expect(db.codes[7]).toEqual({ code: 'G3', label: 'Arc' });
+    expect(problems.map((p) => p.path)).toEqual([
+      'codes[5].sets.feedUnit',
+      'codes[5].sets.tool',
+      'codes[6].sets',
+      'codes[7].sets.speedLimit',
+    ]);
+  });
+
+  // AD-31: the class of a cycle parameter wins over its address, because a cycle is where
+  // a control most often breaks its own convention (the µm pecks of §8.2).
+  it('reads how a cycle parameter is meant to be read, and reports an unknown reading', () => {
+    const { db, problems } = load({
+      dialect: 'x',
+      version: 1,
+      codes: [
+        {
+          code: 'G83',
+          label: 'Peck drilling',
+          params: [
+            { address: 'Q', label: 'Peck', unit: 'increment' },
+            { address: 'P', label: 'Dwell', unit: 'count' },
+            { address: 'Z', label: 'Depth', unit: 'length' },
+            { address: 'F', label: 'Feed', unit: 'feedPerRev' },
+            { address: 'R', label: 'Plane' },
+            { address: 'K', label: 'Repeat', unit: 'times' },
+          ],
+        },
+      ],
+    });
+    expect(db.codes[0].params?.map((param) => param.unit)).toEqual([
+      'increment',
+      'count',
+      'length',
+      'feedPerRev',
+      undefined,
+      undefined,
+    ]);
+    expect(problems.map((p) => p.path)).toEqual(['codes[0].params[5].unit']);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -332,8 +429,21 @@ describe('the database against the rest of the app', () => {
     if (!checked.ok) throw new Error(checked.errors.join('; '));
     return compileProfile(checked.profile);
   });
-  const dbOf = (cp: CompiledProfile): CodeDb =>
-    (cp.profile.codes === 'fanuc' ? fanuc : heidenhain).db;
+  // The **resolved** databases (AD-17): a child file holds only what differs from its
+  // parent, so a profile's real database is the merge, not the file.
+  const RESOLVED = resolveCodeDbs(BUILTIN_CODE_DB_JSON);
+  const dbOf = (cp: CompiledProfile): CodeDb => RESOLVED[cp.profile.codes] ?? emptyCodeDb(cp.profile.codes);
+  /**
+   * M6: every database a profile can end up with, as one lookup table.
+   *
+   * A profile may offer a machine parameter that swaps the database (the Fanuc lathe's
+   * G-code system A or B, AD-31), and which one a document gets is decided per document.
+   * "Is this code described anywhere the profile might use it?" is therefore a question
+   * about the union, and only that union covers a system-B program such as
+   * `l05-system-b.nc`, whose `G77`, `G78` and `G95` live in the variant database.
+   */
+  const anyDbOf = (cp: CompiledProfile): CodeDb =>
+    unionCodeDb(variantDialects(cp.profile).map((dialect) => RESOLVED[dialect] ?? emptyCodeDb(dialect)));
 
   it('describes every keyword its profile tokenizes', () => {
     // A keyword the tokenizer hands over as a keyword token and the database has never
@@ -355,7 +465,7 @@ describe('the database against the rest of the app', () => {
       const id = detectProfile(profiles, `/work/${rel}`, opened.text, 'fanuc-gcode');
       const cp = profiles.find((p) => p.profile.id === id);
       if (!cp) continue;
-      const db = dbOf(cp);
+      const db = anyDbOf(cp);
       let state: LineState | undefined;
       for (const line of text.split('\n')) {
         const result = tokenizeLine(line, cp, state);

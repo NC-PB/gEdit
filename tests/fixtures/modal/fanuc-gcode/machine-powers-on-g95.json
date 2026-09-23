@@ -1,0 +1,19 @@
+{
+  "about": "The same program as `feed-modes.json`, on a machine whose power-on feed mode is G95. Nothing in the program says so, so the difference is visible only where the state is assumed — and it is marked with where it came from (AD-19 rule 8, AD-31). This is the case that proves a machine, and not the dialect, decides the power-on state.",
+  "machine": { "modalInitial": { "feedmode": "G95" } },
+  "input": "../../nc/fanuc/f04-feed-modes.nc",
+  "states": [
+    { "line": 1,
+      "about": "Assumed, and from the machine — not from the profile's documented G94.",
+      "after": { "groups": { "feedmode": "=G95@machine" }, "feedUnit": "per-rev",
+                 "units": "=mm", "feed": null } },
+    { "line": 6,
+      "about": "Still assumed: the program has written nothing but comments and a program number.",
+      "after": { "groups": { "feedmode": "=G95@machine" }, "feedUnit": "per-rev" } },
+    { "line": 7,
+      "about": "The safety line writes G94, and what the program writes always wins over the power-on state.",
+      "after": { "groups": { "feedmode": "G94" }, "feedUnit": "per-minute" } },
+    { "line": 15,
+      "after": { "groups": { "feedmode": "G95" }, "feedUnit": "per-rev", "feed": "0.15" } }
+  ]
+}

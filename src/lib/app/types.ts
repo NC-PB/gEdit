@@ -25,6 +25,14 @@ import type { OutlineItem } from '$lib/core/profiles/outline';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
 import type { TransformDef, TransformResult } from '$lib/core/transforms/types';
 import type {
+  EffectiveMachine,
+  EffectiveProfile,
+  MachineConfig,
+  MachineProblem,
+} from '$lib/core/machines/types';
+import type { MachineType } from '$lib/core/profiles/types';
+import type {
+  ConfigLoad,
   ConfigPaths,
   PythonStatus,
   RecentEntry,
@@ -222,6 +230,12 @@ export interface DocMeta {
   title: string;
   /** Also the Monaco language id. */
   profileId: string;
+  /**
+   * M6, AD-31: the machine chosen for this document. A string is its id, `null` is an
+   * explicit "none (profile defaults)", and `undefined` means "follow the profile's
+   * default machine". `stores/machines.ts` writes it; from M7 per-file memory persists it.
+   */
+  machineId?: string | null;
   encoding: FileEncoding;
   eol: Eol;
   eolMixedOnLoad: boolean;
@@ -454,6 +468,18 @@ export interface ProfileInfo {
   extensions: string[];
   defaultFileName: string;
   newFileEol: Eol;
+  /** M6: turning or milling (`Profile.machineType`), for the auto options and the wording. */
+  machineType: MachineType;
+  /** M6: where the profile came from. A user profile can be edited; a built-in cannot. */
+  origin: 'builtin' | 'user';
+  /** M6: the parent it `extends`, or null. The status picker groups children under it. */
+  parent: string | null;
+  /** M6: the user file it was read from; null for a built-in. */
+  file: string | null;
+  /** M6: the resolution chain, own id first, then the parents (AD-31 compatibility). */
+  chain: string[];
+  /** M6: whether this profile declares `machineParams` — without it there is no machine item. */
+  hasMachineParams: boolean;
 }
 
 /** stores/profiles.ts → `export const profiles: ProfileRegistry` (M1 adapter, M3 real) */
@@ -466,10 +492,29 @@ export interface ProfileRegistry {
   /** `[]` on macOS (F7). */
   openFilters(): DialogFilter[];
   saveFilters(id: string): DialogFilter[];
-  /** The profile as it was read from JSON. Implemented by WP3.1; throws until then. */
+  /** The profile as it was read from JSON — from M6 the **resolved** one (AD-16). */
   profile(id: string): Profile;
-  /** The compiled profile every NC feature reads. Implemented by WP3.1; throws until then. */
+  /**
+   * The compiled profile every NC feature reads.
+   *
+   * M6: this is the profile's own compile, with no machine applied. A document reads
+   * `machines.effective(docId).cp` instead (AD-31); this one serves detection, the
+   * grammar and anything that is about the profile rather than about one document.
+   */
   compiled(id: string): CompiledProfile;
+  /**
+   * M6, AD-31: the profile with `eff` applied — `applyMachine`, then validate, then
+   * compile — cached by `eff.key`, so two machines with the same parameters share one
+   * compiled profile. An overlay or a variant that fails validation is reported once and
+   * falls back to the profile's defaults.
+   */
+  effective(id: string, eff: EffectiveMachine): EffectiveProfile;
+  /**
+   * M6: per variant of the profile, the choice its rules pick for this text and the margin
+   * over the runner-up. A margin below 3 means "not sure", and the caller then keeps the
+   * variant's default. Only consulted when the document has no machine (AD-31).
+   */
+  detectVariants(id: string, text: string): Record<string, { value: string; margin: number }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -564,6 +609,11 @@ export interface CompareService {
 export interface CodeDbService {
   /** The database the profile points at; it is always there, if only empty. */
   forProfile(profileId: string): CodeDb;
+  /**
+   * M6: one **resolved** database by its own id (AD-17), for the variant databases a
+   * machine can switch to (`fanuc-lathe-b`). An unknown id answers with an empty database.
+   */
+  byId(dialect: string): CodeDb;
   /** What the database knows about one token of a block (hover, inspector). */
   lookupWord(profileId: string, token: NcToken): CodeLookup | null;
   /** Entries whose code starts with `prefix`; `atBlockStart` gates Klartext keywords. */
@@ -746,6 +796,68 @@ export interface ScriptService {
   checkPython(): Promise<PythonStatus | null>;
 }
 
+// ---------------------------------------------------------------------------
+// §7.15 The service added in M6: machine configurations (AD-31)
+// ---------------------------------------------------------------------------
+
+/**
+ * stores/machines.ts → `export const machines: MachineService` (P6 stub; owner WP6.8;
+ * WP7.5 adds the per-file persistence, WP12.6 import and export)
+ *
+ * It owns two things that look like one: the **set** of machine configurations
+ * (`machines.json`, tolerant loading, the Machines page) and the **effective view** of
+ * each open document (`effective(docId)`), which is what every NC feature reads instead
+ * of reaching for a profile id.
+ *
+ * Three rules it may not bend:
+ *
+ *  - **A write is refused while the file could not be read** (`blocked()`). Only
+ *    `openFile` and `replaceWithEmpty` are offered then, so a broken hand edit is never
+ *    overwritten behind the user's back (AD-31 Management).
+ *  - **A hand edit wins.** Saving the machines document runs `reloadFromDisk()`, so the
+ *    next page action writes over fresh data, never over a stale in-memory copy.
+ *  - **`effective(docId)` always answers.** The profile's defaults are the worst case;
+ *    there is no "unknown" state a consumer would have to handle.
+ */
+export interface MachineService {
+  /** The valid records, by name. */
+  readonly list: Readable<MachineConfig[]>;
+  /** Bumps on every change of the set **or** of a document's choice. */
+  readonly revision: Readable<number>;
+  /** Bootstrap, after settings and before the first document opens. Never throws. */
+  load(c: ConfigLoad): void;
+  /** Reads the file again, re-evaluates every open document and bumps `revision`. */
+  reloadFromDisk(): Promise<void>;
+  /** True for the document that holds `machines.json` (`docs.byPath(paths.machinesFile)`). */
+  isMachinesDocument(id: DocId): boolean;
+  /** Invalid records (kept verbatim in the file), and a broken or newer file. */
+  problems(): MachineProblem[];
+  /** True while the file itself could not be read: every write below is refused. */
+  blocked(): boolean;
+  /** The one path that moves an unusable file to `machines.json.bak`. */
+  replaceWithEmpty(): Promise<void>;
+  get(id: string): MachineConfig | undefined;
+  /** The machines whose base profile is in this profile's chain (AD-31 compatibility). */
+  compatibleWith(profileId: string): MachineConfig[];
+  defaultFor(profileId: string): string | null;
+  /** The id comes from the name (slug, suffix on collision); saved at once. */
+  add(m: Omit<MachineConfig, 'id'>): Promise<string>;
+  update(id: string, patch: Partial<Omit<MachineConfig, 'id'>>): Promise<void>;
+  duplicate(id: string, name: string): Promise<string>;
+  /** Documents using it are re-evaluated, with one status message. */
+  remove(id: string): Promise<void>;
+  setDefault(profileId: string, id: string | null): Promise<void>;
+  /** `machinesOpenFile`, then opens it as a document. */
+  openFile(): Promise<void>;
+  /** The document's effective view, in the AD-31 order. Always an answer. */
+  effective(docId: DocId): EffectiveProfile;
+  /**
+   * An explicit choice: an id, `null` = "none (profile defaults)", `undefined` = follow
+   * the profile's default machine.
+   */
+  setForDoc(docId: DocId, id: string | null | undefined): void;
+}
+
 /**
  * app/context.ts → `export const ctx: AppContext`
  *
@@ -781,4 +893,6 @@ export interface AppContext {
   bookmarks: BookmarkService;
   // P5
   scripts: ScriptService;
+  // P6
+  machines: MachineService;
 }

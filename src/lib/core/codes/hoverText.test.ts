@@ -173,7 +173,10 @@ describe('hoverText: what the database does not describe', () => {
       ['klartext', '20 CYCL CALL PAT', 'CYCL CALL PAT'],
       ['klartext', '30 TRANS DATUM AXIS X+10 Y+0 Z+0', 'TRANS'],
       ['klartext', '22 CALL LBL 1 REP 4', 'REP'],
-      ['fanuc', 'N10 G50 S2500', 'G50'],
+      // `G50` is not in this list any more: M6/WP6.2 marked the **mill** entry
+      // `verify: true`, because the syntax notes do not say what a mill does with that
+      // number (§8.3), and a `verify` entry deliberately stays out of hover. On the lathe
+      // profile, where the notes are clear, it is described.
       ['fanuc', 'N20 G93 X0. Y0. A90. F12.5', 'G93'],
       ['fanuc', 'N30 M29 S500', 'M29'],
       ['fanuc', 'N70 IF [#1 EQ 1] GOTO100', 'IF'],

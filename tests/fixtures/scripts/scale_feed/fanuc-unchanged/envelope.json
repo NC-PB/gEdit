@@ -1,4 +1,4 @@
 {
-  "message": "No feed rate was changed; 5 already written that way.",
+  "message": "No feed rate was changed; 5 already written that way. No machine: profile defaults assumed.",
   "findings": []
 }

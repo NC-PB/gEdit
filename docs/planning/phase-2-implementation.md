@@ -1774,7 +1774,7 @@ The registry's conflict check (P1 AD-4) and the AltGr rule (D21) apply; the `Mod
 | §7.4 `CodeEntry`, `CodeParam`, `CodeDb` | + `sets` (with `diameter`), `CodeParam.unit` (M6), `fNotFeed` (M8), `templates` (M12); files may `extends`/`remove` | M6, M8, M12 |
 | §7.6 commands | + §7.10 (`channel_siblings` in M10); none removed | M6, M7, M10, M12 |
 | §7.7 settings | + §7.11 (no machine keys); `config.rs` read/save helpers take the file's version (P1 behavior unchanged) | M6, M7 |
-| §7.10 `gedit_nc` | + `ModalInterpreter`, `machine_type_of`, `incremental_axes`, `diameter_axes`, `machine_params`, `number_class_of`, `value_of`, `write_back`, `readings_of`, `resolve_value`; `FeedModeTracker` reads feed modes and cycles from `sets` (same attribute values); implementation split into `_nc_lex.py`/`_nc_modal.py`/`_nc_machine.py` (import path unchanged) | M6 |
+| §7.10 `gedit_nc` | + `ModalInterpreter` (with `diameter_reading`, AD-19 rule 11), `machine_type_of`, `incremental_axes`, `diameter_axes`, `speed_limit_of`, `machine_params`, `number_class_of`, `value_of`, `write_back`, `readings_of`, `resolve_value`, `WRITE_BACK_ERRORS`; `FeedModeTracker` reads feed modes and cycles from `sets` (same attribute values); implementation split into `_nc_lex.py`/`_nc_modal.py`/`_nc_machine.py` (import path unchanged) | M6 |
 | §7.10 `gedit_nc` | + `channels`, `channel_of`, `channel_lines`, `sync_marks` from `_nc_channels.py` (import path unchanged); each answers an empty result for a context without the member, so an M5–M9 script is unaffected | M10 |
 | D10 | closed on macOS (AD-20); Windows/Linux stay as documented (D28) | M6 |
 | D13 | blocks JSON removed | M12 |
@@ -2012,7 +2012,14 @@ A user script that wants to respect the machine calls `machine_params(load_conte
 
 ### 7.16 Where Phase 2 deviated from these contracts
 
-Empty at the start. Filled at each milestone from the hand-off notes, in the P1 §7.12 format.
+Filled at each milestone from the hand-off notes, in the P1 §7.12 format. Every entry is
+**additive or a narrowing**; no §7 signature was replaced.
+
+| # | Contract | What was done instead | Why | M |
+|---|---|---|---|---|
+| 1 | §7.15 `effectiveKey(profileId, params)` | A third, optional parameter: `effectiveKey(profileId, params, source?)`. `EffectiveMachine.key` is built with it, so it holds the provenance as well as the parameters. A call without it is the key §7.15 describes | The profile the key caches carries `modal.sources`, which `applyMachine` derives from `EffectiveMachine.source` and from nothing else. Two documents can agree on every parameter and disagree about where those parameters came from — one where `gcodeSystem: 'B'` was **detected** in the program, one where a machine states it — and they shared one compiled profile, so the second was told the first one's sources for every value it has to assume. That is the one guarantee `core/machines/effective.ts` exists for (G8 M6) | M6 |
+| 2 | §7.15 `numberInput.incrementMm` | On a preset whose `mode` is `calculator`, it is read as the control's **least input increment** — the unit of a `CodeParam.unit: "increment"` word — and no longer as an unused member. The shipped `calculator` preset therefore declares `0.001` and not `1` | §7.15 defines the field for `increment` (the increment) and `scale` (the value of "1") and leaves it undefined for `calculator`. Without a reading there, every micron cycle parameter of a turning program — `G83 Q`, `G74`/`G75 P`/`Q`, `G76 Q` — had no value at all on the lathe's own default preset, which is most of the lathe data M6 added. syntax-fanuc.md §3.2 describes one control on which `X50` is 50 mm **and** `Q6000` is 6 mm, so "as written" is a statement about positions; the G10 review of M6 decided it this way | M6 |
+| 3 | §7.15 `MachineService.list` ("valid records, by name") | `list` still publishes every record the file gave, broken ones included; `contrib/machineSelect.ts` filters on usability where it offers a machine | The Machines page has to show a broken record to offer fixing it, which is what AD-31 Management asks for. The contract's real requirement — "never silently selectable" — is now kept at the two places that select: `compatibleWith` (which always filtered) and the "Other machines…" picker, which did not (G8 M6). A separate `all()` for the page, with `list` valid-only, is the alternative; it is a §7.15 change and belongs to M12, which adds import | M6 |
 
 ### 7.17 Channels (P10; WP10.1–WP10.6; AD-32)
 

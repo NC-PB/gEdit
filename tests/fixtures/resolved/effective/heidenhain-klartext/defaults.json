@@ -1,0 +1,213 @@
+{
+  "codes": "heidenhain",
+  "machine": {
+    "choice": "none",
+    "id": null,
+    "name": null,
+    "params": {
+      "diameter": null,
+      "modalInitial": {},
+      "numberInput": null,
+      "units": "mm",
+      "variants": {}
+    },
+    "source": {
+      "diameter": "profile",
+      "modalInitial": {},
+      "numberInput": "profile",
+      "units": "profile",
+      "variants": {}
+    }
+  },
+  "profile": {
+    "addresses": {
+      "axes": [
+        "X",
+        "Y",
+        "Z",
+        "A",
+        "B",
+        "C",
+        "U",
+        "V",
+        "W"
+      ],
+      "feed": "F",
+      "feedUnitWords": {
+        "FU": "per-rev",
+        "FZ": "per-tooth"
+      },
+      "rapid": "FMAX",
+      "spindle": "S"
+    },
+    "codes": "heidenhain",
+    "detect": {
+      "content": [
+        {
+          "pattern": "^\\s*(\\d+\\s+)?BEGIN\\s+PGM\\b",
+          "weight": 5
+        },
+        {
+          "pattern": "^\\s*(\\d+\\s+)?TOOL\\s+CALL\\b",
+          "weight": 5
+        },
+        {
+          "pattern": "^\\s*\\d+\\s+(L|CC|C|CR|LBL)\\b",
+          "weight": 1
+        },
+        {
+          "pattern": "\\bFMAX\\b",
+          "weight": 1
+        }
+      ],
+      "extensions": {
+        "h": 10
+      }
+    },
+    "editing": {
+      "forceUppercase": false,
+      "preventLineJoin": true
+    },
+    "files": {
+      "defaultExtension": "h",
+      "encoding": "keep",
+      "extensions": [
+        "h"
+      ],
+      "filterName": "Heidenhain Klartext",
+      "lineEnding": "keep",
+      "newFileLineEnding": "crlf"
+    },
+    "grammar": "klartext",
+    "id": "heidenhain-klartext",
+    "machineType": "mill",
+    "modal": {
+      "sources": {
+        "units": "profile"
+      },
+      "units": "mm"
+    },
+    "name": "Heidenhain Klartext",
+    "numbering": {
+      "mode": "consecutive",
+      "start": 0,
+      "step": 1
+    },
+    "outline": [
+      {
+        "kind": "section",
+        "pattern": "^\\s*\\d+\\s+\\*\\s*-?\\s*(?<text>.*)$"
+      },
+      {
+        "kind": "comment",
+        "pattern": "^\\s*\\d+\\s*;\\s*(?<text>.*)$"
+      },
+      {
+        "kind": "program",
+        "pattern": "^\\s*\\d+\\s+(?<text>BEGIN\\s+PGM\\s+(?<name>\\S+)(?:\\s+(?:MM|INCH))?)"
+      },
+      {
+        "kind": "label",
+        "pattern": "^\\s*\\d+\\s+(?:/\\s*)?(?<text>LBL\\s+(?<name>(?!0(?![\\d.]))\\S+))"
+      },
+      {
+        "kind": "subprogram-call",
+        "pattern": "\\b(?<text>(?:CALL\\s+(?:LBL|PGM)|SEL\\s+PGM)\\s+\\S+(?:\\s+REP\\s+\\S+)?)"
+      },
+      {
+        "kind": "stop",
+        "pattern": "\\b(STOP|M0?[01])\\b"
+      },
+      {
+        "kind": "end",
+        "pattern": "\\bEND\\s+PGM\\b|\\bM(?:30|2)\\b"
+      }
+    ],
+    "program": {
+      "end": [
+        "\\bEND\\s+PGM\\b"
+      ],
+      "start": [
+        "\\bBEGIN\\s+PGM\\s+(?<name>\\S+)"
+      ]
+    },
+    "shortName": "Heidenhain",
+    "syntax": {
+      "blockNumber": {
+        "mandatory": true,
+        "mode": "leading-integer"
+      },
+      "blockSkip": {
+        "chars": "/",
+        "position": "after-number"
+      },
+      "comments": [
+        {
+          "end": null,
+          "start": ";"
+        }
+      ],
+      "continuation": "~\\s*$",
+      "continuationMark": "~",
+      "decimalPointSignificant": false,
+      "decimalSeparator": ".",
+      "incrementalPrefix": "I",
+      "keywords": [
+        "BEGIN PGM",
+        "END PGM",
+        "BLK FORM",
+        "TOOL CALL",
+        "TOOL DEF",
+        "CYCL DEF",
+        "CYCL CALL PAT",
+        "CYCL CALL POS",
+        "CYCL CALL",
+        "CALL LBL",
+        "CALL PGM",
+        "SEL PGM",
+        "LBL",
+        "REP",
+        "APPR LT",
+        "APPR LN",
+        "APPR CT",
+        "APPR LCT",
+        "DEP LT",
+        "DEP LN",
+        "DEP CT",
+        "DEP LCT",
+        "RND",
+        "CHF",
+        "CTP",
+        "CT",
+        "CP",
+        "CC",
+        "CR",
+        "LP",
+        "LN",
+        "L",
+        "C",
+        "FMAX",
+        "FAUTO",
+        "FN",
+        "STOP",
+        "PLANE SPATIAL",
+        "PLANE RESET",
+        "FUNCTION TCPM",
+        "FUNCTION RESET TCPM",
+        "TRANS DATUM",
+        "MM",
+        "INCH"
+      ],
+      "sectionHeading": "^\\s*\\d+\\s+\\*",
+      "strings": true,
+      "variables": "Q[LRS]?\\d+",
+      "wordSeparatorRequired": true
+    },
+    "toolCall": {
+      "tool": "TOOL\\s+CALL\\s+(?<tool>\\d+(\\.\\d)?|\"[^\"]+\"|QS\\d+)",
+      "toolFrom": "same-line",
+      "trigger": "\\bTOOL\\s+CALL\\s+(\\d|\"|QS\\d)"
+    },
+    "version": 1
+  }
+}

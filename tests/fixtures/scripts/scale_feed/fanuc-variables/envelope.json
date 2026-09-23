@@ -1,5 +1,5 @@
 {
-  "message": "Scaled 1 of 5 feed rates to 90 %; 4 left as a variable or an expression.",
+  "message": "Scaled 1 of 5 feed rates to 90 %; 4 left as a variable or an expression. No machine: profile defaults assumed.",
   "findings": [
     {
       "line": 7,

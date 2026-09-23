@@ -1,10 +1,14 @@
 // The NC tab, "Numbering" group: renumber blocks and remove block numbers
-// (plan §5 WP4.2). Owner: WP4.2. One feature per file (plan AD-3); see ./README.md.
+// (plan §5 WP4.2 and WP6.3). Owner: WP6.3. One feature per file (plan AD-3); see
+// ./README.md.
 //
 // There is no logic here on purpose. `TransformService.run` is the whole sequence —
 // availability, the options form, the preflight confirmation, the run, the edit, the
 // summary and the results (plan §7.3) — so a transform command is one call, and every
-// transform behaves the same.
+// transform behaves the same. M6 adds an options form to "Remove Block Numbers" (one
+// checkbox, "Keep numbers that are pointed at") and takes the preflight off the renumber
+// runs whose references it can follow; both come out of the transform definitions, and
+// neither is visible here.
 //
 // No shortcuts: §7.11 lists every default binding, and neither of these is in it. Both
 // commands stay enabled while a document is open even on a dialect that cannot run them;

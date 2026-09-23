@@ -1,0 +1,38 @@
+{
+  "note": [
+    "Expected profile detection (plan §5 WP3.1, AD-11), read by src/lib/core/profiles/detect.test.ts.",
+    "One file per folder under tests/fixtures/nc (M6 P6 item 11): a content work package adds its own",
+    "fixtures and its own expectations without touching anybody else's, and a reviewer reads one dialect",
+    "at a time. The test globs this folder, so a new file needs no code change.",
+    "A value is a profile id, or 'fallback' when the content is inconclusive and the current profile stays,",
+    "or 'refused' when decodeFile does not open the file at all, so detection never runs.",
+    "",
+    "M6/WP6.2 adds 'variants': the G-code system the machine parameter 'gcodeSystem' answers with when no",
+    "machine is chosen (§8.1, AD-31). 'detected' is false when the margin between the two choices stays",
+    "below 3, and the variant's default (A) applies. A variant pattern scores its weight once, however",
+    "many lines match it, which is what l07-system-b-drill.nc is here to prove.",
+    "src/lib/data/profiles/fanucLathe.test.ts reads both tables and prints the margins for gate G10."
+  ],
+  "fixtures": {
+    "nc/fanuc-lathe/O2001": "fanuc-lathe",
+    "nc/fanuc-lathe/detect-lathe.txt": "fanuc-lathe",
+    "nc/fanuc-lathe/l01-turning-a.nc": "fanuc-lathe",
+    "nc/fanuc-lathe/l02-packed.nc": "fanuc-lathe",
+    "nc/fanuc-lathe/l03-multi-program.nc": "fanuc-lathe",
+    "nc/fanuc-lathe/l04-references.nc": "fanuc-lathe",
+    "nc/fanuc-lathe/l05-system-b.nc": "fanuc-lathe",
+    "nc/fanuc-lathe/l06-decimal.nc": "fanuc-lathe",
+    "nc/fanuc-lathe/l07-system-b-drill.nc": "fanuc-lathe"
+  },
+  "variants": {
+    "nc/fanuc-lathe/O2001": { "gcodeSystem": "A", "detected": true },
+    "nc/fanuc-lathe/detect-lathe.txt": { "gcodeSystem": "A", "detected": true },
+    "nc/fanuc-lathe/l01-turning-a.nc": { "gcodeSystem": "A", "detected": true },
+    "nc/fanuc-lathe/l02-packed.nc": { "gcodeSystem": "A", "detected": true },
+    "nc/fanuc-lathe/l03-multi-program.nc": { "gcodeSystem": "A", "detected": true },
+    "nc/fanuc-lathe/l04-references.nc": { "gcodeSystem": "A", "detected": true },
+    "nc/fanuc-lathe/l05-system-b.nc": { "gcodeSystem": "B", "detected": true },
+    "nc/fanuc-lathe/l06-decimal.nc": { "gcodeSystem": "A", "detected": true },
+    "nc/fanuc-lathe/l07-system-b-drill.nc": { "gcodeSystem": "B", "detected": true }
+  }
+}

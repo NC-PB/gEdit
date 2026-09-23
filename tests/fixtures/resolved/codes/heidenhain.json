@@ -1,0 +1,1175 @@
+{
+  "addresses": {
+    "A": {
+      "description": "Rotary axis around X.",
+      "label": "A axis"
+    },
+    "B": {
+      "description": "Rotary axis around Y.",
+      "label": "B axis"
+    },
+    "C": {
+      "description": "Rotary axis around Z.",
+      "label": "C axis"
+    },
+    "CCA": {
+      "description": "Angle of the arc in an approach or departure block.",
+      "label": "Opening angle"
+    },
+    "DL": {
+      "description": "Oversize on the length of the tool, added to the value in the tool table.",
+      "label": "Length oversize"
+    },
+    "DR": {
+      "description": "In an arc block it gives the direction: DR+ counter-clockwise, DR- clockwise. In a tool call a number follows and it is the radius oversize of the tool.",
+      "label": "Direction of rotation, or radius oversize"
+    },
+    "DR2": {
+      "description": "Oversize on the corner radius of the tool, added to the value in the tool table.",
+      "label": "Corner radius oversize"
+    },
+    "F": {
+      "description": "Feed rate. The unit follows the program header: millimetres per minute in an MM program, tenths of an inch per minute in an INCH program, and degrees per minute on a rotary axis. FMAX means rapid and FAUTO takes the feed from the last tool call.",
+      "label": "Feed"
+    },
+    "FU": {
+      "description": "Feed given as distance per spindle revolution.",
+      "label": "Feed per revolution"
+    },
+    "FZ": {
+      "description": "Feed given as distance per cutting edge.",
+      "label": "Feed per tooth"
+    },
+    "LEN": {
+      "description": "Length of the straight part of an approach or departure move.",
+      "label": "Approach length"
+    },
+    "M": {
+      "description": "Switches a machine function such as spindle or coolant. A block may carry up to four of them.",
+      "label": "Miscellaneous function"
+    },
+    "MB": {
+      "description": "How far to pull back along the tool axis with M140. MB MAX goes to the travel limit.",
+      "label": "Retract distance"
+    },
+    "NX": {
+      "description": "X part of the surface normal vector in an LN block. CAM writes all three parts.",
+      "label": "Surface normal X"
+    },
+    "NY": {
+      "description": "Y part of the surface normal vector in an LN block. CAM writes all three parts.",
+      "label": "Surface normal Y"
+    },
+    "NZ": {
+      "description": "Z part of the surface normal vector in an LN block. CAM writes all three parts.",
+      "label": "Surface normal Z"
+    },
+    "PA": {
+      "description": "Angle of the point around the pole that CC set.",
+      "label": "Polar angle"
+    },
+    "PR": {
+      "description": "Distance of the point from the pole that CC set.",
+      "label": "Polar radius"
+    },
+    "Q": {
+      "description": "Numbered variable shared by the whole program and by the programs it calls.",
+      "label": "Q parameter, global"
+    },
+    "QL": {
+      "description": "Numbered variable that is valid only inside the program it is used in.",
+      "label": "Q parameter, local"
+    },
+    "QR": {
+      "description": "Numbered variable that keeps its value after the program ends.",
+      "label": "Q parameter, persistent"
+    },
+    "QS": {
+      "description": "Variable that holds text rather than a number, for instance a tool or program name.",
+      "label": "Q parameter, string"
+    },
+    "R": {
+      "description": "Radius value, for instance of a CR arc, an RND rounding or a tool definition.",
+      "label": "Radius"
+    },
+    "REP": {
+      "description": "How many extra times a label section is run.",
+      "label": "Repeat count"
+    },
+    "S": {
+      "description": "Spindle speed in revolutions per minute.",
+      "label": "Spindle speed"
+    },
+    "TX": {
+      "description": "X part of the tool orientation vector in an LN block. It is always a number, never a Q parameter.",
+      "label": "Tool vector X"
+    },
+    "TY": {
+      "description": "Y part of the tool orientation vector in an LN block. It is always a number, never a Q parameter.",
+      "label": "Tool vector Y"
+    },
+    "TZ": {
+      "description": "Z part of the tool orientation vector in an LN block. It is always a number, never a Q parameter.",
+      "label": "Tool vector Z"
+    },
+    "U": {
+      "description": "Extra linear axis parallel to X.",
+      "label": "U axis"
+    },
+    "V": {
+      "description": "Extra linear axis parallel to Y.",
+      "label": "V axis"
+    },
+    "W": {
+      "description": "Extra linear axis parallel to Z.",
+      "label": "W axis"
+    },
+    "X": {
+      "description": "Target position on the X axis. The control writes the sign, and an I in front of the word makes the value incremental.",
+      "label": "X axis"
+    },
+    "Y": {
+      "description": "Target position on the Y axis. An I in front of the word makes the value incremental.",
+      "label": "Y axis"
+    },
+    "Z": {
+      "description": "Target position on the Z axis. An I in front of the word makes the value incremental.",
+      "label": "Z axis"
+    }
+  },
+  "codes": [
+    {
+      "code": "BEGIN PGM",
+      "description": "First block of a program. It carries the program name and the unit the program is written in, MM or INCH.",
+      "group": "program",
+      "label": "Program start"
+    },
+    {
+      "code": "END PGM",
+      "description": "Last block of a program. Name and unit repeat what the start block says.",
+      "group": "program",
+      "label": "Program end"
+    },
+    {
+      "code": "MM",
+      "description": "The program is written in millimetres: coordinates in mm and a feed in mm per minute. It stands in the start and the end block, and both have to say the same.",
+      "group": "program",
+      "label": "Millimetre program",
+      "sets": {
+        "units": "mm"
+      }
+    },
+    {
+      "code": "INCH",
+      "description": "The program is written in inches: coordinates in inch and a feed in tenths of an inch per minute, so F100 is ten inches per minute.",
+      "group": "program",
+      "label": "Inch program",
+      "sets": {
+        "units": "inch"
+      }
+    },
+    {
+      "code": "BLK FORM",
+      "description": "Describes the raw part for the graphics. Sub-block 0.1 carries the tool axis and one corner, sub-block 0.2 the opposite corner.",
+      "group": "program",
+      "label": "Stock definition"
+    },
+    {
+      "code": "TOOL CALL",
+      "description": "Changes to the tool given as a number, a name in quotes or a QS parameter, sets the tool axis and the speed, and switches the length compensation on. A tool call without a tool argument only changes speed or feed and is not a tool change.",
+      "group": "tool",
+      "label": "Tool call",
+      "params": [
+        {
+          "address": "S",
+          "label": "Spindle speed",
+          "min": 0
+        },
+        {
+          "address": "F",
+          "label": "Feed"
+        },
+        {
+          "address": "DL",
+          "label": "Length oversize"
+        },
+        {
+          "address": "DR",
+          "label": "Radius oversize"
+        },
+        {
+          "address": "DR2",
+          "label": "Corner radius oversize"
+        }
+      ]
+    },
+    {
+      "code": "TOOL DEF",
+      "description": "After a tool call it stages the next tool in the magazine, which is machine dependent. With L and R values it defines the tool geometry inside the program.",
+      "group": "tool",
+      "label": "Tool definition or pre-selection"
+    },
+    {
+      "code": "L",
+      "description": "Straight move to the end point. Axes that are not written keep their last value. The block may also carry the radius compensation, a feed and M functions.",
+      "group": "motion",
+      "label": "Straight line"
+    },
+    {
+      "code": "CC",
+      "description": "Sets the circle centre, also called the pole, for the arc blocks that follow. It makes no motion and stays until the next CC.",
+      "group": "motion",
+      "label": "Circle centre"
+    },
+    {
+      "code": "C",
+      "description": "Arc to the end point around the last CC, turning in the direction that DR gives. An end point equal to the start point makes a full circle.",
+      "group": "motion",
+      "label": "Arc around the centre"
+    },
+    {
+      "code": "CR",
+      "description": "Arc to the end point with the radius R. A positive R takes the arc shorter than half a circle, a negative R the longer one; DR gives the direction. The chord cannot be longer than the diameter.",
+      "group": "motion",
+      "label": "Arc by radius",
+      "params": [
+        {
+          "address": "R",
+          "label": "Arc radius",
+          "required": true
+        },
+        {
+          "address": "DR",
+          "label": "Direction of rotation"
+        }
+      ]
+    },
+    {
+      "code": "CT",
+      "description": "Arc to the end point that joins the previous contour element smoothly. It needs at least two positioned blocks before it.",
+      "group": "motion",
+      "label": "Tangential arc"
+    },
+    {
+      "code": "RND",
+      "description": "Rounds the corner between the previous and the next contour element. A feed in this block applies to the rounding only.",
+      "group": "motion",
+      "label": "Corner rounding",
+      "params": [
+        {
+          "address": "R",
+          "label": "Corner radius",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "F",
+          "label": "Feed for the rounding",
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "CHF",
+      "description": "Cuts a chamfer of the given length between two straight elements. It cannot be the first block of a contour, and a feed in this block applies to the chamfer only.",
+      "group": "motion",
+      "label": "Chamfer",
+      "params": [
+        {
+          "address": "F",
+          "label": "Feed for the chamfer",
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "LP",
+      "description": "Straight line given around the pole set with CC: PR is the radius, PA the angle, and IPR or IPA make them incremental.",
+      "group": "motion",
+      "label": "Straight line, polar"
+    },
+    {
+      "code": "CP",
+      "description": "Arc around the pole set with CC, given by the angle PA and the direction DR. With an incremental total angle and a height in the tool axis it becomes a helix.",
+      "group": "motion",
+      "label": "Arc around the pole, polar"
+    },
+    {
+      "code": "CTP",
+      "description": "Arc that leaves the previous element tangentially and ends at a polar point, given by PR and PA.",
+      "group": "motion",
+      "label": "Tangential arc, polar"
+    },
+    {
+      "code": "LN",
+      "description": "Straight line that also carries the direction of the surface: X, Y and Z give the end point, NX, NY and NZ the normal, and TX, TY and TZ the tool orientation. The control uses them for three-dimensional compensation.",
+      "group": "motion",
+      "label": "Straight line with a surface normal"
+    },
+    {
+      "code": "APPR LT",
+      "description": "Moves onto the first contour point along a straight line that leaves the contour tangentially. LEN gives the length of that line.",
+      "group": "motion",
+      "label": "Approach on a tangential line"
+    },
+    {
+      "code": "APPR LN",
+      "description": "Moves onto the first contour point along a straight line at a right angle to the contour. LEN gives the length of that line.",
+      "group": "motion",
+      "label": "Approach on a normal line"
+    },
+    {
+      "code": "APPR CT",
+      "description": "Moves onto the first contour point along an arc that meets the contour tangentially, given by its radius R and the centre angle CCA.",
+      "group": "motion",
+      "label": "Approach on a tangential arc"
+    },
+    {
+      "code": "APPR LCT",
+      "description": "Moves onto the first contour point along a straight line followed by an arc that meets the contour tangentially.",
+      "group": "motion",
+      "label": "Approach on a line and a tangential arc"
+    },
+    {
+      "code": "DEP LT",
+      "description": "Leaves the last contour point along a straight line that continues the contour tangentially, and cancels the radius compensation.",
+      "group": "motion",
+      "label": "Depart on a tangential line"
+    },
+    {
+      "code": "DEP LN",
+      "description": "Leaves the last contour point along a straight line at a right angle to the contour, and cancels the radius compensation.",
+      "group": "motion",
+      "label": "Depart on a normal line"
+    },
+    {
+      "code": "DEP CT",
+      "description": "Leaves the last contour point along an arc that continues the contour tangentially, and cancels the radius compensation.",
+      "group": "motion",
+      "label": "Depart on a tangential arc"
+    },
+    {
+      "code": "DEP LCT",
+      "description": "Leaves the last contour point along a tangential arc followed by a straight line, and cancels the radius compensation.",
+      "group": "motion",
+      "label": "Depart on an arc and a line"
+    },
+    {
+      "code": "R0",
+      "description": "The centre of the tool follows the programmed path. CAM output usually works this way.",
+      "group": "compensation",
+      "label": "No radius compensation"
+    },
+    {
+      "code": "RL",
+      "description": "Puts the tool to the left of the contour seen in the direction of travel. Go through an R0 block before switching to the other side, and do not switch it on in an arc.",
+      "group": "compensation",
+      "label": "Radius compensation, left"
+    },
+    {
+      "code": "RR",
+      "description": "Puts the tool to the right of the contour seen in the direction of travel. Go through an R0 block before switching to the other side, and do not switch it on in an arc.",
+      "group": "compensation",
+      "label": "Radius compensation, right"
+    },
+    {
+      "aliases": [
+        "F MAX"
+      ],
+      "code": "FMAX",
+      "description": "Moves at rapid speed. It counts for this block only; afterwards the last numeric feed applies again.",
+      "group": "feedmode",
+      "label": "Rapid"
+    },
+    {
+      "aliases": [
+        "F AUTO"
+      ],
+      "code": "FAUTO",
+      "description": "Uses the feed that was written in the last tool call.",
+      "group": "feedmode",
+      "label": "Feed from the tool call"
+    },
+    {
+      "code": "LBL",
+      "description": "Marks a jump target, given as a number or a name in quotes. LBL 0 marks the end of a subprogram and may appear many times; every other label may be set once.",
+      "group": "subprogram",
+      "label": "Label"
+    },
+    {
+      "code": "CALL LBL",
+      "description": "Runs the section from that label up to the next LBL 0 and then carries on. REP runs the section that many extra times.",
+      "group": "subprogram",
+      "label": "Call label",
+      "params": [
+        {
+          "address": "REP",
+          "label": "Extra repeats",
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "CALL PGM",
+      "description": "Runs another program as a subprogram. The called program must not contain M2 or M30, Q parameters stay shared, and active transformations stay on after the call.",
+      "group": "subprogram",
+      "label": "Call program"
+    },
+    {
+      "code": "SEL PGM",
+      "description": "Names the program that a later CALL SELECTED PGM block runs, so the path can be put together while the program runs.",
+      "group": "subprogram",
+      "label": "Select a program"
+    },
+    {
+      "code": "REP",
+      "description": "Repeat count behind CALL LBL: the section between the label and the call runs this many times more, so REP 4 runs it five times altogether.",
+      "group": "subprogram",
+      "label": "Repeat a label section"
+    },
+    {
+      "code": "FN",
+      "description": "Calculates with Q parameters. FN 0 assigns, FN 1 to FN 4 add, subtract, multiply and divide, FN 5 to FN 8 are square root, sine, cosine and the root of a sum of squares, and FN 9 upwards jump to a label when a comparison holds.",
+      "group": "parameter",
+      "label": "Q parameter function"
+    },
+    {
+      "code": "CYCL DEF",
+      "description": "Defines a cycle and stores its values. An old-style cycle up to number 39 is written as CYCL DEF <number>.<sub> over several numbered blocks; a cycle from 200 upwards is a header line plus one indented line per Q parameter, and every line but the last ends in a continuation mark.",
+      "group": "cycle",
+      "label": "Cycle definition",
+      "sets": {
+        "cycle": "cancel"
+      }
+    },
+    {
+      "code": "CYCL DEF 32",
+      "description": "Sets how far the path may leave the programmed contour, which is what decides accuracy against speed on a fast contour. It is written in numbered sub-blocks: 32.0 carries the name, 32.1 the tolerance T in millimetres, and 32.2 the HSC-MODE, 0 for accuracy and 1 for speed, together with TA for the rotary axes.",
+      "group": "cycle",
+      "label": "Tolerance cycle",
+      "sets": {
+        "cycle": "cancel"
+      }
+    },
+    {
+      "code": "CYCL CALL",
+      "description": "Runs the cycle that was defined last at the current position. CYCL CALL PAT runs it at every point of a preceding pattern definition.",
+      "group": "cycle",
+      "label": "Cycle call",
+      "sets": {
+        "cycle": "cancel"
+      }
+    },
+    {
+      "code": "CYCL CALL PAT",
+      "description": "Runs the cycle that was defined last at every point of the PATTERN DEF or the point table in front of it.",
+      "group": "cycle",
+      "label": "Cycle call on a pattern",
+      "sets": {
+        "cycle": "cancel"
+      }
+    },
+    {
+      "code": "CYCL CALL POS",
+      "description": "Moves to the position written in the block and runs the cycle that was defined last there.",
+      "group": "cycle",
+      "label": "Cycle call at a position",
+      "sets": {
+        "cycle": "cancel"
+      },
+      "verify": true
+    },
+    {
+      "code": "CYCL DEF 200",
+      "description": "Drills to depth, in pecks when an infeed is given, and pulls back fully between the pecks. It pre-positions in the tool axis itself.",
+      "group": "cycle",
+      "label": "Drilling cycle",
+      "params": [
+        {
+          "address": "Q200",
+          "label": "Safety clearance above the surface",
+          "required": true
+        },
+        {
+          "address": "Q201",
+          "label": "Depth, negative into the material",
+          "required": true
+        },
+        {
+          "address": "Q206",
+          "label": "Plunging feed",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "Q202",
+          "label": "Infeed per peck",
+          "required": true
+        },
+        {
+          "address": "Q210",
+          "label": "Dwell at the top after each retract",
+          "required": true
+        },
+        {
+          "address": "Q203",
+          "label": "Workpiece surface in the tool axis",
+          "required": true
+        },
+        {
+          "address": "Q204",
+          "label": "Second clearance for retracting",
+          "required": true
+        },
+        {
+          "address": "Q211",
+          "label": "Dwell at the hole bottom",
+          "required": true
+        },
+        {
+          "address": "Q395",
+          "label": "Depth reference: 0 tool tip, 1 full diameter"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCL DEF 201",
+      "description": "Feeds down to depth and feeds back out again, so the reamer leaves a clean wall.",
+      "group": "cycle",
+      "label": "Reaming cycle",
+      "params": [
+        {
+          "address": "Q200",
+          "label": "Safety clearance above the surface",
+          "required": true
+        },
+        {
+          "address": "Q201",
+          "label": "Depth, negative into the material",
+          "required": true
+        },
+        {
+          "address": "Q206",
+          "label": "Plunging feed",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "Q211",
+          "label": "Dwell at the hole bottom",
+          "required": true
+        },
+        {
+          "address": "Q208",
+          "label": "Retract feed",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "Q203",
+          "label": "Workpiece surface in the tool axis",
+          "required": true
+        },
+        {
+          "address": "Q204",
+          "label": "Second clearance for retracting",
+          "required": true
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCL DEF 203",
+      "description": "Drills to depth with pecks that get shorter as the hole deepens and with chip breaks in between.",
+      "group": "cycle",
+      "label": "Universal drilling cycle",
+      "params": [
+        {
+          "address": "Q200",
+          "label": "Safety clearance above the surface",
+          "required": true
+        },
+        {
+          "address": "Q201",
+          "label": "Depth, negative into the material",
+          "required": true
+        },
+        {
+          "address": "Q206",
+          "label": "Plunging feed",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "Q202",
+          "label": "Infeed per peck",
+          "required": true
+        },
+        {
+          "address": "Q210",
+          "label": "Dwell at the top after each retract",
+          "required": true
+        },
+        {
+          "address": "Q203",
+          "label": "Workpiece surface in the tool axis",
+          "required": true
+        },
+        {
+          "address": "Q204",
+          "label": "Second clearance for retracting",
+          "required": true
+        },
+        {
+          "address": "Q212",
+          "label": "How much shorter each peck gets",
+          "required": true
+        },
+        {
+          "address": "Q213",
+          "label": "Chip breaks before retracting",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "Q205",
+          "label": "Smallest infeed",
+          "required": true
+        },
+        {
+          "address": "Q211",
+          "label": "Dwell at the hole bottom",
+          "required": true
+        },
+        {
+          "address": "Q208",
+          "label": "Retract feed",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "Q256",
+          "label": "Retract distance for a chip break",
+          "required": true
+        },
+        {
+          "address": "Q395",
+          "label": "Depth reference: 0 tool tip, 1 full diameter"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCL DEF 205",
+      "description": "Drills deep holes with shortening pecks, chip breaks and a controlled return into the hole.",
+      "group": "cycle",
+      "label": "Universal deep-hole drilling cycle",
+      "params": [
+        {
+          "address": "Q200",
+          "label": "Safety clearance above the surface",
+          "required": true
+        },
+        {
+          "address": "Q201",
+          "label": "Depth, negative into the material",
+          "required": true
+        },
+        {
+          "address": "Q206",
+          "label": "Plunging feed",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "Q202",
+          "label": "Infeed per peck",
+          "required": true
+        },
+        {
+          "address": "Q203",
+          "label": "Workpiece surface in the tool axis",
+          "required": true
+        },
+        {
+          "address": "Q204",
+          "label": "Second clearance for retracting",
+          "required": true
+        },
+        {
+          "address": "Q212",
+          "label": "How much shorter each peck gets",
+          "required": true
+        },
+        {
+          "address": "Q205",
+          "label": "Smallest infeed",
+          "required": true
+        },
+        {
+          "address": "Q258",
+          "label": "Upper stop distance for the fast return",
+          "required": true
+        },
+        {
+          "address": "Q259",
+          "label": "Lower stop distance for the fast return",
+          "required": true
+        },
+        {
+          "address": "Q257",
+          "label": "Drilling depth between chip breaks",
+          "required": true
+        },
+        {
+          "address": "Q256",
+          "label": "Retract distance for a chip break",
+          "required": true
+        },
+        {
+          "address": "Q211",
+          "label": "Dwell at the hole bottom",
+          "required": true
+        },
+        {
+          "address": "Q379",
+          "label": "Deeper starting point",
+          "required": true
+        },
+        {
+          "address": "Q253",
+          "label": "Feed for pre-positioning",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "Q208",
+          "label": "Retract feed",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "Q395",
+          "label": "Depth reference: 0 tool tip, 1 full diameter"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCL DEF 206",
+      "description": "Cuts a thread with a compensating chuck. The plunging feed follows from the speed and the thread pitch, so scaling it would change the thread.",
+      "group": "cycle",
+      "label": "Tapping cycle with a floating holder",
+      "params": [
+        {
+          "address": "Q200",
+          "label": "Safety clearance above the surface",
+          "required": true
+        },
+        {
+          "address": "Q201",
+          "label": "Thread depth, negative into the material",
+          "required": true
+        },
+        {
+          "address": "Q206",
+          "label": "Plunging feed from speed times pitch",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "Q211",
+          "label": "Dwell at the hole bottom",
+          "required": true
+        },
+        {
+          "address": "Q203",
+          "label": "Workpiece surface in the tool axis",
+          "required": true
+        },
+        {
+          "address": "Q204",
+          "label": "Second clearance for retracting",
+          "required": true
+        }
+      ],
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCL DEF 207",
+      "description": "Cuts a thread without a compensating chuck: the control keeps the spindle and the feed in step from the pitch. The sign of the pitch decides right- or left-hand.",
+      "group": "cycle",
+      "label": "Rigid tapping cycle",
+      "params": [
+        {
+          "address": "Q200",
+          "label": "Safety clearance above the surface",
+          "required": true
+        },
+        {
+          "address": "Q201",
+          "label": "Thread depth, negative into the material",
+          "required": true
+        },
+        {
+          "address": "Q239",
+          "label": "Thread pitch, negative for left-hand",
+          "required": true
+        },
+        {
+          "address": "Q203",
+          "label": "Workpiece surface in the tool axis",
+          "required": true
+        },
+        {
+          "address": "Q204",
+          "label": "Second clearance for retracting",
+          "required": true
+        }
+      ],
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCL DEF 209",
+      "description": "Cuts a thread without a compensating chuck and pulls back now and then to break the chip.",
+      "group": "cycle",
+      "label": "Rigid tapping cycle with chip breaking",
+      "params": [
+        {
+          "address": "Q200",
+          "label": "Safety clearance above the surface",
+          "required": true
+        },
+        {
+          "address": "Q201",
+          "label": "Thread depth, negative into the material",
+          "required": true
+        },
+        {
+          "address": "Q239",
+          "label": "Thread pitch, negative for left-hand",
+          "required": true
+        },
+        {
+          "address": "Q203",
+          "label": "Workpiece surface in the tool axis",
+          "required": true
+        },
+        {
+          "address": "Q204",
+          "label": "Second clearance for retracting",
+          "required": true
+        },
+        {
+          "address": "Q257",
+          "label": "Depth between chip breaks",
+          "required": true
+        },
+        {
+          "address": "Q256",
+          "label": "Retract distance for a chip break",
+          "required": true
+        },
+        {
+          "address": "Q336",
+          "label": "Spindle angle",
+          "required": true
+        },
+        {
+          "address": "Q403",
+          "label": "Factor for the retract speed",
+          "required": true
+        }
+      ],
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCL DEF 240",
+      "description": "Spots a hole, either down to a depth or until the cone reaches a given diameter.",
+      "group": "cycle",
+      "label": "Centring cycle",
+      "params": [
+        {
+          "address": "Q200",
+          "label": "Safety clearance above the surface",
+          "required": true
+        },
+        {
+          "address": "Q343",
+          "label": "Mode: 0 to a depth, 1 to a diameter",
+          "required": true
+        },
+        {
+          "address": "Q201",
+          "label": "Depth, negative into the material",
+          "required": true
+        },
+        {
+          "address": "Q344",
+          "label": "Centring diameter",
+          "required": true
+        },
+        {
+          "address": "Q206",
+          "label": "Plunging feed",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "Q211",
+          "label": "Dwell at the bottom",
+          "required": true
+        },
+        {
+          "address": "Q203",
+          "label": "Workpiece surface in the tool axis",
+          "required": true
+        },
+        {
+          "address": "Q204",
+          "label": "Second clearance for retracting",
+          "required": true
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "PLANE SPATIAL",
+      "description": "Turns the working plane by three angles around the machine axes. All three are written even when one is zero, and a following word says whether the machine swivels with a compensating move, turns the rotary axes only, or stays put.",
+      "group": "plane",
+      "label": "Tilt the working plane by spatial angles",
+      "verify": true
+    },
+    {
+      "code": "PLANE RESET",
+      "description": "Switches the tilted plane off again. Use it rather than writing zero angles.",
+      "group": "plane",
+      "label": "Reset the tilted working plane",
+      "verify": true
+    },
+    {
+      "code": "FUNCTION TCPM",
+      "description": "Keeps the tool tip on the programmed path while the rotary axes move, and says how the feed and the rotary positions are read.",
+      "group": "tcpm",
+      "label": "Tool centre point management on",
+      "verify": true
+    },
+    {
+      "code": "FUNCTION RESET TCPM",
+      "description": "Switches tool centre point management off again.",
+      "group": "tcpm",
+      "label": "Tool centre point management off",
+      "verify": true
+    },
+    {
+      "code": "M0",
+      "description": "Stops the program at the end of the block. Whether spindle and coolant stop with it depends on the machine.",
+      "group": "program",
+      "label": "Program stop"
+    },
+    {
+      "code": "M1",
+      "description": "Stops the program only while the operator has the optional-stop switch on.",
+      "group": "program",
+      "label": "Optional stop"
+    },
+    {
+      "code": "STOP",
+      "description": "Stops the program at the end of this block until the operator presses start again. An M function may stand in the same block.",
+      "group": "program",
+      "label": "Programmed stop"
+    },
+    {
+      "code": "M2",
+      "description": "Ends the program at the end of the block. Subprograms go after it.",
+      "group": "program",
+      "label": "Program end"
+    },
+    {
+      "code": "M30",
+      "description": "Ends the program at the end of the block, the same as M2.",
+      "group": "program",
+      "label": "Program end"
+    },
+    {
+      "code": "M3",
+      "description": "Starts the spindle clockwise at the start of the block.",
+      "group": "spindle",
+      "label": "Spindle on, clockwise",
+      "modal": true
+    },
+    {
+      "code": "M4",
+      "description": "Starts the spindle counter-clockwise at the start of the block.",
+      "group": "spindle",
+      "label": "Spindle on, counter-clockwise",
+      "modal": true
+    },
+    {
+      "code": "M5",
+      "description": "Stops the spindle at the end of the block.",
+      "group": "spindle",
+      "label": "Spindle stop",
+      "modal": true
+    },
+    {
+      "code": "M6",
+      "description": "Machine-dependent tool change. In Klartext the change itself is done by the tool call, so M6 is not what marks a new tool.",
+      "group": "tool",
+      "label": "Tool change"
+    },
+    {
+      "code": "M8",
+      "description": "Turns the coolant on at the start of the block.",
+      "group": "coolant",
+      "label": "Coolant on",
+      "modal": true
+    },
+    {
+      "code": "M9",
+      "description": "Turns the coolant off at the end of the block.",
+      "group": "coolant",
+      "label": "Coolant off",
+      "modal": true
+    },
+    {
+      "code": "M13",
+      "description": "Starts the spindle clockwise and the coolant in one go.",
+      "group": "spindle",
+      "label": "Spindle clockwise and coolant on",
+      "modal": true
+    },
+    {
+      "code": "M14",
+      "description": "Starts the spindle counter-clockwise and the coolant in one go.",
+      "group": "spindle",
+      "label": "Spindle counter-clockwise and coolant on",
+      "modal": true
+    },
+    {
+      "code": "M89",
+      "description": "Calls the cycle that was defined last as a modal call. What exactly it does is machine dependent.",
+      "group": "cycle",
+      "label": "Modal cycle call"
+    },
+    {
+      "code": "M91",
+      "description": "The positions in this block are read from the machine datum, and the tool length is not applied. It counts for this block only.",
+      "group": "program",
+      "label": "Machine coordinates for this block"
+    },
+    {
+      "code": "M92",
+      "description": "The positions in this block are read from a reference point that the machine builder set. It counts for this block only.",
+      "group": "program",
+      "label": "Builder reference point for this block"
+    },
+    {
+      "code": "M94",
+      "description": "Brings the displayed value of a rotary axis back below a full turn.",
+      "group": "program",
+      "label": "Reduce the rotary axis display"
+    },
+    {
+      "code": "TRANS DATUM",
+      "description": "Shifts the datum without a cycle: TRANS DATUM AXIS takes the shift from the axis values in the block, TRANS DATUM TABLE takes a line of the datum table, and TRANS DATUM RESET cancels the shift.",
+      "group": "offset",
+      "label": "Datum shift"
+    },
+    {
+      "code": "M99",
+      "description": "Runs the last defined cycle once at the end position of this block. It counts for this block only.",
+      "group": "cycle",
+      "label": "Call the cycle once"
+    },
+    {
+      "code": "M116",
+      "description": "Reads the feed of a rotary axis as a path speed rather than an angular speed.",
+      "group": "rotaryfeed",
+      "label": "Rotary feed in millimetres per minute",
+      "modal": true
+    },
+    {
+      "code": "M117",
+      "description": "Takes back M116.",
+      "group": "rotaryfeed",
+      "label": "Rotary feed in millimetres per minute off",
+      "modal": true
+    },
+    {
+      "code": "M126",
+      "description": "Moves a rotary axis the short way round to the programmed angle.",
+      "group": "rotarypath",
+      "label": "Shortest path for rotary axes",
+      "modal": true
+    },
+    {
+      "code": "M127",
+      "description": "Takes back M126.",
+      "group": "rotarypath",
+      "label": "Shortest path for rotary axes off",
+      "modal": true
+    },
+    {
+      "code": "M128",
+      "description": "Holds the tool tip on the programmed position while tilt axes move. Switch it off before a tool call or a machine-coordinate block. An F in the block sets the feed of the compensating moves.",
+      "group": "tcpm",
+      "label": "Keep the tool tip on the path",
+      "modal": true,
+      "params": [
+        {
+          "address": "F",
+          "label": "Feed for the compensating moves",
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "M129",
+      "description": "Takes back M128 at the end of the block.",
+      "group": "tcpm",
+      "label": "Keep the tool tip on the path off",
+      "modal": true
+    },
+    {
+      "code": "M140",
+      "description": "Pulls the tool back along its own axis by the distance after MB, or to the travel limit with MB MAX. It counts for this block only.",
+      "group": "program",
+      "label": "Retract along the tool axis",
+      "params": [
+        {
+          "address": "MB",
+          "label": "Retract distance",
+          "required": true
+        },
+        {
+          "address": "F",
+          "label": "Feed for the retract",
+          "min": 0
+        }
+      ]
+    }
+  ],
+  "dialect": "heidenhain",
+  "version": 1
+}

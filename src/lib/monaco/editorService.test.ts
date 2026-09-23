@@ -6,8 +6,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   createEditorService,
+  docIdOf,
   editor,
   linesOf,
+  modelUri,
   normalizeToLF,
   selectionLinesOf,
   spanOfChange,
@@ -88,6 +90,33 @@ describe('spanOfChange', () => {
     const change = spanOfChange(event([], { isFlush: true }), 0, 0);
     expect(change.endLineOld).toBe(1);
     expect(change.endLineNew).toBe(1);
+  });
+});
+
+describe('docIdOf', () => {
+  /** What Monaco's `Uri.parse` makes of one of our model URIs. */
+  function uriOf(text: string): { scheme: string; authority: string; path: string } {
+    const match = /^([a-z]+):\/\/([^/]*)(\/.*)$/.exec(text);
+    if (match === null) return { scheme: '', authority: '', path: text };
+    return { scheme: match[1], authority: match[2], path: match[3] };
+  }
+
+  it('finds the document a model belongs to', () => {
+    // This is how hover and completion get from the model Monaco hands them back to the
+    // document, and so to its effective profile (AD-31).
+    expect(docIdOf({ uri: uriOf(modelUri('d7')) })).toBe('d7');
+  });
+
+  it('survives an id that needs escaping', () => {
+    expect(docIdOf({ uri: uriOf(modelUri('d 7/8')) })).toBe('d 7/8');
+  });
+
+  it('answers null for a model that is not a document', () => {
+    expect(docIdOf(null)).toBeNull();
+    expect(docIdOf({})).toBeNull();
+    expect(docIdOf({ uri: uriOf('file:///work/part.nc') })).toBeNull();
+    expect(docIdOf({ uri: uriOf('inmemory://model/1') })).toBeNull();
+    expect(docIdOf({ uri: { scheme: 'inmemory', authority: 'doc', path: '/' } })).toBeNull();
   });
 });
 

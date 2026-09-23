@@ -104,12 +104,14 @@ Each row names the owning work package and the feature.
 | `files.ts` | WP1.6 | file commands, close guard, drag and drop, window title |
 | `help.ts` | WP2.4 | About and the shortcut reference |
 | `layoutPersist.ts` | WP2.3 | restores `ui.layout` and then follows it |
+| `machineSelect.ts` | WP6.10 | machine status item and picker, `file.setMachine`, `machines.manage`, `machines.openFile` |
 | `navigation.ts` | WP3.5 | `nav.goto` (Ctrl+G), `nav.nextTool` / `nav.prevTool` (F7 / Shift+F7) |
 | `ncCleanup.ts` | WP4.3 | NC tab "Cleanup": spaces, empty lines, comments, case |
 | `ncNumbering.ts` | WP4.2 | NC tab "Numbering": `nc.renumber`, `nc.removeBlockNumbers` |
 | `palette.ts` | WP1.1 | `view.commandPalette` (F1) |
 | `profileSelect.ts` | WP1.6 | dialect profile status item and picker |
 | `programMap.ts` | WP1.5 | program map (left panel) |
+| `quitGuard.ts` | WP6.5 | reports "any document dirty" to the macOS quit guard |
 | `recent.ts` | WP2.3 | Recent dropdown, `file.openRecent`, `file.clearRecent` |
 | `results.ts` | WP4.1 | the Results panel (bottom region) |
 | `scripts.ts` | WP5.2 | the script UI: Tools group, `script.*` commands, Output panel, status item |

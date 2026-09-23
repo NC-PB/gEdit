@@ -1,0 +1,16 @@
+{
+  "profile": "fanuc-lathe",
+  "machine": {
+    "numberInput": {
+      "mode": "calculator",
+      "incrementMm": "1",
+      "classes": {
+        "feedPerRev": {
+          "mode": "increment",
+          "increment": "0.001"
+        }
+      }
+    }
+  },
+  "machineName": "Lathe 2"
+}

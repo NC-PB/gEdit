@@ -1,0 +1,25 @@
+{
+  "message": "Scaled 3 of 4 spindle speeds to 110 %; 1 left as a speed limit, 3 thread blocks to check by hand.",
+  "findings": [
+    {
+      "line": 11,
+      "severity": "info",
+      "message": "S2500 is a spindle speed limit (G50), so it is not scaled."
+    },
+    {
+      "line": 32,
+      "severity": "warning",
+      "message": "This thread block (G76) runs at S1200, which was scaled on line 29: the feed follows from the speed and the pitch, so check this block by hand."
+    },
+    {
+      "line": 35,
+      "severity": "warning",
+      "message": "This thread block (G92) runs at S1200, which was scaled on line 29: the feed follows from the speed and the pitch, so check this block by hand."
+    },
+    {
+      "line": 41,
+      "severity": "warning",
+      "message": "This thread block (G32) runs at S1200, which was scaled on line 29: the feed follows from the speed and the pitch, so check this block by hand."
+    }
+  ]
+}

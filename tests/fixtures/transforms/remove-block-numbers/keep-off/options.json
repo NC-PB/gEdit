@@ -1,0 +1,28 @@
+{
+  "note": "The same program with \"Keep numbers that are pointed at\" switched off: every number goes, which is what the command did in Phase 1. That is the run the confirmation is for, and every line left pointing at a block number that is gone is listed.",
+  "profile": "fanuc-lathe",
+  "options": {
+    "keepReferenced": false
+  },
+  "expect": {
+    "summary": "ncNumbering.removeBlockNumbers.summary",
+    "skipped": [
+      {
+        "line": 2,
+        "severity": "warning"
+      },
+      {
+        "line": 4,
+        "severity": "warning"
+      },
+      {
+        "line": 7,
+        "severity": "warning"
+      }
+    ],
+    "warnings": [
+      "ncNumbering.removeBlockNumbers.referencesKept"
+    ],
+    "preflight": "ncNumbering.removeBlockNumbers.references"
+  }
+}

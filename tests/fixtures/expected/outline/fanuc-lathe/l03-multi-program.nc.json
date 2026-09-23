@@ -1,0 +1,13 @@
+{
+  "profile": "fanuc-lathe",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"program","line":3,"text":"O2003","endLine":18},
+    {"kind":"tool","line":6,"text":"T1 — OD ROUGH","tool":"01","endLine":18},
+      {"kind":"subprogram-call","line":11,"text":"M98 P2102"},
+      {"kind":"subprogram-call","line":13,"text":"M98 P2102"},
+      {"kind":"end","line":18,"text":"M30"},
+    {"kind":"program","line":19,"text":"O2102","endLine":28},
+    {"kind":"end","line":26,"text":"M99"}
+  ]
+}

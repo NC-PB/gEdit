@@ -1,0 +1,66 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "offsets",
+      "label": "Offsets"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [
+    {
+      "tool": "T2",
+      "offsets": "02",
+      "description": "OD ROUGH",
+      "line": 7,
+      "calls": 1,
+      "feed": "0.3 /rev",
+      "speed": "200 surface"
+    },
+    {
+      "tool": "T4",
+      "offsets": "04",
+      "description": "THREAD 2.0 LEAD",
+      "line": 18,
+      "calls": 1,
+      "feed": "",
+      "speed": "1000"
+    }
+  ],
+  "message": "2 tools",
+  "findings": [
+    {
+      "line": 8,
+      "severity": "info",
+      "message": "T2: the S of 1 block is a speed limit, not a spindle speed, so it is not in the range."
+    },
+    {
+      "line": 22,
+      "severity": "info",
+      "message": "T4: the F of 2 blocks is a thread pitch, not a feed rate, so it is not in the range."
+    }
+  ]
+}

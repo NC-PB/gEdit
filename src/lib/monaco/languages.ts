@@ -105,6 +105,53 @@ function sigilOf(p: Profile): string {
   return source[0].replace(/[\\^$.|?*+()[\]{}]/g, '\\$&');
 }
 
+/**
+ * The databases a document of this profile can be read with: its own, and the one each
+ * declared variant choice names (AD-31).
+ *
+ * The Monaco **language id stays the profile id**, so a variant switch must never need a
+ * new language — a model cannot change its language without being recreated, and
+ * recreating it would lose the undo stack. The grammar is therefore built once, from the
+ * union: it reads only addresses and non-numeric word codes (F49), and those are the same
+ * in every variant of a dialect. What a code *means* is not in the grammar; that comes
+ * from the document's effective database, on every hover and every completion.
+ */
+export function variantDialects(p: Profile): string[] {
+  const out = typeof p.codes === 'string' && p.codes !== '' ? [p.codes] : [];
+  for (const variant of p.machineParams?.variants ?? []) {
+    for (const choice of variant.choices ?? []) {
+      if (typeof choice?.codes === 'string' && choice.codes !== '' && !out.includes(choice.codes)) {
+        out.push(choice.codes);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * One database out of several, for the grammar only: the addresses of all of them and
+ * every code, the first spelling winning. It is never handed to hover or completion —
+ * there, two variants disagreeing about what `G92` means is the whole point.
+ */
+export function unionCodeDb(dbs: readonly CodeDb[]): CodeDb {
+  const first = dbs[0];
+  if (dbs.length <= 1) return first ?? { dialect: '', version: 0, addresses: {}, codes: [] };
+  const addresses: CodeDb['addresses'] = {};
+  const codes: CodeDb['codes'] = [];
+  const seen = new Set<string>();
+  for (const db of dbs) {
+    for (const [letter, value] of Object.entries(db.addresses ?? {})) {
+      if (addresses[letter] === undefined) addresses[letter] = value;
+    }
+    for (const entry of db.codes ?? []) {
+      if (seen.has(entry.code)) continue;
+      seen.add(entry.code);
+      codes.push(entry);
+    }
+  }
+  return { dialect: first.dialect, version: first.version, addresses, codes };
+}
+
 /** Defines `gedit-dark` and `gedit-light`, so `monaco/theme.ts` can name them. */
 export function defineThemes(monaco: Monaco, list: Profile[]): void {
   const themes = generateThemes(list);
@@ -137,6 +184,6 @@ export function registerLanguages(monaco: Monaco, sources: LanguageSources): voi
 export function registerAll(monaco: Monaco): void {
   registerLanguages(monaco, {
     list: () => profiles.list().map((info) => profiles.profile(info.id)),
-    codeDb: (profileId) => codes.forProfile(profileId),
+    codeDb: (profileId) => unionCodeDb(variantDialects(profiles.profile(profileId)).map((id) => codes.byId(id))),
   });
 }

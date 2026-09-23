@@ -1,5 +1,5 @@
 {
-  "message": "Scaled 1 of 3 feed rates to 80 %; 2 left as a thread pitch.",
+  "message": "Scaled 1 of 3 feed rates to 80 %; 2 left as a thread pitch. No machine: profile defaults assumed.",
   "findings": [
     {
       "line": 8,

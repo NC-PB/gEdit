@@ -11,10 +11,16 @@
 // plus APPLY_BUDGET_MS) — an honest whole-run figure rather than a sum of parts that
 // were never measured on the same document.
 //
-// The two transforms are picked for their shapes. `remove-block-numbers` has no options
-// form, so its whole run is one `commands.run`, and it *shortens* every line, which is
-// the case a same-length line-by-line diff cannot take. `renumber` rewrites every line
-// to the same length, which is the fast path, and it is the transform the plan names.
+// The two transforms are picked for their shapes. `remove-block-numbers` *shortens* every
+// line, which is the case a same-length line-by-line diff cannot take; `renumber` rewrites
+// every line to the same length, which is the fast path, and it is the transform the plan
+// names.
+//
+// **Both clocks start after the form is answered.** At M4 `remove-block-numbers` had no
+// options at all; M6 (WP6.3) gave it `keepReferenced`, so it now opens the same dialog
+// `renumber` does. What G7 budgets is the run and the edit, not how long a modal took to
+// draw, so both sections do what the renumber section always did: wait for the dialog,
+// start the clock, click OK. The two numbers stay comparable with the M4 ones.
 //
 // **One undo step** is the check the milestone actually rests on (AD-12): a run that
 // left 100,000 undo entries behind would still be within budget and would still be
@@ -22,7 +28,7 @@
 // string comparison, which is why it is done once rather than inside a `waitFor`.
 
 import { scenario } from '../lib/index.js'
-import { context, message, newDoc, numberedProgram, ready, runTransform } from './m4-common.js'
+import { context, message, newDoc, numberedProgram, ready } from './m4-common.js'
 
 const LINES = 100000
 
@@ -83,10 +89,17 @@ scenario('m4-perf-transform', { timeout: 900 }, async (h) => {
     third: line(3),
   })
 
-  // -------------------------------- remove-block-numbers: no form, and shorter lines
+  // ------------------------------- remove-block-numbers: `keepReferenced`, shorter lines
+  // The program has no GOTO and no `M98 Q`, so the default (keep what is referenced) keeps
+  // nothing: every one of the 100,000 numbers still goes, and the check below is the same
+  // one M4 made.
+  const removing = ctx.commands.run('nc.removeBlockNumbers')
+  await h.waitFor(() => h.q('modal'), { timeout: 20000 })
   const startedRemove = performance.now()
-  await runTransform(h, 'nc.removeBlockNumbers')
+  h.click(h.q('modal-ok'))
+  await removing
   const removeMs = Math.round(performance.now() - startedRemove)
+  await h.idle({ timeout: 30000 })
   h.check(
     `remove-block-numbers on ${lineCount} lines answers within ${WHOLE_RUN_BUDGET_MS} ms`,
     removeMs <= WHOLE_RUN_BUDGET_MS,

@@ -26,7 +26,7 @@ And the three WP5.4 added:
 * a speed that is already zero or negative is never raised to the "smallest speed" limit
   (`fanuc-zero-speed-with-limit`) — the defect G8 M4 finding 11 fixed in `scale_feed.py`
   and left standing here
-* a block whose code is a threading cycle in another G-code system is named when the
+* a block whose code is a threading cycle somewhere else is named when the
   speed it runs at was changed (`fanuc-lathe-threading`)
 """
 
@@ -61,6 +61,14 @@ REQUIRED_CASES = [
     "fanuc-variables",
     "fanuc-zero-speed-with-limit",
     "klartext-tool-call",
+    # M6 (WP6.6): turning.
+    "lathe-surface-speed",
+    "lathe-surface-speed-no",
+    "lathe-system-b-clamp",
+    # G8 M6: a system-A program opened with a system-B machine. Its `G50 S` clamp used to
+    # be raised by 50 % with no finding at all, which is what lets a spindle run away as
+    # the diameter falls under G96.
+    "lathe-a-clamp-as-b",
 ]
 
 #: The address this script is allowed to rewrite; everything else comes back token for
@@ -70,13 +78,47 @@ SCALED_ADDRESSES = ("S",)
 SEVERITIES = ("info", "warning", "error")
 
 
+def context_of(case):
+    """The `ScriptContextV2` a case runs with: the **effective** profile and machine.
+
+    The app never hands a script a profile on its own. It hands it the effective view of the
+    document — the profile with the chosen machine's variants, number reading and power-on
+    state applied, the database that goes with it, and the machine block beside it (plan
+    §7.15, AD-31). A case that names a `machine` in its `case.json` therefore runs against
+    the generated `tests/fixtures/resolved/effective/**` entry for exactly those parameters,
+    written once by `tests/unit/resolved.test.ts`: **Python never merges a machine into a
+    profile**, because two implementations of one merge is how the two sides start
+    disagreeing quietly. A case without one runs with the profile's own defaults, which is
+    what "no machine" means.
+
+    `machineName` in a `case.json` is the name that machine carries in the run. The
+    generator calls every machine it writes `review`; a golden message is easier to read,
+    and to check by hand, with the name a user would have given it, and the name changes
+    nothing but the sentence it appears in.
+    """
+    context = case.context()
+    if isinstance(case.options.get("machine"), dict):
+        effective = helpers.effective_context(golden=case.directory / "case.json")
+    else:
+        effective = helpers.effective_context(case.profile_id)
+    context["profile"] = effective["profile"]
+    context["codes"] = effective["codes"]
+    context["machine"] = dict(effective["machine"])
+    name = case.options.get("machineName")
+    if isinstance(name, str) and name != "":
+        context["machine"]["id"] = name.lower().replace(" ", "-")
+        context["machine"]["name"] = name
+    context.pop("machineName", None)
+    return context
+
+
 def envelope_of(case):
     """The expected `message` and `findings` of a case."""
     return helpers.load_json(case.directory / "envelope.json")
 
 
 def run_case(case):
-    return helpers.run_script(SCRIPT, stdin=case.input_text(), context=case.context())
+    return helpers.run_script(SCRIPT, stdin=case.input_text(), context=context_of(case))
 
 
 def shape_of(lines, cp):
@@ -149,7 +191,7 @@ class TestGoldenCases(unittest.TestCase):
     def test_every_finding_points_at_a_line_of_the_input(self):
         for case in self.cases:
             with self.subTest(case=case.name):
-                first = case.context()["input"]["startLine"]
+                first = context_of(case)["input"]["startLine"]
                 last = first + len(case.input_lines()) - 1
                 for finding in envelope_of(case)["findings"]:
                     self.assertIn(finding["severity"], SEVERITIES)
@@ -445,7 +487,7 @@ class TestSelectionPriming(unittest.TestCase):
 
     def unprimed(self, name):
         case = self.case(name)
-        context = case.context()
+        context = context_of(case)
         self.assertIn("precedingLines", context["input"], "this case is not a primed one")
         context["input"] = {
             key: value for key, value in context["input"].items() if key != "precedingLines"
@@ -476,7 +518,7 @@ class TestSelectionPriming(unittest.TestCase):
     def test_preceding_lines_that_are_not_all_the_lines_above_are_refused(self):
         """A truncated field is a wrong answer; an absent one is an honest warning."""
         case = self.case("fanuc-selection-primed")
-        context = case.context()
+        context = context_of(case)
         context["input"]["precedingLines"] = context["input"]["precedingLines"][-2:]
         result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context)
         self.assertTrue(result.ok, result.stderr)
@@ -588,7 +630,7 @@ class TestAmbiguousThreadingCodes(unittest.TestCase):
         )
         named = [f for f in payload["findings"] if "S650" in f["message"]]
         self.assertEqual(len(named), 1)
-        self.assertIn("threading cycle in another G-code system", named[0]["message"])
+        self.assertIn("threading cycle on another kind of machine", named[0]["message"])
         # G80 cancels it, so the speed after it is scaled without a word.
         self.assertFalse(any("S1000" in f["message"] for f in payload["findings"]))
 
@@ -730,3 +772,120 @@ class TestRunEnvironment(unittest.TestCase):
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
+
+
+class TestLathe(unittest.TestCase):
+    """Turning (M6, WP6.6): constant surface speed, and the clamp the database names.
+
+    A turning program cuts nearly everything under `G96`, where `S` is a surface speed in
+    metres or feet per minute and not revolutions; and the block that clamps the top speed
+    is `G50` in G-code system A and `G92` in system B, which is a **machine** setting and
+    not a property of the dialect (plan AD-31). Neither is a table in the script any more:
+    the profile says what kind of machine it describes and the code database says which code
+    clamps (`sets.speedLimit`, F24).
+    """
+
+    def case(self, name):
+        return next(case for case in helpers.script_cases("scale_speed") if case.name == name)
+
+    def output(self, name):
+        case = self.case(name)
+        result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context_of(case))
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], case.expected_text())
+        return payload
+
+    def lines(self, name):
+        return self.output(name)["text"].split("\n")
+
+    def test_a_surface_speed_is_scaled_on_a_lathe_without_being_asked(self):
+        # auto / yes / no, and auto follows the profile's `machineType` (F33 turns a
+        # remembered `false` into the default). On a turning profile a run that skipped
+        # every G96 block would leave the cutting speeds of the whole program alone.
+        self.assertIn("G96 S242 M03", self.lines("lathe-surface-speed"))
+        self.assertIn("G97 S1320 M03", self.lines("lathe-surface-speed"))
+
+    def test_the_option_still_says_no(self):
+        payload = self.output("lathe-surface-speed-no")
+        self.assertIn("G96 S220 M03", payload["text"].split("\n"))
+        self.assertIn("G97 S1320 M03", payload["text"].split("\n"))
+        css = [f for f in payload["findings"] if "surface speed" in f["message"]]
+        self.assertEqual([f["line"] for f in css], [12])
+
+    def test_the_clamp_of_system_a_is_left_alone_and_named(self):
+        payload = self.output("lathe-surface-speed")
+        self.assertIn("G50 S2500", payload["text"].split("\n"))
+        limit = payload["findings"][0]
+        self.assertEqual(limit["line"], 11)
+        self.assertEqual(limit["message"], "S2500 is a spindle speed limit (G50), so it is not scaled.")
+
+    def test_the_clamp_of_system_b_is_a_different_code_and_the_database_says_so(self):
+        payload = self.output("lathe-system-b-clamp")
+        self.assertIn("G92 S2200", payload["text"].split("\n"))
+        self.assertIn("G96 S220 M03", payload["text"].split("\n"))
+        limit = payload["findings"][0]
+        self.assertEqual(limit["line"], 8)
+        self.assertEqual(limit["message"], "S2200 is a spindle speed limit (G92), so it is not scaled.")
+
+    def test_the_same_block_is_a_clamp_in_both_systems_and_says_why(self):
+        """`G92 S2200` clamps in system B, and G8 M6 made system A read it as one too.
+
+        This is the whole reason the list of clamp codes had to leave the script (F24): a
+        table that says "G50 and G92" lives in the code database, where each G-code system
+        has its own. In system A `G92` is the single-pass threading cycle — but a
+        threading pass carries no `S` word, so an `S` in such a block is a clamp written
+        for system B and not a speed to scale. Raising the top-speed clamp of a
+        constant-surface-speed program is what lets the spindle run away as the diameter
+        falls, so both databases now read this block the same conservative way.
+        """
+        context = helpers.effective_context("fanuc-lathe", params={"percent": 110})
+        result = helpers.run_script(SCRIPT, stdin="G92 S2200\n", context=context)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], "G92 S2200\n")
+        self.assertIn("G92", payload["findings"][0]["message"])
+
+    def test_a_system_a_clamp_is_not_raised_by_a_system_b_machine(self):
+        """G8 M6: the shop has one lathe, set to system B; the program is posted for A.
+
+        `G50 S2500` is the top-speed clamp of G-code system A. The system-B database had
+        dropped the entry altogether, so the block lost its `sets.speedLimit` flag and the
+        `S` was scaled as an ordinary speed: a 150 % run **raised** the clamp of a
+        constant-surface-speed program from 2500 to 3750 rpm, with no finding of any kind.
+        That is the change that lets a spindle run away as the diameter falls, and on a
+        bar-fed part it throws the chuck. B keeps the entry now, with a description saying
+        the number is not its own clamp but that gEdit still reads the `S` as one.
+        """
+        out = self.output("lathe-a-clamp-as-b")
+        self.assertIn("G50 S2500", out["text"].split("\n"))
+        limit = [f for f in out["findings"] if "speed limit (G50)" in f["message"]]
+        self.assertEqual(len(limit), 1, out["findings"])
+        # The cutting speed of the same program is scaled, so this is not a run that did
+        # nothing at all.
+        self.assertIn("G96 S270 M03", out["text"].split("\n"))
+
+    def test_the_clamp_can_be_scaled_on_request_in_either_system(self):
+        for name, code, want in (
+            ("lathe-surface-speed", "G50", "G50 S2750"),
+            ("lathe-system-b-clamp", "G92", "G92 S2420"),
+        ):
+            with self.subTest(code=code):
+                case = self.case(name)
+                context = context_of(case)
+                context["params"] = {"percent": 110, "speedLimits": True}
+                result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context)
+                self.assertTrue(result.ok, result.stderr)
+                self.assertIn(want, result.json()["text"].split("\n"))
+
+    def test_a_context_that_still_sends_a_boolean_is_honoured(self):
+        """`surfaceSpeed` was a `bool` in Phase 1 (F33); an older context still says so."""
+        program = "G96 S220 M03\n"
+        for value, expected in ((True, "G96 S242 M03"), (False, "G96 S220 M03")):
+            with self.subTest(surfaceSpeed=value):
+                context = helpers.effective_context(
+                    "fanuc-lathe", params={"percent": 110, "surfaceSpeed": value}
+                )
+                result = helpers.run_script(SCRIPT, stdin=program, context=context)
+                self.assertTrue(result.ok, result.stderr)
+                self.assertEqual(result.json()["text"], expected + "\n")

@@ -44,9 +44,24 @@ FIXTURES_DIR = REPO_ROOT / "tests" / "fixtures"
 #: ``tests/fixtures/scripts/<script>/<case>/`` (plan §8.2).
 SCRIPT_FIXTURES_DIR = FIXTURES_DIR / "scripts"
 
-#: The built-in profiles and code databases, the ones the app resolves into a context.
+#: The built-in profiles and code databases as they are **written**. A profile or database
+#: that `extends` another is only half of itself here (plan AD-16, AD-17), which is why
+#: nothing in the Python tests reads these folders directly any more.
 PROFILES_DIR = REPO_ROOT / "src" / "lib" / "data" / "profiles"
 CODES_DIR = REPO_ROOT / "src" / "lib" / "data" / "codes"
+
+#: ``tests/fixtures/resolved`` — the generated view of the data as the app really uses it
+#: (plan M6 P6 item 12): profiles and databases with their parents merged in, and one
+#: **effective** profile per declared preset, per variant and per golden context.
+#:
+#: Python never merges a machine into a profile itself. If it did, the two implementations
+#: would drift and a golden would stop proving anything; so it reads what
+#: ``tests/unit/resolved.test.ts`` wrote, and says how to regenerate it when an entry is
+#: missing.
+RESOLVED_DIR = FIXTURES_DIR / "resolved"
+
+#: What to run when a resolved fixture is missing or out of date.
+UPDATE_RESOLVED = "run `UPDATE_RESOLVED=1 npm test -- resolved`"
 
 #: The dialect a fixture case is written in unless its ``case.json`` says otherwise.
 DEFAULT_PROFILE_ID = "fanuc-gcode"
@@ -84,14 +99,41 @@ def load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _resolved(kind: str, name: str) -> Any:
+    """One generated file under ``tests/fixtures/resolved``, or a loud failure."""
+    path = RESOLVED_DIR / kind / (name + ".json")
+    if not path.is_file():
+        raise AssertionError(
+            "%s/%s.json is missing; %s" % (kind, name, UPDATE_RESOLVED)
+        )
+    return load_json(path)
+
+
+def resolved_profile(profile_id: str) -> Dict[str, Any]:
+    """A built-in profile with its parents merged in, as the app uses it (AD-16)."""
+    return _resolved("profiles", profile_id)
+
+
+def resolved_codes(dialect: str) -> List[Dict[str, Any]]:
+    """The entries of a resolved code database, as ``context["codes"]`` carries them."""
+    file = _resolved("codes", dialect)
+    codes = file.get("codes")
+    return codes if isinstance(codes, list) else []
+
+
 def load_profile(profile_id: str) -> Dict[str, Any]:
-    """A built-in profile, exactly as the app ships it and as the context carries it."""
-    return load_json(PROFILES_DIR / (profile_id + ".json"))
+    """A built-in profile, exactly as the app ships it and as the context carries it.
+
+    M6: this is the **resolved** profile (:func:`resolved_profile`). A child profile is
+    only half of itself in ``src/lib/data/profiles``, and a test that read the file would
+    be testing something the app never runs.
+    """
+    return resolved_profile(profile_id)
 
 
 def profile_ids() -> List[str]:
     """Every built-in profile id, sorted."""
-    return sorted(path.stem for path in PROFILES_DIR.glob("*.json"))
+    return sorted(path.stem for path in (RESOLVED_DIR / "profiles").glob("*.json"))
 
 
 def load_codes(profile: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -99,7 +141,62 @@ def load_codes(profile: Dict[str, Any]) -> List[Dict[str, Any]]:
     dialect = profile.get("codes")
     if not isinstance(dialect, str) or dialect == "":
         return []
-    return load_json(CODES_DIR / (dialect + ".json"))["codes"]
+    return resolved_codes(dialect)
+
+
+def effective_context(
+    profile_id: Optional[str] = None,
+    preset: Optional[str] = None,
+    variant: Optional[Any] = None,
+    golden: Optional[Any] = None,
+    **overrides: Any
+) -> Dict[str, Any]:
+    """The ``ScriptContextV2`` of one **effective** profile (plan §7.15, §7.4).
+
+    Three ways to ask, and all three read a file ``tests/unit/resolved.test.ts`` wrote:
+
+    ``effective_context(golden=<path>)``
+        the context that golden runs with, looked up in ``resolved/effective/index.json``.
+        A golden that names a machine is the reason this exists: the merge happened once,
+        in TypeScript, and both languages read the result.
+    ``effective_context(profile_id, preset="is-b")`` / ``(profile_id, variant=("gcodeSystem", "B"))``
+        the context of one declared preset or variant choice, for a unit test.
+    ``effective_context(profile_id)``
+        the profile's own defaults — "no machine", which is what every document had before
+        M6.
+
+    A missing entry fails with the command that regenerates it, never with a guessed
+    profile: guessing is how a test starts passing against data nobody has seen.
+    """
+    if golden is not None:
+        index = _resolved("effective", "index")
+        key = str(golden).replace("\\", "/")
+        if key.startswith(str(FIXTURES_DIR)):
+            key = str(Path(key).relative_to(FIXTURES_DIR)).replace("\\", "/")
+        name = index.get(key)
+        if not isinstance(name, str):
+            raise AssertionError("no effective profile for golden %s; %s" % (key, UPDATE_RESOLVED))
+        # `name` is `effective/<profileId>/<file>.json`, relative to `resolved/`.
+        path = RESOLVED_DIR / name
+        if not path.is_file():
+            raise AssertionError("%s is missing; %s" % (name, UPDATE_RESOLVED))
+        entry = load_json(path)
+    else:
+        if not profile_id:
+            raise AssertionError("effective_context needs a profile id or a golden path")
+        if preset is not None:
+            leaf = "preset-%s" % preset
+        elif variant is not None:
+            pair = variant if isinstance(variant, (tuple, list)) else str(variant).split("=", 1)
+            leaf = "variant-%s-%s" % (pair[0], pair[1])
+        else:
+            leaf = "defaults"
+        entry = _resolved("effective", "%s/%s" % (profile_id, leaf))
+
+    profile = entry["profile"]
+    context = make_context(profile=profile, codes=resolved_codes(entry["codes"]), **overrides)
+    context["machine"] = entry["machine"]
+    return context
 
 
 @dataclass

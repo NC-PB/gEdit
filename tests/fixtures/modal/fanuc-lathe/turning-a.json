@@ -1,0 +1,157 @@
+{
+  "about": "A three-tool turning program in G-code system A, read with no machine, so every assumed value is the profile's own documented default (plan §8.1, §8.8). It is the golden for what a lathe does differently from a mill: the power-on state is G99 G97 G18 and not G94; the feed unit of a plain F is per revolution; G50 makes its own block's S a clamp and not a speed; G71, G72 and G70 are one-shot cycles, so they show up in `block.cycle` and never in `activeCycle`; G76, G92 and G32 carry a thread lead; and the database has no distance code at all, which is why `distance` is `absolute` although the program never writes G90 (AD-19 rule 8).",
+  "input": "../../nc/fanuc-lathe/l01-turning-a.nc",
+  "states": [
+    {
+      "line": 1,
+      "about": "The power-on state, before the program has said anything. Feed per revolution, rpm and the ZX plane are assumed, from the profile; the diameter mode is on, which is what makes X a diameter here.",
+      "after": {
+        "groups": { "feedmode": "=G99", "spindlemode": "=G97", "plane": "=G18" },
+        "feedUnit": "per-rev",
+        "speedUnit": "rpm",
+        "plane": "ZX",
+        "distance": "absolute",
+        "units": "=mm",
+        "diameter": "=on",
+        "tool": null,
+        "feed": null,
+        "speed": null,
+        "speedLimit": null,
+        "activeCycle": null
+      }
+    },
+    {
+      "line": 8,
+      "about": "`G21 G40 G99` states in millimetres what was assumed: G99 is now set, not assumed, and the units come from the program.",
+      "after": {
+        "groups": { "feedmode": "G99", "spindlemode": "=G97" },
+        "feedUnit": "per-rev",
+        "units": "mm",
+        "distance": "absolute"
+      }
+    },
+    {
+      "line": 10,
+      "about": "A bare T word is the tool change on a turret lathe; the station is the first half of T0101.",
+      "after": { "tool": "01", "block": { "toolChange": true } }
+    },
+    {
+      "line": 11,
+      "about": "AD-19 rule 4: the S of a G50 block is the top speed the spindle may reach under constant surface speed, not a speed to cut at. It is the clamp, and the speed the program is cutting at is still unset.",
+      "after": { "speedLimit": "2500", "speed": null, "block": { "speedLimit": true } }
+    },
+    {
+      "line": 12,
+      "about": "G96: S is now a surface speed. The clamp of the block above is still what it was.",
+      "after": {
+        "groups": { "spindlemode": "G96" },
+        "speedUnit": "surface",
+        "speed": "220",
+        "speedLimit": "2500",
+        "block": { "speedLimit": false }
+      }
+    },
+    {
+      "line": 16,
+      "about": "AD-19 rule 2: G71 is not modal on this control, so it belongs to its own block and to nothing after it. Its F is an ordinary feed per revolution — the roughing feed — and not a thread lead.",
+      "after": {
+        "block": { "cycle": "G71", "pitchFeed": false },
+        "activeCycle": null,
+        "feed": "0.25",
+        "feedUnit": "per-rev"
+      }
+    },
+    {
+      "line": 18,
+      "about": "Inside the P-Q profile the blocks are ordinary moves again: no cycle is in force and the feed is the finishing feed.",
+      "after": { "activeCycle": null, "block": { "cycle": null }, "feed": "0.12" }
+    },
+    {
+      "line": 24,
+      "about": "G70 finishes what G71 roughed; it is one-shot in the same way.",
+      "after": { "block": { "cycle": "G70" }, "activeCycle": null }
+    },
+    {
+      "line": 25,
+      "about": "`T0100` cancels the offset of station 1 on the way to the retract position. It is not a tool change, so the tool is still the one that was called.",
+      "after": { "tool": "01", "block": { "toolChange": false } }
+    },
+    {
+      "line": 29,
+      "about": "G97 ends constant surface speed: S is revolutions per minute again.",
+      "after": { "groups": { "spindlemode": "G97" }, "speedUnit": "rpm", "speed": "1200" }
+    },
+    {
+      "line": 33,
+      "about": "The second block of the two-block G76: its F is the thread lead, not a feed rate. G76 is one-shot here as well, and the flag belongs to this block.",
+      "after": {
+        "block": { "cycle": "G76", "pitchFeed": true },
+        "activeCycle": null,
+        "pitchFeedAmbiguous": null,
+        "feed": "1.5"
+      }
+    },
+    {
+      "line": 34,
+      "about": "The block after it is an ordinary rapid: the one-shot cycle is over and its F would be a feed again.",
+      "after": { "block": { "cycle": null, "pitchFeed": false }, "activeCycle": null }
+    },
+    {
+      "line": 35,
+      "about": "In G-code system A, G92 is the single-pass threading cycle and it is modal — which is why the three pass blocks below carry no code of their own. Its F is a lead. On the mill profile the same number is the coordinate-system code, and the database says so there.",
+      "after": { "activeCycle": "G92", "block": { "cycle": "G92", "pitchFeed": true } }
+    },
+    {
+      "line": 38,
+      "about": "A pass block: no code at all, and the modal G92 is still cutting a thread.",
+      "after": { "activeCycle": "G92", "block": { "cycle": null } }
+    },
+    {
+      "line": 39,
+      "about": "AD-19 rule 3: a G00 is a move without a pitch, so it ends the threading cycle.",
+      "after": { "activeCycle": null }
+    },
+    {
+      "line": 41,
+      "about": "G32 is a threading move: it becomes the active cycle rather than cancelling one, because its F is a lead.",
+      "after": { "activeCycle": "G32", "feed": "1.5" }
+    },
+    {
+      "line": 47,
+      "about": "The tool line carries the station and a rapid on one line.",
+      "after": { "tool": "05", "block": { "toolChange": true } }
+    },
+    {
+      "line": 50,
+      "about": "G83 is a modal drilling cycle on this control, so it stays in force over the C positions below it. Its F is an ordinary feed per revolution.",
+      "after": {
+        "activeCycle": "G83",
+        "block": { "cycle": "G83", "pitchFeed": false },
+        "feed": "0.08",
+        "feedUnit": "per-rev"
+      }
+    },
+    {
+      "line": 53,
+      "about": "A bare C position: the cycle repeats at it, so it is still in force.",
+      "after": { "activeCycle": "G83" }
+    },
+    {
+      "line": 54,
+      "about": "G80 cancels it.",
+      "after": { "activeCycle": null, "block": { "cycle": null } }
+    },
+    {
+      "line": 59,
+      "about": "At the end: the state the program leaves behind. Nothing ever wrote a distance code, and this database has none to write, so absolute is not an assumption but the only reading it allows (AD-19 rule 8).",
+      "after": {
+        "groups": { "feedmode": "G99", "spindlemode": "G97", "plane": "=G18" },
+        "distance": "absolute",
+        "diameter": "=on",
+        "units": "mm",
+        "tool": "05",
+        "activeCycle": null
+      }
+    }
+  ]
+}

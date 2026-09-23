@@ -1,0 +1,39 @@
+# M6: the Fanuc lathe, machine configurations and the macOS quit guard.
+# Run with: tests/runtime/suite.sh tests/runtime/suites/m0.txt tests/runtime/suites/m1.txt tests/runtime/suites/m2.txt tests/runtime/suites/m3.txt tests/runtime/suites/m4.txt tests/runtime/suites/m5.txt tests/runtime/suites/m6.txt
+
+# Which dialect a turning program gets, and which G-code system inside it. Run it first:
+# every other M6 scenario assumes a lathe file opens as a lathe file, and an A/B mix-up
+# would make all of them fail for the wrong reason.
+m6-lathe-detect
+
+# Settings ▸ Machines and the file it writes, with a restart. `-1` writes the HOME `-2`
+# reads, so keep them in this order and next to each other.
+m6-machines-manage-1
+m6-machines-manage-2
+
+# A machines.json that cannot be read: one notice, no machine in use, nothing overwritten.
+m6-machines-broken
+
+# Picking a machine per document, and the numbers a script is then handed — the milestone
+# in three report rows.
+m6-machines-select
+
+# Reading a turning program: F7 over the turret's real tool changes, the map, the hover.
+m6-lathe-nav
+
+# The three bundled scripts on their turning goldens, with one undo each.
+m6-lathe-scripts
+
+# Reference-aware renumbering: the P and Q of a turning cycle follow their blocks, and an
+# M99 P is reported instead of being rewritten.
+m6-lathe-renumber
+
+# The macOS quit guard: Dock → Quit with unsaved work, and without it. The clean half is a
+# pair (`-1` quits with a script running, `-2` looks for what is left); keep them in order.
+m6-dock-quit-dirty
+m6-dock-quit-clean-1
+m6-dock-quit-clean-2
+
+# G7: renumber on 100,000 turning lines whose references really are rewritten, and the map
+# rebuild a machine switch costs on that document. Slow; keep it last.
+m6-perf

@@ -32,3 +32,8 @@ tauri = { version = "2", features = ["test"] }
 
 [target."cfg(unix)".dependencies]
 libc = "0.2"
+
+# The macOS termination hook (AD-20, plan M6 P6 item 2). Confined to `src/quit.rs`:
+# nothing else in the backend talks to Objective-C, and G8 checks that.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"

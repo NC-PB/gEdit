@@ -1,0 +1,20 @@
+{
+  "modal/fanuc-gcode/cycles.json": "effective/fanuc-gcode/k-52c1f214.json",
+  "modal/fanuc-gcode/feed-modes.json": "effective/fanuc-gcode/k-52c1f214.json",
+  "modal/fanuc-gcode/machine-powers-on-g95.json": "effective/fanuc-gcode/k-faf1d5a2.json",
+  "modal/fanuc-gcode/packed.json": "effective/fanuc-gcode/k-52c1f214.json",
+  "modal/fanuc-lathe/system-b-drill.json": "effective/fanuc-lathe/k-240b7630.json",
+  "modal/fanuc-lathe/system-b.json": "effective/fanuc-lathe/k-240b7630.json",
+  "modal/fanuc-lathe/turning-a.json": "effective/fanuc-lathe/k-51626b07.json",
+  "modal/heidenhain-klartext/cycle-call.json": "effective/heidenhain-klartext/k-e03718cf.json",
+  "modal/heidenhain-klartext/cycle-feeds.json": "effective/heidenhain-klartext/k-e03718cf.json",
+  "modal/heidenhain-klartext/speed-only.json": "effective/heidenhain-klartext/k-e03718cf.json",
+  "scripts/scale_feed/lathe-a-thread-as-b/case.json": "effective/fanuc-lathe/k-240b7630.json",
+  "scripts/scale_feed/lathe-decimal-calculator/case.json": "effective/fanuc-lathe/k-b2424ce5.json",
+  "scripts/scale_feed/lathe-decimal-is-b/case.json": "effective/fanuc-lathe/k-f4fbaf22.json",
+  "scripts/scale_feed/lathe-feed-limit-machine/case.json": "effective/fanuc-lathe/k-aff6009d.json",
+  "scripts/scale_feed/lathe-system-b/case.json": "effective/fanuc-lathe/k-240b7630.json",
+  "scripts/scale_speed/lathe-a-clamp-as-b/case.json": "effective/fanuc-lathe/k-240b7630.json",
+  "scripts/scale_speed/lathe-system-b-clamp/case.json": "effective/fanuc-lathe/k-240b7630.json",
+  "scripts/tool_list/lathe-system-b/case.json": "effective/fanuc-lathe/k-240b7630.json"
+}

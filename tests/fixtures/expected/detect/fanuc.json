@@ -1,0 +1,20 @@
+{
+  "note": [
+    "Expected profile detection (plan §5 WP3.1, AD-11), read by src/lib/core/profiles/detect.test.ts.",
+    "One file per folder under tests/fixtures/nc (M6 P6 item 11): a content work package adds its own",
+    "fixtures and its own expectations without touching anybody else's, and a reviewer reads one dialect",
+    "at a time. The test globs this folder, so a new file needs no code change.",
+    "A value is a profile id, or 'fallback' when the content is inconclusive and the current profile stays,",
+    "or 'refused' when decodeFile does not open the file at all, so detection never runs."
+  ],
+  "fixtures": {
+    "nc/fanuc/O1234": "fanuc-gcode",
+    "nc/fanuc/detect-fanuc.txt": "fanuc-gcode",
+    "nc/fanuc/f01-mill-3tools.nc": "fanuc-gcode",
+    "nc/fanuc/f02-packed.nc": "fanuc-gcode",
+    "nc/fanuc/f03-multi-program.nc": "fanuc-gcode",
+    "nc/fanuc/f04-feed-modes.nc": "fanuc-gcode",
+    "nc/fanuc/f05-comments-edge.nc": "fanuc-gcode",
+    "nc/fanuc/f07.tap": "fanuc-gcode"
+  }
+}

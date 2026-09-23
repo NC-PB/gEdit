@@ -1,0 +1,17 @@
+{
+  "about": "A Klartext tool call that changes only the speed. `TOOL CALL Z S5000` names no tool, so it is not a tool change and the tool in the spindle does not change — but the speed it carries does.",
+  "input": "../../nc/heidenhain/h03-speed-only.h",
+  "states": [
+    { "line": 4,
+      "after": { "tool": "4", "speed": "3000", "feed": "500", "block": { "toolChange": true } } },
+    { "line": 7,
+      "after": { "feed": "200", "speed": "3000" } },
+    { "line": 10,
+      "about": "A speed change on the same tool: the station stays 4 and the block is no tool change.",
+      "after": { "tool": "4", "speed": "5000", "feed": "500", "block": { "toolChange": false } } },
+    { "line": 13,
+      "after": { "tool": "4", "speed": "6000", "feed": "900", "block": { "toolChange": false } } },
+    { "line": 17,
+      "after": { "tool": "4", "speed": "6000", "feed": "900", "units": "mm" } }
+  ]
+}

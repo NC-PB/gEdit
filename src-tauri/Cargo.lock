@@ -1020,6 +1020,7 @@ name = "gedit"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "objc2",
  "serde",
  "serde_json",
  "tauri",

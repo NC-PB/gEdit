@@ -1,0 +1,11 @@
+{
+  "profile": "fanuc-lathe",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":2,"text":"G-CODE SYSTEM B: G92 S CLAMP, G95 FEED PER REVOLUTION, G77 G78 G33"},
+    {"kind":"program","line":4,"text":"O2005","endLine":35},
+    {"kind":"tool","line":7,"text":"T2 — OD ROUGH","tool":"02","endLine":17},
+    {"kind":"tool","line":18,"text":"T4 — THREAD 2.0 LEAD","tool":"04","endLine":35},
+      {"kind":"end","line":33,"text":"M30"}
+  ]
+}

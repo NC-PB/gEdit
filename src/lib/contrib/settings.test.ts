@@ -89,6 +89,7 @@ function paths(settingsFile: string): ConfigPaths {
     settingsFile,
     stateFile: '/data/state.json',
     userScriptsDir: '/config/scripts',
+    machinesFile: '/config/machines.json',
   };
 }
 

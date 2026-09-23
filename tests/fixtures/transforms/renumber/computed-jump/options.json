@@ -1,0 +1,22 @@
+{
+  "note": "GOTO #100 jumps to a block number the control works out while it runs. Nothing here can follow that, and nothing can fix it afterwards either, so the line is reported rather than overlooked.",
+  "profile": "fanuc-gcode",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      {
+        "line": 1,
+        "severity": "info"
+      },
+      {
+        "line": 2,
+        "severity": "warning"
+      }
+    ],
+    "warnings": [
+      "ncNumbering.renumber.referencesUnresolved"
+    ],
+    "preflight": "ncNumbering.renumber.references"
+  }
+}

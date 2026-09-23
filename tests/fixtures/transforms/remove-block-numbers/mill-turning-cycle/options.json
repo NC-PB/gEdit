@@ -1,0 +1,22 @@
+{
+  "note": "G8 M6, the reviewer's own program, run with the MILL profile — which is where a turning program that carries no lathe-only marker lands. The mill had no rule for a `G70`/`G71 P-Q`, so it deleted N100 and N200 outright with an empty warning list and no confirmation, and the control would alarm on the finished program. The mill now finds those two values, so the numbers they name are kept exactly as the lathe profile keeps them.",
+  "profile": "fanuc-gcode",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.removeBlockNumbers.summary",
+    "skipped": [
+      {
+        "line": 6,
+        "severity": "info"
+      },
+      {
+        "line": 8,
+        "severity": "info"
+      }
+    ],
+    "warnings": [
+      "ncNumbering.removeBlockNumbers.keptReferenced"
+    ],
+    "preflight": null
+  }
+}

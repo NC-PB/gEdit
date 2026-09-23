@@ -62,16 +62,21 @@
 #
 # [[params]]
 # id = "surfaceSpeed"
-# type = "bool"
+# type = "choice"
 # label = "Also scale constant surface speeds"
-# help = "Under G96 the S word is a surface speed, not revolutions per minute."
-# default = false
+# help = "Under G96 the S word is a surface speed in metres or feet per minute, not revolutions. Automatically means yes on a turning profile, where nearly every cut is one, and no on a milling profile."
+# default = "auto"
+# choices = [
+#   { label = "Automatically (yes when turning)", value = "auto" },
+#   { label = "Yes", value = "yes" },
+#   { label = "No", value = "no" }
+# ]
 #
 # [[params]]
 # id = "speedLimits"
 # type = "bool"
 # label = "Also scale spindle speed limits"
-# help = "The S of a G50 or G92 block clamps the top speed for constant surface speed."
+# help = "The S of a speed-clamp block (G50 in G-code system A, G92 in system B) is the top speed the spindle may reach under constant surface speed, not a cutting speed."
 # default = false
 # ///
 """Scale spindle speeds (plan section 5, WP4.7; `nc-transformations.md`, "Scale spindle speeds").
@@ -88,12 +93,19 @@ not a speed and is never rewritten.
 
 Constant surface speed
     between `G96` and `G97` the `S` word is a surface speed in metres or feet per minute,
-    not revolutions. Scaling it is a different operation from scaling rpm, so it is
-    skipped and listed unless the run asks for it.
+    not revolutions. Scaling it is linear and correct, it is simply a different number, so
+    the run has to be told which it means: the option is **auto / yes / no** and auto
+    follows the profile's `machineType`. On a milling program constant surface speed is the
+    exception and the answer is no; on a turning one nearly every cut is under `G96`, and a
+    run that skipped them would leave the cutting speeds of the whole program alone. What is
+    not scaled is listed.
 Speed limits
-    `G50 S` (and `G92 S` in the other G-code systems) clamps the top spindle speed for
-    constant surface speed. It is a machine limit, not a cutting speed. Same rule, and
-    the same pair of codes, as `tool_list.py`'s feed and speed ranges.
+    `G50 S` (and `G92 S` in G-code system B) clamps the top spindle speed for constant
+    surface speed. It is a machine limit, not a cutting speed. **Which** code that is comes
+    out of the code database (`sets.speedLimit`, `gedit_nc.speed_limit_of`), not out of a
+    list in this file: on a lathe in system A `G92` is the single-pass threading cycle and
+    its `S` — if it had one — would not be a clamp at all (plan AD-19 rule 4, F24).
+    `tool_list.py` asks the same question the same way.
 Variables and expressions
     `S#500`, `SQ5`, or an `S` with no value: there is no number to scale.
 Tapping and threading
@@ -122,6 +134,13 @@ written by `gedit_nc.format_number`. Speeds are whole numbers by default, becaus
 what a control accepts; "As written" keeps the precision the value already had. Rounding
 is half away from zero and nothing here ever sees a float.
 
+The machine changes nothing here. A spindle speed has **no number class** (plan §7.15,
+AD-31): `S2000` is 2000 on every control, whatever it makes of a point-less `X50`, so there
+is no value to resolve and no limit to convert. The one thing the document's machine does
+reach is the effective `syntax.decimalPointSignificant`, which the rules below already
+follow, because a control that reads a point-less word as a count is a control a value must
+not be given a decimal point on.
+
 Two rules protect the value itself:
 
 * Where the profile says the decimal point is **significant** (`S100` is not `S100.`), a
@@ -149,10 +168,6 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import gedit_nc
-
-#: The ISO codes that write a spindle speed **limit** rather than a speed. A dialect
-#: without G words never matches them. `tool_list.py` (WP4.6) spells the rule the same way.
-SPEED_LIMIT_CODES = ("G50", "G92")
 
 #: At most this many findings; the rest are counted in the message. A 100k-line program
 #: under G96 would otherwise hand the results panel tens of thousands of rows.
@@ -231,6 +246,22 @@ def trim(value: Decimal) -> str:
     return format(value.normalize(), "f")
 
 
+def choice_param(value: Any, default: str = "auto") -> str:
+    """An ``auto`` / ``yes`` / ``no`` option, from the form or from an older context.
+
+    Phase 1 declared this option as a ``bool``; the form engine turns a remembered ``false``
+    into the field's default when a field becomes a ``choice`` (plan F33), so the app never
+    sends one. A context written by hand or by an older build still can, and a run that says
+    ``true`` or ``false`` meant it, so both are honoured rather than quietly turned into
+    ``auto``.
+    """
+    if value is True:
+        return "yes"
+    if value is False:
+        return "no"
+    return value if value in ("auto", "yes", "no") else default
+
+
 def count_text(count: int, singular: str, plural: Optional[str] = None) -> str:
     """``1 spindle speed`` / ``4 spindle speeds``."""
     return "%s %s" % ("{:,}".format(count), singular if count == 1 else (plural or singular + "s"))
@@ -273,7 +304,15 @@ class Params:
         spindle = addresses.get("spindle")
         self.spindle_address = spindle if isinstance(spindle, str) and spindle != "" else "S"
 
-        self.surface_speed = values.get("surfaceSpeed") is True
+        # Constant surface speed is how a turning program cuts nearly everything and the
+        # exception on a milling one, so "automatically" follows the profile's `machineType`
+        # (plan §7.4). Scaling a surface speed is linear and correct; it is simply a
+        # different number from an rpm, so the run has to be told which it means.
+        self.surface_speed_choice = choice_param(values.get("surfaceSpeed"))
+        self.lathe = gedit_nc.machine_type_of(profile) == "lathe"
+        self.surface_speed = (
+            self.lathe if self.surface_speed_choice == "auto" else self.surface_speed_choice == "yes"
+        )
         self.speed_limits = values.get("speedLimits") is True
 
     def format_for(self, token: gedit_nc.Token) -> Tuple[Dict[str, Any], bool]:
@@ -356,20 +395,31 @@ def apply_edits(line: str, edits: Sequence[Tuple[int, int, str]]) -> str:
     return "".join(out)
 
 
+def power_on_state(tracker: gedit_nc.FeedModeTracker, cp: gedit_nc.CompiledProfile) -> None:
+    """Puts the tracker into the state the control powers on in (plan AD-19 rule 8, AD-31).
+
+    `FeedModeTracker` is Phase 1's API: it is built from a code database alone, so it starts
+    every run in feed per minute and in rpm — which is what a milling control powers on in,
+    and what Phase 1 assumed everywhere. A turning control does not: a Fanuc lathe in G-code
+    system A powers on in `G99`, feed **per revolution**, in system B in `G95`, and the
+    document's machine may say something else again (plan §7.15).
+
+    The **effective** profile carries that state in `modal.initial`, so the run walks those
+    codes through the tracker as the block before the first one. A feed-mode or spindle-mode
+    code in the program then overrides it exactly as it overrides a code on an earlier line,
+    and a dialect that declares no power-on state (Klartext) is untouched.
+    """
+    initial = as_dict(as_dict(cp.profile.get("modal")).get("initial"))
+    codes = [value for value in initial.values() if isinstance(value, str) and value != ""]
+    if not codes:
+        return
+    tokens, _ = gedit_nc.tokenize_line(" ".join(codes), cp, None)
+    tracker.update(tokens)
+
+
 def speed_word(token: gedit_nc.Token, params: Params) -> bool:
     """True when this token is a spindle speed word of the active dialect."""
     return token.kind == "word" and token.address == params.spindle_address
-
-
-def limit_code_of(tokens: Sequence[gedit_nc.Token]) -> Optional[str]:
-    """The `G50` / `G92` of this block, which makes its `S` a limit — or ``None``."""
-    for token in tokens:
-        if token.kind != "word" or token.address is None:
-            continue
-        code = gedit_nc.normalize_code(token.address + (token.value_text or ""))
-        if code in SPEED_LIMIT_CODES:
-            return code
-    return None
 
 
 def scale_token(
@@ -534,7 +584,8 @@ def scale_token(
             "pitch, so check this block by hand." % (word, tracker.active_cycle),
         )
     elif tracker.pitch_feed_ambiguous:
-        # The block's code is a threading cycle in another G-code system of this dialect
+        # The block's code is a threading cycle on another kind of machine, or in another
+        # G-code system of this dialect
         # (`pitchFeedAmbiguous`: Fanuc G76 and G92). `scale_feed.py` refuses such a block's
         # F outright; here the S really is a spindle speed in either reading, so it is
         # scaled — but if this is the lathe reading, it is the speed a thread is cut at
@@ -543,9 +594,9 @@ def scale_token(
         findings.add(
             line,
             "warning",
-            "%s was scaled in a %s block: that code is a threading cycle in another "
-            "G-code system of this dialect, where this block cuts a thread at this speed "
-            "and its F is the thread lead. Check the block by hand."
+            "%s was scaled in a %s block: that code is a threading cycle on another kind "
+            "of machine or in another G-code system, where this block cuts a thread at this "
+            "speed and its F is the thread lead. Check the block by hand."
             % (word, tracker.ambiguous_code),
         )
 
@@ -617,8 +668,8 @@ def inherited_text(tracker: gedit_nc.FeedModeTracker) -> Optional[str]:
         parts.append("the thread-pitch cycle %s" % tracker.active_cycle)
     elif tracker.pitch_feed_ambiguous and tracker.ambiguous_code is not None:
         parts.append(
-            "%s, which is a threading cycle in another G-code system of this dialect"
-            % tracker.ambiguous_code
+            "%s, which is a threading cycle on another kind of machine or in another "
+            "G-code system" % tracker.ambiguous_code
         )
     if not parts:
         return None
@@ -647,6 +698,7 @@ def run(
     down is cut at (G8 M4 finding 6), and says so at its first line.
     """
     tracker = gedit_nc.FeedModeTracker(codes)
+    power_on_state(tracker, cp)
     findings = Findings()
     counts = Counts()
     out: List[str] = []
@@ -692,7 +744,10 @@ def run(
         tokens, state = gedit_nc.tokenize_line(line, cp, state)
         tracker.update(tokens)
         number = base_line + index
-        limit_code = limit_code_of(tokens)
+        # Which code makes this block's `S` a clamp is the database's answer, not this
+        # file's: `G50` in Fanuc's G-code system A, `G92` in system B, `G26` on a Sinumerik
+        # (plan AD-19 rule 4, F24).
+        limit_code = gedit_nc.speed_limit_of(codes, tokens)
 
         # A thread block that starts while a changed speed is in force: the speed that
         # cuts the thread was set further up, so the warning has to point here.
@@ -712,7 +767,8 @@ def run(
                     number,
                     "warning",
                     "This block runs at %s, which was scaled on line %d, and its code (%s) "
-                    "is a threading cycle in another G-code system of this dialect: if "
+                    "is a threading cycle on another kind of machine or in another "
+                    "G-code system: if "
                     "this is a lathe program the thread is cut at the changed speed, so "
                     "check the block by hand."
                     % (last_speed[1], last_speed[0], tracker.ambiguous_code),

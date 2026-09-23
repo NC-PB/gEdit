@@ -1,0 +1,88 @@
+{
+  "id": "fanuc-lathe",
+  "extends": "fanuc-gcode",
+  "name": "Fanuc (ISO) lathe",
+  "shortName": "Fanuc T",
+  "version": 1,
+  "machineType": "lathe",
+  "codes": "fanuc-lathe",
+  "files": { "filterName": "Fanuc lathe G-Code" },
+  "detect": {
+    "extensions": { "nc": 3, "tap": 3, "cnc": 2, "eia": 2, "iso": 2 },
+    "content": [
+      { "pattern": "^\\s*%\\s*$", "weight": 5 },
+      { "pattern": "^\\s*[O:]\\d{1,8}(?!\\d)", "weight": 5 },
+      { "pattern": "^\\s*N\\d+", "weight": 1 },
+      { "pattern": "^\\s*(N\\d+\\s*)?[GM]\\d{1,3}(\\.\\d)?(?![\\d.])", "weight": 1 },
+      { "pattern": "^\\s*\\([^)]*\\)\\s*$", "weight": 1 },
+      { "pattern": "(?<![A-Z])T\\d{4}(?!\\d)", "weight": 3 },
+      { "pattern": "(?<![A-Z])G0*50\\s*S\\d", "weight": 4 },
+      { "pattern": "(?<![A-Z])G0*92\\s*S\\d", "weight": 4 },
+      { "pattern": "(?<![A-Z])G0*9[67](?![\\d.])", "weight": 4 },
+      { "pattern": "(?<![A-Z])G0*7[0-3](?![\\d.])(?=[^(]*P\\s*\\d)(?=[^(]*Q\\s*\\d)", "weight": 6 },
+      { "pattern": "(?<![A-Z])G0*7[12]\\s*U[\\d.]+\\s*R", "weight": 6 },
+      { "pattern": "(?<![A-Z])G0*28\\s*U", "weight": 4 },
+      { "pattern": "(?<![A-Z])[UW][-+]?\\.?\\d", "weight": 1 }
+    ],
+    "priority": 0
+  },
+  "addresses": {
+    "axes": ["X", "Z", "C", "Y", "U", "W"],
+    "arcCenter": ["I", "K"],
+    "incremental": { "U": "X", "W": "Z" },
+    "diameter": ["X", "U"],
+    "angular": ["C"]
+  },
+  "toolCall": {
+    "trigger": "(?<![A-Z])T\\d{1,4}(?!\\d)",
+    "ignore": "(?<![A-Z])T(?:\\d{0,2}00|0+)(?!\\d)",
+    "tool": "(?<![A-Z])T(?<tool>\\d{1,2}?)(?:\\d{2})?(?!\\d)",
+    "toolFrom": "same-line"
+  },
+  "modal": { "initial": { "feedmode": "G99", "spindlemode": "G97", "plane": "G18" } },
+  "syntax": { "decimalPointSignificant": false },
+  "machineParams": {
+    "numberInput": { "default": "calculator" },
+    "diameter": "on",
+    "modalGroups": ["feedmode", "spindlemode", "plane"],
+    "variants": [
+      {
+        "id": "gcodeSystem",
+        "label": "G-code system",
+        "default": "A",
+        "choices": [
+          {
+            "value": "A",
+            "label": "G-code system A",
+            "codes": "fanuc-lathe",
+            "detect": [
+              { "pattern": "(?<![A-Z])G0*50\\s*S\\d", "weight": 4 },
+              { "pattern": "(?<![A-Z])G0*9[89](?![\\d.])", "weight": 2 }
+            ]
+          },
+          {
+            "value": "B",
+            "label": "G-code system B",
+            "codes": "fanuc-lathe-b",
+            "overlay": { "modal": { "initial": { "feedmode": "G95" } } },
+            "detect": [
+              { "pattern": "(?<![A-Z])G0*92\\s*S\\d", "weight": 5 },
+              { "pattern": "(?<![A-Z])G0*7[789](?![\\d.])", "weight": 5 },
+              { "pattern": "(?<![A-Z])G0*9[45](?![\\d.])", "weight": 2 }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "numbering": {
+    "references": [
+      { "trigger": "(?<![A-Z])M\\s*0*99(?!\\d)", "addresses": ["P"], "rewrite": false },
+      { "trigger": "^(?=[^(]*Q\\s*\\d)[^(]*(?<![A-Z])M\\s*0*98(?!\\d)", "addresses": ["Q"] },
+      { "trigger": "^(?=[^(]*P\\s*\\d)(?=[^(]*Q\\s*\\d)[^(]*(?<![A-Z])M\\s*0*98(?!\\d)", "addresses": ["Q"], "rewrite": false },
+      { "trigger": "^(?=[^(]*P\\s*\\d)(?=[^(]*Q\\s*\\d)[^(]*(?<![A-Z])G\\s*0*7[0-3](?![\\d.])", "addresses": ["P", "Q"] },
+      { "trigger": "(?<![A-Z])GOTO", "addresses": ["GOTO"] }
+    ]
+  },
+  "toolList": { "description": "auto", "commentFilter": "^[-*=_\\s]*$", "dropLeadingZeros": true }
+}

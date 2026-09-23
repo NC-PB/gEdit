@@ -155,12 +155,14 @@
     {
       "code": "MM",
       "group": "program",
+      "sets": { "units": "mm" },
       "label": "Millimetre program",
       "description": "The program is written in millimetres: coordinates in mm and a feed in mm per minute. It stands in the start and the end block, and both have to say the same."
     },
     {
       "code": "INCH",
       "group": "program",
+      "sets": { "units": "inch" },
       "label": "Inch program",
       "description": "The program is written in inches: coordinates in inch and a feed in tenths of an inch per minute, so F100 is ten inches per minute."
     },
@@ -432,24 +434,28 @@
     {
       "code": "CYCL DEF",
       "group": "cycle",
+      "sets": { "cycle": "cancel" },
       "label": "Cycle definition",
       "description": "Defines a cycle and stores its values. An old-style cycle up to number 39 is written as CYCL DEF <number>.<sub> over several numbered blocks; a cycle from 200 upwards is a header line plus one indented line per Q parameter, and every line but the last ends in a continuation mark."
     },
     {
       "code": "CYCL DEF 32",
       "group": "cycle",
+      "sets": { "cycle": "cancel" },
       "label": "Tolerance cycle",
       "description": "Sets how far the path may leave the programmed contour, which is what decides accuracy against speed on a fast contour. It is written in numbered sub-blocks: 32.0 carries the name, 32.1 the tolerance T in millimetres, and 32.2 the HSC-MODE, 0 for accuracy and 1 for speed, together with TA for the rotary axes."
     },
     {
       "code": "CYCL CALL",
       "group": "cycle",
+      "sets": { "cycle": "cancel" },
       "label": "Cycle call",
       "description": "Runs the cycle that was defined last at the current position. CYCL CALL PAT runs it at every point of a preceding pattern definition."
     },
     {
       "code": "CYCL CALL PAT",
       "group": "cycle",
+      "sets": { "cycle": "cancel" },
       "label": "Cycle call on a pattern",
       "description": "Runs the cycle that was defined last at every point of the PATTERN DEF or the point table in front of it."
     },
@@ -457,12 +463,14 @@
       "code": "CYCL CALL POS",
       "group": "cycle",
       "verify": true,
+      "sets": { "cycle": "cancel" },
       "label": "Cycle call at a position",
       "description": "Moves to the position written in the block and runs the cycle that was defined last there."
     },
     {
       "code": "CYCL DEF 200",
       "group": "cycle",
+      "sets": { "cycle": "start" },
       "label": "Drilling cycle",
       "description": "Drills to depth, in pecks when an infeed is given, and pulls back fully between the pecks. It pre-positions in the tool axis itself.",
       "params": [
@@ -516,6 +524,7 @@
     {
       "code": "CYCL DEF 201",
       "group": "cycle",
+      "sets": { "cycle": "start" },
       "label": "Reaming cycle",
       "description": "Feeds down to depth and feeds back out again, so the reamer leaves a clean wall.",
       "params": [
@@ -561,6 +570,7 @@
     {
       "code": "CYCL DEF 203",
       "group": "cycle",
+      "sets": { "cycle": "start" },
       "label": "Universal drilling cycle",
       "description": "Drills to depth with pecks that get shorter as the hole deepens and with chip breaks in between.",
       "params": [
@@ -641,6 +651,7 @@
     {
       "code": "CYCL DEF 205",
       "group": "cycle",
+      "sets": { "cycle": "start" },
       "label": "Universal deep-hole drilling cycle",
       "description": "Drills deep holes with shortening pecks, chip breaks and a controlled return into the hole.",
       "params": [
@@ -737,6 +748,7 @@
       "code": "CYCL DEF 206",
       "group": "cycle",
       "pitchFeed": true,
+      "sets": { "cycle": "start" },
       "label": "Tapping cycle with a floating holder",
       "description": "Cuts a thread with a compensating chuck. The plunging feed follows from the speed and the thread pitch, so scaling it would change the thread.",
       "params": [
@@ -777,6 +789,7 @@
       "code": "CYCL DEF 207",
       "group": "cycle",
       "pitchFeed": true,
+      "sets": { "cycle": "start" },
       "label": "Rigid tapping cycle",
       "description": "Cuts a thread without a compensating chuck: the control keeps the spindle and the feed in step from the pitch. The sign of the pitch decides right- or left-hand.",
       "params": [
@@ -811,6 +824,7 @@
       "code": "CYCL DEF 209",
       "group": "cycle",
       "pitchFeed": true,
+      "sets": { "cycle": "start" },
       "label": "Rigid tapping cycle with chip breaking",
       "description": "Cuts a thread without a compensating chuck and pulls back now and then to break the chip.",
       "params": [
@@ -864,6 +878,7 @@
     {
       "code": "CYCL DEF 240",
       "group": "cycle",
+      "sets": { "cycle": "start" },
       "label": "Centring cycle",
       "description": "Spots a hole, either down to a depth or until the cone reaches a given diameter.",
       "params": [

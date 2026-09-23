@@ -1,0 +1,33 @@
+{
+  "about": "A Klartext program with three tools and a cycle that is defined once and called twice: which block is a tool change, and what the cycle definition leaves behind.",
+  "input": "../../nc/heidenhain/h01-3tools.h",
+  "states": [
+    { "line": 1,
+      "after": { "units": "mm", "distance": "absolute", "tool": null, "feed": null, "speed": null } },
+    { "line": 3,
+      "about": "A blank definition says nothing about the modal state.",
+      "after": { "tool": null, "activeCycle": null, "block": { "cycle": null } } },
+    { "line": 6,
+      "after": { "tool": "1", "speed": "3000", "feed": "800", "block": { "toolChange": true } } },
+    { "line": 9,
+      "after": { "feed": "300" } },
+    { "line": 10,
+      "after": { "feed": "800" } },
+    { "line": 17,
+      "about": "A tool call with a speed and no feed: the feed of the tool before it still stands.",
+      "after": { "tool": "2", "speed": "2400", "feed": "800", "block": { "toolChange": true } } },
+    { "line": 19,
+      "after": { "block": { "cycle": "CYCL DEF 200" }, "activeCycle": null } },
+    { "line": 28,
+      "after": { "block": { "cycle": "CYCL DEF 200" } } },
+    { "line": 29,
+      "after": { "block": { "cycle": null }, "groups": { "coolant": "M8" } } },
+    { "line": 30,
+      "about": "`CYCL CALL` runs the definition; it starts no cycle of its own.",
+      "after": { "activeCycle": null, "block": { "cycle": null } } },
+    { "line": 35,
+      "after": { "tool": "3", "speed": "5000", "feed": "600", "block": { "toolChange": true } } },
+    { "line": 46,
+      "after": { "tool": "3", "feed": "600", "speed": "5000", "units": "mm" } }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "profile": "fanuc-gcode",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":2,"text":"A MILL WHOSE TOOL NUMBERS HAVE FOUR DIGITS: IT IS STILL A MILL"},
+    {"kind":"program","line":4,"text":"O1009","endLine":30},
+    {"kind":"tool","line":6,"text":"T1001","tool":"1001","endLine":15},
+    {"kind":"tool","line":16,"text":"T1002","tool":"1002","endLine":30},
+      {"kind":"end","line":28,"text":"M30"}
+  ]
+}

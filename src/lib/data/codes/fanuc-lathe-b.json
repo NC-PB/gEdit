@@ -1,0 +1,173 @@
+{
+  "dialect": "fanuc-lathe-b",
+  "version": 1,
+  "extends": "fanuc-lathe",
+  "codes": [
+    {
+      "code": "G33",
+      "group": "motion",
+      "modal": true,
+      "pitchFeed": true,
+      "label": "Thread cutting pass",
+      "description": "Cuts one straight or tapered threading pass to the end point in the block. F is the thread lead per revolution, not a feed rate, so scaling the feed would change the thread. G-code system A spells this G32.",
+      "params": [
+        {
+          "address": "X",
+          "label": "Thread end diameter"
+        },
+        {
+          "address": "Z",
+          "label": "Thread end along Z"
+        },
+        {
+          "address": "F",
+          "label": "Thread lead per revolution",
+          "required": true,
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "G50",
+      "group": "nonmodal",
+      "verify": true,
+      "sets": { "speedLimit": true },
+      "label": "Coordinate set, top spindle speed (G-code system A)",
+      "description": "The sources do not use this number in G-code system B, where G92 sets the coordinate system and the top spindle speed. It is kept here because a program posted for system A is opened with a system-B machine often enough, and the S of such a block is a speed limit and not a speed to scale: raising the clamp of a constant-surface-speed program is what lets the spindle run away as the diameter falls. Check what your control does with it."
+    },
+    {
+      "code": "G77",
+      "group": "motion",
+      "modal": true,
+      "label": "Turning pass",
+      "description": "Cuts one outside or inside turning pass, straight or tapered, and returns to the start point. It belongs to the motion group, so the next G00 or G01 ends it. G-code system A spells this G90.",
+      "params": [
+        {
+          "address": "X",
+          "label": "End diameter of the pass"
+        },
+        {
+          "address": "Z",
+          "label": "End of the pass along Z"
+        },
+        {
+          "address": "R",
+          "label": "Taper: the difference in radius between the start and the end"
+        },
+        {
+          "address": "F",
+          "label": "Feed",
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "G78",
+      "group": "motion",
+      "modal": true,
+      "pitchFeed": true,
+      "label": "Threading pass as a cycle",
+      "description": "Cuts one threading pass, straight or tapered, and returns to the start point, so a thread is written as a list of X values. F is the thread lead per revolution, not a feed rate. G-code system A spells this G92.",
+      "params": [
+        {
+          "address": "X",
+          "label": "Thread diameter of this pass"
+        },
+        {
+          "address": "Z",
+          "label": "Thread end along Z"
+        },
+        {
+          "address": "R",
+          "label": "Taper: the difference in radius between the start and the end"
+        },
+        {
+          "address": "F",
+          "label": "Thread lead per revolution",
+          "required": true,
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "G79",
+      "group": "motion",
+      "modal": true,
+      "label": "Facing pass",
+      "description": "Cuts one facing pass, square or tapered, and returns to the start point. It belongs to the motion group, so the next G00 or G01 ends it. G-code system A spells this G94.",
+      "params": [
+        {
+          "address": "X",
+          "label": "End diameter of the pass"
+        },
+        {
+          "address": "Z",
+          "label": "End of the pass along Z"
+        },
+        {
+          "address": "R",
+          "label": "Taper: the difference along Z between the start and the end"
+        },
+        {
+          "address": "F",
+          "label": "Feed",
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "G90",
+      "group": "distance",
+      "modal": true,
+      "sets": { "distance": "absolute" },
+      "label": "Absolute positions",
+      "description": "Position words are read as coordinates in the active work offset. G-code systems B and C number the distance modes the way a mill does; in system A the same number is a turning cycle and incremental moves are written with U and W."
+    },
+    {
+      "code": "G91",
+      "group": "distance",
+      "modal": true,
+      "sets": { "distance": "incremental" },
+      "label": "Incremental positions",
+      "description": "Position words are read as distances from the current position. G-code system A has no G91 and uses U and W for that."
+    },
+    {
+      "code": "G92",
+      "group": "nonmodal",
+      "pitchFeedAmbiguous": true,
+      "sets": { "speedLimit": true },
+      "label": "Coordinate set, top spindle speed",
+      "description": "Sets the coordinate system without moving. With an S word it gives the highest spindle speed the control may use for constant surface speed; write it in a block of its own in front of G96. G-code system A uses G50 for this and reads G92 as the single-pass threading cycle, whose F is the thread lead — so gEdit will not scale the F of such a block here either: a program posted for system A and opened with a system-B machine would otherwise have its thread leads multiplied in silence."
+    },
+    {
+      "code": "G94",
+      "group": "feedmode",
+      "modal": true,
+      "sets": { "feedUnit": "per-minute" },
+      "label": "Feed per minute",
+      "description": "F is read as distance per minute. G-code systems B and C number the feed modes the way a mill does; in system A the same number is a facing cycle and the feed modes are G98 and G99."
+    },
+    {
+      "code": "G95",
+      "group": "feedmode",
+      "modal": true,
+      "sets": { "feedUnit": "per-rev" },
+      "label": "Feed per revolution",
+      "description": "F is read as distance per spindle revolution, which keeps the chip thickness steady while constant surface speed changes the spindle speed. In G-code system A this mode is G99."
+    },
+    {
+      "code": "G98",
+      "group": "cyclereturn",
+      "modal": true,
+      "label": "Cycle return to the initial level",
+      "description": "After each hole a drilling cycle pulls back to the level the tool was at when the cycle started, which clears anything in the way. In G-code system A the same number means feed per minute instead."
+    },
+    {
+      "code": "G99",
+      "group": "cyclereturn",
+      "modal": true,
+      "label": "Cycle return to the retract plane",
+      "description": "After each hole a drilling cycle pulls back only to the R plane, which is quicker. In G-code system A the same number means feed per revolution instead."
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "note": "The program uses N100 twice, so GOTO 100 has no single answer. A control takes the first match; this run refuses to decide for it, leaves the value as it is and says which line to look at.",
+  "profile": "fanuc-gcode",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      {
+        "line": 1,
+        "severity": "info"
+      },
+      {
+        "line": 2,
+        "severity": "warning"
+      }
+    ],
+    "warnings": [
+      "ncNumbering.renumber.referencesUnresolved"
+    ],
+    "preflight": "ncNumbering.renumber.references"
+  }
+}

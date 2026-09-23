@@ -1,0 +1,57 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "offsets",
+      "label": "Offsets"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [
+    {
+      "tool": "T1",
+      "offsets": "01, 11",
+      "description": "",
+      "line": 5,
+      "calls": 4,
+      "feed": "0.1-0.2 /rev",
+      "speed": "1500"
+    }
+  ],
+  "message": "1 tool, 1 without a description",
+  "findings": [
+    {
+      "line": 6,
+      "severity": "info",
+      "message": "T1: the S of 1 block is a speed limit, not a spindle speed, so it is not in the range."
+    },
+    {
+      "line": 7,
+      "severity": "info",
+      "message": "T1: the S of 1 block is a surface speed (G96), not a spindle speed, so it is not in the range."
+    }
+  ]
+}

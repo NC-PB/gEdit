@@ -92,7 +92,14 @@ function harness(over: Partial<OutlineServiceDeps> = {}): Harness {
         };
       },
     },
-    compiled: (profileId) => COMPILED.get(profileId) ?? null,
+    // The document's effective view (AD-31). Without a machine the key is the profile id,
+    // so a profile switch still rebuilds the index — and so does a machine switch, which
+    // is what the key is there for.
+    effective: (id: DocId) => {
+      const profileId = docs.get(id)?.profileId;
+      const cp = profileId === undefined ? undefined : COMPILED.get(profileId);
+      return cp === undefined ? null : { cp, key: profileId as string };
+    },
     schedule: (fn, ms) => {
       const task: Task = { fn, ms, cancelled: false };
       tasks.push(task);

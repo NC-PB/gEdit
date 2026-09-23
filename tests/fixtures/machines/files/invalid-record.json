@@ -1,0 +1,26 @@
+{
+  "$version": 1,
+  "machines": [
+    {
+      "id": "Lathe 2",
+      "name": "Lathe 2",
+      "profile": "fanuc-lathe",
+      "params": { "variants": { "gcodeSystem": "B" } }
+    },
+    {
+      "id": "lathe-c",
+      "name": "Lathe C",
+      "profile": "fanuc-lathe",
+      "params": { "variants": { "gcodeSystem": "C" } }
+    },
+    {
+      "id": "lathe-ok",
+      "name": "Lathe OK",
+      "profile": "fanuc-lathe",
+      "params": { "numberInput": { "mode": "increment", "incrementMm": "0.001" } },
+      "tooling": { "turret": "12 stations" }
+    }
+  ],
+  "defaults": { "fanuc-lathe": "gone" },
+  "workshop": "hall 2"
+}

@@ -200,7 +200,10 @@ function classify(line: string, cp: CompiledProfile, spec: OutlineSpec): LineMar
     break;
   }
 
-  const isTool = cp.re.toolTrigger.test(masked);
+  // A trigger line that also matches `toolCall.ignore` is not a tool change: a Fanuc lathe
+  // writes `T0100` to cancel the offset of station 1, and `G00 X100. Z100. T0100` to
+  // retract with it. Counting those would put a tool step on every retract (§7.1).
+  const isTool = cp.re.toolTrigger.test(masked) && !(cp.re.toolIgnore?.test(masked) ?? false);
   let tool: string | null = null;
   if (isTool || spec.toolFromLast) {
     const match = cp.re.tool.exec(masked);

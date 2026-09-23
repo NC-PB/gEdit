@@ -1,0 +1,14 @@
+{
+  "$version": 2,
+  "machines": [
+    {
+      "id": "lathe-2",
+      "name": "Lathe 2",
+      "profile": "fanuc-lathe",
+      "params": { "variants": { "gcodeSystem": "B" } },
+      "spindleGearRange": "low"
+    }
+  ],
+  "defaults": { "fanuc-lathe": "lathe-2" },
+  "workshop": "hall 2"
+}

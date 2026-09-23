@@ -1,0 +1,9 @@
+{
+  "profile": "fanuc-lathe",
+  "machine": {
+    "variants": {
+      "gcodeSystem": "B"
+    }
+  },
+  "machineName": "Lathe B"
+}

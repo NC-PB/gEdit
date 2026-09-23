@@ -1,0 +1,75 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "offsets",
+      "label": "Offsets"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [
+    {
+      "tool": "T1",
+      "offsets": "01",
+      "description": "OD ROUGH",
+      "line": 10,
+      "calls": 1,
+      "feed": "0.12-0.25 /rev",
+      "speed": "220 surface"
+    },
+    {
+      "tool": "T3",
+      "offsets": "03",
+      "description": "THREAD",
+      "line": 28,
+      "calls": 1,
+      "feed": "",
+      "speed": "1200"
+    },
+    {
+      "tool": "T5",
+      "offsets": "05",
+      "description": "DRILL",
+      "line": 47,
+      "calls": 1,
+      "feed": "0.08 /rev",
+      "speed": "900"
+    }
+  ],
+  "message": "3 tools",
+  "findings": [
+    {
+      "line": 11,
+      "severity": "info",
+      "message": "T1: the S of 1 block is a speed limit, not a spindle speed, so it is not in the range."
+    },
+    {
+      "line": 33,
+      "severity": "info",
+      "message": "T3: the F of 3 blocks is a thread pitch, not a feed rate, so it is not in the range."
+    }
+  ]
+}

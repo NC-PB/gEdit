@@ -1,5 +1,5 @@
 {
-  "message": "Scaled 1 feed rate to 110 %; 1 cycle feed left unchanged.",
+  "message": "Scaled 1 feed rate to 110 %; 1 cycle feed left unchanged. No machine: profile defaults assumed.",
   "findings": [
     {
       "line": 7,

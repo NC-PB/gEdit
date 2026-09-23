@@ -1,0 +1,16 @@
+{
+  "note": "G8 M6. A block may write its words in any order, so `P2000 M98 Q50` is the same subprogram call as `M98 P2000 Q50`: it starts program 2000 at THAT program's N50, which this file cannot renumber. The guard only looked to the right of M98, so the P in front of it was not seen and the Q was rewritten with the caller's own new number. It is reported and kept now, while the plain local call on the next line is still followed.",
+  "profile": "fanuc-lathe",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      { "line": 1, "severity": "info" },
+      { "line": 2, "severity": "info" },
+      { "line": 4, "severity": "warning" },
+      { "line": 7, "severity": "info" }
+    ],
+    "warnings": ["ncNumbering.renumber.referencesRewritten", "ncNumbering.renumber.referencesKept"],
+    "preflight": "ncNumbering.renumber.references"
+  }
+}

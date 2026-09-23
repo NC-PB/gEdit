@@ -1,5 +1,5 @@
 {
-  "message": "Scaled 2 of 4 feed rates to 50 %; 2 left by the value filter.",
+  "message": "Scaled 2 of 4 feed rates to 50 %; 2 left by the value filter. No machine: profile defaults assumed.",
   "findings": [
     {
       "line": 5,

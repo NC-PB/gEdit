@@ -23,7 +23,7 @@ import { writable, type Readable, type Writable } from 'svelte/store';
 import { OutlineIndex, type OutlineItem } from '$lib/core/profiles/outline';
 import { editor as appEditor } from '$lib/monaco/editorService';
 import { docs as appDocs } from '$lib/stores/documents';
-import { profiles as appProfiles } from '$lib/stores/profiles';
+import { machines as appMachines } from '$lib/stores/machines';
 import type { CompiledProfile } from '$lib/core/profiles/types';
 import type { Disposable, DocId, DocumentStore, EditorService, OutlineService } from '$lib/app/types';
 
@@ -35,8 +35,17 @@ export const AGGREGATE_DELAY_MS = 150;
 export interface OutlineServiceDeps {
   docs: Pick<DocumentStore, 'get' | 'list'>;
   editor: Pick<EditorService, 'hasModel' | 'getLineCount' | 'getLines' | 'onDidChangeContent' | 'onDidCreateModel'>;
-  /** The compiled profile of a document, or null when its id is unknown. */
-  compiled(profileId: string): CompiledProfile | null;
+  /**
+   * The document's **effective** compiled profile and the key it was built from (AD-31),
+   * or null while the document is unknown.
+   *
+   * The key, not the profile id, is what an index is rebuilt on. A machine decides which
+   * G-code system a lathe program is read in, and with it which lines are tool changes —
+   * so switching the machine has to rebuild the map exactly as switching the profile does.
+   */
+  effective(id: DocId): { cp: CompiledProfile; key: string } | null;
+  /** Bumps whenever a machine or a document's choice changed, so the keys are re-read. */
+  machineRevision?: Readable<number>;
   /** `setTimeout`, as a canceller; `ms` of 0 means "after this frame". */
   schedule(fn: () => void, ms: number): Disposable;
   chunkLines: number;
@@ -44,7 +53,8 @@ export interface OutlineServiceDeps {
 }
 
 interface Entry {
-  profileId: string;
+  /** `EffectiveMachine.key`: the profile **and** the machine the index was built with. */
+  key: string;
   index: OutlineIndex;
   store: Writable<OutlineItem[]>;
   /** The chunked first build, or null once it has finished. */
@@ -100,28 +110,36 @@ export function createOutlineService(deps: OutlineServiceDeps): OutlineServiceIn
         const entry = entries.get(id);
         if (entry) rebuild(id, entry);
       }),
-      // Closed documents lose their index; a profile change rebuilds it.
+      // Closed documents lose their index; a profile or machine change rebuilds it.
       deps.docs.list.subscribe((list) => {
         const open = new Set(list.map((doc) => doc.id));
         for (const [id, entry] of [...entries]) {
-          if (!open.has(id)) {
-            drop(id, entry);
-            continue;
-          }
-          const profileId = list.find((doc) => doc.id === id)?.profileId;
-          if (profileId !== undefined && profileId !== entry.profileId) {
-            entry.profileId = profileId;
-            entry.index = new OutlineIndex(profileOf(profileId));
-            rebuild(id, entry);
-          }
+          if (!open.has(id)) drop(id, entry);
+          else reindexIfChanged(id, entry);
         }
       }),
+      ...(deps.machineRevision === undefined
+        ? []
+        : [
+            deps.machineRevision.subscribe(() => {
+              for (const [id, entry] of [...entries]) reindexIfChanged(id, entry);
+            }),
+          ]),
     ];
   }
 
-  /** The compiled profile, or an empty one that classifies nothing, for an unknown id. */
-  function profileOf(profileId: string): CompiledProfile {
-    return deps.compiled(profileId) ?? EMPTY_PROFILE;
+  /** Rebuilds when the document's effective view is not the one the index was built with. */
+  function reindexIfChanged(id: DocId, entry: Entry): void {
+    const view = deps.effective(id);
+    if (view === null || view.key === entry.key) return;
+    entry.key = view.key;
+    entry.index = new OutlineIndex(view.cp);
+    rebuild(id, entry);
+  }
+
+  /** The effective compiled profile, or an empty one that classifies nothing. */
+  function profileOf(id: DocId): CompiledProfile {
+    return deps.effective(id)?.cp ?? EMPTY_PROFILE;
   }
 
   function drop(id: DocId, entry: Entry): void {
@@ -189,10 +207,10 @@ export function createOutlineService(deps: OutlineServiceDeps): OutlineServiceIn
     const found = entries.get(id);
     if (found) return found;
 
-    const profileId = deps.docs.get(id)?.profileId ?? '';
+    const view = deps.effective(id);
     const entry: Entry = {
-      profileId,
-      index: new OutlineIndex(profileOf(profileId)),
+      key: view?.key ?? '',
+      index: new OutlineIndex(view?.cp ?? profileOf(id)),
       store: writable<OutlineItem[]>([]),
       build: null,
       ready: Promise.resolve(),
@@ -267,7 +285,12 @@ const EMPTY_PROFILE: CompiledProfile = {
 export const outline: OutlineServiceInternals = createOutlineService({
   docs: appDocs,
   editor: appEditor,
-  compiled: (profileId) => (appProfiles.get(profileId) ? appProfiles.compiled(profileId) : null),
+  effective: (id) => {
+    if (appDocs.get(id) === undefined) return null;
+    const view = appMachines.effective(id);
+    return { cp: view.cp, key: view.machine.key };
+  },
+  machineRevision: appMachines.revision,
   schedule: (fn, ms) => {
     const handle = setTimeout(fn, ms);
     return () => clearTimeout(handle);

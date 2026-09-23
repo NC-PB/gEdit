@@ -1,0 +1,15 @@
+{
+  "profile": "fanuc-lathe",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"program","line":3,"text":"O2001","endLine":61},
+    {"kind":"comment","line":4,"text":"POST: SYNTHETIC TURNING, G-CODE SYSTEM A"},
+    {"kind":"comment","line":5,"text":"T0101  OD ROUGH"},
+    {"kind":"comment","line":6,"text":"T0303  THREAD 1.5 LEAD"},
+    {"kind":"comment","line":7,"text":"T0505  DRILL D8"},
+    {"kind":"tool","line":10,"text":"T1 — OD ROUGH","tool":"01","endLine":27},
+    {"kind":"tool","line":28,"text":"T3 — THREAD","tool":"03","endLine":46},
+    {"kind":"tool","line":47,"text":"T5 — DRILL","tool":"05","endLine":61},
+      {"kind":"end","line":59,"text":"M30"}
+  ]
+}

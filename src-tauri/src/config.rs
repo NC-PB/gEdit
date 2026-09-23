@@ -67,6 +67,12 @@ pub struct ConfigLoad {
     pub ui: Value,
     /// English detail text for a state file that could not be used.
     pub state_error: Option<String>,
+    /// The contents of `<config>/machines.json` (M6); `{}` when missing or invalid.
+    pub machines: Value,
+    /// English detail text for a machines file that could not be used. While it is
+    /// set the webview refuses every write to the file (AD-31 Management): a broken
+    /// hand edit is never overwritten behind the user's back.
+    pub machines_error: Option<String>,
     pub paths: ConfigPaths,
 }
 
@@ -121,6 +127,12 @@ impl JsonFile {
 /// bare file name and is what the English error text names, because the folder
 /// is already in [`ConfigPaths`].
 pub fn read_json_object(path: &Path, name: &str) -> JsonFile {
+    read_json_object_versioned(path, name, SETTINGS_VERSION)
+}
+
+/// [`read_json_object`] for a file with its own format version (M6: `machines.json`
+/// carries `MACHINES_VERSION`, which moves independently of the settings version).
+pub fn read_json_object_versioned(path: &Path, name: &str, version_now: u32) -> JsonFile {
     // The metadata comes first: `std::fs::read` pre-allocates from the file
     // length and reads to EOF, so judging the size afterwards meant a
     // multi-gigabyte file was fully buffered before it was refused — and
@@ -166,8 +178,8 @@ pub fn read_json_object(path: &Path, name: &str) -> JsonFile {
     let version = value
         .get(VERSION_KEY)
         .and_then(Value::as_u64)
-        .unwrap_or(SETTINGS_VERSION as u64);
-    if version > SETTINGS_VERSION as u64 {
+        .unwrap_or(version_now as u64);
+    if version > version_now as u64 {
         return JsonFile {
             value,
             error: Some(format!(
@@ -202,8 +214,19 @@ pub fn as_object(value: Value, name: &str) -> Result<Map<String, Value>, String>
 pub fn save_json_object(
     path: &Path,
     name: &str,
+    object: Map<String, Value>,
+    current: &JsonFile,
+) -> Result<(), String> {
+    save_json_object_versioned(path, name, object, current, SETTINGS_VERSION)
+}
+
+/// [`save_json_object`] for a file with its own format version (M6).
+pub fn save_json_object_versioned(
+    path: &Path,
+    name: &str,
     mut object: Map<String, Value>,
     current: &JsonFile,
+    version_now: u32,
 ) -> Result<(), String> {
     if current.read_only {
         return Err(current
@@ -220,10 +243,7 @@ pub fn save_json_object(
             .clone()
             .unwrap_or_else(|| format!("{name}: could not be read, so it is not replaced")));
     }
-    object.insert(
-        VERSION_KEY.to_owned(),
-        Value::Number(SETTINGS_VERSION.into()),
-    );
+    object.insert(VERSION_KEY.to_owned(), Value::Number(version_now.into()));
     // Pretty, with a trailing newline: the user can open this file in the editor
     // ("Open settings file") and `editor.rulers` is documented as edit-the-file.
     let mut bytes = serde_json::to_vec_pretty(&object)
@@ -255,11 +275,18 @@ pub fn bak_path(path: &Path) -> PathBuf {
 pub fn load(dirs: &paths::AppDirs) -> ConfigLoad {
     let settings = read_json_object(&dirs.settings_file(), paths::SETTINGS_FILE_NAME);
     let state = crate::state::read_state(&dirs.state_file());
+    let machines = read_json_object_versioned(
+        &dirs.machines_file(),
+        paths::MACHINES_FILE_NAME,
+        crate::machines::MACHINES_VERSION,
+    );
     ConfigLoad {
         settings: Value::Object(settings.value),
         settings_error: settings.error,
         ui: Value::Object(state.ui),
         state_error: state.file.error,
+        machines: Value::Object(machines.value),
+        machines_error: machines.error,
         paths: dirs.to_config_paths(),
     }
 }

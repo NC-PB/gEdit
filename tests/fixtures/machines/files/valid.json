@@ -1,0 +1,35 @@
+{
+  "$version": 1,
+  "machines": [
+    {
+      "id": "lathe-2",
+      "name": "Lathe 2",
+      "profile": "fanuc-lathe",
+      "params": {
+        "numberInput": {
+          "mode": "increment",
+          "incrementMm": "0.001",
+          "incrementInch": "0.0001",
+          "incrementDeg": "0.001",
+          "incrementSec": "0.001",
+          "classes": {
+            "feedPerMin": { "mode": "calculator" },
+            "feedPerRev": { "mode": "calculator" }
+          }
+        },
+        "units": "mm",
+        "diameter": "on",
+        "variants": { "gcodeSystem": "B" },
+        "modalInitial": { "feedmode": "G95" }
+      },
+      "notes": "The big chuck; set up for G-code system B."
+    },
+    {
+      "id": "mill-1",
+      "name": "Mill 1",
+      "profile": "fanuc-gcode",
+      "params": { "units": "mm" }
+    }
+  ],
+  "defaults": { "fanuc-lathe": "lathe-2" }
+}

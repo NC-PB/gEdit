@@ -35,6 +35,7 @@
 
 import type { DocMeta, EncodingName, Eol, Located, Msg, ReportData } from '$lib/app/types';
 import type { CodeEntry } from '$lib/core/codes/types';
+import type { EffectiveMachine, MachineParams } from '$lib/core/machines/types';
 import type { Profile } from '$lib/core/profiles/types';
 
 // ---------------------------------------------------------------------------
@@ -116,10 +117,27 @@ export interface ScriptContextV2 {
   cursor: { line: number; column: number };
   /** The values of the parameter form, already validated; `{}` for a script with none. */
   params: Record<string, unknown>;
-  /** The resolved profile as it was read from JSON (no `extends` in P1, AD-11). */
+  /**
+   * The profile the document is read with. M6: the **effective** profile — resolved
+   * (`extends`, AD-16) and with the document's machine applied (AD-31) — so a script that
+   * reads `syntax.decimalPointSignificant` already follows the machine without knowing
+   * that machines exist.
+   */
   profile: Profile;
-  /** `codes.forScripts(profileId)`: the dialect's code database without templates. */
+  /** The document's effective code database, flattened: the entries, without templates. */
   codes: CodeEntry[];
+  /**
+   * M6, AD-31. The document's effective machine. `contract` stays 2: the member is
+   * additive, and `gedit_nc.machine_params(ctx)` answers the profile's defaults (every
+   * source `profile`) for a context that does not carry it, so an M5 script is unaffected.
+   */
+  machine: {
+    id: string | null;
+    name: string | null;
+    choice: 'document' | 'default' | 'none';
+    params: MachineParams;
+    source: EffectiveMachine['source'];
+  };
 }
 
 /** What `buildContext` needs. Everything it cannot derive, the caller passes in. */
@@ -130,6 +148,8 @@ export interface BuildContextInput {
   input: ScriptContextInput;
   cursor: { line: number; column: number };
   params: Record<string, unknown>;
+  /** M6: the document's effective machine; `buildContext` copies the §7.15 script member out of it. */
+  machine: EffectiveMachine;
 }
 
 // ---------------------------------------------------------------------------

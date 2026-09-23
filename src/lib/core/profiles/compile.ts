@@ -85,6 +85,7 @@ export function compileProfile(p: Profile): CompiledProfile {
       continuation: compileOptional(syntax.continuation, 'syntax.continuation', flags),
       variables: compileOptional(syntax.variables, 'syntax.variables', flags),
       toolTrigger: compilePattern(toolCall.trigger, 'toolCall.trigger', flags),
+      toolIgnore: compileOptional(toolCall.ignore, 'toolCall.ignore', flags),
       tool: compilePattern(toolCall.tool, 'toolCall.tool', flags),
       programStart: compileList(program.start, 'program.start', flags),
       programEnd: compileList(program.end, 'program.end', flags),

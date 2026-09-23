@@ -30,6 +30,11 @@ pub const SETTINGS_FILE_NAME: &str = "settings.json";
 pub const STATE_FILE_NAME: &str = "state.json";
 /// `<config>/scripts`, the folder the user's own scripts live in (M5).
 pub const USER_SCRIPTS_DIR_NAME: &str = "scripts";
+/// `<config>/machines.json` (plan §7.15, AD-31, D50). Kept out of `settings.json`
+/// on purpose: settings are flat keys that store only what differs from the
+/// default, while machines are user-owned records with ids, their own schema
+/// version and import/export.
+pub const MACHINES_FILE_NAME: &str = "machines.json";
 
 /// The absolute paths the webview is told about, once, as part of `config_load`
 /// (plan §7.6). Serialized in camelCase, matching `ConfigPaths` in
@@ -51,6 +56,10 @@ pub struct ConfigPaths {
     pub state_file: String,
     /// `<config>/scripts`, the folder `script_new` and `script_copy_to_user` write to (M5).
     pub user_scripts_dir: String,
+    /// `<config>/machines.json` (M6). The webview needs it to tell the machines
+    /// document from any other one it has open, exactly as it does with
+    /// `settings_file`; knowing the path grants nothing.
+    pub machines_file: String,
 }
 
 /// The two folders everything gEdit owns hangs off. Resolved once per command,
@@ -77,6 +86,10 @@ impl AppDirs {
         self.config.join(USER_SCRIPTS_DIR_NAME)
     }
 
+    pub fn machines_file(&self) -> PathBuf {
+        self.config.join(MACHINES_FILE_NAME)
+    }
+
     /// The webview's view of these folders. Lossy conversion is deliberate: a
     /// home directory whose name is not valid UTF-8 still gives a usable, if
     /// imperfect, string to show, and nothing is ever read back from it.
@@ -87,6 +100,7 @@ impl AppDirs {
             settings_file: text(&self.settings_file()),
             state_file: text(&self.state_file()),
             user_scripts_dir: text(&self.user_scripts_dir()),
+            machines_file: text(&self.machines_file()),
         }
     }
 
@@ -158,7 +172,7 @@ mod tests {
     }
 
     #[test]
-    fn names_the_three_files_under_the_two_folders() {
+    fn names_the_app_files_under_the_two_folders() {
         let dirs = AppDirs {
             config: PathBuf::from("/c"),
             data: PathBuf::from("/d"),
@@ -171,6 +185,8 @@ mod tests {
         assert_eq!(paths.settings_file, under("/c", "settings.json"));
         assert_eq!(paths.state_file, under("/d", "state.json"));
         assert_eq!(paths.user_scripts_dir, under("/c", "scripts"));
+        // M6: the machines file sits beside the settings, in the config folder.
+        assert_eq!(paths.machines_file, under("/c", "machines.json"));
     }
 
     #[test]

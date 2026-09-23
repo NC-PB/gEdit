@@ -16,15 +16,20 @@
 //      by its label (`UPPER CASE`), an integer by its text. `fieldsMatchFixture` below
 //      checks that the two agree on *which* options the case sets, so a fixture that
 //      grows an option fails here instead of silently running with a default.
-//   2. **Three transforms have no options form at all** (`remove-block-numbers`,
-//      `insert-spaces`, `remove-spaces`, `remove-empty-lines`): `def.options` is absent,
-//      so `TransformService` opens no dialog and `form` stays false.
-//   3. **Two cases answer a native alert.** `renumber/references` is the preflight — the
-//      program jumps to block numbers the run does not rewrite — and
-//      `remove-comments/klartext-sections` is the Klartext follow-up of
-//      `contrib/ncCleanup.ts`, which offers `nc.renumber` because the removed line broke
-//      the consecutive numbering. The follow-up is declined, so the golden is the
-//      transform's own output.
+//   2. **Three transforms have no options form at all** (`insert-spaces`,
+//      `remove-spaces`, `remove-empty-lines`): `def.options` is absent, so
+//      `TransformService` opens no dialog and `form` stays false. M6 (WP6.3) moved
+//      `remove-block-numbers` out of that list — it now offers `keepReferenced` on any
+//      dialect that describes block-number references, which Fanuc does and Klartext does
+//      not.
+//   3. **One case answers a native alert.** `remove-comments/klartext-sections` is the
+//      Klartext follow-up of `contrib/ncCleanup.ts`, which offers `nc.renumber` because
+//      the removed line broke the consecutive numbering. The follow-up is declined, so the
+//      golden is the transform's own output. `renumber/references` used to be a second
+//      one: at M4 the run could only warn about the jump targets it was about to
+//      invalidate, so it asked first. M6 rewrites them instead, so there is nothing left
+//      to ask and no alert — the preflight fires only where a reference cannot be
+//      followed (see `m6-lathe-renumber`).
 
 import { scenario } from '../lib/index.js'
 import {
@@ -70,13 +75,13 @@ const CASES = [
     name: 'references',
     form: true,
     fields: { start: 10, step: 10, skipStartingWith: '(', restartAtProgramStart: false },
-    confirm: 'Continue',
-    why: 'the preflight asks about the jump targets, and the references are left as they were',
+    why: 'every GOTO, packed IF-GOTO and local M98 Q follows its block to the new number, with no question asked',
   },
   {
     command: 'nc.removeBlockNumbers',
     id: 'remove-block-numbers',
     name: 'skip-marks',
+    form: true,
     why: '/N100 becomes /G0 and every skip mark stays where it stood',
   },
   {
@@ -203,6 +208,9 @@ scenario('m4-transforms', { timeout: 420 }, async (h) => {
     message(h) === 'Heidenhain Klartext separates its words with spaces, so they cannot be removed.' && h.app.text() === klartextText && ctx.docs.getActiveId() === klartext,
     { message: message(h), text: h.app.text().split('\n') },
   )
+  // No `form: true` here, and that is the point: `available()` is checked before the
+  // options form is built, so the Klartext refusal comes back without a dialog even though
+  // the transform has an option on Fanuc (WP6.3).
   await runTransform(h, 'nc.removeBlockNumbers')
   h.check(
     'so does one the dialect forbids',
@@ -222,7 +230,9 @@ scenario('m4-transforms', { timeout: 420 }, async (h) => {
   // ================================================== C. the scope is what was selected
   const scoped = await newDoc(h, LABELLED)
   await selectLines(h, 3, 4)
-  await runTransform(h, 'nc.removeBlockNumbers')
+  // A Fanuc document, so the `keepReferenced` form is offered; nothing in `LABELLED` points
+  // at a block number, so the default keeps nothing and both numbers go.
+  await runTransform(h, 'nc.removeBlockNumbers', { form: true })
   const lines = h.app.text().split('\n')
   h.check(
     'a selection is the scope: only the selected blocks lost their numbers',

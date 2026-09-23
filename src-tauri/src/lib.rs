@@ -8,6 +8,8 @@
 //! - [`paths`] — where the config, data and user-script folders are
 //! - [`atomic`] — crash-safe writes for the app's own small JSON files
 //! - [`config`] — `settings.json`
+//! - [`machines`] — `machines.json`: the user's machine configurations (M6)
+//! - [`quit`] — the macOS quit guard (M6)
 //! - [`state`] — `state.json`: the recent-files list and the webview's UI state
 //! - [`menu`] — the macOS menu and the two window-closing requests (macOS only)
 //! - [`python`] — finding the user's Python interpreter
@@ -26,10 +28,12 @@
 mod atomic;
 mod config;
 mod files;
+mod machines;
 #[cfg(target_os = "macos")]
 mod menu;
 mod paths;
 mod python;
+mod quit;
 pub mod scripts;
 mod state;
 
@@ -43,6 +47,9 @@ fn setup_app(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     let handle = app.handle();
     paths::ensure_dirs(handle);
     state::grant_recent_on_startup(handle);
+    // macOS only in effect: Dock -> Quit and a logout never reach the window, so the
+    // answer to "may I terminate?" has to be ready before one is asked (AD-20).
+    quit::install(handle);
     Ok(())
 }
 
@@ -76,12 +83,18 @@ pub fn run() {
         // The in-flight script runs, so that `script_cancel` and `kill_all` reach the
         // same registry the runner polls (plan AD-13).
         .manage(scripts::RunRegistry::default())
+        // Whether any document has unsaved changes, for the macOS termination hook
+        // (AD-20): the delegate answers from this flag, never by asking the webview.
+        .manage(quit::QuitGuard::default())
         .setup(setup_app)
         .invoke_handler(tauri::generate_handler![
             files::files_stat,
             config::config_load,
             config::settings_save,
             config::settings_open_file,
+            machines::machines_save,
+            machines::machines_open_file,
+            quit::quit_guard_set_dirty,
             state::ui_state_save,
             state::recent_list,
             state::recent_touch,

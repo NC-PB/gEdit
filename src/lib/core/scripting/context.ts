@@ -122,5 +122,15 @@ export function buildContext(i: BuildContextInput): ScriptContextV2 {
     params: { ...i.params },
     profile: i.profile,
     codes: [...i.codes],
+    // M6, AD-31: what the document's machine decides, and where each value came from.
+    // `id`/`name` are null for "none", and the script then reads every `source` as
+    // `profile` — which is what `gedit_nc.machine_params` answers for an older context.
+    machine: {
+      id: i.machine.id,
+      name: i.machine.name,
+      choice: i.machine.choice,
+      params: i.machine.params,
+      source: i.machine.source,
+    },
   };
 }

@@ -17,7 +17,7 @@ import { status } from '$lib/app/status';
 import { findBlock, nextInList, parseGotoInput } from '$lib/core/nav';
 import { editor } from '$lib/monaco/editorService';
 import { docs } from '$lib/stores/documents';
-import { profiles } from '$lib/stores/profiles';
+import { machines } from '$lib/stores/machines';
 import { t } from '$lib/i18n';
 import type { CommandContext, Contribution, DocId } from '$lib/app/types';
 
@@ -73,8 +73,9 @@ async function goto(context: CommandContext): Promise<void> {
     return;
   }
 
-  const profileId = docs.get(id)?.profileId ?? '';
-  const cp = profiles.get(profileId) ? profiles.compiled(profileId) : null;
+  // The document's effective profile (AD-31): which lines carry a block number is a
+  // property of the document, and from M6 that means the machine's view of it.
+  const cp = docs.get(id) === undefined ? null : machines.effective(id).cp;
   // The cursor line is where the search starts, so a repeated Ctrl+G walks the
   // duplicates of a block number instead of finding the same one again.
   const from = editor.cursor()?.line ?? 0;

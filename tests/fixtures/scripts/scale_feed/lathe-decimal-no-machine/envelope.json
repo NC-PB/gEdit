@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 2 of 4 feed rates to 90 %; 2 already written that way. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 20,
+      "severity": "info",
+      "message": "F0.1 stays as it is: 90 % of 0.1 is 0.09, which written with 1 decimal is 0.1. Ask for more decimal places to scale it."
+    },
+    {
+      "line": 23,
+      "severity": "info",
+      "message": "F0.1 stays as it is: 90 % of 0.1 is 0.09, which written with 1 decimal is 0.1. Ask for more decimal places to scale it."
+    }
+  ]
+}

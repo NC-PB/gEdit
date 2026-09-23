@@ -1,0 +1,79 @@
+{
+  "about": "The same dialect on a machine set to G-code system B (plan §8.1, AD-31): the machine, not the profile, decides which database and which power-on feed mode apply. Everything the codes mean changes with it — G92 is the speed clamp and not a threading cycle, G95 is feed per revolution, G78 cuts the thread, and G90/G91 are the distance codes this system has and system A has not, so `distance` starts unknown instead of absolute.",
+  "machine": { "variants": { "gcodeSystem": "B" } },
+  "input": "../../nc/fanuc-lathe/l05-system-b.nc",
+  "states": [
+    {
+      "line": 1,
+      "about": "The power-on feed mode is G95 here, and it is assumed because the machine says so, not because the profile does (AD-19 rule 8). Unlike system A this database has distance codes, so nothing may be assumed about the distance mode until the program writes one.",
+      "after": {
+        "groups": { "feedmode": "=G95@machine", "spindlemode": "=G97", "plane": "=G18" },
+        "feedUnit": "per-rev",
+        "speedUnit": "rpm",
+        "distance": "unknown",
+        "units": "=mm",
+        "diameter": "=on"
+      }
+    },
+    {
+      "line": 5,
+      "about": "`G21 G40 G90 G95` states all of it: absolute, millimetres, feed per revolution.",
+      "after": {
+        "groups": { "feedmode": "G95", "distance": "G90" },
+        "feedUnit": "per-rev",
+        "distance": "absolute",
+        "units": "mm"
+      }
+    },
+    {
+      "line": 8,
+      "about": "AD-19 rule 4 again, on the code that carries it in this system: the S of a G92 block is the clamp. In system A the same number is the single-pass threading cycle, which is the whole reason the system is a machine parameter.",
+      "after": { "speedLimit": "2200", "speed": null, "block": { "speedLimit": true } }
+    },
+    {
+      "line": 9,
+      "after": { "groups": { "spindlemode": "G96" }, "speedUnit": "surface", "speed": "200" }
+    },
+    {
+      "line": 12,
+      "about": "G77 is the outer-diameter turning cycle of system B and an ordinary move as far as the feed goes: F0.3 is a feed per revolution.",
+      "after": { "feed": "0.3", "feedUnit": "per-rev", "activeCycle": null, "block": { "pitchFeed": false } }
+    },
+    {
+      "line": 18,
+      "after": { "tool": "04", "block": { "toolChange": true } }
+    },
+    {
+      "line": 22,
+      "about": "G78 is the threading cycle of system B: its F is the 2 mm lead, and it stays in force over the pass blocks below.",
+      "after": { "activeCycle": "G78", "block": { "cycle": "G78", "pitchFeed": true }, "feed": "2.0" }
+    },
+    {
+      "line": 24,
+      "about": "A pass block written with the code again; still a thread.",
+      "after": { "activeCycle": "G78", "block": { "pitchFeed": true } }
+    },
+    {
+      "line": 25,
+      "about": "A rapid ends it (AD-19 rule 3).",
+      "after": { "activeCycle": null, "block": { "pitchFeed": false } }
+    },
+    {
+      "line": 26,
+      "about": "G33 is a threading move in both systems.",
+      "after": { "activeCycle": "G33", "block": { "pitchFeed": true }, "feed": "2.0" }
+    },
+    {
+      "line": 33,
+      "after": {
+        "groups": { "feedmode": "G95", "spindlemode": "G97", "distance": "G90" },
+        "feedUnit": "per-rev",
+        "speedUnit": "rpm",
+        "distance": "absolute",
+        "tool": "04",
+        "speedLimit": "2200",
+        "activeCycle": null
+      }
+    }
+  ]
+}

@@ -24,9 +24,15 @@ const fanuc = validated(fanucJson);
 const heidenhain = validated(heidenhainJson);
 
 describe('built-in profiles', () => {
-  it('ships exactly the two P1 dialects, the default first', () => {
-    expect(BUILTIN_PROFILE_JSON).toHaveLength(2);
-    expect((BUILTIN_PROFILE_JSON as Profile[]).map((p) => p.id)).toEqual(['fanuc-gcode', 'heidenhain-klartext']);
+  it('ships the P1 dialects and the M6 lathe, resolved, the default first', () => {
+    // M6: the list holds the **resolved** built-ins (AD-16), so a child profile is in it
+    // exactly as the app uses it — `fanuc-lathe` with `fanuc-gcode` merged in.
+    expect(BUILTIN_PROFILE_JSON).toHaveLength(3);
+    expect((BUILTIN_PROFILE_JSON as Profile[]).map((p) => p.id)).toEqual([
+      'fanuc-gcode',
+      'fanuc-lathe',
+      'heidenhain-klartext',
+    ]);
     expect(FALLBACK_PROFILE_ID).toBe('fanuc-gcode');
   });
 
@@ -80,7 +86,18 @@ describe('compileProfile', () => {
     expect(f.sectionHeading).toBeUndefined();
     expect(f.continuation).toBeUndefined();
     expect(f.commentFilter?.test('-----')).toBe(true);
-    expect(f.references.map((r) => r.addresses)).toEqual([['P'], ['Q'], ['P', 'Q'], ['GOTO']]);
+    // M6/WP6.2: the mill lost the lathe `G70`–`G73 P/Q` **rewrite** rule (F22), because
+    // `G73` on a mill is the chip-break peck cycle and its `Q` a depth. The second `Q`
+    // rule is I6's: a `M98` block that also carries a `P` names a block of the *called*
+    // program, so that `Q` is reported and never rewritten (plan §0 item 5).
+    //
+    // The fourth rule is the G8 M6 guard: a `G70`–`G73` block that carries **both** a `P`
+    // and a `Q` is a turning cycle whichever profile the document is read with, and a
+    // turning program that carries no lathe-only marker is read with this one. The mill
+    // still never rewrites those values — but it now says they are there, so a renumber
+    // or a remove-block-numbers cannot quietly cut the blocks they name.
+    expect(f.references.map((r) => r.addresses)).toEqual([['P'], ['Q'], ['Q'], ['P', 'Q'], ['GOTO']]);
+    expect(fanuc.numbering?.references?.map((r) => r.rewrite !== false)).toEqual([false, true, false, false, true]);
 
     const h = compileProfile(heidenhain).re;
     expect(h.sectionHeading?.test('12 * - ROUGHING')).toBe(true);
@@ -146,7 +163,14 @@ describe('compileProfile', () => {
 // program map.
 
 describe('the dialect the built-in profiles describe', () => {
-  const compiled = { fanuc: compileProfile(fanuc), heidenhain: compileProfile(heidenhain) };
+  // The lathe is a child profile (AD-16), so it is taken from the **resolved** list: its
+  // own file says only what differs from the mill.
+  const lathe = validated(BUILTIN_PROFILE_JSON.find((raw) => (raw as Profile).id === 'fanuc-lathe'));
+  const compiled = {
+    fanuc: compileProfile(fanuc),
+    heidenhain: compileProfile(heidenhain),
+    lathe: compileProfile(lathe),
+  };
 
   it('counts U, V and W as axes, because on a lathe U and W are the axes', () => {
     // `G28 U0. W0.` is a move. With U/V/W left out they colour like a register letter,
@@ -167,24 +191,56 @@ describe('the dialect the built-in profiles describe', () => {
   it('knows every kind of N-number reference a renumber has to rewrite', () => {
     // `syntax-fanuc` §7.2: `M99 P<n>`, `M98 Q<n>`, `GOTO <n>` and the `P`/`Q` of the
     // multi-pass cycles. `M98 P<n>` is deliberately not one: it names a program.
+    //
+    // M6/WP6.2 (F22): the `G7[0-3]` rule left this **mill** profile, because `G73` on a
+    // mill is the chip-break peck cycle and its `Q` a depth — the code database says so —
+    // so an everyday drilling block used to raise the one confirmation that protects the
+    // user (G8 M4). The rule now sits on the lathe profile, where those cycles live, and
+    // the lathe assertions below are the ones that keep it honest.
     const fired = (line: string): string[] =>
       compiled.fanuc.re.references.filter((rule) => rule.trigger.test(line)).flatMap((rule) => rule.addresses);
     expect(fired('N10 M99 P100').sort()).toEqual(['P']);
     expect(fired('N10 M98 Q1200').sort()).toEqual(['Q']);
-    expect(fired('N10 G71 P100 Q200 U0.4 W0.1 F0.25').sort()).toEqual(['P', 'Q']);
-    expect(fired('N10 G70 P100 Q200').sort()).toEqual(['P', 'Q']);
     expect(fired('N70 IF[#1EQ2]GOTO100')).toEqual(['GOTO']);
     // A program call is not a block reference, so renumbering must leave it alone.
     expect(fired('N10 M98 P2000')).toEqual([]);
-    // Nor is a peck depth. `G7[0-3]` names block numbers only in the lathe cycles, which
-    // carry **both** P and Q (`syntax-fanuc` §6: `G71 P100 Q200 U0.4 W0.1 F0.25`). This
-    // profile is a mill dialect, where G73 is the chip-break peck cycle and its Q is a
-    // depth — the code database says so — so an everyday drilling block used to raise
-    // the one confirmation that protects the user (G8 M4).
+    // Nor is a peck depth, on either profile: the mill's `G7[0-3]` guard wants a `P` as
+    // well, and a drilling block has none.
     expect(fired('N30 G73 Z-30. R2. Q3. F150.')).toEqual([]);
     expect(fired('N30 G83 Z-30. R2. Q3. F150.')).toEqual([]);
+    // G8 M6: a two-block turning cycle read with the mill profile. Both values are found
+    // — and the rule that finds them forbids the rewrite, which the run then reports.
+    expect(fired('N10 G71 P100 Q200 U0.4 W0.1 F0.25').sort()).toEqual(['P', 'Q']);
+    expect(fired('N10 G70 P100 Q200').sort()).toEqual(['P', 'Q']);
+
+    const onLathe = (line: string): string[] =>
+      compiled.lathe.re.references.filter((rule) => rule.trigger.test(line)).flatMap((rule) => rule.addresses);
+    expect(onLathe('N10 G71 P100 Q200 U0.4 W0.1 F0.25').sort()).toEqual(['P', 'Q']);
+    expect(onLathe('N10 G70 P100 Q200').sort()).toEqual(['P', 'Q']);
     // The first block of the two-line lathe form has neither, and names nothing.
-    expect(fired('N20 G71 U1.5 R0.5')).toEqual([]);
+    expect(onLathe('N20 G71 U1.5 R0.5')).toEqual([]);
+    expect(onLathe('N30 G83 Z-30. R2. Q3000 F0.1')).toEqual([]);
+    // `M98 Q` is a local call and is rewritten; `M98 P… Q…` names a block of the *called*
+    // program, which this file cannot renumber (F42). G8 M6: the lathe now carries the
+    // same pair the mill does, so that second case is **reported** — two rules fire, one
+    // of them `rewrite: false`, and `referencesOn` keeps the safer of the two answers.
+    expect(onLathe('N10 M98 Q500')).toEqual(['Q']);
+    expect(onLathe('N10 M98 P2005 Q500')).toEqual(['Q', 'Q']);
+
+    // G8 M6: Fanuc lets the words of a block stand in any order and allows a space behind
+    // an address, so none of these may slip past a trigger (syntax-fanuc §3.1).
+    for (const line of ['N10 G71 P 100 Q 200 U0.4', 'N10 G70 P100 Q 200', 'N10 Q200 P100 G71 U0.4']) {
+      expect(onLathe(line).sort(), line).toEqual(['P', 'Q']);
+    }
+    expect(onLathe('N10 M98 Q 50')).toEqual(['Q']);
+    expect(onLathe('N10 M 98 Q50')).toEqual(['Q']);
+    expect(onLathe('N50 P2000 M98 Q50')).toEqual(['Q', 'Q']);
+    expect(fired('N50 P2000 M98 Q50')).toEqual(['Q', 'Q']);
+    expect(onLathe('N10 M99 P 30')).toEqual(['P']);
+    expect(fired('N10 M099 P30')).toEqual(['P']);
+    // …and a number that only begins with 98 or 99 is a different M-code.
+    expect(fired('N10 M981 Q50')).toEqual([]);
+    expect(onLathe('N10 M981 Q50')).toEqual([]);
   });
 
   it('offers the extensions the syntax notes list', () => {

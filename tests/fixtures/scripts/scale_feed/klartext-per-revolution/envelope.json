@@ -1,5 +1,5 @@
 {
-  "message": "Scaled 5 feed rates to 110 %; 1 rounded to the decimals it was written with, 1 cycle feed left unchanged.",
+  "message": "Scaled 5 feed rates to 110 %; 1 rounded to the decimals it was written with, 1 cycle feed left unchanged. No machine: profile defaults assumed.",
   "findings": [
     {
       "line": 10,

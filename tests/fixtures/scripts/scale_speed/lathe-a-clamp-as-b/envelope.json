@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 1 of 2 spindle speeds to 150 %; 1 left as a speed limit, 1 thread block to check by hand.",
+  "findings": [
+    {
+      "line": 7,
+      "severity": "info",
+      "message": "S2500 is a spindle speed limit (G50), so it is not scaled."
+    },
+    {
+      "line": 10,
+      "severity": "warning",
+      "message": "This block runs at S180, which was scaled on line 8, and its code (G92) is a threading cycle on another kind of machine or in another G-code system: if this is a lathe program the thread is cut at the changed speed, so check the block by hand."
+    }
+  ]
+}

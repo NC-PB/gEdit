@@ -41,7 +41,7 @@ export function read(store) {
  * The config paths `config_load` answered with. Every M2 scenario needs them, and a null
  * here means the backend never answered, which is worth failing loudly on.
  * @param {any} ctx `h.app.ctx`
- * @returns {{ configDir: string, dataDir: string, settingsFile: string, stateFile: string, userScriptsDir: string }}
+ * @returns {{ configDir: string, dataDir: string, settingsFile: string, stateFile: string, userScriptsDir: string, machinesFile: string }}
  */
 export function configPaths(ctx) {
   const paths = read(ctx.settings.paths)

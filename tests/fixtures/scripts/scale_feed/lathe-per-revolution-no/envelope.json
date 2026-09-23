@@ -1,0 +1,35 @@
+{
+  "message": "No feed rate was changed; 3 left as a thread pitch, 3 left in another feed mode. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 16,
+      "severity": "info",
+      "message": "F0.25 is a feed per revolution (G99), so it is not scaled."
+    },
+    {
+      "line": 18,
+      "severity": "info",
+      "message": "F0.12 is a feed per revolution (G99), so it is not scaled."
+    },
+    {
+      "line": 33,
+      "severity": "warning",
+      "message": "F1.5 is a thread pitch (G76), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    },
+    {
+      "line": 35,
+      "severity": "warning",
+      "message": "F1.5 is a thread pitch (G92), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    },
+    {
+      "line": 41,
+      "severity": "warning",
+      "message": "F1.5 is a thread pitch (G32), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    },
+    {
+      "line": 50,
+      "severity": "info",
+      "message": "F0.08 is a feed per revolution (G99), so it is not scaled."
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "message": "Scaled 1 of 4 feed rates to 50 %; 3 left because the code means a threading cycle somewhere else. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 16,
+      "severity": "warning",
+      "message": "F1.5 is not scaled: G78 is a threading cycle on another kind of machine or in another G-code system, where this F is the thread lead and not a feed rate. Check the block and scale it by hand if it really is a feed."
+    },
+    {
+      "line": 17,
+      "severity": "warning",
+      "message": "F1.5 is not scaled: G78 is a threading cycle on another kind of machine or in another G-code system, where this F is the thread lead and not a feed rate. Check the block and scale it by hand if it really is a feed."
+    },
+    {
+      "line": 18,
+      "severity": "warning",
+      "message": "F1.5 is not scaled: G78 is a threading cycle on another kind of machine or in another G-code system, where this F is the thread lead and not a feed rate. Check the block and scale it by hand if it really is a feed."
+    }
+  ]
+}

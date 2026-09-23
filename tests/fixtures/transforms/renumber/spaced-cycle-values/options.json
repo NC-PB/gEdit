@@ -1,0 +1,15 @@
+{
+  "note": "G8 M6, the reviewer's own program. Fanuc allows a space between an address and its value, and the sources write G71 P 100 Q 200. The reference triggers wanted the digits to touch the address, so no rule fired: the two profile blocks were renumbered and both cycles kept naming N100 and N200, which no longer existed, with no warning and no results row. The values follow their blocks now.",
+  "profile": "fanuc-lathe",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      { "line": 1, "severity": "info" },
+      { "line": 2, "severity": "info" },
+      { "line": 11, "severity": "info" }
+    ],
+    "warnings": ["ncNumbering.renumber.referencesRewritten"],
+    "preflight": null
+  }
+}

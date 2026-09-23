@@ -45,6 +45,8 @@ export default {
     cyclereturn: 'Cycle return',
     offset: 'Work offset',
     compensation: 'Tool compensation',
+    /** M6/F25: the tool **length** offset is its own modal group, not radius compensation. */
+    lengthComp: 'Tool length offset',
     cycle: 'Cycle',
     spindle: 'Spindle',
     coolant: 'Coolant',

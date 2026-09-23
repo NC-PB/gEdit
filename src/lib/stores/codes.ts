@@ -14,6 +14,7 @@
 
 import { loadCodeDb, emptyCodeDb, type CodeDbProblem } from '$lib/core/codes/load';
 import { completionsFor, lookupWord as lookupWordIn } from '$lib/core/codes/lookup';
+import { resolveCodeDbs } from '$lib/core/codes/resolve';
 import { BUILTIN_CODE_DB_JSON } from '$lib/data/codes';
 import { profiles } from '$lib/stores/profiles';
 import type { CodeDbService } from '$lib/app/types';
@@ -25,6 +26,12 @@ export interface CodeDbServiceDeps {
   dialectOf(profileId: string): string | undefined;
   /** The stored JSON of one database; undefined when the dialect has no file. */
   source(dialect: string): unknown | undefined;
+  /**
+   * M6, AD-17: every stored database, keyed by dialect id, so `extends` and `remove` can be
+   * resolved — a child cannot be merged without its parent in hand. A dialect that is not
+   * in this map still goes through `source` on its own.
+   */
+  sources?(): Record<string, unknown>;
   /** Where a broken database is reported. Defaults to `console.warn`. */
   warn?(message: string, detail?: unknown): void;
 }
@@ -34,24 +41,40 @@ export function createCodeDbService(deps: CodeDbServiceDeps): CodeDbService {
   const cache = new Map<string, CodeDb>();
   /** One object, so the lookup index behind it is built once and not per call. */
   const none = emptyCodeDb('');
+  /** The resolved set, built once: resolution is by dialect id, not by profile (AD-17). */
+  let resolved: Record<string, CodeDb> | null = null;
 
-  function byDialect(dialect: string): CodeDb {
-    const cached = cache.get(dialect);
-    if (cached) return cached;
+  function resolveAll(): Record<string, CodeDb> {
+    if (resolved === null) {
+      resolved = resolveCodeDbs(deps.sources?.() ?? {}, (dialect, p) =>
+        warn(`code database "${dialect}": ${p.path}: ${p.message}`),
+      );
+    }
+    return resolved;
+  }
 
+  /** A database that is not part of the resolved set, read on its own (a test, a user file). */
+  function loadOne(dialect: string): CodeDb {
     let db = emptyCodeDb(dialect);
     const raw = deps.source(dialect);
     if (raw === undefined) {
       warn(`code database "${dialect}" is not available`);
-    } else {
-      const problems: CodeDbProblem[] = [];
-      try {
-        db = loadCodeDb(raw, (p) => problems.push(p));
-      } catch (err) {
-        warn(`code database "${dialect}" could not be read`, err);
-      }
-      for (const p of problems) warn(`code database "${dialect}": ${p.path}: ${p.message}`);
+      return db;
     }
+    const problems: CodeDbProblem[] = [];
+    try {
+      db = loadCodeDb(raw, (p) => problems.push(p));
+    } catch (err) {
+      warn(`code database "${dialect}" could not be read`, err);
+    }
+    for (const p of problems) warn(`code database "${dialect}": ${p.path}: ${p.message}`);
+    return db;
+  }
+
+  function byDialect(dialect: string): CodeDb {
+    const cached = cache.get(dialect);
+    if (cached) return cached;
+    const db = resolveAll()[dialect] ?? loadOne(dialect);
     cache.set(dialect, db);
     return db;
   }
@@ -64,6 +87,15 @@ export function createCodeDbService(deps: CodeDbServiceDeps): CodeDbService {
 
   return {
     forProfile,
+
+    /**
+     * A resolved database by its own id, for the variant databases a machine switches to
+     * (`fanuc-lathe-b`). A document's own database comes through `machines.effective`,
+     * never from here (AD-31).
+     */
+    byId(dialect: string): CodeDb {
+      return dialect === '' ? none : byDialect(dialect);
+    },
 
     lookupWord(profileId: string, token: NcToken): CodeLookup | null {
       return lookupWordIn(forProfile(profileId), token);
@@ -97,4 +129,5 @@ function dialectOf(profileId: string): string | undefined {
 export const codes: CodeDbService = createCodeDbService({
   dialectOf,
   source: (dialect) => BUILTIN_CODE_DB_JSON[dialect],
+  sources: () => BUILTIN_CODE_DB_JSON,
 });

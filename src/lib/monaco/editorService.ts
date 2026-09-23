@@ -72,6 +72,36 @@ interface PendingModel {
   eol: Eol;
 }
 
+/**
+ * The URI of the Monaco model that holds a document (`inmemory://doc/<id>`).
+ *
+ * It is the whole of the model → document mapping, and it is a *function* rather than a
+ * map because Monaco hands a language provider a model, not a document: hover and
+ * completion have to find their way back to the document to ask for its effective profile
+ * (AD-31), and they may be called for a model this service never created.
+ */
+export function modelUri(id: DocId): string {
+  return `inmemory://doc/${encodeURIComponent(id)}`;
+}
+
+/**
+ * The document a Monaco model belongs to, or null for a model that is not a document — a
+ * diff side, a scratch model, anything Monaco made for itself. A caller that gets null
+ * falls back to the profile's own defaults, which is what a document with no machine uses
+ * anyway.
+ */
+export function docIdOf(model: { uri?: { scheme?: string; authority?: string; path?: string } } | null): DocId | null {
+  const uri = model?.uri;
+  if (!uri || uri.scheme !== 'inmemory' || uri.authority !== 'doc') return null;
+  const path = typeof uri.path === 'string' ? uri.path.replace(/^\//, '') : '';
+  if (path === '') return null;
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return null;
+  }
+}
+
 export interface EditorServiceDeps {
   docs: DocumentStore;
   /** Resolves the Monaco namespace. Injected so a test never has to load the real one. */
@@ -275,7 +305,7 @@ export function createEditorService(deps: EditorServiceDeps): EditorService {
 
   function realize(id: DocId, spec: PendingModel): ModelEntry {
     const monacoApi = api();
-    const uri = monacoApi.Uri.parse(`inmemory://doc/${encodeURIComponent(id)}`);
+    const uri = monacoApi.Uri.parse(modelUri(id));
     // A model for this URI can survive a hot reload; Monaco refuses a duplicate URI.
     monacoApi.editor.getModel(uri)?.dispose();
     const model = monacoApi.editor.createModel(normalizeToLF(spec.textLF), spec.languageId, uri);

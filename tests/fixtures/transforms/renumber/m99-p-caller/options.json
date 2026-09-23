@@ -1,0 +1,26 @@
+{
+  "note": "F42: M99 P30 returns to N30 of the CALLER, which is a block of the main program above. The subprogram has an N30 of its own, so a run that resolved the value in the program it stands in would write the subprograms new number into it and the return would land inside the subprogram. The rule is rewrite: false, so the value is reported and never touched.",
+  "profile": "fanuc-lathe",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      {
+        "line": 1,
+        "severity": "info"
+      },
+      {
+        "line": 5,
+        "severity": "info"
+      },
+      {
+        "line": 7,
+        "severity": "warning"
+      }
+    ],
+    "warnings": [
+      "ncNumbering.renumber.referencesKept"
+    ],
+    "preflight": "ncNumbering.renumber.references"
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "message": "Scaled 3 feed rates to 150 %; 2 clamped to a limit.",
+  "message": "Scaled 3 feed rates to 150 %; 2 clamped to a limit. No machine: profile defaults assumed.",
   "findings": [
     {
       "line": 5,

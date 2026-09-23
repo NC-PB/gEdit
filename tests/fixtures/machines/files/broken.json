@@ -1,0 +1,8 @@
+[
+  {
+    "id": "lathe-2",
+    "name": "Lathe 2",
+    "profile": "fanuc-lathe",
+    "params": { "variants": { "gcodeSystem": "B" } }
+  }
+]

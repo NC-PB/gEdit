@@ -30,7 +30,7 @@ In scope:
 - Python scripting, bundled script library and external commands
 - Preferences, themes and keyboard shortcuts
 
-Supported dialects: Fanuc-style ISO code for milling, and Heidenhain Klartext. A Fanuc lathe profile, Siemens Sinumerik and Okuma OSP are planned — until the first of them exists, a turning program is read with a mill profile, with the consequences the [user guide](../user/dialects.md#lathes-and-other-controls) spells out.
+Supported dialects: Fanuc-style ISO code for milling, Fanuc-style ISO code for turning, and Heidenhain Klartext. Siemens Sinumerik and Okuma OSP are planned. Alongside the dialect profile sits the **machine configuration** — how one particular control reads what the profile describes (number reading, G-code system, diameter programming, power-on modes); see the [user guide](../user/machines.md).
 
 ## Non-goals
 
@@ -56,6 +56,7 @@ These are design notes. The manual for the program as it stands is [docs/user](.
 | [settings-ui.md](settings-ui.md) | Preferences, storage layout, themes, shortcuts, UI layout |
 | [roadmap.md](roadmap.md) | Phases 0 to 3, backlog and not-planned list |
 | [phase-1-implementation.md](phase-1-implementation.md) | The executed plan for Phase 0 cleanup and Phase 1: architecture, milestones M0–M5, the binding contracts (§7) and where the implementation deviated from them (§7.12), owner decisions, deferred items (§10) |
+| [phase-2-implementation.md](phase-2-implementation.md) | The plan being executed now: milestones M6–M12, the contracts they add (§7), the dialect and machine-parameter data they ship (§8), fixtures (§9) and the owner decisions behind them (§10) |
 | [syntax/syntax-fanuc.md](syntax/syntax-fanuc.md) | Fanuc syntax notes for the CAM-output subset |
 | [syntax/syntax-heidenhain.md](syntax/syntax-heidenhain.md) | Heidenhain Klartext syntax notes |
 | [syntax/syntax-sinumerik.md](syntax/syntax-sinumerik.md) | Siemens Sinumerik syntax notes |
@@ -85,3 +86,11 @@ gEdit is a multi-document Tauri 2 + SvelteKit + Monaco app. What Phase 1 deliver
 - **Around it** — settings dialog and storage layout, light/dark/system theme, window and layout state, command palette, a generated shortcut reference, About with third-party notices, an i18n layer with every UI string in one place, and a macOS runtime harness that drives the real app.
 
 What Phase 1 deliberately did **not** do is listed in §10 of [phase-1-implementation.md](phase-1-implementation.md); the user-visible limits are in the [user guide](../user/README.md#what-gedit-does-not-do). Each document below notes what already exists in its own area.
+
+## Current state (Phase 2, in progress)
+
+Phase 2 is being built milestone by milestone against [phase-2-implementation.md](phase-2-implementation.md). What is in the tree so far:
+
+- **M6 — turning, and the machine behind the program.** A Fanuc lathe profile (`fanuc-lathe`) with its own code databases for G-code systems A and B, turret tool words, the turning cycles and their thread leads; profile inheritance (`extends`), so the lathe is the mill profile plus its differences rather than a second copy. **Machine configurations** (`machines.json`, `Settings ▸ Machines`, a status-bar item per document): how a control reads a written number, units at power-on, diameter programming, the G-code system and the power-on modal codes — every value of them a *documented default* until a machine says otherwise, and nothing computed from a default that the presets disagree about (AD-31). A modal interpreter on the Python side, so a script reads what is in force after each block out of the code database instead of a table of its own. Reference-aware renumbering: `GOTO`, `M98 Q` and the `P`/`Q` of `G70`–`G73` are rewritten where the run can prove the target and reported everywhere else. And the macOS quit guard, so a Dock quit or a logout stops at the unsaved-changes prompt.
+
+The milestones after it — never losing work (M7), Okuma OSP and Sinumerik turning (M8), compare and search, block skip, checks and extents (M9), multi-channel programs (M10), the code inspector and address arithmetic (M11), and templates, user profiles and the Phase 2 exit (M12) — are still ahead. §5 of the implementation plan is the running list.

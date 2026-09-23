@@ -12,6 +12,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { noMachine } from '$lib/core/machines/effective';
 import type { CodeDb } from '$lib/core/codes/types';
 import fanucJson from '$lib/data/profiles/fanuc-gcode.json';
 import heidenhainJson from '$lib/data/profiles/heidenhain-klartext.json';
@@ -49,7 +50,7 @@ function goldens(): Golden[] {
 }
 
 function context(cp: CompiledProfile, options: Record<string, unknown> = {}): TransformContext {
-  return { cp, codes: NO_CODES, options, firstLine: 1 };
+  return { cp, codes: NO_CODES, options, firstLine: 1, machine: noMachine(cp.profile) };
 }
 
 describe('convertCase goldens', () => {

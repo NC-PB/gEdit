@@ -1,7 +1,10 @@
 {
-  "note": "G8 M4: the selection holds the jump target N100 but not the 'GOTO 100' above it. The preflight used to scan only the selected lines, find nothing, and let the run rewrite the target in silence; it now scans the document and the run counts the pointer it cannot see.",
+  "note": "G8 M4: the selection holds the jump target N100 but not the \"GOTO 100\" above it. The preflight used to scan only the selected lines, find nothing, and let the run rewrite the target in silence. It now scans the document; the jump is outside the lines this run may return, so it cannot be rewritten either, and the line is reported.",
   "profile": "fanuc-gcode",
-  "scope": { "startLine": 3, "endLine": 5 },
+  "scope": {
+    "startLine": 3,
+    "endLine": 5
+  },
   "options": {
     "start": 10,
     "step": 10,
@@ -10,8 +13,15 @@
   },
   "expect": {
     "summary": "ncNumbering.renumber.summary",
-    "skipped": [],
-    "warnings": ["ncNumbering.renumber.referencesKept"],
+    "skipped": [
+      {
+        "line": 2,
+        "severity": "warning"
+      }
+    ],
+    "warnings": [
+      "ncNumbering.renumber.referencesUnresolved"
+    ],
     "preflight": "ncNumbering.renumber.references"
   }
 }

@@ -20,7 +20,7 @@ not what the column says it is:
 * a selection under a `G95` set above it inherits the feed mode, because its case folder
   carries a `preceding.nc` (`input.precedingLines`, plan section 7.5) —
   `fanuc-selection-primed`
-* the `F` of a block whose code is a threading cycle in another G-code system stays out
+* the `F` of a block whose code is a threading cycle somewhere else stays out
   of the feed range (`fanuc-lathe-ambiguous`)
 """
 
@@ -52,11 +52,49 @@ REQUIRED_CASES = [
     "klartext-names",
     "klartext-numbers",
     "klartext-speed-only",
+    # M6 (WP6.6): the turret, read with the lathe profile.
+    "lathe-offsets",
+    "lathe-system-b",
+    "lathe-turning",
 ]
 
 
+def context_of(case):
+    """The `ScriptContextV2` a case runs with: the **effective** profile and machine.
+
+    The app never hands a script a profile on its own. It hands it the effective view of the
+    document — the profile with the chosen machine's variants, number reading and power-on
+    state applied, the database that goes with it, and the machine block beside it (plan
+    §7.15, AD-31). A case that names a `machine` in its `case.json` therefore runs against
+    the generated `tests/fixtures/resolved/effective/**` entry for exactly those parameters,
+    written once by `tests/unit/resolved.test.ts`: **Python never merges a machine into a
+    profile**, because two implementations of one merge is how the two sides start
+    disagreeing quietly. A case without one runs with the profile's own defaults, which is
+    what "no machine" means.
+
+    `machineName` in a `case.json` is the name that machine carries in the run. The
+    generator calls every machine it writes `review`; a golden message is easier to read,
+    and to check by hand, with the name a user would have given it, and the name changes
+    nothing but the sentence it appears in.
+    """
+    context = case.context()
+    if isinstance(case.options.get("machine"), dict):
+        effective = helpers.effective_context(golden=case.directory / "case.json")
+    else:
+        effective = helpers.effective_context(case.profile_id)
+    context["profile"] = effective["profile"]
+    context["codes"] = effective["codes"]
+    context["machine"] = dict(effective["machine"])
+    name = case.options.get("machineName")
+    if isinstance(name, str) and name != "":
+        context["machine"]["id"] = name.lower().replace(" ", "-")
+        context["machine"]["name"] = name
+    context.pop("machineName", None)
+    return context
+
+
 def run_case(case):
-    return helpers.run_script(SCRIPT, stdin=case.input_text(), context=case.context())
+    return helpers.run_script(SCRIPT, stdin=case.input_text(), context=context_of(case))
 
 
 class TestGoldenCases(unittest.TestCase):
@@ -186,18 +224,20 @@ class TestRules(unittest.TestCase):
         self.assertEqual(report["message"], "No tool changes found.")
 
     def test_a_turret_lathe_program_says_why_its_tool_list_is_empty(self):
-        # G8 M4. A turret lathe changes tool with a bare `T0101`; the shipped Fanuc
-        # profile reads a tool change as `M6`, which such a program never writes. The
-        # report was empty and said "No tool changes found.", which reads as "this
-        # program uses no tools" — on a program with six tool words in it.
+        # G8 M4. A turret lathe changes tool with a bare `T0101`; the mill profile reads a
+        # tool change as `M6`, which such a program never writes. The report was empty and
+        # said "No tool changes found.", which reads as "this program uses no tools" — on a
+        # program with six tool words in it. M6: the lathe profile exists now, so the
+        # sentence says to open the program with it instead of that gEdit has none.
         report = self.report_of("fanuc-lathe-turret")
         self.assertEqual(report["rows"], [])
         self.assertIn("No tool change found, but 6 tool words were seen", report["message"])
-        self.assertIn("needs a lathe profile", report["message"])
+        self.assertIn("belongs to a lathe profile", report["message"])
         finding = report["findings"][0]
         self.assertEqual(finding["severity"], "warning")
         self.assertEqual(finding["line"], 7)
         self.assertIn("M6", finding["message"])
+        self.assertIn("open this program with a lathe profile", finding["message"])
 
     def test_a_program_with_neither_tools_nor_tool_words_is_not_blamed_on_the_profile(self):
         # The two empty reports have to stay apart: this one really uses no tools.
@@ -283,7 +323,7 @@ class TestModalStateOfASelection(unittest.TestCase):
 
     def test_without_the_lines_above_it_the_per_revolution_feeds_widen_the_range(self):
         case = self.case("fanuc-selection-primed")
-        context = case.context()
+        context = context_of(case)
         context["input"] = {
             key: value for key, value in context["input"].items() if key != "precedingLines"
         }
@@ -376,3 +416,119 @@ class TestRunEnvironment(unittest.TestCase):
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
+
+
+class TestLathe(unittest.TestCase):
+    """The turret (M6, WP6.6): stations, offsets, and the units a range is in.
+
+    On a lathe the `T` word is the tool change and carries two things at once, the station
+    and the offset it runs with; there is no `M6`. All of that is the profile's
+    (`toolCall.trigger`, `toolCall.ignore`, the `tool` group), so the same script reads a
+    turning program as soon as the document has the lathe profile — and a variant, or a
+    later `toolCall` overlay, needs no change here either (plan §7.1, AD-31).
+    """
+
+    def case(self, name):
+        return next(case for case in helpers.script_cases("tool_list") if case.name == name)
+
+    def report(self, name):
+        case = self.case(name)
+        result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context_of(case))
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload, case.expected_json())
+        return payload
+
+    def rows(self, name):
+        return self.report(name)["rows"]
+
+    def keys(self, name):
+        return [column["key"] for column in self.report(name)["columns"]]
+
+    def test_the_station_is_the_profiles_tool_group_and_not_the_whole_word(self):
+        # `T0101` is station 1 with offset 01. The profile's `tool` pattern says which
+        # digits are the station; this script counts rows per station, so the three tools
+        # of the program are three rows and not six.
+        self.assertEqual([row["tool"] for row in self.rows("lathe-turning")], ["T1", "T3", "T5"])
+        self.assertEqual([row["line"] for row in self.rows("lathe-turning")], [10, 28, 47])
+
+    def test_an_offset_cancel_is_not_a_tool_change(self):
+        # `G00 X100. Z100. T0100` retracts with the offset of station 1 cancelled. Counting
+        # it would put a call — and on a program that ends every tool that way, a whole row
+        # — in the list for a block that changes no tool (`toolCall.ignore`).
+        self.assertEqual([row["calls"] for row in self.rows("lathe-turning")], [1, 1, 1])
+
+    def test_the_offsets_column_lists_the_offsets_a_station_was_called_with(self):
+        # Every turret spelling of one station: `T0101`, `T101`, `T1` and `T0111`.
+        rows = self.rows("lathe-offsets")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["tool"], "T1")
+        self.assertEqual(rows[0]["calls"], 4)
+        self.assertEqual(rows[0]["offsets"], "01, 11")
+
+    def test_a_milling_report_has_no_offsets_column(self):
+        # The column is the turret's. A mill's `T` word is the station and nothing else, so
+        # the column would be an empty one in every row.
+        self.assertNotIn("offsets", self.keys("fanuc-preselect"))
+        self.assertIn("offsets", self.keys("lathe-turning"))
+
+    def test_the_turret_warning_is_only_on_a_milling_profile(self):
+        """The same program, twice: once as a mill would read it, once as what it is.
+
+        Opened with the mill profile a turning program has no tool change at all, and the
+        report says so and where the program belongs. Opened with the lathe profile the
+        bare `T` word **is** the tool change, so there is nothing to warn about.
+        """
+        mill = self.report("fanuc-lathe-turret")
+        self.assertEqual(mill["rows"], [])
+        self.assertIn("belongs to a lathe profile", mill["message"])
+        lathe = self.report("lathe-turning")
+        self.assertEqual(lathe["message"], "3 tools")
+        for finding in lathe["findings"]:
+            self.assertNotIn("lathe profile", finding["message"])
+
+    def test_the_feed_range_is_in_the_unit_the_control_powers_on_in(self):
+        """0.12-0.25 mm per revolution, not "no feeds found".
+
+        A range only means something inside one unit, and Phase 1 fixed that unit at feed
+        per minute because a milling control powers on there. A turning control powers on in
+        feed per revolution (`G99`), so that is what its ranges are in — otherwise every
+        feed of every turning program would be left out of the column and explained in a
+        finding. The unit is written next to the range, because the same digits read as
+        millimetres per minute would be nonsense.
+        """
+        rows = self.rows("lathe-turning")
+        self.assertEqual(rows[0]["feed"], "0.12-0.25 /rev")
+        self.assertEqual(rows[2]["feed"], "0.08 /rev")
+
+    def test_a_thread_lead_is_not_a_feed_in_any_unit(self):
+        payload = self.report("lathe-turning")
+        self.assertEqual(payload["rows"][1]["feed"], "", "the thread tool has no feed range")
+        pitch = [f for f in payload["findings"] if "thread pitch" in f["message"]]
+        self.assertEqual(len(pitch), 1)
+        self.assertEqual(pitch[0]["line"], 33)
+        self.assertIn("the F of 3 blocks", pitch[0]["message"])
+
+    def test_a_surface_speed_range_says_that_it_is_one(self):
+        # 220 m/min and 220 rpm are not the same number, and a column that showed both as
+        # `220` would be read as whichever the reader expected.
+        rows = self.rows("lathe-turning")
+        self.assertEqual(rows[0]["speed"], "220 surface")
+        self.assertEqual(rows[1]["speed"], "1200")
+
+    def test_the_clamp_is_not_a_speed_in_either_g_code_system(self):
+        for name, line in (("lathe-turning", 11), ("lathe-system-b", 8)):
+            with self.subTest(case=name):
+                payload = self.report(name)
+                limits = [f for f in payload["findings"] if "speed limit" in f["message"]]
+                self.assertEqual([f["line"] for f in limits], [line])
+                self.assertNotIn("2500", payload["rows"][0]["speed"])
+                self.assertNotIn("2200", payload["rows"][0]["speed"])
+
+    def test_system_b_is_read_with_its_own_database(self):
+        rows = self.rows("lathe-system-b")
+        self.assertEqual([row["tool"] for row in rows], ["T2", "T4"])
+        self.assertEqual([row["offsets"] for row in rows], ["02", "04"])
+        self.assertEqual(rows[0]["feed"], "0.3 /rev")
+        # `G78` is the threading cycle of system B: its F is the lead, so T4 has no range.
+        self.assertEqual(rows[1]["feed"], "")

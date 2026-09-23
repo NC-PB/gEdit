@@ -3,11 +3,13 @@
 //
 // The order is fixed:
 //   1. set the command context provider
-//   2. read settings.json and state.json (P2): the contributions build their commands and
-//      panels from the effective settings and restore the saved layout, so both have to
-//      be in memory first. Neither call may throw — a broken file falls back to the
-//      defaults and the store shows the notice — so a failure here is logged and startup
-//      continues.
+//   2. read settings.json, state.json and machines.json (P2, P6): the contributions build
+//      their commands and panels from the effective settings and restore the saved
+//      layout, so both have to be in memory first, and the machines have to be there
+//      before the first document opens — otherwise its effective view would be built
+//      without them and every consumer would have to re-evaluate. None of the three may
+//      throw — a broken file falls back to the defaults and the store shows the notice —
+//      so a failure here is logged and startup continues.
 //   3. load the contributions (this is where the initial untitled document appears, WP1.6)
 //   4. install the window key dispatcher
 //   5. watch the state behind the context, so the ribbon re-evaluates enablement
@@ -41,9 +43,11 @@ import { editor } from '$lib/monaco/editorService';
 import { getMonaco, type Monaco } from '$lib/monaco/setup';
 import { docs } from '$lib/stores/documents';
 import { layout } from '$lib/stores/layout';
+import { machines } from '$lib/stores/machines';
 import { profiles } from '$lib/stores/profiles';
 import { settings } from '$lib/stores/settings';
-import { uiState } from '$lib/stores/uiState';
+import { loadConfigOnce, uiState } from '$lib/stores/uiState';
+import { isTauriRuntime } from '$lib/utils/platform';
 import { files } from '$lib/app/fileOps';
 import { scripts } from '$lib/app/scripts';
 import { isScriptRunning, runningScript } from '$lib/stores/scripts';
@@ -137,6 +141,8 @@ export interface BootstrapDeps {
   loadSettings: () => Promise<unknown>;
   /** `uiState.load()` (WP2.3). */
   loadUiState: () => Promise<unknown>;
+  /** `machines.load(configLoad)` (P6, §7.15): the same round trip, no second read. */
+  loadMachines: () => Promise<unknown>;
   loadContributions: () => Promise<Disposable>;
   installDispatcher: () => Disposable;
   watchContext: (notify: () => void) => Disposable;
@@ -167,7 +173,9 @@ const EMPTY_CONTEXT: CommandContext = {
  * the UI state is honoured). A rejection is logged and swallowed, because the app has to
  * start even when the config folder is unreadable.
  */
-async function loadPersisted(deps: Pick<BootstrapDeps, 'loadSettings' | 'loadUiState'>): Promise<void> {
+async function loadPersisted(
+  deps: Pick<BootstrapDeps, 'loadSettings' | 'loadUiState' | 'loadMachines'>,
+): Promise<void> {
   try {
     await deps.loadSettings();
   } catch (err) {
@@ -177,6 +185,13 @@ async function loadPersisted(deps: Pick<BootstrapDeps, 'loadSettings' | 'loadUiS
     await deps.loadUiState();
   } catch (err) {
     console.error('the saved UI state could not be loaded', err);
+  }
+  try {
+    await deps.loadMachines();
+  } catch (err) {
+    // The machine service reports a broken file itself; a rejection here means the
+    // round trip failed, and a document then runs on its profile's defaults.
+    console.error('the machine configurations could not be loaded', err);
   }
 }
 
@@ -256,6 +271,12 @@ export const startApp: () => Promise<Disposable> = createStartApp({
   commandContext,
   loadSettings: () => settings.load(),
   loadUiState: () => uiState.load(),
+  loadMachines: async () => {
+    // `loadConfigOnce` is the memo behind `settings.load()`, so this is the same
+    // `config_load` answer, not a second round trip (AD-8 allows exactly one).
+    if (!isTauriRuntime()) return;
+    machines.load(await loadConfigOnce());
+  },
   loadContributions,
   installDispatcher,
   watchContext,

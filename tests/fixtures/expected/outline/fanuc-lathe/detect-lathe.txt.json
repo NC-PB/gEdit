@@ -1,0 +1,10 @@
+{
+  "profile": "fanuc-lathe",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":2,"text":"PLAIN TEXT FILE: THE DIALECT COMES FROM THE CONTENT"},
+    {"kind":"program","line":4,"text":"O2009","endLine":18},
+    {"kind":"tool","line":7,"text":"T2 — OD FINISH","tool":"02","endLine":18},
+      {"kind":"end","line":16,"text":"M30"}
+  ]
+}

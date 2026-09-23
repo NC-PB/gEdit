@@ -12,8 +12,15 @@
 // generation and the role → colour mapping, which `tokenize` would not touch.
 //
 // Neither the palette nor the detection answers are retyped here: the palette is parsed
-// out of `core/grammar/roles.ts` and the answers come from
-// `tests/fixtures/expected/detect/fixtures.json`, both read at run time.
+// out of `core/grammar/roles.ts` and the answers come from `tests/fixtures/expected/detect/`,
+// both read at run time.
+//
+// **M6 split that folder** (P6 item 11). There is no longer one `fixtures.json`: there is
+// one file per folder of `tests/fixtures/nc`, so a content work package adds its dialect's
+// expectations without touching anybody else's, plus `_improvements.json` for the
+// hand-written texts. A fixture's folder *is* its expectation file, so this scenario
+// derives the file names from `OPENED` rather than listing them — a fixture whose folder
+// has no expectation file then fails loudly instead of being skipped.
 
 import { scenario } from '../lib/index.js'
 import {
@@ -137,10 +144,16 @@ scenario('m3-profiles', { timeout: 300, files: REPO_FILE }, async (h) => {
   const light = rolesByColor(palette.light)
 
   // ------------------------------------------------------------ detection in the app
-  const goldens = JSON.parse(await h.disk.read(await h.fixture('expected/detect/fixtures.json')))
+  // `nc/<folder>/<file>` → `expected/detect/<folder>.json`, merged over the folders this
+  // scenario actually opens.
   /** @type {Record<string, string>} */
-  const answers = goldens.fixtures
-  h.check('every fixture this scenario opens has an entry in the detection goldens', OPENED.every((rel) => typeof answers[rel] === 'string'), OPENED.filter((rel) => typeof answers[rel] !== 'string'))
+  const answers = {}
+  for (const folder of [...new Set(OPENED.map((rel) => rel.split('/')[1]))]) {
+    const file = JSON.parse(await h.disk.read(await h.fixture(`expected/detect/${folder}.json`)))
+    Object.assign(answers, file.fixtures)
+  }
+  const goldens = JSON.parse(await h.disk.read(await h.fixture('expected/detect/_improvements.json')))
+  h.check('every fixture this scenario opens has an entry in its folder’s detection goldens', OPENED.every((rel) => typeof answers[rel] === 'string'), OPENED.filter((rel) => typeof answers[rel] !== 'string'))
 
   /** @type {{ path: string, id: string }[]} */
   const opened = []
@@ -164,8 +177,8 @@ scenario('m3-profiles', { timeout: 300, files: REPO_FILE }, async (h) => {
   })
 
   // ------------------------------------------------------------ content outvotes the extension
-  // The cases `expected/detect/fixtures.json` records as improvements over M0. The texts
-  // and the answers come out of that file, so the two cannot drift apart.
+  // The cases `expected/detect/_improvements.json` records as improvements over M0. The
+  // texts and the answers come out of that file, so the two cannot drift apart.
   for (const [index, improvement] of goldens.improvements.entries()) {
     const suffix = improvement.path.slice(improvement.path.lastIndexOf('.'))
     const path = `${h.cfg.run}/improvement-${index}${suffix}`

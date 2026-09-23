@@ -1,0 +1,17 @@
+{
+  "note": "G8 M6, the reviewer's own program, run with the MILL profile — which is where a turning program that carries no lathe-only marker lands. The mill has no idea what a G71 P-Q is, so it renumbered N100 and N200 and left the two cycles pointing at numbers the program no longer had, with an empty warning list. The mill now finds those values and refuses to touch them, so the run asks first and lists both lines with the reason. The blocks still move: this transform cannot make the program right, it can only stop being quiet about it.",
+  "profile": "fanuc-gcode",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      { "line": 1, "severity": "info" },
+      { "line": 2, "severity": "info" },
+      { "line": 5, "severity": "warning" },
+      { "line": 9, "severity": "warning" },
+      { "line": 11, "severity": "info" }
+    ],
+    "warnings": ["ncNumbering.renumber.referencesKept"],
+    "preflight": "ncNumbering.renumber.references"
+  }
+}

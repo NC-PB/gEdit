@@ -1,0 +1,749 @@
+{
+  "dialect": "fanuc-lathe",
+  "version": 1,
+  "extends": "fanuc",
+  "remove": [
+    "G43",
+    "G44",
+    "G49",
+    "G54.1",
+    "G81",
+    "G82",
+    "G86",
+    "G91",
+    "G93",
+    "G95"
+  ],
+  "addresses": {
+    "X": {
+      "label": "X axis, a diameter",
+      "description": "Position across the turning axis, written as a diameter while diameter programming is on. With G4 it is a dwell time in seconds."
+    },
+    "U": {
+      "label": "Incremental X, a diameter",
+      "description": "Distance to move across the turning axis, as a diameter. Inside the multi-pass cycles it is a depth of cut or an allowance on X instead, and with G4 a dwell time in seconds."
+    },
+    "W": {
+      "label": "Incremental Z",
+      "description": "Distance to move along the turning axis. Inside the multi-pass cycles it is a depth of cut or an allowance on Z instead."
+    },
+    "C": {
+      "label": "C axis",
+      "description": "Angle of the spindle, used to place holes and flats for driven tools."
+    },
+    "R": {
+      "label": "Radius, retract or allowance",
+      "description": "Arc radius with G2 and G3. In the lathe cycles it is the retract between passes, a taper, a relief amount or a finish allowance, depending on the cycle and on the block."
+    },
+    "F": {
+      "label": "Feed, or thread lead",
+      "description": "Feed rate. The unit follows the feed mode: distance per minute with G98, per spindle revolution with G99. In a threading block it is the thread lead instead."
+    },
+    "E": {
+      "label": "Thread lead, fine form",
+      "description": "A thread lead written more precisely than F allows, on controls that offer it. Not confirmed against the syntax notes; check what your control does with it."
+    },
+    "P": {
+      "label": "Block reference, dwell, step or program number",
+      "description": "First profile block with G70 to G73, a dwell in milliseconds with G4, a step in microns with G74 and G75, the packed thread data of G76, or the program number with M98."
+    },
+    "Q": {
+      "label": "Block reference, peck or cut depth",
+      "description": "Last profile block with G70 to G73, a peck in microns with G74, G75, G83 and G87, the first cut depth of G76, or the block a local call starts at with M98."
+    },
+    "T": {
+      "label": "Turret station and offset",
+      "description": "The last two digits are the offset register and the ones before them the turret station, so T0101 and T101 are both station 1 with offset 1. An offset of 00 cancels the offset and is not a tool change."
+    },
+    "H": {
+      "label": "H address",
+      "description": "Not described for turning in the syntax notes. Some controls read it as an incremental C move. Check what your control does with it."
+    },
+    "D": {
+      "label": "D address",
+      "description": "Not used for turning on the source controls: the nose radius and the tip direction come from the tool offset the T word selects. Magazine-type machines may use it as an offset register."
+    }
+  },
+  "codes": [
+    {
+      "code": "G4",
+      "group": "nonmodal",
+      "label": "Dwell",
+      "description": "Holds the tool where it is before the next block runs. It applies to this block only.",
+      "params": [
+        {
+          "address": "X",
+          "label": "Dwell time in seconds",
+          "min": 0,
+          "unit": "dwell"
+        },
+        {
+          "address": "U",
+          "label": "Dwell time in seconds",
+          "min": 0,
+          "unit": "dwell"
+        },
+        {
+          "address": "P",
+          "label": "Dwell time in milliseconds",
+          "min": 0,
+          "unit": "count"
+        }
+      ]
+    },
+    {
+      "code": "G18",
+      "group": "plane",
+      "modal": true,
+      "sets": { "plane": "ZX" },
+      "label": "ZX plane, the turning plane",
+      "description": "Selects ZX as the working plane, which is where turning happens. Arcs use I and K. Lathes come up in this plane and CAM output rarely leaves it."
+    },
+    {
+      "code": "G32",
+      "group": "motion",
+      "modal": true,
+      "pitchFeed": true,
+      "label": "Thread cutting pass",
+      "description": "Cuts one straight or tapered threading pass to the end point in the block. F is the thread lead per revolution, not a feed rate, so scaling the feed would change the thread. G-code system B spells this G33.",
+      "params": [
+        {
+          "address": "X",
+          "label": "Thread end diameter"
+        },
+        {
+          "address": "Z",
+          "label": "Thread end along Z"
+        },
+        {
+          "address": "F",
+          "label": "Thread lead per revolution",
+          "required": true,
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "G40",
+      "group": "compensation",
+      "modal": true,
+      "label": "Cancel nose radius compensation",
+      "description": "Turns nose radius compensation off. Do it during a retract move, not in an arc."
+    },
+    {
+      "code": "G41",
+      "group": "compensation",
+      "modal": true,
+      "label": "Nose radius compensation, tool left",
+      "description": "Offsets the path by the insert nose radius to the left of the direction of travel. The radius and the tip direction come from the tool offset the T word selects, so no register is written in the block. Switch it on during an approach move."
+    },
+    {
+      "code": "G42",
+      "group": "compensation",
+      "modal": true,
+      "label": "Nose radius compensation, tool right",
+      "description": "Offsets the path by the insert nose radius to the right of the direction of travel. The radius and the tip direction come from the tool offset the T word selects, so no register is written in the block. Switch it on during an approach move."
+    },
+    {
+      "code": "G50",
+      "group": "nonmodal",
+      "sets": { "speedLimit": true },
+      "label": "Coordinate set, top spindle speed",
+      "description": "Sets the coordinate system without moving. With an S word it gives the highest spindle speed the control may use for constant surface speed; write it in a block of its own in front of G96. G-code system B uses G92 for this."
+    },
+    {
+      "code": "G70",
+      "group": "cycle",
+      "sets": { "cycle": "start" },
+      "label": "Finishing pass along the profile",
+      "description": "Runs the finishing pass along the profile blocks from P to Q, taking the feed and speed written inside those blocks. It follows a roughing cycle that left an allowance.",
+      "params": [
+        {
+          "address": "P",
+          "label": "Block number of the first profile block",
+          "required": true,
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "Q",
+          "label": "Block number of the last profile block",
+          "required": true,
+          "min": 0,
+          "unit": "count"
+        }
+      ]
+    },
+    {
+      "code": "G71",
+      "group": "cycle",
+      "sets": { "cycle": "start" },
+      "label": "Roughing cycle along Z",
+      "description": "Roughs an outside or inside contour in passes along Z and leaves an allowance for the finishing cycle. It is written in two blocks: depth of cut and retract first, then the profile range and the allowances.",
+      "params": [
+        {
+          "address": "U",
+          "label": "Depth of cut per pass in the first block (a radius value), allowance on X in the second (a diameter, its sign says outside or inside)"
+        },
+        {
+          "address": "R",
+          "label": "Retract between the passes, in the first block"
+        },
+        {
+          "address": "P",
+          "label": "Block number of the first profile block",
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "Q",
+          "label": "Block number of the last profile block",
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "W",
+          "label": "Allowance on Z"
+        },
+        {
+          "address": "F",
+          "label": "Roughing feed",
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "G72",
+      "group": "cycle",
+      "sets": { "cycle": "start" },
+      "label": "Roughing cycle along X (facing)",
+      "description": "The same as G71, but the passes run along X, so it roughs a face instead of a diameter. The depth of cut in the first block is a W value.",
+      "params": [
+        {
+          "address": "W",
+          "label": "Depth of cut per pass in the first block, allowance on Z in the second"
+        },
+        {
+          "address": "R",
+          "label": "Retract between the passes, in the first block"
+        },
+        {
+          "address": "P",
+          "label": "Block number of the first profile block",
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "Q",
+          "label": "Block number of the last profile block",
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "U",
+          "label": "Allowance on X (a diameter, its sign says outside or inside)"
+        },
+        {
+          "address": "F",
+          "label": "Roughing feed",
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "G73",
+      "group": "cycle",
+      "sets": { "cycle": "start" },
+      "label": "Pattern repeating cycle",
+      "description": "Walks the profile again and again, each time a little closer to the finished shape. It suits a blank that is already near the final form, such as a casting or a forging. Two blocks: the stock to remove and the number of passes first, then the profile range and the allowances.",
+      "params": [
+        {
+          "address": "U",
+          "label": "Stock to remove on X in the first block, allowance on X in the second"
+        },
+        {
+          "address": "W",
+          "label": "Stock to remove on Z in the first block, allowance on Z in the second"
+        },
+        {
+          "address": "R",
+          "label": "Number of passes in the first block",
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "P",
+          "label": "Block number of the first profile block",
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "Q",
+          "label": "Block number of the last profile block",
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "F",
+          "label": "Roughing feed",
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "G74",
+      "group": "cycle",
+      "pitchFeedAmbiguous": true,
+      "sets": { "cycle": "start" },
+      "label": "Face pecking cycle",
+      "description": "Drills or grooves into the face in pecks, pulling back by R between them so the chips clear. Written in two blocks: the retract first, then the end point and the steps. On a lathe it is not a tapping cycle, so F is an ordinary feed — but the same number is the left-hand tapping cycle on a mill, where F is the pitch. gEdit will not scale the F of such a block: refusing a real pecking feed costs one edit by hand, scaling a pitch cuts a different thread.",
+      "params": [
+        {
+          "address": "R",
+          "label": "Retract between the pecks, in the first block"
+        },
+        {
+          "address": "X",
+          "label": "End diameter of the last groove; leave it out for a hole on centre"
+        },
+        {
+          "address": "Z",
+          "label": "Depth along Z"
+        },
+        {
+          "address": "P",
+          "label": "Step on X between the grooves, in microns on the source controls",
+          "min": 0,
+          "unit": "increment"
+        },
+        {
+          "address": "Q",
+          "label": "Peck along Z, in microns on the source controls",
+          "min": 0,
+          "unit": "increment"
+        },
+        {
+          "address": "F",
+          "label": "Feed",
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "G75",
+      "group": "cycle",
+      "sets": { "cycle": "start" },
+      "label": "Grooving cycle along X",
+      "description": "The same as G74 turned through ninety degrees: it pecks into a diameter and steps along Z, which is how a wide groove is cut with a narrow insert.",
+      "params": [
+        {
+          "address": "R",
+          "label": "Retract between the pecks, in the first block"
+        },
+        {
+          "address": "X",
+          "label": "Groove bottom diameter"
+        },
+        {
+          "address": "Z",
+          "label": "End point of the last groove along Z"
+        },
+        {
+          "address": "P",
+          "label": "Peck on X, in microns on the source controls",
+          "min": 0,
+          "unit": "increment"
+        },
+        {
+          "address": "Q",
+          "label": "Step along Z between the grooves, in microns on the source controls",
+          "min": 0,
+          "unit": "increment"
+        },
+        {
+          "address": "F",
+          "label": "Feed",
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "G76",
+      "group": "cycle",
+      "pitchFeed": true,
+      "sets": { "cycle": "start" },
+      "label": "Multi-pass threading cycle",
+      "description": "Cuts a thread in several passes, taking less material each time. Written in two blocks: the finishing passes, the pull-out chamfer and the insert angle packed into P, the smallest cut depth and the finish allowance first; then the thread end, the taper, the thread height, the first cut depth and the lead. F is the thread lead per revolution, not a feed rate. P means two different things in the two blocks and one entry cannot tell them apart, so gEdit counts it rather than measuring it: the packed six digits of the first block are never converted, and the thread height of the second is shown as written.",
+      "params": [
+        {
+          "address": "P",
+          "label": "Finishing passes, chamfer and insert angle packed into six digits in the first block; thread height in microns in the second. Counted, not measured: the packed digits must never be converted, and one entry cannot tell the two blocks apart",
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "Q",
+          "label": "Smallest cut depth in the first block, first cut depth in the second, both in microns on the source controls",
+          "min": 0,
+          "unit": "increment"
+        },
+        {
+          "address": "R",
+          "label": "Finish allowance in the first block, taper in the second"
+        },
+        {
+          "address": "X",
+          "label": "Thread end diameter at the root"
+        },
+        {
+          "address": "Z",
+          "label": "Thread end along Z"
+        },
+        {
+          "address": "F",
+          "label": "Thread lead per revolution",
+          "required": true,
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "G77",
+      "group": "motion",
+      "modal": true,
+      "verify": true,
+      "label": "Turning pass (G-code system B)",
+      "description": "G-code system A does not use this number; in system B it is the single-pass turning cycle that system A writes as G90. Its F is an ordinary feed. A program that writes it was almost certainly posted for system B, so set a machine with that G-code system to read it properly."
+    },
+    {
+      "code": "G78",
+      "group": "motion",
+      "modal": true,
+      "pitchFeedAmbiguous": true,
+      "verify": true,
+      "label": "Threading pass (G-code system B)",
+      "description": "G-code system A does not use this number; in system B it is the single-pass threading cycle that system A writes as G92, and its F is the thread lead per revolution. gEdit therefore never scales the F of such a block, whichever G-code system the document is read in: a program that writes G78 was almost certainly posted for system B. Set a machine with that G-code system to read the rest of the program properly."
+    },
+    {
+      "code": "G79",
+      "group": "motion",
+      "modal": true,
+      "verify": true,
+      "label": "Facing pass (G-code system B)",
+      "description": "G-code system A does not use this number; in system B it is the single-pass facing cycle that system A writes as G94. Its F is an ordinary feed. A program that writes it was almost certainly posted for system B, so set a machine with that G-code system to read it properly."
+    },
+    {
+      "code": "G80",
+      "group": "cycle",
+      "modal": true,
+      "sets": { "cycle": "cancel" },
+      "label": "Cancel the drilling cycle",
+      "description": "Ends the active drilling, tapping or boring cycle. Any code from the motion group ends it as well."
+    },
+    {
+      "code": "G83",
+      "group": "cycle",
+      "modal": true,
+      "sets": { "cycle": "start" },
+      "label": "Drilling cycle on the face",
+      "description": "Drills along Z into the face of the part, on centre or on a C position under a driven tool. With Q it pecks. It stays active, so the next block with a position drills another hole, until G80.",
+      "params": [
+        {
+          "address": "Z",
+          "label": "Hole bottom",
+          "required": true
+        },
+        {
+          "address": "R",
+          "label": "Retract plane",
+          "required": true
+        },
+        {
+          "address": "Q",
+          "label": "Peck depth, in microns on the source controls",
+          "min": 0,
+          "unit": "increment"
+        },
+        {
+          "address": "P",
+          "label": "Dwell at the bottom in milliseconds",
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "F",
+          "label": "Drilling feed",
+          "required": true,
+          "min": 0
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
+        }
+      ]
+    },
+    {
+      "code": "G84",
+      "group": "cycle",
+      "modal": true,
+      "pitchFeed": true,
+      "sets": { "cycle": "start" },
+      "label": "Tapping cycle on the face",
+      "description": "Cuts a thread along Z into the face of the part: the spindle turns back at the bottom of the hole. F is the thread lead, so scaling the feed would change the thread.",
+      "params": [
+        {
+          "address": "Z",
+          "label": "Hole bottom",
+          "required": true
+        },
+        {
+          "address": "F",
+          "label": "Thread lead",
+          "required": true,
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "G85",
+      "group": "cycle",
+      "modal": true,
+      "verify": true,
+      "sets": { "cycle": "start" },
+      "label": "Boring cycle on the face",
+      "description": "Feeds along Z into the face and feeds back out again, which leaves a cleaner wall than a rapid retract.",
+      "params": [
+        {
+          "address": "Z",
+          "label": "Hole bottom",
+          "required": true
+        },
+        {
+          "address": "R",
+          "label": "Retract plane",
+          "required": true
+        },
+        {
+          "address": "F",
+          "label": "Boring feed",
+          "required": true,
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "G87",
+      "group": "cycle",
+      "modal": true,
+      "sets": { "cycle": "start" },
+      "label": "Drilling cycle on the side",
+      "description": "Drills along X into the side of the part under a driven tool. With Q it pecks. It stays active, so the next block with a position drills another hole, until G80.",
+      "params": [
+        {
+          "address": "X",
+          "label": "Hole bottom diameter",
+          "required": true
+        },
+        {
+          "address": "R",
+          "label": "Retract plane",
+          "required": true
+        },
+        {
+          "address": "Q",
+          "label": "Peck depth, in microns on the source controls",
+          "min": 0,
+          "unit": "increment"
+        },
+        {
+          "address": "P",
+          "label": "Dwell at the bottom in milliseconds",
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "F",
+          "label": "Drilling feed",
+          "required": true,
+          "min": 0
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
+        }
+      ]
+    },
+    {
+      "code": "G88",
+      "group": "cycle",
+      "modal": true,
+      "pitchFeed": true,
+      "sets": { "cycle": "start" },
+      "label": "Tapping cycle on the side",
+      "description": "Cuts a thread along X into the side of the part: the spindle turns back at the bottom of the hole. F is the thread lead, so scaling the feed would change the thread.",
+      "params": [
+        {
+          "address": "X",
+          "label": "Hole bottom diameter",
+          "required": true
+        },
+        {
+          "address": "F",
+          "label": "Thread lead",
+          "required": true,
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "G89",
+      "group": "cycle",
+      "modal": true,
+      "verify": true,
+      "sets": { "cycle": "start" },
+      "label": "Boring cycle on the side",
+      "description": "Feeds along X into the side and feeds back out again, which leaves a cleaner wall than a rapid retract.",
+      "params": [
+        {
+          "address": "X",
+          "label": "Hole bottom diameter",
+          "required": true
+        },
+        {
+          "address": "R",
+          "label": "Retract plane",
+          "required": true
+        },
+        {
+          "address": "F",
+          "label": "Boring feed",
+          "required": true,
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "G90",
+      "group": "motion",
+      "modal": true,
+      "label": "Turning pass",
+      "description": "Cuts one outside or inside turning pass, straight or tapered, and returns to the start point. It belongs to the motion group, so the next G00 or G01 ends it. On a mill and in G-code system B the same number means absolute positions instead.",
+      "params": [
+        {
+          "address": "X",
+          "label": "End diameter of the pass"
+        },
+        {
+          "address": "Z",
+          "label": "End of the pass along Z"
+        },
+        {
+          "address": "R",
+          "label": "Taper: the difference in radius between the start and the end"
+        },
+        {
+          "address": "F",
+          "label": "Feed",
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "G92",
+      "group": "motion",
+      "modal": true,
+      "pitchFeed": true,
+      "sets": { "speedLimit": true },
+      "label": "Threading pass as a cycle",
+      "description": "Cuts one threading pass, straight or tapered, and returns to the start point, so a thread is written as a list of X values. F is the thread lead per revolution, not a feed rate. On a mill and in G-code system B the same number sets the coordinate system and clamps the spindle speed instead. A threading pass carries no S word, so gEdit reads the S of a G92 block as that speed clamp rather than as a speed to scale — which is what protects a system-B program opened with a system-A machine.",
+      "params": [
+        {
+          "address": "X",
+          "label": "Thread diameter of this pass"
+        },
+        {
+          "address": "Z",
+          "label": "Thread end along Z"
+        },
+        {
+          "address": "R",
+          "label": "Taper: the difference in radius between the start and the end"
+        },
+        {
+          "address": "F",
+          "label": "Thread lead per revolution",
+          "required": true,
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "G94",
+      "group": "motion",
+      "modal": true,
+      "label": "Facing pass",
+      "description": "Cuts one facing pass, square or tapered, and returns to the start point. It belongs to the motion group, so the next G00 or G01 ends it. On a mill and in G-code system B the same number means feed per minute instead; on a lathe in system A the feed modes are G98 and G99.",
+      "params": [
+        {
+          "address": "X",
+          "label": "End diameter of the pass"
+        },
+        {
+          "address": "Z",
+          "label": "End of the pass along Z"
+        },
+        {
+          "address": "R",
+          "label": "Taper: the difference along Z between the start and the end"
+        },
+        {
+          "address": "F",
+          "label": "Feed",
+          "min": 0
+        }
+      ]
+    },
+    {
+      "code": "G96",
+      "group": "spindlemode",
+      "modal": true,
+      "sets": { "speedUnit": "surface" },
+      "label": "Constant surface speed",
+      "description": "S is read as a surface speed in metres per minute, or feet per minute in the inch system, and the control raises the spindle speed as the diameter gets smaller. Clamp the top speed with G50 in a block of its own beforehand."
+    },
+    {
+      "code": "G97",
+      "group": "spindlemode",
+      "modal": true,
+      "sets": { "speedUnit": "rpm" },
+      "label": "Fixed spindle speed",
+      "description": "S is read as revolutions per minute again and the speed stays where it is set. Threading and drilling on centre need it."
+    },
+    {
+      "code": "G98",
+      "group": "feedmode",
+      "modal": true,
+      "sets": { "feedUnit": "per-minute" },
+      "label": "Feed per minute",
+      "description": "F is read as distance per minute. This is what G98 means in G-code system A; on a mill and in system B the same number chooses the level a drilling cycle returns to."
+    },
+    {
+      "code": "G99",
+      "group": "feedmode",
+      "modal": true,
+      "sets": { "feedUnit": "per-rev" },
+      "label": "Feed per revolution",
+      "description": "F is read as distance per spindle revolution, which keeps the chip thickness steady while constant surface speed changes the spindle speed. This is what G99 means in G-code system A; on a mill and in system B the same number chooses the level a drilling cycle returns to."
+    },
+    {
+      "code": "M6",
+      "group": "tool",
+      "label": "Tool change on a magazine machine",
+      "description": "Changes to the tool that T selects on a machine with a tool magazine. A turret indexes on the T word alone and does not use M6."
+    }
+  ]
+}

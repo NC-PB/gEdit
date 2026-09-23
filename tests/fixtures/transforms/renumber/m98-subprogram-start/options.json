@@ -1,0 +1,26 @@
+{
+  "note": "M98 P2000 Q50 starts the called program O2000 at its N50, so the Q names a block of that program and not of the caller. The rule that fires on a M98 block carrying a P is rewrite: false (I6, plan §0 item 5), so the value is reported and never touched — not merely left alone because this caller happens to have no N50 of its own. A main program that did have one would otherwise have had its call moved to the wrong place in silence.",
+  "profile": "fanuc-gcode",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      {
+        "line": 1,
+        "severity": "info"
+      },
+      {
+        "line": 3,
+        "severity": "warning"
+      },
+      {
+        "line": 5,
+        "severity": "info"
+      }
+    ],
+    "warnings": [
+      "ncNumbering.renumber.referencesKept"
+    ],
+    "preflight": "ncNumbering.renumber.references"
+  }
+}

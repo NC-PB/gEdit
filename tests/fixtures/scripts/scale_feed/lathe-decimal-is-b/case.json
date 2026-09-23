@@ -1,0 +1,21 @@
+{
+  "profile": "fanuc-lathe",
+  "machine": {
+    "numberInput": {
+      "classes": {
+        "feedPerMin": {
+          "mode": "calculator"
+        },
+        "feedPerRev": {
+          "mode": "calculator"
+        }
+      },
+      "incrementDeg": "0.001",
+      "incrementInch": "0.0001",
+      "incrementMm": "0.001",
+      "incrementSec": "0.001",
+      "mode": "increment"
+    }
+  },
+  "machineName": "Lathe IS-B"
+}

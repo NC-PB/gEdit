@@ -1,0 +1,18 @@
+{
+  "note": "The written form is kept: Q0100 and GOTO0100 are written with four digits because the post writes four, so they become Q0030 and GOTO0030 and not Q30. N0100 is the same block number as N100.",
+  "profile": "fanuc-gcode",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      {
+        "line": 1,
+        "severity": "info"
+      }
+    ],
+    "warnings": [
+      "ncNumbering.renumber.referencesRewritten"
+    ],
+    "preflight": null
+  }
+}

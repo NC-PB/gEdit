@@ -18,6 +18,9 @@
 //   parseNumber                   core/nc/numbers.ts
 //   formatNumber                  core/nc/numberFormat.ts
 
+import type { ParamSource } from '$lib/core/machines/types';
+import type { FeedUnit } from '$lib/core/profiles/types';
+
 /**
  * What a token is.
  *
@@ -87,6 +90,72 @@ export interface LineState {
 export interface TokenizeResult {
   tokens: NcToken[];
   state: LineState;
+}
+
+// ---------------------------------------------------------------------------
+// The modal state (P6, §7.4, AD-19). Python fills it in M6 (`_nc_modal.py`,
+// WP6.4), TypeScript in M11 (`core/nc/modal.ts`, WP11.1); both are held to the
+// goldens in `tests/fixtures/modal/<profileId>/<case>.json`.
+//
+// NC is a modal language: `G95`, a tapping cycle or `G96` stays in force until
+// something cancels it. Everything below is what "in force" means, and every
+// value that gEdit did not read out of the program carries `assumed: true` and
+// the source it came from, so nothing is ever presented as if the program had
+// said it.
+// ---------------------------------------------------------------------------
+
+/** The code in force in one modal group. `line` 0 together with `assumed` means power-on. */
+export interface ModalValue {
+  code: string;
+  /** Where it was set; 0 for an assumed power-on value. */
+  line: number;
+  assumed: boolean;
+  /**
+   * For an assumed value: where it came from — the document's machine, a detected
+   * variant's overlay, or the profile's documented default (`modal.sources`, AD-19 rule 8).
+   */
+  from?: ParamSource;
+}
+
+/** A word the interpreter kept: its text, its line, and whether it was a variable. */
+export interface WordSeen {
+  valueText: string;
+  line: number;
+  /** The value is a variable or an expression, so it has no literal. */
+  variable: boolean;
+}
+
+/** Everything that is in force after a block (§7.4). */
+export interface ModalState {
+  /** Modal group → the code in force (`'motion'` → `'G1'`, `'feedmode'` → `'G99'`). */
+  groups: Record<string, ModalValue>;
+  feedUnit: FeedUnit;
+  speedUnit: 'rpm' | 'surface' | 'unknown';
+  /**
+   * `'absolute'` **without** a line on a database that declares no distance codes at all
+   * (Fanuc G-code system A, which has no `G91`, and Klartext): it is the only reading the
+   * database allows, so it is not assumed, it is known (AD-19 rule 8).
+   */
+  distance: 'absolute' | 'incremental' | 'unknown';
+  /** The power-on value is assumed; `G20`/`G21` set it with their line. */
+  units: { value: 'mm' | 'inch' | 'unknown'; line: number; assumed: boolean; from?: ParamSource };
+  plane: 'XY' | 'ZX' | 'YZ' | 'unknown';
+  /**
+   * Diameter programming of the `addresses.diameter` words; `null` on a profile without
+   * the parameter (a mill). Whether one word is a diameter or a radius value also depends
+   * on `distance` (AD-19 rule 11), so a consumer asks for that answer, never for the mode.
+   */
+  diameter: { mode: 'on' | 'off' | 'absolute-only'; line: number; assumed: boolean; from?: ParamSource } | null;
+  /** The tool of the last tool line: `station` as the profile's `tool` group captured it. */
+  tool: { station: string; written: string; line: number } | null;
+  feed: WordSeen | null;
+  speed: WordSeen | null;
+  /** The last clamp value: an `S` in a `sets.speedLimit` block, or a `speedLimitWords` assignment. */
+  speedLimit: WordSeen | null;
+  activeCycle: { code: string; line: number; pitchFeed: boolean } | null;
+  pitchFeedAmbiguous: string | null;
+  /** Flags of the block just applied, and of that block only. */
+  block: { cycle: string | null; pitchFeed: boolean; speedLimit: boolean; fNotFeed: boolean; toolChange: boolean };
 }
 
 /** What `blockNumberOf` returns; `text` is the number as written, without the prefix. */

@@ -33,7 +33,7 @@ What the cases cover, in the plan's words:
 And the four the M4 review added, each of which is a program the script used to get
 wrong:
 
-* a code whose number is a threading cycle in another G-code system is refused rather
+* a code whose number is a threading cycle somewhere else is refused rather
   than scaled (`fanuc-lathe-threading`)
 * a zero or negative feed is never raised to the "smallest feed" limit
   (`fanuc-zero-feed-with-limit`)
@@ -55,6 +55,40 @@ in the state it is really written in.
 Each of the three is checked twice: once against its golden, and once with
 `precedingLines` taken back out, which is what the run used to do and what it still does
 when the context does not carry the field.
+
+And the turning cases M6 added (WP6.6). A turning program is not a milling program with
+other numbers in it: nearly every feed is a feed per **revolution**, the codes that carry a
+thread lead are ordinary codes of the dialect, and which of them means what depends on the
+machine's G-code system rather than on the dialect (plan AD-31). Each case is a claim:
+
+* `lathe-turning` — a feed per revolution is scaled on a lathe without being asked, the
+  `P`-`Q` profile of a `G71` holds ordinary feeds, and the leads of `G76`, `G92` and `G32`
+  are not touched
+* `lathe-per-revolution-no` — the same program with the option set to no: nothing is
+  scaled, and each finding names the code that is in force (`G99`), not the mill's `G95`
+* `lathe-system-b` / `lathe-system-b-as-a` — one program, two machines. In system B `G78`
+  cuts the thread and its `F` is the 2 mm lead; read as system A, where `G78` is not a code
+  at all, the same word is multiplied. Which one happens is the machine's setting
+* `lathe-decimal-is-b` / `-calculator` / `-no-machine` — `F155` becomes `F140` in all three,
+  because scaling is unit-free whatever the control makes of a number without a point
+* `lathe-feed-limit-machine` / `-no-machine` — and the limits are not: the same program and
+  the same written result, once against a limit of 0.2 mm/rev on a machine that reads a
+  point-less feed in increments of 0.001, and once against a limit of 200 as written
+* `klartext-no-value-limit` — a feed per tooth has no value at all, so it is scaled and the
+  limits are left out of it, loudly
+
+And the three the G8 review of M6 added. Each is a real program paired with the machine a
+shop would have, and each came back from this script with a thread lead multiplied and
+nothing said about it — the mistake that scraps a part. A lead is refused now whichever
+way the program and the profile are paired, because the flag sits on the **code**:
+
+* `lathe-b-thread-no-clamp` — a G-code system B program whose post writes no `G92 S`
+  clamp, so variant detection cannot reach its margin and the program is read as system A,
+  where `G78` is not a code at all. The three 1.5 mm leads are left alone all the same
+* `lathe-a-thread-as-b` — the mirror: a system A program opened with the shop's system-B
+  machine, where `G92` sets the coordinate system. Its `G92 X… Z… F1.5` is still a thread
+* `lathe-mill-tapping` — a milling program opened with the lathe profile, where `G74` pecks
+  a face instead of cutting a left-hand thread. Its `F1.25` is still a pitch
 """
 
 from __future__ import annotations
@@ -93,6 +127,22 @@ REQUIRED_CASES = [
     "klartext-per-revolution",
     "klartext-selection-primed",
     "klartext-tapping",
+    # M6 (WP6.6): the turning cases. Each one is a claim the plan names by hand.
+    "klartext-no-value-limit",
+    "lathe-decimal-calculator",
+    "lathe-decimal-is-b",
+    "lathe-decimal-no-machine",
+    "lathe-feed-limit-machine",
+    "lathe-feed-limit-no-machine",
+    "lathe-per-revolution-no",
+    "lathe-system-b",
+    "lathe-system-b-as-a",
+    "lathe-turning",
+    # G8 M6: the three programs the NC review ran, each of which came back with a thread
+    # lead multiplied and nothing said. The pairing of program and machine is the point.
+    "lathe-a-thread-as-b",
+    "lathe-b-thread-no-clamp",
+    "lathe-mill-tapping",
 ]
 
 #: The addresses this script is allowed to rewrite. Everything else has to come back
@@ -102,13 +152,47 @@ SCALED_ADDRESSES = ("F", "FU", "FZ")
 SEVERITIES = ("info", "warning", "error")
 
 
+def context_of(case):
+    """The `ScriptContextV2` a case runs with: the **effective** profile and machine.
+
+    The app never hands a script a profile on its own. It hands it the effective view of the
+    document — the profile with the chosen machine's variants, number reading and power-on
+    state applied, the database that goes with it, and the machine block beside it (plan
+    §7.15, AD-31). A case that names a `machine` in its `case.json` therefore runs against
+    the generated `tests/fixtures/resolved/effective/**` entry for exactly those parameters,
+    written once by `tests/unit/resolved.test.ts`: **Python never merges a machine into a
+    profile**, because two implementations of one merge is how the two sides start
+    disagreeing quietly. A case without one runs with the profile's own defaults, which is
+    what "no machine" means.
+
+    `machineName` in a `case.json` is the name that machine carries in the run. The
+    generator calls every machine it writes `review`; a golden message is easier to read,
+    and to check by hand, with the name a user would have given it, and the name changes
+    nothing but the sentence it appears in.
+    """
+    context = case.context()
+    if isinstance(case.options.get("machine"), dict):
+        effective = helpers.effective_context(golden=case.directory / "case.json")
+    else:
+        effective = helpers.effective_context(case.profile_id)
+    context["profile"] = effective["profile"]
+    context["codes"] = effective["codes"]
+    context["machine"] = dict(effective["machine"])
+    name = case.options.get("machineName")
+    if isinstance(name, str) and name != "":
+        context["machine"]["id"] = name.lower().replace(" ", "-")
+        context["machine"]["name"] = name
+    context.pop("machineName", None)
+    return context
+
+
 def envelope_of(case):
     """The expected `message` and `findings` of a case."""
     return helpers.load_json(case.directory / "envelope.json")
 
 
 def run_case(case):
-    return helpers.run_script(SCRIPT, stdin=case.input_text(), context=case.context())
+    return helpers.run_script(SCRIPT, stdin=case.input_text(), context=context_of(case))
 
 
 def shape_of(lines, cp):
@@ -183,7 +267,7 @@ class TestGoldenCases(unittest.TestCase):
     def test_every_finding_points_at_a_line_of_the_input(self):
         for case in self.cases:
             with self.subTest(case=case.name):
-                first = case.context()["input"]["startLine"]
+                first = context_of(case)["input"]["startLine"]
                 last = first + len(case.input_lines()) - 1
                 for finding in envelope_of(case)["findings"]:
                     self.assertIn(finding["severity"], SEVERITIES)
@@ -267,7 +351,7 @@ class TestRules(unittest.TestCase):
             self.assertEqual(finding["severity"], "warning")
             self.assertIn(code, finding["message"])
             self.assertIn("thread lead", finding["message"])
-        self.assertIn("another G-code system", result.json()["message"])
+        self.assertIn("threading cycle somewhere else", result.json()["message"])
 
     def test_the_ambiguous_code_is_recognised_however_the_block_is_written(self):
         """The refusal has to survive the ways a post actually writes a code.
@@ -304,9 +388,9 @@ class TestRules(unittest.TestCase):
         self.assertTrue(result.ok, result.stderr)
         self.assertEqual(
             result.json()["findings"][0]["message"],
-            "F2.0 is not scaled: G76 is a threading cycle in another G-code system of "
-            "this dialect, where this F is the thread lead and not a feed rate. Check "
-            "the block and scale it by hand if it really is a feed.",
+            "F2.0 is not scaled: G76 is a threading cycle on another kind of machine or "
+            "in another G-code system, where this F is the thread lead and not a feed "
+            "rate. Check the block and scale it by hand if it really is a feed.",
         )
 
     def test_the_ambiguity_of_a_non_modal_code_ends_with_its_own_block(self):
@@ -396,7 +480,11 @@ class TestRules(unittest.TestCase):
         case = self.case("fanuc-unchanged")
         payload = self.output("fanuc-unchanged")
         self.assertEqual(payload["text"], case.input_text())
-        self.assertEqual(payload["message"], "No feed rate was changed; 5 already written that way.")
+        self.assertEqual(
+            payload["message"],
+            "No feed rate was changed; 5 already written that way. No machine: profile "
+            "defaults assumed.",
+        )
 
     def test_a_selection_counts_from_the_line_the_selection_started_on(self):
         payload = self.output("fanuc-selection")
@@ -509,7 +597,7 @@ class TestSelectionPriming(unittest.TestCase):
     def unprimed(self, name):
         """The same run with `precedingLines` taken back out: the M4 behaviour."""
         case = self.case(name)
-        context = case.context()
+        context = context_of(case)
         self.assertIn("precedingLines", context["input"], "this case is not a primed one")
         context["input"] = {
             key: value for key, value in context["input"].items() if key != "precedingLines"
@@ -581,7 +669,7 @@ class TestSelectionPriming(unittest.TestCase):
                 payload = self.primed(name)
                 first = payload["findings"][0]
                 self.assertEqual(first["severity"], "info")
-                self.assertEqual(first["line"], self.case(name).context()["input"]["startLine"])
+                self.assertEqual(first["line"], context_of(self.case(name))["input"]["startLine"])
                 self.assertIn("were read for the modal state", first["message"])
                 self.assertIn(needle, first["message"])
                 self.assertFalse(
@@ -619,7 +707,7 @@ class TestSelectionPriming(unittest.TestCase):
         `gedit_nc.preceding_lines` turns that back into the M4 warning.
         """
         case = self.case("fanuc-selection-primed")
-        context = case.context()
+        context = context_of(case)
         context["input"]["precedingLines"] = context["input"]["precedingLines"][-3:]
         result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context)
         self.assertTrue(result.ok, result.stderr)
@@ -877,7 +965,9 @@ class TestRunEnvironment(unittest.TestCase):
         )
         self.assertTrue(result.ok, result.stderr)
         payload = result.json()
-        self.assertEqual(payload["message"], "Scaled 20,000 feed rates to 90 %.")
+        self.assertEqual(
+            payload["message"], "Scaled 20,000 feed rates to 90 %. No machine: profile defaults assumed."
+        )
         self.assertEqual(payload["text"].count("F1080."), 20000)
         self.assertEqual(payload["findings"], [])
 
@@ -901,3 +991,291 @@ class TestRunEnvironment(unittest.TestCase):
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
+
+
+class TestLathe(unittest.TestCase):
+    """Turning (M6, WP6.6): the feed unit, the thread leads, the machine and the limits.
+
+    Every claim here is checked against the golden of its own case **and** stated in one
+    sentence, so that a fixture regenerated by hand cannot quietly change what the script
+    does. The programs are the synthetic turning fixtures of `tests/fixtures/nc/fanuc-lathe`;
+    what a Fanuc lathe does with a code comes from `docs/planning/syntax/syntax-fanuc.md`
+    through `src/lib/data`, never from this file.
+    """
+
+    def case(self, name):
+        return next(case for case in helpers.script_cases("scale_feed") if case.name == name)
+
+    def output(self, name):
+        """The golden of a case, re-checked against a live run."""
+        case = self.case(name)
+        result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context_of(case))
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], case.expected_text())
+        return payload
+
+    def lines(self, name):
+        return self.output(name)["text"].split("\n")
+
+    def messages(self, name):
+        return [finding["message"] for finding in self.output(name)["findings"]]
+
+    # -- the feed unit ------------------------------------------------------
+
+    def test_a_feed_per_revolution_is_scaled_on_a_lathe_without_being_asked(self):
+        # The option is auto / yes / no, and auto follows the profile's `machineType`. On a
+        # turning profile nearly every feed is a feed per revolution: a run that skipped
+        # them by default, as the mill default does, would do nothing at all and say so in
+        # a sentence nobody reads.
+        lines = self.lines("lathe-turning")
+        self.assertIn("G71 P100 Q200 U0.4 W0.1 F0.23", lines)
+        self.assertIn("N110 G01 Z0. F0.11", lines)
+        self.assertIn("G83 Z-15. R2. Q3000 F0.07", lines)
+
+    def test_the_option_still_says_no_and_the_finding_names_the_code_in_force(self):
+        payload = self.output("lathe-per-revolution-no")
+        self.assertEqual(payload["text"], self.case("lathe-per-revolution-no").input_text())
+        skipped = [f for f in payload["findings"] if "per revolution" in f["message"]]
+        self.assertEqual([f["line"] for f in skipped], [16, 18, 50])
+        for finding in skipped:
+            # G99, not G95: `FeedModeTracker` calls the mode `G95` whatever code the
+            # dialect writes for it, and a finding that named the mill's code would send
+            # the reader looking for a G95 that is not in the program (F24).
+            self.assertIn("a feed per revolution (G99)", finding["message"])
+            self.assertNotIn("G95", finding["message"])
+
+    def test_the_power_on_feed_mode_holds_before_the_program_states_one(self):
+        """A lathe that never writes a feed mode is still in feed per revolution.
+
+        `FeedModeTracker` is built from a code database alone and starts in feed per
+        minute, which is a milling control's power-on state. The effective profile's
+        `modal.initial` is what this control powers on in (AD-19 rule 8), and the run reads
+        it — otherwise a program that leaves the feed mode to the control would have its
+        feeds read as millimetres per minute and, with the option set to no, scaled anyway.
+        """
+        context = helpers.effective_context("fanuc-lathe", params={"percent": 90, "perRevolution": "no"})
+        program = "G00 X40. Z2.\nG01 Z-10. F0.25\n"
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], program, "a per-revolution feed was scaled")
+        self.assertIn("a feed per revolution (G99)", payload["findings"][0]["message"])
+
+    def test_the_feeds_inside_a_g71_profile_are_ordinary_feeds(self):
+        # G70-G73 are one-shot cycles on this control (AD-19 rule 2): the `F` of the cycle
+        # block is the roughing feed, and the blocks between `P` and `Q` are ordinary moves
+        # whose feeds belong to the finishing pass. None of them is a thread lead.
+        payload = self.output("lathe-turning")
+        for line in (16, 18):
+            self.assertFalse(
+                any(f["line"] == line for f in payload["findings"]),
+                "line %d was refused" % line,
+            )
+
+    def test_a_thread_lead_is_never_scaled_and_the_finding_names_its_code(self):
+        payload = self.output("lathe-turning")
+        lines = payload["text"].split("\n")
+        # G76 (the second block of the two-block form), the modal G92 pass and G32.
+        self.assertIn("G76 X18.16 Z-18. P920 Q250 F1.5", lines)
+        self.assertIn("G92 X19.4 Z-18. F1.5", lines)
+        self.assertIn("G32 Z-18. F1.5", lines)
+        pitches = [f for f in payload["findings"] if "thread pitch" in f["message"]]
+        self.assertEqual([f["line"] for f in pitches], [33, 35, 41])
+        for finding, code in zip(pitches, ("G76", "G92", "G32")):
+            self.assertEqual(finding["severity"], "warning")
+            self.assertIn("thread pitch (%s)" % code, finding["message"])
+
+    def test_a_lathe_lead_is_refused_outright_and_not_as_an_ambiguous_code(self):
+        """On the mill profile `G76` and `G92` are ambiguous; on the lathe they are leads.
+
+        The mill database marks them `pitchFeedAmbiguous` because a turning program opened
+        with the mill profile gives nothing away. The lathe database says what they are, so
+        the refusal is the plain thread-pitch one and the reader is not told to go and
+        decide something the profile already knows.
+        """
+        for message in self.messages("lathe-turning"):
+            self.assertNotIn("another G-code system", message)
+
+    # -- the G-code system is the machine's ---------------------------------
+
+    def test_system_b_leaves_the_thread_lead_of_its_own_threading_cycle_alone(self):
+        payload = self.output("lathe-system-b")
+        self.assertIn("G78 X29.4 Z-25. F2.0", payload["text"].split("\n"))
+        self.assertIn("G77 X38. Z-40. F0.27", payload["text"].split("\n"))
+        leads = [f for f in payload["findings"] if "thread pitch" in f["message"]]
+        self.assertEqual([f["line"] for f in leads], [22, 26])
+        self.assertIn("thread pitch (G78)", leads[0]["message"])
+
+    def test_a_system_b_thread_lead_survives_being_read_as_system_a(self):
+        """The wrong machine used to be silent here; G8 M6 made it refuse instead.
+
+        `G78` is the threading cycle of G-code system B and is not a code of system A at
+        all, so a document whose machine says A — or a detection that answered A, which a
+        B program without a `G92 S` clamp can easily produce — read `G78 X29.4 Z-25. F2.0`
+        as an unknown code with an ordinary feed and wrote 90 % of a 2 mm lead into the
+        file. The system-A database now carries G77, G78 and G79 with
+        `pitchFeedAmbiguous` on the threading one, so the refusal no longer depends on
+        which system detection picked: refusing a real feed costs one edit by hand,
+        scaling a lead cuts a different thread.
+        """
+        a = self.output("lathe-system-b-as-a")
+        b = self.output("lathe-system-b")
+        self.assertIn("G78 X29.4 Z-25. F2.0", a["text"].split("\n"))
+        self.assertIn("G78 X29.4 Z-25. F2.0", b["text"].split("\n"))
+        # Read as A the reason is the ambiguity, read as B it is the code itself.
+        self.assertTrue(any("G78" in f["message"] for f in a["findings"]))
+        self.assertTrue(any("thread pitch (G78)" in f["message"] for f in b["findings"]))
+        # Everything else about the two runs is the same, which is what makes the point.
+        self.assertIn("G77 X38. Z-40. F0.27", a["text"].split("\n"))
+        self.assertTrue(any("thread pitch (G33)" in f["message"] for f in a["findings"]))
+
+    # -- the machine's number reading ---------------------------------------
+
+    def test_the_decimal_point_changes_nothing_about_scaling(self):
+        """`F155` becomes `F140` under IS-B, under calculator input and with no machine.
+
+        Scaling is unit-free in all three readings — the literal is multiplied, and the
+        value is the literal times a constant — so the machine never changes the digits
+        that are written. It changes what those digits are **worth**, which is the limits'
+        business and nothing else's (AD-31, F48).
+        """
+        for name in ("lathe-decimal-is-b", "lathe-decimal-calculator", "lathe-decimal-no-machine"):
+            with self.subTest(case=name):
+                lines = self.lines(name)
+                self.assertIn("G01 Z-10 F140", lines)
+                self.assertIn("G01 Z-10. F140.", lines)
+
+    def test_a_machine_case_really_runs_against_that_machine(self):
+        """The guard on the generated fixtures: the case's machine must reach the run.
+
+        `tests/unit/resolved.test.ts` keys an effective entry by the machine's **parameters**
+        alone, so a machine that picks exactly the profile's defaults — `lathe-decimal-
+        calculator`, whose preset is the lathe's default — shares its file with the
+        "no machine" entry of the same profile, and which of the two is written depends on
+        the order the goldens are walked in. It is right today; this asserts it rather than
+        trusting it, because the difference is invisible in the text and decides whether a
+        value is resolved from the machine or from "every preset agrees" (AD-31).
+        """
+        for name, source in (
+            ("lathe-decimal-is-b", "machine"),
+            ("lathe-decimal-calculator", "machine"),
+            ("lathe-feed-limit-machine", "machine"),
+            ("lathe-decimal-no-machine", "profile"),
+            ("lathe-system-b", "profile"),
+        ):
+            with self.subTest(case=name):
+                machine = context_of(self.case(name))["machine"]
+                self.assertEqual(machine["source"]["numberInput"], source)
+
+    def test_the_limits_compare_what_the_machine_reads(self):
+        """A largest feed of 0.2 is 0.2 mm/rev, not the literal 0.2 (F48).
+
+        On this machine a feed word written without a decimal point is a count of 0.001 mm
+        increments, so `F250` is 0.25 mm/rev; 120 % of it is 0.3, which is over the limit,
+        and the limit is written back into the word's own form as `F200`. The two feeds that
+        stay under it are scaled as written.
+        """
+        payload = self.output("lathe-feed-limit-machine")
+        lines = payload["text"].split("\n")
+        self.assertIn("G01 Z-10. F186", lines)
+        self.assertIn("G01 X38. F200", lines)
+        self.assertIn("G01 Z-20. F0.14", lines)
+        self.assertEqual(
+            payload["findings"][0]["message"],
+            "F250 would become 300; the largest feed (0.2) was used instead, written as 200.",
+        )
+        self.assertIn("Machine 'Lathe 2'.", payload["message"])
+
+    def test_with_no_machine_the_limits_compare_the_value_as_written(self):
+        """The same program and the same result, for a different reason.
+
+        With no machine a word keeps a value only where every preset the profile declares
+        reads it alike (AD-31). The three Fanuc presets read a **feed** as written whatever
+        they do to a length, so the limit applies — as 200 mm/rev, the number the user
+        typed. The written answer is `F200` in both cases and means two different things,
+        which is exactly why the summary says which machine the run used.
+        """
+        payload = self.output("lathe-feed-limit-no-machine")
+        self.assertIn("G01 X38. F200", payload["text"].split("\n"))
+        self.assertEqual(
+            payload["findings"][0]["message"],
+            "F250 would become 300; the largest feed (200) was used instead.",
+        )
+        self.assertIn("No machine: profile defaults assumed.", payload["message"])
+
+    def test_a_feed_with_no_value_is_scaled_but_never_limited(self):
+        """A feed per tooth is not a length per time: it has no class and no value.
+
+        The word is still scaled — multiplying it is right in every reading — but no limit
+        is applied to it and the run says so. Comparing it with a "largest feed" the user
+        typed in millimetres per minute would be a guess with a number in front of it.
+        """
+        payload = self.output("klartext-no-value-limit")
+        lines = payload["text"].split("\n")
+        self.assertIn("5 L Y+40 FZ0.06", lines)
+        self.assertIn("4 L X+0 Y+0 F900", lines)  # clamped to the limit
+        self.assertIn("6 L X-10 FU0.14", lines)  # per revolution: a value, under the limit
+        unresolved = [f for f in payload["findings"] if "FZ0.05" in f["message"]]
+        self.assertEqual(len(unresolved), 1)
+        self.assertEqual(unresolved[0]["severity"], "warning")
+        self.assertIn("the feed limits were not applied to it", unresolved[0]["message"])
+        self.assertIn("1 scaled without a limit check", payload["message"])
+
+    def test_a_run_without_a_limit_says_nothing_about_a_value_it_never_needed(self):
+        """The same program with no limit: no finding, because nothing was compared."""
+        case = self.case("klartext-no-value-limit")
+        context = context_of(case)
+        context["params"] = {"percent": 120, "perRevolution": "yes"}
+        result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context)
+        self.assertTrue(result.ok, result.stderr)
+        self.assertEqual(result.json()["findings"], [])
+
+    def test_the_machine_decides_whether_a_value_may_be_given_a_decimal_point(self):
+        """The machine reaches every Phase 1 number rule through the effective profile.
+
+        `applyMachine` sets `syntax.decimalPointSignificant` from the length class's reading
+        (AD-31): on a control with increment input a point-less word is a count of
+        increments, and giving it a point multiplies what the control reads by a thousand —
+        so a run that asks for two decimals rounds such a value whole instead and says so.
+        With calculator-type input, which is what the lathe profile defaults to, `F155` and
+        `F155.` are the same number and the decimals are written. Nothing in this script
+        decides that; it reads `syntax.decimalPointSignificant` as it did in Phase 1.
+        """
+        case = self.case("lathe-decimal-is-b")
+        program = "G99\nG01 Z-10. F155\n"
+        for name, expected in (("lathe-decimal-is-b", "F140"), ("lathe-decimal-calculator", "F139.50")):
+            with self.subTest(case=name):
+                context = context_of(self.case(name))
+                context["params"] = {"percent": 90, "decimals": "2"}
+                result = helpers.run_script(SCRIPT, stdin=program, context=context)
+                self.assertTrue(result.ok, result.stderr)
+                payload = result.json()
+                self.assertEqual(payload["text"], "G99\nG01 Z-10. %s\n" % expected)
+        self.assertTrue(case.expected_file.is_file())
+
+    def test_the_summary_names_the_machine_or_says_there_is_none(self):
+        self.assertIn("Machine 'Lathe IS-B'.", self.output("lathe-decimal-is-b")["message"])
+        self.assertIn("Machine 'Lathe B'.", self.output("lathe-system-b")["message"])
+        self.assertIn(
+            "No machine: profile defaults assumed.", self.output("lathe-turning")["message"]
+        )
+
+    # -- the option, as older contexts send it ------------------------------
+
+    def test_a_context_that_still_sends_a_boolean_is_honoured(self):
+        """`perRevolution` was a `bool` in Phase 1 (F33).
+
+        The form engine turns a remembered `false` into the new field's default, so the app
+        never sends one; a hand-written or older context still can, and a run that said
+        `true` or `false` meant it.
+        """
+        program = "G99\nG01 Z-10. F0.25\n"
+        for value, expected in ((True, "G01 Z-10. F0.23"), (False, "G01 Z-10. F0.25")):
+            with self.subTest(perRevolution=value):
+                context = helpers.effective_context(
+                    "fanuc-lathe", params={"percent": 90, "perRevolution": value}
+                )
+                result = helpers.run_script(SCRIPT, stdin=program, context=context)
+                self.assertTrue(result.ok, result.stderr)
+                self.assertIn(expected, result.json()["text"].split("\n"))

@@ -387,6 +387,26 @@ export function createHarness(cfg, rec, send) {
     },
 
     /**
+     * The app's own JSON files, by name, parsed — `settings.json`, `machines.json` or
+     * `state.json` (M6). The harness resolves the folder the way the app does, so a
+     * scenario asserts on what the app wrote without knowing where `--home` put it.
+     *
+     * `null` means the file is not there yet, which is a state worth asserting on after a
+     * fresh start.
+     *
+     *     const file = await h.config.read('machines.json')
+     *     assert.deepEqual(file.machines.map((m) => m.id), ['lathe-is-b'])
+     *
+     */
+    config: {
+      /**
+       * @param {'settings.json' | 'machines.json' | 'state.json'} name
+       * @returns {Promise<unknown | null>}
+       */
+      read: (name) => invoke('h_config_read', { name }),
+    },
+
+    /**
      * Drops files or folders on the window: grants them like tauri-plugin-fs does and
      * emits `tauri://drag-drop`.
      * @param {string[]} paths

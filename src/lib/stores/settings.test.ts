@@ -13,6 +13,7 @@ const PATHS: ConfigPaths = {
   settingsFile: '/cfg/settings.json',
   stateFile: '/data/state.json',
   userScriptsDir: '/cfg/scripts',
+  machinesFile: '/cfg/machines.json',
 };
 
 function load(o: Partial<ConfigLoad> = {}): ConfigLoad {
@@ -21,6 +22,8 @@ function load(o: Partial<ConfigLoad> = {}): ConfigLoad {
     settingsError: null,
     ui: {},
     stateError: null,
+    machines: {},
+    machinesError: null,
     paths: PATHS,
     ...o,
   };

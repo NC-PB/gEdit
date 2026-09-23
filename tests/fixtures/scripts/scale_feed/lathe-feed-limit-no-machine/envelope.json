@@ -1,0 +1,10 @@
+{
+  "message": "Scaled 3 feed rates to 120 %; 1 clamped to a limit. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 10,
+      "severity": "info",
+      "message": "F250 would become 300; the largest feed (200) was used instead."
+    }
+  ]
+}

@@ -924,6 +924,33 @@ pub fn h_quit(app: AppHandle, mode: String, delay_ms: Option<u64>) {
     });
 }
 
+/// One of the app's **own** JSON files, by name, parsed.
+///
+/// `settings.json` and `machines.json` live in the config folder, `state.json` in the
+/// data folder; the harness resolves them itself, exactly as the app does, so a scenario
+/// never has to know where `--home` put them. Only these three names are accepted: the
+/// point of the command is to read what the app wrote, not to give the page a file
+/// reader (it has `h_read_disk` for its own scratch files).
+///
+/// A file that is not there yet answers `null` — "nothing has been written", which is a
+/// perfectly good state to assert on after a fresh start.
+#[tauri::command(async)]
+pub fn h_config_read(app: AppHandle, name: String) -> Result<Value, String> {
+    let dirs = crate::paths::app_dirs(&app)?;
+    let path = match name.as_str() {
+        "settings.json" => dirs.settings_file(),
+        "machines.json" => dirs.machines_file(),
+        "state.json" => dirs.state_file(),
+        other => return Err(format!("h_config_read: unknown file {other}")),
+    };
+    match std::fs::read_to_string(&path) {
+        Ok(text) => serde_json::from_str::<Value>(&text)
+            .map_err(|e| format!("{name}: invalid JSON ({e})")),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(Value::Null),
+        Err(err) => Err(format!("{name}: {err}")),
+    }
+}
+
 /// Window and app state as AppKit sees it, plus the number of visible alerts.
 #[tauri::command(async)]
 pub fn h_window_state(app: AppHandle) -> Result<Value, String> {

@@ -29,6 +29,7 @@ import { editor } from '$lib/monaco/editorService';
 import { codes } from '$lib/stores/codes';
 import { docs } from '$lib/stores/documents';
 import { layout } from '$lib/stores/layout';
+import { machines } from '$lib/stores/machines';
 import { profiles } from '$lib/stores/profiles';
 import { recent } from '$lib/stores/recent';
 import { results } from '$lib/stores/results';
@@ -62,4 +63,5 @@ export const ctx: AppContext = {
   results,
   bookmarks,
   scripts,
+  machines,
 };

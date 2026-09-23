@@ -39,22 +39,20 @@ import { initialValues } from '$lib/core/forms/values';
 import { transformScope } from '$lib/core/transforms/scope';
 import { applyLines as applyLinesToModel } from '$lib/monaco/applyLines';
 import { editor as appEditor } from '$lib/monaco/editorService';
-import { codes as appCodes } from '$lib/stores/codes';
 import { docs as appDocs } from '$lib/stores/documents';
-import { profiles as appProfiles } from '$lib/stores/profiles';
+import { machines as appMachines } from '$lib/stores/machines';
 import { results as appResults } from '$lib/stores/results';
 import { uiState as appUiState } from '$lib/stores/uiState';
 import { t as translate } from '$lib/i18n';
 import type {
-  CodeDbService,
   DocId,
   DocumentStore,
   EditorService,
   FileOps,
+  MachineService,
   Modals,
   Msg,
   NativeDialogs,
-  ProfileRegistry,
   ReportData,
   ResultsService,
   StatusService,
@@ -63,7 +61,7 @@ import type {
   UiStateStore,
 } from '$lib/app/types';
 import type { FieldSpec } from '$lib/core/forms/types';
-import type { CompiledProfile } from '$lib/core/profiles/types';
+import type { EffectiveProfile } from '$lib/core/machines/types';
 import type { TransformContext, TransformDef, TransformResult } from '$lib/core/transforms/types';
 
 /** The `uiState.lastParams` key a transform's form values are remembered under. */
@@ -74,8 +72,13 @@ export function formKey(id: string): string {
 export interface TransformDeps {
   docs: Pick<DocumentStore, 'getActiveId' | 'get'>;
   editor: Pick<EditorService, 'getLineCount' | 'getLines' | 'selectionLines'>;
-  profiles: Pick<ProfileRegistry, 'compiled'>;
-  codes: Pick<CodeDbService, 'forProfile'>;
+  /**
+   * The document's **effective** view (AD-31): the profile with its machine applied, the
+   * database that goes with it, and the machine itself. A transform never asks for a
+   * profile by id — `X10` means something different on two machines of the same dialect,
+   * and the transform is the thing that would write the wrong number.
+   */
+  machines: Pick<MachineService, 'effective'>;
   modals: Pick<Modals, 'form'>;
   dialogs: Pick<NativeDialogs, 'confirm'>;
   status: Pick<StatusService, 'show'>;
@@ -150,13 +153,14 @@ export function createTransformService(deps: TransformDeps): TransformService {
         return null;
       }
 
-      let cp: CompiledProfile;
+      let effective: EffectiveProfile;
       try {
-        cp = deps.profiles.compiled(doc.profileId);
+        effective = deps.machines.effective(docId);
       } catch {
         deps.status.show(t('transforms.noProfile', { profile: doc.profileId }), { error: true });
         return null;
       }
+      const cp = effective.cp;
 
       // 1. Availability.
       const availability = def.available(cp);
@@ -192,7 +196,8 @@ export function createTransformService(deps: TransformDeps): TransformService {
       const document = partial ? deps.editor.getLines(docId, 1, lineCount) : lines;
       const ctx: TransformContext = {
         cp,
-        codes: deps.codes.forProfile(doc.profileId),
+        codes: effective.codes,
+        machine: effective.machine,
         options,
         firstLine: scope.startLine,
         document,
@@ -251,8 +256,7 @@ export function createTransformService(deps: TransformDeps): TransformService {
 export const transforms: TransformService = createTransformService({
   docs: appDocs,
   editor: appEditor,
-  profiles: appProfiles,
-  codes: appCodes,
+  machines: appMachines,
   modals: appModals,
   dialogs: appDialogs,
   status: appStatus,

@@ -1,0 +1,18 @@
+{
+  "note": "G8 M6, the reviewer's own program, and the twin of renumber/computed-jump. `GOTO #100` works its target out while the program runs, so there is no number for \"Keep numbers that are pointed at\" to hold on to and the block it lands on is removed like any other. The option that was meant to make this transform safer was also the flag that switched the Phase 1 warning off, so the run said \"removed 3 block numbers\" and nothing else. It asks first now and lists the line.",
+  "profile": "fanuc-gcode",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.removeBlockNumbers.summary",
+    "skipped": [
+      {
+        "line": 2,
+        "severity": "warning"
+      }
+    ],
+    "warnings": [
+      "ncNumbering.removeBlockNumbers.referencesComputed"
+    ],
+    "preflight": "ncNumbering.removeBlockNumbers.computed"
+  }
+}

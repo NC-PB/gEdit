@@ -4,7 +4,7 @@
     {
       "line": 7,
       "severity": "warning",
-      "message": "This block runs at S800, which was scaled on line 5, and its code (G76) is a threading cycle in another G-code system of this dialect: if this is a lathe program the thread is cut at the changed speed, so check the block by hand."
+      "message": "This block runs at S800, which was scaled on line 5, and its code (G76) is a threading cycle on another kind of machine or in another G-code system: if this is a lathe program the thread is cut at the changed speed, so check the block by hand."
     }
   ]
 }

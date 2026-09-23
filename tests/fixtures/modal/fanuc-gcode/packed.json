@@ -1,0 +1,29 @@
+{
+  "about": "A packed Fanuc program: no spaces between the words, block numbers, block skip, variables and a jump. The same state has to come out of it as out of a spaced program.",
+  "input": "../../nc/fanuc/f02-packed.nc",
+  "states": [
+    { "line": 4,
+      "after": { "groups": { "motion": "G0", "distance": "G90" }, "distance": "absolute" } },
+    { "line": 5,
+      "about": "`N10T1M6`: a block number, then the tool and the trigger, with nothing between them.",
+      "after": { "tool": "1", "block": { "toolChange": true } } },
+    { "line": 9,
+      "about": "`Z-#101` is a variable move; the F of the same block is still a feed.",
+      "after": { "groups": { "motion": "G1" }, "feed": "300." } },
+    { "line": 11,
+      "about": "AD-19 rule 9: `IF [...] GOTO100` is not a code, so nothing changes.",
+      "after": { "groups": { "motion": "G1" }, "feed": "1200.", "activeCycle": null } },
+    { "line": 18,
+      "about": "`N130M06T2`: the trigger is written before the station, and `M06` is `M6`.",
+      "after": { "tool": "2", "block": { "toolChange": true } } },
+    { "line": 20,
+      "after": { "activeCycle": "G81", "feed": "200.", "block": { "cycle": "G81" } } },
+    { "line": 22,
+      "after": { "activeCycle": null, "groups": { "cycle": "G80" } } },
+    { "line": 23,
+      "about": "`N180T3G43H3M6`: the station, a length offset and the trigger in one packed block.",
+      "after": { "tool": "3", "block": { "toolChange": true } } },
+    { "line": 26,
+      "after": { "groups": { "distance": "G91" }, "distance": "incremental" } }
+  ]
+}

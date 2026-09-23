@@ -80,9 +80,24 @@ describe('encoding fixtures', () => {
   });
 });
 
+/**
+ * The owner's own programs he explicitly handed over as public (plan §9.2, D45).
+ *
+ * They are the one kind of committed fixture that was **not** written for gEdit, so they
+ * carry no `WRITTEN FOR GEDIT` marker and they keep whatever bytes the control wrote —
+ * line endings included, because a published program has to be byte-identical to the one
+ * that ran. What they do need is the README line: control, a generic description, the
+ * hand-over date and the owner's permission (F51).
+ */
+const OWNER_PUBLIC = 'nc/owner-public/';
+
 describe('hand-written fixtures', () => {
-  const handWritten = listFixtures('nc').filter((rel) => !rel.startsWith('nc/encoding/'));
-  const crlf = ['nc/fanuc/f01-mill-3tools.nc', 'nc/heidenhain/h01-3tools.h'];
+  const handWritten = listFixtures('nc').filter(
+    (rel) => !rel.startsWith('nc/encoding/') && !rel.startsWith(OWNER_PUBLIC),
+  );
+  // M6/WP6.2 added `l01-turning-a.nc`, the one turning fixture written with CRLF, so
+  // that the lathe side has a byte-exact round trip of the endings a control writes.
+  const crlf = ['nc/fanuc/f01-mill-3tools.nc', 'nc/fanuc-lathe/l01-turning-a.nc', 'nc/heidenhain/h01-3tools.h'];
 
   it.each(handWritten)('%s keeps its line endings', (rel) => {
     const text = roughText(readFixture(rel));
@@ -99,6 +114,10 @@ describe('provenance', () => {
     expect(readme).toContain(`\`${rel.split('/').pop()}\``);
     const bytes = readFixture(rel);
     if (bytes.length === 0) return; // empty.txt has no room for a comment
+    // A program the owner handed over was written by his CAM, not for gEdit: it carries
+    // no marker, and putting one in would change the bytes it is committed for. Its
+    // README line is what says where it came from and that he allowed it.
+    if (rel.startsWith(OWNER_PUBLIC)) return;
     // First line, or the block after BEGIN PGM in Klartext programs.
     const head = roughText(bytes).replace(/^\0+/, '').split(/\r\n|\r|\n/, 2);
     expect(head.some((line) => /^(?:\d+ ; |; |\()WRITTEN FOR GEDIT\b/.test(line)), head.join(' | ')).toBe(true);

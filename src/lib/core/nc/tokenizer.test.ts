@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import fanucJson from '$lib/data/profiles/fanuc-gcode.json';
 import heidenhainJson from '$lib/data/profiles/heidenhain-klartext.json';
+import { BUILTIN_PROFILE_JSON } from '$lib/data/profiles';
 import { compileProfile } from '$lib/core/profiles/compile';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
 import { blockNumberOf, tokenizeLine } from './tokenizer';
@@ -21,6 +22,11 @@ import type { LineState, NcToken } from './types';
 
 const fanuc = compileProfile(fanucJson as unknown as Profile);
 const klartext = compileProfile(heidenhainJson as unknown as Profile);
+// The lathe is a child profile (AD-16), so it is compiled from the **resolved** list:
+// its own file says only what differs from the mill.
+const lathe = compileProfile(
+  (BUILTIN_PROFILE_JSON.find((raw) => (raw as Profile).id === 'fanuc-lathe') ?? {}) as Profile,
+);
 
 interface GoldenEntry {
   line: string;
@@ -48,6 +54,9 @@ function dump(tokens: NcToken[]): string {
 
 describe.each([
   ['fanuc-gcode', fanuc],
+  // M6: the lathe inherits the mill's whole `syntax`, so it tokenizes the same lines the
+  // same way. WP6.2 replaces this golden with lathe lines (`T0101`, `U`/`W`, `G96 S`).
+  ['fanuc-lathe', lathe],
   ['heidenhain-klartext', klartext],
 ])('%s goldens', (profileId, cp) => {
   const entries = golden(profileId);

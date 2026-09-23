@@ -1,0 +1,10 @@
+{
+  "profile": "fanuc-lathe",
+  "machine": {
+    "numberInput": {
+      "incrementMm": "1",
+      "mode": "calculator"
+    }
+  },
+  "machineName": "Lathe calc"
+}

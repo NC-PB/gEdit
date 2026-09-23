@@ -48,6 +48,7 @@ function harness(over: Partial<BootstrapDeps> = {}): Harness {
     commandContext: () => CONTEXT,
     loadSettings: async () => log.push('loadSettings'),
     loadUiState: async () => log.push('loadUiState'),
+    loadMachines: async () => log.push('loadMachines'),
     loadContributions: async () => step('loadContributions'),
     installDispatcher: () => step('installDispatcher'),
     watchContext: () => step('watchContext'),
@@ -78,6 +79,7 @@ describe('startApp', () => {
       'setContextProvider',
       'loadSettings',
       'loadUiState',
+      'loadMachines',
       'loadContributions',
       'installDispatcher',
       'watchContext',
@@ -193,10 +195,11 @@ describe('startApp', () => {
     const h = harness({
       loadSettings: () => Promise.reject(new Error('EACCES settings.json')),
       loadUiState: () => Promise.reject(new Error('EACCES state.json')),
+      loadMachines: () => Promise.reject(new Error('EACCES machines.json')),
     });
     await createStartApp(h.deps)();
     expect(h.log).toContain('loadContributions');
-    expect(error).toHaveBeenCalledTimes(2);
+    expect(error).toHaveBeenCalledTimes(3);
     error.mockRestore();
   });
 

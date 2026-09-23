@@ -1,0 +1,436 @@
+{
+  "codes": "fanuc-lathe",
+  "machine": {
+    "choice": "document",
+    "id": "review",
+    "name": "review",
+    "params": {
+      "diameter": "on",
+      "modalInitial": {},
+      "numberInput": {
+        "incrementMm": "0.001",
+        "mode": "calculator"
+      },
+      "units": "mm",
+      "variants": {
+        "gcodeSystem": "A"
+      }
+    },
+    "source": {
+      "diameter": "profile",
+      "modalInitial": {
+        "feedmode": "profile",
+        "plane": "profile",
+        "spindlemode": "profile"
+      },
+      "numberInput": "machine",
+      "units": "profile",
+      "variants": {
+        "gcodeSystem": "profile"
+      }
+    }
+  },
+  "profile": {
+    "addresses": {
+      "angular": [
+        "C"
+      ],
+      "arcCenter": [
+        "I",
+        "K"
+      ],
+      "arcCenterMode": "incremental",
+      "axes": [
+        "X",
+        "Z",
+        "C",
+        "Y",
+        "U",
+        "W"
+      ],
+      "diameter": [
+        "X",
+        "U"
+      ],
+      "feed": "F",
+      "incremental": {
+        "U": "X",
+        "W": "Z"
+      },
+      "spindle": "S",
+      "tool": "T"
+    },
+    "codes": "fanuc-lathe",
+    "compare": {
+      "ignoreBlockNumbers": true,
+      "ignoreCase": true,
+      "ignoreComments": false,
+      "ignoreNumberFormat": true,
+      "ignoreWhitespace": true,
+      "tolerance": 0
+    },
+    "detect": {
+      "content": [
+        {
+          "pattern": "^\\s*%\\s*$",
+          "weight": 5
+        },
+        {
+          "pattern": "^\\s*[O:]\\d{1,8}(?!\\d)",
+          "weight": 5
+        },
+        {
+          "pattern": "^\\s*N\\d+",
+          "weight": 1
+        },
+        {
+          "pattern": "^\\s*(N\\d+\\s*)?[GM]\\d{1,3}(\\.\\d)?(?![\\d.])",
+          "weight": 1
+        },
+        {
+          "pattern": "^\\s*\\([^)]*\\)\\s*$",
+          "weight": 1
+        },
+        {
+          "pattern": "(?<![A-Z])T\\d{4}(?!\\d)",
+          "weight": 3
+        },
+        {
+          "pattern": "(?<![A-Z])G0*50\\s*S\\d",
+          "weight": 4
+        },
+        {
+          "pattern": "(?<![A-Z])G0*92\\s*S\\d",
+          "weight": 4
+        },
+        {
+          "pattern": "(?<![A-Z])G0*9[67](?![\\d.])",
+          "weight": 4
+        },
+        {
+          "pattern": "(?<![A-Z])G0*7[0-3](?![\\d.])(?=[^(]*P\\s*\\d)(?=[^(]*Q\\s*\\d)",
+          "weight": 6
+        },
+        {
+          "pattern": "(?<![A-Z])G0*7[12]\\s*U[\\d.]+\\s*R",
+          "weight": 6
+        },
+        {
+          "pattern": "(?<![A-Z])G0*28\\s*U",
+          "weight": 4
+        },
+        {
+          "pattern": "(?<![A-Z])[UW][-+]?\\.?\\d",
+          "weight": 1
+        }
+      ],
+      "extensions": {
+        "cnc": 2,
+        "eia": 2,
+        "iso": 2,
+        "min": 2,
+        "nc": 3,
+        "tap": 3
+      },
+      "priority": 0
+    },
+    "editing": {
+      "forceUppercase": true,
+      "preventLineJoin": true,
+      "tabWidth": 4
+    },
+    "extends": "fanuc-gcode",
+    "files": {
+      "defaultExtension": "nc",
+      "encoding": "keep",
+      "extensions": [
+        "nc",
+        "tap",
+        "cnc",
+        "eia",
+        "iso",
+        "min",
+        "ncc",
+        "ptp",
+        "txt"
+      ],
+      "filterName": "Fanuc lathe G-Code",
+      "lineEnding": "keep",
+      "newFileLineEnding": "crlf"
+    },
+    "grammar": "iso",
+    "id": "fanuc-lathe",
+    "machineParams": {
+      "diameter": "on",
+      "modalGroups": [
+        "feedmode",
+        "spindlemode",
+        "plane"
+      ],
+      "numberInput": {
+        "default": "calculator",
+        "presets": [
+          {
+            "id": "is-b",
+            "label": "Increments of 0.001 mm (IS-B): X50 is 0.050 mm, X50. is 50 mm; feeds and speeds as written (F200 is 200)",
+            "source": "syntax-fanuc.md §3.2",
+            "value": {
+              "classes": {
+                "feedPerMin": {
+                  "mode": "calculator"
+                },
+                "feedPerRev": {
+                  "mode": "calculator"
+                }
+              },
+              "incrementDeg": "0.001",
+              "incrementInch": "0.0001",
+              "incrementMm": "0.001",
+              "incrementSec": "0.001",
+              "mode": "increment"
+            },
+            "verify": true
+          },
+          {
+            "id": "is-c",
+            "label": "Increments of 0.0001 mm (IS-C): X50 is 0.0050 mm, X50. is 50 mm; feeds and speeds as written (F200 is 200)",
+            "source": "syntax-fanuc.md §3.2",
+            "value": {
+              "classes": {
+                "feedPerMin": {
+                  "mode": "calculator"
+                },
+                "feedPerRev": {
+                  "mode": "calculator"
+                }
+              },
+              "incrementDeg": "0.0001",
+              "incrementInch": "0.00001",
+              "incrementMm": "0.0001",
+              "incrementSec": "0.0001",
+              "mode": "increment"
+            },
+            "verify": true
+          },
+          {
+            "id": "calculator",
+            "label": "As written: X50 and X50. are both 50 mm; cycle steps in microns (Q6000 is 6 mm)",
+            "source": "syntax-fanuc.md §3.2",
+            "value": {
+              "incrementMm": "0.001",
+              "mode": "calculator"
+            },
+            "verify": true
+          }
+        ]
+      },
+      "units": "mm",
+      "variants": [
+        {
+          "choices": [
+            {
+              "codes": "fanuc-lathe",
+              "detect": [
+                {
+                  "pattern": "(?<![A-Z])G0*50\\s*S\\d",
+                  "weight": 4
+                },
+                {
+                  "pattern": "(?<![A-Z])G0*9[89](?![\\d.])",
+                  "weight": 2
+                }
+              ],
+              "label": "G-code system A",
+              "value": "A"
+            },
+            {
+              "codes": "fanuc-lathe-b",
+              "detect": [
+                {
+                  "pattern": "(?<![A-Z])G0*92\\s*S\\d",
+                  "weight": 5
+                },
+                {
+                  "pattern": "(?<![A-Z])G0*7[789](?![\\d.])",
+                  "weight": 5
+                },
+                {
+                  "pattern": "(?<![A-Z])G0*9[45](?![\\d.])",
+                  "weight": 2
+                }
+              ],
+              "label": "G-code system B",
+              "overlay": {
+                "modal": {
+                  "initial": {
+                    "feedmode": "G95"
+                  }
+                }
+              },
+              "value": "B"
+            }
+          ],
+          "default": "A",
+          "id": "gcodeSystem",
+          "label": "G-code system"
+        }
+      ]
+    },
+    "machineType": "lathe",
+    "modal": {
+      "diameter": "on",
+      "initial": {
+        "feedmode": "G99",
+        "plane": "G18",
+        "spindlemode": "G97"
+      },
+      "sources": {
+        "diameter": "profile",
+        "feedmode": "profile",
+        "plane": "profile",
+        "spindlemode": "profile",
+        "units": "profile"
+      },
+      "units": "mm"
+    },
+    "name": "Fanuc (ISO) lathe",
+    "numbering": {
+      "digits": 0,
+      "max": 99999,
+      "onOverflow": "wrap",
+      "references": [
+        {
+          "addresses": [
+            "P"
+          ],
+          "rewrite": false,
+          "trigger": "(?<![A-Z])M\\s*0*99(?!\\d)"
+        },
+        {
+          "addresses": [
+            "Q"
+          ],
+          "trigger": "^(?=[^(]*Q\\s*\\d)[^(]*(?<![A-Z])M\\s*0*98(?!\\d)"
+        },
+        {
+          "addresses": [
+            "Q"
+          ],
+          "rewrite": false,
+          "trigger": "^(?=[^(]*P\\s*\\d)(?=[^(]*Q\\s*\\d)[^(]*(?<![A-Z])M\\s*0*98(?!\\d)"
+        },
+        {
+          "addresses": [
+            "P",
+            "Q"
+          ],
+          "trigger": "^(?=[^(]*P\\s*\\d)(?=[^(]*Q\\s*\\d)[^(]*(?<![A-Z])G\\s*0*7[0-3](?![\\d.])"
+        },
+        {
+          "addresses": [
+            "GOTO"
+          ],
+          "trigger": "(?<![A-Z])GOTO"
+        }
+      ],
+      "restartAtProgramStart": true,
+      "skipEmpty": true,
+      "skipStartingWith": [
+        "%",
+        "O",
+        "("
+      ],
+      "spacesAfter": 1,
+      "start": 10,
+      "step": 10
+    },
+    "onLoad": {
+      "stripNul": true
+    },
+    "outline": [
+      {
+        "kind": "program",
+        "pattern": "^\\s*[O:](?<name>\\d+)"
+      },
+      {
+        "kind": "comment",
+        "pattern": "^\\s*\\((?<text>[^)]*)\\)\\s*$"
+      },
+      {
+        "kind": "stop",
+        "pattern": "(?<![A-Z])M0*[01](?!\\d)"
+      },
+      {
+        "kind": "subprogram-call",
+        "pattern": "(?<![A-Z])(?<text>M0*98\\s*[PQ]\\d+(?:\\s*L\\d+)?|G0*65\\s*P\\d+)"
+      },
+      {
+        "kind": "end",
+        "pattern": "(?<![A-Z])M0*(?:30|2|99)(?!\\d)"
+      }
+    ],
+    "program": {
+      "end": [
+        "(?<![A-Z])M0*(30|2)(?!\\d)"
+      ],
+      "start": [
+        "^\\s*O(?<name>\\d+)",
+        "^\\s*:(?<name>\\d+)"
+      ]
+    },
+    "shortName": "Fanuc T",
+    "syntax": {
+      "blockNumber": {
+        "altPrefixes": [],
+        "mandatory": false,
+        "mode": "prefix",
+        "prefix": "N"
+      },
+      "blockSkip": {
+        "chars": "/",
+        "levels": true,
+        "position": "either"
+      },
+      "comments": [
+        {
+          "end": ")",
+          "start": "("
+        }
+      ],
+      "decimalPointSignificant": false,
+      "decimalSeparator": ".",
+      "keywords": [
+        "GOTO",
+        "IF",
+        "THEN",
+        "WHILE",
+        "DO",
+        "END",
+        "EQ",
+        "NE",
+        "GT",
+        "LT",
+        "GE",
+        "LE",
+        "AND",
+        "OR",
+        "XOR",
+        "MOD"
+      ],
+      "variables": "#\\d+",
+      "wordSeparatorRequired": false
+    },
+    "toolCall": {
+      "ignore": "(?<![A-Z])T(?:\\d{0,2}00|0+)(?!\\d)",
+      "tool": "(?<![A-Z])T(?<tool>\\d{1,2}?)(?:\\d{2})?(?!\\d)",
+      "toolFrom": "same-line",
+      "trigger": "(?<![A-Z])T\\d{1,4}(?!\\d)"
+    },
+    "toolList": {
+      "commentFilter": "^[-*=_\\s]*$",
+      "description": "auto",
+      "dropLeadingZeros": true
+    },
+    "version": 1
+  }
+}

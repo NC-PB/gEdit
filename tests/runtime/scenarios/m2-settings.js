@@ -69,7 +69,15 @@ scenario('m2-settings', { timeout: 300, files: { [`${CONFIG}/settings.json`]: BR
   h.check('Mod+, opens the settings dialog (§7.11)', !!dialog())
   h.check('it is the one `modal` on screen', h.qa('modal').length === 1 && h.q('modal')?.dataset.modal === 'settings', h.qa('modal').map((e) => e.dataset.modal))
   const categories = h.qa('settings-category').map((e) => e.dataset.category)
-  h.check('the five pages of §7.7 are there, in order', JSON.stringify(categories) === JSON.stringify(['appearance', 'editor', 'assistance', 'files', 'scripts']), categories)
+  // M6 (P6 item 9) adds a sixth tab after the five schema pages. It is **not** a settings
+  // page: machine configurations are records in `machines.json`, not keys in
+  // `settings.json` (D50), and `pagesOf` builds pages from `SETTING_FIELDS` alone. So the
+  // check is "the five pages of §7.7, in order, and then Machines" rather than a count.
+  h.check(
+    'the five pages of §7.7 are there in order, with the M6 Machines tab behind them',
+    JSON.stringify(categories) === JSON.stringify(['appearance', 'editor', 'assistance', 'files', 'scripts', 'machines']),
+    categories,
+  )
   h.check('Appearance is open first', h.q('settings-page')?.dataset.category === 'appearance')
   h.check('its fields are drawn with labels, not with i18n keys', !!field(h, 'appearance.theme') && !!field(h, 'appearance.editorFontSize') && !/settings\.appearance/.test(dialog()?.textContent ?? ''), dialog()?.textContent?.slice(0, 120))
   h.check('another page’s fields are not drawn', !field(h, 'editor.tabWidth'))

@@ -12,7 +12,76 @@ import { status } from '$lib/app/status';
 import { docs } from '$lib/stores/documents';
 import { profiles } from '$lib/stores/profiles';
 import { t } from '$lib/i18n';
-import type { Contribution, QuickPickItem } from '$lib/app/types';
+import type { Contribution, ProfileInfo, QuickPickItem } from '$lib/app/types';
+
+/** What the picker offers for one profile: its id and the name it is offered under. */
+export interface PickerEntry {
+  id: string;
+  label: string;
+}
+
+/**
+ * The leading words every name in a family shares (`''` when there are none).
+ *
+ * A head that is one of the names whole is no head at all: "Fanuc" and "Fanuc lathe" would
+ * leave the first with nothing to be called, so those two are written out in full.
+ */
+function familyHead(names: readonly string[]): string {
+  if (names.length < 2) return '';
+  const words = names.map((name) => name.split(' '));
+  let n = 0;
+  while (words.every((parts) => n < parts.length && parts[n] === words[0][n])) n++;
+  if (n === 0 || words.some((parts) => parts.length === n)) return '';
+  return words[0].slice(0, n).join(' ');
+}
+
+/**
+ * The picker's entries: every child right after the profile it extends (M6), and a family
+ * that shares the start of its name offered under that shared part.
+ *
+ * The names are **data**, not UI strings (contrib README rule 3) — what this builds is the
+ * grouping around them, so that a lathe profile that inherits from a mill one is visibly
+ * the same control and not a second, unrelated dialect.
+ *
+ * `nameOf` gives a profile's display name (`Profile.name`), which is what a user calls the
+ * dialect; `ProfileInfo.name` is the file-dialog filter and reads like one.
+ */
+export function pickerEntries(
+  all: readonly ProfileInfo[],
+  nameOf: (id: string) => string,
+): PickerEntry[] {
+  const known = new Set(all.map((info) => info.id));
+  const childrenOf = new Map<string, ProfileInfo[]>();
+  const roots: ProfileInfo[] = [];
+  for (const info of all) {
+    const parent = info.parent !== null && known.has(info.parent) && info.parent !== info.id ? info.parent : null;
+    if (parent === null) roots.push(info);
+    else childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), info]);
+  }
+
+  const out: PickerEntry[] = [];
+  const seen = new Set<string>();
+  const push = (info: ProfileInfo, head: string): void => {
+    if (seen.has(info.id)) return;
+    seen.add(info.id);
+    const name = nameOf(info.id);
+    const tail = head === '' ? name : name.slice(head.length).trim();
+    const label = head === '' || tail === '' ? name : t('profiles.grouped', { group: head, name: tail });
+    out.push({ id: info.id, label });
+    for (const child of childrenOf.get(info.id) ?? []) push(child, head);
+  };
+
+  for (const root of roots) {
+    // One head for the whole family, the parent's own children and theirs included: the
+    // part every name in it starts with.
+    const family: ProfileInfo[] = [root];
+    for (let i = 0; i < family.length; i++) family.push(...(childrenOf.get(family[i].id) ?? []));
+    push(root, familyHead(family.map((info) => nameOf(info.id))));
+  }
+  // A cycle among user profiles (M12) would leave someone out; the picker still lists it.
+  for (const info of all) push(info, '');
+  return out;
+}
 
 async function pickProfile(): Promise<void> {
   const id = docs.getActiveId();
@@ -20,18 +89,21 @@ async function pickProfile(): Promise<void> {
   if (!doc) return;
 
   const all = profiles.list();
-  const items: QuickPickItem<string>[] = all.map((info) => ({
+  const entries = pickerEntries(all, (profileId) => profiles.profile(profileId).name);
+  const items: QuickPickItem<string>[] = entries.map((entry) => ({
     // Profile names are data, not UI strings (contrib README rule 3).
-    label: info.name,
-    description: info.id === doc.profileId ? '✓' : undefined,
-    detail: t('profiles.extensions', { list: info.extensions.map((e) => `.${e}`).join(', ') }),
-    value: info.id,
+    label: entry.label,
+    description: entry.id === doc.profileId ? '✓' : undefined,
+    detail: t('profiles.extensions', {
+      list: (profiles.get(entry.id)?.extensions ?? []).map((e) => `.${e}`).join(', '),
+    }),
+    value: entry.id,
   }));
   const picked = await modals.quickPick(items, {
     placeholder: t('profiles.placeholder'),
     initialIndex: Math.max(
       0,
-      all.findIndex((info) => info.id === doc.profileId),
+      entries.findIndex((entry) => entry.id === doc.profileId),
     ),
   });
   if (picked === undefined || picked === doc.profileId) return;

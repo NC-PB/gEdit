@@ -11,13 +11,18 @@ shadows the bundled file of the same name (plan §3, AD-13).
 
 | File | Owner | What |
 | --- | --- | --- |
-| `gedit_nc.py` | **WP4.6** | the shared library: context, tokenizer, number formatting, feed modes, report and envelope output (plan §7.10) |
+| `gedit_nc.py` | **WP4.6** | the shared library, and the only import path a script may use: context, tokenizer, number formatting, modal state, machine parameters, report and envelope output (plan §7.10) |
+| `_nc_lex.py` | **P6** | the tokenizer and the number formatting behind it |
+| `_nc_modal.py` | **WP6.4** | `ModalInterpreter` and `FeedModeTracker`: what is in force after a block |
+| `_nc_machine.py` | **WP6.9** | the machine parameters, and what a written number is worth on one |
 | `tool_list.py` | **WP4.6** | tools in order of first use, with descriptions and call counts — `output = "report"` |
 | `scale_feed.py` | **WP4.7** | multiply `F` values by a percentage — `output = "replace"` |
 | `scale_speed.py` | **WP4.7** | multiply `S` values by a percentage — `output = "replace"` |
 
 `gedit_nc.py` and any file whose name starts with `_` are **not listed as scripts**:
-discovery skips them, because they are library code, not commands.
+discovery skips them, because they are library code, not commands. The `_nc_*` modules are
+the internals of `gedit_nc`, which re-exports everything that is public — a script imports
+`gedit_nc` and nothing else, so the split can move without breaking anyone.
 
 ---
 
@@ -108,14 +113,28 @@ your script should survive with defaults rather than a traceback.
   },
   "cursor": { "line": 44, "column": 3 },
   "params": { "percent": 90 },
-  "profile": { /* the resolved dialect profile, as it is shipped */ },
-  "codes":   [ /* the dialect's code database, without templates */ ]
+  "profile": { /* the effective dialect profile: resolved, with the machine applied */ },
+  "codes":   [ /* the effective code database, without templates */ ],
+  "machine": { /* the document's machine, with the source of each parameter */ }
 }
 ```
 
 `profile` and `codes` are what make a script dialect-agnostic: comment syntax, addresses,
 keywords, number format and what each code *means* all come from there. Nothing in a good
 script hardcodes Fanuc.
+
+Both are **effective** (M6): the profile is resolved through its `extends` chain and the
+document's machine configuration is already applied to it, so the chosen G-code system has
+picked the code database, the machine's power-on codes are in `modal.initial` and
+`syntax.decimalPointSignificant` follows how that control reads a number. A script that
+scales values never has to know that machines exist.
+
+`machine` is the machine itself, for the scripts that do: `{id, name, choice, params,
+source}`, where `source` says per parameter whether it came from the machine, from what was
+detected in this program, or from the profile's documented default. Read it with
+`gedit_nc.machine_params(context)`, which answers the profile's own defaults — every source
+`"profile"` — for a document with no machine and for a context from before M6 that does not
+carry the member at all.
 
 ## 4. What your script hands back
 
@@ -226,7 +245,12 @@ Plan §7.10 is the contract; the docstrings in the file are the detail.
 | `tokenize_line(line, cp, prev_state)` | one block's tokens, and the state the next line needs |
 | `mask_comments(line, cp)` | the line with the comments blanked, same offsets — what a profile's own patterns run against |
 | `parse_number`, `format_number`, `scale_decimal` | NC numbers as decimal strings, never as floats |
+| `ModalInterpreter(cp, codes)` | what is in force after a block — see below |
 | `FeedModeTracker(codes)` | G93/G94/G95, G96/G97, the active cycle, whether its `F` is a thread pitch, and whether the code means a threading cycle in another G-code system |
+| `speed_limit_of(codes, tokens)` | the code in this block whose `sets.speedLimit` makes the block's `S` a clamp, or `None` |
+| `machine_type_of(profile)`, `incremental_axes(profile)`, `diameter_axes(profile)` | `'mill'` or `'lathe'`, the `{'U': 'X', 'W': 'Z'}` pairs, and the words written as a diameter |
+| `machine_params(context)` | the document's machine: `params` (how numbers are read, units, diameter, variants, power-on codes) and `source` for each of them — `"machine"`, `"detected"` or `"profile"`. A context from before M6, or a document with no machine, answers the profile's own defaults with every source `"profile"` |
+| `number_class_of`, `value_of`, `write_back`, `readings_of`, `resolve_value` | what a word's number **is** on this machine, and how to write a value back into it |
 | `preceding_lines(context)`, `prime_tracker(tracker, lines, cp)` | the lines above a selection, and the modal state they leave behind (§6) |
 | `report(...)`, `envelope(...)` | the two JSON result shapes |
 
@@ -235,6 +259,76 @@ Plan §7.10 is the contract; the docstrings in the file are the detail.
 `tests/fixtures/tokens/` and `tests/fixtures/numberformat.cases.json`. That shared set is
 the contract between the two implementations: when one has to change, the fixture changes
 with it and **both** sides are re-run.
+
+The number rules are a port of `src/lib/core/machines/numbers.ts` and are held to
+`tests/fixtures/machines/numbers.json` in both languages; the modal interpreter's goldens
+are `tests/fixtures/modal/<profile>/**`.
+
+### `ModalInterpreter(cp, codes)` — what is in force after a block
+
+NC is modal: a feed mode, a cycle or constant surface speed stays in force until something
+cancels it, and a script that reads a block without that state reads it wrong. Build one
+from the compiled profile and the context's `codes`, feed it every line in program order,
+and ask it what is in force:
+
+```python
+interp = gedit_nc.ModalInterpreter(cp, context["codes"])
+for number, line in enumerate(lines, 1):
+    tokens, state = gedit_nc.tokenize_line(line, cp, state)
+    interp.update(tokens, number, gedit_nc.mask_comments(line, cp))
+    if interp.pitch_feed:
+        continue            # this block's F is a thread lead, not a feed rate
+```
+
+`interp.state` is the whole picture: the active code per modal group with the line that set
+it, the feed unit, the speed unit, the distance and diameter modes, the units, the plane,
+the last tool, feed, speed and speed clamp, the active cycle, and the flags of the block
+just applied. A value nothing in the program set is marked `assumed`, with `from` saying
+where it came from — the document's machine, a detected variant, or the profile's documented
+default. Nothing is guessed: a group nothing has named reads `unknown`.
+
+Everything it knows comes from the profile and the code database, so the same code reads a
+mill, a lathe in either G-code system, and Klartext. The third argument of `update` is the
+line with its comments masked (`gedit_nc.mask_comments`); leave it out and the tool rule is
+simply not applied.
+
+`gedit_nc.FeedModeTracker` is the older, smaller view of the same state and keeps working
+unchanged. Whether a diameter word is a diameter **or a radius** in the block you are
+looking at is `interp.diameter_reading('X')` — the diameter mode alone does not answer it,
+because a `DIAM90`-style mode is a diameter while the program is absolute and a radius while
+it is incremental.
+
+### Why your script needs the number rules
+
+`X50` is 50 mm on one control and 0.050 mm on the next, and the difference is a machine
+parameter, not a property of the dialect. A script that only *scales* can ignore all of this
+— scaling is unit-free, and the effective `syntax.decimalPointSignificant` already follows
+the machine. A script that **compares** a value with a limit, or **computes** with one, has
+to ask:
+
+```python
+machine = gedit_nc.machine_params(context)
+cls = gedit_nc.number_class_of(token.address, context["profile"], tracker.feed_unit,
+                               block_codes, tracker.pitch_feed)
+value, readings = gedit_nc.resolve_value(token.value, cls, machine,
+                                         context["profile"], units)
+if value is None:
+    # No class, or a reading that depends on a machine nobody chose. Report the word —
+    # `readings` says what each preset would make of it — and leave it alone.
+    ...
+```
+
+`value` is decimal text in millimetres, inches, degrees or seconds. To put a value back into
+the word it came from, use `write_back`, which keeps the word's own form (a point stays a
+point, a point-less word stays a count) and tells you when the value had to be rounded:
+
+```python
+text, rounded, error = gedit_nc.write_back(new_value, token.value, cls, machine, units,
+                                           gedit_nc.number_format_of(context["profile"]))
+```
+
+Never divide by a thousand yourself, and never assume a point-less word is a count: the
+machine decides, and where no machine was chosen gEdit refuses to decide for it.
 
 ## 8. Writing one
 

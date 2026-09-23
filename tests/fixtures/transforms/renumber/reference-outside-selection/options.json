@@ -1,0 +1,27 @@
+{
+  "note": "A selection that holds the GOTO but not the N100 it points at. The block outside the selection keeps its number, so rewriting the jump would send it somewhere else; the value stays and the line is reported.",
+  "profile": "fanuc-gcode",
+  "scope": {
+    "startLine": 4,
+    "endLine": 5
+  },
+  "options": {
+    "start": 10,
+    "step": 10,
+    "skipStartingWith": "",
+    "restartAtProgramStart": false
+  },
+  "expect": {
+    "summary": "ncNumbering.renumber.summary",
+    "skipped": [
+      {
+        "line": 4,
+        "severity": "warning"
+      }
+    ],
+    "warnings": [
+      "ncNumbering.renumber.referencesUnresolved"
+    ],
+    "preflight": "ncNumbering.renumber.references"
+  }
+}

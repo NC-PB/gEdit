@@ -36,16 +36,20 @@ const M4_SERVICES = ['transforms', 'results', 'bookmarks'] as const;
 /** What P5 adds (plan §7.3). The singleton is a stub on `m5/base`; the key is not. */
 const M5_SERVICES = ['scripts'] as const;
 
+/** What P6 adds (plan §7.15). The singleton is a stub on `m6/base`; the key is not. */
+const M6_SERVICES = ['machines'] as const;
+
 const SERVICES = [
   ...M1_SERVICES,
   ...M2_SERVICES,
   ...M3_SERVICES,
   ...M4_SERVICES,
   ...M5_SERVICES,
+  ...M6_SERVICES,
 ];
 
 describe('app context', () => {
-  it('exposes every M1 to M5 service', () => {
+  it('exposes every M1 to M6 service', () => {
     expect(Object.keys(ctx).sort()).toEqual([...SERVICES].sort());
   });
 

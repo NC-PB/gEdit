@@ -1,0 +1,10 @@
+{
+  "profile": "fanuc-lathe",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":2,"text":"SYSTEM B: SIX G99 CYCLE-RETURN BLOCKS AGAINST ONE G92 S CLAMP"},
+    {"kind":"program","line":4,"text":"O2007","endLine":25},
+    {"kind":"tool","line":7,"text":"T6 — DRILL D6","tool":"06","endLine":25},
+      {"kind":"end","line":23,"text":"M30"}
+  ]
+}

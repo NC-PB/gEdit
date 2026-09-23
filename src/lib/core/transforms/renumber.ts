@@ -1,6 +1,8 @@
-// Renumber blocks (plan §5 WP4.2, `docs/planning/nc-transformations.md`). Owner: **WP4.2**.
+// Renumber blocks (plan §5 WP4.2 and WP6.3, `docs/planning/nc-transformations.md`).
+// Owner: **WP6.3** (was WP4.2).
 //
-// Rewrites the block number at the start of each block. What it must never do:
+// Rewrites the block number at the start of each block **and the references that point at
+// it** (M6). What it must never do:
 //
 //  - touch a number that is not a block number: `N` inside a comment (`(N50)`), inside a
 //    string, or as an address in the middle of a block
@@ -9,13 +11,20 @@
 //  - renumber an alphanumeric block name (`NLAP1`) — it is a label, not a counter
 //  - number a program marker: `%`, `O1000` and `:1000` are not blocks, and `N10 :1000`
 //    moves the program number out of the first position of the block
-//  - update a `GOTO` target silently: `numbering.references` matches become a **preflight
-//    warning**, because a renumber that rewrites `GOTO 100` targets is a different, much
-//    more dangerous transform. The scan is over the whole document (`references.ts`), not
-//    over the selection: a jump *above* the selection points into it just as well.
+//  - **guess** at a reference. `GOTO 100`, `M98 Q100` and `G71 P100 Q200` are rewritten
+//    only where the run can prove which block they name: one block with that number, in
+//    the same program, inside the lines this run rewrites, under a rule that allows it
+//    (`numbering.references[].rewrite`, §7.1). Everything else is reported and left
+//    exactly as it is — a jump target written wrongly is worse than one left behind,
+//    because the program still runs and lands in the wrong place. The scan is over the
+//    whole document (`references.ts`), not over the selection: a jump *above* the
+//    selection points into it just as well.
 //  - wrap past the maximum in silence: wrapping writes a second `N10` into the program,
 //    and duplicate block numbers are a defect, not a formatting choice. `stop` warned
-//    from the start; `wrap` warns now too (G8 M4).
+//    from the start; `wrap` warns now too (G8 M4). And it rewrites **no** reference whose
+//    new value the run itself made ambiguous: a control takes the first block that
+//    matches, so a value that names several blocks is not an answer (G8 M6). The
+//    preflight bounds that question before the run and asks about it (`mayWrap`).
 //
 // Nor does it read a selection as if it were the start of the document: the state going
 // into `lines[0]` comes from `fragment.ts`, so a Klartext selection that begins inside a
@@ -70,11 +79,12 @@ import { tokenizeLine } from '$lib/core/nc/tokenizer';
 import { compileProfile } from '$lib/core/profiles/compile';
 import { t } from '$lib/i18n';
 import { continuationRisk, stateBefore } from './fragment';
-import { hasReference, maskedOf, referenceAddresses, referencePreflight, scanReferences } from './references';
+import { maskedOf, referencePreflight, scanProgram } from './references';
 import type { Located, Msg } from '$lib/app/types';
 import type { FieldSpec } from '$lib/core/forms/types';
 import type { LineState, NcToken } from '$lib/core/nc/types';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
+import type { ProgramScan, ReferenceWord } from './references';
 import type { TransformContext, TransformDef, TransformResult } from './types';
 
 /** Rows the results panel gets at most; the summary still counts every skipped line. */
@@ -350,6 +360,270 @@ function isProgramMarkerLine(tokens: NcToken[]): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Block-number references
+// ---------------------------------------------------------------------------
+
+/**
+ * What this run does with one reference.
+ *
+ * Only `rewritten` writes anything; `unchanged` is a reference whose target keeps the
+ * number it had, which is the right answer and not worth a word. The other six are the
+ * ones the user is told about, and each names the reason, because "check your jumps" is
+ * not something anybody can act on.
+ */
+type Outcome =
+  /** The value was replaced with the number its block carries now. */
+  | 'rewritten'
+  /** Resolved, and the number did not change. */
+  | 'unchanged'
+  /** The rule says report only: the block may be in the calling program (`M99 P`, F42). */
+  | 'kept'
+  /** No block of this program carries that number. */
+  | 'missing'
+  /** More than one does, so there is no single answer. */
+  | 'duplicate'
+  /** The block it names is not among the lines this run rewrites. */
+  | 'outside'
+  /** The reference itself is outside them and points into them. */
+  | 'incoming'
+  /** The value is a variable, an expression or otherwise not a block number. */
+  | 'notNumber'
+  /** The block carries two words with this address, so which one points at a block
+   *  number cannot be told from the line (`references.ts`, `ReferenceWord.ambiguous`). */
+  | 'ambiguous';
+
+interface Decision {
+  /** Index into the run's `lines`, or -1 when the reference stands outside them. */
+  index: number;
+  /** The document line, for the results panel. */
+  line: number;
+  word: ReferenceWord;
+  outcome: Outcome;
+  /** The value to write in place of `word.text`; empty unless `outcome` is `rewritten`. */
+  text: string;
+}
+
+/** True for every outcome the user is told about. */
+function isTrouble(outcome: Outcome): boolean {
+  return outcome !== 'rewritten' && outcome !== 'unchanged';
+}
+
+/**
+ * The new value, written the way the old one was.
+ *
+ * Zero padding is a property of the reference, not of the block number: `P0100` is written
+ * with four digits because the post writes four, so it becomes `P0020` and not `P20`. A
+ * value that was not padded stays unpadded, and one that outgrows its padding is written
+ * in full rather than truncated.
+ */
+function writtenAs(oldText: string, oldValue: number, newValue: number): string {
+  const digits = String(newValue);
+  const padded = oldText.length > String(oldValue).length;
+  return padded && digits.length < oldText.length ? digits.padStart(oldText.length, '0') : digits;
+}
+
+/**
+ * How often each block number occurs in a program **after** the run.
+ *
+ * `newNumberOf` is the run's answer for a line of its scope; every other row keeps the
+ * number the scan read. The result is per program segment, because that is the scope a
+ * block-number reference is resolved in.
+ *
+ * Without this, a run that wraps rewrote every reference with a number the program now
+ * carries ten times over (G8 M6): the duplicate test only ever looked at the numbering
+ * the run **replaced**, found each target unique there, and wrote a value a control
+ * resolves to the first of many matching blocks.
+ */
+function numbersAfter(
+  scan: ProgramScan,
+  base: number,
+  lineCount: number,
+  newNumberOf: (index: number) => number | null,
+): Map<number, number>[] {
+  const end = base + lineCount;
+  const after: Map<number, number>[] = scan.segments.map(() => new Map());
+  for (let row = 0; row < scan.numbers.length; row++) {
+    const written = row >= base && row < end ? newNumberOf(row - base) : null;
+    const number = written ?? (scan.numbers[row] >= 0 ? scan.numbers[row] : null);
+    if (number === null) continue;
+    const counts = after[scan.segmentOf[row]];
+    counts.set(number, (counts.get(number) ?? 0) + 1);
+  }
+  return after;
+}
+
+/**
+ * What the run can do with every reference in the program.
+ *
+ * `newNumberOf` answers, for a line of the run's scope, the block number it carries
+ * afterwards, or null when that line keeps the number it had. The preflight passes null
+ * for the whole function: it only has to know *whether* a reference can be rewritten, and
+ * that question is answered by the program's own numbers, so the preflight and the run
+ * always agree on what will be reported — with one exception, a run that wraps: only the
+ * run knows the numbering it wrote, and the preflight bounds that question for itself
+ * (`mayWrap`).
+ */
+function decideReferences(
+  scan: ProgramScan,
+  firstLine: number,
+  lineCount: number,
+  newNumberOf: ((index: number) => number | null) | null,
+): Decision[] {
+  const base = Math.max(0, Math.trunc(firstLine) - scan.firstLine);
+  const end = base + lineCount;
+  const decisions: Decision[] = [];
+  // Only the run knows the numbering it wrote; the preflight asks about wrapping in its
+  // own way (`mayWrap`), because it cannot know how many blocks will really be numbered.
+  const after = newNumberOf === null ? null : numbersAfter(scan, base, lineCount, newNumberOf);
+
+  for (const { row, word } of scan.found) {
+    const line = scan.firstLine + row;
+    const site = word.target === null ? undefined : scan.segments[scan.segmentOf[row]].get(word.target);
+
+    if (row < base || row >= end) {
+      // A reference this run does not rewrite only matters when it points **into** the
+      // lines it does: everything else keeps naming a number nothing here touches.
+      if (site === undefined) continue;
+      const inside =
+        (site.row >= base && site.row < end) ||
+        (site.lastRow >= base && site.lastRow < end) ||
+        (site.row < base && site.lastRow >= end);
+      if (inside) decisions.push({ index: -1, line, word, outcome: 'incoming', text: '' });
+      continue;
+    }
+
+    const index = row - base;
+    const decide = (outcome: Outcome, text = ''): void => {
+      decisions.push({ index, line, word, outcome, text });
+    };
+    // The rule first: `rewrite: false` is not "could not", it is "must not", and that is
+    // what the row has to say even when the number happens to exist here as well.
+    if (!word.rewrite) decide('kept');
+    // Two words of one address in one block: the rule fired on the line and cannot say
+    // which of them it meant, so neither is touched.
+    else if (word.ambiguous) decide('ambiguous');
+    else if (word.target === null) decide('notNumber');
+    // Without a document a missing number may simply be out of sight, and saying "this
+    // program has no N100" about lines nobody read would be a lie.
+    else if (site === undefined) decide(scan.unchecked ? 'outside' : 'missing');
+    else if (site.count > 1) decide('duplicate');
+    else if (site.row < base || site.row >= end) decide('outside');
+    else {
+      const value = newNumberOf === null ? null : newNumberOf(site.row - base);
+      // The number this reference would name afterwards, whether the run rewrites the
+      // value or leaves it standing. A run that wrapped hands the same number out several
+      // times, and a control takes the first match, so an answer that is no longer unique
+      // is not an answer (G8 M6).
+      const named = value ?? word.target;
+      if (after !== null && (after[scan.segmentOf[row]].get(named) ?? 0) > 1) decide('duplicate');
+      else if (value === null || value === word.target) decide('unchanged');
+      else decide('rewritten', writtenAs(word.text, word.target, value));
+    }
+  }
+  return decisions;
+}
+
+/**
+ * Writes the rewritten values into the lines the run produced.
+ *
+ * The spans were read on the original line, and the only thing the run changed in front
+ * of them is the head of the block — the number, its skip marks and the gap behind it —
+ * so everything behind the head moved by exactly the change in the line's length. Several
+ * values on one line are written from the back, so an earlier span keeps its offsets.
+ */
+function applyReferences(out: string[], lines: readonly string[], decisions: readonly Decision[]): void {
+  const byLine = new Map<number, Decision[]>();
+  for (const decision of decisions) {
+    if (decision.outcome !== 'rewritten' || decision.index < 0) continue;
+    const list = byLine.get(decision.index);
+    if (list === undefined) byLine.set(decision.index, [decision]);
+    else list.push(decision);
+  }
+
+  for (const [index, list] of byLine) {
+    const delta = out[index].length - lines[index].length;
+    list.sort((a, b) => b.word.start - a.word.start);
+    let text = out[index];
+    for (const { word, text: value } of list) {
+      text = text.slice(0, word.start + delta) + value + text.slice(word.end + delta);
+    }
+    out[index] = text;
+  }
+}
+
+/**
+ * The two row lists in one, in line order and capped.
+ *
+ * The results panel is read top to bottom, so a reference row belongs next to the skipped
+ * line above it and not behind 200 of them. Both lists are already in line order, which
+ * makes this a merge; where a line appears in both, the skip comes first, because it is
+ * the reason the line looks the way it does.
+ */
+function mergeRows(skipped: Located[], references: Located[], limit: number): Located[] {
+  if (references.length === 0) return skipped;
+  const rows: Located[] = [];
+  let a = 0;
+  let b = 0;
+  while (rows.length < limit && (a < skipped.length || b < references.length)) {
+    if (b >= references.length || (a < skipped.length && skipped[a].line <= references[b].line)) rows.push(skipped[a++]);
+    else rows.push(references[b++]);
+  }
+  return rows;
+}
+
+/**
+ * The scan both the preflight and the run work from.
+ *
+ * `altPrefixes` decides what counts as an existing block number, so the scan has to read
+ * the program through the same compiled profile the run writes it with.
+ */
+function scanFor(lines: string[], ctx: TransformContext, cp: CompiledProfile): ProgramScan {
+  return scanProgram(lines, cp === ctx.cp ? ctx : { ...ctx, cp });
+}
+
+/**
+ * The most blocks one run of the counter can have to number, as an upper bound.
+ *
+ * Every line is at most one block, so the scope's line count is the bound — except where
+ * the counter starts over at each program start, and then it is the longest program
+ * inside the scope. It is deliberately an over-estimate: skipped and unnumbered lines
+ * bring the real count down, and the only thing this answers is whether the run *could*
+ * run past the maximum.
+ */
+function mostBlocks(scan: ProgramScan, restart: boolean, firstLine: number, lineCount: number): number {
+  if (!restart) return lineCount;
+  const base = Math.max(0, Math.trunc(firstLine) - scan.firstLine);
+  const end = Math.min(scan.segmentOf.length, base + lineCount);
+  let best = 0;
+  let run = 0;
+  let segment = -1;
+  for (let row = base; row < end; row++) {
+    if (scan.segmentOf[row] !== segment) {
+      segment = scan.segmentOf[row];
+      run = 0;
+    }
+    run++;
+    if (run > best) best = run;
+  }
+  return best;
+}
+
+/**
+ * Whether this run could pass the maximum and start over, which makes **every** rewritten
+ * value suspect (G8 M6).
+ *
+ * The run itself knows exactly what it wrote and reports each affected reference as a
+ * duplicate (`numbersAfter`). This is the question the preflight can answer before any of
+ * it happens, and it can only bound it: the answer is "may", and the message says so.
+ */
+function mayWrap(settings: Settings, scan: ProgramScan, firstLine: number, lineCount: number): boolean {
+  if (!settings.wrap || settings.max === null) return false;
+  const blocks = mostBlocks(scan, settings.restartAtProgramStart, firstLine, lineCount);
+  if (blocks <= 0) return false;
+  return settings.start + settings.step * (blocks - 1) > settings.max;
+}
+
+// ---------------------------------------------------------------------------
 // The transform
 // ---------------------------------------------------------------------------
 
@@ -441,9 +715,10 @@ function optionFields(cp: CompiledProfile): FieldSpec[] {
  *
  *  - a consecutive dialect, numbered from a line that is not line 1: the numbers this run
  *    writes cannot line up with the blocks above and below the selection.
- *  - the program points at its own block numbers (`GOTO 100`, `M99 P…`, `G71 P…Q…`).
- *    Renumbering rewrites the targets and not the pointers, so the jumps would land
- *    somewhere else. Reference-aware renumbering is a separate, later transform.
+ *  - the program points at block numbers this run **cannot** follow: a target that is not
+ *    there, one that is there twice, one outside the renumbered lines, a pointer from
+ *    outside them into them, or a rule that says the target may be in the caller. The
+ *    ones it can follow are rewritten and are not worth a dialog (M6, WP6.3).
  *  - a run that could not look outside its own lines at all.
  *
  * The reference scan is over the **document**, not over `lines`. A selection that holds
@@ -460,10 +735,31 @@ function preflightOf(lines: string[], ctx: TransformContext): Msg | null {
   // unknown: the first lines could be the tail of a block above and must not be numbered.
   if (continuationRisk(ctx, stateBefore(ctx))) return { key: 'ncNumbering.renumber.fragmentUnknown' };
 
-  return referencePreflight(scanReferences(lines, ctx), {
-    references: 'ncNumbering.renumber.references',
-    unchecked: 'ncNumbering.renumber.referencesUnchecked',
-  });
+  const settings = settingsFor(ctx.cp, ctx.options);
+  const scan = scanFor(lines, ctx, withAltPrefixes(ctx.cp, settings.altPrefixes));
+  // One line, one question: a `G71 P100 Q200` whose two targets are both gone is one
+  // thing to look at, not two.
+  const lineNumbers = new Set<number>();
+  for (const decision of decideReferences(scan, ctx.firstLine, lines.length, null)) {
+    if (isTrouble(decision.outcome)) lineNumbers.add(decision.line);
+  }
+  let first = 0;
+  for (const line of lineNumbers) if (first === 0 || line < first) first = line;
+
+  // Before the more usual question: a run that starts the numbering over hands the same
+  // number out several times, and then no reference can be rewritten with an answer a
+  // control would resolve to one block. The run reports each of them; this says it first.
+  if (scan.count > 0 && mayWrap(settings, scan, ctx.firstLine, lines.length)) {
+    return {
+      key: 'ncNumbering.renumber.referencesMayWrap',
+      params: { count: scan.count, start: settings.start, max: settings.max ?? 0 },
+    };
+  }
+
+  return referencePreflight(
+    { count: lineNumbers.size, first, unchecked: scan.unchecked },
+    { references: 'ncNumbering.renumber.references', unchecked: 'ncNumbering.renumber.referencesUnchecked' },
+  );
 }
 
 function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
@@ -474,7 +770,6 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
   const prefixOut = blockNumber.mode === 'leading-integer' ? '' : (blockNumber.prefix ?? 'N');
   const namePrefixes = blockNumber.mode === 'leading-integer' ? [] : [prefixOut, ...settings.altPrefixes];
   const marks = settings.skipStartingWith;
-  const addresses = referenceAddresses(cp);
 
   // One lookup per run instead of one per skipped line (`Located.message` is display text).
   const reason = {
@@ -482,7 +777,6 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
     name: t('ncNumbering.renumber.skippedName'),
     notNumbered: t('ncNumbering.renumber.skippedNotNumbered'),
     stopped: t('ncNumbering.renumber.skippedStopped'),
-    reference: t('ncNumbering.renumber.referenceKept'),
     programMarker: t('ncNumbering.renumber.skippedProgramMarker'),
     wrapped: t('ncNumbering.renumber.wrappedRow'),
   };
@@ -491,8 +785,9 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
   const lineMap = new Int32Array(lines.length);
   const skipped: Located[] = [];
   const warnings: Msg[] = [];
+  /** Scope index → the block number that line carries after the run. */
+  const newNumberOf = new Map<number, number>();
   let skippedCount = 0;
-  let references = 0;
   let numbered = 0;
   let value = settings.start;
   let stopped = false;
@@ -524,10 +819,6 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
     if (continuation) continue;
 
     if (settings.restartAtProgramStart && isProgramStart(maskedOf(line, tokens), cp)) value = settings.start;
-    if (addresses.size > 0 && hasReference(tokens, line, cp, addresses)) {
-      references++;
-      note(i, reason.reference, 'warning');
-    }
 
     const head = readHead(line, tokens);
     const blank = head.restStart >= line.length && head.end === head.leadEnd;
@@ -581,6 +872,7 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
 
     const digits = String(value);
     out[i] = rebuild(line, head, prefixOut + (settings.digits > 0 ? digits.padStart(settings.digits, '0') : digits), settings.spacesAfter);
+    newNumberOf.set(i, value);
     numbered++;
     value += settings.step;
   }
@@ -591,14 +883,54 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
       params: { count: wraps, line: firstWrapLine, start: settings.start, max: settings.max ?? 0 },
     });
   }
-  // A jump *above* the selection points into it just as well, and the run's own walk
-  // only ever saw the selection. The preflight already scanned the document; counting
-  // there again keeps the results panel from reporting a clean program (G8 M4).
-  const referencesTotal =
-    addresses.size > 0 && ctx.firstLine > 1 ? Math.max(references, scanReferences(lines, ctx).count) : references;
-  if (referencesTotal > 0) warnings.push({ key: 'ncNumbering.renumber.referencesKept', params: { count: referencesTotal } });
-  const listed = skippedCount + references + wraps;
-  if (listed > skipped.length) warnings.push({ key: 'ncNumbering.renumber.skippedTruncated', params: { shown: skipped.length, total: listed } });
+
+  // The references, over the whole document: a jump *above* the selection points into it
+  // just as well, and the run's own walk only ever saw the selection (G8 M4).
+  const decisions = decideReferences(
+    scanFor(lines, ctx, cp),
+    ctx.firstLine,
+    lines.length,
+    (index) => newNumberOf.get(index) ?? null,
+  );
+  applyReferences(out, lines, decisions);
+
+  const rowText: Record<Outcome, string> = {
+    rewritten: '',
+    unchanged: '',
+    kept: t('ncNumbering.renumber.referenceKeptRow'),
+    missing: t('ncNumbering.renumber.referenceMissingRow'),
+    duplicate: t('ncNumbering.renumber.referenceDuplicateRow'),
+    outside: t('ncNumbering.renumber.referenceOutsideRow'),
+    incoming: t('ncNumbering.renumber.referenceIncomingRow'),
+    notNumber: t('ncNumbering.renumber.referenceNotNumberRow'),
+    ambiguous: t('ncNumbering.renumber.referenceAmbiguousRow'),
+  };
+  const referenceRows: Located[] = [];
+  const seen = new Set<string>();
+  let rewritten = 0;
+  let kept = 0;
+  let unresolved = 0;
+  for (const decision of decisions) {
+    if (decision.outcome === 'rewritten') rewritten++;
+    if (!isTrouble(decision.outcome)) continue;
+    if (decision.outcome === 'kept') kept++;
+    else unresolved++;
+    // Two values of one cycle call that fail the same way are one row, not two.
+    const key = `${decision.line}:${decision.outcome}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (referenceRows.length < SKIP_LIMIT) {
+      referenceRows.push({ line: decision.line, message: rowText[decision.outcome], severity: 'warning' });
+    }
+  }
+
+  if (rewritten > 0) warnings.push({ key: 'ncNumbering.renumber.referencesRewritten', params: { count: rewritten } });
+  if (kept > 0) warnings.push({ key: 'ncNumbering.renumber.referencesKept', params: { count: kept } });
+  if (unresolved > 0) warnings.push({ key: 'ncNumbering.renumber.referencesUnresolved', params: { count: unresolved } });
+
+  const rows = mergeRows(skipped, referenceRows, SKIP_LIMIT);
+  const listed = skippedCount + wraps + seen.size;
+  if (listed > rows.length) warnings.push({ key: 'ncNumbering.renumber.skippedTruncated', params: { shown: rows.length, total: listed } });
 
   const summary: Msg =
     numbered === 0 && skippedCount === 0
@@ -607,7 +939,7 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
         ? { key: 'ncNumbering.renumber.summary', params: { count: numbered } }
         : { key: 'ncNumbering.renumber.summarySkipped', params: { count: numbered, skipped: skippedCount } };
 
-  return { lines: out, lineMap, summary, skipped, warnings };
+  return { lines: out, lineMap, summary, skipped: rows, warnings };
 }
 
 export const renumber: TransformDef = {

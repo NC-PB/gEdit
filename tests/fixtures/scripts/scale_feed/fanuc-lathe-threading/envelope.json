@@ -1,5 +1,5 @@
 {
-  "message": "Scaled 2 of 5 feed rates to 80 %; 1 left as a thread pitch, 2 left because the code means a threading cycle in another G-code system, 1 rounded to the decimals it was written with.",
+  "message": "Scaled 2 of 5 feed rates to 80 %; 1 left as a thread pitch, 2 left because the code means a threading cycle somewhere else, 1 rounded to the decimals it was written with. No machine: profile defaults assumed.",
   "findings": [
     {
       "line": 6,
@@ -9,12 +9,12 @@
     {
       "line": 7,
       "severity": "warning",
-      "message": "F2.0 is not scaled: G76 is a threading cycle in another G-code system of this dialect, where this F is the thread lead and not a feed rate. Check the block and scale it by hand if it really is a feed."
+      "message": "F2.0 is not scaled: G76 is a threading cycle on another kind of machine or in another G-code system, where this F is the thread lead and not a feed rate. Check the block and scale it by hand if it really is a feed."
     },
     {
       "line": 8,
       "severity": "warning",
-      "message": "F2.0 is not scaled: G92 is a threading cycle in another G-code system of this dialect, where this F is the thread lead and not a feed rate. Check the block and scale it by hand if it really is a feed."
+      "message": "F2.0 is not scaled: G92 is a threading cycle on another kind of machine or in another G-code system, where this F is the thread lead and not a feed rate. Check the block and scale it by hand if it really is a feed."
     },
     {
       "line": 9,

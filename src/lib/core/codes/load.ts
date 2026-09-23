@@ -16,7 +16,37 @@
 // spelling and the duplicate check sees the same key the lookup will.
 
 import { normalizeCode } from './lookup';
-import type { CodeDb, CodeEntry, CodeParam } from './types';
+import type { CodeDb, CodeEntry, CodeParam, CodeSets } from './types';
+import type { NumberClass } from '$lib/core/machines/types';
+
+/**
+ * M6 (§7.2, AD-19). What a `sets` member may say, one list per member.
+ *
+ * The modal interpreter reads these and nothing else, so an unknown value has to be
+ * dropped and reported rather than carried: a `feedUnit: "per-minutes"` that reached the
+ * interpreter would leave the feed unit unknown on every block after it, and the reason
+ * would be a typo nobody was told about.
+ */
+const SETS_VALUES = {
+  feedUnit: ['per-minute', 'per-rev', 'per-tooth', 'inverse-time'],
+  speedUnit: ['rpm', 'surface'],
+  distance: ['absolute', 'incremental'],
+  units: ['mm', 'inch'],
+  plane: ['XY', 'ZX', 'YZ'],
+  cycle: ['start', 'cancel'],
+  diameter: ['on', 'off', 'absolute-only'],
+} as const satisfies Record<string, readonly string[]>;
+
+/** M6 (§7.2, AD-31). How a cycle parameter's value is read, whatever its address suggests. */
+const PARAM_UNITS: readonly (NumberClass | 'increment' | 'count')[] = [
+  'length',
+  'angle',
+  'feedPerMin',
+  'feedPerRev',
+  'dwell',
+  'increment',
+  'count',
+];
 
 /** The file is not a code database at all. */
 export class CodeDbError extends Error {
@@ -79,6 +109,14 @@ function readParams(
     const max = num(item.max);
     if (min !== undefined) param.min = min;
     if (max !== undefined) param.max = max;
+    if (item.unit !== undefined) {
+      const unit = str(item.unit);
+      if (unit !== undefined && (PARAM_UNITS as readonly string[]).includes(unit)) {
+        param.unit = unit as CodeParam['unit'];
+      } else {
+        report({ path: `${at}.unit`, message: `unit has to be one of ${PARAM_UNITS.join(', ')}` });
+      }
+    }
     out.push(param);
   });
   return out.length > 0 ? out : undefined;
@@ -120,6 +158,41 @@ function readAddresses(
   return out;
 }
 
+/**
+ * M6 (§7.2, AD-19): what a code switches on. An unknown member or an unknown value is
+ * dropped and reported; the rest of the entry still loads, because a wrong `sets` must not
+ * take a label and a description with it.
+ */
+function readSets(raw: unknown, path: string, report: (p: CodeDbProblem) => void): CodeSets | undefined {
+  if (raw === undefined) return undefined;
+  if (!isRecord(raw)) {
+    report({ path, message: 'sets is not an object' });
+    return undefined;
+  }
+
+  const out: Record<string, unknown> = {};
+  for (const [member, value] of Object.entries(raw)) {
+    const at = `${path}.${member}`;
+    if (member === 'speedLimit') {
+      if (value === true) out.speedLimit = true;
+      else if (value !== false) report({ path: at, message: 'speedLimit has to be true or false' });
+      continue;
+    }
+    const allowed = (SETS_VALUES as Record<string, readonly string[] | undefined>)[member];
+    if (allowed === undefined) {
+      report({ path: at, message: `${member} is not something a code sets` });
+      continue;
+    }
+    const text = str(value);
+    if (text === undefined || !allowed.includes(text)) {
+      report({ path: at, message: `${member} has to be one of ${allowed.join(', ')}` });
+      continue;
+    }
+    out[member] = text;
+  }
+  return Object.keys(out).length > 0 ? (out as CodeSets) : undefined;
+}
+
 function readEntry(
   raw: unknown,
   path: string,
@@ -151,6 +224,8 @@ function readEntry(
   if (description) entry.description = description;
   const params = readParams(raw.params, `${path}.params`, report);
   if (params) entry.params = params;
+  const sets = readSets(raw.sets, `${path}.sets`, report);
+  if (sets) entry.sets = sets;
 
   if (raw.aliases !== undefined) {
     if (!Array.isArray(raw.aliases)) {

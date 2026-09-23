@@ -1,0 +1,558 @@
+{
+  "note": [
+    "How a control reads a written number (plan section 7.15, AD-31). One golden set for two",
+    "implementations: src/lib/core/machines/numbers.ts (vitest) and",
+    "src-tauri/resources/scripts/_nc_machine.py (unittest). A disagreement between them is a",
+    "failure, not a rounding detail.",
+    "",
+    "Every value below comes from the arithmetic of the declared parameters, not from anyone's",
+    "manual: a preset says 'a length without a point is a count of 0.001 mm', and the cases work",
+    "out what that makes of X50. The presets themselves are documented defaults of a machine",
+    "configuration, never facts about a machine (section 8, section 8.8).",
+    "",
+    "'inputs' are NumberInput objects a machine may carry, 'decls' are machineParams",
+    "declarations (either a built-in profile by id, or written here where the profile ships",
+    "later), and 'profiles' are the profiles the class rules are read from."
+  ],
+  "fmt": { "decimals": "keep", "trailingZeros": "keep", "keepPoint": true, "plusSign": "keep" },
+
+  "inputs": {
+    "is-b": {
+      "note": "the fanuc-gcode preset is-b: lengths, angles and the dwell in increments of 0.001, feeds as written",
+      "mode": "increment",
+      "incrementMm": "0.001",
+      "incrementInch": "0.0001",
+      "incrementDeg": "0.001",
+      "incrementSec": "0.001",
+      "classes": { "feedPerMin": { "mode": "calculator" }, "feedPerRev": { "mode": "calculator" } }
+    },
+    "is-c": {
+      "note": "the fanuc-gcode preset is-c: the same, one decimal finer",
+      "mode": "increment",
+      "incrementMm": "0.0001",
+      "incrementInch": "0.00001",
+      "incrementDeg": "0.0001",
+      "incrementSec": "0.0001",
+      "classes": { "feedPerMin": { "mode": "calculator" }, "feedPerRev": { "mode": "calculator" } }
+    },
+    "calculator": {
+      "note": "the fanuc-gcode preset calculator: every position as written, with or without a point, and the micron parameters of a cycle in increments of 0.001",
+      "mode": "calculator",
+      "incrementMm": "0.001"
+    },
+    "angles-only": {
+      "note": "G8 M6: a control that declares an angular increment and no dwell increment. Section 7.15 chains the dwell to the digits of incrementMm; the angular increment is not a step on that chain, and reading a dwell in it would give a wrong time with nothing said. No shipped preset looks like this, which is why nothing caught it.",
+      "mode": "increment",
+      "incrementMm": "0.001",
+      "incrementDeg": "0.01"
+    },
+    "okuma-1mm": {
+      "note": "section 8.8, the Okuma 1 mm unit system: as written (a scale whose unit is 1)",
+      "mode": "calculator",
+      "incrementMm": "1",
+      "incrementInch": "1"
+    },
+    "okuma-1um": {
+      "note": "section 8.8, the Okuma 1 um unit system: every literal is multiplied, with or without a point",
+      "mode": "scale",
+      "incrementMm": "0.001",
+      "incrementInch": "0.0001",
+      "incrementDeg": "0.001",
+      "incrementSec": "0.01",
+      "classes": {
+        "feedPerMin": { "increment": "0.1", "incrementInch": "0.01" },
+        "feedPerRev": { "increment": "0.001", "incrementInch": "0.0001" }
+      }
+    },
+    "okuma-10um": {
+      "note": "section 8.8, the Okuma 10 um unit system; its inch behaviour is unverified, so no inch case uses it",
+      "mode": "scale",
+      "incrementMm": "0.01",
+      "incrementDeg": "0.01",
+      "incrementSec": "0.1",
+      "classes": { "feedPerMin": { "increment": "1" }, "feedPerRev": { "increment": "0.01" } }
+    },
+    "mixed": {
+      "note": "not a shipped preset: one machine that reads every class differently, so the per-class rules are covered",
+      "mode": "increment",
+      "incrementMm": "0.001",
+      "classes": {
+        "angle": { "mode": "calculator" },
+        "feedPerRev": { "mode": "scale", "increment": "0.0001" },
+        "dwell": { "mode": "increment", "increment": "0.01" }
+      }
+    },
+    "broken-zero": {
+      "note": "a hand-edited machines.json with an unusable increment: no word gets a value, none is guessed",
+      "mode": "increment",
+      "incrementMm": "0"
+    },
+    "odd-increment": {
+      "note": "an increment that is not a power of ten, so the write-back division does not terminate",
+      "mode": "increment",
+      "incrementMm": "0.003"
+    }
+  },
+
+  "decls": {
+    "fanuc": { "profile": "fanuc-gcode" },
+    "lathe": { "profile": "fanuc-lathe" },
+    "klartext": { "profile": "heidenhain-klartext" },
+    "okuma": {
+      "note": "the section 8.8 Okuma declaration, written here because that profile ships in M8 (P8)",
+      "numberInput": {
+        "default": "okuma-1mm",
+        "presets": [
+          { "id": "okuma-1um", "label": "Unit system 1 um: every number is scaled", "input": "okuma-1um" },
+          { "id": "okuma-1mm", "label": "Unit system 1 mm: every number as written", "input": "okuma-1mm" },
+          { "id": "okuma-10um", "label": "Unit system 10 um: every number is scaled", "input": "okuma-10um" }
+        ]
+      }
+    }
+  },
+
+  "profiles": {
+    "mill": { "profile": "fanuc-gcode" },
+    "lathe": { "profile": "fanuc-lathe" },
+    "klartext": { "profile": "heidenhain-klartext" },
+    "feed-word-e": {
+      "note": "stands in for the Okuma profile of M8: a dialect whose E word is a feed per revolution",
+      "inline": {
+        "id": "feed-word-e",
+        "addresses": {
+          "feed": "F",
+          "spindle": "S",
+          "axes": ["X", "Z", "C"],
+          "arcCenter": ["I", "K"],
+          "angular": ["C"],
+          "feedUnitWords": { "E": "per-rev" }
+        }
+      }
+    }
+  },
+
+  "class": [
+    {
+      "note": "1. a cycle parameter wins over everything: Q of a peck cycle is a count of least increments",
+      "profile": "mill",
+      "address": "Q",
+      "feedUnit": "per-minute",
+      "codes": [{ "code": "G83", "group": "cycle", "params": [{ "address": "Q", "label": "Peck", "unit": "increment" }] }],
+      "expected": "increment"
+    },
+    {
+      "note": "1b. the same rule names a class outright: the X of a dwell block is a time, not a position",
+      "profile": "mill",
+      "address": "X",
+      "feedUnit": "per-minute",
+      "codes": [{ "code": "G4", "group": "nonmodal", "params": [{ "address": "X", "label": "Dwell", "unit": "dwell" }] }],
+      "expected": "dwell"
+    },
+    {
+      "note": "1c. a repeat count is a plain integer and is never converted",
+      "profile": "mill",
+      "address": "K",
+      "feedUnit": "per-minute",
+      "codes": [{ "code": "G81", "group": "cycle", "params": [{ "address": "K", "label": "Repeats", "unit": "count" }] }],
+      "expected": "count"
+    },
+    {
+      "note": "1d. the same letter, another cycle: without a unit the address decides, so K is an arc centre",
+      "profile": "mill",
+      "address": "K",
+      "feedUnit": "per-minute",
+      "codes": [{ "code": "G2", "group": "motion" }],
+      "expected": "length"
+    },
+    {
+      "note": "1e. L as a repeat count of a cycle",
+      "profile": "mill",
+      "address": "L",
+      "feedUnit": "per-minute",
+      "codes": [{ "code": "G81", "group": "cycle", "params": [{ "address": "L", "label": "Repeats", "unit": "count" }] }],
+      "expected": "count"
+    },
+    {
+      "note": "2. the feed word of a block whose F is a time (Okuma and Sinumerik G4, M8) is a dwell",
+      "profile": "mill",
+      "address": "F",
+      "feedUnit": "per-minute",
+      "codes": [{ "code": "G4", "group": "nonmodal", "fNotFeed": true }],
+      "expected": "dwell"
+    },
+    {
+      "note": "2b. the same for a dialect whose second feed word is E",
+      "profile": "feed-word-e",
+      "address": "E",
+      "feedUnit": "per-rev",
+      "codes": [{ "code": "G4", "group": "nonmodal", "fNotFeed": true }],
+      "expected": "dwell"
+    },
+    {
+      "note": "3. a thread lead is per revolution although the modal feed mode says per minute",
+      "profile": "lathe",
+      "address": "F",
+      "feedUnit": "per-minute",
+      "codes": [{ "code": "G76", "group": "cycle", "pitchFeed": true }],
+      "expected": "feedPerRev"
+    },
+    {
+      "note": "3b. the same when the pitch comes from the cycle that is still active, not from this block",
+      "profile": "lathe",
+      "address": "F",
+      "feedUnit": "per-minute",
+      "pitchFeed": true,
+      "codes": [],
+      "expected": "feedPerRev"
+    },
+    {
+      "note": "3c. a code that is a threading cycle in another G-code system says nothing: no class, no value",
+      "profile": "mill",
+      "address": "F",
+      "feedUnit": "per-minute",
+      "codes": [{ "code": "G92", "group": "offset", "pitchFeedAmbiguous": true }],
+      "expected": null
+    },
+    {
+      "note": "4. a rotary axis the profile lists is an angle",
+      "profile": "lathe",
+      "address": "C",
+      "feedUnit": "per-rev",
+      "codes": [],
+      "expected": "angle"
+    },
+    {
+      "note": "4b. the same letter on a profile that does not list it is an ordinary axis",
+      "profile": "mill",
+      "address": "C",
+      "feedUnit": "per-minute",
+      "codes": [],
+      "expected": "length"
+    },
+    {
+      "note": "5. the feed word by the modal feed unit: per minute",
+      "profile": "mill",
+      "address": "F",
+      "feedUnit": "per-minute",
+      "codes": [],
+      "expected": "feedPerMin"
+    },
+    {
+      "note": "5b. the feed word by the modal feed unit: per revolution",
+      "profile": "lathe",
+      "address": "F",
+      "feedUnit": "per-rev",
+      "codes": [],
+      "expected": "feedPerRev"
+    },
+    {
+      "note": "5c. a feed while the feed unit is unknown has no class, so nothing converts it",
+      "profile": "mill",
+      "address": "F",
+      "feedUnit": "unknown",
+      "codes": [],
+      "expected": null
+    },
+    {
+      "note": "5d. inverse time is not a length per time; the number has no class",
+      "profile": "mill",
+      "address": "F",
+      "feedUnit": "inverse-time",
+      "codes": [],
+      "expected": null
+    },
+    {
+      "note": "5e. a word that carries its own feed unit beats the modal one (Klartext FU)",
+      "profile": "klartext",
+      "address": "FU",
+      "feedUnit": "per-minute",
+      "codes": [],
+      "expected": "feedPerRev"
+    },
+    {
+      "note": "5f. feed per tooth has no class of its own and is left alone",
+      "profile": "klartext",
+      "address": "FZ",
+      "feedUnit": "per-minute",
+      "codes": [],
+      "expected": null
+    },
+    {
+      "note": "5g. E is a feed per revolution on a dialect that says so",
+      "profile": "feed-word-e",
+      "address": "E",
+      "feedUnit": "per-minute",
+      "codes": [],
+      "expected": "feedPerRev"
+    },
+    {
+      "note": "6. an axis is a length",
+      "profile": "lathe",
+      "address": "X",
+      "feedUnit": "per-rev",
+      "codes": [],
+      "expected": "length"
+    },
+    {
+      "note": "6b. an incremental twin is a length as well",
+      "profile": "lathe",
+      "address": "W",
+      "feedUnit": "per-rev",
+      "codes": [],
+      "expected": "length"
+    },
+    {
+      "note": "6c. an arc centre is a length",
+      "profile": "lathe",
+      "address": "K",
+      "feedUnit": "per-rev",
+      "codes": [],
+      "expected": "length"
+    },
+    {
+      "note": "6d. R is a length wherever it stands, unless a cycle parameter says otherwise",
+      "profile": "mill",
+      "address": "R",
+      "feedUnit": "per-minute",
+      "codes": [],
+      "expected": "length"
+    },
+    {
+      "note": "7. a spindle speed has no number class at all",
+      "profile": "lathe",
+      "address": "S",
+      "feedUnit": "per-rev",
+      "codes": [],
+      "expected": null
+    },
+    {
+      "note": "7b. a tool word has none either",
+      "profile": "lathe",
+      "address": "T",
+      "feedUnit": "per-rev",
+      "codes": [],
+      "expected": null
+    },
+    {
+      "note": "7c. and neither has a G word",
+      "profile": "mill",
+      "address": "G",
+      "feedUnit": "per-minute",
+      "codes": [],
+      "expected": null
+    },
+    {
+      "note": "7d. an offset register is a number of a table, not a length",
+      "profile": "mill",
+      "address": "H",
+      "feedUnit": "per-minute",
+      "codes": [],
+      "expected": null
+    },
+    {
+      "note": "7e. a block number is not a value",
+      "profile": "mill",
+      "address": "N",
+      "feedUnit": "per-minute",
+      "codes": [],
+      "expected": null
+    },
+    {
+      "note": "a lower-case address is the same address",
+      "profile": "mill",
+      "address": "x",
+      "feedUnit": "per-minute",
+      "codes": [],
+      "expected": "length"
+    }
+  ],
+
+  "value": [
+    { "note": "IS-B: a length without a point is a count of 0.001 mm", "literal": "50", "class": "length", "input": "is-b", "units": "mm", "expected": "0.05" },
+    { "note": "IS-B: the same word with a point is millimetres as written", "literal": "50.", "class": "length", "input": "is-b", "units": "mm", "expected": "50" },
+    { "note": "IS-B: the sign is carried through", "literal": "-50", "class": "length", "input": "is-b", "units": "mm", "expected": "-0.05" },
+    { "note": "IS-B: a written plus is a plus", "literal": "+50", "class": "length", "input": "is-b", "units": "mm", "expected": "0.05" },
+    { "note": "IS-B: a value written without its leading zero has a point, so it is millimetres", "literal": ".5", "class": "length", "input": "is-b", "units": "mm", "expected": "0.5" },
+    { "note": "IS-B: zero is zero in both readings", "literal": "0", "class": "length", "input": "is-b", "units": "mm", "expected": "0" },
+    { "note": "IS-B: and minus zero is still zero", "literal": "-0", "class": "length", "input": "is-b", "units": "mm", "expected": "0" },
+    { "note": "IS-B: one increment is the smallest length this control can be given", "literal": "1", "class": "length", "input": "is-b", "units": "mm", "expected": "0.001" },
+    { "note": "IS-B: the same digit with a point is a thousand times more", "literal": "1.", "class": "length", "input": "is-b", "units": "mm", "expected": "1" },
+    { "note": "IS-B: an angle word is read in degrees", "literal": "90000", "class": "angle", "input": "is-b", "units": "mm", "expected": "90" },
+    { "note": "IS-B: angles ignore the unit system, so an inch program reads the same 90 degrees", "literal": "90000", "class": "angle", "input": "is-b", "units": "inch", "expected": "90" },
+    { "note": "IS-B: a dwell is seconds", "literal": "2500", "class": "dwell", "input": "is-b", "units": "mm", "expected": "2.5" },
+    { "note": "IS-B: a dwell ignores the unit system too", "literal": "2500", "class": "dwell", "input": "is-b", "units": "inch", "expected": "2.5" },
+    { "note": "IS-B: feeds are read as written on this preset", "literal": "155", "class": "feedPerMin", "input": "is-b", "units": "mm", "expected": "155" },
+    { "note": "IS-B: a feed per revolution as written", "literal": "0.155", "class": "feedPerRev", "input": "is-b", "units": "mm", "expected": "0.155" },
+    { "note": "IS-B in an inch program: the length increment is a tenth of the metric one", "literal": "50", "class": "length", "input": "is-b", "units": "inch", "expected": "0.005" },
+    { "note": "IS-B in an inch program: with a point the value is inches as written", "literal": "50.", "class": "length", "input": "is-b", "units": "inch", "expected": "50" },
+    { "note": "IS-C: one decimal finer than IS-B", "literal": "50", "class": "length", "input": "is-c", "units": "mm", "expected": "0.005" },
+    { "note": "IS-C in an inch program", "literal": "50", "class": "length", "input": "is-c", "units": "inch", "expected": "0.0005" },
+    { "note": "IS-C: the dwell increment is finer as well", "literal": "2500", "class": "dwell", "input": "is-c", "units": "mm", "expected": "0.25" },
+    { "note": "IS-C: and so is the angle increment", "literal": "90000", "class": "angle", "input": "is-c", "units": "mm", "expected": "9" },
+    { "note": "calculator input: a length without a point is millimetres", "literal": "50", "class": "length", "input": "calculator", "units": "mm", "expected": "50" },
+    { "note": "calculator input: the point changes nothing", "literal": "50.", "class": "length", "input": "calculator", "units": "mm", "expected": "50" },
+    { "note": "calculator input: a dwell is seconds as written", "literal": "2", "class": "dwell", "input": "calculator", "units": "mm", "expected": "2" },
+    { "note": "G8 M6: with no dwell increment declared, G4 X2500 is 2.5 s from the digits of incrementMm and not 25 s from the angular increment", "literal": "2500", "class": "dwell", "input": "angles-only", "units": "mm", "expected": "2.5" },
+    { "note": "G8 M6: and the angular increment is still what an angle word is read in", "literal": "9000", "class": "angle", "input": "angles-only", "units": "mm", "expected": "90" },
+    { "note": "calculator input: an angle is degrees as written", "literal": "90", "class": "angle", "input": "calculator", "units": "mm", "expected": "90" },
+    { "note": "calculator input: a feed as written", "literal": "155", "class": "feedPerMin", "input": "calculator", "units": "mm", "expected": "155" },
+    { "note": "Okuma 1 mm: X1 is one millimetre", "literal": "1", "class": "length", "input": "okuma-1mm", "units": "mm", "expected": "1" },
+    { "note": "Okuma 1 mm: X1.0 is the same millimetre", "literal": "1.0", "class": "length", "input": "okuma-1mm", "units": "mm", "expected": "1" },
+    { "note": "Okuma 1 um: a length is scaled by 0.001", "literal": "10000", "class": "length", "input": "okuma-1um", "units": "mm", "expected": "10" },
+    { "note": "Okuma 1 um: a number with a point is scaled too, which is what makes it a unit system", "literal": "10.5", "class": "length", "input": "okuma-1um", "units": "mm", "expected": "0.0105" },
+    { "note": "Okuma 1 um: F234.56 is 0.23456 mm per revolution", "literal": "234.56", "class": "feedPerRev", "input": "okuma-1um", "units": "mm", "expected": "0.23456" },
+    { "note": "Okuma 1 um: the feed per minute has a unit of its own", "literal": "1000", "class": "feedPerMin", "input": "okuma-1um", "units": "mm", "expected": "100" },
+    { "note": "Okuma 1 um: the dwell unit is a hundredth of a second", "literal": "100", "class": "dwell", "input": "okuma-1um", "units": "mm", "expected": "1" },
+    { "note": "Okuma 1 um: angles are scaled like everything else", "literal": "90000", "class": "angle", "input": "okuma-1um", "units": "mm", "expected": "90" },
+    { "note": "Okuma 1 um in an inch program: the length unit is the declared inch one", "literal": "10000", "class": "length", "input": "okuma-1um", "units": "inch", "expected": "1" },
+    { "note": "Okuma 1 um in an inch program: the feed per revolution likewise", "literal": "234.56", "class": "feedPerRev", "input": "okuma-1um", "units": "inch", "expected": "0.023456" },
+    { "note": "Okuma 10 um: X0.1 is a micrometre", "literal": "0.1", "class": "length", "input": "okuma-10um", "units": "mm", "expected": "0.001" },
+    { "note": "Okuma 10 um: X1000 is ten millimetres", "literal": "1000", "class": "length", "input": "okuma-10um", "units": "mm", "expected": "10" },
+    { "note": "Okuma 10 um: F23.456 is 0.23456 mm per revolution", "literal": "23.456", "class": "feedPerRev", "input": "okuma-10um", "units": "mm", "expected": "0.23456" },
+    { "note": "Okuma 10 um: the feed per minute is read as written on this system", "literal": "1000", "class": "feedPerMin", "input": "okuma-10um", "units": "mm", "expected": "1000" },
+    { "note": "Okuma 10 um: the dwell unit is a tenth of a second", "literal": "25", "class": "dwell", "input": "okuma-10um", "units": "mm", "expected": "2.5" },
+    { "note": "per class: the length follows the machine's own mode", "literal": "50", "class": "length", "input": "mixed", "units": "mm", "expected": "0.05" },
+    { "note": "per class: an angle this machine reads as written", "literal": "90", "class": "angle", "input": "mixed", "units": "mm", "expected": "90" },
+    { "note": "per class: a feed per revolution this machine scales by its own unit", "literal": "1555", "class": "feedPerRev", "input": "mixed", "units": "mm", "expected": "0.1555" },
+    { "note": "per class: a dwell with an increment of its own", "literal": "250", "class": "dwell", "input": "mixed", "units": "mm", "expected": "2.5" },
+    { "note": "per class in an inch program: a class increment without an inch twin is a tenth of itself", "literal": "1555", "class": "feedPerRev", "input": "mixed", "units": "inch", "expected": "0.01555" },
+    { "note": "per class in an inch program: the length increment falls back to a tenth as well", "literal": "50", "class": "length", "input": "mixed", "units": "inch", "expected": "0.005" },
+    { "note": "a cycle parameter in least increments: Q6000 is six millimetres on an IS-B control", "literal": "6000", "class": "increment", "input": "is-b", "units": "mm", "expected": "6" },
+    { "note": "the same parameter on IS-C", "literal": "6000", "class": "increment", "input": "is-c", "units": "mm", "expected": "0.6" },
+    { "note": "G8 M6: a cycle parameter in microns is a count of increments even where positions are read as written, so the peck of G83 Q6000 is 6 mm and not six metres", "literal": "6000", "class": "increment", "input": "calculator", "units": "mm", "expected": "6" },
+    { "note": "G8 M6: and a position on that same preset is still 50 mm as written, which is what the syntax notes describe on one control", "literal": "50", "class": "length", "input": "calculator", "units": "mm", "expected": "50" },
+    { "note": "in a unit system the same parameter is scaled by the length unit", "literal": "6000", "class": "increment", "input": "okuma-10um", "units": "mm", "expected": "60" },
+    { "note": "a point on such a parameter still means millimetres", "literal": "6.", "class": "increment", "input": "is-b", "units": "mm", "expected": "6" },
+    { "note": "a profile that declares no number input at all is read as its JSON says: as written", "literal": "50", "class": "length", "input": null, "units": "mm", "expected": "50" },
+    { "note": "the same, with a point", "literal": "50.", "class": "length", "input": null, "units": "mm", "expected": "50" },
+    { "note": "and its dwell as written", "literal": "2", "class": "dwell", "input": null, "units": "mm", "expected": "2" },
+    { "note": "a count is never converted, whatever the machine", "literal": "3", "class": "count", "input": "is-b", "units": "mm", "expected": null },
+    { "note": "a word the class rules left without a class is never converted either", "literal": "1200", "class": null, "input": "is-b", "units": "mm", "expected": null },
+    { "note": "an unusable increment gives no value rather than a wrong one", "literal": "50", "class": "length", "input": "broken-zero", "units": "mm", "expected": null }
+  ],
+
+  "writeBack": [
+    { "note": "IS-B: a whole number of increments keeps the word point-less", "value": "0.05", "original": "50", "class": "length", "input": "is-b", "units": "mm", "expected": { "text": "50", "rounded": false } },
+    { "note": "IS-B: a word written with a point keeps it", "value": "50", "original": "50.", "class": "length", "input": "is-b", "units": "mm", "expected": { "text": "50.", "rounded": false } },
+    { "note": "IS-B: a value finer than the increment is rounded, and the rounding is reported", "value": "0.0505", "original": "50", "class": "length", "input": "is-b", "units": "mm", "expected": { "text": "51", "rounded": true } },
+    { "note": "IS-B: the inspector refuses that rounding instead of writing it", "value": "0.0505", "original": "50", "class": "length", "input": "is-b", "units": "mm", "refuseRounding": true, "expected": { "error": "rounded" } },
+    { "note": "IS-B: a pointed word keeps the precision it was written with, so half a millimetre rounds", "value": "50.5", "original": "50.", "class": "length", "input": "is-b", "units": "mm", "expected": { "text": "51.", "rounded": true } },
+    { "note": "IS-B: one written decimal keeps one decimal", "value": "50.55", "original": "50.5", "class": "length", "input": "is-b", "units": "mm", "expected": { "text": "50.6", "rounded": true } },
+    { "note": "IS-B: an exact value at the written precision is not a rounding", "value": "50.6", "original": "50.5", "class": "length", "input": "is-b", "units": "mm", "expected": { "text": "50.6", "rounded": false } },
+    { "note": "IS-B: a dwell goes back into increments of a millisecond", "value": "2.5", "original": "2500", "class": "dwell", "input": "is-b", "units": "mm", "expected": { "text": "2500", "rounded": false } },
+    { "note": "IS-B: an angle goes back into increments of a thousandth of a degree", "value": "90", "original": "90000", "class": "angle", "input": "is-b", "units": "mm", "expected": { "text": "90000", "rounded": false } },
+    { "note": "IS-B: a feed is read as written on this preset, and the style without a leading zero is kept", "value": "0.1425", "original": ".15", "class": "feedPerRev", "input": "is-b", "units": "mm", "expected": { "text": ".14", "rounded": true } },
+    { "note": "IS-B: 155 scaled to 90 per cent is 139.5 and goes back as 140", "value": "139.5", "original": "155", "class": "feedPerMin", "input": "is-b", "units": "mm", "expected": { "text": "140", "rounded": true } },
+    { "note": "IS-B: a negative word stays negative", "value": "-0.05", "original": "-50", "class": "length", "input": "is-b", "units": "mm", "expected": { "text": "-50", "rounded": false } },
+    { "note": "IS-B: minus zero is written as zero, and that is not a rounding", "value": "0", "original": "-0", "class": "length", "input": "is-b", "units": "mm", "expected": { "text": "0", "rounded": false } },
+    { "note": "IS-B in an inch program: the inch increment decides", "value": "0.005", "original": "50", "class": "length", "input": "is-b", "units": "inch", "expected": { "text": "50", "rounded": false } },
+    { "note": "calculator input: the value is written as written", "value": "60", "original": "50", "class": "length", "input": "calculator", "units": "mm", "expected": { "text": "60", "rounded": false } },
+    { "note": "calculator input: a point-less word keeps its precision, so a half millimetre rounds and says so", "value": "60.5", "original": "50", "class": "length", "input": "calculator", "units": "mm", "expected": { "text": "61", "rounded": true } },
+    { "note": "Okuma 10 um: a value that is a whole number of units keeps the point-less word", "value": "10", "original": "1000", "class": "length", "input": "okuma-10um", "units": "mm", "expected": { "text": "1000", "rounded": false } },
+    { "note": "Okuma 10 um: a value between two units is rounded and reported", "value": "10.005", "original": "1000", "class": "length", "input": "okuma-10um", "units": "mm", "expected": { "text": "1001", "rounded": true } },
+    { "note": "Okuma 10 um: a word written with a point is divided by the unit as well", "value": "0.001", "original": "0.1", "class": "length", "input": "okuma-10um", "units": "mm", "expected": { "text": "0.1", "rounded": false } },
+    { "note": "Okuma 1 um: a feed per revolution goes back into its own unit", "value": "0.23456", "original": "234.56", "class": "feedPerRev", "input": "okuma-1um", "units": "mm", "expected": { "text": "234.56", "rounded": false } },
+    { "note": "a profile without a number input writes the value as written", "value": "60", "original": "50", "class": "length", "input": null, "units": "mm", "expected": { "text": "60", "rounded": false } },
+    { "note": "an increment that is not a power of ten still gives a whole count, and the loss is reported", "value": "0.1", "original": "50", "class": "length", "input": "odd-increment", "units": "mm", "expected": { "text": "33", "rounded": true } },
+    { "note": "a cycle parameter in least increments goes back as a count", "value": "6", "original": "6000", "class": "increment", "input": "is-b", "units": "mm", "expected": { "text": "6000", "rounded": false } },
+    { "note": "G8 M6: a cycle parameter goes back as the count it is, on the calculator preset too", "value": "6", "original": "6000", "class": "increment", "input": "calculator", "units": "mm", "expected": { "text": "6000", "rounded": false } },
+    { "note": "a count is not a value and is never written back", "value": "3", "original": "3", "class": "count", "input": "is-b", "units": "mm", "expected": { "error": "noReading" } },
+    { "note": "and a word without a class has nothing to write back into", "value": "3", "original": "3", "class": null, "input": "is-b", "units": "mm", "expected": { "error": "noReading" } },
+    { "note": "an unusable increment refuses the write instead of guessing", "value": "1", "original": "50", "class": "length", "input": "broken-zero", "units": "mm", "expected": { "error": "noReading" } },
+    { "note": "a value that is not a number is refused with its own reason", "value": "fifty", "original": "50", "class": "length", "input": "is-b", "units": "mm", "expected": { "error": "notANumber" } }
+  ],
+
+  "readings": [
+    {
+      "note": "no machine: the three Fanuc presets read a point-less length differently, so nothing is settled",
+      "literal": "50", "class": "length", "decl": "fanuc", "units": "mm",
+      "expected": [
+        { "preset": "is-b", "value": "0.05" },
+        { "preset": "is-c", "value": "0.005" },
+        { "preset": "calculator", "value": "50" }
+      ]
+    },
+    {
+      "note": "no machine: with a point every Fanuc preset agrees, and the default is still listed first",
+      "literal": "50.", "class": "length", "decl": "fanuc", "units": "mm",
+      "expected": [
+        { "preset": "is-b", "value": "50" },
+        { "preset": "is-c", "value": "50" },
+        { "preset": "calculator", "value": "50" }
+      ]
+    },
+    {
+      "note": "no machine: the Fanuc presets all read a feed as written, so a feed needs no machine",
+      "literal": "155", "class": "feedPerMin", "decl": "fanuc", "units": "mm",
+      "expected": [
+        { "preset": "is-b", "value": "155" },
+        { "preset": "is-c", "value": "155" },
+        { "preset": "calculator", "value": "155" }
+      ]
+    },
+    {
+      "note": "no machine: a dwell without a point differs on every preset",
+      "literal": "2500", "class": "dwell", "decl": "fanuc", "units": "mm",
+      "expected": [
+        { "preset": "is-b", "value": "2.5" },
+        { "preset": "is-c", "value": "0.25" },
+        { "preset": "calculator", "value": "2500" }
+      ]
+    },
+    {
+      "note": "G8 M6: no machine, and all three presets of the mill now read a cycle parameter in microns as a count; they differ only in how fine the count is",
+      "literal": "6000", "class": "increment", "decl": "fanuc", "units": "mm",
+      "expected": [
+        { "preset": "is-b", "value": "6" },
+        { "preset": "is-c", "value": "0.6" },
+        { "preset": "calculator", "value": "6" }
+      ]
+    },
+    {
+      "note": "the lathe inherits the same three presets and lists its own default first",
+      "literal": "50", "class": "length", "decl": "lathe", "units": "mm",
+      "expected": [
+        { "preset": "calculator", "value": "50" },
+        { "preset": "is-b", "value": "0.05" },
+        { "preset": "is-c", "value": "0.005" }
+      ]
+    },
+    {
+      "note": "no machine on an Okuma: a length word differs on every unit system",
+      "literal": "1000", "class": "length", "decl": "okuma", "units": "mm",
+      "expected": [
+        { "preset": "okuma-1mm", "value": "1000" },
+        { "preset": "okuma-1um", "value": "1" },
+        { "preset": "okuma-10um", "value": "10" }
+      ]
+    },
+    {
+      "note": "and a point does not help there, because a unit system scales a pointed number too",
+      "literal": "1000.", "class": "length", "decl": "okuma", "units": "mm",
+      "expected": [
+        { "preset": "okuma-1mm", "value": "1000" },
+        { "preset": "okuma-1um", "value": "1" },
+        { "preset": "okuma-10um", "value": "10" }
+      ]
+    },
+    {
+      "note": "a profile that declares no presets offers no readings",
+      "literal": "50", "class": "length", "decl": "klartext", "units": "mm",
+      "expected": []
+    }
+  ],
+
+  "resolve": [
+    { "note": "the machine decides, and there is nothing to ask about", "literal": "50", "class": "length", "source": "machine", "input": "is-b", "decl": "fanuc", "units": "mm", "expected": { "value": "0.05", "readings": [] } },
+    { "note": "no machine: a point-less length has no value, and the readings say why", "literal": "50", "class": "length", "source": "profile", "input": "is-b", "decl": "fanuc", "units": "mm", "expected": { "value": null, "readings": ["is-b", "is-c", "calculator"] } },
+    { "note": "no machine: a length with a point is settled, because every preset agrees", "literal": "50.", "class": "length", "source": "profile", "input": "is-b", "decl": "fanuc", "units": "mm", "expected": { "value": "50", "readings": [] } },
+    { "note": "no machine: a feed is settled on the Fanuc presets", "literal": "155", "class": "feedPerMin", "source": "profile", "input": "is-b", "decl": "fanuc", "units": "mm", "expected": { "value": "155", "readings": [] } },
+    { "note": "no machine: a dwell is not", "literal": "2500", "class": "dwell", "source": "profile", "input": "is-b", "decl": "fanuc", "units": "mm", "expected": { "value": null, "readings": ["is-b", "is-c", "calculator"] } },
+    { "note": "no machine on an Okuma: no length word has a value, with or without a point", "literal": "1000.", "class": "length", "source": "profile", "input": "okuma-1mm", "decl": "okuma", "units": "mm", "expected": { "value": null, "readings": ["okuma-1mm", "okuma-1um", "okuma-10um"] } },
+    { "note": "a profile that declares nothing needs no machine: its JSON is the answer", "literal": "50", "class": "length", "source": "profile", "input": null, "decl": "klartext", "units": "mm", "expected": { "value": "50", "readings": [] } },
+    { "note": "a word with no class has no value and nothing to show", "literal": "1200", "class": null, "source": "machine", "input": "is-b", "decl": "fanuc", "units": "mm", "expected": { "value": null, "readings": [] } },
+    { "note": "a count has none either", "literal": "3", "class": "count", "source": "machine", "input": "is-b", "decl": "fanuc", "units": "mm", "expected": { "value": null, "readings": [] } },
+    { "note": "G8 M6: a machine on the lathe's own default preset answers the micron parameters of a turning program instead of leaving every one of them blank", "literal": "6000", "class": "increment", "source": "machine", "input": "calculator", "decl": "fanuc", "units": "mm", "expected": { "value": "6", "readings": [] } },
+    { "note": "no machine: the same parameter is unsettled, and the calculator preset shows as no reading", "literal": "6000", "class": "increment", "source": "profile", "input": "is-b", "decl": "fanuc", "units": "mm", "expected": { "value": null, "readings": ["is-b", "is-c", "calculator"] } }
+  ]
+}

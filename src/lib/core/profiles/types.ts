@@ -21,12 +21,24 @@
 // `syntax.caseSensitive` is set.
 
 import type { Eol } from '$lib/app/types';
+import type { NumberInput, ParamSource } from '$lib/core/machines/types';
 
 /** A regular expression as ECMAScript source, without delimiters and without flags. */
 export type Pattern = string;
 
 /** What an outline rule marks a line as. The program map has one icon per kind. */
 export type OutlineKind = 'tool' | 'program' | 'section' | 'comment' | 'label' | 'stop' | 'end' | 'subprogram-call';
+
+/**
+ * What kind of machine the profile describes (P6, §7.1). It is **not** a machine
+ * configuration (AD-31): it says "turning" or "milling", not which control setting a
+ * particular machine in the workshop runs with. Scripts, hover and the inspector read it
+ * for their auto options and their wording ("diameter", "per revolution").
+ */
+export type MachineType = 'mill' | 'lathe';
+
+/** The unit a feed word is in, once the modal state is known (AD-19). */
+export type FeedUnit = 'per-minute' | 'per-rev' | 'per-tooth' | 'inverse-time' | 'unknown';
 
 /** `profile.numbering`, read by renumbering, auto-numbering and go-to-block (WP4.2). */
 export interface NumberingOptions {
@@ -45,8 +57,15 @@ export interface NumberingOptions {
   restartAtProgramStart?: boolean;
   /** Only renumber lines that already carry a block number. */
   onlyNumbered?: boolean;
-  /** Block-number references that have to follow a renumber (`M99 P…`, `GOTO…`). */
-  references?: { trigger: Pattern; addresses: string[] }[];
+  /**
+   * Block-number references that have to follow a renumber (`M99 P…`, `GOTO…`).
+   *
+   * P6: `rewrite` defaults to true — the value is rewritten with the number it points at.
+   * `false` means "report only": a Fanuc `M99 P` may name a block in the **caller**, which
+   * a renumber of this file cannot see, so rewriting it would point the return somewhere
+   * else (F42).
+   */
+  references?: { trigger: Pattern; addresses: string[]; rewrite?: boolean }[];
 }
 
 /** `profile.numberFormat`, read by `formatNumber` (WP3.2) and the M4 transforms. */
@@ -74,6 +93,37 @@ export interface Profile {
   /** Short name for the status bar. */
   shortName: string;
   version: number;
+  /**
+   * P6, AD-16. Parent profile id. The child is merged over its **resolved** parent before
+   * validation, and the field is kept on the result so the UI can show the chain. A child
+   * must set its own `id`, `name` and `shortName`.
+   */
+  extends?: string;
+  /** P6. Default `'mill'`. See [`MachineType`]: the kind of machine, not a machine. */
+  machineType?: MachineType;
+  /**
+   * P6, AD-19 rule 8 and AD-31. The power-on state.
+   *
+   * `initial` is modal group → canonical code in force at the top of a program, as the
+   * control comes up. A built-in JSON writes only `initial`; `units`, `diameter` and
+   * `sources` are written by `applyMachine` from the document's machine or from the
+   * defaults in `machineParams`. All of them are applied as **assumed** (line 0), and
+   * `sources` says where each one came from, so the interpreter and the UI can tell a
+   * value the machine states from one gEdit fell back on.
+   */
+  modal?: {
+    initial?: Record<string, string>;
+    units?: 'mm' | 'inch';
+    diameter?: 'on' | 'off';
+    /** A key per modal group, plus `units` and `diameter`. */
+    sources?: Record<string, ParamSource>;
+  };
+  /**
+   * P6, AD-31. What a machine configuration of this profile may set, with the documented
+   * defaults (§7.15, §8.8). Absent: the profile has no machine parameters (Klartext) and
+   * no machine item in the status bar.
+   */
+  machineParams?: MachineParamsDecl;
   /** Which grammar generator builds the Monarch rules (WP3.4). */
   grammar: 'iso' | 'klartext';
   /** Id of the code database this profile reads (`data/codes/<codes>.json`). */
@@ -141,6 +191,17 @@ export interface Profile {
     axes: string[];
     arcCenter?: string[];
     arcCenterMode?: 'incremental' | 'absolute';
+    /** P6. Incremental address → the axis it moves: `{ U: 'X', W: 'Z' }`. */
+    incremental?: Record<string, string>;
+    /** P6. Addresses written as a diameter while the diameter mode is on: `['X', 'U']`. */
+    diameter?: string[];
+    /** P6. Rotary axes, whose number class is `angle` (AD-31): `['A', 'B', 'C']`. */
+    angular?: string[];
+    /**
+     * P6. Words that set the feed unit by themselves (Klartext `{ FU: 'per-rev',
+     * FZ: 'per-tooth' }`); a plain feed word returns to the unit the modal group gives.
+     */
+    feedUnitWords?: Record<string, Exclude<FeedUnit, 'unknown'>>;
   };
   toolCall: {
     /** A line that changes the tool (`M6`, `TOOL CALL …`). */
@@ -149,6 +210,13 @@ export interface Profile {
     tool: Pattern;
     /** `same-line-or-last`: the tool is the `T` on the line, or the last `T` before it. */
     toolFrom: 'same-line' | 'same-line-or-last';
+    /**
+     * P6. A trigger line whose **masked** text also matches this is not a tool change.
+     * A Fanuc lathe writes `T0100` to cancel the offset of station 1 and `G00 X100. T0100`
+     * to retract with it — neither is a tool change, and counting them would put a tool
+     * step and a program-map row on every retract.
+     */
+    ignore?: Pattern;
   };
   program: { start: Pattern[]; end: Pattern[] };
   /** Ordered; the first matching rule wins. Named groups `text` and `name` give the label. */
@@ -168,6 +236,81 @@ export interface Profile {
   [p2Field: string]: unknown;
 }
 
+// ---------------------------------------------------------------------------
+// What a machine configuration of this profile may set (P6, AD-31, §7.1, §8.8)
+//
+// The declaration is **data**, inherited through `extends` like every other field, and
+// reviewed by G10. No code names a dialect: the Fanuc lathe's A/B difference, Okuma's unit
+// table and the Sinumerik diameter default are all written down here, in the profile.
+//
+// Every value in a declaration is a **documented default, not a fact** about anybody's
+// machine (§8 header). That is why a preset carries `source` where the syntax notes give
+// one and `verify: true` where they do not: the label the user reads has to say which of
+// the two it is.
+// ---------------------------------------------------------------------------
+
+/** One way of reading numbers, offered by name ("Increments of 0.001 mm (IS-B)"). */
+export interface NumberInputPreset {
+  /** `'is-b'`, `'calculator'`, `'okuma-10um'`. */
+  id: string;
+  /** Display text; data, not a translation key. */
+  label: string;
+  value: NumberInput;
+  /** Where the notes say so (`'syntax-okuma.md §3.3'`); absent with `verify: true` = a documented default. */
+  source?: string;
+  verify?: boolean;
+}
+
+/**
+ * A profile overlay: merged like `extends` (AD-16) and limited to these members, so a
+ * variant can change the power-on state, the tool rule, the numbering and the addresses —
+ * and nothing else. The validator enforces the limit.
+ */
+export type ProfileOverlay = Partial<Pick<Profile, 'modal' | 'toolCall' | 'numbering' | 'addresses'>>;
+
+/** One choice of a variant (`A` or `B` of the Fanuc lathe's G-code system). */
+export interface VariantChoice {
+  /** `'A'`. */
+  value: string;
+  /** `'G-code system A'`. */
+  label: string;
+  /** The code database for this choice (an AD-17 child of the profile's `codes`); absent = `codes`. */
+  codes?: string;
+  overlay?: ProfileOverlay;
+  /**
+   * Scored on the first 400 masked lines, and only when no machine is chosen (AD-31).
+   *
+   * Unlike `detect.content`, each pattern scores its weight **once** (presence). A marker
+   * a post repeats in every block — a system-B `G99 G83 …` cycle-return line, which also
+   * matches the system-A `G98`/`G99` rule — would otherwise outvote a single decisive
+   * marker such as one `G92 S` clamp (WP6.1).
+   */
+  detect?: { pattern: Pattern; weight: number }[];
+}
+
+/** One machine parameter with a fixed set of choices (`gcodeSystem`: A or B). */
+export interface VariantDecl {
+  /** `'gcodeSystem'`. */
+  id: string;
+  label: string;
+  /** One of the `choices` values; what applies when nothing is chosen and nothing detected. */
+  default: string;
+  choices: VariantChoice[];
+}
+
+/** `profile.machineParams` (§7.15, §8.8). */
+export interface MachineParamsDecl {
+  /** Absent: numbers are read as the profile's JSON says, with no choice (Klartext). */
+  numberInput?: { default: string; presets: NumberInputPreset[] };
+  /** Power-on default; absent = `'mm'`. */
+  units?: 'mm' | 'inch';
+  /** Lathes only; absent = not a parameter of this profile. */
+  diameter?: 'on' | 'off';
+  /** Modal groups whose power-on code a machine may set; the dialog offers their codes. */
+  modalGroups?: string[];
+  variants?: VariantDecl[];
+}
+
 /**
  * A profile with every pattern compiled once. Services take this, never a raw `Profile`,
  * so no regex is built per line.
@@ -182,6 +325,8 @@ export interface CompiledProfile {
     continuation?: RegExp;
     variables?: RegExp;
     toolTrigger: RegExp;
+    /** P6: `toolCall.ignore`. A trigger line that also matches this is not a tool change. */
+    toolIgnore?: RegExp;
     tool: RegExp;
     programStart: RegExp[];
     programEnd: RegExp[];
@@ -204,3 +349,39 @@ export interface ProfileErrorInfo {
 
 /** The result of `validateProfile`: either a profile, or the list of problems found. */
 export type ProfileValidation = { ok: true; profile: Profile } | { ok: false; errors: string[] };
+
+// ---------------------------------------------------------------------------
+// Inheritance (P6, AD-16). The functions live in `core/profiles/resolve.ts`;
+// their types live here, with every other profile type.
+// ---------------------------------------------------------------------------
+
+/** One profile file on its way in: the JSON, where it came from, and which file it was. */
+export interface ProfileSource {
+  raw: unknown;
+  origin: 'builtin' | 'user';
+  /** The user file's name; absent for a built-in. */
+  file?: string;
+}
+
+/** One profile after its parents were merged into it. `profile` is still raw JSON. */
+export interface ResolvedProfile {
+  profile: Record<string, unknown>;
+  origin: 'builtin' | 'user';
+  file?: string;
+  /** Own id first, then the parents (`['fanuc-lathe', 'fanuc-gcode']`). */
+  chain: string[];
+}
+
+/**
+ * Why a profile could not be used, with enough detail to fix the file: which file, which
+ * profile, and the JSON path of the field at fault.
+ */
+export interface ProfileProblem {
+  origin: 'builtin' | 'user';
+  file: string | null;
+  profileId: string | null;
+  path: string;
+  message: string;
+  /** Which source it was, for a file that has no id and no name to be called by. */
+  index?: number;
+}

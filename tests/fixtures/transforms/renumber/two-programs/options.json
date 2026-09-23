@@ -1,0 +1,22 @@
+{
+  "note": "Two programs in one file, each with its own GOTO 100 and its own N100. The map is built per program, so each jump follows the block of the program it stands in; one map over the file would have called both numbers ambiguous and rewritten neither.",
+  "profile": "fanuc-gcode",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      {
+        "line": 1,
+        "severity": "info"
+      },
+      {
+        "line": 5,
+        "severity": "info"
+      }
+    ],
+    "warnings": [
+      "ncNumbering.renumber.referencesRewritten"
+    ],
+    "preflight": null
+  }
+}

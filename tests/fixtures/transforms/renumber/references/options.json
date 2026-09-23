@@ -1,5 +1,5 @@
 {
-  "note": "GOTO, M98 Q, M99 P and a lathe G71 P/Q point at block numbers: the preflight asks, the numbers change and the references do not.",
+  "note": "GOTO, a packed IF-GOTO and a local M98 Q point at block numbers of this program: the run follows them and rewrites the values, so the preflight has nothing left to ask about. The N of a comment is text and stays.",
   "profile": "fanuc-gcode",
   "options": {
     "start": 10,
@@ -11,29 +11,13 @@
     "summary": "ncNumbering.renumber.summarySkipped",
     "skipped": [
       {
-        "line": 2,
-        "severity": "warning"
-      },
-      {
-        "line": 3,
-        "severity": "warning"
-      },
-      {
-        "line": 5,
-        "severity": "warning"
-      },
-      {
         "line": 6,
-        "severity": "warning"
-      },
-      {
-        "line": 7,
         "severity": "info"
       }
     ],
     "warnings": [
-      "ncNumbering.renumber.referencesKept"
+      "ncNumbering.renumber.referencesRewritten"
     ],
-    "preflight": "ncNumbering.renumber.references"
+    "preflight": null
   }
 }

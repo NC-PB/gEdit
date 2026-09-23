@@ -1,0 +1,31 @@
+{
+  "note": [
+    "The detection results that moved from the M0 characterization (utils/detectLanguage.ts).",
+    "Not a folder of fixtures: these are hand-written texts, so the file name starts with an",
+    "underscore and the per-folder glob skips it.",
+    "Every fixture above answers exactly as it did at M0: only the cases below moved."
+  ],
+  "improvements": [
+    {
+      "case": "a Klartext program saved with a Fanuc extension: the content outvotes the extension weight",
+      "path": "/work/prog.nc",
+      "text": "0 BEGIN PGM PROG MM\n1 TOOL CALL 5 Z S2000\n2 L Z+100 R0 FMAX\n3 END PGM PROG MM\n",
+      "m0": "fanuc-gcode",
+      "expected": "heidenhain-klartext"
+    },
+    {
+      "case": "a Fanuc program saved as .h: the same rule the other way round",
+      "path": "/work/prog.h",
+      "text": "%\nO1234\nN10 G0 X0\nN20 M30\n%\n",
+      "m0": "heidenhain-klartext",
+      "expected": "fanuc-gcode"
+    },
+    {
+      "case": "a program number of more than five digits is still a program number (the profile allows eight)",
+      "path": "/work/a.txt",
+      "text": "O123456\n",
+      "m0": "fallback",
+      "expected": "fanuc-gcode"
+    }
+  ]
+}

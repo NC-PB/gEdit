@@ -61,6 +61,24 @@
     metas: SettingFieldMeta[];
   }
 
+  /**
+   * The Machines page (M6, AD-31). It is **not** a settings category: machine
+   * configurations are records in `machines.json`, not keys in `settings.json` (D50), and
+   * `pagesOf` only builds pages from `SETTING_FIELDS` (F47). So it is a tab of its own,
+   * after the schema pages, and the page component owns everything inside it.
+   */
+  // Typed with its own literal so an importer keeps it (svelte2tsx widens a plain `const`
+  // export to `string`, and `machines.manage` passes it as a `DialogTab`).
+  export const MACHINES_TAB: 'machines' = 'machines';
+
+  /** A tab of the dialog: a settings category, or the Machines page. */
+  export type DialogTab = SettingCategory | typeof MACHINES_TAB;
+
+  /** The tabs, in order: the schema pages, then Machines. */
+  export function tabsOf(pages: readonly SettingsPage[]): DialogTab[] {
+    return [...pages.map((page) => page.category), MACHINES_TAB];
+  }
+
   /** The pages that have something to show, in `CATEGORY_ORDER`. */
   export function pagesOf(metas: readonly SettingFieldMeta[] = SETTING_FIELDS): SettingsPage[] {
     return CATEGORY_ORDER.map((category) => ({
@@ -168,6 +186,7 @@
   import { untrack } from 'svelte';
   import { get } from 'svelte/store';
   import Modal from '$lib/components/common/Modal.svelte';
+  import MachinesPage from '$lib/components/dialogs/MachinesPage.svelte';
   import FormRenderer from '$lib/components/forms/FormRenderer.svelte';
   import { dialogs } from '$lib/app/dialogs';
   import { files } from '$lib/app/fileOps';
@@ -182,18 +201,26 @@
   interface Props {
     /** Supplied by ModalHost. Resolves `settings.open`; the value is unused. */
     close: (value?: unknown) => void;
+    /**
+     * The tab to open on (I6, M6). `settings.open` leaves it out and gets the first page;
+     * `machines.manage` asks for `MACHINES_TAB`, so the command that means "manage my
+     * machines" does not land on Appearance. An unknown value is ignored rather than
+     * shown as an empty dialog.
+     */
+    initialTab?: DialogTab;
   }
 
-  let { close }: Props = $props();
+  let { close, initialTab }: Props = $props();
 
   const paths = settings.paths;
 
   const pages = pagesOf();
+  const tabs = tabsOf(pages);
   const readOnly = settings.isReadOnly();
   const report = settings.report();
 
   /** Literal `t()` keys, so `i18n/keys.test.ts` can scan them. */
-  function categoryLabel(category: SettingCategory): string {
+  function categoryLabel(category: DialogTab): string {
     switch (category) {
       case 'appearance':
         return t('settings.categories.appearance');
@@ -203,6 +230,8 @@
         return t('settings.categories.assistance');
       case 'files':
         return t('settings.categories.files');
+      case MACHINES_TAB:
+        return t('settings.categories.machines');
       default:
         return t('settings.categories.scripts');
     }
@@ -238,7 +267,13 @@
 
   // Seeded once, on purpose: the dialog owns the pending values until Save or Cancel.
   let current = $state<Record<string, unknown>>(untrack(() => snapshotValues(get(settings.values))));
-  let active = $state<SettingCategory>(pages[0]?.category ?? 'appearance');
+  // Read once, like `current` above: the caller says where the dialog opens, and from then
+  // on the tab belongs to the user.
+  let active = $state<DialogTab>(
+    untrack(() =>
+      initialTab !== undefined && tabs.includes(initialTab) ? initialTab : (pages[0]?.category ?? 'appearance'),
+    ),
+  );
   let tablist = $state<HTMLElement | undefined>(undefined);
   let busy = $state(false);
 
@@ -247,15 +282,15 @@
 
   /** Pages that hold a field the user has to fix before anything can be saved. */
   const invalid = $derived(
-    new Set(
+    new Set<string>(
       pages
         .filter((page) => page.metas.some((meta) => errors[meta.key] !== undefined))
         .map((page) => page.category),
     ),
   );
 
-  const activeSpecs = $derived(specs.get(active) ?? []);
-  const activeLists = $derived(listSpecs.get(active) ?? []);
+  const activeSpecs = $derived(specs.get(active as SettingCategory) ?? []);
+  const activeLists = $derived(listSpecs.get(active as SettingCategory) ?? []);
 
   function set(id: string, value: unknown): void {
     current = { ...current, [id]: value };
@@ -277,23 +312,23 @@
 
   // --- the category tabs ----------------------------------------------------
 
-  function selectCategory(category: SettingCategory): void {
+  function selectCategory(category: DialogTab): void {
     active = category;
     tablist?.querySelector<HTMLElement>(`[data-category="${category}"]`)?.focus();
   }
 
   /** Arrow keys, Home and End move between the pages, as a tab list is expected to. */
   function onTabKey(e: KeyboardEvent): void {
-    const index = pages.findIndex((page) => page.category === active);
+    const index = tabs.indexOf(active);
     let next = index;
-    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next = (index + 1) % pages.length;
-    else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') next = (index - 1 + pages.length) % pages.length;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next = (index + 1) % tabs.length;
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
     else if (e.key === 'Home') next = 0;
-    else if (e.key === 'End') next = pages.length - 1;
+    else if (e.key === 'End') next = tabs.length - 1;
     else return;
     e.preventDefault();
     e.stopPropagation();
-    selectCategory(pages[next].category);
+    selectCategory(tabs[next]);
   }
 
   // --- the list control (scripts.folders) -----------------------------------
@@ -412,7 +447,7 @@
       type="button"
       class="footer-action"
       data-testid="settings-reset"
-      disabled={readOnly || busy}
+      disabled={readOnly || busy || active === MACHINES_TAB}
       onclick={() => void resetCategory()}
     >
       {t('settings.reset')}
@@ -453,23 +488,23 @@
         aria-label={t('settings.categoriesLabel')}
         bind:this={tablist}
       >
-        {#each pages as page (page.category)}
+        {#each tabs as tab (tab)}
           <button
             type="button"
             role="tab"
-            id="settings-tab-{page.category}"
+            id="settings-tab-{tab}"
             class="tab"
-            class:selected={page.category === active}
+            class:selected={tab === active}
             data-testid="settings-category"
-            data-category={page.category}
-            data-invalid={invalid.has(page.category) ? '1' : '0'}
-            aria-selected={page.category === active}
-            aria-controls="settings-page-{page.category}"
-            tabindex={page.category === active ? 0 : -1}
-            onclick={() => selectCategory(page.category)}
+            data-category={tab}
+            data-invalid={invalid.has(tab) ? '1' : '0'}
+            aria-selected={tab === active}
+            aria-controls="settings-page-{tab}"
+            tabindex={tab === active ? 0 : -1}
+            onclick={() => selectCategory(tab)}
             onkeydown={onTabKey}
           >
-            {categoryLabel(page.category)}
+            {categoryLabel(tab)}
           </button>
         {/each}
       </div>
@@ -482,12 +517,16 @@
         data-testid="settings-page"
         data-category={active}
       >
-        <FormRenderer
-          fields={activeSpecs}
-          values={current}
-          errors={errorsFor(activeSpecs)}
-          onChange={set}
-        />
+        {#if active === MACHINES_TAB}
+          <MachinesPage />
+        {:else}
+          <FormRenderer
+            fields={activeSpecs}
+            values={current}
+            errors={errorsFor(activeSpecs)}
+            onChange={set}
+          />
+        {/if}
 
         {#each activeLists as spec (spec.id)}
           {@const entries = listOf(spec.id)}

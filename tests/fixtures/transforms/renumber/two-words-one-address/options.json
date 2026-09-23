@@ -1,0 +1,16 @@
+{
+  "note": "G8 M6, the reviewer's own program. A reference rule fires on the whole line, not on a span of it, so a block that carries two Q words handed both of them to the `M98 Q` rule and the 3 mm (3000 micron) peck depth of the G83 came back as Q30. No control accepts such a block and no post writes one, but the rewrite was silent, and this module's rule is refuse rather than guess. Both words are reported and neither is touched.",
+  "profile": "fanuc-lathe",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      { "line": 1, "severity": "info" },
+      { "line": 2, "severity": "info" },
+      { "line": 4, "severity": "warning" },
+      { "line": 8, "severity": "info" }
+    ],
+    "warnings": ["ncNumbering.renumber.referencesUnresolved"],
+    "preflight": "ncNumbering.renumber.references"
+  }
+}

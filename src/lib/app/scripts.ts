@@ -59,10 +59,9 @@ import {
   type ScriptEntry,
   type ScriptList,
 } from '$lib/platform/commands';
-import { codes as appCodes } from '$lib/stores/codes';
 import { docs as appDocs } from '$lib/stores/documents';
 import { layout as appLayout } from '$lib/stores/layout';
-import { profiles as appProfiles } from '$lib/stores/profiles';
+import { machines as appMachines } from '$lib/stores/machines';
 import { results as appResults } from '$lib/stores/results';
 import {
   jsonFromStdout,
@@ -80,16 +79,15 @@ import { uiState as appUiState } from '$lib/stores/uiState';
 import { t as translate } from '$lib/i18n';
 import { isTauriRuntime } from '$lib/utils/platform';
 import type {
-  CodeDbService,
   DocId,
   DocumentStore,
   EditorService,
   FileOps,
   LayoutStore,
+  MachineService,
   Modals,
   Msg,
   NativeDialogs,
-  ProfileRegistry,
   ReportData,
   ResultsService,
   ScriptService,
@@ -98,7 +96,7 @@ import type {
   UiStateStore,
 } from '$lib/app/types';
 import type { FieldSpec } from '$lib/core/forms/types';
-import type { Profile } from '$lib/core/profiles/types';
+import type { EffectiveProfile } from '$lib/core/machines/types';
 import type { ScriptContextInput } from '$lib/core/scripting/types';
 
 /** The `uiState.lastParams` key a script's form values are remembered under (§7.3). */
@@ -218,8 +216,13 @@ function nextRunId(): string {
 export interface ScriptDeps {
   docs: Pick<DocumentStore, 'getActiveId' | 'get'>;
   editor: Pick<EditorService, 'getLineCount' | 'getLines' | 'selectionLines' | 'cursor' | 'versionId'>;
-  profiles: Pick<ProfileRegistry, 'profile'>;
-  codes: Pick<CodeDbService, 'forScripts'>;
+  /**
+   * The document's **effective** view (AD-31): the script gets the profile with its
+   * machine applied and the database that goes with it, so a P1 script that reads
+   * `syntax.decimalPointSignificant` already follows the machine without knowing that
+   * machines exist.
+   */
+  machines: Pick<MachineService, 'effective'>;
   modals: Pick<Modals, 'form'>;
   dialogs: Pick<NativeDialogs, 'confirm'>;
   status: Pick<StatusService, 'show'>;
@@ -447,9 +450,9 @@ export function createScriptService(deps: ScriptDeps): ScriptService {
       return;
     }
 
-    let profile: Profile;
+    let effective: EffectiveProfile;
     try {
-      profile = deps.profiles.profile(doc.profileId);
+      effective = deps.machines.effective(docId);
     } catch {
       say(MSG.noProfile(doc.profileId), { error: true });
       return;
@@ -488,8 +491,9 @@ export function createScriptService(deps: ScriptDeps): ScriptService {
     // 4. The context file.
     const context = buildContext({
       doc,
-      profile,
-      codes: deps.codes.forScripts(doc.profileId),
+      profile: effective.profile,
+      codes: effective.codes.codes,
+      machine: effective.machine,
       input: resolved.input,
       cursor: { line: cursor.line, column: cursor.column },
       params,
@@ -710,8 +714,7 @@ export function createScriptService(deps: ScriptDeps): ScriptService {
 export const scripts: ScriptService = createScriptService({
   docs: appDocs,
   editor: appEditor,
-  profiles: appProfiles,
-  codes: appCodes,
+  machines: appMachines,
   modals: appModals,
   dialogs: appDialogs,
   status: appStatus,

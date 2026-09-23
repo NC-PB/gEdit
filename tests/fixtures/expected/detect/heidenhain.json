@@ -1,0 +1,17 @@
+{
+  "note": [
+    "Expected profile detection (plan §5 WP3.1, AD-11), read by src/lib/core/profiles/detect.test.ts.",
+    "One file per folder under tests/fixtures/nc (M6 P6 item 11): a content work package adds its own",
+    "fixtures and its own expectations without touching anybody else's, and a reviewer reads one dialect",
+    "at a time. The test globs this folder, so a new file needs no code change.",
+    "A value is a profile id, or 'fallback' when the content is inconclusive and the current profile stays,",
+    "or 'refused' when decodeFile does not open the file at all, so detection never runs."
+  ],
+  "fixtures": {
+    "nc/heidenhain/detect-heidenhain.txt": "heidenhain-klartext",
+    "nc/heidenhain/h01-3tools.h": "heidenhain-klartext",
+    "nc/heidenhain/h02-tool-names.h": "heidenhain-klartext",
+    "nc/heidenhain/h03-speed-only.h": "heidenhain-klartext",
+    "nc/heidenhain/h04-cycle-feeds.h": "heidenhain-klartext"
+  }
+}

@@ -1,14 +1,22 @@
 {
-  "note": "G8 M4: this transform deleted the very blocks GOTO, M99 P and G71 P-Q point at, and reported nothing at all — strictly more destructive than renumber, which at least warned. The removal itself is what the command means, so it still happens; it now asks first and lists every line left pointing at a block number that is gone. M98 P1010 names a program, not a block, and is not listed.",
-  "profile": "fanuc-gcode",
+  "note": "G8 M4 and M6: this transform deleted the very blocks GOTO, M99 P and G71 P-Q point at, and reported nothing at all. It now keeps them. N100 and N200 are named by the roughing and finishing cycles and by the return, so they stay where they are; every other number goes, the results panel lists the two that were kept, and there is nothing left to confirm. M98 P1010 names a program, not a block.",
+  "profile": "fanuc-lathe",
+  "options": {},
   "expect": {
     "summary": "ncNumbering.removeBlockNumbers.summary",
     "skipped": [
-      { "line": 2, "severity": "warning" },
-      { "line": 4, "severity": "warning" },
-      { "line": 7, "severity": "warning" }
+      {
+        "line": 5,
+        "severity": "info"
+      },
+      {
+        "line": 6,
+        "severity": "info"
+      }
     ],
-    "warnings": ["ncNumbering.removeBlockNumbers.referencesKept"],
-    "preflight": "ncNumbering.removeBlockNumbers.references"
+    "warnings": [
+      "ncNumbering.removeBlockNumbers.keptReferenced"
+    ],
+    "preflight": null
   }
 }

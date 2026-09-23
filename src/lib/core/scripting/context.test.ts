@@ -7,6 +7,7 @@
 // filled under exactly one condition and omitted, never truncated, when it does not fit.
 
 import { describe, expect, it } from 'vitest';
+import { noMachine } from '$lib/core/machines/effective';
 import {
   buildContext,
   MAX_PRECEDING_CHARS,
@@ -53,6 +54,7 @@ function build(over: Partial<BuildContextInput> = {}) {
     input: input(),
     cursor: { line: 130, column: 5 },
     params: { percent: 90 },
+    machine: noMachine(PROFILE),
     ...over,
   });
 }
@@ -75,6 +77,21 @@ describe('buildContext', () => {
       params: { percent: 90 },
       profile: PROFILE,
       codes: CODES,
+      // M6, AD-31: no machine means the profile's own defaults, with every source
+      // `profile` — which is exactly what a Phase 1 document ran with.
+      machine: {
+        id: null,
+        name: null,
+        choice: 'none',
+        params: { numberInput: null, units: 'mm', diameter: null, variants: {}, modalInitial: {} },
+        source: {
+          numberInput: 'profile',
+          units: 'profile',
+          diameter: 'profile',
+          variants: {},
+          modalInitial: {},
+        },
+      },
     });
   });
 

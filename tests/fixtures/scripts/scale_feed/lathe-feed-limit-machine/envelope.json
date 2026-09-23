@@ -1,0 +1,10 @@
+{
+  "message": "Scaled 3 feed rates to 120 %; 1 clamped to a limit. Machine 'Lathe 2'.",
+  "findings": [
+    {
+      "line": 10,
+      "severity": "info",
+      "message": "F250 would become 300; the largest feed (0.2) was used instead, written as 200."
+    }
+  ]
+}

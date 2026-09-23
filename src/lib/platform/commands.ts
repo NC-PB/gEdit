@@ -53,6 +53,13 @@ export interface ConfigPaths {
   settingsFile: string;
   stateFile: string;
   userScriptsDir: string;
+  /**
+   * M6: `<config>/machines.json`. The webview needs it for the same reason it needs
+   * `settingsFile` — to tell the machines document from any other one it has open, so a
+   * save of that document reloads the machines (`contrib/settings.ts` does it for
+   * settings). Nothing is granted by knowing the path.
+   */
+  machinesFile: string;
 }
 
 /**
@@ -69,6 +76,13 @@ export interface ConfigLoad {
   /** The `ui` member of `<data>/state.json`. */
   ui: Record<string, unknown>;
   stateError: string | null;
+  /**
+   * M6: the contents of `<config>/machines.json`, read in the same round trip (AD-8 allows
+   * exactly one). Always an object: `{}` when the file is missing or unusable.
+   */
+  machines: Record<string, unknown>;
+  /** English detail for a machines file that could not be used; a write is refused while it is set. */
+  machinesError: string | null;
   paths: ConfigPaths;
 }
 
@@ -102,6 +116,42 @@ export function uiStateSave(ui: Record<string, unknown>): Promise<void> {
  */
 export function settingsOpenFile(): Promise<string> {
   return invoke<string>('settings_open_file');
+}
+
+/**
+ * M6, §7.10. Replaces `<config>/machines.json` with `machines` — the whole file each
+ * time, a JSON object of at most 1 MiB, written atomically and stamped with
+ * `MACHINES_VERSION`. An unusable previous file is kept as `machines.json.bak`, and a
+ * file on disk with a newer `$version` is never overwritten.
+ *
+ * The whole object, not a patch: a machine is a record with an id, and a partial write
+ * would be the one way a rename could lose the parameters that decide how the control
+ * reads numbers.
+ */
+export function machinesSave(machines: Record<string, unknown>): Promise<void> {
+  return invoke<void>('machines_save', { machines });
+}
+
+/**
+ * M6, §7.10. Makes sure `machines.json` exists (creating an empty one), grants that single
+ * file to the fs scope and answers with its path, so "Open machines file" can open it as a
+ * document. Only this one file is granted — never the folder.
+ */
+export function machinesOpenFile(): Promise<string> {
+  return invoke<string>('machines_open_file');
+}
+
+/**
+ * M6, AD-20. Tells the backend whether any document has unsaved changes.
+ *
+ * macOS asks the application whether it may terminate when the user picks Quit from the
+ * Dock or logs out, and the answer has to be given on the spot — there is no time to ask
+ * the webview. So the webview keeps this flag up to date (on every flip, not on every
+ * keystroke) and the native side answers from it. Elsewhere the command only stores the
+ * flag: Windows and Linux cannot veto a session end (F29, D28).
+ */
+export function quitGuardSetDirty(dirty: boolean): Promise<void> {
+  return invoke<void>('quit_guard_set_dirty', { dirty });
 }
 
 /** The recent list, newest first. Never fails: a broken state file answers with `[]`. */

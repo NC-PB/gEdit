@@ -3,6 +3,7 @@
   "name": "Heidenhain Klartext",
   "shortName": "Heidenhain",
   "version": 1,
+  "machineType": "mill",
   "grammar": "klartext",
   "codes": "heidenhain",
   "files": {
@@ -86,7 +87,8 @@
     "feed": "F",
     "rapid": "FMAX",
     "spindle": "S",
-    "axes": ["X", "Y", "Z", "A", "B", "C", "U", "V", "W"]
+    "axes": ["X", "Y", "Z", "A", "B", "C", "U", "V", "W"],
+    "feedUnitWords": { "FU": "per-rev", "FZ": "per-tooth" }
   },
   "toolCall": {
     "trigger": "\\bTOOL\\s+CALL\\s+(\\d|\"|QS\\d)",
