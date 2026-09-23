@@ -172,6 +172,19 @@ mod tests {
         path.file_name().is_none_or(|name| name != "secret.nc")
     }
 
+    /// Makes `path` read-only, or writable again, the way this platform says it.
+    ///
+    /// `Permissions::set_readonly` is the one way of saying it that means the same thing
+    /// on all three targets: it clears the write bits on Unix and sets (or clears)
+    /// `FILE_ATTRIBUTE_READONLY` on Windows. Clearing it widens a Unix file to `0o666`
+    /// rather than putting `0o644` back, which is of no consequence to a file in a
+    /// scratch directory that the test then deletes.
+    fn set_readonly(path: &Path, readonly: bool) {
+        let mut permissions = fs::metadata(path).unwrap().permissions();
+        permissions.set_readonly(readonly);
+        fs::set_permissions(path, permissions).unwrap();
+    }
+
     /// The single answer for one path.
     fn one(path: String) -> FileStat {
         let mut stats = stat_all(vec![path], allow_except_secret);
@@ -254,16 +267,23 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
-    #[cfg(unix)]
+    /// The flag the padlock, the read-only banner and "Save goes to Save As" read
+    /// (AD-23) — on **every** platform gEdit ships on, which is why this one is not
+    /// gated.
+    ///
+    /// [`not_writable`] has two bodies, and the `#[cfg(not(unix))]` one is the body that
+    /// runs on Windows. Both read-only tests used to be `#[cfg(unix)]`, so the Windows
+    /// leg of an M7 feature was described in a doc comment and executed by nothing: the
+    /// whole of AD-23 could have answered `false` on Windows and all three CI legs would
+    /// still have been green.
     #[test]
     fn a_read_only_file_is_flagged() {
-        use std::os::unix::fs::PermissionsExt;
         let dir = scratch_dir("readonly");
         let file = dir.join("a.nc");
-        fs::set_permissions(&file, fs::Permissions::from_mode(0o444)).unwrap();
+        set_readonly(&file, true);
         let stat = one(s(&file));
         assert!(stat.readonly, "{stat:?}");
-        fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).unwrap();
+        set_readonly(&file, false);
         let stat = one(s(&file));
         assert!(!stat.readonly, "{stat:?}");
         let _ = fs::remove_dir_all(&dir);
