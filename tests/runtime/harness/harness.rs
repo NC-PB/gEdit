@@ -944,8 +944,9 @@ pub fn h_config_read(app: AppHandle, name: String) -> Result<Value, String> {
         other => return Err(format!("h_config_read: unknown file {other}")),
     };
     match std::fs::read_to_string(&path) {
-        Ok(text) => serde_json::from_str::<Value>(&text)
-            .map_err(|e| format!("{name}: invalid JSON ({e})")),
+        Ok(text) => {
+            serde_json::from_str::<Value>(&text).map_err(|e| format!("{name}: invalid JSON ({e})"))
+        }
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(Value::Null),
         Err(err) => Err(format!("{name}: {err}")),
     }
