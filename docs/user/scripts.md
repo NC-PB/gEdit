@@ -21,13 +21,21 @@ gEdit looks for an interpreter at startup, in this order:
 1. The `GEDIT_PYTHON` environment variable, if it is set.
 2. `Settings ▸ Scripts ▸ Python interpreter`, if it names a file that exists. Point this
    at a virtual environment's interpreter if you want one.
-3. `python3` (`python` on Windows), looked up through your login shell — so a Homebrew or
-   python.org install is found even when you started gEdit from the Dock — and then in the
-   usual install locations.
+3. The interpreter your own command line would run.
+   - **macOS and Linux**: `python3`, looked up through your login shell — so a Homebrew or
+     python.org install is found even when you started gEdit from the Dock — and then in
+     the usual install locations.
+   - **Windows**: the `py` launcher first, asked which interpreter `py -3` would start,
+     then `python`, then `python3`. Each is looked for where a command prompt would find
+     it — the Windows folder included, so a launcher installed for all users is found
+     whatever is on `PATH`.
 
 **If no interpreter is found, the script commands are disabled and say so. Everything else
-in gEdit keeps working.** On Windows, the `python` that opens the Microsoft Store is
-recognised as "not installed" rather than used.
+in gEdit keeps working.** On Windows that covers the case that looks least like it: a
+clean Windows 10 or 11 already has `python.exe` and `python3.exe` on `PATH` before Python
+is installed, as placeholders that open the Microsoft Store instead of running anything.
+gEdit never takes one of those for an interpreter and reports "Python was not found". A
+Python you really did install from the Store is used as usual.
 
 ## Running a script
 

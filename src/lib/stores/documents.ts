@@ -11,7 +11,7 @@
 // flips only; everything else is written by the file operations.
 
 import { derived, writable, type Readable } from 'svelte/store';
-import { baseName, isMacPlatform, isWindowsPlatform } from '$lib/utils/platform';
+import { baseName, isMacPlatform, isWindowsPlatform, plainPath } from '$lib/utils/platform';
 import type { DocId, DocMeta, DocumentStore, NewDocMeta } from '$lib/app/types';
 
 /** Prefix of a document that has never been saved; the store appends `-<index>`. */
@@ -36,9 +36,17 @@ export interface DocumentStoreDeps {
  * the file system is wrong across a symlinked directory, and a wrong *merge* is worse
  * than a missed one — it would hand two different files to a single tab. Full identity
  * needs a canonical path from Rust, which is M2 work.
+ *
+ * The one thing it does know about a platform's spelling is Windows' `\\?\` (M8):
+ * `\\?\C:\nc\a.nc` and `C:\nc\a.nc` are the same file, and `canonicalize` answers with
+ * the first while every dialog answers with the second. Rust folds them at the
+ * boundary (`paths::plain`); doing it here too means a path that arrives spelled the
+ * other way still finds its tab instead of opening a second one over the same file.
  */
 export function pathKey(path: string, o: { backslashSeparator?: boolean } = {}): string {
-  let value = o.backslashSeparator ? path.replace(/\\/g, '/') : path;
+  // Before the separators collapse: `\\?\` would otherwise read as a UNC share root.
+  let value = plainPath(path);
+  value = o.backslashSeparator ? value.replace(/\\/g, '/') : value;
   value = value.replace(/^\.\//, ''); // `./prog.nc` is `prog.nc`
   // A leading `//` is a UNC share root and stays; everything else collapses.
   const unc = value.startsWith('//') && !value.startsWith('///');

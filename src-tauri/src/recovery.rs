@@ -106,7 +106,8 @@ const TEXT_EXT: &str = "txt";
 /// The metadata that sits beside it.
 const META_EXT: &str = "json";
 
-/// Whether `key` may become a file name under a session folder: `^[a-z0-9-]{1,64}$`.
+/// Whether `key` may become a file name under a session folder: `^[a-z0-9-]{1,64}$`,
+/// and not one of DOS's device names.
 ///
 /// This is the only thing between a webview-supplied string and the file system, so
 /// it is an allow-list and not a deny-list: `..`, `/`, `\`, a drive letter, a NUL, a
@@ -114,12 +115,20 @@ const META_EXT: &str = "json";
 /// in the alphabet. Session ids are checked with the same rule, because a session id
 /// from `recovery_read`, `recovery_discard` or a hand-edited folder name is a path
 /// component in exactly the same way.
+///
+/// The alphabet alone is not enough on Windows (M8): `con`, `nul`, `aux`, `com1` and
+/// `lpt1` are all spelled with it, and each of them names a device rather than a file
+/// however it is extended — `nul.txt` and `nul.json` are the bit bucket. A snapshot
+/// filed under one would be written to nothing and read back as nothing, which is the
+/// one failure a crash-recovery folder may not have. No key the webview builds today
+/// is one of them, so this closes a hole rather than fixing a symptom.
 pub fn valid_key(key: &str) -> bool {
     !key.is_empty()
         && key.len() <= MAX_KEY_LENGTH
         && key
             .bytes()
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+        && !crate::paths::is_device_name(key)
 }
 
 /// The ages and the size the folder is kept to, in one value so that a test can
@@ -898,6 +907,23 @@ mod tests {
             &"a".repeat(MAX_KEY_LENGTH + 1),
         ] {
             assert!(!valid_key(bad), "{bad:?} should be refused");
+        }
+    }
+
+    /// M8: the alphabet spells the DOS device names too, and a key becomes
+    /// `<key>.txt` and `<key>.json` — both of which are the device on Windows, with
+    /// or without the extension. A snapshot filed under `nul` would be written to
+    /// nothing and read back as nothing, and the session id is checked by the same
+    /// rule because it becomes a folder name.
+    #[test]
+    fn a_key_that_names_a_windows_device_is_refused() {
+        for device in ["con", "prn", "aux", "nul", "com1", "com9", "lpt1", "lpt9"] {
+            assert!(!valid_key(device), "{device} names a device");
+        }
+        // The ids gEdit builds itself are unaffected, and so are ordinary keys that
+        // only start like a device.
+        for good in ["console", "com10", "nulled", "d1", "s-1750000000000-4711"] {
+            assert!(valid_key(good), "{good} should still be usable");
         }
     }
 

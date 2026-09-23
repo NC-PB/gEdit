@@ -16,7 +16,9 @@
 //! - [`BackupMode::History`] (the default) — `<data>/backups/<fnv32 of the folder>/
 //!   <file name>/<UTC yyyymmdd-hhmmss.mmm>-<file name>`, keeping `files.backupCount`
 //!   of them. The shop folder stays clean, which matters because a folder watcher
-//!   that picks up `*.bak` would post the backup to a machine.
+//!   that picks up `*.bak` would post the backup to a machine. A file name past
+//!   [`MAX_HISTORY_NAME`] is shortened on the way in ([`history_name`]): the stamp in
+//!   front of it must still leave a name the file system will take.
 //! - [`BackupMode::Sibling`] — `<path>.bak`, overwritten. Refused when that path is a
 //!   symlink or a directory, so a save can never follow a link out of the folder.
 //! - [`BackupMode::Off`] — nothing is copied and the save goes ahead.
@@ -118,6 +120,61 @@ pub const SIBLING_SUFFIX: &str = ".bak";
 
 /// `yyyymmdd-hhmmss.mmm`: what a history entry's name starts with.
 const STAMP_LEN: usize = 19;
+
+/// The longest one file or folder **name** may be: 255, on NTFS, ext4, APFS and HFS+
+/// alike (Microsoft, "Naming Files, Paths, and Namespaces": the file name component
+/// limit; `NAME_MAX` elsewhere).
+///
+/// Measured in bytes, which is never fewer than the UTF-16 units Windows counts — a
+/// character is one unit and one to three bytes, or two units and four bytes — so the
+/// one measure is safe on every platform.
+const MAX_COMPONENT: usize = 255;
+
+/// What a history entry's name carries in front of the document's own, at its widest.
+///
+/// Usually that is `<stamp>-`, but [`unique_name`] files a second backup of one file
+/// in one millisecond as `<stamp>-<n>-`, with `n` up to [`MAX_SAME_MILLISECOND`], so
+/// the budget has to be the wider of the two or the invariant below is false for every
+/// same-millisecond entry: `STAMP_LEN` + two dashes + the digits of the counter (G8 M8
+/// — the first spelling of this was `STAMP_LEN + 1`, three characters short).
+const ENTRY_PREFIX_LEN: usize = STAMP_LEN + 2 + MAX_SAME_MILLISECOND.ilog10() as usize + 1;
+
+/// And what [`temp_path`] puts around *that* while the copy is being written:
+/// `.<entry>.tmp-<pid>-<n>`, with ten digits allowed for each of the two numbers.
+const TEMP_AFFIX_LEN: usize = 1 + ".tmp-".len() + 10 + 1 + 10;
+
+/// The longest document name a history entry can be filed under, which is what is
+/// left of [`MAX_COMPONENT`] once both of those are in the name (M8).
+///
+/// A CAM post that names its output after the part, the operation, the tool and the
+/// date reaches 150 characters easily; past this the *backup* of a file the user can
+/// save perfectly well stops being a legal name, and the save that asked for it
+/// stops with "the copy could not be made" — the same at every save from then on.
+/// Longer names are shortened by [`history_name`] rather than refused.
+///
+/// What this costs, said plainly (G8 M8, correcting "shorter names are untouched, so
+/// no existing history moves"): [`TEMP_AFFIX_LEN`] budgets ten digits each for the pid
+/// and the counter, which no real machine reaches — a five-digit pid and a one-digit
+/// counter make the affix 13 rather than 27. So names of 206 to about 222 characters
+/// *did* have a working history before M8, under a folder named after the document,
+/// and [`history_dir`] now points at the shortened `<head>-<fnv32>.<ext>` instead. The
+/// old folder is left where it is: it stops being pruned and stops being added to, and
+/// the `backupCount` the user set starts again from zero. Nothing is deleted.
+///
+/// That is the deliberate trade. The budget could be cut to the affix a real pid
+/// produces and keep those histories, but then the one case it exists for — the
+/// machine whose pid needs the digits, or a `copy_atomic` that has retried often
+/// enough for a wide counter — is back to a save that fails every time, and a failed
+/// save is worse than a history that restarts. The range is narrow, it only contains
+/// names a CAM post generated rather than names anyone typed, and the alternative
+/// (migrating the old folder with `fs::rename` on first use) adds a rename of the
+/// user's backups to the save path to save a folder most installations do not have.
+pub const MAX_HISTORY_NAME: usize = MAX_COMPONENT - ENTRY_PREFIX_LEN - TEMP_AFFIX_LEN;
+
+/// How much of a long name's extension is kept. `.nc`, `.NC`, `.tap`, `.gcode`, `.h`:
+/// long enough for the ones a program is actually called, short enough that a name
+/// that is *all* extension cannot eat the part that identifies the file.
+const MAX_EXTENSION: usize = 8;
 
 /// How many backups of one file may carry the same millisecond before the write is
 /// given up on. One more than the most that can be kept, so a free name always
@@ -302,6 +359,11 @@ fn sibling_target(source: &Path) -> Result<PathBuf, String> {
 /// points at a folder on the user's own disk, it never travels between machines, and
 /// a path only means anything on the platform that spelled it.
 pub fn folder_key(folder: &Path) -> String {
+    // And in the ordinary spelling, so that a folder that reached us through
+    // `canonicalize` keys the same history as the `C:\…` the file dialog gives for it
+    // (M8, `paths::plain`); two histories of one folder is what this hash exists to
+    // prevent.
+    let folder = paths::plain(folder);
     let normalized: PathBuf = folder.components().collect();
     let text = normalized.to_string_lossy();
     let text = if paths::FOLD_CASE {
@@ -389,7 +451,7 @@ fn history_dir(dirs: &AppDirs, source: &Path) -> Result<PathBuf, String> {
         .parent()
         .filter(|folder| !folder.as_os_str().is_empty())
         .ok_or_else(|| format!("{}: has no folder", source.display()))?;
-    let name = file_name(source)?;
+    let name = history_name(file_name(source)?);
     let root = dirs.backups_dir();
     let by_folder = root.join(folder_key(folder));
     let by_name = by_folder.join(name);
@@ -405,13 +467,52 @@ fn history_dir(dirs: &AppDirs, source: &Path) -> Result<PathBuf, String> {
 /// The full path of the history entry to write now.
 fn history_target(dirs: &AppDirs, source: &Path, now: SystemTime) -> Result<PathBuf, String> {
     let dir = history_dir(dirs, source)?;
-    let name = file_name(source)?;
-    unique_name(&dir, &stamp(now), name).ok_or_else(|| {
+    // The same shortening as the folder above, so that `prune` still reads an entry's
+    // name as `<stamp>-<the folder's own name>`.
+    let name = history_name(file_name(source)?);
+    unique_name(&dir, &stamp(now), &name).ok_or_else(|| {
         format!(
             "{}: more than {MAX_SAME_MILLISECOND} backups in one millisecond",
             dir.display()
         )
     })
+}
+
+/// The document's name as a history entry can carry it: its own, or — past
+/// [`MAX_HISTORY_NAME`] — a shortened one that is still recognizably it.
+///
+/// The shortened form is `<the first of the name>-<fnv32 of the whole>.<extension>`.
+/// The head is what the user reads, the extension is what says it is a program, and
+/// the hash is what keeps two CAM names that agree for their first two hundred
+/// characters from sharing one history folder — the same argument [`folder_key`]
+/// makes for the folder level, at the file level.
+///
+/// A name that is not valid UTF-8 is handed back untouched: cutting WTF-8 at a byte
+/// count can split a character in half, and a name like that is rare enough that
+/// keeping the old behaviour for it is better than inventing one.
+fn history_name(name: &OsStr) -> OsString {
+    if name.len() <= MAX_HISTORY_NAME {
+        return name.to_os_string();
+    }
+    let Some(text) = name.to_str() else {
+        return name.to_os_string();
+    };
+    let extension = Path::new(text)
+        .extension()
+        .and_then(OsStr::to_str)
+        .filter(|extension| !extension.is_empty() && extension.len() <= MAX_EXTENSION);
+    let tail = match extension {
+        Some(extension) => format!("-{}.{extension}", fnv32(text)),
+        None => format!("-{}", fnv32(text)),
+    };
+    // `tail` is ASCII and far shorter than the budget, so this cannot underflow.
+    let mut head = MAX_HISTORY_NAME - tail.len();
+    while !text.is_char_boundary(head) {
+        head -= 1;
+    }
+    let mut short = OsString::from(&text[..head]);
+    short.push(tail);
+    short
 }
 
 /// The document's own file name, as an `OsStr` so that a name which is not valid
@@ -1095,6 +1196,189 @@ mod tests {
             folder_key(Path::new("/NC/Jobs")) == key,
             paths::FOLD_CASE,
             "the case rule does not match the platform's"
+        );
+    }
+
+    /// M8: a CAM post that names its output after the part, the operation, the tool
+    /// and the date writes names this long, and the *stamp in front of it* is what
+    /// takes the history entry past what a file name may be — 255 on NTFS, ext4 and
+    /// APFS alike — so the user's file saves and its backup does not. In `history`,
+    /// which is the default mode, at every save.
+    #[test]
+    fn a_long_cam_name_is_shortened_into_a_name_the_file_system_takes() {
+        let (root, dirs) = scratch("long-name");
+        let stem: String =
+            "1234567_Gehaeuse_Deckel_OP20_Schlichten_Kontur_D12R1_Werkzeug_17_Rev_C_"
+                .repeat(4)
+                .chars()
+                .take(237)
+                .collect();
+        let name = format!("{stem}.NC");
+        // A name the user can perfectly well keep on disk, whose history entry — the
+        // same name with the stamp in front of it — is not a name at all.
+        assert!(name.len() < MAX_COMPONENT, "{} is unusable", name.len());
+        assert!(
+            ENTRY_PREFIX_LEN + name.len() > MAX_COMPONENT,
+            "the entry would fit, so this proves nothing"
+        );
+        let source = program(&root, &name, "G0 X0\n");
+
+        let target = PathBuf::from(
+            backup(&dirs, history(2), &source, at(1_000))
+                .unwrap()
+                .expect("no backup was made"),
+        );
+        assert!(target.is_file(), "{} was not written", target.display());
+
+        // Every component of it is a legal name, with room for the temp file that
+        // `copy_atomic` writes beside the entry while it copies.
+        for component in target.strip_prefix(dirs.backups_dir()).unwrap().iter() {
+            assert!(
+                component.len() + TEMP_AFFIX_LEN <= MAX_COMPONENT,
+                "{component:?} is {} long",
+                component.len()
+            );
+        }
+        // And it is still the user's file: the head of the name he gave it, and the
+        // extension that says what it is.
+        let folder = target
+            .parent()
+            .unwrap()
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(folder.starts_with(&stem[..64]), "unrecognizable: {folder}");
+        assert!(folder.ends_with(".NC"), "the extension is gone: {folder}");
+        assert_eq!(
+            target.file_name().unwrap().to_str().unwrap(),
+            format!("19700101-000001.000-{folder}")
+        );
+
+        // A second save of the same file lands in the same history, and pruning still
+        // reads the entries — `prune` tells our stamp from the document's own name by
+        // comparing it with the folder's name, which is the shortened one now.
+        backup(&dirs, history(2), &source, at(2_000)).unwrap();
+        backup(&dirs, history(2), &source, at(3_000)).unwrap();
+        let mut kept: Vec<String> = fs::read_dir(target.parent().unwrap())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        kept.sort();
+        assert_eq!(
+            kept,
+            vec![
+                format!("19700101-000002.000-{folder}"),
+                format!("19700101-000003.000-{folder}")
+            ]
+        );
+
+        // Two programs whose names agree for the first two hundred characters are two
+        // programs: the hash in the shortened name keeps their histories apart.
+        let sibling = program(&root, &format!("{stem}_OP30.NC"), "G0 X1\n");
+        let other = PathBuf::from(
+            backup(&dirs, history(2), &sibling, at(4_000))
+                .unwrap()
+                .unwrap(),
+        );
+        assert_ne!(other.parent(), target.parent());
+        assert_eq!(fs::read_to_string(&other).unwrap(), "G0 X1\n");
+
+        // And the same once more for the *widest* entry name there is. Everything
+        // above files at `<stamp>-<name>`; two saves inside one millisecond make
+        // `unique_name` write `<stamp>-<n>-<name>` instead, which is up to three
+        // characters longer (G8 M8 — `ENTRY_PREFIX_LEN` used to budget for the narrow
+        // one, so this whole invariant was false for every same-millisecond entry).
+        let first = PathBuf::from(
+            backup(&dirs, history(2), &source, at(9_000))
+                .unwrap()
+                .unwrap(),
+        );
+        let second = PathBuf::from(
+            backup(&dirs, history(2), &source, at(9_000))
+                .unwrap()
+                .unwrap(),
+        );
+        assert_ne!(
+            first, second,
+            "the collision was not filed under its own name"
+        );
+        assert_eq!(
+            second.file_name().unwrap().to_str().unwrap(),
+            format!("19700101-000009.000-1-{folder}")
+        );
+        for component in second.strip_prefix(dirs.backups_dir()).unwrap().iter() {
+            assert!(
+                component.len() + TEMP_AFFIX_LEN <= MAX_COMPONENT,
+                "{component:?} is {} long",
+                component.len()
+            );
+        }
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// The budget is the prefix [`unique_name`] can really write, not the usual one:
+    /// read off the widest name it can build rather than restated, so a change to
+    /// either of its two formats has to be made here too (G8 M8).
+    #[test]
+    fn the_entry_prefix_budget_is_the_widest_prefix_unique_name_writes() {
+        let stamp = stamp(at(0));
+        assert_eq!(stamp.len(), STAMP_LEN);
+        assert_eq!(
+            ENTRY_PREFIX_LEN,
+            format!("{stamp}-")
+                .len()
+                .max(format!("{stamp}-{MAX_SAME_MILLISECOND}-").len())
+        );
+    }
+
+    /// The shortening is only for the names that need it: every history already on
+    /// disk has to keep the folder it is in.
+    #[test]
+    fn an_ordinary_name_is_filed_under_itself() {
+        assert_eq!(history_name(OsStr::new("WELLE.NC")), OsStr::new("WELLE.NC"));
+        let at_the_limit = "a".repeat(MAX_HISTORY_NAME);
+        assert_eq!(
+            history_name(OsStr::new(&at_the_limit)),
+            OsStr::new(&at_the_limit)
+        );
+        // One character more is shortened, and to the budget exactly.
+        let over = "a".repeat(MAX_HISTORY_NAME + 1);
+        assert_eq!(history_name(OsStr::new(&over)).len(), MAX_HISTORY_NAME);
+        // A name that is all extension keeps the head instead: `MAX_EXTENSION` is
+        // what stops the tail from eating the part that identifies the file.
+        let all_extension = format!("part.{}", "x".repeat(MAX_HISTORY_NAME));
+        let short = history_name(OsStr::new(&all_extension));
+        assert!(
+            short.to_str().unwrap().starts_with("part."),
+            "{short:?} is not the user's name any more"
+        );
+        assert_eq!(short.len(), MAX_HISTORY_NAME);
+        // A multi-byte character is never cut in half.
+        let german = format!("{}.NC", "Gehäuse_".repeat(40));
+        let short = history_name(OsStr::new(&german));
+        assert!(short.to_str().is_some(), "cut a character in half");
+        assert!(short.len() <= MAX_HISTORY_NAME);
+    }
+
+    /// M8: the same Windows folder reaches `files_backup` as `C:\nc` from the file
+    /// dialog and as `\\?\C:\nc` from anything that canonicalized it, and the second
+    /// spelling would open a second history — the five versions the user thinks he
+    /// has would be split over two folders, neither of them full.
+    #[test]
+    fn the_two_windows_spellings_of_one_folder_share_one_history() {
+        assert_eq!(
+            folder_key(Path::new(r"\\?\C:\nc\jobs")),
+            folder_key(Path::new(r"C:\nc\jobs"))
+        );
+        assert_eq!(
+            folder_key(Path::new(r"\\?\UNC\nas\cam\jobs")),
+            folder_key(Path::new(r"\\nas\cam\jobs"))
+        );
+        // Still a folder key, not a shared bucket: two folders keep two histories.
+        assert_ne!(
+            folder_key(Path::new(r"\\?\C:\nc\jobs")),
+            folder_key(Path::new(r"C:\nc\other"))
         );
     }
 

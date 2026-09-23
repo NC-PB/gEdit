@@ -17,7 +17,8 @@ fn main() {
     // reach it either: it applies to tests/*.rs only. So the linker embeds the manifest
     // into everything this package links (the app, the unit-test executables, the cdylib),
     // and tauri-build leaves it out of its resource file, so that the app carries it once.
-    // The file is tauri-build's default manifest, unchanged.
+    // The file is tauri-build's default manifest plus the `longPathAware` setting
+    // (M8); it says there what that is for and what the user's machine still needs.
     let manifest =
         PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("windows-app-manifest.xml");
     println!("cargo:rerun-if-changed={}", manifest.display());

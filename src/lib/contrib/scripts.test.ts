@@ -463,8 +463,27 @@ describe('new script names', () => {
     expect(validateScriptName('gedit_nc.py')?.key).toBe('scripts.nameReserved');
   });
 
+  // M8: `NUL.py` is the bit bucket on Windows, not a file — the template would be
+  // swallowed, the tab would open empty and every save of it would go nowhere. Rust
+  // refuses it in `is_safe_segment`; this says so under the field instead.
+  it('refuses a name that is a Windows device', () => {
+    for (const device of ['CON', 'con', 'NUL', 'aux', 'PRN', 'com1', 'LPT9']) {
+      expect(validateScriptName(device)?.key, device).toBe('scripts.nameDevice');
+      expect(validateScriptName(`${device}.py`)?.key, device).toBe('scripts.nameDevice');
+    }
+    // Names that only start like one are names.
+    for (const name of ['console', 'com10', 'nulled', 'conveyor']) {
+      expect(validateScriptName(name), name).toBeNull();
+    }
+  });
+
   it('has a message for every reason it can give', () => {
-    for (const key of ['scripts.nameEmpty', 'scripts.nameInvalid', 'scripts.nameReserved']) {
+    for (const key of [
+      'scripts.nameEmpty',
+      'scripts.nameInvalid',
+      'scripts.nameReserved',
+      'scripts.nameDevice',
+    ]) {
       expect(hasKey(key), key).toBe(true);
     }
   });

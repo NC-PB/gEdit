@@ -175,6 +175,33 @@ in order across a clock change; it is not your local time.
 A backup is an ordinary copy of the file. Open one with `File ▸ Open`, or compare it with
 what you have now (`Cmd/Ctrl+Alt+C`, then pick the file).
 
+**A very long file name is shortened in the backup folder.** The time stamp goes in front
+of the name, and a name plus a stamp can be longer than a file name is allowed to be — 255
+characters, on every system. A program whose name is longer than about 200 characters is
+therefore filed under the beginning of its name, a short code and its extension:
+
+```
+1234567_Gehaeuse_Deckel_OP20_…_Rev_C_-7b31a0c4.NC
+```
+
+The copy itself is untouched — it is the file, byte for byte, under a name you can still
+recognise. Only the backup's name is shortened; your program keeps the name you gave it.
+
+If a program of about that length already had backups from an earlier version of gEdit,
+they are in a folder under its full name and they stay there — nothing is deleted, but the
+history starts again under the shortened name. Copy the old folder's files out by hand if
+you still want them, or rename the program to something shorter and save it once.
+
+**On Windows, long folder paths need one setting.** gEdit reads and writes its own backups
+whatever they are called, but Windows Explorer and older programs stop at 260 characters
+for a whole path, so a deep folder plus a long name can be a backup you cannot reach by
+hand. If that happens, switch the machine's long-path support on: `Computer
+Configuration ▸ Administrative Templates ▸ System ▸ Filesystem ▸ Enable Win32 long paths`
+in `gpedit.msc`, or set `LongPathsEnabled` to `1` under
+`HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem` and restart. It needs
+Windows 10 version 1607 or newer; on an older Windows there is no such setting, and the
+way to reach the file is to copy the folder nearer the drive's root first.
+
 **A new program has nothing to copy.** The first save of a file that is not on disk yet
 writes no backup, because there is no earlier version of it.
 

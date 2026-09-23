@@ -200,7 +200,11 @@ fn dedupe_key(path: &str) -> String {
 }
 
 fn key_with_case(path: &str, fold_case: bool) -> String {
-    let normalized: PathBuf = Path::new(path).components().collect();
+    // `paths::plain` first: on Windows the same file reaches the list as `C:\nc\a.nc`
+    // from the dialog and as `\\?\C:\nc\a.nc` from anything that canonicalized it, and
+    // the Recent menu would carry it twice (M8).
+    let path = paths::plain(Path::new(path));
+    let normalized: PathBuf = path.components().collect();
     let key = normalized.to_string_lossy().into_owned();
     if fold_case {
         key.to_lowercase()
@@ -281,6 +285,11 @@ fn entries(list: &[String]) -> Vec<RecentEntry> {
 pub fn grant_in(scope: &tauri::fs::Scope, path: &Path) {
     let _ = scope.allow_file(path);
     if let Ok(canonical) = std::fs::canonicalize(path) {
+        // In the ordinary spelling (M8): `allow_file` stores what it is given *and*
+        // the canonical form of it (`push_pattern` → `canonicalize_parent`), so the
+        // scope holds the `\\?\` spelling either way, and a pattern nothing else in
+        // gEdit ever writes down is one more way for the two to drift apart.
+        let canonical = paths::plain(&canonical);
         if canonical != path {
             let _ = scope.allow_file(&canonical);
         }
@@ -524,6 +533,38 @@ mod tests {
                 "{spelling}"
             );
         }
+    }
+
+    /// M8: on Windows one file has two spellings — the `C:\…` of the file dialog and
+    /// the `\\?\C:\…` of anything that went through `canonicalize` — and the Recent
+    /// menu would list it twice, once under a name Explorer cannot even show.
+    #[test]
+    fn touch_treats_the_two_windows_spellings_of_one_path_as_one_entry() {
+        let before = list(&[r"C:\nc\WELLE.NC", r"C:\b.nc"]);
+        assert_eq!(
+            touch_with(&before, r"\\?\C:\nc\WELLE.NC", 10, sensitive),
+            list(&[r"\\?\C:\nc\WELLE.NC", r"C:\b.nc"])
+        );
+        // And the other way round, for a list written by an older build.
+        assert_eq!(
+            touch_with(
+                &list(&[r"\\?\C:\nc\WELLE.NC"]),
+                r"C:\nc\WELLE.NC",
+                10,
+                sensitive
+            ),
+            list(&[r"C:\nc\WELLE.NC"])
+        );
+        // A share reaches the dialog as `\\nas\…` and `canonicalize` as `\\?\UNC\…`.
+        assert_eq!(
+            touch_with(
+                &list(&[r"\\nas\cam\WELLE.NC"]),
+                r"\\?\UNC\nas\cam\WELLE.NC",
+                10,
+                sensitive
+            ),
+            list(&[r"\\?\UNC\nas\cam\WELLE.NC"])
+        );
     }
 
     /// AD-9: case-insensitive on macOS and Windows, byte for byte on Linux.

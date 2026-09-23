@@ -20,6 +20,7 @@
 //! a document save of that one path back through `settings_save` is the fix if
 //! it is ever worth closing.
 
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 use tauri::{AppHandle, Manager};
@@ -52,6 +53,189 @@ pub const RECOVERY_DIR_NAME: &str = "recovery";
 /// one folder and must not end up with two histories. Linux compares byte for
 /// byte. One constant, so the two can never disagree.
 pub const FOLD_CASE: bool = cfg!(any(target_os = "macos", target_os = "windows"));
+
+// ---------------------------------------------------------------------------
+// How Windows spells a path (M8)
+// ---------------------------------------------------------------------------
+
+/// The prefix `std::fs::canonicalize` puts in front of every path it returns on
+/// Windows (documented on `std::fs::canonicalize`: "this converts the path to use
+/// extended length path syntax").
+const VERBATIM: &str = r"\\?\";
+
+/// The same prefix for a network share: `\\?\UNC\server\share` is the verbatim
+/// spelling of `\\server\share` ("Naming Files, Paths, and Namespaces").
+const VERBATIM_UNC: &str = r"\\?\UNC\";
+
+/// Whether `name` names one of DOS's devices rather than a file.
+///
+/// `CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9` and `LPT1`-`LPT9` (and `COM¹`, `COM²`,
+/// `COM³` and the `LPT` three, whose shaped digits Windows folds to the same
+/// devices) are devices **whatever the extension**: `NUL.py` opens the same
+/// bit bucket as `NUL`, writes to it vanish and reads of it come back empty. The
+/// rule and that list are Microsoft's, in "Naming Files, Paths, and Namespaces":
+/// "avoid these names followed immediately by an extension; for example, NUL.txt
+/// and NUL.tar.gz are both equivalent to NUL".
+///
+/// `COM0` and `LPT0` are **not** on Microsoft's list and are refused anyway, as a
+/// deliberate margin — the unit is matched as any ASCII digit. Both directions of the
+/// over-reach are harmless and the two places this is used make that so: refusing a
+/// name only ever costs a user the one script name `COM0.py`, which he can spell
+/// `COM0_.py`, while treating it as a device in [`plain`] only ever *keeps* a `\\?\`
+/// prefix, and a kept prefix always names the file it already named. Narrowing it to
+/// Microsoft's exact list would be the direction that can go wrong: whether the
+/// kernel's own `RtlIsDosDeviceName` stops at `1` is not documented anywhere we can
+/// cite, and nobody on this project can put the question to a Windows machine. The
+/// i18n string `scripts.nameDevice` and `isDeviceName` in `utils/platform.ts` say
+/// `COM0`-`COM9` for the same reason; all three have to agree.
+///
+/// So the part that decides is what stands before the **first** dot, with trailing
+/// spaces trimmed — those are what Win32 path normalization drops before it looks
+/// the name up. Leading spaces are not trimmed by normalization, so ` CON` is an
+/// ordinary file name and stays one here.
+///
+/// The answer does not depend on the platform this runs on — it is a fact about how
+/// Windows reads a name, and the tests for it have to run somewhere. What each caller
+/// *does* with the answer does depend on the platform: `scripts::discovery` refuses
+/// the names it creates everywhere but only hides the ones on disk on Windows, where
+/// they really are devices.
+pub fn is_device_name(name: &str) -> bool {
+    let stem = name.split('.').next().unwrap_or(name).trim_end_matches(' ');
+    if ["CON", "PRN", "AUX", "NUL"]
+        .iter()
+        .any(|device| stem.eq_ignore_ascii_case(device))
+    {
+        return true;
+    }
+    // `COM<unit>` and `LPT<unit>`, and nothing longer.
+    let mut chars = stem.chars();
+    let (Some(a), Some(b), Some(c), Some(unit)) =
+        (chars.next(), chars.next(), chars.next(), chars.next())
+    else {
+        return false;
+    };
+    if chars.next().is_some() {
+        return false;
+    }
+    let port = [
+        a.to_ascii_uppercase(),
+        b.to_ascii_uppercase(),
+        c.to_ascii_uppercase(),
+    ];
+    (port == ['C', 'O', 'M'] || port == ['L', 'P', 'T'])
+        && (unit.is_ascii_digit() || matches!(unit, '¹' | '²' | '³'))
+}
+
+/// The characters Win32 does not allow in a name, and therefore reads as something
+/// other than part of one: `< > : " | ? *`, the control characters 1 through 31 and
+/// the NUL byte (Microsoft, "Naming Files, Paths, and Namespaces", which lists those
+/// two ranges separately). `/` and `\` are on that list too and are handled as
+/// separators instead, one in [`is_plain_component`] and one by the split that feeds it.
+///
+/// A verbatim path never goes through that parse — the `\\?\` prefix "tells the
+/// Windows APIs to disable all string parsing" — so a name holding one of these is
+/// exactly the case where the two spellings are two different things.
+fn is_win32_reserved(byte: u8) -> bool {
+    matches!(
+        byte,
+        0..=31 | b'<' | b'>' | b':' | b'"' | b'|' | b'?' | b'*'
+    )
+}
+
+/// One path component that means the same thing with and without a `\\?\` prefix.
+///
+/// A verbatim path is handed to the file system as it stands; an ordinary one is
+/// normalized first, and normalization is what trims trailing dots and spaces, turns
+/// `/` into a separator, resolves `.` and `..`, maps the DOS device names and reads
+/// the reserved characters. A component that any of those would change is a component
+/// whose two spellings name two different things, and [`plain`] then leaves the path
+/// alone.
+///
+/// The reserved characters are the case a Linux or macOS CAM seat writes onto a share
+/// (M8, G8): `\\?\UNC\nas\cam\2026-01-05T10:30:00.nc` is a perfectly good verbatim
+/// path, and `\\nas\cam\2026-01-05T10:30:00.nc` is a request for the alternate data
+/// stream `30:00.nc` of a file called `2026-01-05T10`. `?` and `*` make `CreateFileW`
+/// fail with `ERROR_INVALID_NAME` instead, and `"`, `<` and `>` are the wildcards
+/// `RtlDosPathNameToNtPathName` maps them onto. `dunce` refuses to strip a prefix over
+/// the same set (`is_valid_filename`, dunce 1.0.5 `src/lib.rs`).
+///
+/// gEdit's own I/O cannot reach that case today — `std` only writes the prefix at 248
+/// UTF-16 units or more, so a short path like the one above is never canonicalized,
+/// and a long one is re-prefixed by `get_long_path` — but a `Resolved.path` is handed
+/// unprefixed to `python.exe` and to the webview, so the rule belongs here rather than
+/// in a comment saying it cannot happen.
+fn is_plain_component(part: &str) -> bool {
+    !part.is_empty()
+        && !part.ends_with('.')
+        && !part.ends_with(' ')
+        && !part.contains('/')
+        && !part.bytes().any(is_win32_reserved)
+        && !is_device_name(part)
+}
+
+/// The ordinary spelling of a path: the `\\?\` of a canonicalized Windows path
+/// removed, when removing it names the same file.
+///
+/// **This is the one boundary where a path becomes a string the rest of gEdit
+/// compares.** `std::fs::canonicalize` is the only thing in gEdit that produces a
+/// verbatim path, and everything else — the file dialog, the command line, the
+/// recent list, `<config>/scripts` joined onto a file name — produces the ordinary
+/// one. Two spellings of one file are two documents to
+/// `pathKey` in `stores/documents.ts`, two entries to [`crate::state`]'s recent list
+/// and two histories to [`crate::backup`]'s `folder_key`, so the two spellings are
+/// folded into one here, at the point where a `Path` turns into something that is
+/// compared or handed to the webview, and nowhere else.
+///
+/// It stays inside the fs scope: `Scope::allow_file` stores the path it is given
+/// **and** its canonical form (`push_pattern` → `canonicalize_parent` in
+/// `tauri/src/scope/fs.rs`), while `is_allowed` canonicalizes what it is asked
+/// about — so granting the ordinary spelling grants the verbatim one with it.
+///
+/// It is not `cfg(windows)`-gated. Every path that reaches it is absolute, and an
+/// absolute path on Unix begins with `/`, so the prefix cannot appear there; one
+/// rule for every platform means the Windows spellings are covered by tests that run
+/// on every platform, which is the only way this can be tested at all without a
+/// Windows machine.
+pub fn plain(path: &Path) -> Cow<'_, Path> {
+    match path.to_str().and_then(plain_text) {
+        Some(text) => Cow::Owned(PathBuf::from(text)),
+        None => Cow::Borrowed(path),
+    }
+}
+
+/// [`plain`] on the text of a path. `None` when the path is not a verbatim one, or
+/// when dropping the prefix would change which file it names.
+fn plain_text(path: &str) -> Option<String> {
+    // The root is `server\share` for a share and `C:` for a drive; what follows it
+    // are the file and folder names that normalization could change.
+    let (rest, root_parts, prefix) = if let Some(rest) = path.strip_prefix(VERBATIM_UNC) {
+        (rest, 2, r"\\")
+    } else {
+        let rest = path.strip_prefix(VERBATIM)?;
+        // A drive, and only a drive: `\\?\Volume{…}` and `\\?\BootPartition` name
+        // volumes that have no ordinary spelling at all.
+        if !matches!(rest.as_bytes(), [drive, b':', b'\\', ..] if drive.is_ascii_alphabetic()) {
+            return None;
+        }
+        (rest, 1, "")
+    };
+
+    let mut parts = rest.split('\\');
+    for _ in 0..root_parts {
+        parts.next().filter(|part| !part.is_empty())?;
+    }
+    let mut parts = parts.peekable();
+    while let Some(part) = parts.next() {
+        // A trailing separator, as in `\\?\C:\`: the root is the whole path.
+        if part.is_empty() && parts.peek().is_none() {
+            break;
+        }
+        if !is_plain_component(part) {
+            return None;
+        }
+    }
+    Some(format!("{prefix}{rest}"))
+}
 
 /// The mode the two M7 folders get on Unix: owner only.
 ///
@@ -235,6 +419,133 @@ mod tests {
             data: root.join("data"),
         };
         (root, dirs)
+    }
+
+    /// The device names, with and without an extension, in both cases, and the names
+    /// that only look like one. A file called `NUL.py` is not a file (M8): writes to
+    /// it vanish, so `New script ▸ NUL` would hand the user an editor tab over a bit
+    /// bucket and every save would go nowhere.
+    #[test]
+    fn the_dos_device_names_are_recognized_whatever_the_extension() {
+        for device in [
+            "CON", "PRN", "AUX", "NUL", "COM1", "COM9", "LPT1", "LPT9", "COM0", "LPT0",
+        ] {
+            for name in [
+                device.to_string(),
+                device.to_lowercase(),
+                format!("{device}.py"),
+                format!("{device}.NC"),
+                // "NUL.tar.gz ... equivalent to NUL": what counts is the first dot.
+                format!("{device}.tar.gz"),
+                // Normalization trims the trailing spaces before it matches.
+                format!("{device} .py"),
+                format!("{device}  "),
+            ] {
+                assert!(is_device_name(&name), "{name} names a device");
+            }
+        }
+        // The shaped digits are the same three ports.
+        assert!(is_device_name("COM¹") && is_device_name("LPT³"));
+        for name in [
+            "CONSOLE.py",
+            "COM10.py",
+            "COM.py",
+            "NULL.py",
+            "welle.nc",
+            // A leading space is not trimmed by normalization, so this is a file.
+            " CON.py",
+            "my.CON",
+            "",
+        ] {
+            assert!(!is_device_name(name), "{name} is an ordinary name");
+        }
+    }
+
+    /// Both spellings of one Windows file have to come out as one string, or the file
+    /// opens in two tabs, is two entries in the recent list and gets two backup
+    /// histories (M8). Run on every platform on purpose: nobody here has Windows.
+    #[test]
+    fn a_verbatim_windows_path_is_folded_onto_its_ordinary_spelling() {
+        let plain_of = |path: &str| plain(Path::new(path)).display().to_string();
+        assert_eq!(plain_of(r"\\?\C:\nc\WELLE.NC"), r"C:\nc\WELLE.NC");
+        assert_eq!(plain_of(r"\\?\c:\nc\WELLE.NC"), r"c:\nc\WELLE.NC");
+        assert_eq!(plain_of(r"\\?\C:\"), r"C:\");
+        // A share: `\\?\UNC\nas\cam\x` is `\\nas\cam\x`, which is the spelling the
+        // file dialog hands back for the same file.
+        assert_eq!(plain_of(r"\\?\UNC\nas\cam\WELLE.NC"), r"\\nas\cam\WELLE.NC");
+        // Already ordinary, or not a path with an ordinary spelling at all.
+        for path in [
+            r"C:\nc\WELLE.NC",
+            r"\\nas\cam\WELLE.NC",
+            r"\\?\Volume{a5b2}\nc\WELLE.NC",
+            r"\\?\BootPartition\x",
+            "/nc/welle.nc",
+            "welle.nc",
+        ] {
+            assert_eq!(plain_of(path), path, "{path} must be left alone");
+        }
+        // A bare share root folds too: `\\?\UNC\nas\cam` is `\\nas\cam`, with or
+        // without the trailing separator. Never a document's own path, but `pathKey`
+        // in the webview has to answer the same thing for it (G8 M8).
+        assert_eq!(plain_of(r"\\?\UNC\nas\cam"), r"\\nas\cam");
+        assert_eq!(plain_of(r#"\\?\UNC\nas\cam\"#), r#"\\nas\cam\"#);
+        // The prefix is what keeps these from being normalized, so dropping it would
+        // name something else: a device, a name a trailing dot or space is trimmed
+        // off, a `/` that would become a separator, and the characters Win32 reads as
+        // something other than part of a name.
+        for path in [
+            r"\\?\C:\nc\NUL.NC",
+            r"\\?\C:\nc\welle.nc.",
+            r"\\?\C:\nc\welle.nc ",
+            r"\\?\C:\nc\a/b",
+            r"\\?\UNC\nas\cam\NUL.NC",
+            // A Linux CAM seat's timestamp name on a share. `:` would be read as an
+            // alternate data stream of a file called `2026-01-05T10` (G8 M8).
+            r"\\?\UNC\nas\cam\2026-01-05T10:30:00.nc",
+            // `?` and `*` make `CreateFileW` fail with `ERROR_INVALID_NAME`; `"`, `<`
+            // and `>` are the wildcards normalization maps them onto.
+            r"\\?\C:\nc\what?.nc",
+            r"\\?\C:\nc\star*.nc",
+            r#"\\?\C:\nc\quote".nc"#,
+            r"\\?\C:\nc\lt<gt>.nc",
+            r"\\?\C:\nc\pipe|.nc",
+            "\\\\?\\C:\\nc\\bell\x07.nc",
+        ] {
+            assert_eq!(plain_of(path), path, "{path} must keep its prefix");
+        }
+    }
+
+    /// The webview has to know the same two rules: the New Script prompt says why a
+    /// name is refused before the round trip, and `pathKey` folds the same two
+    /// spellings so that one file is one tab. That means the rules are written twice,
+    /// and this is what catches a change made to only one of them — the pattern
+    /// `backup.rs` uses for the settings schema.
+    #[test]
+    fn the_webview_mirrors_these_two_rules() {
+        let ts = crate::source_scan::lf(include_str!("../../src/lib/utils/platform.ts"));
+        assert!(
+            // Spelled without the escapes the regex writes the three shaped digits
+            // with, so that this needle is the same characters in both files.
+            ts.contains("^(CON|PRN|AUX|NUL|(COM|LPT)[0-9"),
+            "platform.ts no longer knows the device names"
+        );
+        assert!(
+            ts.contains("export function plainPath(")
+                && ts.contains("export function isDeviceName("),
+            "platform.ts no longer exports the two rules"
+        );
+        // And the third: the characters only a verbatim path can carry (G8 M8).
+        assert!(
+            ts.contains(r#"const WIN32_RESERVED = '<>:"|?*';"#)
+                && ts.contains("charCodeAt(i) <= 31"),
+            "platform.ts no longer knows Win32's reserved characters"
+        );
+        // And the one place a path becomes a document's identity uses it.
+        let documents = crate::source_scan::lf(include_str!("../../src/lib/stores/documents.ts"));
+        assert!(
+            documents.contains("plainPath(path)"),
+            "pathKey no longer folds the `\\\\?\\` spelling"
+        );
     }
 
     #[test]

@@ -19,9 +19,13 @@
 //!   entry stays in the list with `shadowed: true`, so the UI can explain itself instead
 //!   of silently dropping a script the user can see on disk.
 //! - An id is `root:name.py` or `root:group/name.py`. Every segment must be a plain file
-//!   name (no separators, no `.` or `..`, nothing starting with `.`), the file must end
-//!   in `.py`, and `canonicalize(file)` must start with `canonicalize(root)` — which is
-//!   what stops a symlink from pointing out of the folder.
+//!   name (no separators, no `.` or `..`, nothing starting with `.`, and — on Windows
+//!   only, where they are not files — none of DOS's device names: `NUL.py` is the bit
+//!   bucket there, while on macOS and Linux it is a file like any other), the file must
+//!   end in `.py`, and `canonicalize(file)` must start with `canonicalize(root)` —
+//!   which is what stops a symlink from pointing out of the folder. The path that
+//!   leaves here is in the ordinary spelling (`paths::plain`), so that one file is one
+//!   string wherever the webview got it from.
 //! - A missing folder is not an error: the root is reported with `exists: false` and no
 //!   scripts. A dev build without the bundled resource, and an extra folder on a network
 //!   share that is not mounted today, both have to give a working Scripts menu.
@@ -125,8 +129,10 @@ pub struct Resolved {
     pub root: String,
     pub group: Option<String>,
     pub file_name: String,
-    /// The canonical path: symlinks are already followed, and it has been checked to be
-    /// a regular file under the canonical root.
+    /// The canonical path, in the ordinary spelling: symlinks are already followed,
+    /// it has been checked to be a regular file under the canonical root, and the
+    /// `\\?\` a Windows `canonicalize` puts in front is gone (`paths::plain`, M8) —
+    /// the same string `create_script` and `copy_into` build for the same file.
     pub path: PathBuf,
     pub editable: bool,
 }
@@ -367,6 +373,22 @@ fn mark_shadowed(scripts: &mut [ScriptEntry]) {
 /// its root; the second is the `canonicalize` comparison in [`resolve_id`], which is
 /// what catches a symlink. Rejecting `.` and anything starting with it also keeps the
 /// bare `..` and hidden files out.
+///
+/// It covers two of the three ways a name gets into the app — the walk in
+/// [`read_names`] and an id in [`resolve_id`] — and both of those ask the same
+/// question: is this a name *this* machine can open? So [`paths::is_device_name`]
+/// is `cfg(windows)` here (M8). On Windows `NUL.py` is not a file but the bit bucket:
+/// `create_new` on it succeeds, the template is swallowed, the editor opens an empty
+/// tab, and every save of it goes nowhere; `CON.py` and `COM1.py` are the console and
+/// the first serial port in the same way, so neither may be listed or addressed there.
+///
+/// On macOS and Linux those are ordinary names. An `aux.py` of auxiliary helpers, or
+/// a `con/` group folder, opens and runs like any other file, and the user can see it
+/// in Finder — dropping it from the walk would break this module's own rule that an
+/// entry it cannot use stays visible with a reason rather than vanishing. The third
+/// door, [`new_script_name`], refuses the names on **every** platform, because a
+/// script folder gEdit fills on a Mac is one that may be synced to a Windows machine
+/// and must not arrive holding a file nobody there can open.
 pub fn is_safe_segment(segment: &str) -> bool {
     !segment.is_empty()
         && !segment.starts_with('.')
@@ -374,6 +396,7 @@ pub fn is_safe_segment(segment: &str) -> bool {
         && !segment.ends_with(' ')
         && !segment.contains(['/', '\\', ':'])
         && !segment.chars().any(char::is_control)
+        && !(cfg!(windows) && paths::is_device_name(segment))
 }
 
 /// `root:name.py` or `root:group/name.py`, checked against the roots.
@@ -426,7 +449,13 @@ pub fn resolve_id(roots: &[RootDir], id: &str) -> Result<Resolved, String> {
         root: root.name.clone(),
         group: group.map(str::to_string),
         file_name: file_name.to_string(),
-        path,
+        // The containment check above is done on what `canonicalize` returned, both
+        // sides in the same spelling; what leaves this function is the ordinary one.
+        // On Windows `canonicalize` answers with a `\\?\` path while `create_script`
+        // and `copy_into` build an ordinary `C:\…`, and the webview would hold the
+        // same file under two names — two tabs that each believe they own it, and the
+        // second save discarding the first (M8, `paths::plain`).
+        path: paths::plain(&path).into_owned(),
         editable: root.editable,
     })
 }
@@ -526,11 +555,17 @@ fn new_script_name(name: &str) -> Result<(String, String), String> {
     let stem = title.strip_suffix(".py").unwrap_or(title).trim_end();
     let file_name = format!("{stem}.py");
     // The new file has to be discoverable and addressable by the same rules as any
-    // other script, so it is checked against the id grammar rather than a looser one.
+    // other script, so it is checked against the id grammar rather than a looser one —
+    // plus the device names, which `is_safe_segment` only refuses on Windows (M8).
+    // Here they are refused everywhere: this is the one door gEdit *creates* a file
+    // through, and a scripts folder filled on a Mac is one that gets synced to a
+    // Windows machine, where `NUL.py` swallows the template and reads back empty.
+    // `validateScriptName` in `contrib/scripts.ts` says the same thing in the prompt.
     if stem.is_empty()
         || stem.starts_with('_')
         || stem.ends_with('.')
         || !is_safe_segment(&file_name)
+        || paths::is_device_name(&file_name)
         || file_name == LIBRARY_FILE_NAME
     {
         return Err(format!("Invalid script name: {name}"));
@@ -612,6 +647,12 @@ mod tests {
             editable,
             listed: true,
         }
+    }
+
+    /// What `resolve_id` answers with for `path`: canonical, in the ordinary
+    /// spelling. On Windows `canonicalize` alone would be the `\\?\` one (M8).
+    fn canonical(path: &Path) -> PathBuf {
+        paths::plain(&fs::canonicalize(path).unwrap()).into_owned()
     }
 
     fn ids(list: &ScriptList) -> Vec<&str> {
@@ -848,10 +889,12 @@ mod tests {
         assert_eq!(a.file_name, "a.py");
         assert_eq!(a.group, None);
         assert!(a.editable);
-        assert_eq!(a.folder(), fs::canonicalize(&dir).unwrap());
+        // `plain` on both sides, because `Resolved.path` is the ordinary spelling
+        // and `canonicalize` is the `\\?\` one on Windows (M8).
+        assert_eq!(a.folder(), canonical(&dir));
         let b = resolve_id(&roots, "user:turning/b.py").unwrap();
         assert_eq!(b.group.as_deref(), Some("turning"));
-        assert_eq!(b.folder(), fs::canonicalize(dir.join("turning")).unwrap());
+        assert_eq!(b.folder(), canonical(&dir.join("turning")));
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -919,7 +962,7 @@ mod tests {
         std::os::unix::fs::symlink(dir.join("a.py"), dir.join("also_a.py")).unwrap();
         assert_eq!(
             resolve_id(&roots, "user:also_a.py").unwrap().path,
-            fs::canonicalize(dir.join("a.py")).unwrap()
+            canonical(&dir.join("a.py"))
         );
         for dir in [dir, outside] {
             let _ = fs::remove_dir_all(&dir);
@@ -951,6 +994,85 @@ mod tests {
         ] {
             assert!(new_script_name(name).is_err(), "accepted {name:?}");
         }
+    }
+
+    /// M8: on Windows these name devices, not files, with or without the `.py`.
+    /// `New script ▸ NUL` wrote the template into the bit bucket, opened the empty
+    /// tab it read back, and every save of it went the same way; `CON` and `COM1`
+    /// are the console and the first serial port.
+    ///
+    /// The prompt refuses them on **every** platform, because the folder it writes
+    /// into is one people sync to a Windows machine (G8 M8: the walk and the id
+    /// grammar refuse them only where they really are devices, which is the test
+    /// below — a Mac that has an `aux.py` must keep seeing it).
+    #[test]
+    fn a_device_name_is_never_accepted_as_a_new_script_name() {
+        for stem in ["CON", "con", "NUL", "aux", "PRN", "com1", "LPT9"] {
+            assert!(
+                new_script_name(stem).is_err(),
+                "accepted the device {stem:?}"
+            );
+            assert!(
+                new_script_name(&format!("{stem}.py")).is_err(),
+                "accepted the device {stem:?}.py"
+            );
+        }
+        // Names that only start like one are still names.
+        for stem in ["console", "com10", "nulled", "conveyor"] {
+            assert!(new_script_name(stem).is_ok(), "refused {stem:?}");
+        }
+    }
+
+    /// Whether a device name may be *listed and addressed* is a question about the
+    /// file system underneath, not about the name, so `is_safe_segment` answers it
+    /// per platform (G8 M8).
+    ///
+    /// On Windows there is nothing to list: `NUL.py` is the bit bucket, so an id
+    /// naming one must not resolve. On macOS and Linux the file is real, opens, and
+    /// runs — and M8 shipped a walk that dropped it from the Scripts menu with no
+    /// error and no marker, which is exactly what this module's shadowing rule exists
+    /// to avoid. The two halves are asserted against the same table.
+    #[test]
+    fn a_device_name_is_a_segment_only_where_it_is_not_a_device() {
+        let usable = !cfg!(windows);
+        for stem in ["CON", "con", "NUL", "aux", "PRN", "com1", "LPT9"] {
+            // Both segments of an id: a group folder, and the file name with its
+            // extension.
+            assert_eq!(is_safe_segment(stem), usable, "{stem} as a folder name");
+            assert_eq!(
+                is_safe_segment(&format!("{stem}.py")),
+                usable,
+                "{stem}.py as a file name"
+            );
+        }
+        for stem in ["console", "com10", "nulled", "conveyor"] {
+            assert!(is_safe_segment(&format!("{stem}.py")), "refused {stem}.py");
+        }
+    }
+
+    /// The same names against a folder that really holds those files. Only Unix can
+    /// hold them, which is why the case matters: M8 walked past `aux.py` and `con/`
+    /// and the user lost two scripts he could see in Finder, with nothing said
+    /// anywhere (G8 M8).
+    #[cfg(unix)]
+    #[test]
+    fn on_unix_a_device_name_is_an_ordinary_script() {
+        let dir = scratch(
+            "devices",
+            &[("NUL.py", "# nul"), ("con/", ""), ("con/a.py", "# a")],
+        );
+        let roots = roots_in(None, dir.clone(), &[], true);
+        for id in ["user:NUL.py", "user:con/a.py"] {
+            let resolved = resolve_id(&roots, id).unwrap_or_else(|err| panic!("{id}: {err}"));
+            assert!(resolved.path.is_file(), "{id} does not point at the file");
+        }
+        // And the walk offers both — the loose file first, then the group, which is
+        // this root's ordinary listing order.
+        let listed = discover(&roots);
+        assert_eq!(ids(&listed), ["user:NUL.py", "user:con/a.py"]);
+        // The prompt still refuses to *create* one, on this platform too.
+        assert!(new_script_name("NUL").is_err());
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -1017,6 +1139,48 @@ mod tests {
         }
     }
 
+    /// M8 — the data-loss one. The two commands that hand the webview a script's
+    /// path have to hand out the **same string** for the same file: `script_new`
+    /// builds `<config>/scripts/x.py` while `script_source_path` answers with what
+    /// `canonicalize` returned, which on Windows is `\\?\C:\…`. `pathKey` in
+    /// `stores/documents.ts` compares those two as text, so the file opened once
+    /// through New and once through Edit was two tabs that each believed they owned
+    /// it — and the second save discarded the first.
+    ///
+    /// The scratch root is canonicalized (and put in the ordinary spelling) first, so
+    /// that what is compared is only the spelling of the prefix and not the macOS
+    /// `/var` → `/private/var` link.
+    #[test]
+    fn the_new_and_the_edit_path_of_one_script_are_one_string() {
+        let dir = canonical(&scratch("one-spelling", &[]));
+        let created = create_script(&dir, "Deburr").unwrap();
+        let roots = roots_in(None, dir.clone(), &[], true);
+        let resolved = resolve_id(&roots, "user:Deburr.py").unwrap();
+        let edited = editable_source(&resolved, "user:Deburr.py").unwrap();
+        assert_eq!(
+            edited.to_string_lossy(),
+            created.to_string_lossy(),
+            "two spellings of one file are two tabs"
+        );
+
+        // And so does a copy out of the bundled folder, which builds its path the
+        // same way `script_new` does.
+        let bundled = canonical(&scratch("one-spelling-bundled", &[("b.py", "# b")]));
+        let roots = roots_in(Some(bundled.clone()), dir.clone(), &[], true);
+        let source = resolve_id(&roots, "bundled:b.py").unwrap();
+        let copied = copy_into(&dir, &source, "bundled:b.py").unwrap();
+        let resolved = resolve_id(&roots, "user:b.py").unwrap();
+        assert_eq!(
+            editable_source(&resolved, "user:b.py")
+                .unwrap()
+                .to_string_lossy(),
+            copied.to_string_lossy()
+        );
+        for dir in [dir, bundled] {
+            let _ = fs::remove_dir_all(&dir);
+        }
+    }
+
     /// Plan §3: a bundled script is never granted to the webview.
     #[test]
     fn only_an_editable_script_hands_its_path_out() {
@@ -1029,7 +1193,7 @@ mod tests {
         let script = resolve_id(&roots, "user:b.py").unwrap();
         assert_eq!(
             editable_source(&script, "user:b.py").unwrap(),
-            fs::canonicalize(user.join("b.py")).unwrap()
+            canonical(&user.join("b.py"))
         );
         for dir in [bundled, user] {
             let _ = fs::remove_dir_all(&dir);

@@ -87,6 +87,7 @@ export default {
   nameEmpty: 'Enter a name',
   nameInvalid: 'Use a plain file name: no / \\ : and no leading _ or .',
   nameReserved: 'gedit_nc.py is the script library and cannot be used as a name',
+  nameDevice: 'CON, PRN, AUX, NUL, COM0-COM9 and LPT0-LPT9 name Windows devices, not files',
   created: 'Created {name}',
   newFailed: 'Could not create the script',
   copied: 'Copied {script} to your scripts folder',

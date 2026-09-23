@@ -89,6 +89,12 @@ pub const EXIT_GRACE: Duration = Duration::from_millis(1500);
 pub const MIN_PYTHON: (u32, u32) = (3, 9);
 
 /// What the Windows Store's `python` alias exits with when nothing is installed.
+///
+/// The other half of that story is [`crate::python`], which never *chooses* an
+/// interpreter under `WindowsApps` in the first place. This is what happens when one is
+/// run anyway: the user pointed `scripts.python` at it, or the lookup found nothing and
+/// the bare fallback name resolved to the alias. Both ends have to say the same thing, so
+/// neither may be changed without the other.
 const WINDOWS_NOT_FOUND: i32 = 9009;
 
 /// What `python_check` asks the interpreter. One line, no imports beyond `sys`, so it
@@ -524,7 +530,8 @@ fn collect(pipe: Option<Receiver<(Vec<u8>, bool)>>, deadline: Instant) -> (Strin
 
 /// The interpreter for scripts, in the order of AD-13: the `GEDIT_PYTHON` environment
 /// variable, then `scripts.python` from the settings (only when it names a file that
-/// exists), then the resolver that looks the user's own `python3` up.
+/// exists), then [`crate::python`], which looks the user's own interpreter up the way
+/// their own shell or command prompt would.
 pub fn interpreter(settings: &ScriptSettings) -> PathBuf {
     interpreter_with(std::env::var_os("GEDIT_PYTHON"), settings)
 }
@@ -1342,7 +1349,8 @@ mod unix_tests {
         assert!(outcome.success(), "{outcome:?}");
         let expected = format!(
             "cwd={}\npath={}\ncontext={{\"contract\":2}}\nN10 G0 X1.\n",
-            std::fs::canonicalize(&dir).unwrap().display(),
+            // The ordinary spelling, which is what `Resolved.folder()` is (M8).
+            crate::paths::plain(&std::fs::canonicalize(&dir).unwrap()).display(),
             bundled.display()
         );
         assert_eq!(outcome.stdout, expected);
@@ -1390,6 +1398,590 @@ mod unix_tests {
         let outcome = execute(&plan, &RunState::default()).unwrap();
         assert!(outcome.timed_out);
         assert!(started.elapsed() < Duration::from_secs(2));
+        assert!(judge("p", Ok(outcome)).message.unwrap().contains("seconds"));
+    }
+}
+
+#[cfg(all(test, windows))]
+mod windows_tests {
+    //! The runner on Windows, driven through `cmd.exe`: every Windows has one whether or
+    //! not it has a Python, and it can be told to hang, to fail and to print more than a
+    //! pipe holds, which is what needs proving.
+    //!
+    //! These are the Unix siblings above, one for one, minus the one claim Windows cannot
+    //! make. There is no `killpg` here, so [`kill_group`] is a no-op and a *grandchild* a
+    //! script spawned outlives the run (plan AD-13). What is proved instead is that the
+    //! direct child is killed on a timeout and on a cancel, and
+    //! `the_group_kill_is_a_no_op_here` keeps the missing half honest rather than silent.
+    //!
+    //! **Why every command runs with a `cwd` and names files relative to it.** An absolute
+    //! path inside a `cmd /c` argument would have to be quoted, and `std` escapes a `"` in
+    //! an argument as `\"` — MSVCRT's rule (`make_command_line` in
+    //! `library/std/src/sys/args/windows.rs`), which `cmd.exe` does not use. Handing the
+    //! folder to the child and letting it say `type data.txt` avoids the whole question.
+    //!
+    //! Where a *file* has to stand in for a Python, it is a `.bat`: `std` resolves a
+    //! `.bat`/`.cmd` program through `cmd.exe` itself and escapes the arguments for it,
+    //! including the `%` in the version probe (`make_bat_command_line`, same file), so a
+    //! batch file is a faithful stand-in for an interpreter that takes `-c <program>`.
+
+    use super::*;
+
+    /// `cmd.exe`, from the variable Windows always sets, so no PATH search is involved.
+    fn cmd_exe() -> PathBuf {
+        std::env::var_os("ComSpec")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("cmd.exe"))
+    }
+
+    /// A plan that runs `command` under `cmd.exe /c`, with `dir` as its working folder.
+    fn cmd(command: &str, dir: &Path, timeout: Duration) -> RunPlan {
+        RunPlan {
+            program: cmd_exe(),
+            args: vec![OsString::from("/c"), OsString::from(command)],
+            cwd: Some(dir.to_path_buf()),
+            env: Vec::new(),
+            stdin: String::new(),
+            timeout,
+            stdout_cap: MAX_STDOUT_BYTES,
+            stderr_cap: MAX_STDERR_BYTES,
+        }
+    }
+
+    /// A plan that runs a program directly, with no shell in between — used wherever a
+    /// `cmd.exe` would only add a process between the runner and the thing being killed.
+    fn program(program: &str, args: &[&str], timeout: Duration) -> RunPlan {
+        RunPlan {
+            program: PathBuf::from(program),
+            args: args.iter().map(OsString::from).collect(),
+            cwd: None,
+            env: Vec::new(),
+            stdin: String::new(),
+            timeout,
+            stdout_cap: MAX_STDOUT_BYTES,
+            stderr_cap: MAX_STDERR_BYTES,
+        }
+    }
+
+    /// Something that runs for half a minute and is not a shell, so that killing it is
+    /// killing the thing under test. `ping` is in the system directory on every Windows.
+    fn sleeper(seconds: u32) -> RunPlan {
+        program(
+            "ping",
+            &["-n", &seconds.to_string(), "127.0.0.1"],
+            Duration::from_secs(u64::from(seconds)),
+        )
+    }
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("gedit-runner-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Writes a batch file. The lines are joined with CRLF because that is what `cmd.exe`
+    /// reads batch files as.
+    fn batch(path: &Path, lines: &[&str]) {
+        std::fs::write(path, format!("{}\r\n", lines.join("\r\n"))).unwrap();
+    }
+
+    fn run(plan: &RunPlan) -> RunOutcome {
+        execute(plan, &RunState::default()).expect("the plan did not start")
+    }
+
+    /// Writes a batch file that prints the script environment and then the context file,
+    /// and a plan that runs it.
+    ///
+    /// A batch file may quote `"%GEDIT_CONTEXT%"` however it likes — `cmd.exe` parses it
+    /// from disk — so the context file is read without its folder having to be the
+    /// child's working directory. That matters on Windows: a directory that is a live
+    /// process's working directory cannot be deleted, and `ContextDir` deletes this one.
+    fn reads_the_context(dir: &Path, timeout: Duration) -> RunPlan {
+        let script = dir.join("show-context.bat");
+        batch(
+            &script,
+            &[
+                "@echo off",
+                "echo %PYTHONUTF8%",
+                "echo %PYTHONIOENCODING%",
+                "echo %PYTHONDONTWRITEBYTECODE%",
+                "echo %PYTHONPATH%",
+                "echo %GEDIT_CONTEXT%",
+                "type \"%GEDIT_CONTEXT%\"",
+            ],
+        );
+        RunPlan {
+            program: script,
+            ..program("", &[], timeout)
+        }
+    }
+
+    /// The child's output as lines, with blanks dropped: `cmd.exe` ends every line with
+    /// CRLF and `more` is entitled to a blank of its own, and neither is what is under
+    /// test here.
+    fn lines(text: &str) -> Vec<String> {
+        text.lines()
+            .map(|line| line.trim().to_string())
+            .filter(|line| !line.is_empty())
+            .collect()
+    }
+
+    /// A command that appends to `alive` about once a second until it is stopped.
+    ///
+    /// `ping` against the loopback address is the delay, because it wants nothing from
+    /// stdin or from a console, which is all a script run is given. Killing the run
+    /// mid-sleep leaves at most one `ping.exe` behind — `kill_group` cannot reach a
+    /// grandchild here — and that one exits by itself a second later.
+    const MARKER_LOOP: &str = "for /l %i in (1,1,600) do @(echo x>>alive&ping -n 2 127.0.0.1 >nul)";
+
+    /// The marker's size, or `None` while nothing has been written yet.
+    fn still_alive(marker: &Path) -> Option<u64> {
+        std::fs::metadata(marker).ok().map(|meta| meta.len())
+    }
+
+    /// Whether anything is still appending to the marker. The window is longer than one
+    /// turn of [`MARKER_LOOP`], so a child that is still running cannot look stopped.
+    fn is_still_growing(marker: &Path) -> bool {
+        let before = still_alive(marker);
+        std::thread::sleep(Duration::from_millis(1500));
+        still_alive(marker) != before
+    }
+
+    #[test]
+    fn passes_stdin_through_and_reports_a_clean_exit() {
+        let dir = scratch("stdin");
+        // `more` is the filter Windows has always had; with a pipe for its output it
+        // copies stdin through instead of paging.
+        let mut plan = cmd("more", &dir, Duration::from_secs(20));
+        plan.stdin = "N10 G0 X1.\nN20 G1 Z-5. F100\n".to_string();
+        let outcome = run(&plan);
+        assert_eq!(outcome.exit_code, Some(0), "{outcome:?}");
+        assert!(outcome.success());
+        assert!(!outcome.timed_out && !outcome.cancelled && !outcome.stdout_truncated);
+        assert_eq!(lines(&outcome.stdout), ["N10 G0 X1.", "N20 G1 Z-5. F100"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_non_zero_exit_keeps_stderr_and_is_not_a_failure_to_start() {
+        let dir = scratch("exit-code");
+        let outcome = run(&cmd(
+            "echo out&echo boom 1>&2&exit 3",
+            &dir,
+            Duration::from_secs(20),
+        ));
+        assert_eq!(outcome.exit_code, Some(3), "{outcome:?}");
+        assert!(!outcome.success());
+        assert_eq!(outcome.stdout.trim(), "out");
+        assert_eq!(outcome.stderr.trim(), "boom");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_program_that_cannot_be_started_is_an_error_not_an_outcome() {
+        let plan = program(r"C:\definitely\not\here.exe", &[], Duration::from_secs(5));
+        let err = execute(&plan, &RunState::default()).unwrap_err();
+        assert!(err.contains(r"C:\definitely\not\here.exe"), "{err}");
+    }
+
+    #[test]
+    fn the_cwd_is_the_folder_the_plan_names() {
+        let dir = scratch("cwd");
+        std::fs::write(dir.join("data.txt"), "from the script's folder").unwrap();
+        let outcome = run(&cmd("type data.txt", &dir, Duration::from_secs(20)));
+        assert_eq!(outcome.stdout.trim(), "from the script's folder");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_environment_reaches_the_child() {
+        let dir = scratch("env");
+        let context = ContextDir::create(&serde_json::json!({ "contract": 2 })).unwrap();
+        let mut plan = reads_the_context(&dir, Duration::from_secs(20));
+        plan.env = script_env(Some(Path::new(r"C:\res\scripts")), &context.context_file());
+        let outcome = run(&plan);
+        let context_file = context.context_file().display().to_string();
+        assert_eq!(
+            lines(&outcome.stdout),
+            [
+                "1",
+                "utf-8",
+                "1",
+                r"C:\res\scripts",
+                context_file.as_str(),
+                r#"{"contract":2}"#,
+            ],
+            "{outcome:?}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The Windows half of F19: the run's own child is killed when the deadline passes.
+    /// Its grandchildren are not — [`kill_group`] cannot reach them — which is why this
+    /// test watches `cmd.exe`'s own appends and not a background job's.
+    #[test]
+    fn a_timeout_kills_the_child() {
+        let dir = scratch("timeout");
+        let marker = dir.join("alive");
+        // Long enough that `cmd.exe` has certainly started and appended once, short
+        // enough that the deadline is what ends the run.
+        let started = Instant::now();
+        let outcome = run(&cmd(MARKER_LOOP, &dir, Duration::from_millis(2500)));
+        let elapsed = started.elapsed();
+        assert!(outcome.timed_out, "{outcome:?}");
+        assert!(!outcome.cancelled);
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "the kill took {elapsed:?}"
+        );
+        assert!(still_alive(&marker).is_some(), "the loop never started");
+        assert!(!is_still_growing(&marker), "the child outlived the run");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_cancel_from_another_thread_stops_the_run() {
+        let state = Arc::new(RunState::default());
+        let asked = Arc::clone(&state);
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            asked.cancel();
+        });
+        let started = Instant::now();
+        let outcome = execute(&sleeper(30), &state).unwrap();
+        assert!(outcome.cancelled, "{outcome:?}");
+        assert!(!outcome.timed_out);
+        assert!(started.elapsed() < Duration::from_secs(5));
+    }
+
+    /// Cancelling through the registry is what the Cancel button does, and it has to
+    /// reach a run that started on another thread.
+    #[test]
+    fn the_registry_cancels_a_run_that_is_already_going() {
+        let registry = Arc::new(RunRegistry::default());
+        let state = registry.start("r1");
+        let asked = Arc::clone(&registry);
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            assert!(asked.cancel("r1"));
+        });
+        let outcome = execute(&sleeper(30), &state).unwrap();
+        registry.finish("r1", &state);
+        assert!(outcome.cancelled, "{outcome:?}");
+        assert!(registry.is_empty());
+    }
+
+    /// The group kill is a no-op on Windows and the runner's own `child.kill()` is what
+    /// stops a script. If that ever stops being true — a job object, say — this is the
+    /// test that has to change, and the module docs with it.
+    #[test]
+    fn the_group_kill_is_a_no_op_here() {
+        let mut child = Command::new("ping")
+            .args(["-n", "30", "127.0.0.1"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("ping did not start");
+
+        kill_group(child.id());
+        std::thread::sleep(Duration::from_millis(200));
+        assert!(
+            matches!(child.try_wait(), Ok(None)),
+            "kill_group stopped the process; Windows has no killpg"
+        );
+
+        child.kill().unwrap();
+        assert!(child.wait().is_ok());
+    }
+
+    /// Past the cap the reader keeps draining, or the child would block on a full pipe
+    /// and the run would hang instead of being truncated. 5000 lines of 16 characters
+    /// plus CRLF is 90 000 bytes, comfortably more than the 64 KiB `std` gives an
+    /// anonymous pipe (`PIPE_BUFFER_CAPACITY` in `library/std/src/sys/pal/windows/
+    /// pipe.rs`), so a reader that stopped at the 100-byte cap really would wedge it.
+    ///
+    /// The loop is parenthesised so that `echo done` runs **once**, after it. `cmd.exe`
+    /// gives the `DO` clause the rest of the line, `&` included — the two-command body
+    /// of [`MARKER_LOOP`] depends on exactly that — so an unparenthesised
+    /// `do @echo x&echo done 1>&2` would write "done" once per iteration and the
+    /// assertion below would be reading five thousand of them. The Unix sibling of this
+    /// test gets the same shape for free: `;` there does not bind into the `while` body.
+    #[test]
+    fn the_stdout_cap_truncates_and_still_lets_the_child_finish() {
+        let dir = scratch("stdout-cap");
+        let mut plan = cmd(
+            "(for /l %i in (1,1,5000) do @echo 0123456789abcdef)&echo done 1>&2",
+            &dir,
+            Duration::from_secs(60),
+        );
+        plan.stdout_cap = 100;
+        let outcome = run(&plan);
+        assert_eq!(outcome.exit_code, Some(0), "{outcome:?}");
+        assert!(outcome.stdout_truncated);
+        assert_eq!(outcome.stdout.len(), 100);
+        // One "done", not one per iteration — and the byte count in the message rather
+        // than the value, because the failure this guards against is five thousand of
+        // them and an `assert_eq!` would print every one.
+        assert_eq!(
+            lines(&outcome.stderr),
+            ["done"],
+            "{} bytes of stderr",
+            outcome.stderr.len()
+        );
+        // Below the cap nothing is dropped and nothing is claimed.
+        plan.stdout_cap = MAX_STDOUT_BYTES;
+        let outcome = run(&plan);
+        assert!(!outcome.stdout_truncated);
+        assert_eq!(outcome.stdout.len(), 5000 * "0123456789abcdef\r\n".len());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn stderr_has_its_own_cap() {
+        let dir = scratch("stderr-cap");
+        let mut plan = cmd(
+            "echo xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx 1>&2",
+            &dir,
+            Duration::from_secs(20),
+        );
+        plan.stderr_cap = 10;
+        let outcome = run(&plan);
+        assert_eq!(outcome.stderr.len(), 10, "{outcome:?}");
+        // A truncated stderr is not what `stdoutTruncated` means.
+        assert!(!outcome.stdout_truncated);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The context folder is the run's, and it goes away with it whether the run
+    /// succeeded, failed or timed out.
+    #[test]
+    fn the_context_folder_is_removed_after_every_kind_of_run() {
+        let elsewhere = scratch("context");
+        for which in ["read", "fail", "hang"] {
+            let dir;
+            {
+                let context = ContextDir::create(&serde_json::json!({ "contract": 2 })).unwrap();
+                dir = context.dir().to_path_buf();
+                let mut plan = match which {
+                    "read" => reads_the_context(&elsewhere, Duration::from_secs(20)),
+                    "fail" => cmd("exit 1", &elsewhere, Duration::from_secs(20)),
+                    _ => {
+                        let mut hang = sleeper(30);
+                        hang.timeout = Duration::from_millis(300);
+                        hang
+                    }
+                };
+                plan.env = script_env(None, &context.context_file());
+                let _ = run(&plan);
+                assert!(dir.is_dir(), "{which}");
+            }
+            assert!(!dir.exists(), "{which} left {} behind", dir.display());
+        }
+        let _ = std::fs::remove_dir_all(&elsewhere);
+    }
+
+    /// Quitting must not leave a `while True:` script running (plan AD-13, F19). On
+    /// Windows that promise reaches the script itself, not what the script started.
+    #[test]
+    fn kill_all_leaves_no_live_process() {
+        let dir = scratch("kill-all");
+        let marker = dir.join("alive");
+        let registry = Arc::new(RunRegistry::default());
+        let plan = cmd(MARKER_LOOP, &dir, Duration::from_secs(60));
+
+        let runner = {
+            let registry = Arc::clone(&registry);
+            std::thread::spawn(move || {
+                let (state, _registered) = Registered::start(&registry, "r1");
+                execute(&plan, &state).unwrap()
+            })
+        };
+        // Wait for the loop to be up, so the kill has something to prove.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while still_alive(&marker).is_none() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(still_alive(&marker).is_some(), "the script never started");
+
+        assert_eq!(registry.cancel_all(), 1);
+        assert!(
+            wait_until_idle(&registry, EXIT_GRACE),
+            "a run was still registered after {EXIT_GRACE:?}"
+        );
+        let outcome = runner.join().unwrap();
+        assert!(outcome.cancelled, "{outcome:?}");
+        assert!(!is_still_growing(&marker), "the script outlived kill_all");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // -- the whole chain ---------------------------------------------------
+
+    /// Discovery, the id, the header's timeout, the context file, the environment, the
+    /// cwd and stdin, in one run. A batch file stands in for the interpreter — it is
+    /// handed the script's path exactly as a Python would be — so this also holds on a
+    /// machine without a Python.
+    #[test]
+    fn a_script_runs_from_its_id_with_its_header_its_context_and_its_stdin() {
+        let dir = scratch("end-to-end");
+        let bundled = dir.join("bundled");
+        std::fs::create_dir_all(&bundled).unwrap();
+        std::fs::write(dir.join("data.txt"), "in the script's folder\r\n").unwrap();
+        let script = dir.join("echo.py");
+        std::fs::write(
+            &script,
+            "# /// gedit\n\
+             # name = \"Echo\"\n\
+             # output = \"replace\"\n\
+             # timeout = 7\n\
+             # ///\n\
+             print(\"the fake interpreter below answers instead\")\n",
+        )
+        .unwrap();
+        // Quoting `%GEDIT_CONTEXT%` is safe here: the batch file is parsed by `cmd.exe`
+        // from disk, not assembled by `std` out of arguments. `set /p` reads the one line
+        // of stdin without a second process, and `%stdin%` on the next line is expanded
+        // after it has run.
+        let interpreter = dir.join("fake-python.bat");
+        batch(
+            &interpreter,
+            &[
+                "@echo off",
+                "echo script=%~nx1",
+                "type data.txt",
+                "echo path=%PYTHONPATH%",
+                "type \"%GEDIT_CONTEXT%\"",
+                "echo.",
+                "set /p stdin=",
+                "echo %stdin%",
+            ],
+        );
+
+        // 1. Discovery finds it and reads its header.
+        let roots = vec![discovery::RootDir {
+            name: "user".to_string(),
+            dir: dir.clone(),
+            editable: true,
+            listed: true,
+        }];
+        let list = discovery::discover(&roots);
+        assert_eq!(list.scripts.len(), 1);
+        let meta = list.scripts[0].meta.as_ref().expect("no header");
+        assert_eq!(meta.name, "Echo");
+        assert_eq!(list.scripts[0].id, "user:echo.py");
+
+        // 2. The id resolves, and the header's timeout beats the setting.
+        let resolved = discovery::resolve_id(&roots, "user:echo.py").unwrap();
+        let settings = ScriptSettings {
+            timeout_seconds: 60,
+            ..ScriptSettings::default()
+        };
+        let seconds = timeout_secs(None, meta.timeout, &settings);
+        assert_eq!(seconds, 7);
+
+        // 3. The run gets its script, its context, its folder and its stdin.
+        let context = ContextDir::create(&serde_json::json!({ "contract": 2 })).unwrap();
+        let plan = plan_run(
+            &resolved,
+            &interpreter,
+            Some(&bundled),
+            &context,
+            "N10 G0 X1.\n".to_string(),
+            Duration::from_secs(seconds),
+        );
+        let outcome = run(&plan);
+        assert!(outcome.success(), "{outcome:?}");
+        let on_the_path = format!("path={}", bundled.display());
+        assert_eq!(
+            lines(&outcome.stdout),
+            [
+                "script=echo.py",
+                "in the script's folder",
+                on_the_path.as_str(),
+                r#"{"contract":2}"#,
+                "N10 G0 X1.",
+            ],
+            "{outcome:?}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // -- python_check against a fake interpreter ---------------------------
+
+    #[test]
+    fn probes_a_fake_interpreter() {
+        let dir = scratch("probe");
+        let good = dir.join("python-good.bat");
+        batch(&good, &["@echo 3.12.4"]);
+        let status = probe(&good);
+        assert!(status.ok, "{status:?}");
+        assert_eq!(status.version.as_deref(), Some("3.12.4"));
+        assert_eq!(status.interpreter.as_deref(), good.to_str());
+
+        let old = dir.join("python-old.bat");
+        batch(&old, &["@echo 3.8.10"]);
+        let status = probe(&old);
+        assert!(!status.ok);
+        assert!(status.message.unwrap().contains("too old"));
+
+        let broken = dir.join("python-broken.bat");
+        batch(
+            &broken,
+            &["@echo off", "echo no module named encodings 1>&2", "exit 1"],
+        );
+        assert!(!probe(&broken).ok);
+
+        assert!(!probe(&dir.join("python-missing.bat")).ok);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The Store's redirector is the one "interpreter" a clean Windows always has, and
+    /// what it does is print a line and exit 9009. `python::imp` keeps it from ever being
+    /// chosen; this is the other half — when it *is* what got run, because the user
+    /// pointed the setting at it or because the fallback name resolved to it, the exit
+    /// code has to survive `GetExitCodeProcess` and come out as "Python was not found".
+    #[test]
+    fn a_real_exit_code_9009_is_read_as_python_was_not_found() {
+        let dir = scratch("store-stub");
+        let stub = dir.join("python.bat");
+        let exit_line = format!("exit {WINDOWS_NOT_FOUND}");
+        // *Not* the sentence the redirector prints. If the stub said "Python was not
+        // found" itself, deleting `judge`'s 9009 arm would leave the generic
+        // "<interpreter> could not be run: <stderr>" arm building a message with the
+        // same words in it, and this test would still pass with the branch gone.
+        batch(&stub, &["@echo off", "echo stub speaking 1>&2", &exit_line]);
+        let outcome = execute(
+            &RunPlan::probe(&stub, &["-c", VERSION_PROBE], PROBE_TIMEOUT),
+            &RunState::default(),
+        )
+        .expect("the stub did not start");
+        assert_eq!(outcome.exit_code, Some(WINDOWS_NOT_FOUND), "{outcome:?}");
+
+        let status = probe(&stub);
+        assert!(!status.ok, "{status:?}");
+        assert_eq!(status.version, None);
+        // The exact sentence, so only the 9009 arm can have produced it.
+        assert_eq!(
+            status.message.as_deref(),
+            Some(format!("Python was not found ({})", stub.to_string_lossy()).as_str()),
+            "{status:?}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A probe that hangs must not hang the app; the 5 s budget is the whole point.
+    #[test]
+    fn a_probe_that_never_answers_times_out() {
+        let plan = RunPlan::probe(
+            Path::new("ping"),
+            &["-n", "30", "127.0.0.1"],
+            Duration::from_millis(200),
+        );
+        let started = Instant::now();
+        let outcome = execute(&plan, &RunState::default()).unwrap();
+        assert!(outcome.timed_out, "{outcome:?}");
+        assert!(started.elapsed() < Duration::from_secs(5));
         assert!(judge("p", Ok(outcome)).message.unwrap().contains("seconds"));
     }
 }

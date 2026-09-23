@@ -11,4 +11,25 @@
       />
     </dependentAssembly>
   </dependency>
+  <!--
+    Long paths (M8). `<data>\backups\<key>\<file name>\<stamp>-<file name>` passes the
+    260-character MAX_PATH as soon as a CAM-generated file name gets long, and so does
+    any program in a folder tree a shop nests deeply.
+
+    Rust's own file calls already cope: `std::sys::path::windows::maybe_verbatim` puts
+    `\\?\` in front of every absolute path of 248 characters or more before it reaches
+    CreateFileW or CreateDirectoryW, so gEdit's reads and writes are not what this is
+    for. What this is for is everything in the process that is *not* std — the common
+    item dialog behind File ▸ Open among them — which takes the ordinary spelling and
+    is held to MAX_PATH unless the process says otherwise.
+
+    Microsoft ("Maximum Path Length Limitation") asks for both halves: this manifest
+    entry, and the machine-wide policy. The policy is the user's to set, and
+    `docs/user/README.md` says so under the backups.
+  -->
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+    </windowsSettings>
+  </application>
 </assembly>

@@ -222,6 +222,28 @@ describe('byPath', () => {
     expect(unix.byPath('/nc/a\\b.nc')?.id).toBe(odd);
     expect(unix.byPath('/nc/a/b.nc')).toBeUndefined();
   });
+
+  // M8: `canonicalize` answers with `\\?\C:\…` on Windows while every dialog answers
+  // with `C:\…`, so a script opened through `script_source_path` and the same file
+  // opened again from Recent were two tabs over one file — and the second save
+  // discarded the first. Rust folds them (`paths::plain`); this is the net under it.
+  it('sees through the `\\\\?\\` spelling of a Windows path', () => {
+    const windows = createDocumentStore({ caseInsensitivePaths: true, backslashSeparator: true });
+    const id = windows.add(file('C:\\Users\\peter\\scripts\\deburr.py'));
+    expect(windows.byPath('\\\\?\\C:\\Users\\peter\\scripts\\deburr.py')?.id).toBe(id);
+
+    // And the other way round, for a tab that was opened under the long spelling.
+    const other = createDocumentStore({ caseInsensitivePaths: true, backslashSeparator: true });
+    const verbatim = other.add(file('\\\\?\\C:\\nc\\WELLE.NC'));
+    expect(other.byPath('C:\\nc\\WELLE.NC')?.id).toBe(verbatim);
+
+    // A share, whose two spellings are `\\?\UNC\nas\cam` and `\\nas\cam`.
+    const share = createDocumentStore({ caseInsensitivePaths: true, backslashSeparator: true });
+    const onShare = share.add(file('\\\\nas\\cam\\WELLE.NC'));
+    expect(share.byPath('\\\\?\\UNC\\nas\\cam\\WELLE.NC')?.id).toBe(onShare);
+    // Still two files when they are two files.
+    expect(share.byPath('\\\\?\\UNC\\nas\\other\\WELLE.NC')).toBeUndefined();
+  });
 });
 
 describe('pathKey', () => {
@@ -237,6 +259,15 @@ describe('pathKey', () => {
     // A UNC share root keeps its double slash, so `//server/share` stays distinct.
     expect(pathKey('\\\\server\\share\\a.nc', { backslashSeparator: true })).toBe('//server/share/a.nc');
     expect(pathKey('/server/share/a.nc')).toBe('/server/share/a.nc');
+  });
+
+  it('folds the two Windows spellings of one path onto one key', () => {
+    const win = { backslashSeparator: true };
+    expect(pathKey('\\\\?\\C:\\nc\\a.nc', win)).toBe(pathKey('C:\\nc\\a.nc', win));
+    expect(pathKey('\\\\?\\UNC\\nas\\cam\\a.nc', win)).toBe(pathKey('\\\\nas\\cam\\a.nc', win));
+    // The prefix is what keeps a device name from being a device, so a path that
+    // needs it keeps it — and stays a key of its own.
+    expect(pathKey('\\\\?\\C:\\nc\\NUL.nc', win)).not.toBe(pathKey('C:\\nc\\NUL.nc', win));
   });
 });
 

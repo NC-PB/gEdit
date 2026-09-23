@@ -8,10 +8,20 @@ not ask to change.
 Built with Tauri, SvelteKit and Monaco. It works offline — the editor is bundled with the
 app and nothing is loaded from the network.
 
-Two dialects:
+Three dialects:
 
 - **Fanuc (ISO) mill** — `.nc`, `.tap`, `.cnc`, `.eia`, `.iso`, `.min`, `.ncc`, `.ptp`, `.txt`
+- **Fanuc (ISO) turning** — the same extensions; turret tool changes, the lathe meanings of
+  the cycle and threading codes, `U`/`W` incremental and `X` as a diameter
 - **Heidenhain Klartext** — `.h`
+
+Next to the dialect sits the **machine configuration**: how one particular control reads
+what the dialect describes — whether a number without a decimal point means millimetres or
+the smallest input increment, which G-code system a lathe uses, whether `X` is a diameter,
+and what is already in effect when a program starts. You define your machines once and pick
+one per file; without a machine gEdit says which defaults it is assuming, and where the
+possible readings disagree it refuses to convert rather than guess. See
+[docs/user/machines.md](docs/user/machines.md).
 
 ![The gEdit main window in the dark theme](docs/screenshots/main-window.png)
 
@@ -29,6 +39,13 @@ punched-tape NUL leader and trailer are detected and written back unchanged. A p
 open and save without editing is byte for byte the file you started with. Unsaved changes
 are marked and are asked about before they are lost, and a file changed on disk by the CAM
 system is noticed while you work.
+
+**Work you cannot lose.** The file is copied aside before the save that would overwrite it.
+Unsaved work is snapshotted while you edit, so a crash or a power cut is offered back the
+next time you start — and a restore never overwrites a file that changed in the meantime
+without saying so. Your open tabs come back with the dialect, machine, cursor and bookmarks
+you left them with, and a file you may not write routes Save to Save As before anything is
+copied.
 
 **Dialect profiles.** What a control considers a comment, a block number, a tool change or
 a program start is data, not code. The dialect is detected from the extension *and* the
@@ -88,22 +105,24 @@ mailed you. The full picture is in
 ### What gEdit does not do
 
 No backplot, simulation or 3D display. No DNC or machine communication. No program
-management. One mill dialect and one Klartext dialect — a lathe profile is planned. Python
+management. Fanuc mill, Fanuc turning and Klartext — Okuma OSP and Sinumerik are planned,
+and so is multi-channel support for twin-turret machines. Python
 is needed **only** for the script features; everything else works without it. The
 [user guide](docs/user/README.md) lists the limits in full.
 
 ## Documentation
 
 - **[User guide](docs/user/README.md)** — what the program does and how to use it, plus
-  [dialects](docs/user/dialects.md), [transformations](docs/user/transformations.md),
-  [scripts](docs/user/scripts.md) and the [keyboard](docs/user/shortcuts.md).
+  [dialects](docs/user/dialects.md), [machines](docs/user/machines.md),
+  [transformations](docs/user/transformations.md), [scripts](docs/user/scripts.md) and the
+  [keyboard](docs/user/shortcuts.md).
 - **[Planning](docs/planning/README.md)** — scope, roadmap and feature notes.
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — setup, conventions, checks and the runtime harness.
 
 ## Requirements
 
 - To build: [Node.js](https://nodejs.org/), [Rust](https://www.rust-lang.org/tools/install), and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your platform.
-- To use the script features: Python 3.9 or newer. On Windows, `python` must be on `PATH`. On macOS and Linux, gEdit looks up `python3` through your login shell (so a Homebrew or python.org install is found even when the app is started from Finder), then in common install locations. The interpreter can also be set in the settings dialog, or with the `GEDIT_PYTHON` environment variable.
+- To use the script features: Python 3.9 or newer. On Windows, gEdit asks the `py` launcher which interpreter `py -3` would start, and otherwise takes `python` or `python3` from where a command prompt would find it — never the Microsoft Store placeholders that a clean Windows has on `PATH` before Python is installed. On macOS and Linux it looks up `python3` through your login shell (so a Homebrew or python.org install is found even when the app is started from Finder), then in common install locations. The interpreter can also be set in the settings dialog, or with the `GEDIT_PYTHON` environment variable.
 
 ## Development
 

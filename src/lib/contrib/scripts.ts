@@ -70,7 +70,7 @@ import { scriptsForProfile, scriptLabel } from '$lib/core/scripting/filter';
 import { lastScriptId } from '$lib/stores/scripts';
 import { settings } from '$lib/stores/settings';
 import { t } from '$lib/i18n';
-import { baseName, isTauriRuntime } from '$lib/utils/platform';
+import { baseName, isDeviceName, isTauriRuntime } from '$lib/utils/platform';
 import {
   scriptCopyToUser,
   scriptNew,
@@ -162,6 +162,10 @@ export function validateScriptName(value: string): Msg | null {
   const stem = (title.endsWith('.py') ? title.slice(0, -'.py'.length) : title).trimEnd();
   if (stem === '') return { key: 'scripts.nameEmpty' };
   if (`${stem}.py` === LIBRARY_FILE_NAME) return { key: 'scripts.nameReserved' };
+  // `NUL.py` is not a file on Windows but the bit bucket, and `CON.py` and `COM1.py`
+  // are devices in the same way (M8). Its own message: "use a plain file name" would
+  // be a riddle in front of a name that looks perfectly plain.
+  if (isDeviceName(`${stem}.py`)) return { key: 'scripts.nameDevice' };
   const unsafe =
     stem.startsWith('_') ||
     stem.startsWith('.') ||
