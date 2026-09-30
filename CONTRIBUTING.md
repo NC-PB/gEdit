@@ -65,6 +65,19 @@ Run what CI runs: `npm run check`, `npm test`, `npm run build`, `npm run license
 
 The runtime harness is not part of CI, because it needs a real macOS desktop.
 
+## Releases
+
+`.github/workflows/release.yml` builds the release installers and puts them on a **draft** GitHub release; the owner publishes it by hand after the checklist in [docs/releases/checklist.md](docs/releases/checklist.md). To cut a release, set the version everywhere (see Versions below), add a `## vX.Y.Z (date)` entry to `CHANGELOG.md` (the draft takes its notes from it), merge to `main`, and push the tag `vX.Y.Z`. The workflow then:
+
+- fails unless the tag equals `v` plus the version `npm run versions:check` agrees on, the commit is on `main`, and the CHANGELOG has the entry;
+- runs `ci.yml` on the tagged commit (by `workflow_call`, without the debug bundles), in parallel with the bundles;
+- builds unsigned release bundles: one universal `.dmg` on macOS, `.msi` and NSIS `.exe` on Windows, `.deb`, `.rpm` and `.AppImage` on Linux;
+- creates the draft release, or refreshes the draft already there, with the bundles and a `SHA256SUMS` file. It never publishes, and it fails if the tag already has a published release.
+
+Run it by hand from the Actions tab (Release > Run workflow) for a dry run: the bundles come out as workflow artifacts and no release is read or changed. Only the last job can write (`contents: write`), and only for a tag push.
+
+A tag run uses the `release.yml` of the tagged commit, so the workflow's own "is on `main`" check guards against mistakes, not against someone who may push tags. What limits who can cut a release is repository settings, which the owner keeps in place: a **tag ruleset** on `refs/tags/v*` that restricts creation, update and deletion to the owner (bypass list: admin), and **branch protection** on `main`.
+
 ## Folder layout
 
 ```
@@ -215,7 +228,7 @@ Writing scenarios:
 
 ## Versions
 
-The app version is set in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`. Change all three together, let `npm install` and a cargo build refresh the lockfiles, and run `npm run versions:check`.
+The app version is set in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`. Change all three together, let `npm install` and a cargo build refresh the lockfiles, and run `npm run versions:check`. (`npm version X.Y.Z --no-git-tag-version` does `package.json` and its lockfile; `cargo update -p gedit --offline` in `src-tauri/` does `Cargo.lock`.) The release workflow refuses a tag that differs from this version.
 
 ## License
 

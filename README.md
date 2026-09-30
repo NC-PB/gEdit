@@ -36,6 +36,18 @@ each one, and the program end — with the entry the cursor is in marked. At the
 status bar: the file, the dialect, the encoding, the line ending and the cursor position.
 The programs are the project's own synthetic samples from `tests/fixtures/exit/`.*
 
+## Download
+
+Installers for macOS, Windows and Linux are on the
+[GitHub Releases page](https://github.com/NC-PB/gEdit/releases): a `.dmg` for macOS (Apple
+Silicon and Intel), an `.msi` and a setup `.exe` for Windows, and a `.deb`, an `.rpm` and an
+`.AppImage` for Linux, with a `SHA256SUMS` file to check them against. What each release
+contains is in the [CHANGELOG](CHANGELOG.md).
+
+**The installers are not signed.** macOS and Windows warn you the first time you start
+gEdit, and each needs one confirmation; the steps are under
+[Installing an unsigned build](CHANGELOG.md#installing-an-unsigned-build) in the CHANGELOG.
+
 ## Features
 
 **Files that survive the round trip.** Several files open at once, in tabs, by dialog or by

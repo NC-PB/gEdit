@@ -1,6 +1,6 @@
 [package]
 name = "gedit"
-version = "0.1.0"
+version = "0.2.0"
 description = "A desktop G-code editor for CNC programming (Fanuc & Heidenhain)."
 authors = ["Peter <83696476+NC-PB@users.noreply.github.com>"]
 license = "MIT"

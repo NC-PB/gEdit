@@ -1,6 +1,7 @@
 # Continuous integration: type check, unit tests, frontend build and notices on Linux;
 # the bundled Python scripts on the oldest and the newest supported interpreter;
-# Rust checks and debug bundles on macOS, Windows and Linux.
+# Rust checks and debug bundles on macOS, Windows and Linux. The release workflow
+# (release.yml) calls this one on a version tag, without the debug bundles.
 # The runtime harness (tests/runtime) drives native macOS UI and is run locally only.
 
 name: CI
@@ -10,6 +11,14 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # The release workflow runs the whole of this workflow on the tagged commit. It builds
+  # the release bundles itself, so it asks for the debug bundles to be left out.
+  workflow_call:
+    inputs:
+      skip-bundles:
+        description: Leave out the debug bundle jobs
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -148,6 +157,7 @@ jobs:
   bundle:
     name: Debug bundle (${{ matrix.os }})
     needs: checks
+    if: ${{ !inputs.skip-bundles }}
     strategy:
       fail-fast: false
       matrix:

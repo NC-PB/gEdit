@@ -1,0 +1,287 @@
+# Release: installers for macOS, Windows and Linux attached to a DRAFT GitHub release.
+#
+#   - Push a tag vX.Y.Z: the version is checked against the files that carry it, the CI
+#     workflow runs on the tagged commit, the bundles are built, and a draft release for
+#     the tag is created (or, if a draft for it exists, refreshed). The owner reads the
+#     notes, tries the bundles and publishes the draft by hand. Nothing here publishes,
+#     and a release that is already published is never touched: the run fails instead.
+#   - Run it by hand (workflow_dispatch): a dry run. It builds the bundles and keeps them
+#     as workflow artifacts only; no release is created, read or changed.
+#
+# The bundles are not signed with a certificate: there are no signing secrets (the macOS
+# app gets an ad-hoc signature, which only keeps the bundle intact). The release notes say so and
+# CHANGELOG.md explains the warnings an unsigned build gets from each system.
+
+name: Release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two runs for one tag queue behind each other rather than racing on the release. A run
+# that is already going is never cancelled: half of a release is worse than a late one.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  # Tauri's Linux build dependencies (WebKitGTK 4.1 and friends), as in ci.yml
+  LINUX_PACKAGES: libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+jobs:
+  # Fails fast, before anything is built: the tag has to be the version of the app, and
+  # a tag run has to be on a commit that is on main and that has a CHANGELOG entry.
+  version:
+    name: Tag and version
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # the whole history, for the "is this commit on main" question
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      # package.json, package-lock.json, tauri.conf.json, Cargo.toml and Cargo.lock
+      # have to agree (the script has no dependencies, so no `npm ci` is needed)
+      - name: Versions match
+        run: npm run versions:check
+
+      - name: Tag equals the version
+        id: check
+        shell: bash
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$REF_TYPE" != "tag" ]; then
+            echo "Dry run on $REF_NAME: version $version, no tag to compare."
+            exit 0
+          fi
+          if [ "$REF_NAME" != "v$version" ]; then
+            echo "::error::The tag is $REF_NAME but the app is version $version: the tag has to be v$version."
+            exit 1
+          fi
+          # a release is cut from main and from nothing else
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD; then
+            echo "::error::$REF_NAME is not on main: a release is cut from a commit on main."
+            exit 1
+          fi
+          # the draft takes its notes from here
+          if ! awk -v v="$REF_NAME" '/^## /{ if ($2 == v) found = 1 } END { exit !found }' CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## $REF_NAME' entry."
+            exit 1
+          fi
+          echo "$REF_NAME is version $version, on main, with a CHANGELOG entry."
+
+  # The same checks as every push to main: type check, unit tests, frontend build,
+  # notices, versions, the bundle scan, the Python scripts on 3.9 and 3.12, and cargo
+  # fmt, clippy and test on the three systems, on the commit that is tagged. The debug
+  # bundles are left out: the release bundles below replace them. A dry run skips this
+  # (it exists to try the build) and so does nothing else: the draft needs it.
+  ci:
+    name: CI on the tagged commit
+    needs: version
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+    with:
+      skip-bundles: true
+
+  bundle:
+    name: Bundle (${{ matrix.name }})
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # One universal binary (Apple Silicon and Intel in a single .dmg)
+          - name: macOS
+            os: macos-14
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+            tauri-args: --target universal-apple-darwin
+            bundle-dir: src-tauri/target/universal-apple-darwin/release/bundle
+            expect: dmg
+          - name: Windows
+            os: windows-latest
+            rust-targets: ''
+            tauri-args: ''
+            bundle-dir: src-tauri/target/release/bundle
+            expect: msi exe
+          - name: Linux
+            os: ubuntu-22.04
+            rust-targets: ''
+            tauri-args: ''
+            bundle-dir: src-tauri/target/release/bundle
+            expect: deb rpm AppImage
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      # patchelf is needed for the AppImage
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $LINUX_PACKAGES patchelf
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - run: npm ci
+      # Runs `npm run build` itself (beforeBuildCommand); unsigned release bundles
+      - name: tauri build
+        run: npx tauri build ${{ matrix.tauri-args }}
+
+      # The app is signed ad hoc ("-", no certificate; see bundle.macOS.signingIdentity in
+      # tauri.conf.json). Without it the linker's signature does not cover the bundle's
+      # resources, and a quarantined download is "damaged" to Gatekeeper with no way to
+      # open it. A broken signature fails here, not at the owner.
+      - name: macOS app signature is intact
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          BUNDLE_DIR: ${{ matrix.bundle-dir }}
+        run: |
+          app="$BUNDLE_DIR/macos/gEdit.app"
+          codesign -dv "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+
+      # a bundle type that silently stopped being produced fails here, not at the owner
+      - name: Every expected bundle type is there
+        shell: bash
+        env:
+          BUNDLE_DIR: ${{ matrix.bundle-dir }}
+          EXPECT: ${{ matrix.expect }}
+        run: |
+          find "$BUNDLE_DIR" -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*.exe' -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \) -exec ls -l {} +
+          for ext in $EXPECT; do
+            if ! ls "$BUNDLE_DIR"/*/*."$ext" > /dev/null 2>&1; then
+              echo "::error::No .$ext bundle under $BUNDLE_DIR."
+              exit 1
+            fi
+          done
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: gedit-release-${{ matrix.os }}
+          path: |
+            ${{ matrix.bundle-dir }}/dmg/*.dmg
+            ${{ matrix.bundle-dir }}/msi/*.msi
+            ${{ matrix.bundle-dir }}/nsis/*.exe
+            ${{ matrix.bundle-dir }}/deb/*.deb
+            ${{ matrix.bundle-dir }}/rpm/*.rpm
+            ${{ matrix.bundle-dir }}/appimage/*.AppImage
+          if-no-files-found: error
+          retention-days: 14
+
+  # The only job that can write, and only for a tag push. It creates the draft release
+  # (or refreshes the draft that is already there), attaches the bundles and a
+  # SHA256SUMS file, and stops. It never publishes, and it fails on a published release.
+  draft:
+    name: Draft release
+    needs: [version, ci, bundle]
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # the token is only for `gh`; nothing here pushes
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: gedit-release-*
+          merge-multiple: true
+          path: bundles
+
+      - name: Notes, bundles and checksums
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # the CHANGELOG entry of this version, without its heading
+          awk -v v="$TAG" '/^## /{ if (on) exit; if ($2 == v) { on = 1; next } } on' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::The CHANGELOG entry of $TAG is empty."
+            exit 1
+          fi
+
+          # one flat folder, every bundle once
+          mkdir assets
+          find bundles -type f -exec cp {} assets/ \;
+          count=$(find bundles -type f | wc -l)
+          if [ "$(ls assets | wc -l)" -ne "$count" ]; then
+            echo "::error::Two bundles have the same file name."
+            exit 1
+          fi
+          (cd assets && sha256sum -- * > ../SHA256SUMS && mv ../SHA256SUMS .)
+          ls -l assets
+          cat assets/SHA256SUMS
+
+      - name: Create or refresh the draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          # `releases/tags/<tag>` does not return a draft, so look in the list
+          states=$(gh api --paginate "repos/$REPO/releases" \
+            --jq ".[] | select(.tag_name == \"$TAG\") | \"\(.id) \(.draft)\"")
+          n=$(printf '%s' "$states" | grep -c . || true)
+
+          if [ "$n" -eq 0 ]; then
+            echo "No release for $TAG yet: creating the draft."
+            gh release create "$TAG" --draft --verify-tag \
+              --title "gEdit $TAG" --notes-file notes.md assets/*
+          elif [ "$n" -gt 1 ]; then
+            echo "::error::More than one release is tagged $TAG; not touching any of them."
+            exit 1
+          else
+            id=${states% *}
+            draft=${states#* }
+            if [ "$draft" != "true" ]; then
+              echo "::error::$TAG is already published. A published release is never overwritten; fix forward with a new version."
+              exit 1
+            fi
+            echo "A draft for $TAG exists (id $id): refreshing it."
+            gh api --method PATCH "repos/$REPO/releases/$id" \
+              -f name="gEdit $TAG" -F body=@notes.md -F draft=true > /dev/null
+            # the draft ends up with exactly this run's files
+            for asset in $(gh api --paginate "repos/$REPO/releases/$id/assets" --jq '.[].id'); do
+              gh api --method DELETE "repos/$REPO/releases/assets/$asset"
+            done
+            gh release upload "$TAG" assets/*
+          fi
+
+          gh api --paginate "repos/$REPO/releases" \
+            --jq ".[] | select(.tag_name == \"$TAG\") | \"draft=\(.draft) assets=\(.assets | length)\""
