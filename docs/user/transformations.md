@@ -40,17 +40,17 @@ clears its report.
 leave a jump pointing at the wrong block or delete its target, renumber only part of a
 Klartext program, or write lower case for a control that reads only upper case, asks first
 and lets you say no. Remove Empty Lines and Remove Comments, which can leave gaps in
-Klartext's block numbers, say so afterwards and offer to renumber. That offer renumbers
-what the run worked on: after a run on a selection it renumbers only the selection, so
-answer no there and renumber the whole program instead.
+Klartext's block numbers, say so afterwards and offer to renumber. That offer always
+renumbers the whole program; after a run on a selection it says so and clears the
+selection first.
 
-**The options are remembered.** Every dialog on this tab opens with the answers you gave
-last time — on any program, in any dialect, also after a restart. Only the first time do
-they come from the dialect.
+**The options are remembered.** Every dialog on this tab opens with the answers you last
+gave for that dialect, also after a restart. The first time in each dialect they come from
+the dialect.
 
-**The lock does not cover this tab.** Read-only stops your typing, not a transformation:
-run one on a locked program and the text changes (Save still goes to Save As). Unlock on
-purpose, or work on a copy.
+**A locked program is refused.** On a read-only document every command on this tab stops
+before it asks anything, and the status bar says which lock is on and how to lift it.
+Unlock on purpose, or work on a copy.
 
 Behind all of this, gEdit reads each line the way the active dialect's control does: it
 knows what is a comment, a string, a variable, an expression and a keyword, so a `G1`
@@ -63,17 +63,16 @@ safe, the line is left as written and listed in Results rather than changed and 
 
 ### Renumber Blocks…
 
-Writes a fresh set of block numbers. Because the dialog opens with your last answers
-whatever the dialect, check **Maximum**, **Above the maximum** and **Skip lines starting
-with** when you move between controls: otherwise an Okuma program gets the Fanuc answers,
-not its own. The defaults are the ones of the first run:
+Writes a fresh set of block numbers. The dialog opens with your last answers for the
+dialect, so an Okuma program never gets the Fanuc answers. The defaults are the ones of
+the first run in a dialect:
 
 | Option | What it does |
 |---|---|
 | **Start at** | The number the first block gets (default 10) |
 | **Increment** | The step between blocks (default 10) |
-| **Digits** | Pad with leading zeros to this width; 0 writes the number as short as it is |
-| **Maximum** | Leave empty for no maximum (default 99999 on Fanuc and Sinumerik, 9999 on Okuma) |
+| **Digits** | Pad with leading zeros to this width; 0 writes the number as short as it is. On a control with a hard limit, at most as many digits as its highest block number (Okuma: 4) |
+| **Maximum** | Leave empty for no maximum (default 99999 on Fanuc and Sinumerik, 9999 on Okuma). On Okuma it is required and at most 9999, the highest block number the control accepts |
 | **Above the maximum** | Start over at the start value, or stop and warn (Okuma: stop by default) |
 | **Spaces after the number** | Between `N120` and the rest of the block |
 | **Skip lines starting with** | Separated by spaces. Fanuc skips `%`, `O` and `(`; Okuma `$`, `%`, `O` and `(`; Sinumerik `%`, `;`, `PROC`, `DEF` and `EXTERN`. A program marker (`%`, `O1001`, Okuma's `$NAME.MIN%`, Sinumerik's `%_N_…`) is never numbered, whatever the list says — on Okuma only an `O` line with nothing behind it counts as one, so `O1001 (NAME)` is protected only by the `O` in the list |

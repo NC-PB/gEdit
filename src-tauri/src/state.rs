@@ -20,16 +20,23 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use serde_json::{Map, Value};
 use tauri::AppHandle;
 use tauri_plugin_fs::FsExt;
 
 use crate::config::{self, JsonFile};
+use crate::files::{self, STAT_BUDGET};
 use crate::paths::{self, AppDirs, STATE_FILE_NAME};
 
 /// The most recent entries that are re-granted at startup, newest first.
 pub const MAX_GRANTED_ON_STARTUP: usize = 50;
+
+/// How long one startup grant ([`grant_paths`]) may hold the window back, all its
+/// paths together. It runs before the window exists, so a hung share must cost at
+/// most this — the recent list and the session are granted one after the other.
+pub const GRANT_BUDGET: Duration = Duration::from_millis(750);
 
 /// The longest recent list this build stores, whatever `files.recentLength`
 /// says. §7.7 caps that setting at 50; this is the hard ceiling that also holds
@@ -53,7 +60,9 @@ const FOLD_CASE: bool = paths::FOLD_CASE;
 ///
 /// `exists` is what the list looked like when it was read; a missing entry stays
 /// in the list and is shown struck through, so that a file on an unmounted share
-/// is not silently forgotten.
+/// is not silently forgotten. An entry whose check did not answer in time (a hung
+/// share) reads as existing: unknown is not gone, and the webview offers to *remove*
+/// an entry that does not exist.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecentEntry {
@@ -256,12 +265,24 @@ fn remove_with(list: &[String], path: &str, key: impl Fn(&str) -> String) -> Vec
         .collect()
 }
 
-/// The list as the webview sees it, with a fresh existence check per entry.
+/// The list as the webview sees it, with a fresh existence check per entry, all of
+/// them within one [`STAT_BUDGET`].
 fn entries(list: &[String]) -> Vec<RecentEntry> {
+    entries_with(list, STAT_BUDGET, |path| Path::new(path).exists())
+}
+
+/// [`entries`] with the check and its budget injected, for the tests.
+fn entries_with(
+    list: &[String],
+    budget: Duration,
+    exists: impl Fn(&str) -> bool + Send + Sync + 'static,
+) -> Vec<RecentEntry> {
+    let answers = files::run_bounded(list.to_vec(), budget, exists);
     list.iter()
-        .map(|path| RecentEntry {
+        .zip(answers)
+        .map(|(path, exists)| RecentEntry {
             path: path.clone(),
-            exists: Path::new(path).exists(),
+            exists: exists.unwrap_or(true),
         })
         .collect()
 }
@@ -283,13 +304,23 @@ fn entries(list: &[String]) -> Vec<RecentEntry> {
 /// `recent_touch` time would close it, at the price of showing the resolved path
 /// in the Recent menu instead of the one the user typed.
 pub fn grant_in(scope: &tauri::fs::Scope, path: &Path) {
+    // Resolved first, outside the scope: `allow_file` canonicalizes too, **while it
+    // holds the scope's lock**, so on a share that hangs there every `is_allowed` —
+    // every stat and every read and write of the fs plugin — would hang behind it.
+    // Having just resolved the path, the share is known to answer.
+    let canonical = std::fs::canonicalize(path).ok();
+    grant_resolved(scope, path, canonical.as_deref());
+}
+
+/// [`grant_in`] once the path has been resolved.
+fn grant_resolved(scope: &tauri::fs::Scope, path: &Path, canonical: Option<&Path>) {
     let _ = scope.allow_file(path);
-    if let Ok(canonical) = std::fs::canonicalize(path) {
+    if let Some(canonical) = canonical {
         // In the ordinary spelling (M8): `allow_file` stores what it is given *and*
         // the canonical form of it (`push_pattern` → `canonicalize_parent`), so the
         // scope holds the `\\?\` spelling either way, and a pattern nothing else in
         // gEdit ever writes down is one more way for the two to drift apart.
-        let canonical = paths::plain(&canonical);
+        let canonical = paths::plain(canonical);
         if canonical != path {
             let _ = scope.allow_file(&canonical);
         }
@@ -308,17 +339,80 @@ pub fn grant_file(app: &AppHandle, path: &Path) {
 /// time): `max` stops counting once that many entries have *passed*, so a
 /// hand-edited list of 100,000 names would still be walked and stat'd in full
 /// before the window appears.
+///
+/// It runs before the window exists, so it takes at most [`GRANT_BUDGET`]: every
+/// path is resolved on a thread of its own ([`files::run_bounded`]), and one that
+/// has not answered by then — a file on a hung share — is **not granted**, like a
+/// missing one. The grants themselves run within the same budget, in its last third.
 pub fn grant_paths(scope: &tauri::fs::Scope, paths: &[String], max: usize) -> usize {
-    let existing = paths
+    grant_paths_with(scope, paths, max, GRANT_BUDGET, |path| {
+        // Both, as before: a file can exist and still not canonicalize (some virtual
+        // drives on Windows), and it is granted as written then.
+        Path::new(path)
+            .exists()
+            .then(|| std::fs::canonicalize(path).ok())
+    })
+    .len()
+}
+
+/// [`grant_paths`] for the session (`session::start`): only paths that are **files**
+/// count (the webview never opens a folder), and the answer is which paths were
+/// granted, so the caller can count the others as missing. Same budget, and a path
+/// that does not answer in it is not granted — to the session it is offline.
+pub fn grant_files(scope: &tauri::fs::Scope, paths: &[String], max: usize) -> HashSet<String> {
+    grant_files_within(scope, paths, max, GRANT_BUDGET, |path| {
+        Path::new(path)
+            .is_file()
+            .then(|| std::fs::canonicalize(path).ok())
+    })
+}
+
+/// [`grant_files`] with the resolver and the budget injected, for the tests.
+pub(crate) fn grant_files_within(
+    scope: &tauri::fs::Scope,
+    paths: &[String],
+    max: usize,
+    budget: Duration,
+    resolve: impl Fn(&str) -> Option<Option<PathBuf>> + Send + Sync + 'static,
+) -> HashSet<String> {
+    grant_paths_with(scope, paths, max, budget, resolve)
+        .into_iter()
+        .collect()
+}
+
+/// [`grant_paths`] with the resolver and the budget injected, for the tests. The
+/// resolver answers `None` for a file that does not exist and, for one that does,
+/// its canonical path if it has one. Answers with the paths that were granted.
+fn grant_paths_with(
+    scope: &tauri::fs::Scope,
+    paths: &[String],
+    max: usize,
+    budget: Duration,
+    resolve: impl Fn(&str) -> Option<Option<PathBuf>> + Send + Sync + 'static,
+) -> Vec<String> {
+    // Two thirds to find the files and the rest to grant them: a hung path uses up
+    // the whole of the first part, and the grants must still get a turn.
+    let deadline = Instant::now() + budget;
+    let resolved = files::run_bounded(paths.to_vec(), budget * 2 / 3, resolve);
+    // The outer `None` is a path that did not answer: not known to exist.
+    let existing: Vec<(String, Option<PathBuf>)> = paths
         .iter()
-        .filter(|path| Path::new(path).exists())
-        .take(max);
-    let mut granted = 0;
-    for path in existing {
-        grant_in(scope, Path::new(path));
-        granted += 1;
-    }
-    granted
+        .zip(resolved)
+        .filter_map(|(path, answer)| Some((path.clone(), answer??)))
+        .take(max)
+        .collect();
+    let keys: Vec<String> = existing.iter().map(|(path, _)| path.clone()).collect();
+    let chosen: std::collections::HashMap<String, Option<PathBuf>> = existing.into_iter().collect();
+    let scope = scope.clone();
+    let left = deadline.saturating_duration_since(Instant::now());
+    let granted = files::run_bounded(keys.clone(), left, move |path| {
+        let canonical = chosen.get(path).and_then(Option::as_deref);
+        grant_resolved(&scope, Path::new(path), canonical);
+    });
+    keys.into_iter()
+        .zip(granted)
+        .filter_map(|(path, granted)| granted.map(|()| path))
+        .collect()
 }
 
 /// Grants the recent entries that still exist, newest first, at most
@@ -410,7 +504,10 @@ pub fn ui_state_save(app: AppHandle, ui: Value) -> Result<(), String> {
 /// The recent list, newest first, each entry with a fresh `exists`.
 /// Infallible on purpose: a broken `state.json` answers with an empty list
 /// rather than an error, because the Recent menu must never block startup.
-#[tauri::command]
+///
+/// Run off the main thread (`async`): it stats every entry, and one of them can
+/// be on a share that has gone away.
+#[tauri::command(async)]
 pub fn recent_list(app: AppHandle) -> Vec<RecentEntry> {
     match paths::app_dirs(&app) {
         Ok(dirs) => list_recent(&dirs),
@@ -824,6 +921,109 @@ mod tests {
         assert_eq!(grant_recent(&scope, &paths), MAX_GRANTED_ON_STARTUP);
         assert!(scope.is_allowed(&paths[MAX_GRANTED_ON_STARTUP - 1]));
         assert!(!scope.is_allowed(&paths[MAX_GRANTED_ON_STARTUP]));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // --- a hung share (TODO "Next up" 8) ----------------------------------------
+
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    /// Blocks until `release` is set (at most 10 s), the way a check does on a share
+    /// whose server has gone away.
+    fn hang_until(release: &AtomicBool) {
+        let until = Instant::now() + Duration::from_secs(10);
+        while !release.load(Ordering::SeqCst) && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    const SHORT: Duration = Duration::from_millis(300);
+
+    /// The Recent menu re-reads the list on every open. One entry on a hung share
+    /// used to hold the answer — on the main thread — for as long as the OS retried;
+    /// now it costs the budget and reads as present, so the menu does not offer to
+    /// remove a file that is only unreachable.
+    #[test]
+    fn a_hung_recent_entry_reads_as_present_within_the_budget() {
+        let dir = scratch("entries-hung");
+        let here = dir.join("a.nc");
+        fs::write(&here, b"G0\n").unwrap();
+        let hung = dir.join("hung.nc");
+        let gone = dir.join("gone.nc");
+        let listed = list(&[
+            here.to_str().unwrap(),
+            hung.to_str().unwrap(),
+            gone.to_str().unwrap(),
+        ]);
+        let release = Arc::new(AtomicBool::new(false));
+        let gate = Arc::clone(&release);
+
+        let started = Instant::now();
+        let reported = entries_with(&listed, SHORT, move |path| {
+            if path.ends_with("hung.nc") {
+                hang_until(&gate);
+            }
+            Path::new(path).exists()
+        });
+        let took = started.elapsed();
+        release.store(true, Ordering::SeqCst);
+
+        assert!(took < Duration::from_secs(3), "the list took {took:?}");
+        assert!(reported[0].exists);
+        assert!(reported[1].exists, "a hung entry must not read as missing");
+        assert!(!reported[2].exists);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// The startup grant runs before the window exists. A recent file on a hung
+    /// share used to hold the window back for as long as the OS retried; now it
+    /// costs at most the budget, it is not granted, and the others still are.
+    #[test]
+    fn a_hung_path_does_not_hold_up_the_startup_grant() {
+        let dir = scratch("grant-hung");
+        let here = dir.join("a.nc");
+        fs::write(&here, b"G0\n").unwrap();
+        let hung = dir.join("hung.nc");
+        fs::write(&hung, b"G0\n").unwrap();
+        let later = dir.join("b.nc");
+        fs::write(&later, b"G0\n").unwrap();
+        let listed = list(&[
+            here.to_str().unwrap(),
+            hung.to_str().unwrap(),
+            later.to_str().unwrap(),
+        ]);
+        let release = Arc::new(AtomicBool::new(false));
+        let gate = Arc::clone(&release);
+
+        let app = mock_app();
+        let scope = app.fs_scope();
+        let started = Instant::now();
+        let granted = grant_paths_with(
+            &scope,
+            &listed,
+            MAX_GRANTED_ON_STARTUP,
+            SHORT,
+            move |path| {
+                if path.ends_with("hung.nc") {
+                    hang_until(&gate);
+                }
+                Path::new(path)
+                    .exists()
+                    .then(|| std::fs::canonicalize(path).ok())
+            },
+        );
+        let took = started.elapsed();
+        release.store(true, Ordering::SeqCst);
+
+        assert!(took < Duration::from_secs(3), "the grant took {took:?}");
+        assert_eq!(granted.len(), 2);
+        assert!(scope.is_allowed(&here));
+        assert!(scope.is_allowed(&later));
+        assert!(
+            !scope.is_allowed(&hung),
+            "a path that did not answer was granted"
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 

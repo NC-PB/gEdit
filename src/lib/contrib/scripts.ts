@@ -515,28 +515,35 @@ export default {
     const stopPython = scripts.python.subscribe(() => notifyContextChanged());
     const stopLast = lastScriptId.subscribe(() => notifyContextChanged());
 
-    // Follow the two settings this feature reads (I5). `script.addFolder` already rescans
-    // after its own write, but the settings dialog writes both keys too, and before this
+    // Follow the three settings this feature reads (I5). `script.addFolder` already rescans
+    // after its own write, but the settings dialog writes all three keys too, and before this
     // nothing reacted: a user who fixed `scripts.python` had to restart before the script
-    // commands came back on — exactly the moment they are trying to recover from — and a
-    // folder added in the dialog stayed invisible until the next rescan.
+    // commands came back on — exactly the moment they are trying to recover from — a folder
+    // added in the dialog stayed invisible until the next rescan, and `scripts.showBundled`
+    // (the "show the scripts that ship with gEdit" toggle) is applied by Rust's `scripts_list`
+    // (`core/scripting/filter.ts`), so flipping it left the Scripts group showing the old list
+    // until a manual Rescan.
     //
     // The first subscriber call carries the values `settings.load()` already put there, so
     // it only records them: the startup probe and the startup listing are in flight below.
     let interpreter: string | undefined;
     let folders: string | undefined;
+    let showBundled: boolean | undefined;
     const stopSettings = settings.values.subscribe((values) => {
       const nextInterpreter = values['scripts.python'];
       const nextFolders = values['scripts.folders'].join('\u0000');
+      const nextShowBundled = values['scripts.showBundled'];
       const first = interpreter === undefined;
       const changedInterpreter = !first && nextInterpreter !== interpreter;
       const changedFolders = !first && nextFolders !== folders;
+      const changedShowBundled = !first && nextShowBundled !== showBundled;
       interpreter = nextInterpreter;
       folders = nextFolders;
+      showBundled = nextShowBundled;
       // A new interpreter changes what a run *uses*, not what discovery *finds* (the scan
       // and the header parse are Rust's and read no Python), so the two are separate.
       if (changedInterpreter) void scripts.checkPython();
-      if (changedFolders) void rescanQuietly();
+      if (changedFolders || changedShowBundled) void rescanQuietly();
     });
 
     const stopList = scripts.list.subscribe((entries) => {

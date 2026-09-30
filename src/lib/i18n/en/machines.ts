@@ -179,8 +179,13 @@ export default {
     removeInUse_one: 'Remove {name}? {count} open document uses it and will fall back to the dialect defaults.',
     removeInUse_other: 'Remove {name}? {count} open documents use it and will fall back to the dialect defaults.',
     replaceTitle: 'Replace the machines file?',
+    // What Replace actually does (`config.rs::save_json_object_versioned`): a new, empty
+    // file takes its place; the old one is kept as `machines.json.bak` only when it could
+    // not be read as JSON at all — a file that parsed but could not be used as machine
+    // records is replaced with no backup. A file written by a newer gEdit is not touched:
+    // Replace is refused for it, same as every other write.
     replaceMessage:
-      'The unreadable file is kept as machines.json.bak and a new, empty one takes its place.',
+      'A new, empty file takes its place. The old one is kept as machines.json.bak only if it could not be read as JSON at all; if it could be read but not used, it is replaced with no backup. A file written by a newer gEdit is left as it is — Replace is refused for it, like any other write.',
     nameTaken: 'Another machine is already called that.',
     nameLong: 'A name may be at most 64 characters long.',
     added: 'Machine {name} added',
@@ -189,7 +194,8 @@ export default {
     removed: 'Machine {name} removed',
     defaultSet: '{name} is now the default for the {profile} dialect',
     defaultCleared: 'The {profile} dialect has no default machine any more',
-    replaced: 'The machines file was replaced; the old one is machines.json.bak',
+    replaced:
+      'The machines file was replaced with an empty one. The file that was there is kept as machines.json.bak only if it could not be read as JSON.',
     saveFailed: 'The machines file could not be written',
     modalDropped:
       'The power-on codes {codes} do not exist in what you just chose, so those groups follow the dialect again.',

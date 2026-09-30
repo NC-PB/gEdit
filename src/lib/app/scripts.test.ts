@@ -888,6 +888,109 @@ describe('ScriptService.run: the stale guard', () => {
 });
 
 // ---------------------------------------------------------------------------
+// The read-only lock (AD-23)
+// ---------------------------------------------------------------------------
+
+describe('ScriptService.run: a locked document', () => {
+  function lock(h: Harness, reason: 'user' | 'attribute' = 'user'): string {
+    h.docs.update(h.docId, { readOnly: true, readOnlyReason: reason });
+    return h.docs.get(h.docId)!.title;
+  }
+
+  it('refuses a replace script before Python, the form or the run, and names the lock', async () => {
+    const h = harness({
+      entries: [
+        entry('bundled:scale_feed.py', {
+          meta: meta({ params: [{ id: 'f', type: 'number', label: 'F', default: 1 }] }),
+        }),
+      ],
+    });
+    await h.service.rescan();
+    const name = lock(h);
+    await h.service.run('bundled:scale_feed.py');
+    expect(lastStatus(h)).toMatchObject({
+      text: fakeT('readOnly.refusedUser', { name, action: 'Scale feed rates' }),
+      error: true,
+    });
+    expect(h.probes).toBe(0);
+    expect(h.forms).toHaveLength(0);
+    expect(h.requests).toHaveLength(0);
+    expect(h.applied).toHaveLength(0);
+    expect(get(runningScript)).toBeNull();
+  });
+
+  it('uses the on-disk wording for a file that is read-only itself', async () => {
+    const h = await ready();
+    const name = lock(h, 'attribute');
+    await h.service.run('bundled:scale_feed.py');
+    expect(lastStatus(h).text).toBe(fakeT('readOnly.refusedAttribute', { name, action: 'Scale feed rates' }));
+    expect(h.requests).toHaveLength(0);
+  });
+
+  it('still runs a script that only reports', async () => {
+    const h = await ready({
+      entries: [entry('bundled:tool_list.py', { meta: meta({ name: 'Tool list', output: 'report' }) })],
+    });
+    lock(h);
+    h.runs = [result({ stdout: JSON.stringify({ title: 'Tool list', columns: [], rows: [] }) })];
+    await h.service.run('bundled:tool_list.py');
+    expect(h.requests).toHaveLength(1);
+    expect(get(results.current)).toMatchObject({ title: 'Tool list' });
+    expect(h.applied).toHaveLength(0);
+  });
+
+  it('still runs a panel or new-tab script', async () => {
+    const h = await ready({
+      entries: [
+        entry('bundled:panel.py', { meta: meta({ output: 'panel' }) }),
+        entry('bundled:copy.py', { meta: meta({ output: 'new-document' }) }),
+        entry('bundled:plain.py', { meta: null }),
+      ],
+    });
+    lock(h);
+    h.runs = [result({ stdout: 'hello' }), result({ stdout: 'N10' }), result({ stdout: 'x' })];
+    await h.service.run('bundled:panel.py');
+    await h.service.run('bundled:copy.py');
+    // No header means `panel` (§7.6), which changes nothing.
+    await h.service.run('bundled:plain.py');
+    expect(h.requests).toHaveLength(3);
+    expect(h.created).toEqual([{ profileId: 'fanuc-gcode', text: 'N10' }]);
+    expect(h.applied).toHaveLength(0);
+  });
+
+  it('does not write a result into a document locked during the run, and offers a new tab', async () => {
+    const h = await ready();
+    let name = '';
+    h.duringRun = () => {
+      name = lock(h);
+    };
+    h.runs = [result({ stdout: 'N10 G1 F90.' })];
+    h.confirmAnswers = [true];
+    await h.service.run('bundled:scale_feed.py');
+    expect(h.applied).toHaveLength(0);
+    expect(h.confirms).toEqual([
+      {
+        title: fakeT('readOnly.lockedDuringRunTitle'),
+        message: fakeT('readOnly.lockedDuringRunMessage', { name, script: 'Scale feed rates' }),
+        ok: 'scripts.staleOpen',
+      },
+    ]);
+    expect(h.created).toEqual([{ profileId: 'fanuc-gcode', text: 'N10 G1 F90.' }]);
+  });
+
+  it('says the result was discarded when the new tab is declined', async () => {
+    const h = await ready();
+    h.duringRun = () => lock(h);
+    h.runs = [result({ stdout: 'N10 G1 F90.' })];
+    h.confirmAnswers = [false];
+    await h.service.run('bundled:scale_feed.py');
+    expect(h.applied).toHaveLength(0);
+    expect(h.created).toHaveLength(0);
+    expect(lastStatus(h)).toMatchObject({ error: true, text: expect.stringContaining('staleDiscarded') });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // The running flag, the last script, cancel
 // ---------------------------------------------------------------------------
 

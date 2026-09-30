@@ -221,7 +221,7 @@ beforeEach(async () => {
   resetScriptsForTest();
   resetCommandsForTest();
   layout.restore({ bottom: { visible: false, height: 200, active: null } });
-  await settings.reset(['scripts.folders', 'scripts.python']);
+  await settings.reset(['scripts.folders', 'scripts.python', 'scripts.showBundled']);
   // Last, so the reset above does not show up in what a test is looking at.
   fake.reset();
 });
@@ -587,6 +587,22 @@ describe('managing scripts', () => {
     // Saving the same values again is not a change and starts nothing.
     await settings.save({ 'scripts.python': '/opt/py/bin/python3' });
     expect(fake.calls).toEqual(['checkPython', 'rescan']);
+    dispose();
+  });
+
+  // The Scripts group is Rust's list, filtered by `scripts.showBundled` in `scripts_list`
+  // (`core/scripting/filter.ts`). Before this fix, flipping the "Show the scripts that ship
+  // with gEdit" toggle left the group showing the pre-toggle list until a manual Rescan.
+  it('re-lists when `scripts.showBundled` changes, same as the folders', async () => {
+    const dispose = await registerContributions([contribution]);
+    fake.calls = [];
+    await settings.save({ 'scripts.showBundled': false });
+    expect(fake.calls).toEqual(['rescan']);
+    // Saving the same value again is not a change and starts nothing.
+    await settings.save({ 'scripts.showBundled': false });
+    expect(fake.calls).toEqual(['rescan']);
+    await settings.save({ 'scripts.showBundled': true });
+    expect(fake.calls).toEqual(['rescan', 'rescan']);
     dispose();
   });
 

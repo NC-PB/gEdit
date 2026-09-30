@@ -16,7 +16,9 @@
 // Importing this module in node is a guard as well: `applyLines` reaches the editor
 // service, which must keep Monaco behind a dynamic import.
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { editor } from './editorService';
+import { docs } from '$lib/stores/documents';
 import {
   applyLines,
   applyLinesTo,
@@ -404,5 +406,52 @@ describe('applyLines', () => {
     // The real editor service holds no models in node, which is also the proof that
     // importing this module did not pull Monaco in.
     expect(applyLines('d404', 1, 10, ['anything'])).toEqual({ changedLines: 0 });
+  });
+
+  describe('the read-only lock (AD-23)', () => {
+    const opened: string[] = [];
+    afterEach(() => {
+      vi.restoreAllMocks();
+      for (const id of opened.splice(0)) docs.remove(id);
+    });
+
+    function open(readOnly: boolean): { id: string; model: FakeModel } {
+      const id = docs.add({
+        path: null,
+        untitledIndex: 90 + opened.length,
+        profileId: 'fanuc-gcode',
+        encoding: { encoding: 'utf-8', hasBom: false },
+        eol: 'lf',
+        eolMixedOnLoad: false,
+        nul: { leader: 0, trailer: 0, stripped: 0 },
+        textDirty: false,
+        metaDirty: false,
+        disk: null,
+        external: 'none',
+        readOnly,
+        readOnlyReason: readOnly ? 'user' : null,
+      });
+      opened.push(id);
+      const model = new FakeModel('N10 G0 X0\nN20 M30');
+      vi.spyOn(editor, 'model').mockImplementation((asked) =>
+        asked === id ? (model as unknown as ReturnType<typeof editor.model>) : undefined,
+      );
+      return { id, model };
+    }
+
+    it('writes an editable document', () => {
+      const { id, model } = open(false);
+      expect(applyLines(id, 1, 2, ['N10 G0 X1', 'N20 M30'])).toEqual({ changedLines: 1 });
+      expect(model.lines).toEqual(['N10 G0 X1', 'N20 M30']);
+    });
+
+    it('refuses a locked document, whoever the caller is', () => {
+      const { id, model } = open(true);
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      expect(applyLines(id, 1, 2, ['N10 G0 X1', 'N20 M30'])).toEqual({ changedLines: 0, locked: true });
+      expect(model.lines).toEqual(['N10 G0 X0', 'N20 M30']);
+      expect(model.batches).toHaveLength(0);
+      expect(error).toHaveBeenCalledOnce();
+    });
   });
 });

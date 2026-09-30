@@ -335,13 +335,14 @@ choose **Later**, close the program's tab, and use `Show Recovered Work`.
 
 **Reopen the last files at start.** The programs that were open when gEdit was last closed
 come back, up to 50 of them, with the one you were on in front. A file gEdit cannot reach
-at that moment is skipped, with one line in the status bar rather than one dialog per file
-— and when other files did open, the line that counts them replaces it at once.
+at that moment is skipped, with one line in the status bar next to the count of files that
+did open, rather than one dialog per file; hover it to see which files were skipped.
 
-**A skipped file does not wait for the next start.** It stays in the list only until the
-list is next written, which happens as soon as you open, close or switch a tab; from then
-on it is gone from the list, and you open it yourself. So if a network share or a USB stick
-was not mounted when gEdit started, mount it and restart gEdit before you touch the tabs.
+**A skipped file is tried again at the next start.** It stays in the list while you work,
+so a network share or a USB stick that was not mounted costs nothing: mount it, and the
+file comes back at the next start (or open it yourself; from then on it is an ordinary
+tab). A file that stays missing is dropped from the list once it has been missing at 5
+starts in a row over at least two weeks.
 
 An untitled document is not in the list, because there is no file to reopen — an untitled
 document with unsaved text is covered by the crash snapshot instead.
@@ -394,10 +395,18 @@ keyboard shortcut for it: an accidental one would look like a broken keyboard. W
 tab is locked, Save goes to Save As as well. The lock lasts as long as the tab: reopen the
 file or restart gEdit and it opens unlocked.
 
-**Neither lock stops the NC tab or a script.** A lock refuses your typing, but a
-renumbering, a cleanup, or a script whose result replaces the text still changes a locked
-program. Save still goes to Save As while it is locked, so the file on disk is safe; the
-text in the tab is not. Run those only on a program you mean to change, or on a copy.
+**Both locks cover everything that would change the text.** Typing, pasting, a code
+block from the Insert tab, every command on the NC tab, a script whose result replaces the
+text, a change of line endings in the status bar and the revert arrows in a comparison are
+all refused, and the status bar says which lock stopped them and how to lift it. A
+transformation or a script is refused before it runs, so nothing is computed and thrown
+away. A script that only reports — to the Output panel, the Results panel or a new tab —
+still runs. If you lock a program while a script is running on it, the result is not
+written into it; gEdit offers to open it in a new tab instead.
+
+**Reloading is not an edit.** When the file changes on disk, a locked document is reloaded
+like any other (see above): the lock keeps your hand off the program, and the file on disk
+is that program.
 
 ### What none of this protects
 
@@ -477,7 +486,8 @@ editor.**
 or any file you pick. The comparison opens over the editor, side by side or inline, with
 buttons for the next and previous difference.
 
-The current document stays editable in the comparison; the other side is read-only. Files
+The current document stays editable in the comparison, unless it is locked; the other side
+is read-only. Files
 above 50 MB are refused. **Ignore whitespace** (off by default) leaves out differences in
 the blanks at the start and the end of a line — not the spaces between words, so after
 Remove Spaces every line whose inner spaces went still shows as changed.

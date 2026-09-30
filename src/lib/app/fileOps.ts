@@ -74,7 +74,8 @@ export interface FileOpsDeps {
   status: StatusService;
   profiles: ProfileRegistry;
   fs: FileSystemAccess;
-  filesStat(paths: string[]): Promise<FileStat[]>;
+  /** `platform/commands.ts` `filesStat`: with `partial`, an `unavailable` answer resolves. */
+  filesStat(paths: string[], o?: { partial?: boolean }): Promise<FileStat[]>;
   /**
    * M7, AD-21: copies the file aside before the write that overwrites it. Answers where
    * the copy went, `null` when there was nothing to copy (`files.backup` is `off`, or the
@@ -224,18 +225,23 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
    * gets `undefined` knows only that it knows nothing, which is the one answer that
    * makes it ask instead of write.
    */
-  async function statOf(paths: string[]): Promise<FileStat[] | undefined> {
+  async function statOf(paths: string[], o?: { partial?: boolean }): Promise<FileStat[] | undefined> {
     try {
-      return await deps.filesStat(paths);
+      return await deps.filesStat(paths, o);
     } catch (err) {
       console.error('files_stat failed', err);
       return undefined;
     }
   }
 
-  /** The stat of one path, or `undefined` for "no answer" **and** "no such entry". */
+  /**
+   * The stat of one path, or `undefined` for "no answer" **and** "no such entry" — and
+   * for an `unavailable` one (a hung share, TODO Next up 8), which looks like "outside
+   * the scope" and would otherwise read as "no file there".
+   */
   async function statOne(path: string): Promise<FileStat | undefined> {
-    return (await statOf([path]))?.[0];
+    const stat = (await statOf([path]))?.[0];
+    return stat?.unavailable === true ? undefined : stat;
   }
 
   function stampOf(bytes: Uint8Array, stat: FileStat | undefined): DiskStamp {
@@ -336,7 +342,15 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     // The stat runs BEFORE the read: reading first would mean a multi-gigabyte file is
     // already in the webview by the time its size is known (G8 F4). The same answer is
     // the disk stamp below, so this costs no extra round trip.
-    const stat = await statOne(path);
+    const answered = (await statOf([path], { partial: true }))?.[0];
+    // A share that does not answer (TODO Next up 8): the read would block until the OS
+    // gives up, and it cannot be cancelled — while it waits, it holds the file-command
+    // lock, so Save, Close and the close button would do nothing, silently, for minutes.
+    if (answered?.unavailable === true) {
+      await refuse(name, t('files.notAnswering', { name }));
+      return null;
+    }
+    const stat = answered;
     if (stat && stat.size !== null && stat.size > MAX_OPEN_BYTES) {
       await refuse(
         name,

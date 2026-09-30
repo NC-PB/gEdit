@@ -8,6 +8,10 @@
 //   - `monaco/editorService.ts` puts it on the editor, in the same block as the model
 //     switch, so no paint ever shows a locked program in an editable editor;
 //   - `components/editor/TabBar.svelte` and `ReadOnlyStatus.svelte` show it.
+//   - `app/readOnlyLock.ts` is what the writers that bypass the editor ask first — the
+//     transforms, a script's `replace` result, the Insert tab's blocks — and
+//     `monaco/applyLines.ts` refuses a locked model as the backstop; `monaco/diff.ts`
+//     locks the comparison's editable side.
 //
 // This file is only the way a user reaches it. The command is deliberately **not** on a
 // shortcut (§7.13 gives it none): locking is rare, and an accidental one would look like

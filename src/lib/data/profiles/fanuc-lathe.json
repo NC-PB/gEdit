@@ -42,7 +42,52 @@
   "modal": { "initial": { "feedmode": "G99", "spindlemode": "G97", "plane": "G18" } },
   "syntax": { "decimalPointSignificant": false },
   "machineParams": {
-    "numberInput": { "default": "calculator" },
+    "numberInput": {
+      "default": "calculator",
+      "presets": [
+        {
+          "id": "is-b",
+          "label": "Increments of 0.001 mm (IS-B): X50 is 0.050 mm, X50. is 50 mm; feeds and speeds as written (F200 is 200)",
+          "source": "syntax-fanuc.md \u00a73.2",
+          "verify": true,
+          "value": {
+            "mode": "increment",
+            "incrementMm": "0.001",
+            "incrementInch": "0.0001",
+            "incrementDeg": "0.001",
+            "incrementSec": "0.001",
+            "classes": {
+              "feedPerMin": { "mode": "calculator" },
+              "feedPerRev": { "mode": "calculator" }
+            }
+          }
+        },
+        {
+          "id": "is-c",
+          "label": "Increments of 0.0001 mm (IS-C): X50 is 0.0050 mm, X50. is 50 mm; feeds and speeds as written (F200 is 200)",
+          "source": "syntax-fanuc.md \u00a73.2",
+          "verify": true,
+          "value": {
+            "mode": "increment",
+            "incrementMm": "0.0001",
+            "incrementInch": "0.00001",
+            "incrementDeg": "0.0001",
+            "incrementSec": "0.0001",
+            "classes": {
+              "feedPerMin": { "mode": "calculator" },
+              "feedPerRev": { "mode": "calculator" }
+            }
+          }
+        },
+        {
+          "id": "calculator",
+          "label": "As written: X50 and X50. are both 50 mm; G74/G75 P and Q, G76 Q and G83/G87 Q are in microns (Q6000 is 6 mm)",
+          "source": "syntax-fanuc.md \u00a73.2",
+          "verify": true,
+          "value": { "mode": "calculator", "incrementMm": "0.001" }
+        }
+      ]
+    },
     "diameter": "on",
     "modalGroups": ["feedmode", "spindlemode", "plane"],
     "variants": [

@@ -14,10 +14,15 @@
 
 import { get, writable } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createFileTracker, createSessionService, snapshotOf } from './session';
+import { createFileTracker, createSessionService, snapshotOf, statSessionPaths } from './session';
 import { createFileMemory } from '$lib/stores/fileMemory';
+import { t } from '$lib/i18n';
 import type { Disposable, DocId, FileMemo, FileMemoryStore } from '$lib/app/types';
-import type { SessionState } from '$lib/platform/commands';
+import type { FileStat, SessionState } from '$lib/platform/commands';
+
+// Only `statSessionPaths` reaches Tauri, through the real `filesStat` wrapper.
+const invoke = vi.hoisted(() => vi.fn());
+vi.mock('@tauri-apps/api/core', () => ({ invoke }));
 
 interface FakeDoc {
   id: DocId;
@@ -41,12 +46,18 @@ interface SessionHarness {
   notes: string[];
   /** The same notices with their options, for the ones that are errors. */
   noticed: { text: string; error: boolean; detail?: string }[];
+  /** The one status message on screen: `files.open` puts its summary there. */
+  shown: { text: string; error: boolean; detail?: string } | null;
   stored: SessionState;
   /** Paths `files_stat` reports as a readable file. */
   onDisk: Set<string>;
   quit(): Promise<void>;
   failLoad: boolean;
   failStat: boolean;
+  /** The detail of the summary the fake `files.open` shows. */
+  openDetail: string | undefined;
+  /** Replaces the fake `files_stat` when set. */
+  statWith: ((paths: string[]) => Promise<{ allowed: boolean; exists: boolean; isDir: boolean }[]>) | null;
   /** The message `session_save` rejects with, or null when it works. */
   failSave: string | null;
   restoreEnabled: boolean;
@@ -71,6 +82,7 @@ function sessionHarness(o: { docs?: FakeDoc[]; active?: DocId | null } = {}): Se
     activated: [],
     notes: [],
     noticed: [],
+    shown: null,
     stored: { paths: [], active: null },
     onDisk: new Set<string>(),
     quit: async () => {
@@ -78,6 +90,8 @@ function sessionHarness(o: { docs?: FakeDoc[]; active?: DocId | null } = {}): Se
     },
     failLoad: false,
     failStat: false,
+    statWith: null,
+    openDetail: undefined,
     failSave: null,
     restoreEnabled: true,
   };
@@ -99,6 +113,7 @@ function sessionHarness(o: { docs?: FakeDoc[]; active?: DocId | null } = {}): Se
       return state.stored;
     },
     stat: async (paths) => {
+      if (state.statWith !== null) return state.statWith(paths);
       if (state.failStat) throw new Error('files_stat failed');
       return paths.map((path) => ({
         allowed: state.onDisk.has(path),
@@ -111,6 +126,8 @@ function sessionHarness(o: { docs?: FakeDoc[]; active?: DocId | null } = {}): Se
       const opened = paths.map((path, at) => ({ id: `r${at}`, path }));
       list.set(opened);
       activeId.set(opened.at(-1)?.id ?? null);
+      // What the real `files.open` does last: its summary replaces whatever was shown.
+      state.shown = { text: `Opened ${opened.length} files`, error: false, detail: state.openDetail };
       return opened.map((doc) => doc.id);
     },
     activate: (id) => {
@@ -124,7 +141,9 @@ function sessionHarness(o: { docs?: FakeDoc[]; active?: DocId | null } = {}): Se
     notify: (text, o) => {
       state.notes.push(text);
       state.noticed.push({ text, error: o?.error === true, detail: o?.detail });
+      state.shown = { text, error: o?.error === true, detail: o?.detail };
     },
+    shown: () => state.shown,
     restoreEnabled: () => state.restoreEnabled,
     debounceMs: 1000,
   });
@@ -255,6 +274,21 @@ describe('restoring the session', () => {
     expect(h.notes[0]).toContain('2 files');
   });
 
+  it('joins the missing-files notice onto the summary files.open leaves on screen', async () => {
+    // There is one status message, and `files.open` shows "Opened N files" last: said
+    // before it, the notice was replaced before anyone could read it (TODO Next up 9).
+    const h = sessionHarness();
+    h.stored = { paths: ['/net/gone.nc', '/a.nc', '/b.nc'], active: 1 };
+    h.onDisk.add('/a.nc');
+    h.onDisk.add('/b.nc');
+
+    expect(await h.session.restore()).toBe(2);
+    expect(h.shown?.text).toContain('Opened 2 files');
+    expect(h.shown?.text).toContain('1 file from the last session');
+    // The tooltip names the file that was skipped.
+    expect(h.shown?.detail).toBe('/net/gone.nc');
+  });
+
   it('hands every file to one files.open call, which is what closes the scratch tab', async () => {
     // The pristine untitled document the window starts with is dropped by `files.open`
     // itself (`fileOps.test.ts`: "opens several files as several tabs and drops the
@@ -299,6 +333,65 @@ describe('restoring the session', () => {
     // stack of "could not be opened" boxes over an empty editor.
     expect(await h.session.restore()).toBe(0);
     expect(h.openedWith).toEqual([]);
+  });
+});
+
+/**
+ * Review of TODO Next up 8/9: the notice about skipped files, when the share behind them
+ * hangs, and when something else is on screen already.
+ */
+describe('the missing-files notice', () => {
+  const hung = (path: string): FileStat => ({
+    path,
+    allowed: false,
+    exists: false,
+    isDir: false,
+    mtimeMs: null,
+    size: null,
+    readonly: false,
+    unavailable: true,
+  });
+
+  it('names the files when every one is on a share that hangs', async () => {
+    // Rust answers `unavailable` for each, and the plain wrapper rejects when nothing
+    // answered — so the restore opened nothing and said nothing.
+    invoke.mockImplementation(async (_cmd: string, args: { paths: string[] }) => args.paths.map(hung));
+    const h = sessionHarness();
+    h.stored = { paths: ['/Volumes/dnc/a.nc', '/Volumes/dnc/b.nc'], active: 0 };
+    h.statWith = (paths) => statSessionPaths(paths);
+
+    expect(await h.session.restore()).toBe(0);
+
+    expect(invoke).toHaveBeenCalledWith('files_stat', { paths: h.stored.paths });
+    expect(h.openedWith).toEqual([]);
+    expect(h.notes).toHaveLength(1);
+    expect(h.notes[0]).toBe(t('session.missing', { count: 2 }));
+    expect(h.shown?.detail).toBe('/Volumes/dnc/a.nc\n/Volumes/dnc/b.nc');
+    invoke.mockReset();
+  });
+
+  it('is not joined onto an older, unrelated message', async () => {
+    const h = sessionHarness();
+    h.stored = { paths: ['/net/gone.nc'], active: 0 };
+    h.shown = { text: 'settings.json has errors', error: true, detail: 'line 3: bad value' };
+
+    await h.session.restore();
+
+    expect(h.noticed).toEqual([
+      { text: t('session.missing', { count: 1 }), error: false, detail: '/net/gone.nc' },
+    ]);
+  });
+
+  it('keeps the file names in the tooltip when the summary has a detail of its own', async () => {
+    const h = sessionHarness();
+    h.stored = { paths: ['/net/gone.nc', '/a.nc'], active: 0 };
+    h.onDisk.add('/a.nc');
+    h.openDetail = 'a.nc: something files.open had to say';
+
+    await h.session.restore();
+
+    expect(h.shown?.text).toContain('Opened 1 files');
+    expect(h.shown?.detail).toBe('a.nc: something files.open had to say\n/net/gone.nc');
   });
 });
 
@@ -366,6 +459,23 @@ describe('a restore that could not reach its files', () => {
     await openByHand(h, '/local/scratch.nc');
 
     expect(h.saved.at(-1)?.paths).toEqual(['/local/scratch.nc', '/a.nc', '/b.nc']);
+    stop();
+  });
+
+  it('lets go of a skipped file once it is open again, so closing its tab removes it', async () => {
+    const h = sessionHarness();
+    h.stored = { paths: ['/net/b.nc', '/net/c.nc'], active: 0 };
+    expect(await h.session.restore()).toBe(0);
+
+    const stop = h.session.start();
+    // The share is back and the user opens one of the skipped files, then closes it.
+    await openByHand(h, '/net/b.nc');
+    expect(h.saved.at(-1)?.paths).toEqual(['/net/b.nc', '/net/c.nc']);
+    h.setDocs([], null);
+    await vi.advanceTimersByTimeAsync(1100);
+
+    // `/net/b.nc` was closed on purpose; `/net/c.nc` is still waiting for its share.
+    expect(h.saved.at(-1)?.paths).toEqual(['/net/c.nc']);
     stop();
   });
 

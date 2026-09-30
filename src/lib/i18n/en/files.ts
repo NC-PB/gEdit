@@ -71,6 +71,8 @@ export default {
   saveFailed: 'Could not save {name}',
   backupFailed: 'Could not back up {name}',
   tooLarge: '{name} is {size}, which is more than the {limit} gEdit can open',
+  /** The stat before an open did not answer: a hung share (TODO Next up 8). */
+  notAnswering: '{name} is on a share that does not answer; try again when it is back',
   reloadFailed: 'Could not reload {name}',
   dialogFailed: 'Could not open the file dialog',
   saveDialogFailed: 'Could not open the save dialog',

@@ -221,6 +221,45 @@ describe('availability and options', () => {
     expect(fields.every((field) => field.label.trim() !== '' && !field.label.includes('ncNumbering.'))).toBe(true);
   });
 
+  // TODO Next up 7: Digits allowed 9 on Okuma, and N00010 is a number the control rejects.
+  it('bounds the form by the limit of a dialect that stops at its maximum', () => {
+    const byId = new Map((renumber.options?.(compiled('okuma-osp')) ?? []).map((field) => [field.id, field]));
+    expect(byId.get('digits')).toMatchObject({ default: 0, min: 0, max: 4 });
+    expect(byId.get('max')).toMatchObject({ default: 9999, max: 9999, required: true });
+    expect(byId.get('start')).toMatchObject({ max: 9999 });
+    expect(byId.get('onOverflow')?.default).toBe('stop');
+  });
+
+  it('leaves the maximum open where it is only the point the counter starts over', () => {
+    for (const id of [FANUC, 'sinumerik']) {
+      const byId = new Map((renumber.options?.(compiled(id)) ?? []).map((field) => [field.id, field]));
+      expect(byId.get('digits')?.max, id).toBe(9);
+      expect(byId.get('max')?.required, id).toBe(false);
+      expect(byId.get('max')?.max, id).toBe(999999999);
+    }
+  });
+
+  it('holds a caller that skipped the form to the same limit, and says so', () => {
+    const okuma = compiled('okuma-osp');
+    const result = renumber.run(['N1 G0 X0', 'N2 G0 X1'], context(okuma, { digits: 7, max: 50000, start: 9990 }));
+    expect(result.lines).toEqual(['N9990 G0 X0', 'N2 G0 X1']);
+    expect(result.warnings).toEqual([
+      expect.objectContaining({ key: 'ncNumbering.renumber.overflowStopped' }),
+      { key: 'ncNumbering.renumber.limitedMax', params: { max: 9999 } },
+      { key: 'ncNumbering.renumber.limitedDigits', params: { digits: 4 } },
+    ]);
+    // Review of Next up 7: only the answer that was over is named. A run that asked for
+    // too high a maximum and left the digits alone was told "at most 0 digits".
+    const maxOnly = renumber.run(['N1 G0 X0'], context(okuma, { max: 50000 }));
+    expect(maxOnly.warnings).toEqual([{ key: 'ncNumbering.renumber.limitedMax', params: { max: 9999 } }]);
+    const digitsOnly = renumber.run(['N1 G0 X0'], context(okuma, { digits: 6, max: 9999 }));
+    expect(digitsOnly.lines).toEqual(['N0010 G0 X0']);
+    expect(digitsOnly.warnings).toEqual([{ key: 'ncNumbering.renumber.limitedDigits', params: { digits: 4 } }]);
+    const within = renumber.run(['N1 G0 X0'], context(okuma, { digits: 4 }));
+    expect(within.lines).toEqual(['N0010 G0 X0']);
+    expect(within.warnings).toEqual([]);
+  });
+
   it('has no form at all on a dialect that numbers consecutively', () => {
     expect(renumber.options?.(compiled(KLARTEXT))).toEqual([]);
   });

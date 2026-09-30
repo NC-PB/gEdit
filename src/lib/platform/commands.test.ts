@@ -57,6 +57,41 @@ describe('filesStat', () => {
     invoke.mockResolvedValue(stats);
     await expect(filesStat(['/nc/a.nc', '/nope'])).resolves.toEqual(stats);
   });
+
+  // TODO "Next up" 8. Rust answers a stat that hung (an SMB or DNC share gone quiet) as
+  // `unavailable` with everything else empty — the same fields as "outside the scope",
+  // which `fileOps.write` reads as "no file there, nothing to ask about". A rejection is
+  // what every one-path caller already reads as "the stat did not answer".
+  const hung = {
+    path: '/share/a.nc',
+    allowed: false,
+    exists: false,
+    isDir: false,
+    mtimeMs: null,
+    size: null,
+    readonly: false,
+    unavailable: true,
+  };
+
+  it('rejects when no path answered in time', async () => {
+    invoke.mockResolvedValue([hung]);
+    await expect(filesStat(['/share/a.nc'])).rejects.toThrow(/no answer in time/);
+  });
+
+  it('answers per entry when some paths did answer', async () => {
+    const stats = [
+      { path: '/nc/a.nc', allowed: true, exists: true, isDir: false, mtimeMs: 1, size: 2, readonly: false, unavailable: false },
+      { ...hung, path: '/share/b.nc' },
+    ];
+    invoke.mockResolvedValue(stats);
+    await expect(filesStat(['/nc/a.nc', '/share/b.nc'])).resolves.toEqual(stats);
+  });
+
+  it('answers per entry, even when none answered, for a caller that asks for it', async () => {
+    invoke.mockResolvedValue([hung]);
+    await expect(filesStat(['/share/a.nc'], { partial: true })).resolves.toEqual([hung]);
+    expect(invoke).toHaveBeenCalledWith('files_stat', { paths: ['/share/a.nc'] });
+  });
 });
 
 // M2 (plan §7.6): the config, state and recent-files commands. The argument keys are the

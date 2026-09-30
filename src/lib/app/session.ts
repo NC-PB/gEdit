@@ -17,10 +17,16 @@
 // is ten events and one session.
 //
 // Restoring: with `files.restoreSession` set, the stored paths are reopened in order and
-// the stored index is activated. **A file that is no longer there is dropped before
+// the stored index is activated. **A file that is no longer there is skipped before
 // anything is opened**, with one status message rather than one dialog per file — a
 // restore that puts up a stack of native alerts at start, or that resurrects a program
-// that was deleted on purpose, is worse than no restore at all.
+// that was deleted on purpose, is worse than no restore at all. That message is joined
+// onto the "Opened N files" summary `files.open` shows, because there is only one
+// status message and the summary would otherwise replace it before anyone read it.
+//
+// A skipped file is not forgotten: it stays in the stored list until it opens again or
+// Rust drops it by the rule in `session.rs` (missing at 5 starts in a row over at least
+// 14 days) — see [`unreachable`] below.
 //
 // Three rules that a test would catch if they were broken:
 //
@@ -52,10 +58,10 @@ import { getMonaco } from '$lib/monaco/setup';
 import { settings as appSettings } from '$lib/stores/settings';
 import { status as appStatus } from '$lib/app/status';
 import { uiState as appUiState } from '$lib/stores/uiState';
-import { filesStat, sessionLoad, sessionSave, type SessionState } from '$lib/platform/commands';
+import { filesStat, sessionLoad, sessionSave, type FileStat, type SessionState } from '$lib/platform/commands';
 import { isTauriRuntime } from '$lib/utils/platform';
 import { t } from '$lib/i18n';
-import type { Readable } from 'svelte/store';
+import { get, type Readable } from 'svelte/store';
 import type {
   Disposable,
   DocId,
@@ -97,6 +103,8 @@ export interface SessionDeps {
   activate(id: DocId): void;
   onWillQuit(cb: () => Promise<void> | void): Disposable;
   notify(text: string, o?: { error?: boolean; detail?: string }): void;
+  /** The status message on screen now (`status.current`), so the restore can add to it. */
+  shown(): { text: string; error: boolean; detail?: string } | null;
   /** `files.restoreSession`. Read when `restore()` runs, not when it is wired. */
   restoreEnabled(): boolean;
   debounceMs: number;
@@ -134,9 +142,13 @@ export function createSessionService(deps: SessionDeps): SessionService {
    * and truncates at 50, and they are appended **after** the open documents, so the cap
    * gives up a path nobody could open before it gives up a tab that is on screen.
    *
-   * The price is that a file which is really gone stays in the list and is skipped —
-   * with its one status line — at every start. That is the direction to fail in: a path
-   * that lingers is a nuisance, a tab list that vanished is a day's work to reconstruct.
+   * Rust keeps them too, although the scope refuses them (they were never granted):
+   * `session_save` keeps a refused path that the stored list already held. A path leaves
+   * this list the moment it is open in a tab — from then on it is an ordinary tab, and
+   * closing it removes it — and Rust drops one that has been missing at 5 starts in a row
+   * over at least 14 days, so a file that is really gone lingers, with its status line
+   * at every start, for about two weeks. That is the direction to fail in: a path that
+   * lingers is a nuisance, a tab list that vanished is a day's work to reconstruct.
    */
   let unreachable: string[] = [];
   /** Whether the user has been told, once, that the session list is not being stored. */
@@ -146,10 +158,12 @@ export function createSessionService(deps: SessionDeps): SessionService {
     const snapshot = snapshotOf(deps.docs.all(), deps.docs.getActiveId());
     if (unreachable.length === 0) return snapshot;
     const open = new Set(snapshot.paths);
-    const rest = unreachable.filter((path) => !open.has(path));
-    if (rest.length === 0) return snapshot;
+    // Once a skipped file is open again it is a tab like any other, and closing that tab
+    // has to take it out of the session — so it stops being carried for good.
+    unreachable = unreachable.filter((path) => !open.has(path));
+    if (unreachable.length === 0) return snapshot;
     // Appended, never inserted: `active` is an index into `paths`.
-    return { paths: [...snapshot.paths, ...rest], active: snapshot.active };
+    return { paths: [...snapshot.paths, ...unreachable], active: snapshot.active };
   }
 
   function writeNow(): Promise<void> {
@@ -254,17 +268,38 @@ export function createSessionService(deps: SessionDeps): SessionService {
       });
       const usable = stored.paths.filter((_, at) => reachable[at]);
       unreachable = stored.paths.filter((_, at) => !reachable[at]);
-      const missing = unreachable.length;
-      if (missing > 0) deps.notify(t('session.missing', { count: missing }));
-      if (usable.length === 0) return 0;
+      const skipped = [...unreachable];
+      // What was on screen before `files.open` ran: an older message, about something else.
+      const before = deps.shown();
+      // Said after `files.open`, not before: its "Opened N files" would replace it.
+      const tellMissing = (): void => {
+        if (skipped.length === 0) return;
+        const missing = t('session.missing', { count: skipped.length });
+        // Joined only onto the summary `files.open` itself just showed. Joined onto an older
+        // message, the notice took on that message's error colour and its tooltip.
+        const shown = deps.shown();
+        const summary = shown !== null && shown !== before ? shown : null;
+        // The tooltip names the files, so the user knows which ones to look for.
+        const names = skipped.join('\n');
+        deps.notify(summary === null ? missing : `${summary.text} · ${missing}`, {
+          error: summary?.error === true,
+          detail: summary?.detail ? `${summary.detail}\n${names}` : names,
+        });
+      };
+      if (usable.length === 0) {
+        tellMissing();
+        return 0;
+      }
 
       let opened: DocId[];
       try {
         opened = await deps.open(usable);
       } catch (err) {
         console.warn('the session could not be reopened', err);
+        tellMissing();
         return 0;
       }
+      tellMissing();
       if (opened.length === 0) return 0;
 
       // The tab that was in front, or — when that file is one of the skipped ones — the
@@ -470,6 +505,17 @@ export function createFileTracker(deps: FileTrackerDeps): Disposable {
 // The singletons
 // ---------------------------------------------------------------------------
 
+/**
+ * The restore's stat, answered per entry (review of TODO Next up 8). A session usually
+ * lives on one share, and when that share hangs every entry comes back `unavailable` —
+ * which plain `filesStat` turns into a rejection, and a restore whose stat rejected opened
+ * nothing and said nothing. Read per entry, an unavailable path has `allowed: false`, so
+ * the restore skips it, names it in its notice and keeps it, like any file it cannot reach.
+ */
+export function statSessionPaths(paths: string[], stat: typeof filesStat = filesStat): Promise<FileStat[]> {
+  return stat(paths, { partial: true });
+}
+
 /** The application-wide session service (`ctx.session`). */
 export const session: SessionService = createSessionService({
   docs: {
@@ -484,11 +530,12 @@ export const session: SessionService = createSessionService({
     await sessionSave(paths, active);
   },
   load: async () => (isTauriRuntime() ? sessionLoad() : { paths: [], active: null }),
-  stat: async (paths) => (isTauriRuntime() ? filesStat(paths) : []),
+  stat: async (paths) => (isTauriRuntime() ? statSessionPaths(paths) : []),
   open: (paths) => appFiles.open(paths),
   activate: (id) => appDocs.activate(id),
   onWillQuit: (cb) => appFiles.onWillQuit(cb),
   notify: (text, o) => appStatus.show(text, o),
+  shown: () => get(appStatus.current),
   restoreEnabled: () => appSettings.get('files.restoreSession'),
   debounceMs: SESSION_DEBOUNCE_MS,
 });

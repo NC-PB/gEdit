@@ -122,7 +122,7 @@
         },
         {
           "id": "calculator",
-          "label": "As written: X50 and X50. are both 50 mm; cycle steps in microns (Q6000 is 6 mm)",
+          "label": "As written: X50 and X50. are both 50 mm; the mill has no cycle parameter with a fixed micron reading, so Q and the rest read the same way",
           "source": "syntax-fanuc.md \u00a73.2",
           "verify": true,
           "value": { "mode": "calculator", "incrementMm": "0.001" }

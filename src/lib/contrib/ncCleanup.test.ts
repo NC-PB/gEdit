@@ -21,7 +21,14 @@ const fake = vi.hoisted(() => ({
   registered: new Set<string>(),
   confirmAnswer: true,
   confirmed: [] as string[],
+  messages: [] as string[],
   ran: [] as string[],
+  /** The editor: a 10-line document and the selection `selectionLines()` reports. */
+  selection: null as { startLine: number; endLine: number; empty: boolean } | null,
+  revealed: [] as number[],
+  /** What the selection is when `nc.renumber` runs, which is the scope it will take. */
+  selectionAtRenumber: [] as ({ startLine: number; endLine: number; empty: boolean } | null)[],
+  caretSticks: true,
 }));
 
 vi.mock('$lib/app/transforms', () => ({
@@ -29,8 +36,9 @@ vi.mock('$lib/app/transforms', () => ({
 }));
 vi.mock('$lib/app/dialogs', () => ({
   dialogs: {
-    confirm: (o: { title: string }): Promise<boolean> => {
+    confirm: (o: { title: string; message: string }): Promise<boolean> => {
       fake.confirmed.push(o.title);
+      fake.messages.push(o.message);
       return Promise.resolve(fake.confirmAnswer);
     },
   },
@@ -40,13 +48,25 @@ vi.mock('$lib/app/registry/commands', () => ({
     has: (id: string): boolean => fake.registered.has(id),
     run: (id: string): Promise<boolean> => {
       fake.ran.push(id);
+      fake.selectionAtRenumber.push(fake.selection);
       return Promise.resolve(true);
     },
   },
 }));
 
+vi.mock('$lib/monaco/editorService', () => ({
+  editor: {
+    getLineCount: (): number => 10,
+    selectionLines: () => fake.selection,
+    reveal: (_id: string, line: number): void => {
+      fake.revealed.push(line);
+      if (fake.caretSticks) fake.selection = { startLine: line, endLine: line, empty: true };
+    },
+  },
+}));
+
 const ncCleanup = (await import('./ncCleanup')).default;
-const { hasKey } = await import('$lib/i18n');
+const { hasKey, t } = await import('$lib/i18n');
 
 const IDS = ['nc.insertSpaces', 'nc.removeSpaces', 'nc.removeEmptyLines', 'nc.removeComments', 'nc.convertCase'];
 const byId = new Map<string, CommandDef>((ncCleanup.commands ?? []).map((def) => [def.id, def]));
@@ -103,7 +123,12 @@ describe('the renumber offer after a run that removed lines', () => {
     fake.registered = new Set(['nc.renumber']);
     fake.confirmAnswer = true;
     fake.confirmed = [];
+    fake.messages = [];
     fake.ran = [];
+    fake.selection = null;
+    fake.revealed = [];
+    fake.selectionAtRenumber = [];
+    fake.caretSticks = true;
   });
 
   const removeEmptyLines = (): CommandDef => byId.get('nc.removeEmptyLines') as CommandDef;
@@ -113,6 +138,36 @@ describe('the renumber offer after a run that removed lines', () => {
     await removeEmptyLines().run({ activeDocId: 'd1' } as never);
     expect(fake.confirmed).toHaveLength(1);
     expect(fake.ran).toEqual(['nc.renumber']);
+  });
+
+  // The confirmed cleanup bug: Remove Comments on lines 4-6 of a Klartext program, then
+  // "Renumber now?" renumbered lines 4-6 only, from 0, and the program had two 0s.
+  it('renumbers the whole program after a run on a selection, and says so', async () => {
+    fake.result = resultWith([{ key: 'ncCleanup.renumberNeeded' }]);
+    fake.selection = { startLine: 4, endLine: 6, empty: false };
+    await removeEmptyLines().run({ activeDocId: 'd1' } as never);
+    expect(fake.messages).toEqual([t('ncCleanup.renumberSelectionMessage')]);
+    expect(fake.revealed).toEqual([4]);
+    expect(fake.ran).toEqual(['nc.renumber']);
+    expect(fake.selectionAtRenumber).toEqual([{ startLine: 4, endLine: 4, empty: true }]);
+  });
+
+  it('asks the plain question when the run covered the whole program', async () => {
+    fake.result = resultWith([{ key: 'ncCleanup.renumberNeeded' }]);
+    fake.selection = { startLine: 1, endLine: 10, empty: false };
+    await removeEmptyLines().run({ activeDocId: 'd1' } as never);
+    expect(fake.messages).toEqual([t('ncCleanup.renumberMessage')]);
+    expect(fake.ran).toEqual(['nc.renumber']);
+    expect(fake.selectionAtRenumber[0]?.empty).toBe(true);
+  });
+
+  it('renumbers nothing rather than part of the program when the selection stays', async () => {
+    fake.result = resultWith([{ key: 'ncCleanup.renumberNeeded' }]);
+    fake.selection = { startLine: 4, endLine: 6, empty: false };
+    fake.caretSticks = false;
+    await removeEmptyLines().run({ activeDocId: 'd1' } as never);
+    expect(fake.confirmed).toHaveLength(1);
+    expect(fake.ran).toEqual([]);
   });
 
   it('leaves the program alone when the answer is no', async () => {
@@ -145,7 +200,7 @@ describe('the renumber offer after a run that removed lines', () => {
   });
 
   it('has a message for every string the offer shows', () => {
-    for (const key of ['ncCleanup.renumberNeeded', 'ncCleanup.renumberTitle', 'ncCleanup.renumberMessage', 'ncCleanup.renumberOk']) {
+    for (const key of ['ncCleanup.renumberNeeded', 'ncCleanup.renumberTitle', 'ncCleanup.renumberMessage', 'ncCleanup.renumberSelectionMessage', 'ncCleanup.renumberOk']) {
       expect(hasKey(key), key).toBe(true);
     }
   });

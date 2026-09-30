@@ -7,30 +7,42 @@
 // profile's own block names. Blocks JSON stays until the P2 templates.
 
 import BlocksGroup from '$lib/components/shell/BlocksGroup.svelte';
+import { lockRefusal } from '$lib/app/readOnlyLock';
 import { status } from '$lib/app/status';
 import { editor } from '$lib/monaco/editorService';
 import { docs } from '$lib/stores/documents';
 import { hasKey, t } from '$lib/i18n';
 import { allBlockIds, blockFor } from '$lib/utils/insertBlock';
-import type { CommandDef, Contribution } from '$lib/app/types';
+import type { CommandDef, Contribution, DocMeta } from '$lib/app/types';
 
 /** The block id whose button also sits in the Home tab (the M0 "New Prg" button). */
 const HOME_BLOCK = 'start';
 
-function activeProfileId(): string | null {
+function activeDoc(): DocMeta | null {
   const id = docs.getActiveId();
-  return (id === null ? undefined : docs.get(id)?.profileId) ?? null;
+  return (id === null ? undefined : docs.get(id)) ?? null;
+}
+
+function activeProfileId(): string | null {
+  return activeDoc()?.profileId ?? null;
 }
 
 function insert(blockId: string): void {
-  const profileId = activeProfileId();
-  if (profileId === null) {
+  const doc = activeDoc();
+  if (doc === null) {
     status.show(t('blocks.noDocument'), { error: true });
     return;
   }
-  const block = blockFor(profileId, blockId);
+  const block = blockFor(doc.profileId, blockId);
   if (block === null) {
     status.show(t('blocks.noBlock', { id: blockId }), { error: true });
+    return;
+  }
+  // The editor's own `readOnly` refuses the insert as well, but silently (AD-23): a
+  // button that does nothing looks broken, so the lock says so here.
+  const locked = lockRefusal(doc, t('readOnly.insertBlock', { block: block.Text }));
+  if (locked !== null) {
+    status.show(t(locked.key, locked.params), { error: true });
     return;
   }
   editor.insertText(block.TextBlock);

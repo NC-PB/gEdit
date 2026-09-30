@@ -450,12 +450,27 @@ describe('what the lathe profile inherits and what it states', () => {
     expect(mill.syntax.decimalPointSignificant).toBe(true);
     expect(lathe.profile.machineParams?.numberInput?.default).toBe('calculator');
     expect(mill.machineParams?.numberInput?.default).toBe('is-b');
-    // The presets themselves are inherited key by key (AD-16): the lathe repeats none.
+    // The lathe states its presets itself (an array is replaced as a whole, AD-16): the
+    // same three, because the mill's "As written" label is about the mill.
     expect(lathe.profile.machineParams?.numberInput?.presets?.map((p) => p.id)).toEqual([
       'is-b',
       'is-c',
       'calculator',
     ]);
+  });
+
+  // Review of the UI polish pass: the mill's "As written" label says no cycle parameter has
+  // a fixed micron reading, and the lathe inherited it — where G74/G75 P and Q, G76 Q and
+  // G83/G87 Q are exactly that (`unit: "increment"` in its code database).
+  it('describes the lathe, not the mill, in its default number-input preset', () => {
+    const presets = lathe.profile.machineParams?.numberInput?.presets ?? [];
+    const calculator = presets.find((preset) => preset.id === 'calculator');
+    expect(calculator?.label).not.toMatch(/mill/i);
+    expect(calculator?.label).toContain('G76 Q');
+    expect(calculator?.label).toContain('Q6000 is 6 mm');
+    // The two increment presets say the same as the mill's.
+    const mill = compiled(MILL).profile.machineParams?.numberInput?.presets ?? [];
+    expect(presets.slice(0, 2)).toEqual(mill.slice(0, 2));
   });
 
   it('offers exactly the machine parameters of §8.8', () => {

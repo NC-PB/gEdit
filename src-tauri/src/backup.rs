@@ -234,15 +234,25 @@ impl BackupSettings {
 /// Errors unless `fs_scope().is_allowed(path)`: the only paths that ever reach this
 /// command are ones the user opened, so it can never be used to copy an arbitrary
 /// file into a folder the webview can read.
+///
+/// `async`, and the work is on the blocking pool: a plain `fn` command runs on the main
+/// thread (`tauri-macros` 2.6 `ExecutionContext::Blocking`), and both the scope check
+/// (it canonicalizes) and the copy touch the file's share. A save to a share that has
+/// stopped answering waits for it here without freezing the window (TODO Next up 8).
 #[tauri::command]
-pub fn files_backup(app: AppHandle, path: String) -> Result<Option<String>, String> {
+pub async fn files_backup(app: AppHandle, path: String) -> Result<Option<String>, String> {
     let scope = app.fs_scope();
-    backup_allowed(
-        &paths::app_dirs(&app)?,
-        Path::new(&path),
-        SystemTime::now(),
-        |path| scope.is_allowed(path),
-    )
+    tauri::async_runtime::spawn_blocking(move || {
+        backup_allowed(
+            &paths::app_dirs(&app)?,
+            Path::new(&path),
+            SystemTime::now(),
+            |path| scope.is_allowed(path),
+        )
+    })
+    .await
+    // The save reads a rejection as "no backup", and does not write.
+    .map_err(|err| format!("the backup did not finish: {err}"))?
 }
 
 /// The command's body with the scope predicate injected, the way `files::stat_all`
@@ -802,7 +812,7 @@ mod tests {
     fn the_command_asks_the_fs_scope_and_touches_nothing_itself() {
         let source = source_scan::lf(include_str!("backup.rs"));
         let signature = concat!(
-            "pub fn files_",
+            "pub async fn files_",
             "backup(app: AppHandle, path: String) -> Result<Option<String>, String> {"
         );
         let at = source.find(signature).expect("the signature changed");
@@ -815,6 +825,12 @@ mod tests {
         assert!(
             body.contains(concat!("scope.is_", "allowed(path)")),
             "the fs scope is taken but never asked about the path"
+        );
+        // TODO Next up 8: the scope check and the copy touch the share, so neither may
+        // run on the main thread.
+        assert!(
+            body.contains(concat!("spawn_", "blocking(")),
+            "the command does its work on the thread that called it"
         );
         assert!(
             !body.contains("std::fs") && !body.contains("fs::"),

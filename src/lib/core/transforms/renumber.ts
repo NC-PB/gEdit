@@ -128,6 +128,10 @@ function matchesAt(line: string, at: number, literal: string, caseSensitive: boo
 interface Settings {
   /** Klartext: every block, step 1, no form (`numbering.mode`). */
   consecutive: boolean;
+  /** The caller asked for more digits than the dialect allows, and was held to them. */
+  digitsLimited: boolean;
+  /** The caller asked for a higher maximum (or none) than the dialect allows. */
+  maxLimited: boolean;
   start: number;
   step: number;
   digits: number;
@@ -175,6 +179,23 @@ function wordsOf(value: unknown, fallback: string[]): string[] {
   return [...fallback];
 }
 
+/**
+ * The highest block number the control accepts and how many digits it has, or null when
+ * the dialect has no hard limit. Padding past that width writes a block number the
+ * control reads as too long (`N00010` on a 9999 control).
+ *
+ * The schema has no field for "hard limit" (§7.1), so the profile says it the way it
+ * already can: a `max` with `onOverflow: 'stop'` (Okuma, 9999) is the control's limit. A
+ * `max` with `wrap` (Fanuc, Sinumerik) is only where the counter starts over, and a user
+ * may raise it or clear it for a control with a longer number.
+ */
+function profileLimit(cp: CompiledProfile): { max: number; digits: number } | null {
+  const { max, onOverflow } = cp.profile.numbering;
+  if (onOverflow !== 'stop' || max === undefined || !Number.isFinite(max) || max < 1) return null;
+  const whole = Math.trunc(max);
+  return { max: whole, digits: String(whole).length };
+}
+
 function settingsFor(cp: CompiledProfile, options: Record<string, unknown>): Settings {
   const numbering = cp.profile.numbering;
   const separated = cp.profile.syntax.wordSeparatorRequired === true;
@@ -185,6 +206,8 @@ function settingsFor(cp: CompiledProfile, options: Record<string, unknown>): Set
   if (numbering.mode === 'consecutive') {
     return {
       consecutive: true,
+      digitsLimited: false,
+      maxLimited: false,
       start: Math.max(0, Math.trunc(numbering.start ?? 0)),
       step: 1,
       digits: 0,
@@ -199,12 +222,23 @@ function settingsFor(cp: CompiledProfile, options: Record<string, unknown>): Set
     };
   }
 
+  // A caller that skips the form (a script, a headless run) is held to the same limit
+  // the form enforces, and told which of its answers was cut down (`digitsLimited`,
+  // `maxLimited`).
+  const limit = profileLimit(cp);
+  const digits = intOf(options.digits, numbering.digits ?? 0, 0);
+  const max = maxOf(options.max, numbering.max ?? null);
+  const digitsOver = limit !== null && digits > limit.digits;
+  const maxOver = limit !== null && (max === null || max > limit.max);
+
   return {
     consecutive: false,
+    digitsLimited: digitsOver,
+    maxLimited: maxOver,
     start: intOf(options.start, numbering.start ?? 10, 0),
     step: intOf(options.step, numbering.step ?? 10, 1),
-    digits: intOf(options.digits, numbering.digits ?? 0, 0),
-    max: maxOf(options.max, numbering.max ?? null),
+    digits: digitsOver ? limit.digits : digits,
+    max: maxOver ? limit.max : max,
     wrap: options.onOverflow === undefined ? (numbering.onOverflow ?? 'wrap') === 'wrap' : options.onOverflow === 'wrap',
     spacesAfter: intOf(options.spacesAfter, numbering.spacesAfter ?? 1, minSpaces),
     skipStartingWith: wordsOf(options.skipStartingWith, numbering.skipStartingWith ?? []),
@@ -655,6 +689,9 @@ function optionFields(cp: CompiledProfile): FieldSpec[] {
   // Klartext: consecutive from 0 in steps of 1 is what the control accepts, so there is
   // nothing to ask. `TransformService` opens no dialog for an empty field list.
   if (numbering.mode === 'consecutive') return [];
+  // The dialect's own limit bounds the form: Okuma reads block numbers up to 9999, so a
+  // fifth digit (`N00010`) or a maximum above it writes blocks the control rejects.
+  const limit = profileLimit(cp);
 
   return [
     {
@@ -665,27 +702,35 @@ function optionFields(cp: CompiledProfile): FieldSpec[] {
       default: numbering.start ?? 10,
       required: true,
       min: 0,
-      max: 99999999,
+      max: limit?.max ?? 99999999,
     },
     { id: 'step', type: 'integer', label: t('ncNumbering.renumber.fields.step.label'), default: numbering.step ?? 10, required: true, min: 1, max: 100000 },
     {
       id: 'digits',
       type: 'integer',
       label: t('ncNumbering.renumber.fields.digits.label'),
-      help: t('ncNumbering.renumber.fields.digits.help'),
-      default: numbering.digits ?? 0,
+      help:
+        limit === null
+          ? t('ncNumbering.renumber.fields.digits.help')
+          : t('ncNumbering.renumber.fields.digits.helpLimit', { digits: limit.digits }),
+      default: Math.min(numbering.digits ?? 0, limit?.digits ?? 9),
       required: true,
       min: 0,
-      max: 9,
+      max: limit?.digits ?? 9,
     },
     {
       id: 'max',
       type: 'integer',
       label: t('ncNumbering.renumber.fields.max.label'),
-      help: t('ncNumbering.renumber.fields.max.help'),
+      help:
+        limit === null
+          ? t('ncNumbering.renumber.fields.max.help')
+          : t('ncNumbering.renumber.fields.max.helpLimit', { max: limit.max }),
       default: numbering.max ?? undefined,
+      // Empty means "no maximum", which a dialect with a limit does not have.
+      required: limit !== null,
       min: 1,
-      max: 999999999,
+      max: limit?.max ?? 999999999,
     },
     {
       id: 'onOverflow',
@@ -904,6 +949,14 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
     value += settings.step;
   }
 
+  // One warning per answer that was cut down: a run that only asked for too high a maximum
+  // used to be told it had been held to "at most 0 digits" as well.
+  if (settings.maxLimited && settings.max !== null) {
+    warnings.push({ key: 'ncNumbering.renumber.limitedMax', params: { max: settings.max } });
+  }
+  if (settings.digitsLimited) {
+    warnings.push({ key: 'ncNumbering.renumber.limitedDigits', params: { digits: settings.digits } });
+  }
   if (wraps > 0) {
     warnings.push({
       key: 'ncNumbering.renumber.wrapped',

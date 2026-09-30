@@ -223,7 +223,7 @@
           },
           {
             "id": "calculator",
-            "label": "As written: X50 and X50. are both 50 mm; cycle steps in microns (Q6000 is 6 mm)",
+            "label": "As written: X50 and X50. are both 50 mm; G74/G75 P and Q, G76 Q and G83/G87 Q are in microns (Q6000 is 6 mm)",
             "source": "syntax-fanuc.md §3.2",
             "value": {
               "incrementMm": "0.001",

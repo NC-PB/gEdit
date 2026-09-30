@@ -105,10 +105,14 @@ not whatever failed first:
 7. **You edited the document while it ran.** The answer no longer fits the question: the
    lines it would overwrite have moved. Nothing is applied, and a dialog — *The program
    changed while the script ran* — offers **Open in new tab** so the work is not lost.
+8. **You locked the document while it ran**, in `replace` mode. Nothing is written into it;
+   the same **Open in new tab** is offered.
 
 A run can also be refused before it starts: no program is open, the script is not for this
-dialect, it needs a selection, its header asks to replace an input it does not take,
-another script is running, or no Python was found. The status bar says which.
+dialect, it needs a selection, its header asks to replace an input it does not take, it
+would replace the text of a locked (read-only) program, another script is running, or no
+Python was found. The status bar says which. A script in any other mode still runs on a
+locked program: it changes nothing there.
 
 Nothing is ever applied silently: every run ends in a summary, a result, or a message
 saying why not.

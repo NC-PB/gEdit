@@ -47,4 +47,6 @@ export default {
   // Status messages
   encodingChanged: '{name} will be written as {encoding}',
   eolChanged: '{name} will be written with {eol} line endings',
+  /** The `{action}` of the read-only lock's refusal (AD-23): the line endings are text. */
+  eolAction: 'Change Line Endings',
 } as const satisfies Messages;

@@ -7,13 +7,42 @@
 //! happens when the user picked or dropped it. A path outside the scope comes back
 //! as `allowed: false` with everything else empty, so the webview cannot use this
 //! command to probe the file system.
+//!
+//! **A stat can hang.** A program on an SMB or DNC share whose server has gone away
+//! does not fail, it blocks — for as long as the OS keeps retrying, which can be
+//! minutes. So the command is `async` (Tauri runs a plain `fn` command on the main
+//! thread, and the external-change poll calls this one every 2 s), each call answers
+//! at most [`MAX_STAT_PATHS`] paths, and every path is stat'd on a thread of its own
+//! with a shared [`STAT_BUDGET`] (see [`run_bounded`]). A path that has not answered
+//! by then comes back `unavailable`: **unknown, never gone** — every other field is
+//! empty, `allowed` included, and a caller must decide nothing from it.
 
+use std::collections::{BTreeMap, HashMap};
 use std::fs::Metadata;
+use std::io;
 use std::path::Path;
-use std::time::UNIX_EPOCH;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc, Mutex, MutexGuard};
+use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use tauri::AppHandle;
 use tauri_plugin_fs::FsExt;
+
+/// The most paths one `files_stat` call answers. Any beyond it come back
+/// `unavailable`, so the answer still has one entry per input. The callers ask for
+/// the open documents, the recent list, the session or a drop — far fewer than this.
+pub const MAX_STAT_PATHS: usize = 256;
+
+/// How long one `files_stat` call waits for its stats, all of them together. A local
+/// disk answers in microseconds and a healthy share in milliseconds; this is for the
+/// share that does not answer at all.
+pub const STAT_BUDGET: Duration = Duration::from_millis(1500);
+
+/// The most worker threads that may be left waiting on hung paths, all calls
+/// together. Past it nothing new is started and everything answers "unknown": a last
+/// resort, because [`run_bounded`] already starts no second thread for a path whose
+/// first one is still stuck.
+const MAX_ABANDONED: usize = 128;
 
 /// One entry of the `files_stat` answer. Serialized in camelCase, matching
 /// `FileStat` in `src/lib/platform/commands.ts`.
@@ -37,6 +66,22 @@ pub struct FileStat {
     /// **Whether this user may not write the file**, which is the question AD-23
     /// asks and not the one `Permissions::readonly()` answers. See [`not_writable`].
     pub readonly: bool,
+    /// The stat did not answer within [`STAT_BUDGET`] (a hung share), answered with an
+    /// error that does not say "not there" (a timeout, a host that is down, EIO), or the
+    /// call asked for more than [`MAX_STAT_PATHS`] paths. Every other field is empty then,
+    /// and **empty does not mean gone**: nothing about this path is known.
+    pub unavailable: bool,
+}
+
+impl FileStat {
+    /// The answer for a path nothing is known about.
+    pub fn unavailable(path: String) -> Self {
+        FileStat {
+            path,
+            unavailable: true,
+            ..FileStat::default()
+        }
+    }
 }
 
 /// Whether the file at `path` is one the process may not write.
@@ -89,38 +134,240 @@ fn not_writable(_path: &str, meta: &Metadata) -> bool {
 
 /// Stats every path in one round trip. The answer has one entry per input, in the
 /// same order, so the caller can zip it with its own list.
+///
+/// `async` so that Tauri runs it off the main thread (a plain `fn` command is run on
+/// it, `tauri-macros` 2.6 `ExecutionContext::Blocking`), and the waiting is done on
+/// the blocking pool rather than on an async worker.
 #[tauri::command]
-pub fn files_stat(app: AppHandle, paths: Vec<String>) -> Vec<FileStat> {
+pub async fn files_stat(app: AppHandle, paths: Vec<String>) -> Vec<FileStat> {
     let scope = app.fs_scope();
-    stat_all(paths, |path| scope.is_allowed(path))
+    let asked = paths.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        stat_all(paths, move |path| scope.is_allowed(path))
+    })
+    .await
+    // The pool task panicked: nothing is known about any of them.
+    .unwrap_or_else(|_| asked.into_iter().map(FileStat::unavailable).collect())
 }
 
 /// The command's body with the scope predicate injected, so the rules can be
-/// tested without an app handle.
-pub fn stat_all(paths: Vec<String>, is_allowed: impl Fn(&Path) -> bool) -> Vec<FileStat> {
+/// tested without an app handle. The predicate runs on the worker thread too:
+/// `Scope::is_allowed` canonicalizes, which touches the share as well.
+pub fn stat_all(
+    paths: Vec<String>,
+    is_allowed: impl Fn(&Path) -> bool + Send + Sync + 'static,
+) -> Vec<FileStat> {
+    stat_all_within(paths, STAT_BUDGET, is_allowed)
+}
+
+/// [`stat_all`] with the time budget injected, for the tests.
+pub fn stat_all_within(
+    mut paths: Vec<String>,
+    budget: Duration,
+    is_allowed: impl Fn(&Path) -> bool + Send + Sync + 'static,
+) -> Vec<FileStat> {
+    let over = paths.split_off(paths.len().min(MAX_STAT_PATHS));
+    let answers = run_bounded(paths.clone(), budget, move |path| {
+        stat_one(path, &is_allowed)
+    });
     paths
         .into_iter()
-        .map(|path| {
-            if !is_allowed(Path::new(&path)) {
-                return FileStat {
-                    path,
-                    ..FileStat::default()
-                };
-            }
-            // Symlinks are followed: the document's identity is the file the user
-            // opened through the link, and that is what a save rewrites.
-            match std::fs::metadata(&path) {
-                Ok(meta) => of_metadata(path, &meta),
-                // Missing, or unreadable because a parent directory lost its
-                // permissions; either way there is nothing to report.
-                Err(_) => FileStat {
-                    path,
-                    allowed: true,
-                    ..FileStat::default()
-                },
-            }
-        })
+        .zip(answers)
+        .map(|(path, answer)| answer.unwrap_or_else(|| FileStat::unavailable(path)))
+        .chain(over.into_iter().map(FileStat::unavailable))
         .collect()
+}
+
+fn stat_one(path: &str, is_allowed: &impl Fn(&Path) -> bool) -> FileStat {
+    // Symlinks are followed: the document's identity is the file the user
+    // opened through the link, and that is what a save rewrites.
+    stat_one_with(path, is_allowed, |path| std::fs::metadata(path))
+}
+
+/// [`stat_one`] with the metadata call injected, so the error cases can be tested.
+fn stat_one_with(
+    path: &str,
+    is_allowed: &impl Fn(&Path) -> bool,
+    metadata: impl Fn(&Path) -> io::Result<Metadata>,
+) -> FileStat {
+    let path = path.to_owned();
+    if !is_allowed(Path::new(&path)) {
+        return FileStat {
+            path,
+            ..FileStat::default()
+        };
+    }
+    match metadata(Path::new(&path)) {
+        Ok(meta) => of_metadata(path, &meta),
+        // Missing, or unreadable because a parent directory lost its
+        // permissions; either way there is nothing to report.
+        Err(err) if is_absent(err.kind()) => FileStat {
+            path,
+            allowed: true,
+            ..FileStat::default()
+        },
+        // Anything else is the share answering that it cannot answer — a soft mount's
+        // ETIMEDOUT, a host that is down, an I/O error. That is unknown, never gone: read
+        // as "missing", the poll would mark the tab deleted and a save would write over
+        // the file without its changed-on-disk question.
+        Err(_) => FileStat::unavailable(path),
+    }
+}
+
+/// The errors of a stat that say the path is not there (or cannot be, as named).
+fn is_absent(kind: io::ErrorKind) -> bool {
+    matches!(
+        kind,
+        io::ErrorKind::NotFound
+            | io::ErrorKind::NotADirectory
+            | io::ErrorKind::PermissionDenied
+            | io::ErrorKind::InvalidFilename
+    )
+}
+
+// --- the time budget ----------------------------------------------------------
+
+/// The worker threads whose caller stopped waiting, by path. While a path is in
+/// here its share is known to be hung, and a new request for it answers "unknown"
+/// at once instead of leaving one more thread behind every 2 s.
+struct Abandoned {
+    by_path: BTreeMap<String, usize>,
+    total: usize,
+}
+
+static ABANDONED: Mutex<Abandoned> = Mutex::new(Abandoned {
+    by_path: BTreeMap::new(),
+    total: 0,
+});
+
+fn abandoned() -> MutexGuard<'static, Abandoned> {
+    // Nothing in here can be left half-updated by a panic.
+    ABANDONED
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// One worker's two flags, both read and written under [`ABANDONED`]'s lock so a
+/// worker that finishes just as its caller gives up cannot leave its path marked
+/// hung for ever.
+#[derive(Default)]
+struct Flags {
+    done: AtomicBool,
+    abandoned: AtomicBool,
+}
+
+/// Runs `work` for every key, each on a thread of its own, and waits at most
+/// `budget` for all of them together. Answers one entry per key, in order: the
+/// result, or `None` for a key that did not answer in time — or that was not even
+/// tried, because a thread from an earlier call is still stuck on it.
+///
+/// A thread that does not answer in time is left to finish on its own (a blocked
+/// `stat` cannot be cancelled) and its result is dropped. Repeated keys are run once.
+pub fn run_bounded<R, F>(keys: Vec<String>, budget: Duration, work: F) -> Vec<Option<R>>
+where
+    R: Clone + Send + 'static,
+    F: Fn(&str) -> R + Send + Sync + 'static,
+{
+    let deadline = Instant::now() + budget;
+    let work = Arc::new(work);
+    let (tx, rx) = mpsc::channel::<(usize, R)>();
+
+    // The first position of every distinct key, and where each key's answer goes.
+    let mut first: HashMap<&str, usize> = HashMap::new();
+    let slot: Vec<usize> = keys
+        .iter()
+        .enumerate()
+        .map(|(at, key)| *first.entry(key.as_str()).or_insert(at))
+        .collect();
+
+    let mut running: Vec<(usize, Arc<Flags>)> = Vec::new();
+    for (at, key) in keys.iter().enumerate() {
+        if slot[at] != at {
+            continue;
+        }
+        {
+            let stuck = abandoned();
+            if stuck.by_path.contains_key(key) || stuck.total >= MAX_ABANDONED {
+                continue;
+            }
+        }
+        let flags = Arc::new(Flags::default());
+        let (key_owned, flags_worker, tx, work) = (
+            key.clone(),
+            Arc::clone(&flags),
+            tx.clone(),
+            Arc::clone(&work),
+        );
+        let spawned = std::thread::Builder::new()
+            .name("gedit-stat".into())
+            .spawn(move || {
+                // Dropped on unwind as well, so a panicking `work` cannot leave its
+                // path marked hung.
+                let finished = Finish(&key_owned, &flags_worker);
+                let answer = work(&key_owned);
+                drop(finished);
+                let _ = tx.send((at, answer));
+            });
+        if spawned.is_ok() {
+            running.push((at, flags));
+        }
+    }
+    drop(tx);
+
+    let mut answers: Vec<Option<R>> = vec![None; keys.len()];
+    let mut waiting = running.len();
+    while waiting > 0 {
+        let left = deadline.saturating_duration_since(Instant::now());
+        match rx.recv_timeout(left) {
+            Ok((at, answer)) => {
+                answers[at] = Some(answer);
+                waiting -= 1;
+            }
+            // Out of time, or every sender is gone (a worker panicked).
+            Err(_) => break,
+        }
+    }
+
+    if waiting > 0 {
+        let mut stuck = abandoned();
+        for (at, flags) in &running {
+            if answers[*at].is_none() && !flags.done.load(Ordering::Relaxed) {
+                flags.abandoned.store(true, Ordering::Relaxed);
+                *stuck.by_path.entry(keys[*at].clone()).or_insert(0) += 1;
+                stuck.total += 1;
+            }
+        }
+    }
+
+    (0..keys.len())
+        .map(|at| answers[slot[at]].clone())
+        .collect()
+}
+
+/// A worker's last step: a path its caller gave up on is not hung any more.
+struct Finish<'a>(&'a str, &'a Flags);
+
+impl Drop for Finish<'_> {
+    fn drop(&mut self) {
+        let Finish(key, flags) = *self;
+        let mut stuck = abandoned();
+        flags.done.store(true, Ordering::Relaxed);
+        if flags.abandoned.load(Ordering::Relaxed) {
+            stuck.total -= 1;
+            if let Some(count) = stuck.by_path.get_mut(key) {
+                *count -= 1;
+                if *count == 0 {
+                    stuck.by_path.remove(key);
+                }
+            }
+        }
+    }
+}
+
+/// Whether a thread from an earlier call is still stuck on `key`.
+#[cfg(test)]
+fn is_stuck(key: &str) -> bool {
+    abandoned().by_path.contains_key(key)
 }
 
 fn of_metadata(path: String, meta: &Metadata) -> FileStat {
@@ -134,6 +381,7 @@ fn of_metadata(path: String, meta: &Metadata) -> FileStat {
         mtime_ms: mtime_ms(meta),
         size: (!is_dir).then_some(meta.len()),
         readonly,
+        unavailable: false,
     }
 }
 
@@ -335,5 +583,228 @@ mod tests {
         // A directory keeps the attribute answer: `readonly` is about documents.
         assert!(!one(s(&dir.join("sub"))).readonly);
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    // --- the time budget (TODO "Next up" 8) -----------------------------------
+
+    use std::sync::atomic::AtomicUsize;
+
+    /// The scope predicate of these tests, hanging on every `hung*` path until
+    /// `release` is set — the way `stat` blocks on a share whose server has gone away
+    /// — and counting how often it was asked about one.
+    fn hanging(
+        release: Arc<AtomicBool>,
+        asked: Arc<AtomicUsize>,
+    ) -> impl Fn(&Path) -> bool + Send + Sync + 'static {
+        move |path| {
+            let hung = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("hung"));
+            if hung {
+                asked.fetch_add(1, Ordering::SeqCst);
+                let until = Instant::now() + Duration::from_secs(10);
+                while !release.load(Ordering::SeqCst) && Instant::now() < until {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+            }
+            allow_except_secret(path)
+        }
+    }
+
+    /// Waits for the thread a test left behind to finish and unmark its path.
+    fn wait_until_unstuck(path: &str) {
+        let until = Instant::now() + Duration::from_secs(10);
+        while is_stuck(path) && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(!is_stuck(path), "{path} is still marked hung");
+    }
+
+    const SHORT: Duration = Duration::from_millis(300);
+
+    /// The defect: one hung share held the whole answer — and, on the main thread,
+    /// the whole UI — for as long as the OS retried. Now the others answer and the
+    /// hung one is unknown, never "gone".
+    #[test]
+    fn a_hung_path_is_unavailable_and_the_others_still_answer() {
+        let dir = scratch_dir("hung");
+        let (release, asked) = (Arc::new(AtomicBool::new(false)), Arc::default());
+        let hung = s(&dir.join("hung.nc"));
+        let paths = vec![s(&dir.join("a.nc")), hung.clone(), s(&dir.join("sub"))];
+
+        let started = Instant::now();
+        let stats = stat_all_within(paths, SHORT, hanging(release.clone(), asked));
+        let took = started.elapsed();
+        release.store(true, Ordering::SeqCst);
+
+        assert!(took < Duration::from_secs(3), "the call took {took:?}");
+        assert!(stats[0].allowed && stats[0].exists && !stats[0].unavailable);
+        assert_eq!(stats[1], FileStat::unavailable(hung.clone()));
+        // Unknown is not gone: nothing a caller could read as "deleted".
+        assert!(!stats[1].allowed && !stats[1].exists);
+        assert!(stats[2].allowed && stats[2].is_dir && !stats[2].unavailable);
+        wait_until_unstuck(&hung);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// The poll asks every 2 s. A path whose thread from the last call is still stuck
+    /// answers "unknown" at once instead of leaving one more thread behind each time —
+    /// and is tried again as soon as that thread has come back.
+    #[test]
+    fn a_path_that_is_still_hung_is_not_tried_again() {
+        let dir = scratch_dir("stuck");
+        let hung_file = dir.join("hung-stuck.nc");
+        fs::write(&hung_file, "G0\n").unwrap();
+        let hung = s(&hung_file);
+        let release = Arc::new(AtomicBool::new(false));
+        let asked = Arc::new(AtomicUsize::new(0));
+
+        let first = stat_all_within(
+            vec![hung.clone()],
+            SHORT,
+            hanging(release.clone(), asked.clone()),
+        );
+        assert!(first[0].unavailable);
+        assert!(is_stuck(&hung));
+
+        let started = Instant::now();
+        let second = stat_all_within(
+            vec![hung.clone()],
+            SHORT,
+            hanging(release.clone(), asked.clone()),
+        );
+        assert!(second[0].unavailable);
+        assert_eq!(
+            asked.load(Ordering::SeqCst),
+            1,
+            "a second thread was started"
+        );
+        assert!(
+            started.elapsed() < SHORT,
+            "the second call waited for nothing"
+        );
+
+        release.store(true, Ordering::SeqCst);
+        wait_until_unstuck(&hung);
+        let third = stat_all_within(vec![hung.clone()], SHORT, hanging(release, asked.clone()));
+        assert!(third[0].allowed && third[0].exists && !third[0].unavailable);
+        assert_eq!(asked.load(Ordering::SeqCst), 2);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Past [`MAX_STAT_PATHS`] nothing is stat'd, and the answer still has one entry
+    /// per input so the caller's zip stays aligned.
+    #[test]
+    fn a_call_answers_at_most_max_stat_paths() {
+        let dir = scratch_dir("cap");
+        let paths: Vec<String> = (0..MAX_STAT_PATHS + 2)
+            .map(|n| s(&dir.join(format!("gone{n}.nc"))))
+            .collect();
+        let stats = stat_all(paths.clone(), allow_except_secret);
+        assert_eq!(stats.len(), paths.len());
+        assert!(stats[..MAX_STAT_PATHS]
+            .iter()
+            .all(|f| f.allowed && !f.unavailable));
+        assert_eq!(
+            stats[MAX_STAT_PATHS],
+            FileStat::unavailable(paths[MAX_STAT_PATHS].clone())
+        );
+        assert!(stats[MAX_STAT_PATHS + 1].unavailable);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_repeated_path_is_stat_once_and_answered_everywhere() {
+        let dir = scratch_dir("repeat");
+        let a = s(&dir.join("a.nc"));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&calls);
+        let stats = stat_all(vec![a.clone(), a.clone(), a], move |path| {
+            counted.fetch_add(1, Ordering::SeqCst);
+            allow_except_secret(path)
+        });
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(stats[0].exists && stats[0] == stats[1] && stats[1] == stats[2]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// The poll and a save can stat the same file at the same moment. Only a path a
+    /// caller has *given up on* is skipped, so neither of them may see "unknown" for a
+    /// file that answers — a save would then ask about a change that did not happen.
+    #[test]
+    fn concurrent_calls_for_one_path_all_answer() {
+        let dir = scratch_dir("concurrent");
+        let a = s(&dir.join("a.nc"));
+        let workers: Vec<_> = (0..8)
+            .map(|_| {
+                let a = a.clone();
+                std::thread::spawn(move || stat_all(vec![a], allow_except_secret).remove(0))
+            })
+            .collect();
+        for worker in workers {
+            let stat = worker.join().unwrap();
+            assert!(stat.allowed && stat.exists && !stat.unavailable, "{stat:?}");
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Review of Next up 8: a stat that failed quickly with anything but "not there" was
+    /// reported as `allowed: true, exists: false`, so a soft mount's ETIMEDOUT or a
+    /// host that is down marked the tab deleted and let a save skip its question.
+    #[test]
+    fn a_stat_error_that_is_not_absence_is_unavailable() {
+        let path = "/Volumes/dnc/a.nc";
+        let failing = |kind: io::ErrorKind| {
+            stat_one_with(path, &|_: &Path| true, move |_| Err(io::Error::from(kind)))
+        };
+        for kind in [
+            io::ErrorKind::NotFound,
+            io::ErrorKind::NotADirectory,
+            io::ErrorKind::PermissionDenied,
+            io::ErrorKind::InvalidFilename,
+        ] {
+            assert_eq!(
+                failing(kind),
+                FileStat {
+                    path: path.to_owned(),
+                    allowed: true,
+                    ..FileStat::default()
+                },
+                "{kind:?}"
+            );
+        }
+        for kind in [
+            io::ErrorKind::TimedOut,
+            io::ErrorKind::NetworkUnreachable,
+            io::ErrorKind::HostUnreachable,
+            io::ErrorKind::NotConnected,
+            io::ErrorKind::Interrupted,
+            io::ErrorKind::Other,
+        ] {
+            assert_eq!(
+                failing(kind),
+                FileStat::unavailable(path.to_owned()),
+                "{kind:?}"
+            );
+        }
+        // An I/O error the way the OS reports it (EIO has no kind of its own).
+        #[cfg(unix)]
+        assert_eq!(
+            stat_one_with(path, &|_: &Path| true, |_| Err(
+                io::Error::from_raw_os_error(libc::EIO)
+            )),
+            FileStat::unavailable(path.to_owned())
+        );
+    }
+
+    /// The wire shape `commands.ts` reads.
+    #[test]
+    fn unavailable_is_serialized_in_camel_case() {
+        let json = serde_json::to_value(FileStat::unavailable("/nc/a.nc".into())).unwrap();
+        assert_eq!(json["unavailable"], true);
+        assert_eq!(json["allowed"], false);
+        assert_eq!(json["exists"], false);
+        assert_eq!(json["mtimeMs"], serde_json::Value::Null);
     }
 }

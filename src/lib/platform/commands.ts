@@ -32,15 +32,34 @@ export interface FileStat {
   mtimeMs: number | null;
   size: number | null;
   readonly: boolean;
+  /**
+   * The stat did not answer in time — a hung SMB or DNC share — or answered with an error
+   * that does not say "not there" (a timeout, a host that is down), or the call asked for
+   * more paths than Rust answers (`files::MAX_STAT_PATHS`). Everything else is empty,
+   * `allowed` included, and **empty does not mean gone**: nothing about the path is
+   * known. Rust always sends it; optional so that a hand-made stat need not.
+   */
+  unavailable?: boolean;
 }
 
 /**
  * Stats several paths in one round trip; answers only for paths the fs scope already
  * allows (AD-10). Used for the external-change poll, the no-op save check and the
  * folder filter of drag and drop. The result has one entry per input, in order.
+ *
+ * Rust waits at most `files::STAT_BUDGET` (1.5 s) for a call, so a path on a hung share
+ * answers `unavailable` instead of holding the others. **When no path answered, this
+ * rejects**, unless `partial` is set: a caller that stats one file reads a rejection as
+ * "the stat did not answer" and asks before it writes, where an entry that looks like
+ * "outside the scope" could let a save skip its changed-on-disk question. A caller that
+ * reads `unavailable` per entry passes `{ partial: true }`.
  */
-export function filesStat(paths: string[]): Promise<FileStat[]> {
-  return invoke<FileStat[]>('files_stat', { paths });
+export async function filesStat(paths: string[], o: { partial?: boolean } = {}): Promise<FileStat[]> {
+  const stats = await invoke<FileStat[]>('files_stat', { paths });
+  if (!o.partial && stats.length > 0 && stats.every((stat) => stat.unavailable === true)) {
+    throw new Error(`files_stat: no answer in time for ${stats.length === 1 ? stats[0].path : `${stats.length} paths`}`);
+  }
+  return stats;
 }
 
 // ---------------------------------------------------------------------------
@@ -225,8 +244,9 @@ export interface SessionState {
 }
 
 /**
- * Replaces the stored session list. Rust keeps only paths the fs scope already allows
- * and truncates to 50, so this cannot be used to have a path granted at the next start.
+ * Replaces the stored session list. Rust keeps only paths the fs scope already allows,
+ * or that the stored list already held (a file offline at start), and truncates to 50,
+ * so this cannot be used to have a new path granted at the next start.
  */
 export function sessionSave(paths: string[], active: number | null): Promise<void> {
   return invoke<void>('session_save', { paths, active });

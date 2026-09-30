@@ -12,6 +12,9 @@ export default {
   renumberTitle: 'Renumber the program?',
   renumberMessage:
     'This control needs consecutive block numbers, and lines were removed. Renumber the program now?',
+  /** The same question after a run on a selection: the renumber covers the whole program. */
+  renumberSelectionMessage:
+    'This control needs consecutive block numbers, and lines were removed from the selection. Renumbering only the selection would give the program duplicate numbers, so the whole program is renumbered and the selection is cleared. Renumber the program now?',
   renumberOk: 'Renumber',
 
   insertSpaces: {

@@ -59,6 +59,10 @@ export default {
       'The numbers passed {max} once and started over at {start} (first at line {line}), so the program now has duplicate block numbers. A control takes the first match, and block search, GOTO and M99 P become ambiguous. Use a larger maximum, a smaller increment, or "Stop and warn".',
     wrapped_other:
       'The numbers passed {max} {count} times and started over at {start} (the first at line {line}), so the program now has duplicate block numbers. A control takes the first match, and block search, GOTO and M99 P become ambiguous. Use a larger maximum, a smaller increment, or "Stop and warn".',
+    /** A caller that skipped the form asked for more than the dialect allows: one each. */
+    limitedMax: 'This control accepts block numbers up to {max}, so the run used {max} as the maximum.',
+    limitedDigits:
+      'This control reads block numbers of at most {digits} digits, so the numbers were padded to {digits}.',
     skippedTruncated: 'The table lists the first {shown} of {total} skipped lines.',
     /** M6: the three outcomes of a reference. Rewritten is good news and says so plainly. */
     referencesRewritten_one: '{count} jump, return or cycle was rewritten with the new block number.',
@@ -88,8 +92,17 @@ export default {
     fields: {
       start: { label: 'Start at', help: 'The number the first block gets.' },
       step: { label: 'Increment' },
-      digits: { label: 'Digits', help: 'Pad with leading zeros to this many digits. 0 writes the number as short as it is.' },
-      max: { label: 'Maximum', help: 'Leave empty for no maximum.' },
+      digits: {
+        label: 'Digits',
+        help: 'Pad with leading zeros to this many digits. 0 writes the number as short as it is.',
+        /** The dialect names a maximum; `digits` is how many digits it has. */
+        helpLimit: 'Pad with leading zeros to this many digits, at most {digits}: this control reads no longer block numbers. 0 writes the number as short as it is.',
+      },
+      max: {
+        label: 'Maximum',
+        help: 'Leave empty for no maximum.',
+        helpLimit: 'At most {max}, the highest block number this control accepts.',
+      },
       onOverflow: {
         label: 'Above the maximum',
         wrap: 'Start over at the start value',

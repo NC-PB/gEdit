@@ -25,6 +25,7 @@ const fake = vi.hoisted(() => ({
   confirms: [] as { title: string; message: string }[],
   confirmAnswer: true,
   applied: [] as unknown[],
+  eols: [] as unknown[],
   messages: [] as string[],
 }));
 
@@ -44,7 +45,7 @@ vi.mock('$lib/app/dialogs', () => ({
 vi.mock('$lib/app/fileOps', () => ({
   files: {
     setEncoding: (_id: string, e: FileEncoding) => fake.applied.push(e),
-    setEol: () => {},
+    setEol: (_id: string, eol: string) => fake.eols.push(eol),
   },
   EOL_LABELS: { crlf: 'CRLF', lf: 'LF', cr: 'CR' },
 }));
@@ -74,7 +75,10 @@ function doc(o: { encoding?: FileEncoding; leader?: number; trailer?: number } =
   } as unknown as DocMeta;
 }
 
+const setEol = (encoding.commands ?? []).find((def) => def.id === 'file.setEol') as CommandDef;
+
 const run = (): Promise<void> => setEncoding.run({ activeDocId: 'd1' } as never) as Promise<void>;
+const runEol = (): Promise<void> => setEol.run({ activeDocId: 'd1' } as never) as Promise<void>;
 
 beforeEach(() => {
   fake.doc = doc();
@@ -82,6 +86,7 @@ beforeEach(() => {
   fake.confirms = [];
   fake.confirmAnswer = true;
   fake.applied = [];
+  fake.eols = [];
   fake.messages = [];
 });
 
@@ -152,5 +157,36 @@ describe('a punched-tape program picked as UTF-16', () => {
     await run();
     expect(fake.confirms).toEqual([]);
     expect(fake.applied).toEqual([CP1252]);
+  });
+});
+
+// Review of TODO Next up 6 (§7.16 #30): the user guide says both locks cover everything
+// that would change the text, and the line-ending picker rewrote a locked model and
+// marked it modified.
+describe('the line-ending picker on a locked document', () => {
+  const locked = (reason: 'user' | 'attribute'): DocMeta =>
+    ({ ...doc(), eol: 'crlf', readOnly: true, readOnlyReason: reason }) as unknown as DocMeta;
+
+  it('changes an unlocked document', async () => {
+    fake.doc = { ...doc(), eol: 'crlf', readOnly: false, readOnlyReason: null };
+    fake.picked = 'lf';
+    await runEol();
+    expect(fake.eols).toEqual(['lf']);
+  });
+
+  it('is refused, and says which lock stopped it', async () => {
+    for (const reason of ['user', 'attribute'] as const) {
+      fake.doc = locked(reason);
+      fake.picked = 'lf';
+      fake.messages = [];
+      await runEol();
+      expect(fake.eols).toEqual([]);
+      expect(fake.messages).toEqual([
+        t(reason === 'user' ? 'readOnly.refusedUser' : 'readOnly.refusedAttribute', {
+          name: 'tape.nc',
+          action: t('encoding.eolAction'),
+        }),
+      ]);
+    }
   });
 });

@@ -198,6 +198,66 @@ describe('TransformService.run: availability', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Step 0: the read-only lock (AD-23)
+// ---------------------------------------------------------------------------
+
+describe('TransformService.run: a locked document', () => {
+  function lock(h: Harness, reason: 'user' | 'attribute'): string {
+    h.docs.update(h.docId, { readOnly: true, readOnlyReason: reason });
+    return h.docs.get(h.docId)!.title;
+  }
+
+  it('refuses before the form, the preflight or the run, and names the lock', async () => {
+    const h = harness();
+    const name = lock(h, 'user');
+    const run = vi.fn(upperCase().run);
+    const def = upperCase({ options: () => NUMBER_FIELDS, preflight: () => ({ key: 'common.warning' }), run });
+    expect(await h.service.run(def)).toBeNull();
+    expect(h.status).toEqual([
+      { text: t('readOnly.refusedUser', { name, action: t(def.title) }), error: true },
+    ]);
+    expect(h.forms).toHaveLength(0);
+    expect(h.confirms).toHaveLength(0);
+    expect(run).not.toHaveBeenCalled();
+    expect(h.applied).toHaveLength(0);
+  });
+
+  it('says so differently when the file itself is read-only', async () => {
+    const h = harness();
+    const name = lock(h, 'attribute');
+    await h.service.run(upperCase());
+    expect(h.status).toEqual([
+      { text: t('readOnly.refusedAttribute', { name, action: t('results.title') }), error: true },
+    ]);
+    expect(h.applied).toHaveLength(0);
+  });
+
+  it('still runs when the result goes to a new tab', async () => {
+    const h = harness();
+    lock(h, 'user');
+    expect(await h.service.run(upperCase(), { target: 'new-document' })).not.toBeNull();
+    expect(h.applied).toHaveLength(0);
+    expect(h.created).toHaveLength(1);
+  });
+
+  it('refuses at the apply when the lock was set while the form was open', async () => {
+    const h = harness();
+    const def = upperCase({ options: () => NUMBER_FIELDS });
+    h.formAnswers.push({ start: 10, pad: false });
+    // `run` is suspended in the form; the lock goes on before it resumes, as a click on
+    // the status bar behind the dialog would.
+    const pending = h.service.run(def);
+    const name = lock(h, 'user');
+    expect(await pending).toBeNull();
+    expect(h.applied).toHaveLength(0);
+    expect(h.status.at(-1)).toEqual({
+      text: t('readOnly.refusedUser', { name, action: t(def.title) }),
+      error: true,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Step 2: the options form
 // ---------------------------------------------------------------------------
 
@@ -214,20 +274,42 @@ describe('TransformService.run: the options form', () => {
     h.formAnswers.push({ start: 200, pad: true });
     await h.service.run(upperCase({ options: () => NUMBER_FIELDS }));
     expect(h.forms[0].values).toEqual({ start: 10, pad: false });
-    expect(h.remembered.get(formKey('upper'))).toEqual({ start: 200, pad: true });
+    expect(h.remembered.get(formKey('upper', 'fanuc-gcode'))).toEqual({ start: 200, pad: true });
   });
 
   it('pre-fills the form from what was remembered last time', async () => {
     const h = harness();
-    h.remembered.set(formKey('upper'), { start: 500, pad: true });
+    h.remembered.set(formKey('upper', 'fanuc-gcode'), { start: 500, pad: true });
     h.formAnswers.push({ start: 500, pad: true });
     await h.service.run(upperCase({ options: () => NUMBER_FIELDS }));
     expect(h.forms[0].values).toEqual({ start: 500, pad: true });
   });
 
+  // TODO Next up 7: after a Fanuc run, Okuma was offered 99999 / "Start over" instead of
+  // its own 9999 / "Stop", and Sinumerik lost its skip list.
+  it('remembers the answers per dialect, not across dialects', async () => {
+    const h = harness();
+    const fields = (cp: { profile: { id: string } }): FieldSpec[] => [
+      { id: 'max', type: 'integer', label: 'Max', default: cp.profile.id === 'okuma-osp' ? 9999 : 99999 },
+    ];
+    h.formAnswers.push({ max: 50000 });
+    await h.service.run(upperCase({ options: fields }));
+
+    h.docs.update(h.docId, { profileId: 'okuma-osp' });
+    h.formAnswers.push({ max: 9000 });
+    await h.service.run(upperCase({ options: fields }));
+    expect(h.forms[1].values).toEqual({ max: 9999 });
+
+    h.docs.update(h.docId, { profileId: 'fanuc-gcode' });
+    h.formAnswers.push({ max: 50000 });
+    await h.service.run(upperCase({ options: fields }));
+    expect(h.forms[2].values).toEqual({ max: 50000 });
+    expect(h.remembered.get(formKey('upper', 'okuma-osp'))).toEqual({ max: 9000 });
+  });
+
   it('lets an explicit option win over what was remembered', async () => {
     const h = harness();
-    h.remembered.set(formKey('upper'), { start: 500, pad: true });
+    h.remembered.set(formKey('upper', 'fanuc-gcode'), { start: 500, pad: true });
     h.formAnswers.push({ start: 7, pad: true });
     await h.service.run(upperCase({ options: () => NUMBER_FIELDS }), { options: { start: 7 } });
     expect(h.forms[0].values).toEqual({ start: 7, pad: true });
@@ -235,7 +317,7 @@ describe('TransformService.run: the options form', () => {
 
   it('skipForm skips the form and what was remembered with it', async () => {
     const h = harness();
-    h.remembered.set(formKey('upper'), { start: 500, pad: true });
+    h.remembered.set(formKey('upper', 'fanuc-gcode'), { start: 500, pad: true });
     const seen: { options?: Record<string, unknown> } = {};
     const def = upperCase({
       options: () => NUMBER_FIELDS,
@@ -248,7 +330,7 @@ describe('TransformService.run: the options form', () => {
     expect(h.forms).toHaveLength(0);
     // The profile defaults plus what the caller passed, and nothing from state.json.
     expect(seen.options).toEqual({ start: 10, pad: true });
-    expect(h.remembered.get(formKey('upper'))).toEqual({ start: 500, pad: true });
+    expect(h.remembered.get(formKey('upper', 'fanuc-gcode'))).toEqual({ start: 500, pad: true });
   });
 
   it('a cancelled form cancels the run', async () => {

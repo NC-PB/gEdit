@@ -10,16 +10,22 @@
 // `DiffHandle` is what `CompareView` holds: the navigation the toolbar drives, plus the
 // two live options.
 //
-// Two rules the construction options follow, both verified against Monaco 0.55:
+// Three rules the construction options follow, all verified against Monaco 0.55:
 //
 //  1. `createDiffEditor` feeds every *editor* option it is given into the shared
 //     standalone configuration service (`standaloneServices.js:517`), so anything passed
 //     here that is not diff-specific would silently change the main editor as well. Only
-//     `automaticLayout` is passed, with the value `editorService` already set.
+//     `automaticLayout` is passed, with the value `editorService` already set, and
+//     `readOnly`/`readOnlyMessage`, which `editorService` sets on every document switch
+//     anyway and which no Monaco feature reads back from that service.
 //  2. `theme` is deliberately absent: passing it calls `themeService.setTheme()`
 //     (`standaloneCodeEditor.js:258`), which would override the user's theme choice
 //     (WP2.6) for as long as the comparison is open. Left out, the diff editor simply
 //     renders in the current global theme.
+//  3. The read-only lock (AD-23) covers the comparison: the modified side *is* the
+//     document, and the gutter's revert arrows write into it. The diff editor's `readOnly`
+//     locks that side and hides the arrows; it follows the lock while the comparison is
+//     open, because the status bar can lock or unlock the document underneath it.
 //
 // IMPORTANT: Monaco is reached through `$lib/monaco/setup`, which imports
 // `$lib/monaco/core` *dynamically*. Nothing in this module may import `core` for a value,
@@ -29,6 +35,8 @@
 import type * as MonacoApi from 'monaco-editor/esm/vs/editor/editor.api.js';
 import { getMonaco } from '$lib/monaco/setup';
 import { editor as editorService } from '$lib/monaco/editorService';
+import { docs } from '$lib/stores/documents';
+import { t } from '$lib/i18n';
 import type { Disposable, DocId } from '$lib/app/types';
 
 /**
@@ -123,6 +131,9 @@ export async function createDiff(req: DiffRequest): Promise<DiffHandle> {
     original = owned;
   }
 
+  const lockedNow = (): boolean => docs.get(req.modifiedDocId)?.readOnly === true;
+  let appliedLock = lockedNow();
+
   let instance: MonacoApi.editor.IStandaloneDiffEditor;
   try {
     instance = monaco.editor.createDiffEditor(req.container, {
@@ -133,6 +144,8 @@ export async function createDiff(req: DiffRequest): Promise<DiffHandle> {
       useInlineViewWhenSpaceIsLimited: false,
       ignoreTrimWhitespace: req.ignoreTrimWhitespace,
       originalEditable: false,
+      readOnly: appliedLock,
+      readOnlyMessage: { value: t('readOnly.editorMessage') },
       renderOverviewRuler: true,
     });
   } catch (err) {
@@ -142,6 +155,13 @@ export async function createDiff(req: DiffRequest): Promise<DiffHandle> {
   instance.setModel({ original, modified });
 
   let disposed = false;
+  // Rule 3: `fileOps.setReadOnly` changes the document without changing which one is open.
+  const stopFollowingLock = docs.list.subscribe(() => {
+    const locked = lockedNow();
+    if (disposed || locked === appliedLock) return;
+    appliedLock = locked;
+    instance.updateOptions({ readOnly: locked });
+  });
   return {
     goToDiff(direction: 'next' | 'previous'): void {
       if (!disposed) instance.goToDiff(direction);
@@ -158,6 +178,7 @@ export async function createDiff(req: DiffRequest): Promise<DiffHandle> {
     dispose(): void {
       if (disposed) return;
       disposed = true;
+      stopFollowingLock();
       // Detach first: the modified model (and a `document` original) outlives this view.
       instance.setModel(null);
       instance.dispose();

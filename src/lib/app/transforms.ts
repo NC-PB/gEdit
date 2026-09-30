@@ -4,8 +4,9 @@
 // that every one of them behaves the same and no `contrib/` file repeats it. The steps
 // are listed on `TransformService` in `app/types.ts`:
 //
+//  0. a locked document (AD-23) refuses a run that would replace text, before step 1.
 //  1. `available(cp)` — the reason goes to the status bar and nothing else happens.
-//  2. the options form, pre-filled from `uiState.lastParams['transform:'+id]`.
+//  2. the options form, pre-filled from `uiState.lastParams['transform:'+id+':'+profile]`.
 //  3. `preflight(lines, ctx)` — a `Msg` becomes a confirmation the user may decline.
 //  4. `run(lines, ctx)` on the scope.
 //  5. the output: the scope replaced as one undo step, or a new untitled document.
@@ -35,6 +36,7 @@ import { dialogs as appDialogs } from '$lib/app/dialogs';
 import { files as appFiles } from '$lib/app/fileOps';
 import { modals as appModals } from '$lib/app/modals';
 import { status as appStatus } from '$lib/app/status';
+import { lockRefusal } from '$lib/app/readOnlyLock';
 import { initialValues } from '$lib/core/forms/values';
 import { transformScope } from '$lib/core/transforms/scope';
 import { applyLines as applyLinesToModel } from '$lib/monaco/applyLines';
@@ -64,9 +66,15 @@ import type { FieldSpec } from '$lib/core/forms/types';
 import type { EffectiveProfile } from '$lib/core/machines/types';
 import type { TransformContext, TransformDef, TransformResult } from '$lib/core/transforms/types';
 
-/** The `uiState.lastParams` key a transform's form values are remembered under. */
-export function formKey(id: string): string {
-  return `transform:${id}`;
+/**
+ * The `uiState.lastParams` key a transform's form values are remembered under.
+ *
+ * One per dialect: the fields and their defaults come from the profile, so an answer
+ * given for one control is no answer for another. A Fanuc run's 99999 and "Start over"
+ * used to become the next Okuma run's values, and a Sinumerik run lost its skip list.
+ */
+export function formKey(id: string, profileId: string): string {
+  return `transform:${id}:${profileId}`;
 }
 
 export interface TransformDeps {
@@ -109,12 +117,12 @@ export function createTransformService(deps: TransformDeps): TransformService {
   /** The values a run starts from when the form is skipped, or the form is pre-filled with. */
   function startingValues(
     fields: FieldSpec[],
-    id: string,
+    key: string,
     o: { options?: Record<string, unknown>; skipForm?: boolean } | undefined,
   ): Record<string, unknown> {
     // `skipForm` also skips what was remembered: a headless run (the harness, a test, a
     // command that carries its own options) has to be reproducible.
-    const remembered = o?.skipForm === true ? undefined : deps.uiState.getLastParams(formKey(id));
+    const remembered = o?.skipForm === true ? undefined : deps.uiState.getLastParams(key);
     return { ...initialValues(fields, remembered), ...(o?.options ?? {}) };
   }
 
@@ -153,6 +161,14 @@ export function createTransformService(deps: TransformDeps): TransformService {
         return null;
       }
 
+      // A locked document refuses the run before anything is asked or computed (AD-23);
+      // a result bound for a new tab changes nothing here and still runs.
+      const locked = o?.target === 'new-document' ? null : lockRefusal(doc, t(def.title));
+      if (locked !== null) {
+        say(locked, true);
+        return null;
+      }
+
       let effective: EffectiveProfile;
       try {
         effective = deps.machines.effective(docId);
@@ -175,7 +191,8 @@ export function createTransformService(deps: TransformDeps): TransformService {
 
       // 2. The options form.
       const fields = def.options?.(cp) ?? [];
-      let options = startingValues(fields, def.id, o);
+      const rememberedAs = formKey(def.id, cp.profile.id);
+      let options = startingValues(fields, rememberedAs, o);
       if (fields.length > 0 && o?.skipForm !== true) {
         const answered = await deps.modals.form({
           title: t(def.title),
@@ -184,7 +201,7 @@ export function createTransformService(deps: TransformDeps): TransformService {
         });
         if (answered === undefined) return null;
         options = answered;
-        deps.uiState.setLastParams(formKey(def.id), answered);
+        deps.uiState.setLastParams(rememberedAs, answered);
       }
 
       const lines = deps.editor.getLines(docId, scope.startLine, scope.endLine);
@@ -237,6 +254,14 @@ export function createTransformService(deps: TransformDeps): TransformService {
           activate: true,
         });
       } else {
+        // Asked again: the form and the confirmation await, and the lock can be set
+        // while either is open. The run is deterministic, so nothing is lost by refusing.
+        const current = deps.docs.get(docId);
+        const lockedNow = current === undefined ? null : lockRefusal(current, t(def.title));
+        if (lockedNow !== null) {
+          say(lockedNow, true);
+          return null;
+        }
         deps.applyLines(docId, scope.startLine, scope.endLine, result.lines, result.lineMap);
       }
 

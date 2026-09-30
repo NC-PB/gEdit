@@ -46,9 +46,15 @@
 //
 // Text always travels as LF (`monaco/editorService.ts`): Monaco normalizes what is
 // inserted to the model's own EOL, so a CRLF document stays CRLF.
+//
+// **The read-only lock.** This writes the model, not the editor, so Monaco's `readOnly`
+// option never sees it (AD-23). The callers refuse a locked document before they run and
+// say why (`app/readOnlyLock.ts`); the check in `applyLines` below is the backstop that
+// keeps a caller which forgot from writing a locked program anyway.
 
 import { charSpan, computeLineEdits, type LineEdit } from '$lib/core/transforms/lineDiff';
 import { editor as appEditor } from '$lib/monaco/editorService';
+import { docs as appDocs } from '$lib/stores/documents';
 import type { DocId } from '$lib/app/types';
 
 /** How many changed lines it takes to switch to chunked hunks, and how big a hunk gets. */
@@ -345,7 +351,9 @@ export function applyLinesTo(
  * G7 budget are measured against.
  *
  * Does nothing (and answers `{ changedLines: 0 }`) when the document has no model or
- * nothing differs, so a transform that changed nothing does not dirty the document.
+ * nothing differs, so a transform that changed nothing does not dirty the document — and
+ * nothing when the document is locked (`locked: true`), which a caller should have
+ * refused already.
  */
 export function applyLines(
   id: DocId,
@@ -353,7 +361,11 @@ export function applyLines(
   endLine: number,
   newLines: string[],
   lineMap?: Int32Array,
-): { changedLines: number } {
+): { changedLines: number; locked?: true } {
+  if (appDocs.get(id)?.readOnly === true) {
+    console.error(`applyLines: document ${id} is locked; the caller should have refused`);
+    return { changedLines: 0, locked: true };
+  }
   const model = appEditor.model(id);
   if (!model) return { changedLines: 0 };
   return applyLinesTo(model, startLine, endLine, newLines, lineMap);

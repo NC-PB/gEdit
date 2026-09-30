@@ -1,6 +1,7 @@
 // Read-only documents: the lock in the tab and the status bar, the message Monaco shows
-// a refused keystroke, and the Save that goes to Save As (WP7.3: `app/fileOps.ts`,
-// `monaco/editorService.ts`, `contrib/readOnly.ts`).
+// a refused keystroke, the Save that goes to Save As, and the transform, script or block
+// the lock refuses (WP7.3: `app/fileOps.ts`, `monaco/editorService.ts`,
+// `contrib/readOnly.ts`, `app/readOnlyLock.ts`).
 // One namespace per feature (plan AD-14); the namespace name is this file's name.
 //
 // Two locks, two wordings, and they must not be confused (AD-23): `attribute` is the
@@ -32,4 +33,16 @@ export default {
   unlocked: '{name} can be edited again',
   /** The file itself is read-only, so the save needs a different file (AD-23). */
   saveAsInstead: '{name} is read-only, so choose where to save it',
+
+  // A change that is not typing, refused before it runs (`app/readOnlyLock.ts`). `action`
+  // is display text: a transform's title, a script's name, `insertBlock` below.
+  refusedUser:
+    '{name} is locked against editing, so {action} did not run. To unlock it, click Read-only in the status bar or use Lock Against Editing in the command palette (F1).',
+  refusedAttribute:
+    '{name} is read-only on disk and opened locked, so {action} did not run. To unlock the text, click Read-only in the status bar or use Lock Against Editing in the command palette (F1); saving it then asks where to put it.',
+  insertBlock: 'Insert {block}',
+  /** The document was locked while the script ran; its result goes nowhere without asking. */
+  lockedDuringRunTitle: 'The program was locked while the script ran',
+  lockedDuringRunMessage:
+    '{name} was locked while {script} was running, so its result was not written into it. Open the result in a new tab instead?',
 } as const satisfies Messages;

@@ -375,6 +375,8 @@ pub fn execute(plan: &RunPlan, state: &RunState) -> Result<RunOutcome, String> {
         // The child is the group leader, so the group id is its pid.
         command.process_group(0);
     }
+    // No console window on Windows (TODO "Next up 10").
+    crate::python::hidden(&mut command);
 
     let mut child = command
         .spawn()
@@ -1677,13 +1679,14 @@ mod windows_tests {
     /// test that has to change, and the module docs with it.
     #[test]
     fn the_group_kill_is_a_no_op_here() {
-        let mut child = Command::new("ping")
+        let mut command = Command::new("ping");
+        command
             .args(["-n", "30", "127.0.0.1"])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("ping did not start");
+            .stderr(Stdio::null());
+        crate::python::hidden(&mut command);
+        let mut child = command.spawn().expect("ping did not start");
 
         kill_group(child.id());
         std::thread::sleep(Duration::from_millis(200));

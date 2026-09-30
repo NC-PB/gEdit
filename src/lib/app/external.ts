@@ -20,6 +20,10 @@
 // typed while the file was being read — falls back to the banner and is not retried for
 // the same `(mtime, size)`. See `reload()` for why that matters.
 //
+// A stat that did not answer in time (`unavailable`: a hung SMB or DNC share) decides
+// nothing — not a change, not a deletion, not "back to normal". The document keeps the
+// state it had until the share answers again.
+//
 // `createExternalChangeService(deps)` plus the singleton wired to the real services
 // (AD-2), so a unit test drives it with a fake clock, a fake stat and a fake read.
 
@@ -162,6 +166,9 @@ export function createExternalChangeService(deps: ExternalChangeDeps): ExternalC
   async function examine(id: DocId, stat: FileStat): Promise<void> {
     const doc = deps.docs.get(id);
     if (!doc?.path || !doc.disk) return;
+    // Unknown, never gone. Rust sends it with `allowed: false`, so the line below would
+    // catch it too; this one does not depend on how an unknown answer is spelled.
+    if (stat.unavailable === true) return;
     if (!stat.allowed) return;
     // The user has already answered about the file in exactly this state, and there was
     // no stamp for the document to adopt, so nothing here can decide it again: raising
@@ -355,7 +362,8 @@ export const external: ExternalChangeService = createExternalChangeService({
   docs: appDocs,
   files: appFiles,
   status: appStatus,
-  filesStat: (paths) => (isTauriRuntime() ? filesStat(paths) : Promise.resolve([])),
+  // Per entry: a document on a hung share must not stop the others from being checked.
+  filesStat: (paths) => (isTauriRuntime() ? filesStat(paths, { partial: true }) : Promise.resolve([])),
   async readFile(path) {
     // Loaded on demand: the fs plugin is only reachable inside the webview.
     const { readFile } = await import('@tauri-apps/plugin-fs');

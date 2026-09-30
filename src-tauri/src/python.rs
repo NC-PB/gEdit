@@ -74,6 +74,129 @@ fn cached_or(lookup: impl FnOnce() -> Option<PathBuf>) -> PathBuf {
     path
 }
 
+/// Every child process gEdit starts is started through this (TODO "Next up 10"): the
+/// interpreter probes here and a script run in `scripts::runner`. On Windows it applies
+/// [`CREATE_NO_WINDOW`], so a release build — which has no console of its own — never
+/// flashes one for a child; on macOS and Linux there is no such window and it does
+/// nothing. It is unconditional so that every spawn site calls it on every platform, and
+/// `spawn_sites_tests` checks that each one does.
+pub(crate) fn hidden(command: &mut Command) -> &mut Command {
+    #[cfg(windows)]
+    suppress_console(command);
+    command
+}
+
+/// Windows-only: the seam behind [`hidden`].
+///
+/// `std::process::Command` never hands its creation flags back out, so there is nothing
+/// on a real `Command` a test could inspect after the fact. [`SetCreationFlags`] is the
+/// seam that works around that: the real `Command` and a test double both implement it,
+/// so [`suppress_console`] itself — what [`hidden`] calls — is what gets proved, in
+/// `creation_flags_tests` below, rather than some parallel copy of the logic.
+#[cfg(windows)]
+trait SetCreationFlags {
+    fn set_creation_flags(&mut self, flags: u32);
+}
+
+#[cfg(windows)]
+impl SetCreationFlags for Command {
+    fn set_creation_flags(&mut self, flags: u32) {
+        use std::os::windows::process::CommandExt;
+        self.creation_flags(flags);
+    }
+}
+
+/// `CREATE_NO_WINDOW`, from `<processthreadsapi.h>`: the child gets no console at all,
+/// rather than inheriting gEdit's (a release build has none) or creating its own.
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// Applies [`CREATE_NO_WINDOW`] to `command`. Piped stdin/stdout/stderr are unaffected —
+/// the flag only stops a *new* console from being created; handles that are explicitly
+/// redirected, as every spawn here does, are unchanged.
+#[cfg(windows)]
+fn suppress_console<C: SetCreationFlags>(command: &mut C) {
+    command.set_creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(all(test, windows))]
+mod creation_flags_tests {
+    //! Regression test for TODO "Next up 10": a release build must never flash a console
+    //! for a script run or an interpreter probe. `Command` gives no way to read its flags
+    //! back, so this proves [`suppress_console`] against a recording double instead — see
+    //! the doc comment on [`SetCreationFlags`] for why that is the real spawn path and not
+    //! a parallel copy. `spawn_sites_tests` checks that every spawn goes through it.
+    use super::*;
+
+    #[derive(Default)]
+    struct Recorded(Option<u32>);
+
+    impl SetCreationFlags for Recorded {
+        fn set_creation_flags(&mut self, flags: u32) {
+            self.0 = Some(flags);
+        }
+    }
+
+    #[test]
+    fn suppress_console_sets_create_no_window() {
+        let mut recorded = Recorded::default();
+        suppress_console(&mut recorded);
+        assert_eq!(recorded.0, Some(CREATE_NO_WINDOW));
+    }
+}
+
+#[cfg(test)]
+mod spawn_sites_tests {
+    //! The flag test above proves what [`hidden`] does, not that anything calls it: a
+    //! refactor that dropped the call from a spawn site would have left it green and the
+    //! console flashing again on Windows (review of Next up 10). So every `.spawn()` in
+    //! the two modules that start processes has to follow a [`hidden`] call in the same
+    //! function. Scanned on every platform, because the call is unconditional.
+    use crate::source_scan;
+
+    /// Each process spawn in the code of `source` (comments are not code), with the
+    /// function it is in, up to it.
+    fn spawns(source: &str) -> Vec<&str> {
+        let needle = concat!(".spa", "wn()");
+        source
+            .match_indices(needle)
+            .filter(|(at, _)| {
+                let line = source[..*at].rfind('\n').map_or(0, |start| start + 1);
+                !source[line..*at].trim_start().starts_with("//")
+            })
+            .map(|(at, _)| {
+                let before = &source[..at];
+                let function = before.rfind("fn ").expect("a spawn outside any function");
+                &before[function..]
+            })
+            .collect()
+    }
+
+    #[test]
+    fn every_child_is_started_hidden() {
+        for (name, source) in [
+            ("python.rs", source_scan::lf(include_str!("python.rs"))),
+            (
+                "scripts/runner.rs",
+                source_scan::lf(include_str!("scripts/runner.rs")),
+            ),
+        ] {
+            let found = spawns(&source);
+            assert!(
+                !found.is_empty(),
+                "{name}: no spawn found, so nothing is checked"
+            );
+            for function in found {
+                let head = function.lines().next().unwrap_or_default();
+                assert!(
+                    function.contains(concat!("hid", "den(")),
+                    "{name}: `{head}` spawns a child without `hidden`"
+                );
+            }
+        }
+    }
+}
+
 /// Runs `command` and answers with what it wrote to stdout within `timeout`, keeping at
 /// most the last `max_output` bytes — the answer is printed last on both platforms.
 ///
@@ -88,7 +211,7 @@ fn cached_or(lookup: impl FnOnce() -> Option<PathBuf>) -> PathBuf {
 /// An empty answer covers every failure — the spawn, the timeout, a program that printed
 /// nothing — because every caller has to treat all three the same way anyway.
 fn capture(command: &mut Command, timeout: Duration, max_output: usize) -> Vec<u8> {
-    let Ok(mut child) = command
+    let Ok(mut child) = hidden(command)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())

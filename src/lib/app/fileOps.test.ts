@@ -353,6 +353,8 @@ interface Harness {
   external: ExternalChangeService;
   /** Makes every `files_stat` reject, the way a dropped IPC call does. */
   statFails: { now: boolean };
+  /** Makes every `files_stat` entry come back `unavailable`, the way a hung share does. */
+  statHung: { now: boolean };
   put(path: string, rel: string): string;
 }
 
@@ -374,9 +376,22 @@ function setup(o: { isTauri?: boolean; filtersSupported?: boolean } = {}): Harne
   };
 
   const statFails = { now: false };
+  const statHung = { now: false };
   const filesStat: FileOpsDeps['filesStat'] = async (paths) => {
     if (statFails.now) throw new Error('files_stat: the IPC call failed');
     return paths.map((path): FileStat => {
+      if (statHung.now) {
+        return {
+          path,
+          allowed: false,
+          exists: false,
+          isDir: false,
+          mtimeMs: null,
+          size: null,
+          readonly: false,
+          unavailable: true,
+        };
+      }
       // A forbidden path answers `allowed: false` and nothing else, so a caller never
       // learns whether it exists (§7.6).
       if (fs.forbidden.has(path)) {
@@ -431,6 +446,7 @@ function setup(o: { isTauri?: boolean; filtersSupported?: boolean } = {}): Harne
     files,
     external,
     statFails,
+    statHung,
     put(path, rel) {
       fs.files.set(path, fixture(rel));
       fs.mtimes.set(path, 500);
@@ -645,6 +661,23 @@ describe('open', () => {
       expect(String(error?.args.detail)).toBe(
         t('files.tooLarge', { name: 'huge.nc', size: '200 MB', limit: '50 MB' }),
       );
+    });
+
+    // Review of Next up 8: an Open Recent entry on a hung share reads as existing, and the
+    // stat that comes back `unavailable` used to be treated as "nothing known" — so the
+    // read went ahead and blocked, uncancellably, while it held the file-command lock.
+    it('refuses a file whose stat does not answer, without reading it', async () => {
+      const path = h.put('/Volumes/dnc/hung.nc', 'nc/encoding/utf8-lf.nc');
+      const read = vi.spyOn(h.fs, 'readFile').mockImplementation(() => new Promise<Uint8Array>(() => {}));
+      h.statHung.now = true;
+
+      expect(await h.files.open([path])).toEqual([]);
+
+      expect(read).not.toHaveBeenCalled();
+      expect(h.docs.all()).toHaveLength(0);
+      const error = h.dialogs.calls.find((c) => c.kind === 'error');
+      expect(error?.args.summary).toBe(t('files.openFailed', { name: 'hung.nc' }));
+      expect(String(error?.args.detail)).toBe(t('files.notAnswering', { name: 'hung.nc' }));
     });
 
     it('opens a file that is exactly at the limit', async () => {
@@ -2104,6 +2137,30 @@ describe('a save over a file the document cannot vouch for (G8 M7)', () => {
     // And when the user does say "overwrite", the document keeps the time it had rather
     // than being restamped with `mtimeMs: null` — which would leave it watching for size
     // changes alone for the rest of the session.
+    h.dialogs.answers.confirm.push(true);
+    expect(await h.files.save(id)).toBe(true);
+    expect(h.docs.get(id)?.disk?.mtimeMs).toBe(before);
+    expect(text(path)).toContain('my edit');
+  });
+
+  // TODO Next up 8: an `unavailable` answer reads like "outside the scope" (`exists:
+  // false`), which `write` would take for "no file there" and write without asking.
+  // The wrapper rejects when nothing answered, but `statOne` must not depend on that.
+  it('asks when the stat comes back unavailable (a hung share)', async () => {
+    const path = h.put('/nc/welle.nc', 'nc/encoding/utf8-lf.nc');
+    const [id] = await h.files.open([path]);
+    const before = h.docs.get(id)?.disk?.mtimeMs;
+    h.editor.type(id, 'G0 X1 (my edit)\n');
+    h.fs.files.set(path, new TextEncoder().encode('G0 X999 (the new post)\n'));
+    h.fs.mtimes.set(path, 90_000);
+
+    h.statHung.now = true;
+    h.dialogs.answers.confirm.push(false);
+    expect(await h.files.save(id)).toBe(false);
+    expect(confirms()).toBe(1);
+    expect(text(path)).toContain('the new post');
+    expect(h.fs.writes).toEqual([]);
+
     h.dialogs.answers.confirm.push(true);
     expect(await h.files.save(id)).toBe(true);
     expect(h.docs.get(id)?.disk?.mtimeMs).toBe(before);

@@ -41,6 +41,8 @@ interface Disk {
   allowed?: boolean;
   /** `decodeFile` refuses these bytes, so `reloadFromDisk` changes nothing at all. */
   undecodable?: boolean;
+  /** The stat does not answer in time: a hung share (TODO "Next up" 8). */
+  unavailable?: boolean;
 }
 
 interface Harness {
@@ -104,6 +106,19 @@ function harness(over: Partial<ExternalChangeDeps> = {}): Harness {
       h.stats++;
       return paths.map((path): FileStat => {
         const entry = disk.get(path);
+        if (entry?.unavailable) {
+          // Exactly what `files.rs` sends: every field empty, `allowed` included.
+          return {
+            path,
+            allowed: false,
+            exists: false,
+            isDir: false,
+            mtimeMs: null,
+            size: null,
+            readonly: false,
+            unavailable: true,
+          };
+        }
         const allowed = entry?.allowed !== false;
         if (!allowed) {
           return { path, allowed: false, exists: false, isDir: false, mtimeMs: null, size: null, readonly: false };
@@ -323,6 +338,42 @@ describe('what is watched', () => {
     await h.service.checkNow();
     expect(h.docs.get(id)?.external).toBe('none');
     expect(warn).toHaveBeenCalled();
+  });
+
+  // TODO "Next up" 8: a hung share answers `unavailable`. Unknown is not a change, not a
+  // deletion, and not "back to normal" either — whatever the tab showed, it keeps.
+  it('decides nothing on a stat that did not answer in time', async () => {
+    const h = harness();
+    const id = h.add();
+    h.disk.set(PATH, { text: null, mtimeMs: null, unavailable: true });
+    await h.service.checkNow();
+    expect(h.docs.get(id)?.external).toBe('none');
+    expect(h.docs.get(id)?.metaDirty).toBe(false);
+    expect(h.reads).toBe(0);
+    expect(h.messages).toEqual([]);
+  });
+
+  it('keeps a banner that is up while the share does not answer', async () => {
+    const h = harness();
+    const changed = h.add();
+    h.disk.set(PATH, { text: 'O2000 (posted again)', mtimeMs: 6000 });
+    await h.service.checkNow();
+    expect(h.docs.get(changed)?.external).toBe('changed');
+
+    h.disk.set(PATH, { text: 'O2000 (posted again)', mtimeMs: 6000, unavailable: true });
+    await h.service.checkNow();
+    expect(h.docs.get(changed)?.external).toBe('changed');
+
+    // …and a deleted marker stays too, and comes back as a change once the share does.
+    h.disk.set(PATH, { text: null, mtimeMs: null });
+    await h.service.checkNow();
+    expect(h.docs.get(changed)?.external).toBe('deleted');
+    h.disk.set(PATH, { text: 'O1000', mtimeMs: 1000, unavailable: true });
+    await h.service.checkNow();
+    expect(h.docs.get(changed)?.external).toBe('deleted');
+    h.disk.set(PATH, { text: 'O3000', mtimeMs: 7000 });
+    await h.service.checkNow();
+    expect(h.docs.get(changed)?.external).toBe('changed');
   });
 
   it('survives a failing files_stat', async () => {

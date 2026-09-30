@@ -15,6 +15,7 @@ import { files, EOL_LABELS } from '$lib/app/fileOps';
 import { dialogs } from '$lib/app/dialogs';
 import { modals } from '$lib/app/modals';
 import { status } from '$lib/app/status';
+import { lockRefusal } from '$lib/app/readOnlyLock';
 import { encodingLabel, keepsNulLeader } from '$lib/core/text';
 import { docs } from '$lib/stores/documents';
 import { t } from '$lib/i18n';
@@ -103,9 +104,21 @@ async function pickEncoding(): Promise<void> {
   status.show(t('encoding.encodingChanged', { name: doc.title, encoding: encodingLabel(picked) }));
 }
 
+/**
+ * AD-23: the line endings are part of the text — `setEol` rewrites every line of the model —
+ * so a locked document keeps them, and the status bar says which lock stopped the change.
+ * The encoding is not: it changes only how the same text is written back.
+ */
+function refusedByLock(doc: DocMeta): boolean {
+  const locked = lockRefusal(doc, t('encoding.eolAction'));
+  if (locked === null) return false;
+  status.show(t(locked.key, locked.params), { error: true });
+  return true;
+}
+
 async function pickEol(): Promise<void> {
   const doc = active();
-  if (!doc) return;
+  if (!doc || refusedByLock(doc)) return;
   const items: QuickPickItem<Eol>[] = EOLS.map((eol) => ({
     label: EOL_LABELS[eol],
     description: eol === doc.eol ? '✓' : undefined,
@@ -117,6 +130,9 @@ async function pickEol(): Promise<void> {
     initialIndex: Math.max(0, EOLS.indexOf(doc.eol)),
   });
   if (!picked || picked === doc.eol) return;
+  // The lock may have been set while the picker was open.
+  const now = docs.get(doc.id);
+  if (!now || refusedByLock(now)) return;
   files.setEol(doc.id, picked);
   status.show(t('encoding.eolChanged', { name: doc.title, eol: EOL_LABELS[picked] }));
 }

@@ -607,13 +607,8 @@ Files reviewed:
 
 ### Code blocks (`heidenhain-klartext.json`)
 
-22. `start` inserts `BEGIN PGM NEW_PRG MM` without a block number and without a matching `END PGM`.
-23. The `example` (cycle 240) and `drill` (cycle 200) blocks:
-    - have no `~` continuation markers and no indentation of the parameter lines
-    - are not numbered
-    - cycle 200 lacks `Q395`
-
-    Pasted as-is they probably do not form a valid multi-line block (verify on a control or simulator).
+22. ~~`start` inserts `BEGIN PGM NEW_PRG MM` without a block number and without a matching `END PGM`.~~ Fixed (TODO Next up 4): `start` inserts `0 BEGIN PGM NEW_PRG MM` and `1 END PGM NEW_PRG MM`. The cursor still lands after `END PGM`, not between the two (needs cursor placement, M12 templates).
+23. ~~The `example` (cycle 240) and `drill` (cycle 200) blocks have no `~` continuation markers, no indentation and no block number, and cycle 200 lacks `Q395`.~~ Fixed (TODO Next up 4): each cycle is one block laid out like the completion snippet (block number on the first line, Q lines indented 3 spaces, ` ~` after the `;` label on every line but the last), and cycle 200 ends in `Q395=0 ;BEZUG TIEFE`. Open: the block number is always `1`, so in a numbered program the insert repeats a number until the user renumbers; and whether a control without Q395 rejects the line (verify on such a control).
 24. The blocks insert German cycle names and labels. Decide on a policy: keep the control's language or make it configurable per dialect.
 
 ### Missing editor features (not yet planned)

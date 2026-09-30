@@ -1,0 +1,15 @@
+{
+  "note": "TODO Next up 7: Okuma reads block numbers up to 9999, and the form used to allow 5 to 9 digits, which wrote N00010 — a block number the control rejects. The form now stops at 4 digits and a maximum of 9999; a caller that skips the form and asks for 6 digits and no maximum is held to the same limit, gets N0010, and is told so.",
+  "profile": "okuma-osp",
+  "options": { "digits": 6, "max": null },
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [{ "line": 1, "severity": "info" }],
+    "warnings": [
+      "ncNumbering.renumber.limitedMax",
+      "ncNumbering.renumber.limitedDigits",
+      "ncNumbering.renumber.referencesRewritten"
+    ],
+    "preflight": null
+  }
+}

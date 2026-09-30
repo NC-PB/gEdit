@@ -41,6 +41,7 @@ import { dialogs as appDialogs } from '$lib/app/dialogs';
 import { files as appFiles } from '$lib/app/fileOps';
 import { modals as appModals } from '$lib/app/modals';
 import { status as appStatus } from '$lib/app/status';
+import { lockRefusal } from '$lib/app/readOnlyLock';
 import { initialValues } from '$lib/core/forms/values';
 import { decideApply } from '$lib/core/scripting/apply';
 import { buildContext, MAX_PRECEDING_LINES } from '$lib/core/scripting/context';
@@ -450,6 +451,16 @@ export function createScriptService(deps: ScriptDeps): ScriptService {
       return;
     }
 
+    // A locked document refuses a script that would replace its text before the
+    // interpreter is even asked (AD-23). One that only fills the panel, a report or a new
+    // tab changes nothing here and still runs. `panel` is the header's default (§7.6).
+    const replaces = (entry.meta?.output ?? 'panel') === 'replace';
+    const locked = replaces ? lockRefusal(doc, label) : null;
+    if (locked !== null) {
+      say(locked, { error: true });
+      return;
+    }
+
     let effective: EffectiveProfile;
     try {
       effective = deps.machines.effective(docId);
@@ -582,6 +593,17 @@ export function createScriptService(deps: ScriptDeps): ScriptService {
         return;
       }
       case 'replace': {
+        // Locked while the script ran: the result is the user's work and is not thrown
+        // away, but it may only go where the user says — as with a stale result.
+        const current = deps.docs.get(docId);
+        if (current?.readOnly === true) {
+          await offerNewTab(label, doc.profileId, decision.text, {
+            title: t('readOnly.lockedDuringRunTitle'),
+            message: t('readOnly.lockedDuringRunMessage', { name: current.title, script: label }),
+          });
+          publish(null);
+          return;
+        }
         const { changedLines } = deps.applyLines(
           docId,
           resolved.input.startLine,
@@ -619,11 +641,19 @@ export function createScriptService(deps: ScriptDeps): ScriptService {
     return report;
   }
 
-  /** The recovery from a stale result: the text still exists, just not where it was going. */
-  async function offerNewTab(label: string, profileId: string, text: string): Promise<void> {
+  /**
+   * The recovery from a stale result: the text still exists, just not where it was going.
+   * `why` replaces the stale wording when the document was locked during the run instead.
+   */
+  async function offerNewTab(
+    label: string,
+    profileId: string,
+    text: string,
+    why?: { title: string; message: string },
+  ): Promise<void> {
     const open = await deps.dialogs.confirm({
-      title: tr(MSG.staleTitle()),
-      message: tr(MSG.staleMessage(label)),
+      title: why?.title ?? tr(MSG.staleTitle()),
+      message: why?.message ?? tr(MSG.staleMessage(label)),
       ok: tr(MSG.staleOpen()),
       cancel: t('common.cancel'),
       kind: 'warning',

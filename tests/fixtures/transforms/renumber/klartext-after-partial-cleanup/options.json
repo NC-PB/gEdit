@@ -1,0 +1,11 @@
+{
+  "note": "The confirmed cleanup bug: Remove Comments on a selection took blocks 4 and 5 out of this program, and the 'Renumber now?' offer that followed renumbered only the selection — a Klartext selection run numbers from 0, so the rest of the program kept 6 to 10 and the selection wrote a second 0 and 1 into it. The offer now always renumbers the whole program: after a run on a selection it says so and clears the selection first (contrib/ncCleanup.ts), and this is what that run gives: every block consecutive from 0 again.",
+  "profile": "heidenhain-klartext",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summary",
+    "skipped": [],
+    "warnings": [],
+    "preflight": null
+  }
+}
