@@ -12,6 +12,9 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // The default 5 s is a wall-clock limit too: the bulk tests (300k lines) and the fixture
+    // reads take 1 to 3 s on a loaded machine, so the limit sits well above the budgets they assert.
+    testTimeout: 20_000,
     include: ["src/**/*.test.ts", "tests/unit/**/*.test.ts"],
   },
 });

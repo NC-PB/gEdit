@@ -22,6 +22,7 @@ import { compileProfile } from '$lib/core/profiles/compile';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
 import { blockNumberOf, tokenizeLine } from './tokenizer';
 import type { LineState, NcToken } from './types';
+import { expectWithin, fastest } from '../../../../tests/unit/helpers/budget';
 
 const fanuc = compileProfile(fanucJson as unknown as Profile);
 const klartext = compileProfile(heidenhainJson as unknown as Profile);
@@ -858,12 +859,11 @@ describe('a program name in place of a program number (`programNames`)', () => {
     const ms: number[] = [];
     for (const length of lengths) {
       const line = '<SHAFT'.repeat(Math.floor(length / 6));
-      const started = performance.now();
-      const { tokens } = tokenizeLine(line, fanuc);
-      ms.push(performance.now() - started);
-      expect(tokens[tokens.length - 1].end).toBe(line.length);
+      // The first call compiles regexes and warms the caches: `fastest` leaves it out.
+      ms.push(fastest(3, () => tokenizeLine(line, fanuc)));
+      expect(tokenizeLine(line, fanuc).tokens.at(-1)?.end).toBe(line.length);
     }
-    expect(Math.max(...ms), lengths.map((n, i) => `${n}: ${ms[i].toFixed(1)} ms`).join(', ')).toBeLessThan(250);
+    expectWithin(Math.max(...ms), 250, lengths.map((n, i) => `${n}: ${ms[i].toFixed(1)} ms`).join(', '));
   });
 });
 
@@ -1032,13 +1032,11 @@ describe('performance', () => {
     const ms: number[] = [];
     for (const length of lengths) {
       const line = '+-'.repeat(length / 2);
-      const started = performance.now();
-      const { tokens } = tokenizeLine(line, klartext);
-      ms.push(performance.now() - started);
-      expect(tokens.length, `${length} characters`).toBe(length);
+      ms.push(fastest(3, () => tokenizeLine(line, klartext)));
+      expect(tokenizeLine(line, klartext).tokens.length, `${length} characters`).toBe(length);
     }
     const worst = Math.max(...ms);
-    expect(worst, `${lengths.map((n, i) => `${n}: ${ms[i].toFixed(1)} ms`).join(', ')}`).toBeLessThan(250);
+    expectWithin(worst, 250, lengths.map((n, i) => `${n}: ${ms[i].toFixed(1)} ms`).join(', '));
   });
 
   // G8 M8 review: the same class of cost in a packed dialect. `p` stops at every letter of
@@ -1059,14 +1057,12 @@ describe('performance', () => {
       const ms: number[] = [];
       for (const length of lengths) {
         const line = make(length);
-        const started = performance.now();
-        const { tokens } = tokenizeLine(line, cp);
-        ms.push(performance.now() - started);
-        expect(tokens[tokens.length - 1].end).toBe(line.length);
+        ms.push(fastest(3, () => tokenizeLine(line, cp)));
+        expect(tokenizeLine(line, cp).tokens.at(-1)?.end).toBe(line.length);
       }
       const worst = Math.max(...ms);
       const report = `${cp.profile.id}: ${lengths.map((n, i) => `${n}: ${ms[i].toFixed(1)} ms`).join(', ')}`;
-      expect(worst, report).toBeLessThan(250);
+      expectWithin(worst, 250, report);
     }
   });
 });

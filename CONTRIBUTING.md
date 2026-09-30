@@ -48,6 +48,8 @@ cargo test --locked
 
 Python tests (the bundled scripts and their shared library): `python3 -m unittest discover -s tests/python -t .`
 
+A unit test that asserts a wall-clock budget goes through `tests/unit/helpers/budget.ts`: the budget is measured on the development machine, and CI multiplies it by a fixed factor (see [phase-2-implementation.md](docs/planning/phase-2-implementation.md) §5.2, rule 13).
+
 ### Before you open a pull request
 
 Run what CI runs: `npm run check`, `npm test`, `npm run build`, `npm run licenses:check`, `npm run versions:check`, and the three cargo commands above. `npm run check` must report **0 errors and 0 warnings**. If you touched `src-tauri/resources/scripts/` or `tests/python/`, run the Python tests too. If your change touches the window, dialogs, file handling or keyboard handling, also run the runtime harness on a Mac (see below) or ask a maintainer to run it.

@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { charSpan, computeLineEdits, DEFAULT_MAX_D, type LineEdit } from './lineDiff';
+import { expectWithin } from '../../../../tests/unit/helpers/budget';
 
 /** Applies the edits from the last to the first, exactly as Monaco applies a batch. */
 function applyEdits(oldLines: string[], edits: LineEdit[]): string[] {
@@ -217,7 +218,7 @@ describe('computeLineEdits: performance', () => {
     const edits = computeLineEdits(oldLines, newLines);
     const elapsed = performance.now() - started;
     expect(edits.length).toBe(33_334);
-    expect(elapsed).toBeLessThan(200);
+    expectWithin(elapsed, 200, '100k same-length lines');
   });
 
   it('answers a 100k-line deletion from a lineMap in well under 200 ms', () => {
@@ -236,7 +237,7 @@ describe('computeLineEdits: performance', () => {
     const edits = computeLineEdits(oldLines, newLines, map);
     const elapsed = performance.now() - started;
     expect(edits.length).toBe(20_000);
-    expect(elapsed).toBeLessThan(200);
+    expectWithin(elapsed, 200, '100k-line deletion from a lineMap');
   });
 });
 

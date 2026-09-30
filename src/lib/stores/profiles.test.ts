@@ -11,6 +11,7 @@ import { effectiveMachine, noMachine } from '$lib/core/machines/effective';
 import { resolveProfiles } from '$lib/core/profiles/resolve';
 import { t } from '$lib/i18n';
 import type { EffectiveMachine, MachineConfig } from '$lib/core/machines/types';
+import { expectWithin, fastest } from '../../../tests/unit/helpers/budget';
 
 const withFilters = createProfileRegistry({ filtersSupported: true });
 const noFilters = createProfileRegistry({ filtersSupported: false });
@@ -374,22 +375,12 @@ describe('validation against the code databases', () => {
 // The registry is built while the app starts, and an effective compile happens on every
 // document whose machine changes. Both are on a path a person waits for (§5 acceptance).
 describe('what it costs', () => {
-  /** The best of a few runs: a single one on a loaded machine says nothing. */
-  function fastest(runs: number, work: () => void): number {
-    let best = Infinity;
-    for (let i = 0; i < runs; i++) {
-      const started = performance.now();
-      work();
-      best = Math.min(best, performance.now() - started);
-    }
-    return best;
-  }
-
   it('resolves every built-in in 20 ms and compiles one effective profile in 5', () => {
-    expect(fastest(5, () => resolveProfiles(BUILTIN_PROFILE_SOURCES))).toBeLessThan(20);
+    // `fastest` warms up and takes the best of five: one run on a loaded machine says nothing.
+    expectWithin(fastest(5, () => resolveProfiles(BUILTIN_PROFILE_SOURCES)), 20, 'resolve of every built-in');
 
     let n = 0;
-    expect(
+    expectWithin(
       fastest(5, () => {
         // A fresh key every time, so nothing is answered from the cache.
         const registry = createProfileRegistry({ filtersSupported: true });
@@ -405,7 +396,9 @@ describe('what it costs', () => {
         );
       }),
       // The registry construction is in here too, which is the pessimistic way round.
-    ).toBeLessThan(5 + 20);
+      5 + 20,
+      'registry and one effective compile',
+    );
   });
 
   // I6/G7: opening a file scores it against every shipped profile and, for the winner,
@@ -430,11 +423,13 @@ describe('what it costs', () => {
     expect(withFilters.list().length).toBeGreaterThanOrEqual(3);
     expect(withFilters.detect('l01-turning-a.nc', text, 'fanuc-gcode')).toBe('fanuc-lathe');
 
-    expect(
+    expectWithin(
       fastest(5, () => {
         const winner = withFilters.detect('l01-turning-a.nc', text, 'fanuc-gcode');
         withFilters.detectVariants(winner, text);
       }),
-    ).toBeLessThan(5);
+      5,
+      'detect and detectVariants of 400 lines',
+    );
   });
 });
