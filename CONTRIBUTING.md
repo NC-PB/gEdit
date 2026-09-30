@@ -67,7 +67,7 @@ The runtime harness is not part of CI, because it needs a real macOS desktop.
 
 ## Releases
 
-`.github/workflows/release.yml` builds the release installers and puts them on a **draft** GitHub release; the owner publishes it by hand after the checklist in [docs/releases/checklist.md](docs/releases/checklist.md). To cut a release, set the version everywhere (see Versions below), add a `## vX.Y.Z (date)` entry to `CHANGELOG.md` (the draft takes its notes from it), merge to `main`, and push the tag `vX.Y.Z`. The workflow then:
+`.github/workflows/release.yml` builds the release installers and puts them on a **draft** GitHub release; the owner publishes it by hand after the checklist in [docs/releases/checklist.md](docs/releases/checklist.md). To cut a release, set the version everywhere (see Versions below), add a `## vX.Y.Z (date)` entry to `CHANGELOG.md` (the draft takes its notes from it, and GitHub shows every line break of release notes, so write each paragraph and each bullet on one line), merge to `main`, and push the tag `vX.Y.Z`. The workflow then:
 
 - fails unless the tag equals `v` plus the version `npm run versions:check` agrees on, the commit is on `main`, and the CHANGELOG has the entry;
 - runs `ci.yml` on the tagged commit (by `workflow_call`, without the debug bundles), in parallel with the bundles;
