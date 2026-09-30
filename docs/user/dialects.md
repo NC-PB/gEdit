@@ -109,7 +109,7 @@ four- or five-digit `T` word, `G50 S` or `G92 S`, `G96`/`G97`, a `G70`–`G73` b
 and `Q`, a `G71`/`G72` with `U` and `R`, `G28 U`, `U`/`W` words. A milling program is
 separated by `M6`, `G43 … H`, `G17` and `Y` words. A Fanuc file that shows neither goes to
 the **mill**, which is the tie-break. The Okuma and Sinumerik profiles have no milling
-partner of their own yet (a built-in one is planned for Sinumerik, see
+partner of their own yet (a built-in one is planned for Sinumerik in M9, see
 [Milling on Okuma and Sinumerik](#milling-on-okuma-and-sinumerik)): an Okuma milling program
 opens with the turning profile, from its `G15 H`/`G56 H` offsets as much as from its
 extension, and a Siemens milling program opens with the Sinumerik turning profile too — by
@@ -571,7 +571,7 @@ and code help mean nothing there.
 ## Milling on Okuma and Sinumerik
 
 Neither control has a milling profile of its own yet — a built-in one for Sinumerik is
-planned (see the end of this section) — and it helps to know what happens to a milling
+planned for M9, "Real programs read right" (see the end of this section) — and it helps to know what happens to a milling
 program today.
 
 **A Siemens milling program opens with the Sinumerik turning profile**, correctly, by its
@@ -601,11 +601,11 @@ codes: a milling program opened with the lathe profile gets lathe meanings for i
 five- or six-digit `T` word all show, and Klartext-style considerations do not apply here),
 but the lathe's tool-station reading is still what shows, not a machining-centre one.
 
-**A built-in Sinumerik milling profile is planned**, next (the M9 prelude). It will be a
+**A built-in Sinumerik milling profile is planned**, as the first part of M9, "Real programs read right". It will be a
 small child of the turning one: the same comments, strings, block numbers, labels, cycle
 calls and highlighting, with the tool rule changed to `M6`, the axes, the diameter and the
 power-on plane and feed changed for milling. Until it ships, writing one yourself is not
-possible either — gEdit does not read profiles from your own folder yet, see
+possible either — gEdit does not read profiles from your own folder yet (planned for M13), see
 [Writing your own profile](#writing-your-own-profile) — but the shape it will take looks
 like this:
 

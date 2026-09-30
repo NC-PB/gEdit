@@ -501,7 +501,7 @@ A subprogram call, cycles included, has to stand in a block of its own [P §3.2.
 - A jump without a condition stands in a block of its own; several conditional jumps may share a block. [P §3.1.5.2, p.474]
 - Conditional jump: `IF <condition> GOTOF <label>` [M]; [P §3.1.5.2, p.472].
 
-### 7.2a Channel coordination (for M10)
+### 7.2a Channel coordination (for M12)
 
 - `WAITM(mark, ch, ch, …)` is a rendezvous: marks 0–99 in a multi-channel system (only mark 0 with one channel), the own channel need not be listed, the mark is cleared after the rendezvous, and a channel holds at most 10 marks at a time. The channel arguments may be numbers, channel **names** (when machine data enables them) or variables, so a machine needs aliases. `WAITMC` is a conditional rendezvous that does not stop the axes but still blocks.
 - `WAITE(ch, …)` waits for the **end of the program** in the other channels. It is not a mark, and a check that compared how many `WAITE` each channel has would flag the normal case.

@@ -1,7 +1,7 @@
 # Modal goldens
 
 What is in force after a block, as both languages have to read it: Python from M6
-(`_nc_modal.py`, WP6.4) and TypeScript from M11 (`core/nc/modal.ts`, WP11.1), against the
+(`_nc_modal.py`, WP6.4) and TypeScript from Phase 3 (`core/nc/modal.ts`, P3.1), against the
 same files. Plan §7.4 and AD-19.
 
 ```

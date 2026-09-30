@@ -2,7 +2,7 @@
 
 Thanks for helping. gEdit is a small project run by part-time contributors, so focused pull requests with tests are the easiest to review.
 
-Four documents to know about before you start: [docs/user](docs/user/README.md) is what the app does today, from a CNC programmer's point of view; [docs/planning](docs/planning/README.md) is what we plan to build and why; [phase-1-implementation.md](docs/planning/phase-1-implementation.md) is the executed plan for Phase 1 — architecture, the binding contracts in §7, and the decisions behind them; and [phase-2-implementation.md](docs/planning/phase-2-implementation.md) is the plan being executed now (M6–M12): the contracts it adds (its §7, with the test ids in §7.12 and the deviations in §7.16), the dialect and machine data (§8) and the owner decisions (§10). What is still open, in the code and in the decisions, is collected in [TODO.md](TODO.md).
+Four documents to know about before you start: [docs/user](docs/user/README.md) is what the app does today, from a CNC programmer's point of view; [docs/planning](docs/planning/README.md) is what we plan to build and why; [phase-1-implementation.md](docs/planning/phase-1-implementation.md) is the executed plan for Phase 1 — architecture, the binding contracts in §7, and the decisions behind them; and [phase-2-implementation.md](docs/planning/phase-2-implementation.md) is the plan being executed now (M6–M13, re-cut on 2026-09-30): the contracts it adds (its §7, with the test ids in §7.12 and the deviations in §7.16), the dialect and machine data (§8) and the owner decisions (§10). What is still open, in the code and in the decisions, is collected in [TODO.md](TODO.md).
 
 ## Setup
 

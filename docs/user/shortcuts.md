@@ -115,4 +115,4 @@ comparison itself. `About gEdit` and this shortcut list are on the View tab.
 ## Custom shortcuts
 
 Not in this version. The keys above are fixed; being able to change them is planned for a
-later phase.
+later phase (Phase 4 of the roadmap).

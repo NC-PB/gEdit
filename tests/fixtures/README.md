@@ -230,8 +230,8 @@ answer):
 - **Detection.** None since R1: `5X_MILLING_VECTOR.H` opens as Klartext (its `BEGIN PGM`
   decides, and every numbered block, `LN` included, counts for it); `2.5D_Milling.mpf`,
   `5X_Milling.mpf` and `Demo_1.mpf` open as Sinumerik (the turning profile, correctly, by
-  their header or their Siemens-only words — a milling profile for it is R2, in the M9
-  prelude; that is a program-map gap now, not a detection one, see below).
+  their header or their Siemens-only words — a milling profile for it is R2, in M9
+  (WP9.1); that is a program-map gap now, not a detection one, see below).
 - **Program map.** The three Okuma milling programs show no tool change (the turning tool
   rule wants a four- or six-digit `T` word). `DRILLING.mpf` lists every preselected tool as
   a change of its own. The three Siemens milling programs above, correctly detected as

@@ -131,12 +131,14 @@ work. Every text in the program is English. The
 ### Still to come
 
 Phase 2 is being built milestone by milestone (see the
-[roadmap](docs/planning/roadmap.md)). Still ahead: comparing a re-posted program without
-the noise of renumbering and number formatting, and merging in both directions; search and
-replace by word value (`T1` but not `T10`, `S>2000`); block skip; program checks and
-extents; multi-channel programs, with a check that the wait codes of the channels match; a
-code inspector that shows what is in force at the cursor, and arithmetic on address values;
-templates, your own dialect profiles, and typing options such as forced upper case.
+[roadmap](docs/planning/roadmap.md)). Still ahead, in this order: reading real programs
+right, including a built-in Sinumerik milling profile (M9); block skip, program checks,
+extents and arithmetic on address values (M10); comparing a re-posted program without the
+noise of renumbering and number formatting, merging in both directions, and search and
+replace by word value (`T1` but not `T10`, `S>2000`) (M11); multi-channel programs, with a
+check that the wait codes of the channels match (M12); your own dialect profiles and typing
+options such as forced upper case (M13). A code inspector that shows what is in force at
+the cursor, and templates, follow in Phase 3.
 
 ## Documentation
 

@@ -695,7 +695,7 @@ A new `okuma.ts` should follow §3.8.
   - live-tool drill: `M110` / `SB= M13` / `G181 …` / `G180` / `M109`
   - program end: `M09` / `M05` / `M02` / `%`
 
-### 11.7a Two-turret synchronization, from the P300 manual (for M10)
+### 11.7a Two-turret synchronization, from the P300 manual (for M12)
 
 - A `P` code is `P` and up to four digits. Execution runs from the smaller number to the larger; equal numbers run together (a rendezvous); when one side has finished, the other goes on. The numbers must ascend in execution order. This is the `ordered` semantics of the channel plan.
 - Spindle commands need the same `P` number on both sides (§9 item 27); `M100` is the id-less wait (`count`), with the pitfalls of §9 item 28.
