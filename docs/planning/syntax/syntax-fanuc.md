@@ -99,7 +99,7 @@ M30
 | Element | Form | Notes |
 |---|---|---|
 | Tape/record marker | `%` alone on a line | First and last line of the file. The control ignores anything before the first `%` (lead-in). A program that runs into the closing `%` without `M02`/`M30` (or `M99` in a subprogram) stops with an alarm. Whether text after the closing `%` is read is **(verify)**. |
-| Program number | `O` + digits, e.g. `O1001` | 4 digits, 8 with an option on the 30i family; `O0` is not allowed. `:` is accepted in place of `O`. On the 30i family a program can also be named instead of numbered: `<NAME>` in angle brackets, up to 32 letters, digits and `- + _ .`, and the same bracketed name may follow `M98`, `G65` and `G66` as the call target. The owner's own lathe output uses this form. |
+| Program number | `O` + digits, e.g. `O1001` | 4 digits, 8 with an option on the 30i family; `O0` is not allowed. `:` is accepted in place of `O`. On the 30i family a program can also be named instead of numbered: `<NAME>` in angle brackets, up to 32 letters, digits and `- + _ .`, and the same bracketed name may follow `M98`, `G65` and `G66` as the call target. `.` and `..` are reserved names. The owner's own lathe output uses this form. gEdit reads `<NAME>` as one `programMarker` token (`syntax.programNames`) wherever the pattern matches, not only where the manual allows one; a name standing somewhere the manual forbids is a linting question (M9), not a tokenizing one. |
 | Program title | Comment in the O-block: `O1001 (BRACKET)` | Shown in the control's directory. Length limit **(verify)**. |
 | Main program end | `M30` (end + rewind) or `M02` | `M30` also stops the spindle and coolant on typical machines. |
 | Subprogram end | `M99` | `M99` in a main program loops back to its start. |
@@ -110,7 +110,7 @@ M30
 ### 2.3 File conventions
 
 - **Extensions:** there is no standard. Common ones are `.nc`, `.tap`, `.cnc`, `.txt`, `.eia`, `.iso`, `.min`, `.ncc` and `.ptp`, plus files without an extension named like the program (`O1001`) **(verify)**. Detection must fall back to content sniffing (see §11).
-- **Encoding:** 7-bit ASCII. The control's code table has no lower case and no tab, and a character outside it is dropped on input, comments included; so umlauts, `ø`, `°` and `µ` do not survive. The owner's real programs carry lower-case comments, so what his controls do with them is still **(verify)**. Keep the file's byte content and line endings unchanged on save, and offer an explicit "normalize line endings" command.
+- **Encoding:** 7-bit ASCII. The control's code table has no lower case and no tab, and a character outside it is dropped on input, comments included; so umlauts, `ø`, `°` and `µ` do not survive. The owner's real programs carry lower-case comments, so what the owner's controls do with them is still **(verify)**. Keep the file's byte content and line endings unchanged on save, and offer an explicit "normalize line endings" command.
 - **`%` inside a comment** ends the program on input: the rest of the file is lost at the control.
 - **Comment length:** the sources say the control displays about 31 characters of a comment as an operator message. Longer comments are common in CAM output; whether they are truncated or rejected is **(verify)**.
 
@@ -279,13 +279,13 @@ Use gEdit's own group names. Fanuc's numeric group ids differ between the mill a
 | motion | `G32` (A) / `G33` (B, C) | Single thread-cutting pass (lathe) | End point, `F` = lead |
 | non-modal | `G04` | Dwell | Seconds with a decimal point via `X` or `U`. `P` is a whole number counted in the least input increment (milliseconds on the usual increment system); a parameter can make the dwell count spindle revolutions under feed per revolution. |
 | non-modal | `G09` | Exact stop for one block | |
-| non-modal | `G10` | Write offsets/data from the program | `G10 L2 P1 X… Y… Z…` (and `L20`) sets a work offset; on a lathe `G10 P… X… Z…` writes a tool offset. Its axis words are **data**, not a move: no extent, no shift, no scaling may touch them. The owner's multi-path lathe programs contain it. |
+| non-modal | `G10` | Write offsets/data from the program | `G10 L2 P1 X… Y… Z…` (and `L20`) sets a work offset; on a lathe `G10 P… X… Z…` writes a tool offset. Its axis words are **data**, not a move: no extent, no shift, no scaling may touch them (`CodeEntry.wordsAreData`, in the database now; scale feed/speed leave and report them). The owner's multi-path lathe programs contain it. |
 | non-modal | `G28` | Return to reference point via an intermediate point | Lathe: `G28 U0. W0.`. Mill idiom: `G91 G28 Z0.` then `G90` **(verify)**. |
 | non-modal | `G30` | Return to 2nd reference point **(verify)** | |
 | non-modal | `G53` | Move in machine coordinates, this block only | Absolute values only. Often used before tool changes. |
 | non-modal | `G52` | Local coordinate shift | Rare |
 | non-modal | `G92` / `G50` | Set coordinate system; on lathes also the maximum spindle speed with `S` (A: G50, B/C: G92) | Put `G50 S…`/`G92 S…` in its own block before `G96` (source advice). |
-| non-modal | `G65` | Macro call with arguments | `P` program, `L` repeats, every other letter an argument (§7.1). Another NC word in the same block is an alarm. |
+| non-modal | `G65` | Macro call with arguments | `P` program, `L` repeats, every other letter an argument (§7.1), **data** rather than a move or a feed (`CodeEntry.wordsAreData`, in the database now, `G66`/`G66.1` too). Another NC word in the same block is an alarm. |
 | plane | `G17` / `G18` / `G19` | XY / ZX / YZ plane | Lathes default to G18. Mills default to G17 **(verify defaults are parameter dependent)**. |
 | units | `G20` / `G21` | inch / mm | Should come before any dimension word. At power-on the last used state is kept. |
 | distance | `G90` / `G91` | absolute / incremental | Mill and lathe B/C only |
@@ -297,7 +297,7 @@ Use gEdit's own group names. Fanuc's numeric group ids differ between the mill a
 | canned cycle | `G80`, `G73`–`G89` | See §6 | Any code from the motion group cancels an active drilling cycle (sources). |
 | cycle return | `G98` / `G99` | Return to initial level / to R level | Mill and lathe B/C |
 | macro modal | `G66` / `G67` | Modal macro call / cancel | Rare in CAM |
-| other, may appear | `G61`/`G62`/`G63`/`G64` (one modal group: exact stop, corner override, **tapping mode**, cutting mode), `G05.1 Q1` (look-ahead contour control), `G08 P1`, `G68`/`G69` (rotation), `G68.2`/`G68.3`/`G68.4` + `G53.1` … `G69` (tilted working plane; the lathe ends it with `G69.1`), `G43.4`/`G43.5` (tool-centre control), `G15`/`G16` (polar coordinates, mill), `G50.1`/`G51.1` (mirror), `G84.2`/`G84.3` (rigid tapping in an older block format, `L` repeats), `G66`/`G66.1`/`G67` | Settled by the 30i manuals. The owner's mill output writes the tilted-plane pair. The databases do not carry most of them yet ([source review](../source-review-2026-09.md), proposal R3). In `G63` blocks `F` is tied to the pitch. |
+| other, may appear | `G61`/`G62`/`G63`/`G64` (one modal group: exact stop, corner override, **tapping mode**, cutting mode), `G05.1 Q1` (look-ahead contour control), `G08 P1`, `G68`/`G69` (rotation), `G68.2`/`G68.3`/`G68.4` + `G53.1` … `G69` (tilted working plane; the lathe ends it with `G69.1`), `G43.4`/`G43.5` (tool-centre control), `G15`/`G16` (polar coordinates, mill), `G50.1`/`G51.1` (mirror), `G84.2`/`G84.3` (rigid tapping in an older block format, `L` repeats), `G66`/`G66.1`/`G67` | Settled by the 30i manuals. The owner's mill output writes the tilted-plane pair. `G61`/`G62`/`G64`, `G65`/`G66`/`G67`, `G10`, `G84.2` and `G84.3` are in the mill database now (`dec/scaling`); the 5-axis, high-speed and tilted-plane codes above still are not ([source review](../source-review-2026-09.md), proposal R3). In `G63` blocks `F` is tied to the pitch: `G63` is a modal code of the path-mode group (`G61`/`G62`/`G63`/`G64`, "valid until" per the manual), and gEdit reads the feed as a lead while it is the active code of that group — the one `pitchFeed` code that sits outside a cycle or motion group. `G84.2`/`G84.3` are the FS15-format rigid taps (mill; the lathe has `G84.2` only). |
 | lathe live tool | `G12.1`/`G13.1` (also written `G112`/`G113`), `G07.1` (also `G107`) | Polar interpolation X–C on/off (while it is on, `C` is a length in mm and arcs use I/J); cylindrical interpolation Z–C (`C` stays an angle) | The owner's lathe output uses polar interpolation. Out of scope beyond hover text, but extents and address arithmetic must not read `C` as an angle inside it. |
 
 ### 4.3 M-codes (portable subset)
@@ -369,10 +369,11 @@ Everything else comes from a per-machine M-code table: user-editable JSON with c
 
   | Form | Meaning |
   |---|---|
+  | 5 digits, `Tttooo`\* | `ttt` = turret station (3 digits), `oo` = offset register (2 digits). `T12345` = tool 123 with offset 45. |
   | 3–4 digits, `Tttoo` | `tt` = turret station, `oo` = offset register. `T0101` = `T101` = tool 1 with offset 1. `T121` = tool 1 with offset 21. |
   | 1–2 digits (`T1`, `T12`) | Station only. The offset is assigned implicitly by machine setting. |
 
-  How many of the last digits are the offset is a parameter of the control (1, 2 or 3 digits, or chosen by the number of offsets), and a `T` word may have up to 8 digits. So the split above is the usual setting, not a rule: one of the owner's lathe posts writes five-digit `T` words, which the profile finds no tool in (D49).
+  How many of the last digits are the offset is a parameter of the control (1, 2 or 3 digits, or chosen by the number of offsets), and a `T` word may have up to 8 digits. So the split above is the usual setting, not a rule: whether a **short** (1–2-digit) word ever carries an implicit offset on the owner's machines is still open (D49). \*The owner decided the five-digit case on 2026-09-27: three digits of station, two of offset, extending the same 2-and-2 / 1-and-2 pattern by one digit (`dec/tools`). A sixth digit and beyond fits no form and is left as it is.
 
 - **Offset cancel:** `T0100`/`T100` (same station, offset 00) cancels the offset. It is **not** a new tool. `T0`/`T0000` **(verify)**.
 - A tool's offset number may differ from its station, e.g. a second offset for the same insert (`T0111`). Treat `tt` as the tool identity and `oo` as information only.
@@ -493,7 +494,7 @@ Own example: `G76 P020060 Q80 R0.03` / `G76 X16.93 Z-22. P920 Q250 F1.5`.
 | Subprogram | `O2000` … `M99` | Same file (after the main M30) or separate file |
 | Call | `M98 P2000` | |
 | Call with repeats | `M98 P52000` | Digits before the last four = count, so 5 × O2000. This packed form works only for 4-digit program numbers and never together with `L`; a 5- to 8-digit program is called as `M98 P12345 L5`. |
-| Call by name | `M98 <NAME>`, `M98 <NAME> L5` | 30i family; the name as in §2.2 |
+| Call by name | `M98 <NAME>`, `M98 <NAME> L5`, `G65 <NAME>` | 30i family; the name as in §2.2. The manual also allows a bracketed name after `G66`, `G66.1`, `M96`, `G72.1` and `G72.2`; gEdit tokenizes all of them as one name, but the program map lists only the `M98`/`G65` forms as calls (dec/names) |
 | External call | `M198 P…` | Runs a program from an external device or data server |
 | Local call | `M98 Q<n>` | Runs blocks from `N<n>` up to the next `M99` within the current program. Available on the source controls; general availability **(verify)**. With a `P` as well (`M98 P… Q…`), a parameter makes the call start at block `Q` of the **called** program. |
 | Return to label | `M99 P<n>` | Returns to `N<n>` of the caller instead of the next block |
@@ -597,11 +598,11 @@ All checks should work on a per-line parse with a small modal-state tracker. Non
 7. Are the lathe multi-pass cycles (G71/G70/G76) used, or are all moves expanded as G01?
 8. Drilling: is `Q` written with a decimal point (mm) or as an integer (µm)? `K` or `L` for repeats?
 9. Rigid tapping: which M-code does each machine use? (Where it goes is settled: before `G84` or in its block, §4.3.)
-10. ~~Are the high-speed and 5-axis codes present?~~ Yes: the owner's mill output writes `G68.2` with `G53.1`, and his lathe output polar interpolation (aggregate).
-11. Maximum comment length that survives at the control; what his controls do with lower-case comments, which the code table does not have (§2.3).
-12. ~~Block skip levels.~~ Settled: `/1`–`/9`, several per block (§3.4). Which levels his posts use is open.
+10. ~~Are the high-speed and 5-axis codes present?~~ Yes: the owner's mill output writes `G68.2` with `G53.1`, and the owner's lathe output polar interpolation (aggregate).
+11. Maximum comment length that survives at the control; what the owner's controls do with lower-case comments, which the code table does not have (§2.3).
+12. ~~Block skip levels.~~ Settled: `/1`–`/9`, several per block (§3.4). Which levels the owner's posts use is open.
 13. Is `U`/`W` still incremental in system B on the target machines? Machine dependent (§4.1).
-14. ~~Does any post emit Macro B?~~ Yes: his lathe programs carry `#` variables and `G10` (aggregate).
+14. ~~Does any post emit Macro B?~~ Yes: the owner's lathe programs carry `#` variables and `G10` (aggregate).
 
 ---
 
@@ -667,7 +668,7 @@ Based on `src/lib/languages/fanuc.ts`, `src/lib/utils/gcodeParser.ts`, `src/lib/
 
 - One `fanuc-gcode` dialect with no profile (mill / lathe-A / lathe-B / lathe-C) and no machine M-code table.
 - Only `.nc` and `.min` map to Fanuc. `.tap`, `.cnc`, `.eia`, `.iso`, `.ncc`, `.ptp` and extension-less `O1234` files fall back to sniffing **(verify list)**.
-- `FANUC_STRONG` allows `O` with at most 5 digits and treats `:` as a program number **(verify)**. `<NAME>` programs are not recognized.
+- `FANUC_STRONG` allows `O` with at most 5 digits and treats `:` as a program number **(verify)**. `<NAME>` programs are now recognized by the tokenizer, the program map and renumbering (`syntax.programNames`, dec/names); detection still has no content pattern for `^\s*<[A-Za-z0-9+\-_.]+>`, so a named program is detected through its other lines only.
 - No mill-vs-lathe sniffing. Possible signals:
   - lathe: `G96` with `G50 S`/`G92 S`, 3–4-digit `T` without `M06`, `U`/`W` words, `G71`/`G70 P Q`, X–Z moves only
   - mill: `M06`, `G43 H`, `G17`, Y words

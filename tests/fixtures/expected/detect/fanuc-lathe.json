@@ -22,7 +22,8 @@
     "nc/fanuc-lathe/l04-references.nc": "fanuc-lathe",
     "nc/fanuc-lathe/l05-system-b.nc": "fanuc-lathe",
     "nc/fanuc-lathe/l06-decimal.nc": "fanuc-lathe",
-    "nc/fanuc-lathe/l07-system-b-drill.nc": "fanuc-lathe"
+    "nc/fanuc-lathe/l07-system-b-drill.nc": "fanuc-lathe",
+    "nc/fanuc-lathe/l08-named-programs.nc": "fanuc-lathe"
   },
   "variants": {
     "nc/fanuc-lathe/O2001": { "gcodeSystem": "A", "detected": true },
@@ -33,6 +34,7 @@
     "nc/fanuc-lathe/l04-references.nc": { "gcodeSystem": "A", "detected": true },
     "nc/fanuc-lathe/l05-system-b.nc": { "gcodeSystem": "B", "detected": true },
     "nc/fanuc-lathe/l06-decimal.nc": { "gcodeSystem": "A", "detected": true },
-    "nc/fanuc-lathe/l07-system-b-drill.nc": { "gcodeSystem": "B", "detected": true }
+    "nc/fanuc-lathe/l07-system-b-drill.nc": { "gcodeSystem": "B", "detected": true },
+    "nc/fanuc-lathe/l08-named-programs.nc": { "gcodeSystem": "A", "detected": true }
   }
 }

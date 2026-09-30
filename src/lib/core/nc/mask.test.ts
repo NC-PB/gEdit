@@ -13,6 +13,7 @@ import { compileProfile } from '$lib/core/profiles/compile';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
 import { maskComments } from './mask';
 import { tokenizeLine } from './tokenizer';
+import type { NcToken } from './types';
 
 const fanuc = compileProfile(fanucJson as unknown as Profile);
 const klartext = compileProfile(heidenhainJson as unknown as Profile);
@@ -124,6 +125,28 @@ describe('maskComments where a string may hold the comment marker', () => {
   });
 });
 
+// `syntax.programNames` (§7.16): the control reads a name's characters like comment text.
+describe('maskComments over a program name', () => {
+  it('writes `_` for each letter and digit and keeps the rest, same length', () => {
+    expect(maskComments('<SHAFT-T12.A> (OD PIN)', fanuc)).toBe('<_____-___._>         ');
+    expect(maskComments('N10 M98<SUB+M30>L2', fanuc)).toBe('N10 M98<___+___>L2');
+  });
+
+  it('leaves nothing a tool, end or feed rule could match, and no blank run a comment reader would take', () => {
+    const masked = maskComments('M98 <PART_T12_M30_F12> L2', fanuc);
+    expect(masked).not.toMatch(/T\d|M30|F\d/);
+    expect(masked).toBe('M98 <________________> L2');
+  });
+
+  it('masks a name inside a comment as the comment it is part of', () => {
+    expect(maskComments('G1 X1. (<SUB_T1>)', fanuc)).toBe('G1 X1.           ');
+  });
+
+  it('leaves a line alone on a profile without the field', () => {
+    expect(maskComments('IF R1<R2 GOTOF END_A', sinumerik)).toBe('IF R1<R2 GOTOF END_A');
+  });
+});
+
 describe('maskComments and the tokenizer', () => {
   const lines: [CompiledProfile, string][] = [
     [fanuc, '%'],
@@ -133,6 +156,9 @@ describe('maskComments and the tokenizer', () => {
     [fanuc, 'G1 (A (B) ) X10.'],
     [fanuc, '/(SKIPPED COMMENT)'],
     [fanuc, 'N10T1M6'],
+    [fanuc, '<SHAFT_T12> (OD PIN)'],
+    [fanuc, 'N10 M98 <SUB-F12.1> L2 (X)'],
+    [fanuc, '<A B>'],
     [klartext, '5 TOOL CALL 1 Z S3000 ; D10'],
     [klartext, '   Q200=2 ;CLEARANCE ~'],
     [klartext, '7 * - ROUGHING'],
@@ -152,6 +178,12 @@ describe('maskComments and the tokenizer', () => {
     [sinumerik, 'CYCLE83(50,0,2,-25,,-5)'],
   ];
 
+  /** True for a program marker that is a program name (`<SHAFT_T12>`), not `O1234` or `%`. */
+  const isName = (token: NcToken, cp: CompiledProfile): boolean => {
+    const source = cp.profile.syntax.programNames;
+    return token.kind === 'programMarker' && typeof source === 'string' && new RegExp(`^(?:${source})$`, cp.flags).test(token.text);
+  };
+
   it.each(lines)('blanks exactly what the tokenizer calls a comment: %#', (cp, line) => {
     const masked = maskComments(line, cp);
     expect(masked).toHaveLength(line.length);
@@ -160,6 +192,7 @@ describe('maskComments and the tokenizer', () => {
     for (const token of tokens) {
       const span = masked.slice(token.start, token.end);
       if (token.kind === 'comment') expect(span, token.text).toBe(' '.repeat(token.text.length));
+      else if (isName(token, cp)) expect(span, token.text).toBe(token.text.replace(/[A-Za-z0-9]/g, '_'));
       else expect(span, token.text).toBe(token.text);
     }
   });

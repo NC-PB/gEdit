@@ -68,6 +68,7 @@ of the hand-written files, and that each file's name appears in backticks here.
 | `f05-comments-edge.nc` | `(T1 M6)` as a comment, unclosed `(` comments, comments before, between and after words, `(A)(B)`, a block-skipped comment, and `(NEXT: T1 M6)` trailing a move. |
 | `O1234` | A file without an extension, with the packed tool change `N10T1M06`. |
 | `f07.tap` | A short program with the `.tap` extension. |
+| `f08-tapping.MIN` | A Fanuc mill program with drilling, left-hand and rigid tapping (`G81`, `G74`, `M29` + `G84`), saved with the Okuma `.MIN` extension: the extension weighs 20 (R1), and clear Fanuc mill content outweighs it, so the tap feeds are read as Fanuc leads and not as Okuma feeds. (`G84.2`/`G84.3` are left out: the mill database does not describe them yet.) |
 | `detect-fanuc.txt` | A complete program in a `.txt` file, so only the content decides the dialect. |
 
 ## `nc/fanuc-lathe/`: Fanuc-style turning programs
@@ -85,6 +86,7 @@ G-code system A, `l05` and `l07` system B; the expected system per file is in
 | `l05-system-b.nc` | System B: the clamp `G92 S2200`, feed per revolution `G95`, the single cycles `G77` and `G78`, and a `G33` threading pass. |
 | `l06-decimal.nc` | The same values with and without a decimal point: `X50`/`X50.`, `Z1000`/`Z1000.`, `F155`/`F155.`, `G83 … Q6000 K3` against `Q6.`, `C90000` against `C90.`, and the dwells `G04 X1.5`, `G04 U2` and `G04 P500`. |
 | `l07-system-b-drill.nc` | Six `G99 G83 …` cycle-return blocks against one `G92 S2000` clamp: the program that decides whether variant detection counts a pattern once or per line (phase 2 plan §8.1). |
+| `l08-named-programs.nc` | Three programs named instead of numbered (30i family): the main program `<SHAFT_T12-F0.2>` calls `M98 <GROOVE_T3_M30> L2` and `M98 <CHAMFER_F12>`, and both subprograms start with their bracketed name. Every name holds a `T`, `F` or `M30` that must not read as a tool change, a feed or a program end. |
 | `O2001` | A turning program in a file without an extension. |
 | `detect-lathe.txt` | A complete turning program in a `.txt` file, so only the content decides the dialect. |
 
@@ -103,6 +105,7 @@ written in upper case and still count as `mpf` and `spf`.
 | `s04-packed.MPF` | No transfer header, packed words (`N10G18G90G95`, `T1D1`, `G0X90Z2`), the block skips `/` and `/1`, a lower-case block, and every form of the `T` word: `T1`, `T12`, the offset cancel `T0 D0` that is **not** a tool change, `MSG("T1 ROUGH")`, which names a tool inside a string and is not one either, and the spindle forms `T1=5` (tool 5) and `T2="PARTOFF"` next to `M1=4`, `M1=5`, `M2=4` and `M2=5`, which switch spindles and are neither a stop nor the program end. |
 | `s05-diameter.MPF` | Diameter programming assumed on at the top, then switched three ways — `DIAMOF`, `DIAM90` with a `G91` step, `DIAMON` — plus the clamp `G26 S3000`, `G710`, the dwells `G4 F1.5` and `G4 S2` (two spindle revolutions, not a speed) and the optional stop `M1`. |
 | `SHAFT_OP20` | A part-off program in a file without an extension, so only the content decides the dialect. |
+| `s06-milling.txt` | A milling program without the `%_N_` transfer header and without a Siemens extension (the case of the owner's `Demo_1.mpf`): `WORKPIECE(`, a bare `CYCLE800`, tool names as strings, `MSG("…")`, arcs with `CR=`, `MCALL CYCLE81(…)`, `X=AC(…)`, `Y=IC(…)` and `TRAORI`/`TRAFOOF`, most of them on lines that move Y. Detection has to read it as Sinumerik on these markers alone (R1), until a milling profile exists. |
 | `detect-sinumerik.txt` | A finishing pass and a centre hole in a `.txt` file, so only the content decides the dialect. |
 
 ## `nc/heidenhain/`: Heidenhain Klartext programs
@@ -113,11 +116,15 @@ written in upper case and still count as `mpf` and `spf`.
 | `h02-tool-names.h` | `TOOL CALL "MILL_D10" Z S5000 F800 DL+0.1`, a `TOOL DEF` preselect, `DECLARE STRING QS1` with `TOOL CALL QS1`, and the indexed tool `TOOL CALL 12.1`. |
 | `h03-speed-only.h` | `TOOL CALL Z S5000` and `TOOL CALL S6000 F900`, which change the speed but not the tool. |
 | `h04-cycle-feeds.h` | Cycle 200 with a numeric `Q206` and with `Q206=FAUTO`, cycle 207 with the pitch `Q239`, and the feeds `FAUTO`, `FZ`, `FU`, `FQ50` and `F` with a `Q50 =` assignment. |
+| `h05-tool-axis.h` | The same tool number twice: `TOOL CALL 4 S6500` with no axis (a speed change) and `TOOL CALL 4 Z S7000` with one (a sister-tool swap, a real call). |
 | `detect-heidenhain.txt` | A complete program in a `.txt` file. |
 
 ## `nc/okuma/`: Okuma OSP turning programs
 
-Written from `docs/planning/syntax/syntax-okuma.md` §2-§8. A unit system changes what a
+Since R1 the `.min`/`.sub`/`.ssb` extensions weigh 20, not decisively: they no longer decide
+detection on their own, and clear Fanuc content in a program of that extension outweighs
+them (`f08-tapping.MIN`, under `nc/fanuc/`). Written from
+`docs/planning/syntax/syntax-okuma.md` §2-§8. A unit system changes what a
 number is worth, never how the program looks, so the files read the same under each of the
 profile's three unit systems; the numbers themselves are chosen for a 1 mm machine, the
 profile's assumed default. `o01`-`o03` and `o05` are main programs with the `$NAME.MIN%`
@@ -134,7 +141,9 @@ extension, and three short synthetic programs written during the NC review (no h
 | `o03-live-tool.MIN` | Driven tools on the face: `M110` alone in its block, `M146`, `G94`, `SB=2000 M13`, a modal `G181` drilling cycle repeated at five more `C` positions, `G180`, a `G184` tapping cycle with `Q6`, `M12`, `M147`, `M109`. |
 | `o04-sub.SUB` | Two subprograms in one file: `O1234` with the sequence name `NLOOP`, `V1` counters, `X=DIA1+2` expressions, `IF [V1 LT 3] GOTO NLOOP` and `CALL O2345 Q2 DIA1=40 ZL1=-20`; `O2345` with the LAP call `G85 NLAP1 …`, its shape `NLAP1 G81` … `G80`, the short jump `IF […] N100`, `GOTO NEND` and `NEND RTS`. |
 | `o05-lap-tap.MIN` | LAP roughing and finishing (`N0100 G85 NAT01 …`, `N0200 G87 NAT01`) along the shape `NAT01 G81` … `G80`, which stands before the calls; the change of cutting conditions on two lines that start with `$` (`$ G84 XA=60 DA=2 FA=0.25`, `$ XB=40 DB=1 FB=0.2`); a `G71` thread cycle whose `H`, `L` and `F` go on over a `$` line; and a `G77` tap with its approach `K`. The lines the `$`-continuation and `G77 … K` tapping detection rules need. |
+| `o06-nend-comment.MIN` | A `NEND (UNLOAD) M02` line: the program end and its comment on one line, which used to show as `NEND` plus a run of blanks in the program map. |
 | `SHAFT-OP2` | A turning and cross-drilling program in a file **without an extension and without the `$…%` header**, which is how a program copied off the control can arrive: only the content decides the dialect. |
+| `O06-THREAD` | A turning program without an extension and without the header whose only Okuma syntax is its `G71` thread cycle, written as the manual writes it: the end point, infeed angle and cuts on the `G71` line, the thread height and lead on a continuation line `$H2.45 … F2` with no blank after the `$`. Before R1 nothing in it was an Okuma marker and it read as Fanuc lathe, where the lead is a feed. |
 | `detect-okuma.txt` | A complete program in a `.txt` file, with the header and the modal call `MODIN O3000` … `MODOUT`, so only the content decides the dialect. |
 
 ## `nc/ambiguous/`: content that barely decides, or does not decide at all
@@ -218,25 +227,30 @@ gEdit has only the turning profile.
 **Known gaps** (what these programs show gEdit getting wrong; the tests hold the right
 answer):
 
-- **Detection.** `5X_MILLING_VECTOR.H` opens as Fanuc mill: its `LN` blocks score nothing
-  for Klartext and a point each for the mill's `Y` rule, which outvotes the extension and
-  `BEGIN PGM`. `2.5D_Milling.mpf`, `5X_Milling.mpf` and `Demo_1.mpf`
-  open as Fanuc mill (the Sinumerik milling gap of `docs/user/dialects.md`).
+- **Detection.** None since R1: `5X_MILLING_VECTOR.H` opens as Klartext (its `BEGIN PGM`
+  decides, and every numbered block, `LN` included, counts for it); `2.5D_Milling.mpf`,
+  `5X_Milling.mpf` and `Demo_1.mpf` open as Sinumerik (the turning profile, correctly, by
+  their header or their Siemens-only words — a milling profile for it is R2, in the M9
+  prelude; that is a program-map gap now, not a detection one, see below).
 - **Program map.** The three Okuma milling programs show no tool change (the turning tool
   rule wants a four- or six-digit `T` word). `DRILLING.mpf` lists every preselected tool as
-  a change of its own. The files above that open with the wrong profile get the wrong map.
-- **Tokens.** A Klartext number with a decimal comma is an `unknown` token, and a `Q`
-  value with one splits (`Q206=636,62` reads `636`); the `;` that ends every block of
-  `TURN.NC` is `unknown`; `CYCLE800` without arguments is `unknown` on Sinumerik; the free
-  cycle name after `CYCL DEF 247` (`INIT.`, `REF.PKT`) is `unknown`.
+  a change of its own. The three Siemens milling programs above, correctly detected as
+  Sinumerik, still get the turning profile's map and tool rule until R2's milling profile
+  ships.
+- **Tokens.** The `;` that ends every block of `TURN.NC` is `unknown`; `CYCLE800` without
+  arguments is `unknown` on Sinumerik; the free cycle name after `CYCL DEF 247` (`INIT.`,
+  `REF.PKT`) is `unknown`. (A Klartext decimal comma is read correctly now, `dec/klartext`.)
 - **Code help.** No entry for `G69`, `G43.4` and `G64` (mill), `G12.1`/`G13.1` (lathe);
   the builder codes of `TURN.NC`; the Okuma lathe's `G101`–`G103` and `G136`–`G138`; and
   every machining-centre code of the Okuma milling programs (`G15`, `G16`, `G56`, `G169`,
   `G170`), which the turning database cannot have. `load.test.ts` leaves this folder out
   of its every-code check for that reason.
-- **Scripts.** Scale feed scales the `F` of `TURN.NC`'s radial tapping cycle, a code the
-  database does not know, and the `F` of `M128`; scale speed changes nothing in
-  `TURN_1.mpf`, whose post writes `SETMS(1)`.
+- **Scripts.** Scale feed reports (does not scale) the `F` of `TURN.NC`'s radial tapping
+  cycle, a code the database does not know (`dec/scaling`, TODO Next up 8), and still
+  scales the `F` of `M128` as a path feed (open, R10). Scale speed now scales `TURN_1.mpf`'s
+  `SETMS(1)` speeds correctly (the Sinumerik main-spindle decision, `dec/scaling`); its
+  `okuma-osp/DRILLING.min` tap (`G84`) now leaves its speed too, like its feed
+  (`CodeEntry.tappingElsewhere`, the NC review's fix).
 
 ## `nc/encoding/`: byte-level cases, generated by `tests/gen/gen-encoding.mjs`
 
@@ -272,6 +286,7 @@ walks `nc/` only, so these files are checked by the tests that read them.
 |---|---|---|
 | `expected/detect/<folder>.json` | `src/lib/core/profiles/detect.test.ts` (also `src/lib/data/profiles/fanucLathe.test.ts`) | The expected profile for every file under `nc/` (`fallback` and `refused` are answers too); `fanuc-lathe.json` adds the expected G-code system. The keys together must equal the `nc/` listing, so a new fixture without an entry fails. |
 | `expected/detect/_improvements.json` | `src/lib/core/profiles/detect.test.ts` and `src/lib/data/profiles/okuma.test.ts` | Hand-written detection cases as inline text, each with the answer the first detection (M0) gave and the one it gives now; the leading `_` keeps the file out of the per-folder glob. |
+| `expected/detect/programs/l08-g183-macro.nc` | `src/lib/data/profiles/fanucLathe.test.ts`, `okuma.test.ts`, `src/lib/core/profiles/contradiction.test.ts` | A Fanuc lathe program (written for gEdit) that calls a builder's macro as `G183` next to a two-block `G71`/`G70 P Q`: the M8 re-review's case, which opened as Okuma while `G180`–`G189` weighed 100. It lives here and not under `nc/` because no code database can describe a builder's macro code, and every `nc/` fixture has to be described (`load.test.ts`). |
 | `expected/detect/owner-public.json` (`knownGaps`) and `expected/outline/owner-public/_known-gaps.json` | `detect.test.ts`, `fanucLathe.test.ts` and `outline.test.ts` | The owner's programs gEdit gets wrong today, each with the reason and the **right** answer (the profile; for the map, every tool change as `[line, tool]`). They run as expected failures (`it.fails`) and get no golden, so a fix fails its test and the entry is replaced by a golden. |
 | `tokens/fanuc-gcode.json` | `src/lib/core/nc/tokenizer.test.ts` and `tests/python/test_gedit_nc.py` | 68 golden lines, 184 tokens. Each entry is `{ line, tokens }` plus an optional `prev` (the incoming `LineState`, default not-a-continuation) and an optional `state` (the expected outgoing one). An entry is compared on the fields it lists; whitespace tokens are left out. |
 | `tokens/fanuc-lathe.json` | the same | 72 golden lines, 197 tokens, same format, written for turning: every `T` spelling, `U`/`W` words, the two-block cycles, `G4U2`, `C90000` and `E1.5`. |

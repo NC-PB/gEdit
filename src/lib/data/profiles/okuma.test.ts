@@ -166,9 +166,9 @@ function otherDialectLines(): string[] {
 describe('an Okuma program is recognised as one', () => {
   const printed: string[] = [];
 
-  it('has fixtures to be recognised on, two of them without an Okuma extension', () => {
+  it('has fixtures to be recognised on, three of them without an Okuma extension', () => {
     expect(FIXTURES.length).toBeGreaterThanOrEqual(6);
-    expect(CONTENT_ONLY).toEqual(['nc/okuma/SHAFT-OP2', 'nc/okuma/detect-okuma.txt']);
+    expect(CONTENT_ONLY).toEqual(['nc/okuma/O06-THREAD', 'nc/okuma/SHAFT-OP2', 'nc/okuma/detect-okuma.txt']);
   });
 
   it.each(FIXTURES)('%s is Okuma, by at least 3 over every other dialect', (rel) => {
@@ -197,27 +197,52 @@ describe('an Okuma program is recognised as one', () => {
     console.log(`Okuma detection margins (G10 §8.7 item 4):\n  ${printed.sort().join('\n  ')}`);
   });
 
-  it('lets an Okuma extension decide, because the content often cannot', () => {
-    // A program that writes nothing only this control writes — no header, four-digit `T`
-    // words, no call, no driven-tool cycle — scores exactly as high on both lathes, and
-    // only the document's own profile would break the tie. Its extension decides.
+  it('gives a program with nothing Okuma-only to the Fanuc lathe, and lets the extension decide it', () => {
+    // R1: a program that writes nothing only this control writes — no header, four-digit
+    // `T` words, no call, no thread cycle — scores exactly as high on both lathes. Its
+    // lines mean the same on both controls, and the codes that do not (G71/G72, LAP,
+    // sequence names, `$` lines) carry markers of their own, so the tie is settled by
+    // `priority: -1` here, from either fallback: the Fanuc lathe. It used to go to whatever
+    // the document was before, which made the answer depend on the order files were opened.
     const text = ['G50 S2000', 'T0101', 'G96 S150 M03', 'G00 X50 Z2', 'G01 Z-20 F0.2', 'G00 X200 Z200', 'M02', ''].join('\n');
     const table = scores(null, text);
     expect(table.get(OKUMA)).toBe(table.get(LATHE));
     expect(detectProfile(BUILTINS, null, text, LATHE)).toBe(LATHE);
-    expect(detectProfile(BUILTINS, null, text, OKUMA)).toBe(OKUMA);
+    expect(detectProfile(BUILTINS, null, text, OKUMA)).toBe(LATHE);
+    expect(okuma.profile.detect.priority).toBe(-1);
+    // The extension breaks the tie the other way: a `.MIN` file is an Okuma program…
     for (const path of ['/work/O1001.MIN', '/work/O1001.SUB', '/work/O1001.ssb']) {
       expect(detectProfile(BUILTINS, path, text, LATHE), path).toBe(OKUMA);
     }
-
-    // Decisive by construction: more than 400 lines of the strongest rule any other
-    // built-in has could score, so no content can outvote it.
-    const strongest = Math.max(
-      ...BUILTINS.filter((cp) => cp.profile.id !== OKUMA).flatMap((cp) => cp.re.detectContent.map((r) => r.weight)),
-    );
+    // …but it is a weight, not a verdict (R1): it outweighs any one ordinary line, and a
+    // Fanuc mill program saved as `.MIN` stays a mill, where its tap feeds are leads.
+    const strongestShared = Math.max(...okuma.re.detectContent.filter((r) => r.weight < 20).map((r) => r.weight));
     for (const ext of ['min', 'sub', 'ssb']) {
-      expect(okuma.profile.detect.extensions[ext], ext).toBeGreaterThan(MAX_SNIFF_LINES * strongest);
+      expect(okuma.profile.detect.extensions[ext], ext).toBeGreaterThan(strongestShared);
+      expect(okuma.profile.detect.extensions[ext], ext).toBeLessThan(100);
     }
+    const rel = 'nc/fanuc/f08-tapping.MIN';
+    const { winner, margin, runnerUp } = ranked(`/work/${rel}`, readFixture(rel));
+    expect(winner).toBe(MILL);
+    expect(runnerUp).toBe(OKUMA);
+    expect(margin).toBeGreaterThanOrEqual(MIN_MARGIN);
+  });
+
+  it('breaks the tie with the thread cycle when its parameters go on over a $ line (R1)', () => {
+    // O06-THREAD: the G71 line holds X, Z, B, D and U, the H and F follow on `$H…` — the
+    // manual's own layout, with no blank after the `$`. Before R1 nothing on either line
+    // was an Okuma marker, the Fanuc lathe won on its comment lines, and scale feed read
+    // the lead as a feed. Both lines say Okuma now, the first because a Fanuc G71/G72
+    // carries P/Q or U…R and never an end point.
+    const text = readFixture('nc/okuma/O06-THREAD');
+    const { winner, margin } = ranked(null, text);
+    expect(winner).toBe(OKUMA);
+    expect(margin).toBeGreaterThanOrEqual(100);
+    expect(scores(null, 'G71 X27.55 Z-24 B60 D0.6 U0.1').get(OKUMA)).toBe(20);
+    expect(scores(null, '$H2.45 L2 F2 M23 M32 M73').get(OKUMA)).toBe(100);
+    // A Sinumerik system variable at the start of a line is not a continuation.
+    expect(scores(null, '$TC_DP1[1,1]=0.4').get(OKUMA)).toBeLessThan(20);
+    expect(scores(null, '$P_UIFR[1]=CTRANS(X,10)').get(OKUMA)).toBeLessThan(20);
   });
 
   it('lets the header decide wherever the file came from (G10 M8)', () => {
@@ -250,7 +275,6 @@ describe('an Okuma program is recognised as one', () => {
     const strong = [
       'CALL O2345 Q2 DIA1=40',
       'NEND RTS',
-      'G181 X50 Z-12 C0 K3 F120',
       'G85 NLAP1 D2 F0.3 U0.4 W0.2',
       'G71 X27.55 Z-30 B60 D0.7 U0.1 H2.45 L2 F2',
       'G77 X0 Z-20 K5 F1.25',
@@ -264,6 +288,49 @@ describe('an Okuma program is recognised as one', () => {
     // …and a Fanuc lathe block with P and Q is not an Okuma thread cycle.
     expect(scores(null, 'N80 G71 P90 Q130 U0.4 W0.2 D1.5 H1 F0.25').get(OKUMA)).toBeLessThan(10);
     expect(scores(null, 'N70 G71 U2.0 R0.5').get(OKUMA)).toBeLessThan(10);
+    expect(scores(null, 'N70 G72 W2.0 R0.5').get(OKUMA)).toBeLessThan(10);
+  });
+
+  it('weighs a G180-G189 code as a hint only, because Fanuc lathes call builder macros by them', () => {
+    // M8 re-review F2: at 100, one `G183` macro call (a Fanuc 18i twin-turret lathe's deep
+    // drilling on the B axis, in a builder manual) turned a Fanuc lathe program into Okuma,
+    // and renumbering then left its `G71 P/Q` pointing at old numbers. The Okuma drilling
+    // cycles are written by this control, but the number alone does not say so.
+    for (const line of ['G181 X50 Z-12 C0 K3 F120', 'N180 G183 B10. C5. D8. I-40. K2 A1. F0.1']) {
+      expect(scores(null, line).get(OKUMA), line).toBe(3);
+    }
+    const text = readFileSync(join(FIXTURES_DIR, 'expected/detect/programs/l08-g183-macro.nc'), 'utf8');
+    for (const path of ['/work/flange.nc', '/work/flange.txt', null]) {
+      for (const fallback of [LATHE, OKUMA, MILL]) {
+        expect(detectProfile(BUILTINS, path, text, fallback), `${String(path)} ${fallback}`).toBe(LATHE);
+      }
+      const table = scores(path, text);
+      expect((table.get(LATHE) ?? 0) - (table.get(OKUMA) ?? 0), String(path)).toBeGreaterThanOrEqual(MIN_MARGIN);
+    }
+  });
+
+  it('reads the work and length offsets of a machining-centre program as Okuma, and a Fanuc line as Fanuc (R9 guard)', () => {
+    // Three of the owner's Okuma programs are machining-centre programs: a page of mill
+    // moves that scores for the Fanuc mill line by line, with `G15 H1`, `G16 H0` and
+    // `G56 H1` among them. No Fanuc post writes those (G15/G16 are polar coordinates there,
+    // G56 a work offset without H, and a length offset is G43 H), so each one outweighs a
+    // page of mill moves: two of them open the program as Okuma under any extension.
+    for (const line of ['N20 G15 H1', 'N2130 G16 H0 X0 Y0', 'N60 G56 H1', 'G56H12']) {
+      const table = scores(null, line);
+      expect(table.get(OKUMA), line).toBe(400);
+      for (const [id, score] of table) if (id !== OKUMA) expect(score, `${line}: ${id}`).toBeLessThanOrEqual(6);
+    }
+    for (const line of ['G56 G43 Z50. H1', 'G90 G56 G0 X0. Y0.', 'N10 G15', 'G16 X50. Y30.', 'G43 H1 Z50. G56']) {
+      expect(scores(null, line).get(OKUMA), line).toBeLessThanOrEqual(1);
+    }
+    for (const rel of listFixtures('nc/owner-public/okuma-osp').filter((r) => !r.endsWith('TURN.min'))) {
+      const text = readFixture(rel);
+      for (const path of [`/work/${rel}`, '/work/prog.nc', null]) {
+        const { winner, margin, runnerUp } = ranked(path, text);
+        expect(winner, `${rel} ${String(path)}`).toBe(OKUMA);
+        expect(margin, `${rel} ${String(path)}: ${margin} over ${runnerUp}`).toBeGreaterThanOrEqual(MIN_MARGIN);
+      }
+    }
   });
 
   it('claims .min, .sub and .ssb and nothing else', () => {
@@ -302,8 +369,9 @@ describe('an Okuma program is recognised as one', () => {
   });
 
   it('gives every content rule a line of its own in the fixtures', () => {
-    // G10 §8.7 item 4: a pattern nothing ever matches describes nothing.
-    const lines = FIXTURES.flatMap((rel) => sniffLines(readFixture(rel)));
+    // G10 §8.7 item 4: a pattern nothing ever matches describes nothing. The owner's
+    // machining-centre programs are this dialect too, and the only ones with `G15 H`.
+    const lines = [...FIXTURES, ...listFixtures('nc/owner-public/okuma-osp')].flatMap((rel) => sniffLines(readFixture(rel)));
     const silent = okuma.re.detectContent
       .filter((rule) => !lines.some((line) => rule.re.test(line)))
       .map((rule) => rule.re.source);

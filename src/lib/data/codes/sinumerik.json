@@ -138,6 +138,7 @@
       "group": "nonmodal",
       "sets": { "cycle": "start" },
       "pitchFeed": true,
+      "tapping": true,
       "label": "Tapping with a compensating chuck, one block",
       "description": "Taps to the position in the block with the spindle not under position control; the chuck takes up the difference. F has to be the spindle speed times the thread pitch, so the two may only be changed together. The move type in force before it applies again in the next block."
     },
@@ -216,6 +217,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "tapping": true,
       "label": "Rigid tapping, into the hole",
       "description": "Drives the tap with the spindle under position control; the lead is in I, J or K and is not a feed. S is read in revolutions per minute here, whatever the feed type says."
     },
@@ -224,6 +226,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "tapping": true,
       "label": "Rigid tapping, back out",
       "description": "The retract of a rigid tapping pass, with the same lead as the block that cut it."
     },
@@ -634,6 +637,7 @@
     {
       "code": "CYCLE84",
       "group": "cycle",
+      "tapping": true,
       "sets": { "cycle": "start" },
       "label": "Rigid tapping cycle",
       "description": "Cuts the thread with the spindle under position control, so no compensating chuck is needed. The lead (MPIT or PIT) and the tapping speed (SST) are its own arguments: it does not take its lead from the feed in force.",
@@ -695,6 +699,7 @@
       "group": "cycle",
       "sets": { "cycle": "start" },
       "pitchFeed": true,
+      "tapping": true,
       "label": "Tapping cycle with a compensating chuck",
       "description": "Taps with a chuck that takes up the difference between feed and pitch. ENC, the ninth argument, says where the lead comes from: with 1 (no spindle encoder) it is the feed in force, which then has to be the speed times the pitch and must not be scaled; with 0, 11 or 20 the cycle takes it from MPIT or PIT.",
       "params": [
@@ -1638,6 +1643,13 @@
       "group": "spindle",
       "label": "Spindle to axis mode",
       "description": "Switches the spindle over to position control as a rotary axis."
+    },
+    {
+      "code": "SVC",
+      "group": "tool",
+      "sets": { "speedUnit": "surface" },
+      "label": "Cutting speed of the tool",
+      "description": "SVC=100 gives the cutting speed of the active milling or drilling tool in metres per minute, feet in an inch program; the control works out the spindle speed from the tool radius. Without an index it is meant for the master spindle, SVC[2]= for spindle 2. An S word ends it, and so do G96 and SPOS."
     },
     {
       "code": "SETMS",

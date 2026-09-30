@@ -1,6 +1,11 @@
 {
-  "message": "Scaled 3 spindle speeds to 80 %; 6 cycle speeds left unchanged.",
+  "message": "Scaled 2 of 3 spindle speeds to 80 %; 1 tapping speed left as written, 6 cycle speeds left unchanged.",
   "findings": [
+    {
+      "line": 34,
+      "severity": "warning",
+      "message": "S500 is the speed in force when the tapping block on line 36 (CYCLE84) runs. A tap's feed follows from its speed and its pitch, so the speed is left as written: scaled on its own it would break the tap. Change the speed and the feed together by hand if the tap should run at another speed."
+    },
     {
       "line": 36,
       "severity": "info",

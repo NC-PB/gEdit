@@ -780,5 +780,98 @@ class TestFeedModeTrackerIsAWrapper(ModalTestCase):
         self.assertEqual([(state[2], state[3]) for state in states], [("G71", True), (None, False)])
 
 
+#: Entries for the tapping tests, **written for these tests**: a tapping mode of its own
+#: group (Fanuc `G63`, ended by `G64`), a modal tapping cycle, a rigid-tapping M code, a
+#: threading pass and a macro call whose words are data.
+TAPPING_CODES: List[Dict[str, Any]] = [
+    {"code": "G0", "group": "motion", "modal": True, "label": "rapid"},
+    {"code": "G1", "group": "motion", "modal": True, "label": "feed"},
+    {"code": "G32", "group": "motion", "modal": True, "pitchFeed": True, "label": "thread pass"},
+    {"code": "G63", "group": "pathmode", "modal": True, "pitchFeed": True, "tapping": True, "label": "tapping mode"},
+    {"code": "G64", "group": "pathmode", "modal": True, "label": "cutting mode"},
+    {"code": "G65", "group": "nonmodal", "wordsAreData": True, "label": "macro call"},
+    {"code": "G80", "group": "cycle", "modal": True, "label": "cancel", "sets": {"cycle": "cancel"}},
+    {"code": "G84", "group": "cycle", "modal": True, "pitchFeed": True, "tapping": True, "label": "tap",
+     "sets": {"cycle": "start"}},
+    {"code": "M29", "group": "spindle", "tapping": True, "label": "rigid tapping"},
+]
+
+
+class TestTappingInTheTracker(ModalTestCase):
+    """2026-09: what scale_speed asks the tracker about taps (owner decision of 2026-09-27).
+
+    ``tapping`` / ``tapping_code`` come from the database's ``tapping`` flag on a code of the
+    block, on the cycle in force or on a mode in force; ``pitch_mode`` is a modal
+    ``pitchFeed`` code outside the cycle and motion groups (the ``G63`` decision of TODO
+    Next up 8); ``data_code`` is a ``wordsAreData`` code of the block.
+    """
+
+    def walk(self, lines, profile_id="fanuc-gcode", codes=None):
+        cp = gedit_nc.compile_profile(helpers.effective_context(profile_id)["profile"])
+        tracker = gedit_nc.FeedModeTracker(TAPPING_CODES if codes is None else codes)
+        state = None
+        out = []
+        for line in lines:
+            tokens, state = gedit_nc.tokenize_line(line, cp, state)
+            tracker.update(tokens, continued=gedit_nc.continues_block(line, cp))
+            out.append((tracker.tapping_code, tracker.pitch_mode, tracker.pitch_feed, tracker.data_code))
+        return out
+
+    def test_a_tapping_code_of_the_block_makes_only_that_block_a_tap(self) -> None:
+        states = self.walk(["M29 S500", "G0 X10.", "G84 X20. Z-10. R2. F750.", "X30.", "G80"])
+        self.assertEqual([state[0] for state in states], ["M29", None, "G84", "G84", None])
+        # M29 carries no pitch of its own: the feed of its block is not a lead.
+        self.assertEqual([state[2] for state in states], [False, False, True, True, False])
+
+    def test_a_tapping_mode_holds_until_its_group_has_another_code(self) -> None:
+        states = self.walk(["G63 G1 Z-12. F500.", "G1 Z3.", "G64 G1 X70. F800."])
+        self.assertEqual([state[0] for state in states], ["G63", "G63", None])
+        self.assertEqual([state[1] for state in states], ["G63", "G63", None])
+        self.assertEqual([state[2] for state in states], [True, True, False])
+
+    def test_a_move_ends_a_modal_cycle_but_not_a_mode(self) -> None:
+        # G1 ends the G84 cycle (rule 3) while the cycle group still names it; the tracker
+        # reads a cycle through the active cycle, so the tap is over.
+        states = self.walk(["G84 X20. Z-10. R2. F750.", "G1 X40. F300."])
+        self.assertEqual([state[0] for state in states], ["G84", None])
+
+    def test_threading_is_a_pitch_but_not_a_tap(self) -> None:
+        (state,) = self.walk(["G32 Z-20. F1.5"])
+        self.assertEqual(state[:3], (None, None, True))
+
+    def test_the_words_of_a_macro_call_are_data_of_that_block_only(self) -> None:
+        states = self.walk(["G65 P9810 Z-5. F3000.", "G1 X10. F500."])
+        self.assertEqual([state[3] for state in states], ["G65", None])
+
+    def test_a_continued_block_keeps_its_tapping_code(self) -> None:
+        codes = [{"code": "G184", "group": "cycle", "modal": True, "pitchFeed": True, "tapping": True,
+                  "label": "driven-tool tap", "sets": {"cycle": "start"}},
+                 {"code": "M29", "group": "spindle", "tapping": True, "label": "rigid tapping"}]
+        states = self.walk(["M29", "$ Q6", "G0 X10"], "okuma-osp", codes)
+        self.assertEqual([state[0] for state in states], ["M29", "M29", None])
+
+    def test_the_written_codes_carry_the_kind_of_token_that_wrote_them(self) -> None:
+        cp = gedit_nc.compile_profile(helpers.effective_context("heidenhain-klartext")["profile"])
+        codes = [{"code": "CYCL DEF 207", "group": "cycle", "tapping": True, "label": "tap",
+                  "sets": {"cycle": "start"}},
+                 {"code": "M99", "group": "cycle", "label": "call once"}]
+        tracker = gedit_nc.FeedModeTracker(codes)
+        tokens, _ = gedit_nc.tokenize_line("6 CYCL DEF 207 GEWINDEBOHREN GS", cp, None)
+        tracker.update(tokens)
+        self.assertEqual([(entry["code"], kind) for entry, kind in tracker.written], [("CYCL DEF 207", "keyword")])
+        tokens, _ = gedit_nc.tokenize_line("7 L X+20 R0 FMAX M99", cp, None)
+        tracker.update(tokens)
+        self.assertEqual([(entry["code"], kind) for entry, kind in tracker.written], [("M99", "word")])
+
+    def test_priming_leaves_a_mode_in_force_and_clears_a_one_block_tap(self) -> None:
+        cp = gedit_nc.compile_profile(helpers.effective_context("fanuc-gcode")["profile"])
+        tracker = gedit_nc.FeedModeTracker(TAPPING_CODES)
+        gedit_nc.prime_tracker(tracker, ["G63 G1 Z-12. F500."], cp, "G1 Z3.")
+        self.assertEqual((tracker.tapping_code, tracker.pitch_mode), ("G63", "G63"))
+        tracker = gedit_nc.FeedModeTracker(TAPPING_CODES)
+        gedit_nc.prime_tracker(tracker, ["M29 S500"], cp, "G0 X10.")
+        self.assertIsNone(tracker.tapping_code)
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

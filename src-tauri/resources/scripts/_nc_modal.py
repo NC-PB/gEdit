@@ -29,6 +29,12 @@ any dialect:
 * a dwell block (``fNotFeed``) is a dwell as a whole: its feed word is a time (rule 6), and
   its speed word, where a control writes one (Sinumerik ``G4 S2``, two revolutions), is not
   a spindle speed either, so neither changes the feed or the speed in force.
+
+**Taps, modes and data (2026-09).** :class:`FeedModeTracker` also answers whether a block
+taps (``CodeEntry.tapping``), whether a modal **mode** outside the cycle and motion groups
+makes the feed a lead (a ``pitchFeed`` entry such as Fanuc ``G63``, read off the groups of
+rule 1), and whether the block's words are data (``wordsAreData``). None of this is in the
+interpreter's state, which TypeScript mirrors; it is the scripts' reading of the same data.
 """
 
 from __future__ import annotations
@@ -154,7 +160,12 @@ def _is_assignment(token: Token) -> bool:
 
 
 def _codes_in(tokens: Sequence[Token], index: Dict[str, Dict[str, Any]]) -> List[str]:
-    """Every code this block writes, in the order it wrote them.
+    """Every code this block writes, in the order it wrote them (:func:`_written_codes`)."""
+    return [code for code, _ in _written_codes(tokens, index)]
+
+
+def _written_codes(tokens: Sequence[Token], index: Dict[str, Dict[str, Any]]) -> List[Tuple[str, str]]:
+    """Every code this block writes, with the kind of token that wrote it, in written order.
 
     An ISO dialect writes a code as an address word (``G95`` is ``G`` + ``95``); Klartext
     writes it as a keyword, and a multi-word code carries its number in the next token
@@ -164,18 +175,22 @@ def _codes_in(tokens: Sequence[Token], index: Dict[str, Dict[str, Any]]) -> List
     Two more come with the turning dialects (M8). A ``call`` token is the code of its
     identifier (``CYCLE84(…)`` is ``CYCLE84``); an assignment word (:func:`_is_assignment`)
     is a value and never a code, so ``M3=3`` does not become the code ``M33``.
+
+    The kind (``'word'``, ``'call'``, ``'keyword'``) is what tells a cycle **defined** by a
+    keyword (Klartext ``CYCL DEF 207``, run later by a call) from one written as a call that
+    runs where it stands (``CYCLE84(…)``).
     """
-    out: List[str] = []
+    out: List[Tuple[str, str]] = []
     count = len(tokens)
     for i, token in enumerate(tokens):
         if token.kind == "word":
             address = token.address or ""
             if address != "" and not _is_assignment(token):
-                out.append(address + (token.value_text or ""))
+                out.append((address + (token.value_text or ""), "word"))
         elif token.kind == "call":
             name = token.address or ""
             if name != "":
-                out.append(name)
+                out.append((name, "call"))
         elif token.kind == "keyword":
             name = token.address or token.text
             number = token.value_text
@@ -185,15 +200,23 @@ def _codes_in(tokens: Sequence[Token], index: Dict[str, Dict[str, Any]]) -> List
                     number = nxt.value_text
             joined = "%s %s" % (name, number) if number is not None else None
             if joined is not None and normalize_code(joined) in index:
-                out.append(joined)
+                out.append((joined, "keyword"))
             else:
-                out.append(name)
+                out.append((name, "keyword"))
     return out
 
 
 # ---------------------------------------------------------------------------
 # The modal interpreter (plan §7.4, AD-19)
 # ---------------------------------------------------------------------------
+
+
+def _head_of(code: str) -> str:
+    """The letters a normalized code starts with: ``G`` of ``G84.2``, ``CYCL`` of ``CYCL DEF 207``."""
+    end = 0
+    while end < len(code) and code[end].isalpha():
+        end += 1
+    return code[:end]
 
 
 def _word_seen(token: Token, line: int) -> Dict[str, Any]:
@@ -743,6 +766,20 @@ class FeedModeTracker:
       ``G04 F``, Sinumerik ``G4 F`` / ``G4 S``): its ``F`` word is a time, not a feed rate,
       and a speed word in it counts spindle revolutions, not rpm. Neither may be scaled or
       reported as a feed or a speed. ``f_not_feed_code`` names the code (``G4``).
+    * ``tapping`` — ``True`` while the block taps a thread (``CodeEntry.tapping``, owner
+      decision of 2026-09-27): a code of the block itself (``M29``, ``G63``, ``CYCLE84``),
+      the modally active cycle (``G84``, ``G331``) or a tapping **mode** in force (Fanuc
+      ``G63`` until ``G64``). ``tapping_code`` names the code. The spindle speed of such a
+      block is tied to its feed by the pitch.
+    * ``pitch_mode`` — the modal code **outside** the cycle and motion groups whose entry
+      carries ``pitchFeed`` and which is the active code of its group (Fanuc ``G63``, the
+      tapping mode, is in force until ``G61``, ``G62`` or ``G64``), or ``None``. While it is
+      set, ``pitch_feed`` is ``True`` as well. The interpreter's own state does not carry it
+      (AD-19 rule 3 is about cycles and moves); this wrapper reads it off the groups.
+    * ``data_code`` — the code of this block whose words are its arguments or its data
+      (``CodeEntry.wordsAreData``: ``G65``, ``G66``, ``G10``), or ``None``.
+    * ``written`` — ``(entry, token kind)`` for every code of the database the line just
+      applied wrote, in written order (``'word'``, ``'call'`` or ``'keyword'``).
 
     **M6: this is a wrapper.** The rules live in :class:`ModalInterpreter` and come out of
     the code database (plan AD-19), so a lathe in G-code system A — where ``G98`` / ``G99``
@@ -769,6 +806,11 @@ class FeedModeTracker:
     ambiguous_code: Optional[str]
     f_not_feed: bool
     f_not_feed_code: Optional[str]
+    tapping: bool
+    tapping_code: Optional[str]
+    pitch_mode: Optional[str]
+    data_code: Optional[str]
+    written: List[Tuple[Dict[str, Any], str]]
 
     def __init__(self, codes: Optional[Sequence[Dict[str, Any]]] = None) -> None:
         """``codes`` is the context's code database (``CodeEntry`` dictionaries)."""
@@ -778,6 +820,22 @@ class FeedModeTracker:
         self._interp = ModalInterpreter(CompiledProfile(profile={}), codes or ())
         self._entries = self._interp._entries
         self._line = 0
+        # 2026-09: what `update` reads for the tapping and data flags, prepared once. A
+        # 100,000-line program asks on every line, so the lookups are kept cheap: only a
+        # word under a letter some code of the database starts with can be a code, and a
+        # written code is normalized once.
+        self._heads = frozenset(_head_of(key) for key in self._entries)
+        self._memo: Dict[str, Optional[Dict[str, Any]]] = {}
+        #: group -> canonical code -> entry, for the modes `_mode_with` looks for.
+        self._mode_groups: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        for entry in self._interp.codes:
+            if not isinstance(entry, dict) or entry.get("modal") is not True:
+                continue
+            group, code = entry.get("group"), entry.get("code")
+            if not isinstance(group, str) or group in ("cycle", "motion") or not isinstance(code, str):
+                continue
+            if entry.get("pitchFeed") is True or entry.get("tapping") is True:
+                self._mode_groups.setdefault(group, {})[code] = entry
         self.reset()
 
     def reset(self) -> None:
@@ -789,11 +847,47 @@ class FeedModeTracker:
         self._old_cycle: Optional[str] = None
         self._old_pitch = False
         self._old_ambiguous: Optional[str] = None
+        self._clear_block_flags()
+        self.written = []
         self._publish()
+
+    def _clear_block_flags(self) -> None:
+        """Forgets what the last block said about itself: its tapping code and its data code."""
+        self._block_tapping: Optional[str] = None
+        self._block_data: Optional[str] = None
 
     def entry(self, code: str) -> Optional[Dict[str, Any]]:
         """The database entry for a written code, following aliases, or ``None``."""
         return self._interp.entry(code)
+
+    def _lookup(self, code: str) -> Optional[Dict[str, Any]]:
+        """:meth:`entry`, remembered per written spelling."""
+        if code in self._memo:
+            return self._memo[code]
+        found = self._entries.get(normalize_code(code)) if code else None
+        self._memo[code] = found
+        return found
+
+    def _written(self, tokens: Sequence[Token]) -> List[Tuple[Dict[str, Any], str]]:
+        """The entries of the codes a line writes, with the token kind (:func:`_written_codes`)."""
+        out: List[Tuple[Dict[str, Any], str]] = []
+        for i, token in enumerate(tokens):
+            kind = token.kind
+            if kind == "word":
+                address = token.address
+                if not address or address.upper() not in self._heads or _is_assignment(token):
+                    continue
+                entry = self._lookup(address + (token.value_text or ""))
+            elif kind == "call":
+                entry = self._lookup(token.address or "")
+            elif kind == "keyword":
+                code = _written_codes(tokens[i:], self._entries)[0][0]
+                entry = self._lookup(code)
+            else:
+                continue
+            if entry is not None:
+                out.append((entry, kind))
+        return out
 
     def update(self, tokens: Sequence[Token], continued: bool = False) -> None:
         """Applies one block's tokens. Call it for every line, in order.
@@ -804,7 +898,18 @@ class FeedModeTracker:
         line that does not follow a trailing ``~`` starts a block of its own, as in P1.
         """
         self._line += 1
+        # The same test the interpreter makes: a line continues the block above it by a
+        # trailing marker on that one or a leading marker on this one.
+        if not (self._interp._continued or continued is True):
+            self._clear_block_flags()
         self._interp.update(tokens, self._line, continued=continued is True)
+        self.written = self._written(tokens)
+        for entry, _ in self.written:
+            canonical = entry.get("code")
+            if entry.get("tapping") is True and self._block_tapping is None:
+                self._block_tapping = canonical
+            if entry.get("wordsAreData") is True and self._block_data is None:
+                self._block_data = canonical
         self._apply_fallbacks(tokens)
         self._publish()
 
@@ -876,6 +981,22 @@ class FeedModeTracker:
         self._old_pitch = False
         self._old_ambiguous = None
 
+    def _mode_with(self, flag: str) -> Optional[str]:
+        """The active modal code outside the cycle and motion groups whose entry has ``flag``.
+
+        A tapping **mode** (Fanuc ``G63``) is neither a cycle nor a move: it is the active
+        code of its own group (AD-19 rule 1) until another code of that group replaces it,
+        and while it is, the feed is a lead and the speed a tap's. The cycle and motion
+        groups are left out because their codes are read through the active cycle, which a
+        move can end while the group still names the cycle (rule 3).
+        """
+        for group, modes in self._mode_groups.items():
+            value = self._interp._groups.get(group)
+            entry = modes.get(value.get("code")) if value is not None else None
+            if entry is not None and entry.get(flag) is True:
+                return entry.get("code")
+        return None
+
     def _publish(self) -> None:
         """The interpreter's state, in Phase 1's attribute values."""
         interp = self._interp
@@ -898,7 +1019,21 @@ class FeedModeTracker:
         # interpreter keeps the two apart (rule 2), so they are put back together here.
         # `_old_cycle` is only ever set by a database entry without a `sets` member.
         self.active_cycle = interp.active_cycle or interp._block["cycle"] or self._old_cycle
-        self.pitch_feed = interp.pitch_feed or (self._old_cycle is not None and self._old_pitch)
+        self.pitch_mode = self._mode_with("pitchFeed")
+        self.pitch_feed = (
+            interp.pitch_feed
+            or (self._old_cycle is not None and self._old_pitch)
+            or self.pitch_mode is not None
+        )
+        # Tapping: the block's own code first, then the cycle in force, then a mode.
+        cycle_entry = self._lookup(self.active_cycle) if self.active_cycle else None
+        self.tapping_code = (
+            self._block_tapping
+            or (self.active_cycle if cycle_entry is not None and cycle_entry.get("tapping") is True else None)
+            or self._mode_with("tapping")
+        )
+        self.tapping = self.tapping_code is not None
+        self.data_code = self._block_data
         self.ambiguous_code = interp.pitch_feed_ambiguous or self._old_ambiguous
         self.pitch_feed_ambiguous = self.ambiguous_code is not None
         # M8: a dwell block. The flag is the database's (`fNotFeed`); the code is for the
@@ -957,6 +1092,7 @@ def prime_tracker(
     if not still_open:
         tracker._interp._clear_block()
         tracker._interp._continued = False
+        tracker._clear_block_flags()
         tracker._publish()
     return state
 

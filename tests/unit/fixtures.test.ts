@@ -81,7 +81,7 @@ describe('encoding fixtures', () => {
 });
 
 /**
- * The owner's own programs he explicitly handed over as public (plan §9.2, D45).
+ * The owner's own programs they explicitly handed over as public (plan §9.2, D45).
  *
  * They are the one kind of committed fixture that was **not** written for gEdit, so they
  * carry no `WRITTEN FOR GEDIT` marker and they keep whatever bytes the control wrote —
@@ -114,9 +114,9 @@ describe('provenance', () => {
     expect(readme).toContain(`\`${rel.split('/').pop()}\``);
     const bytes = readFixture(rel);
     if (bytes.length === 0) return; // empty.txt has no room for a comment
-    // A program the owner handed over was written by his CAM, not for gEdit: it carries
+    // A program the owner handed over was written by their CAM, not for gEdit: it carries
     // no marker, and putting one in would change the bytes it is committed for. Its
-    // README line is what says where it came from and that he allowed it.
+    // README line is what says where it came from and that they allowed it.
     if (rel.startsWith(OWNER_PUBLIC)) return;
     // First line, or the block after BEGIN PGM in Klartext programs.
     const head = roughText(bytes).replace(/^\0+/, '').split(/\r\n|\r|\n/, 2);

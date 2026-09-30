@@ -103,14 +103,25 @@ describe('built-in code databases', () => {
     expect(fanuc.db.codes.find((e) => e.code === 'G96')?.group).not.toBe(spindle);
   });
 
-  it('keeps every pitchFeed code in the cycle or motion group', () => {
+  // 2026-09 decision (TODO Next up 8): `pitchFeed` sits in the cycle or motion group, or on
+  // a modal code of a group of its own — a mode such as Fanuc's tapping mode `G63`, which is
+  // in force until another code of its group (`G61`, `G62`, `G64`) replaces it. The scripts'
+  // tracker reads such a mode off the groups (`FeedModeTracker.pitch_mode`); a non-modal
+  // `pitchFeed` code outside those groups would say nothing about any block and is refused.
+  it('keeps every pitchFeed code in the cycle or motion group, or on a modal mode', () => {
     for (const { db } of [fanuc, heidenhain]) {
       const pitch = db.codes.filter((e) => e.pitchFeed);
       expect(pitch.length).toBeGreaterThan(0);
       for (const entry of pitch) {
-        expect(['cycle', 'motion'], entry.code).toContain(entry.group);
+        const inCycleOrMotion = ['cycle', 'motion'].includes(entry.group ?? '');
+        expect(inCycleOrMotion || entry.modal === true, entry.code).toBe(true);
       }
     }
+    const modes = fanuc.db.codes.filter((e) => e.pitchFeed && !['cycle', 'motion'].includes(e.group ?? ''));
+    expect(modes.map((e) => e.code)).toEqual(['G63']);
+    // The mode ends with the other codes of its group, so all of them are in the database.
+    const group = modes[0].group;
+    expect(fanuc.db.codes.filter((e) => e.group === group).map((e) => e.code)).toEqual(['G61', 'G62', 'G63', 'G64']);
   });
 
   // G76 is not in the `pitchFeed` list although the plan names it: the entry shipped
@@ -120,11 +131,31 @@ describe('built-in code databases', () => {
   it('marks the tapping and threading codes the plan names as pitchFeed', () => {
     const fanucPitch = fanuc.db.codes.filter((e) => e.pitchFeed).map((e) => e.code);
     // The source review (2026-09) added the variable-lead thread G34 from the control's list.
-    expect(fanucPitch.sort()).toEqual(['G32', 'G33', 'G34', 'G74', 'G84']);
+    // 2026-09 (TODO Next up 8): the older-format rigid tapping cycles and the tapping mode.
+    expect(fanucPitch.sort()).toEqual(['G32', 'G33', 'G34', 'G63', 'G74', 'G84', 'G84.2', 'G84.3']);
     expect(fanuc.db.codes.find((e) => e.code === 'G76')?.pitchFeed).toBeUndefined();
 
     const klartextPitch = heidenhain.db.codes.filter((e) => e.pitchFeed).map((e) => e.code);
     expect(klartextPitch.sort()).toEqual(['CYCL DEF 206', 'CYCL DEF 207', 'CYCL DEF 209']);
+  });
+
+  // Owner decision of 2026-09-27: the speed of a tap is not scaled. `tapping` is what
+  // scale_speed reads, so a tapping code without it would have its speed scaled.
+  it('marks the tapping codes, and no threading code, as tapping', () => {
+    const tapping = (db: CodeDb) => db.codes.filter((e) => e.tapping).map((e) => e.code).sort();
+    expect(tapping(fanuc.db)).toEqual(['G63', 'G74', 'G84', 'G84.2', 'G84.3', 'M29']);
+    expect(tapping(heidenhain.db)).toEqual(['CYCL DEF 206', 'CYCL DEF 207', 'CYCL DEF 209']);
+    for (const code of ['G32', 'G33', 'G34', 'G76', 'G92']) {
+      expect(fanuc.db.codes.find((e) => e.code === code)?.tapping, code).toBeUndefined();
+    }
+  });
+
+  // TODO Next up 8: the words of a macro call and of a data-setting block are no feeds.
+  it('marks the macro calls and the data-setting block as blocks whose words are data', () => {
+    expect(fanuc.db.codes.filter((e) => e.wordsAreData).map((e) => e.code)).toEqual(['G10', 'G65', 'G66']);
+    // G67 ends the modal call; its block has no arguments.
+    expect(fanuc.db.codes.find((e) => e.code === 'G67')?.wordsAreData).toBeUndefined();
+    expect(heidenhain.db.codes.some((e) => e.wordsAreData)).toBe(false);
   });
 
   it('marks the codes whose number is a threading cycle in another G-code system', () => {
@@ -336,17 +367,29 @@ describe('loadCodeDb', () => {
       dialect: 'x',
       version: 1,
       codes: [
-        { code: 'G84', label: 'Tap', modal: true, pitchFeed: true, verify: true, group: 'cycle' },
-        { code: 'G0', label: 'Rapid', modal: false, pitchFeed: 'yes', pitchFeedAmbiguous: 1 },
+        { code: 'G84', label: 'Tap', modal: true, pitchFeed: true, tapping: true, verify: true, group: 'cycle' },
+        { code: 'G0', label: 'Rapid', modal: false, pitchFeed: 'yes', pitchFeedAmbiguous: 1, tapping: 'yes', wordsAreData: 1 },
         { code: 'G76', label: 'Bore', pitchFeedAmbiguous: true, group: 'cycle' },
+        { code: 'G65', label: 'Macro call', wordsAreData: true },
+        { code: 'G284', label: 'LAP change', pitchFeedAmbiguous: true, tappingElsewhere: true },
+        { code: 'G288', label: 'LAP thread', pitchFeedAmbiguous: true, tappingElsewhere: 'yes' },
       ],
     });
-    expect(db.codes[0]).toMatchObject({ modal: true, pitchFeed: true, verify: true, group: 'cycle' });
+    expect(db.codes[0]).toMatchObject({ modal: true, pitchFeed: true, tapping: true, verify: true, group: 'cycle' });
     expect(db.codes[1].modal).toBeUndefined();
     expect(db.codes[1].pitchFeed).toBeUndefined();
     expect(db.codes[1].pitchFeedAmbiguous).toBeUndefined();
+    expect(db.codes[1].tapping).toBeUndefined();
+    expect(db.codes[1].wordsAreData).toBeUndefined();
     expect(db.codes[1].group).toBeUndefined();
     expect(db.codes[2].pitchFeedAmbiguous).toBe(true);
+    // 2026-09: the scripts read `tapping` and `wordsAreData` from the loaded database, so
+    // the loader has to carry them (it once dropped `sets` the same way).
+    expect(db.codes[3].wordsAreData).toBe(true);
+    // 2026-09 (review finding NC1): and `tappingElsewhere`, which scale_speed reads.
+    expect(db.codes[4].tappingElsewhere).toBe(true);
+    expect(db.codes[5].tappingElsewhere).toBeUndefined();
+    expect(db.codes[2].tappingElsewhere).toBeUndefined();
   });
 
   it('builds an empty database for a dialect with no file', () => {

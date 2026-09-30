@@ -1,0 +1,11 @@
+{
+  "note": "One of the owner's posts writes the block skip in front of the number (`/15 L ...`, TODO Next up 7). Renumbering rewrites the number and leaves the skip exactly where it was; the ordinary skip-after form (`25 /L ...`) still works too.",
+  "profile": "heidenhain-klartext",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summary",
+    "skipped": [],
+    "warnings": [],
+    "preflight": null
+  }
+}

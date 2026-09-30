@@ -1,0 +1,14 @@
+{
+  "profile": "fanuc-gcode",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"program","line":3,"text":"O1008","endLine":42},
+    {"kind":"comment","line":4,"text":"T5 D8.5 DRILL"},
+    {"kind":"tool","line":6,"text":"T5 — D8.5 DRILL","tool":"5","endLine":18},
+      {"kind":"comment","line":18,"text":"T6 M10 LEFT-HAND TAP"},
+    {"kind":"tool","line":19,"text":"T6 — M10 LEFT-HAND TAP","tool":"6","endLine":29},
+      {"kind":"comment","line":29,"text":"T7 M10 RIGID TAP"},
+    {"kind":"tool","line":30,"text":"T7 — M10 RIGID TAP","tool":"7","endLine":42},
+      {"kind":"end","line":40,"text":"M30"}
+  ]
+}

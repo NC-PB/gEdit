@@ -19,6 +19,10 @@ exports[`generateGrammar > fanuc-gcode: is stable 1`] = `
         "comment",
       ],
       [
+        "<[A-Za-z0-9+\\-_.]+>",
+        "programMarker",
+      ],
+      [
         "^\\s*[/][1-9]?",
         "skip",
       ],
@@ -37,6 +41,10 @@ exports[`generateGrammar > fanuc-gcode: is stable 1`] = `
       ],
       [
         "^\\s*:(?<name>\\d+)",
+        "programMarker",
+      ],
+      [
+        "^\\s*<(?<name>[A-Za-z0-9+\\-_.]+)>",
         "programMarker",
       ],
       [
@@ -135,6 +143,10 @@ exports[`generateGrammar > fanuc-lathe: is stable 1`] = `
         "comment",
       ],
       [
+        "<[A-Za-z0-9+\\-_.]+>",
+        "programMarker",
+      ],
+      [
         "^\\s*[/][1-9]?",
         "skip",
       ],
@@ -153,6 +165,10 @@ exports[`generateGrammar > fanuc-lathe: is stable 1`] = `
       ],
       [
         "^\\s*:(?<name>\\d+)",
+        "programMarker",
+      ],
+      [
+        "^\\s*<(?<name>[A-Za-z0-9+\\-_.]+)>",
         "programMarker",
       ],
       [
@@ -239,7 +255,7 @@ exports[`generateGrammar > heidenhain-klartext: is stable 1`] = `
   "tokenizer": {
     "root": [
       [
-        "^(?:\\s*\\d+\\s+\\*).*$",
+        "^(?:\\s*(?:/\\s*)?\\d+\\s+(?:/\\s*)?\\*).*$",
         "section",
       ],
       [
@@ -257,6 +273,15 @@ exports[`generateGrammar > heidenhain-klartext: is stable 1`] = `
       [
         ""[^"]*"",
         "string",
+      ],
+      [
+        "^(\\s*)([/])(\\s*)(\\d+)(?=\\s|$)",
+        [
+          "",
+          "skip",
+          "",
+          "blockNumber",
+        ],
       ],
       [
         "^(\\s*)(\\d+)(\\s*)([/])",
@@ -284,19 +309,19 @@ exports[`generateGrammar > heidenhain-klartext: is stable 1`] = `
         "mcode",
       ],
       [
-        "DR[+-](?![\\d\\.Q])",
+        "DR[+-](?![\\d.,Q])",
         "keyword",
       ],
       [
-        "(?:I)?[XYZABCUVW](?:(?:[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|[+-]?(?:Q[LRS]?\\d+))|(?=\\s|$))",
+        "(?:I)?[XYZABCUVW](?:(?:[+-]?(?:\\d+[.,]?\\d*|[.,]\\d+)|[+-]?(?:Q[LRS]?\\d+))|(?=\\s|$))",
         "axis",
       ],
       [
-        "(?:FU|FZ|F)(?:(?:[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|[+-]?(?:Q[LRS]?\\d+)))",
+        "(?:FU|FZ|F)(?:(?:[+-]?(?:\\d+[.,]?\\d*|[.,]\\d+)|[+-]?(?:Q[LRS]?\\d+)))",
         "feed",
       ],
       [
-        "S(?:(?:[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|[+-]?(?:Q[LRS]?\\d+)))",
+        "S(?:(?:[+-]?(?:\\d+[.,]?\\d*|[.,]\\d+)|[+-]?(?:Q[LRS]?\\d+)))",
         "spindle",
       ],
       [
@@ -304,11 +329,11 @@ exports[`generateGrammar > heidenhain-klartext: is stable 1`] = `
         "variable",
       ],
       [
-        "(?:I)?(?:CCA|DR2|LEN|REP|DL|DR|MB|NX|NY|NZ|PA|PR|TX|TY|TZ|R)(?:(?:[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|[+-]?(?:Q[LRS]?\\d+)))",
+        "(?:I)?(?:CCA|DR2|LEN|REP|DL|DR|MB|NX|NY|NZ|PA|PR|TX|TY|TZ|R)(?:(?:[+-]?(?:\\d+[.,]?\\d*|[.,]\\d+)|[+-]?(?:Q[LRS]?\\d+)))",
         "number",
       ],
       [
-        "[+-]?(?:\\d+\\.?\\d*|\\.\\d+)",
+        "[+-]?(?:\\d+[.,]?\\d*|[.,]\\d+)",
         "number",
       ],
       [

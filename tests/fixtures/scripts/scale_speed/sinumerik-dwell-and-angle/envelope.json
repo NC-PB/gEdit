@@ -9,7 +9,7 @@
     {
       "line": 6,
       "severity": "info",
-      "message": "S3=1200 is the speed of spindle 3, named by its number; this run scales only the plain S word of the master spindle, so it is left as it is. Switch on \"Also scale other spindles\" to scale it with the others."
+      "message": "S3=1200 is the speed of spindle 3, named by its number; this run scales only the speed of the main spindle, spindle 1, so it is left as it is. Switch on \"Also scale other spindles\" to scale it with the others."
     }
   ]
 }

@@ -1,0 +1,15 @@
+{
+  "message": "No feed rate was changed; 2 left because the code means a threading cycle somewhere else. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 12,
+      "severity": "warning",
+      "message": "F443 is not scaled: G84 is a tapping cycle on another kind of machine or in another G-code system, where this F is the thread lead and not a feed rate. Check the block and scale it by hand if it really is a feed."
+    },
+    {
+      "line": 23,
+      "severity": "warning",
+      "message": "F557 is not scaled: G76 is a threading cycle on another kind of machine or in another G-code system, where this F is the thread lead and not a feed rate. Check the block and scale it by hand if it really is a feed."
+    }
+  ]
+}

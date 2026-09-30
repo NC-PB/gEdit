@@ -25,8 +25,10 @@ import { resolveCodeDbs } from '$lib/core/codes/resolve';
 import { unionCodeDb, variantDialects } from '$lib/monaco/languages';
 import { BUILTIN_CODE_DB_JSON } from '$lib/data/codes';
 import { BUILTIN_PROFILE_JSON } from '$lib/data/profiles';
+import { tokenizeLine } from '$lib/core/nc/tokenizer';
 import { listFixtures, openFixture } from '../../../../tests/unit/helpers/fixtures';
 import type { CodeDb } from '$lib/core/codes/types';
+import type { LineState } from '$lib/core/nc/types';
 import type { Profile } from '$lib/core/profiles/types';
 
 interface Built {
@@ -273,6 +275,18 @@ describe('the iso grammar', () => {
     expect(at('G0X 50 Z3.')).toEqual(['gcode:G0', 'axis:X 50', 'axis:Z3.']);
     expect(at('N 120 G0')).toEqual(['blockNumber:N 120', 'gcode:G0']);
   });
+
+  // `syntax.programNames` (§7.16): painted letter by letter, the `T12` of a name looked
+  // like a tool call and its `F12` like a feed.
+  it('paints a program name as one program marker, at the head and behind a call word', () => {
+    expect(at('<SHAFT_T12> (OD PIN)')).toEqual(['programMarker:<SHAFT_T12>', 'comment:(OD PIN)']);
+    expect(at('M98 <POCKET_F12> L2')).toEqual(['mcode:M98', 'programMarker:<POCKET_F12>', 'number:L2']);
+    expect(at('G65<PROBE-X+1.5>A1.')).toEqual(['gcode:G65', 'programMarker:<PROBE-X+1.5>', 'axis:A1.']);
+    expect(roles(byId('fanuc-lathe').grammar, '<PART_T0101>')).toEqual(['programMarker:<PART_T0101>']);
+    // A blank is no character of a name, and inside a comment nothing is a name.
+    expect(at('(<SUB_T1>)')).toEqual(['comment:(<SUB_T1>)']);
+    expect(at('<A B>')).not.toContain('programMarker:<A B>');
+  });
 });
 
 describe('the klartext grammar', () => {
@@ -297,8 +311,31 @@ describe('the klartext grammar', () => {
     ['41 L X+Q5 Y+Q6 FQ50', ['blockNumber:41', 'keyword:L', 'axis:X+Q5', 'axis:Y+Q6', 'feed:FQ50']],
     ['70 M140 MB 50 F500', ['blockNumber:70', 'mcode:M140', 'number:50', 'feed:F500']],
     ['12 /L X+0', ['blockNumber:12', 'skip:/', 'keyword:L', 'axis:X+0']],
+    // One of the owner's posts writes the block skip in front of the number (§7.16 / R4,
+    // R1): both orders have to read as a `skip` next to a `blockNumber`.
+    ['/62 L X+20', ['skip:/', 'blockNumber:62', 'keyword:L', 'axis:X+20']],
+    // 2026-09 (review finding NC4): a skipped structure block is still a heading, not words.
+    ['/1 * - SCHRUPPEN F500 S3000', ['section:/1 * - SCHRUPPEN F500 S3000']],
+    ['70 / * - SCHLICHTEN F800', ['section:70 / * - SCHLICHTEN F800']],
+    // The decimal comma the owner's CAM post writes, everywhere a number is read: an axis
+    // value, a feed word and a `TOOL CALL` delta (`DR-0,02`).
+    ['63 L X+25,781', ['blockNumber:63', 'keyword:L', 'axis:X+25,781']],
+    ['64 L F1000,5', ['blockNumber:64', 'keyword:L', 'feed:F1000,5']],
+    [
+      '65 TOOL CALL 3 Z S3200 DR-0,02',
+      ['blockNumber:65', 'keyword:TOOL CALL', 'number:3', 'axis:Z', 'spindle:S3200', 'number:DR-0,02'],
+    ],
   ])('reads %s', (line, expected) => {
     expect(at(line)).toEqual(expected);
+  });
+
+  it('reads the decimal comma of a Q-parameter assignment and a cycle continuation', () => {
+    expect(at('   Q206=636,62 ;PLUNGE FEED')).toEqual(['variable:Q206', 'operator:=', 'number:636,62', 'comment:;PLUNGE FEED']);
+    // `X+25,` (5-Axis-1.H): a comma with nothing after it is still the number's separator.
+    expect(at('66 L X+25,')).toEqual(['blockNumber:66', 'keyword:L', 'axis:X+25,']);
+    // A comma inside a string or a comment is text, never a decimal separator.
+    expect(at('67 DECLARE STRING QS2 = "A,B"')).toContain('string:"A,B"');
+    expect(at('68 ; NOTE 1,2,3')).toEqual(['blockNumber:68', 'comment:; NOTE 1,2,3']);
   });
 
   it('leaves the trailing continuation mark out of the comment', () => {
@@ -382,6 +419,36 @@ describe('over the NC fixtures', () => {
     for (const role of [...wanted, id === 'heidenhain-klartext' ? 'keyword' : 'gcode']) {
       expect(seen, `${id} never emitted ${role}`).toContain(role);
     }
+  });
+
+  it('reads every number of the owner-public Klartext programs, decimal comma included', () => {
+    // §7.16 / R4: five of the six published Klartext programs write a decimal comma
+    // (`X241,781`, `Q206=636,62`), never a comma for anything else (checked: none of
+    // FN, PLANE, a string or a comment in these files use one either). Before the fix,
+    // the comma split a number in two — a lone `,` operator token between two number
+    // tokens; this proves every comma now reads as part of one number instead, over the
+    // owner's own programs rather than a synthetic line. Uses `tokenizeLine` (the real,
+    // linear-time tokenizer), not this file's `tokenize()` test harness: the latter
+    // recompiles and re-scans every rule per call, which is fine for a handful of
+    // synthetic lines but far too slow over six real programs.
+    const cp = compileProfile(BUILTIN_PROFILE_JSON.find((raw) => (raw as Profile).id === 'heidenhain-klartext') as Profile);
+    let numbersWithComma = 0;
+    const loneCommas: string[] = [];
+    for (const rel of listFixtures('nc/owner-public/heidenhain-klartext')) {
+      const opened = openFixture(rel);
+      if (opened.refused !== null) continue;
+      let state: LineState | undefined;
+      for (const line of opened.text.split('\n')) {
+        const { tokens, state: next } = tokenizeLine(line, cp, state);
+        state = next;
+        for (const token of tokens) {
+          if (token.text === ',') loneCommas.push(`${rel}: ${line}`);
+          else if (token.text.includes(',')) numbersWithComma += 1;
+        }
+      }
+    }
+    expect(loneCommas.slice(0, 5)).toEqual([]);
+    expect(numbersWithComma).toBeGreaterThan(100);
   });
 
   it('gives the Fanuc fixtures a tool role, and the Klartext ones a section', () => {

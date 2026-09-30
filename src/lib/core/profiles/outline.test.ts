@@ -63,7 +63,7 @@ function outlineOf(rel: string): { profileId: string; text: string; items: Outli
   return { profileId, text, items: index(text, compiled(profileId)).items() };
 }
 
-/** The owner's real programs (plan §9.2): their goldens stay unreviewed until he reads them. */
+/** The owner's real programs (plan §9.2): their goldens stay unreviewed until they read them. */
 const OWNER_PUBLIC = 'nc/owner-public/';
 
 /**
@@ -182,6 +182,22 @@ describe('tool changes the M0 parser missed', () => {
     expect(items.filter((item) => item.kind === 'tool').map((item) => item.line)).toEqual([4]);
   });
 
+  it('leaves a Klartext speed change out of the tool list, tool number and all', () => {
+    // `TOOL CALL 4 S6500` repeats the tool already in the spindle without naming an axis
+    // (syntax-heidenhain §5.1): a speed change, not a second call.
+    expect(itemFor('nc/heidenhain/h05-tool-axis.h', '5 TOOL CALL 4 S6500')).toBeNull();
+    const { items } = outlineOf('nc/heidenhain/h05-tool-axis.h');
+    expect(items.filter((item) => item.kind === 'tool').map((item) => item.line)).toEqual([4, 8]);
+  });
+
+  it('names the tool axis a sister-tool swap, even when the number repeats', () => {
+    // Same tool number, but with its axis this time: the control may swap in a sister
+    // tool, so this is a real call and starts a new segment (§5.1).
+    const item = itemFor('nc/heidenhain/h05-tool-axis.h', '7 TOOL CALL 4 Z S7000');
+    expect(item?.kind).toBe('tool');
+    expect(item?.tool).toBe('4');
+  });
+
   it('lists a named and an indexed Klartext tool', () => {
     expect(itemFor('nc/heidenhain/h02-tool-names.h', '5 TOOL CALL "MILL_D10" Z S5000 F800 DL+0.1')?.tool).toBe('"MILL_D10"');
     expect(itemFor('nc/heidenhain/h02-tool-names.h', '14 TOOL CALL QS1 Z S2800')?.tool).toBe('QS1');
@@ -215,6 +231,19 @@ describe('the kinds', () => {
     expect(flat.some((item) => item.line === 50)).toBe(false);
   });
 
+  // 2026-09 (review finding NC4): the block skip may stand in front of the block number
+  // (`/15 L ...`), and a skipped structure block or comment is still one.
+  it('reads a Klartext section and comment with the block skip in front of the number', () => {
+    const text = '0 BEGIN PGM T MM\n/1 * - SCHRUPPEN F500\n2 / * - SCHLICHTEN\n/3 ; NOTE\n4 END PGM T MM\n';
+    const items = index(text, compiled(KLARTEXT)).items();
+    const flat = items.flatMap((item) => [item, ...(item.children ?? [])]);
+    expect(flat.filter((item) => item.kind === 'section').map((item) => [item.line, item.text])).toEqual([
+      [2, 'SCHRUPPEN F500'],
+      [3, 'SCHLICHTEN'],
+    ]);
+    expect(flat.filter((item) => item.kind === 'comment').map((item) => [item.line, item.text])).toEqual([[4, 'NOTE']]);
+  });
+
   it('lists the program header and the program end', () => {
     const { items } = outlineOf('nc/heidenhain/h01-3tools.h');
     const flat = items.flatMap((item) => [item, ...(item.children ?? [])]);
@@ -234,10 +263,47 @@ describe('the kinds', () => {
     expect(flat.filter((item) => item.kind === 'stop').map((item) => item.text)).toEqual(['M1', 'M1']);
   });
 
+  // `syntax.programNames` (§7.16): a Fanuc program named `<NAME>` instead of numbered.
+  it('lists a named program as written, and a name that holds T12 or M30 as neither a tool nor an end', () => {
+    const lathe = compiled('fanuc-lathe');
+    const text = ['%', '<SHAFT_T12-A> (OD PIN)', 'T0101', 'M98 <GROOVE_M30> L2', 'G65<CHAMFER_F12>A1.', 'M30', '<GROOVE_M30>', 'G01 U-4. F0.08', 'M99', '%'].join('\n');
+    const items = index(text, lathe).items();
+    const flat = items.flatMap((item) => [item, ...(item.children ?? [])]);
+    expect(flat.map((item) => `${item.kind}@${item.line}: ${item.text}`)).toEqual([
+      'program@2: <SHAFT_T12-A>',
+      'tool@3: T1',
+      'subprogram-call@4: M98 <GROOVE_M30> L2',
+      'subprogram-call@5: G65<CHAMFER_F12>',
+      'end@6: M30',
+      'program@7: <GROOVE_M30>',
+      'end@9: M99',
+    ]);
+    expect(index(text, lathe).toolLines()).toEqual([3]);
+  });
+
+  it('never reads a program or a call out of a comment, and keeps the blanks a comment leaves', () => {
+    const fanuc = compiled(FANUC);
+    const flat = index(['(<NOT_A_PROGRAM>)', 'G1 X1. (M98 <NOT_A_CALL>)', 'M98 <SUB_A> (X) L2'].join('\n'), fanuc)
+      .items()
+      .flatMap((item) => [item, ...(item.children ?? [])]);
+    expect(flat.filter((item) => item.kind === 'program' || item.kind === 'subprogram-call').map((item) => item.text)).toEqual([
+      // The call rule's `\s*` runs over the comment, which the map always showed as blanks.
+      'M98 <SUB_A>     L2',
+    ]);
+  });
+
   it('marks M0 and M1 as stops', () => {
     const { items } = outlineOf('nc/fanuc/f01-mill-3tools.nc');
     const flat = items.flatMap((item) => [item, ...(item.children ?? [])]);
     expect(flat.filter((item) => item.kind === 'stop').map((item) => item.text)).toEqual(['M1', 'M1']);
+  });
+
+  // Source review §6 low finding: `end` and `label` rules run over the masked line (§7.4),
+  // so a comment sitting between the label and the end code used to come back as blanks.
+  it('shows a comment inside an Okuma NEND line, not the blanks the mask left behind', () => {
+    const { items } = outlineOf('nc/okuma/o06-nend-comment.MIN');
+    const end = items.find((item) => item.kind === 'end');
+    expect(end?.text).toBe('NEND (UNLOAD) M02');
   });
 });
 
@@ -256,6 +322,28 @@ describe('tool labels', () => {
 
     const below = index('T1 M6\n(FACE MILL)\nS1000 M3\n', compiled(FANUC));
     expect(below.items()[0].text).toBe('T1 — FACE MILL');
+  });
+
+  // 2026-09 (review finding NC7): `M6 T0` on one line unloads the spindle, and so does the
+  // same unload split over two lines, the `T0` preselected and `M6` alone below it.
+  it('lists no tool T0 for an unload, on one line or split over two', () => {
+    const cp = compiled(FANUC);
+    const tools = (text: string) =>
+      index(text, cp)
+        .items()
+        .filter((item) => item.kind === 'tool')
+        .map((item) => [item.line, item.text]);
+    const split = '%\nO1\nT1 M6 (EM10)\nS1000 M3\nG1 X1 F100\nT0\nM6\nT2 M6 (DRILL)\nM30\n%\n';
+    expect(tools(split)).toEqual([
+      [3, 'T1 — EM10'],
+      [8, 'T2 — DRILL'],
+    ]);
+    expect(tools(split.replace('T0\nM6\n', 'M6 T0\n'))).toEqual([
+      [3, 'T1 — EM10'],
+      [7, 'T2 — DRILL'],
+    ]);
+    // A preselected tool that is not the unload is still loaded by the `M6` below it.
+    expect(tools('T0\nT3\nM6\n')).toEqual([[3, 'T3']]);
   });
 
   it('looks three lines up and two down, and no further', () => {
@@ -347,6 +435,37 @@ describe('tool labels', () => {
       p.toolList = { description: 'auto', dropLeadingZeros: false };
     });
     expect(index('T01 M6\n', keepZeros).items()[0].text).toBe('T01');
+  });
+
+  // Owner decision 3 (2026-09-27): a five-digit Fanuc lathe `T` word is a 3-digit tool
+  // plus a 2-digit offset, extending `T101`/`T1234`'s 1+2 and 2+2 split by one more digit
+  // each way. `tool_list.py` reads the same `toolCall.tool` pattern (`test_tool_list.py`).
+  it('splits a Fanuc lathe T word into a tool and an offset, one to five digits', () => {
+    const lathe = compiled('fanuc-lathe');
+    expect(index('T1 M8\n', lathe).items()[0].tool).toBe('1');
+    expect(index('T12 M8\n', lathe).items()[0].tool).toBe('12');
+    expect(index('T101 M8\n', lathe).items()[0].tool).toBe('1');
+    expect(index('T0101 M8\n', lathe).items()[0].tool).toBe('01');
+    expect(index('T1234 M8\n', lathe).items()[0].tool).toBe('12');
+    // Owner decision 3: T12345 = tool 123, offset 45.
+    expect(index('T12345 M8\n', lathe).items()[0].tool).toBe('123');
+  });
+
+  it('reads a Fanuc lathe offset cancel at every digit count, including five', () => {
+    const lathe = compiled('fanuc-lathe');
+    // `T0100` cancels station 1's offset; `T12300` cancels station 123's offset the same
+    // way (owner decision 3's 3-digit station). Neither is a tool change.
+    expect(index('G00 X100. Z100. T0100\n', lathe).items()).toEqual([]);
+    expect(index('G00 X100. Z100. T12300\n', lathe).items()).toEqual([]);
+  });
+
+  it('leaves a six-digit T word alone: not a Fanuc lathe tool-and-offset form', () => {
+    // Owner decision 3 only reaches five digits. A sixth digit is outside every rule the
+    // trigger knows, so the word is never read as a tool change or a preselect at all —
+    // the value is left exactly as written, per the NC-correctness rule.
+    const lathe = compiled('fanuc-lathe');
+    const withSix = index('T123456 M8\n', lathe).items();
+    expect(withSix).toEqual([]);
   });
 
   // G10 M8: with tool management a quoted value is a tool's name, and `T="007"` is not the

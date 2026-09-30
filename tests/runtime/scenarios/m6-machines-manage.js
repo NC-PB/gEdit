@@ -47,7 +47,7 @@ const HOME_2 = '{run}/../m6-machines-manage-1/machines-home'
 
 /** The three preset labels of the Fanuc number-input parameter, as the profile writes them. */
 const IS_B = 'Increments of 0.001 mm (IS-B): X50 is 0.050 mm, X50. is 50 mm; feeds and speeds as written (F200 is 200)'
-const AS_WRITTEN = 'As written: X50 and X50. are both 50 mm; cycle steps in microns (Q6000 is 6 mm)'
+const AS_WRITTEN = 'As written: X50 and X50. are both 50 mm; G74/G75 P and Q, G76 Q and G83/G87 Q are in microns (Q6000 is 6 mm)'
 
 /** The `is-b` preset's rule set, as a machine stores it (resolved `fanuc-lathe.json`). */
 const IS_B_RULES = {

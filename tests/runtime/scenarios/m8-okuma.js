@@ -111,17 +111,18 @@ scenario('m8-okuma', { timeout: 540, files: REPO_FILE }, async (h) => {
     { noExtension: ctx.docs.get(opened['SHAFT-OP2'])?.profileId, txt: ctx.docs.get(opened['detect-okuma.txt'])?.profileId },
   )
 
-  // The intentional M8 change: `.min`, `.sub` and `.ssb` are this control's own extensions
-  // and decide on their own, because line by line an Okuma program looks like Fanuc lathe
-  // code, and a `G71` thread read as the Fanuc roughing cycle would have its lead scaled.
+  // `.min`, `.sub` and `.ssb` are this control's own extensions. Since R1 they weigh 20:
+  // enough to decide a program whose lines both lathes share, not enough to outvote clear
+  // Fanuc mill content (source review 2026-09, the Fanuc mill `.MIN` whose tap feeds were
+  // scaled as Okuma feeds).
   const ssb = await openCopy(h, paths['o04-sub.SUB'], 'O04-SUB.SSB')
   h.check('a .SSB file opens as Okuma', ctx.docs.get(ssb.id)?.profileId === OKUMA, ctx.docs.get(ssb.id)?.profileId)
   const lower = await openCopy(h, paths['o02-thread.MIN'], 'o02-thread.min')
   h.check('and so does a lower-case .min', ctx.docs.get(lower.id)?.profileId === OKUMA, ctx.docs.get(lower.id)?.profileId)
   const fanucAsMin = await openFixtureAs(h, 'nc/fanuc/f01-mill-3tools.nc', 'F01-MILL.MIN')
   h.check(
-    'a Fanuc mill program saved as .MIN opens as Okuma too: the extension decides, as docs/user/dialects.md says (the remedy is to pick the dialect once, per-file memory keeps it)',
-    ctx.docs.get(fanucAsMin.id)?.profileId === OKUMA,
+    'a Fanuc mill program saved as .MIN stays a Fanuc mill program: its content outweighs the extension (R1)',
+    ctx.docs.get(fanucAsMin.id)?.profileId === 'fanuc-gcode',
     ctx.docs.get(fanucAsMin.id)?.profileId,
   )
 

@@ -63,18 +63,21 @@ REQUIRED_CASES = [
     "fanuc-description-trailing",
     "fanuc-feed-modes",
     "fanuc-lathe-ambiguous",
+    "fanuc-lathe-five-digit",
     "fanuc-lathe-turret",
     "fanuc-packed",
     "fanuc-preselect",
     "fanuc-selection-primed",
     "klartext-names",
     "klartext-numbers",
+    "klartext-sister-tool",
     "klartext-speed-only",
     # M6 (WP6.6): the turret, read with the lathe profile.
     "lathe-offsets",
     "lathe-system-b",
     "lathe-turning",
     # M8 (WP8.7): the turning dialects.
+    "okuma-dollar-continuation",
     "okuma-turret",
     "sinumerik-tools",
     # The M8 NC review.
@@ -211,11 +214,39 @@ class TestRules(unittest.TestCase):
         self.assertEqual(self.tools("klartext-numbers"), ["T1", "T2"])
 
     def test_a_klartext_speed_change_is_not_a_tool_change(self):
+        # `TOOL CALL Z S5000` and `TOOL CALL S6000 F900` have no tool number at all;
+        # `TOOL CALL 4 S6500` repeats the tool already in the spindle with no axis
+        # (syntax-heidenhain §5.1). None of the three starts a second call.
         report = self.report_of("klartext-speed-only")
         self.assertEqual(len(report["rows"]), 1)
         self.assertEqual(report["rows"][0]["calls"], 1)
         # The speed range still covers every `TOOL CALL`, because the tool did not change.
-        self.assertEqual(report["rows"][0]["speed"], "3000-6000")
+        self.assertEqual(report["rows"][0]["speed"], "3000-6500")
+
+    def test_a_klartext_tool_call_with_the_axis_is_a_real_second_call(self):
+        # Same tool number as before, but this time with its axis: the control may swap
+        # in a sister tool (syntax-heidenhain §5.1), so this one does start a second call.
+        report = self.report_of("klartext-sister-tool")
+        self.assertEqual(len(report["rows"]), 1)
+        self.assertEqual(report["rows"][0]["calls"], 2)
+
+    def test_a_five_digit_fanuc_lathe_t_word_is_a_3_digit_tool_and_a_2_digit_offset(self):
+        # Owner decision 3 (2026-09-27): T12345 = tool 123, offset 45. T12300 cancels that
+        # offset the same way T0100 cancels station 1's, and a six-digit word is outside
+        # every Fanuc lathe T-word rule, so it is never read as a tool change at all.
+        report = self.report_of("fanuc-lathe-five-digit")
+        self.assertEqual(len(report["rows"]), 1)
+        row = report["rows"][0]
+        self.assertEqual(row["tool"], "T123")
+        self.assertEqual(row["offsets"], "45")
+        self.assertEqual(row["calls"], 1)
+
+    def test_an_okuma_dollar_continuation_carries_the_thread_lead_of_the_block_above_it(self):
+        # G10 M8: `$` continues the block above it (`gedit_nc.continues_block`), so the F
+        # on that line is still the G71 cycle's lead and stays out of the feed range.
+        report = self.report_of("okuma-dollar-continuation")
+        self.assertEqual(report["rows"][0]["feed"], "0.2 /rev")
+        self.assertTrue(any("thread pitch" in finding["message"] for finding in report["findings"]))
 
     def test_a_thread_pitch_is_never_counted_as_a_feed(self):
         report = self.report_of("fanuc-feed-modes")
@@ -262,6 +293,22 @@ class TestRules(unittest.TestCase):
         self.assertEqual(finding["line"], 7)
         self.assertIn("M6", finding["message"])
         self.assertIn("open this program with a lathe profile", finding["message"])
+
+    # Review finding NC7 (2026-09): `T0` preselected and `M6` alone below it unloads the
+    # spindle, as `M6 T0` on one line does; it is no tool T0.
+    def test_an_unload_split_over_two_lines_is_no_tool(self):
+        report = self.report_of("fanuc-unload-split")
+        self.assertEqual([(row["tool"], row["line"]) for row in report["rows"]], [("T1", 3), ("T2", 8), ("T3", 12)])
+        self.assertEqual(report["message"], "3 tools")
+
+    # Review finding NC2 (2026-09): `Decimal(raw)` refused a Klartext decimal comma, so the
+    # feed and speed columns of such a tool went blank.
+    def test_a_klartext_comma_feed_and_speed_are_listed(self):
+        rows = self.report_of("klartext-decimal-comma")["rows"]
+        self.assertEqual([(row["tool"], row["feed"], row["speed"]) for row in rows], [
+            ("T5", "500,5-1000,", "5000,5"),
+            ("T6", "400,25", "3000"),
+        ])
 
     def test_a_program_with_neither_tools_nor_tool_words_is_not_blamed_on_the_profile(self):
         # The two empty reports have to stay apart: this one really uses no tools.

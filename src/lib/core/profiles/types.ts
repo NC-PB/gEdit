@@ -258,6 +258,28 @@ export interface Profile {
      * their own tokens.
      */
     names?: Pattern;
+    /**
+     * Decimal comma (§7.16 / R4). A second character that also starts a fraction when a
+     * number is *read*, alongside `decimalSeparator` (Klartext CAM output writes both:
+     * the manual's `.` and the owner's post's `,`). It never changes what a *new* number
+     * is written with — `decimalSeparator` alone still decides that — but a number that
+     * is rewritten keeps the separator it was written with, point or comma.
+     */
+    decimalSeparatorAlt?: '.' | ',';
+    /**
+     * Phase 2 (§7.16). A program **name** written in place of a program number: Fanuc
+     * `<[A-Za-z0-9+\-_.]+>` (`<SHAFT_T12>`), at the head of a program and behind the call
+     * words (`M98 <SUB_1> L2`, `G65 <MACRO_A> A1.`).
+     *
+     * The whole match is one `programMarker` token wherever it stands outside a comment,
+     * never a run of address words, so no transform or script reads a word inside it. It
+     * carries no `address` and no value: what the program is called is `program.start`'s
+     * answer. The comment mask writes `_` for each of its letters and digits and keeps the
+     * rest (`<SHAFT-T12>` masks as `<_____-___>`), so the tool, end and map rules cannot
+     * find a `T12` or an `M30` in it while a rule that looks for the name's shape still
+     * finds it — and the map shows the name as written, read off the real line.
+     */
+    programNames?: Pattern;
   };
   addresses: {
     tool?: string;
@@ -288,6 +310,14 @@ export interface Profile {
      * so the word is reported and left alone (WP8.7).
      */
     speedLimitWords?: string[];
+    /**
+     * 2026-09 (owner decision of 2026-09-27). The number of the machine's main spindle
+     * (Sinumerik `'1'`). A plain `S` while this spindle is the master (the default, or
+     * after `SETMS(1)`) and the spindle word with this number (`S1=`) are the main
+     * spindle's speed; any other numbered spindle is another spindle. Absent: the profile
+     * names no main spindle, and every numbered spindle is another one.
+     */
+    mainSpindle?: string;
   };
   toolCall: {
     /** A line that changes the tool (`M6`, `TOOL CALL …`). */

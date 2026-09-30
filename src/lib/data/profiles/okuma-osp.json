@@ -15,17 +15,19 @@
     "newFileLineEnding": "crlf"
   },
   "detect": {
-    "extensions": { "min": 5000, "sub": 5000, "ssb": 5000 },
+    "extensions": { "min": 20, "sub": 20, "ssb": 20 },
     "content": [
       { "pattern": "^\\$[\\w-]+\\.(?:MIN|SUB|SSB|SDF)%", "weight": 5000 },
       { "pattern": "^[^(]*(?<![A-Z])(?:CALL|MODIN)\\s+O[A-Z0-9]{1,4}(?![A-Z0-9_])", "weight": 100 },
       { "pattern": "^\\s*(?:N\\w+\\s+)?(?:RTS|MODOUT)(?![A-Z0-9])", "weight": 100 },
-      { "pattern": "^[^(]*(?<![A-Z])G0*18\\d(?![\\d.])", "weight": 100 },
       { "pattern": "^[^(]*(?<![A-Z])G0*8[5-8][ \\t]*N[A-Z0-9]{1,4}(?![A-Z0-9])", "weight": 100 },
       { "pattern": "^(?=[^(]*(?<![A-Z])H[-+]?[.\\d])(?=[^(]*(?<![A-Z])D[-+]?[.\\d])(?![^(]*(?<![A-Z])P[-+]?[.\\d])[^(]*(?<![A-Z])G0*7[12](?![\\d.])", "weight": 100 },
       { "pattern": "^(?=[^(]*(?<![A-Z])K[-+]?[.\\d])[^(]*(?<![A-Z])G0*7[78](?![\\d.])", "weight": 100 },
-      { "pattern": "^\\$[ \\t]+[A-Z]", "weight": 100 },
+      { "pattern": "^\\$(?:[ \\t]+[A-Z]|[A-Z]{1,2}[-+.\\d= \\t])", "weight": 100 },
+      { "pattern": "^[^(]*(?<![A-Z])G0*1[56][ \\t]*H\\d", "weight": 400 },
+      { "pattern": "^(?![^(]*(?<![A-Z])G0*4[34](?![\\d.]))[^(]*(?<![A-Z])G0*56[ \\t]*H\\d", "weight": 400 },
       { "pattern": "^[^(]*(?<![A-Z])SB\\s*=", "weight": 20 },
+      { "pattern": "^(?![^(]*(?<![A-Z])P[-+]?[.\\d])(?![^(]*(?<![A-Z])G(?!0*7[12](?![\\d.]))\\d)(?=[^(]*(?<![A-Z])[XZ][-+]?[.\\d])[^(]*(?<![A-Z])G0*7[12](?![\\d.])", "weight": 20 },
       { "pattern": "^[^(]*(?<![A-Z])IF\\s*\\[[^\\]\\[]*\\]\\s*(?:GOTO\\s*)?N[A-Z0-9]{1,4}(?![A-Z0-9])", "weight": 20 },
       { "pattern": "^[^(]*(?<![A-Z])T\\d{6}(?!\\d)", "weight": 8 },
       { "pattern": "^[^(]*(?<![A-Z])V\\d+\\s*=", "weight": 8 },
@@ -35,9 +37,10 @@
       { "pattern": "(?<![A-Z])G0*50\\s*S\\d", "weight": 4 },
       { "pattern": "(?<![A-Z])G0*9[67](?![\\d.])", "weight": 4 },
       { "pattern": "(?<![A-Z])T\\d{4}(?!\\d)", "weight": 3 },
+      { "pattern": "^[^(]*(?<![A-Z])G0*18\\d(?![\\d.])", "weight": 3 },
       { "pattern": "^\\s*(N\\d+\\s*)?[GM]\\d{1,3}(\\.\\d)?(?![\\d.])", "weight": 1 }
     ],
-    "priority": 0
+    "priority": -1
   },
   "syntax": {
     "comments": [{ "start": "(", "end": ")" }],
@@ -51,7 +54,7 @@
     "systemVariables": "V[A-Z][A-Z0-9]{3}",
     "assignment": "[A-Z][A-Z0-9]{0,3}(?=\\s*=(?!=))",
     "header": "^\\$[^%]*%",
-    "continuationStart": "^[ \\t]*\\$(?=[ \\t]|$)",
+    "continuationStart": "^[ \\t]*\\$(?![^\\r\\n]*%)",
     "names": "[A-Z]{2}[A-Z0-9]*",
     "keywords": [
       "GOTO",

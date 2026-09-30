@@ -149,15 +149,28 @@ code of the block, so you can see which cycle it was) and feeds written as a var
 (`F#101`, `F=R1`, `F=V1`): the control works out those values, gEdit cannot. A feed written
 under an address of its own — a chamfer feed `FRC=`, the `FA=` of a change of cutting
 conditions — is not the `F` word either; it is reported and left. An Okuma line that starts
-with `$` belongs to the block above it, so the lead a `G71` thread cycle carries on its `$`
-line is a thread lead like any other. Klartext `FMAX` and `FAUTO` are not numbers and are
-never touched; an `F` on a rapid block (`G0 … F`) is scaled like any other.
+with `$` belongs to the block above it, whether or not a blank follows the `$`, so the lead
+a `G71` thread cycle carries on its `$` line is a thread lead like any other. Klartext
+`FMAX` and `FAUTO` are not numbers and are never touched; an `F` on a rapid block (`G0 … F`)
+is scaled like any other. A value written with a Klartext decimal comma (`F1000,5`) is
+scaled like any other and written back with its comma; a limit compares it correctly too.
 
 **A code that means two things is refused.** Some codes cut a thread on another kind of
 machine, in the other G-code system or on another make of control — `G76` and `G92` on the
 Fanuc mill profile, `G74` and `G78` (system A) or `G74` and `G92` (system B) on the Fanuc
 lathe, `G76`, `G84`, `G88` and `G92` on an Okuma. Nothing in the block says which reading is
-meant, so their `F` is left alone with a warning.
+meant, so their `F` is left alone with a warning — "threading cycle" for the codes above,
+and "**tapping** cycle" for Okuma's `G84` and `G88` and the Fanuc lathe's `G74`, whose other
+reading is a tap rather than a thread (their speed is left too, below).
+
+**An `F` under a code the dialect's database does not know is reported and left, not
+scaled**, when that code is written under the letter the dialect writes its moves with
+(`G` on the ISO dialects; Klartext has none). A builder's own cycle may take that word as
+something other than a feed rate, and scaling it changed a real program's radial tapping
+lead before this rule existed.
+
+**The words of a `G65`/`G66` macro call and a `G10` offset block are arguments or data, not
+feeds.** They are reported and left, whatever letter they are written under.
 
 **A dwell is not a feed.** In a dwell block the `F` word is a time — Okuma `G04 F2`,
 Sinumerik `G4 F2` — so it is never scaled and not counted as a feed rate; the summary says
@@ -179,7 +192,14 @@ of a table in the script: on the Fanuc mill that is `G93`/`G94`/`G95`; on a Fanu
 Sinumerik `G93`/`G94`/`G95`, and there `G96`/`G97` (per revolution) and `G961`/`G971` (per
 minute) switch the feed unit too. On a Fanuc lathe, a feed inside the finishing profile of
 a `G71`–`G73` roughing cycle is an ordinary feed and is scaled like one; on an Okuma, `G71`
-and `G72` are thread cycles and their `F` is a lead.
+and `G72` are thread cycles and their `F` is a lead. **Fanuc `G63`** (tapping mode) is a
+mode of its own, not a cycle: while it is in force — until `G61`, `G62` or `G64` — the
+feed is a lead and is left, exactly as inside a tapping cycle.
+
+**An Okuma `E` word that no code of its block, or the cycle in force, declares as a
+parameter is reported and left.** LAP's high-speed bar turning cycle makes `E` a contour
+feed only inside a finish-contour definition, and `E` can also be a lead or a dwell
+elsewhere on this control — reporting it is the one reading that is safe everywhere.
 
 **The limits are compared against real values.** If gEdit can work out what a feed is worth
 on this document's [machine](machines.md), your limits and thresholds are compared against
@@ -192,7 +212,9 @@ dialect's defaults were assumed.
 **A selection is read in the state it is really written in.** When you run the script on
 part of a program, the lines above the selection are read for their modal state before the
 first line it may change, so a `G95`, a `G96` or a tapping cycle set higher up is in force.
-The run tells you what it inherited, as an ordinary note on its first line.
+The run tells you what it inherited, as an ordinary note on its first line. Started inside a
+modal tapping call that repeats (Sinumerik `MCALL CYCLE840`), the selection still leaves the
+next tap's lead, because the run knows it is still inside the call.
 
 There is one limit. A very large amount of text above the selection is not sent to the
 script — a selection tens of thousands of lines into a program — and the run then says so
@@ -206,12 +228,32 @@ those blocks by hand.
 The same, for `S`. Leaves alone, and reports, speeds written as a variable and — unless you
 ask — speed limits and the speeds of other spindles.
 
+**A tap's speed is left as written, and reported, like its feed.** Feed and speed are tied
+by the thread's pitch, so scaling one without the other cuts a different thread. This covers
+every speed word of a tapping block — a tapping code of the block itself, a modal tapping
+cycle in force (Fanuc `G84`, Sinumerik `G331`…), a tapping mode in force (Fanuc `G63` until
+`G61`/`G62`/`G64`), a modal call of a tapping cycle while it repeats (`MCALL CYCLE840`), or a
+tapping cycle a keyword defines (Klartext `CYCL DEF 207`) while a call of the database's
+`cycle` group that starts nothing runs it (`CYCL CALL`, `M99`, `M89`; a later `CYCL DEF`
+under the same keyword, such as another parameter set of 207, does not end it) — plus, for a
+tapping block with no speed word of its own, the speed word written last before it, of
+whichever spindle. The run counts these speeds and reports "N tapping speeds left as
+written"; threading keeps the old behaviour, scaled with a warning, because it is not a tap
+in the database's own reading. **Okuma's `G84` and `G88`, and the Fanuc lathe's `G74`, also
+keep their speed**: these numbers are a tapping cycle on a machining centre or a mill, even
+though on a lathe they are LAP or a face-pecking cycle, and the pitch ties speed to feed
+there too. A speed-only block under a modal tap — `S900` with no move — is treated as an
+ordinary speed and scaled, and counted as the last speed written, so the next tap that runs
+with no `S` of its own still leaves the right one.
+
 **Constant surface speeds** (`G96`) are a three-way choice like the per-revolution feeds:
 **Also scale constant surface speeds**, automatically, yes or no. Under `G96` the `S` word
 is a surface speed in metres or feet per minute, not revolutions per minute, so scaling it
 is a different decision from scaling an rpm — and one you should make deliberately.
 **Automatically** scales them on a turning dialect, where nearly every cut is one, and
-leaves them alone, and reports them, on a milling one.
+leaves them alone, and reports them, on a milling one. On Sinumerik, `SVC=` and `SVC[n]=`
+follow the same choice: the tool's cutting speed on the master spindle, or the spindle the
+index names.
 
 **A speed limit is not a speed.** The `S` of the block that clamps the top speed for
 constant surface speed — `G50 S` on a Fanuc lathe in G-code system A and on an Okuma,
@@ -221,20 +263,31 @@ by default and reported, and so is a clamp written as a word of its own (`LIMS=3
 included (`G26 S3000 S2=2000`). Which code or word that is comes from the dialect's code
 database and profile, so the script is right on every dialect without knowing any of them.
 
-**Other spindles are left alone unless you ask.** Only the master spindle's plain `S` is
-scaled by default. A speed written with an address of its own — `SB=2000` for a driven tool,
-`S3=2400` for spindle 3, `S[SPI]=2400` for the spindle whose number is in `SPI` — is
-reported and left, and so is a plain `S` while the program has made another spindle the
-master (`SETMS(3)` on a Sinumerik), because the script cannot tell which spindle is your
-main one. **Also scale other spindles** scales them with the rest. The `S` of a dwell is
-never a speed (`G4 S2` waits two spindle revolutions), and neither is a word the dialect
-lists as an angle (the start angle `SF=` of a thread).
+**Other spindles are left alone unless you ask.** On a Sinumerik program, gEdit's main
+spindle is spindle 1: a plain `S` while spindle 1 is the master (the default, `SETMS`, or
+`SETMS(1)`), and `S1=`, are scaled by default; on a Fanuc lathe or an Okuma the master
+spindle's plain `S` is scaled the same way. A speed written with an address of its own —
+`SB=2000` for a driven tool, `S3=2400` for spindle 3, `S[SPI]=2400` for the spindle whose
+number is in `SPI` — is reported and left, and so is a plain `S` while the program has made
+another spindle the master (`SETMS(2)` on a Sinumerik, `G141` on an Okuma — the sub spindle
+question there still needs the project's answer), because the script cannot tell which
+spindle is your main one otherwise. **Also scale other spindles** scales them with the rest.
+The `S` of a dwell is never a speed (`G4 S2` waits two spindle revolutions), and neither is
+a word the dialect lists as an angle (the start angle `SF=` of a thread).
 
 **Cycles written as calls** carry their speeds as arguments (the tapping speed of
 `CYCLE84(…)`); they are listed and left as they are.
 
+A value written with a Klartext decimal comma is scaled and written back with its comma,
+like a feed.
+
 Defaults to whole numbers, which is what nearly every control wants. A selection is primed
-from the lines above it in exactly the same way, and warns in exactly the same case.
+from the lines above it in exactly the same way, and warns in exactly the same case. If a
+selection ends with a speed that is still in force at its last line and was itself scaled,
+an **info** note on that line says so: the lines below the selection were not read, so a
+tapping or threading block further down that runs at this speed may have had its lead
+written for the old one. Run the command on the whole program, or check those blocks by
+hand, when this note appears.
 
 ### Tool list
 
@@ -244,11 +297,18 @@ of feeds and speeds each tool is used with. Click a row to jump to the call.
 
 On a Fanuc or Okuma turning program it lists the **turret stations**, and an extra column
 shows the offsets each station was called with (`01, 11`) — so a station used with two
-different offsets is one row and tells you both. On a Fanuc lathe, `T0100`, which cancels
-the offset rather than changing the tool, is not a call; on an Okuma, `T0100` is station 1
-with offset 00, and only station `00` (`T0001`) is no tool. A six-digit Okuma `T010203` is
-nose-radius set 01, station 02 and offset 03, and a `T` inside a cycle block only switches
-the offset. A Sinumerik `T` carries no offset, so its list has no such column.
+different offsets is one row and tells you both. On a Fanuc lathe, `T0100` (and, with a
+five-digit word, `T12300`), which cancels the offset rather than changing the tool, is not a
+call; on an Okuma, `T0100` is station 1 with offset 00, and only station `00` (`T0001`) is
+no tool. A six-digit Okuma `T010203` is nose-radius set 01, station 02 and offset 03, and a
+`T` inside a cycle block only switches the offset. A Sinumerik `T` carries no offset, so its
+list has no such column. On a Fanuc mill, `T0` followed by `M6` is an unload — no tool T0 —
+even when the two are on separate lines.
+
+A Klartext `TOOL CALL` of the tool already in the spindle, written with no axis, is a speed
+change rather than a second call: only a `TOOL CALL` that names a different tool, or names
+the axis (a possible sister-tool swap on the same number), counts as a change and moves the
+list on.
 
 A speed or feed written **before** the turret indexes (`G97 S1500 M03`, then `T0202`)
 belongs to the new tool: a value counts for the tool that moves next. A dwell is in no range,
@@ -258,7 +318,8 @@ plain `S` of the main spindle, so a driven tool shows no speed of its own.
 A range is in one unit: the one the control starts in — per revolution on a lathe, marked
 `/rev` — or, for a tool with no value in that unit, the one it has (`/tooth` and `surface`
 are marked as well; per minute and rpm carry no mark). A value in another unit is left out
-of the range and listed under the table, and so are thread pitches and speed limits.
+of the range and listed under the table, and so are thread pitches and speed limits. A
+Klartext value written with a decimal comma is read and shown the same as any other.
 
 A tool named in quotation marks is a name, whatever it is made of: `T="007"` and tool
 number 7 are two rows, and a name keeps its zeros and, when it is all digits, its quotation

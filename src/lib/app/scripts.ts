@@ -42,6 +42,7 @@ import { files as appFiles } from '$lib/app/fileOps';
 import { modals as appModals } from '$lib/app/modals';
 import { status as appStatus } from '$lib/app/status';
 import { lockRefusal } from '$lib/app/readOnlyLock';
+import { contradictionRefusal, guardsScriptOutput } from '$lib/core/profiles/contradiction';
 import { initialValues } from '$lib/core/forms/values';
 import { decideApply } from '$lib/core/scripting/apply';
 import { buildContext, MAX_PRECEDING_LINES } from '$lib/core/scripting/context';
@@ -466,6 +467,17 @@ export function createScriptService(deps: ScriptDeps): ScriptService {
       effective = deps.machines.effective(docId);
     } catch {
       say(MSG.noProfile(doc.profileId), { error: true });
+      return;
+    }
+
+    // R1: a script reads the program through the profile it is handed, so a result that
+    // replaces text is refused on a program that says it is another dialect's.
+    const read = (first: number, last: number): string[] => deps.editor.getLines(docId, first, last);
+    const contradicted = guardsScriptOutput(entry.meta?.output)
+      ? contradictionRefusal(effective.cp, read, deps.editor.getLineCount(docId), label, 'scripts')
+      : null;
+    if (contradicted !== null) {
+      say(contradicted, { error: true });
       return;
     }
 

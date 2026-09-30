@@ -121,7 +121,7 @@ describe('effectiveMachine', () => {
     // whose provenance does not must not share one compile. Document A has no machine and
     // the program says system B; document B has a machine that says so. Same parameters,
     // and the second one would otherwise have been told "detected" for every assumed
-    // value of a document where the user had chosen the machine himself, or the other way
+    // value of a document where the user had chosen the machine themselves, or the other way
     // round.
     const detected = effectiveMachine(LATHE, null, 'none', { gcodeSystem: { value: 'B', margin: 4 } });
     const stated = effectiveMachine(LATHE, machine({ params: { variants: { gcodeSystem: 'B' } } }), 'document', {});

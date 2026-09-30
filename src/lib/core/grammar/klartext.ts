@@ -27,12 +27,12 @@ import {
   alternation,
   blockSkipPattern,
   commentMarkers,
+  escapeClass,
   escapeLiteral,
   keywordPattern,
   letterAddresses,
   lineStart,
   namesPattern,
-  numberPattern,
   operatorClass,
   orderedKeywords,
   variablePattern,
@@ -44,11 +44,28 @@ import {
 /** The letter an M function starts with, and the role it gets. */
 const M_FUNCTION = { letter: 'M', role: 'mcode' as Role };
 
+/**
+ * The decimal marks this profile reads: the manual's point, plus the owner's CAM comma
+ * when `decimalSeparatorAlt` is set (§7.16 / R4). `chars` is the raw characters, for
+ * embedding inside another character class; `atom` is the same marks as one pattern atom.
+ */
+function decimalMarks(p: Profile): { chars: string; atom: string } {
+  const marks = [p.syntax?.decimalSeparator ?? '.', p.syntax?.decimalSeparatorAlt].filter(
+    (mark): mark is '.' | ',' => typeof mark === 'string' && mark.length === 1,
+  );
+  const chars = escapeClass(marks.join(''));
+  return { chars, atom: marks.length > 1 ? `[${chars}]` : escapeLiteral(marks[0] ?? '.') };
+}
+
 /** Builds the rules of a `klartext` grammar, in the order Monarch tries them. */
 export function klartextRules(p: Profile, db: CodeDb): GrammarRule[] {
   const rules: GrammarRule[] = [];
-  const point = escapeLiteral(p.syntax?.decimalSeparator ?? '.');
-  const number = numberPattern(p);
+  const marks = decimalMarks(p);
+  const numberPat = (o: { signed?: boolean } = {}): string => {
+    const sign = o.signed === false ? '' : '[+-]?';
+    return `${sign}(?:\\d+${marks.atom}?\\d*|${marks.atom}\\d+)`;
+  };
+  const number = numberPat();
   const variables = variablePattern(p);
   const value = variables === null ? `(?:${number})` : `(?:${number}|[+-]?${variables})`;
   const incremental = p.syntax?.incrementalPrefix;
@@ -87,11 +104,22 @@ export function klartextRules(p: Profile, db: CodeDb): GrammarRule[] {
   if (typeof continuation === 'string' && continuation !== '') rules.push([continuation, 'operator']);
   rules.push(['"[^"]*"', 'string']);
 
-  // 5 the block skip behind the block number, 6 the block number itself
+  // 5 the block skip before or behind the block number, 6 the block number itself
+  //
+  // Klartext's block number is `lineStart`-anchored (its leading integer would otherwise
+  // paint any bare number as one), and Monarch tries a `^`-anchored rule only at column 0
+  // of the *line*, never at the column a token before it stopped at (`grammar.test.ts`'s
+  // harness models this: a `lineStart` rule is tried only when `pos === 0`). So a skip
+  // before the number has to be captured together with it, in one rule, exactly as a skip
+  // behind it already is — a rule that reads only the skip would leave the number for the
+  // unanchored, unaddressed "bare numbers" rule further down (§7.16 / R1: one of the
+  // owner's posts writes it this way, `/15 L …`).
   const leading = p.syntax?.blockNumber?.mode === 'leading-integer';
   const blockNumber = leading ? '\\d+' : (namesPattern([p.syntax?.blockNumber?.prefix ?? 'N']) ?? 'N') + '\\s*\\d+';
   const skip = blockSkipPattern(p);
-  if (skip?.before) rules.push([lineStart(`\\s*${skip.pattern}`), 'skip']);
+  if (skip?.before) {
+    rules.push([lineStart(`(\\s*)(${skip.pattern})(\\s*)(${blockNumber})(?=\\s|$)`), ['', 'skip', '', 'blockNumber']]);
+  }
   if (skip?.after) {
     rules.push([lineStart(`(\\s*)(${blockNumber})(\\s*)(${skip.pattern})`), ['', 'blockNumber', '', 'skip']]);
   }
@@ -110,7 +138,7 @@ export function klartextRules(p: Profile, db: CodeDb): GrammarRule[] {
   // a digit or a Q parameter behind it makes it the delta radius of a `TOOL CALL`).
   rules.push([`${escapeLiteral(M_FUNCTION.letter)}\\d{1,3}(?![A-Za-z0-9])`, M_FUNCTION.role]);
   const known = addressNames(db);
-  if (known.includes('DR')) rules.push([`DR[+-](?![\\d${point}Q])`, 'keyword']);
+  if (known.includes('DR')) rules.push([`DR[+-](?![\\d${marks.chars}Q])`, 'keyword']);
 
   // 10 to 14: the addresses the profile gives a meaning, then the rest of the database.
   const own = letterAddresses(p);
@@ -141,7 +169,7 @@ export function klartextRules(p: Profile, db: CodeDb): GrammarRule[] {
   // The sign belongs to the number here, unlike in `iso.ts`: the control writes every
   // position with one (`Q201=-15`), and there is no expression syntax for `-` to be the
   // operator of in a place a number can start.
-  rules.push([numberPattern(p), 'number']);
+  rules.push([numberPat(), 'number']);
   const operators = operatorClass(p, '[];');
   if (operators !== null) rules.push([operators, 'operator']);
   if (p.syntax?.wordSeparatorRequired === true) rules.push(['[A-Za-z][A-Za-z0-9+\\-.:\\\\/_]*', '']);

@@ -42,7 +42,8 @@ describe('the built-in code database service', () => {
   });
 
   it('completes through the profile', () => {
-    expect(service.completions('fanuc-gcode', 'G8', false)).toHaveLength(10);
+    // G80–G89 plus the older-format rigid taps G84.2 and G84.3 (2026-09).
+    expect(service.completions('fanuc-gcode', 'G8', false)).toHaveLength(12);
     expect(service.completions('heidenhain-klartext', 'CYCL DEF 2', true).length).toBeGreaterThan(0);
     expect(service.completions('no-such-profile', 'G', true)).toEqual([]);
   });

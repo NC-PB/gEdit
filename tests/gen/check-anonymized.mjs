@@ -14,7 +14,7 @@
 //
 // Exit code 0 when nothing was flagged, 1 when something was, 2 when it could not read a
 // file. The output names the file the user passed in and its line numbers, which is the
-// point here: this runs on the owner's own machine, on files he chose.
+// point here: this runs on the owner's own machine, on files they chose.
 
 import { readFileSync } from 'node:fs';
 

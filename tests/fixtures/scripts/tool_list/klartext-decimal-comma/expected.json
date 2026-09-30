@@ -1,0 +1,49 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [
+    {
+      "tool": "T5",
+      "description": "",
+      "line": 2,
+      "calls": 1,
+      "feed": "500,5-1000,",
+      "speed": "5000,5"
+    },
+    {
+      "tool": "T6",
+      "description": "",
+      "line": 6,
+      "calls": 1,
+      "feed": "400,25",
+      "speed": "3000"
+    }
+  ],
+  "message": "2 tools, 2 without a description",
+  "findings": []
+}

@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 1 of 2 spindle speeds to 50 %; 1 speed of a possible tap left as written, 1 thread block to check by hand.",
+  "findings": [
+    {
+      "line": 7,
+      "severity": "warning",
+      "message": "S295 is the speed in force when the G84 block on line 12 runs, and G84 is a tapping cycle on another kind of machine, where its feed follows from this speed and the pitch. Scale feed leaves the F of such a block for that reason, so the speed is left as written too and the two stay a pair. Check the block, and change the speed and the feed together by hand if it should run at another speed."
+    },
+    {
+      "line": 23,
+      "severity": "warning",
+      "message": "This block runs at S1114, which was scaled on line 19, and its code (G76) is a threading cycle on another kind of machine or in another G-code system: if this is a lathe program the thread is cut at the changed speed, so check the block by hand."
+    }
+  ]
+}

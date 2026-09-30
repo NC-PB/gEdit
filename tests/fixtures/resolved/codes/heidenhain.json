@@ -803,7 +803,8 @@
       "pitchFeed": true,
       "sets": {
         "cycle": "start"
-      }
+      },
+      "tapping": true
     },
     {
       "code": "CYCL DEF 207",
@@ -840,7 +841,8 @@
       "pitchFeed": true,
       "sets": {
         "cycle": "start"
-      }
+      },
+      "tapping": true
     },
     {
       "code": "CYCL DEF 209",
@@ -897,7 +899,8 @@
       "pitchFeed": true,
       "sets": {
         "cycle": "start"
-      }
+      },
+      "tapping": true
     },
     {
       "code": "CYCL DEF 240",

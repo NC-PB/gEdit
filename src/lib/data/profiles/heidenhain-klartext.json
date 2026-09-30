@@ -17,21 +17,23 @@
   "detect": {
     "extensions": { "h": 10 },
     "content": [
+      { "pattern": "^\\s*\\d+\\s+BEGIN\\s+PGM\\s+\\S+\\s+(?:MM|INCH)(?![A-Z0-9_])", "weight": 5000 },
       { "pattern": "^\\s*(\\d+\\s+)?BEGIN\\s+PGM\\b", "weight": 5 },
       { "pattern": "^\\s*(\\d+\\s+)?TOOL\\s+CALL\\b", "weight": 5 },
-      { "pattern": "^\\s*\\d+\\s+(L|CC|C|CR|LBL)\\b", "weight": 1 },
+      { "pattern": "^\\s*\\d+\\s+(?:(?:L|LN|LP|CC|C|CR|CT|CP|RND|CHF|APPR|DEP|LBL|CYCL|FN|PLANE|FUNCTION|TOOL|BLK|END)(?![A-Z0-9_])|[*;]|[MQ]\\d)", "weight": 2 },
       { "pattern": "\\bFMAX\\b", "weight": 1 }
     ]
   },
   "syntax": {
     "comments": [{ "start": ";", "end": null }],
     "strings": true,
-    "sectionHeading": "^\\s*\\d+\\s+\\*",
+    "sectionHeading": "^\\s*(?:/\\s*)?\\d+\\s+(?:/\\s*)?\\*",
     "continuation": "~\\s*$",
     "continuationMark": "~",
-    "blockSkip": { "chars": "/", "position": "after-number" },
+    "blockSkip": { "chars": "/", "position": "either" },
     "blockNumber": { "mode": "leading-integer", "mandatory": true },
     "decimalSeparator": ".",
+    "decimalSeparatorAlt": ",",
     "decimalPointSignificant": false,
     "wordSeparatorRequired": true,
     "incrementalPrefix": "I",
@@ -92,7 +94,7 @@
   },
   "toolCall": {
     "trigger": "\\bTOOL\\s+CALL\\s+(\\d|\"|QS\\d)",
-    "tool": "TOOL\\s+CALL\\s+(?<tool>\\d+(\\.\\d)?|\"[^\"]+\"|QS\\d+)",
+    "tool": "TOOL\\s+CALL\\s+(?<tool>\\d+(\\.\\d)?|\"[^\"]+\"|QS\\d+)\\s*(?<axis>[XYZ])?\\b",
     "toolFrom": "same-line"
   },
   "program": {
@@ -100,8 +102,8 @@
     "end": ["\\bEND\\s+PGM\\b"]
   },
   "outline": [
-    { "kind": "section", "pattern": "^\\s*\\d+\\s+\\*\\s*-?\\s*(?<text>.*)$" },
-    { "kind": "comment", "pattern": "^\\s*\\d+\\s*;\\s*(?<text>.*)$" },
+    { "kind": "section", "pattern": "^\\s*(?:/\\s*)?\\d+\\s+(?:/\\s*)?\\*\\s*-?\\s*(?<text>.*)$" },
+    { "kind": "comment", "pattern": "^\\s*(?:/\\s*)?\\d+\\s*(?:/\\s*)?;\\s*(?<text>.*)$" },
     { "kind": "program", "pattern": "^\\s*\\d+\\s+(?<text>BEGIN\\s+PGM\\s+(?<name>\\S+)(?:\\s+(?:MM|INCH))?)" },
     { "kind": "label", "pattern": "^\\s*\\d+\\s+(?:/\\s*)?(?<text>LBL\\s+(?<name>(?!0(?![\\d.]))\\S+))" },
     { "kind": "subprogram-call", "pattern": "\\b(?<text>(?:CALL\\s+(?:LBL|PGM)|SEL\\s+PGM)\\s+\\S+(?:\\s+REP\\s+\\S+)?)" },

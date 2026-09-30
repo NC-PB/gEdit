@@ -8,6 +8,7 @@
     "G49",
     "G81",
     "G82",
+    "G84.3",
     "G86",
     "G91",
     "G95"
@@ -292,9 +293,10 @@
       "code": "G74",
       "group": "cycle",
       "pitchFeedAmbiguous": true,
+      "tappingElsewhere": true,
       "sets": { "cycle": "start" },
       "label": "Face pecking cycle",
-      "description": "Drills or grooves into the face in pecks, pulling back by R between them so the chips clear. Written in two blocks: the retract first, then the end point and the steps. On a lathe it is not a tapping cycle, so F is an ordinary feed — but the same number is the left-hand tapping cycle on a mill, where F is the pitch. gEdit will not scale the F of such a block: refusing a real pecking feed costs one edit by hand, scaling a pitch cuts a different thread.",
+      "description": "Drills or grooves into the face in pecks, pulling back by R between them so the chips clear. Written in two blocks: the retract first, then the end point and the steps. On a lathe it is not a tapping cycle, so F is an ordinary feed — but the same number is the left-hand tapping cycle on a mill, where F is the pitch. gEdit scales neither the F of such a block nor the spindle speed it runs at: refusing a real pecking feed costs one edit by hand, scaling a pitch or the speed of a tap cuts a different thread.",
       "params": [
         {
           "address": "R",
@@ -487,6 +489,7 @@
       "group": "cycle",
       "modal": true,
       "pitchFeed": true,
+      "tapping": true,
       "sets": { "cycle": "start" },
       "label": "Tapping cycle on the face",
       "description": "Cuts a thread along Z into the face of the part: the spindle turns back at the bottom of the hole. F is the thread lead, so scaling the feed would change the thread.",
@@ -509,6 +512,7 @@
       "group": "cycle",
       "modal": true,
       "pitchFeed": true,
+      "tapping": true,
       "sets": { "cycle": "start" },
       "label": "Rigid tapping cycle, older block format",
       "description": "Rigid tapping written in the format of an older control generation. F is the thread lead, so scaling the feed would change the thread."
@@ -588,6 +592,7 @@
       "group": "cycle",
       "modal": true,
       "pitchFeed": true,
+      "tapping": true,
       "sets": { "cycle": "start" },
       "label": "Tapping cycle on the side",
       "description": "Cuts a thread along X into the side of the part: the spindle turns back at the bottom of the hole. F is the thread lead, so scaling the feed would change the thread.",

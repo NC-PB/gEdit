@@ -20,7 +20,7 @@ Python subset (plan AD-11).
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal, localcontext
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -187,6 +187,9 @@ class _LexSpec:
     #: Upper-case ``syntax.incrementalPrefix``.
     incremental: int
     decimal_point: int
+    #: ``syntax.decimalSeparatorAlt`` (the Klartext decimal comma, §7.16 / R4), or
+    #: ``_NO_CHAR`` when the profile does not declare one.
+    decimal_point_alt: int
     operators: frozenset
     #: ``%`` at the head of a line is a tape marker unless the profile uses it otherwise.
     tape_marker: bool
@@ -206,6 +209,17 @@ class _LexSpec:
     calls: bool
     #: M8 integration ``syntax.names``: a name the program gives itself is one token.
     names: Optional[Any]
+    #: Phase 2 ``syntax.programNames``: a program name (``<SHAFT_T12>``) is one token.
+    program_names: Optional[Any]
+    #: The literal first character of ``syntax.programNames`` (``<``), so it is tried only there.
+    program_name_lead: int
+    #: ``mask_comments``'s whole-line fast path: a compiled character class of every
+    #: character that can start a span the mask changes (a comment marker, ``"`` when the
+    #: profile has strings, the program-name lead). ``None`` when ``program_names`` cannot
+    #: be reduced to a literal lead character (a regex marker) — the fast path is unsafe
+    #: there, so ``mask_comments`` always takes the character loop for that profile.
+    #: Mirrors ``LexSpec.maskLeadPattern`` (``tokenizer.ts``).
+    mask_lead_pattern: Optional[Any]
 
 
 @dataclass
@@ -232,6 +246,8 @@ class CompiledProfile:
     ``system_variables``      regex or ``None`` (P8)
     ``header``                regex or ``None`` (P8): a file header at the head of a line
     ``names``                 regex or ``None`` (M8): a name the program gives itself
+    ``program_names``         regex or ``None`` (phase 2): a program name in place of a
+                              program number (Fanuc ``<SHAFT_T12>``)
     ``tool_trigger``          regex
     ``tool_ignore``           regex or ``None``: a trigger line that also matches is no tool call
     ``tool``                  regex, with the named group ``tool``
@@ -478,6 +494,8 @@ def compile_profile(profile: Dict[str, Any]) -> CompiledProfile:
         "system_variables": _compile_optional(syntax.get("systemVariables"), "syntax.systemVariables", flags),
         "header": _compile_optional(syntax.get("header"), "syntax.header", flags),
         "names": _compile_optional(syntax.get("names"), "syntax.names", flags),
+        # Phase 2 (plan §7.16): a program name in place of a program number is one token.
+        "program_names": _compile_optional(syntax.get("programNames"), "syntax.programNames", flags),
         "tool_trigger": _compile_pattern(tool_call.get("trigger"), "toolCall.trigger", flags),
         "tool_ignore": _compile_optional(tool_call.get("ignore"), "toolCall.ignore", flags),
         "tool": _compile_pattern(tool_call.get("tool"), "toolCall.tool", flags),
@@ -566,9 +584,23 @@ def _build_spec(cp: CompiledProfile) -> _LexSpec:
         if isinstance(value, str) and value != ""
     ]
 
+    program_name_pattern = syntax.get("programNames")
+    program_name_lead = (
+        ord(program_name_pattern[0])
+        if isinstance(program_name_pattern, str)
+        and program_name_pattern != ""
+        and _LITERAL_LEAD.match(program_name_pattern)
+        else _NO_CHAR
+    )
+
     incremental_prefix = syntax.get("incrementalPrefix")
     separator = syntax.get("decimalSeparator")
+    separator_alt = syntax.get("decimalSeparatorAlt")
     skip_codes = set(skip.codes if skip is not None else [])
+
+    mask_lead_pattern = _build_mask_lead_pattern(
+        comments, syntax.get("strings") is True, program_name_pattern, program_name_lead
+    )
 
     return _LexSpec(
         packed=syntax.get("wordSeparatorRequired") is not True,
@@ -590,6 +622,7 @@ def _build_spec(cp: CompiledProfile) -> _LexSpec:
             else _NO_CHAR
         ),
         decimal_point=ord(separator[0]) if isinstance(separator, str) and separator != "" else ord("."),
+        decimal_point_alt=ord(separator_alt) if isinstance(separator_alt, str) and len(separator_alt) == 1 else _NO_CHAR,
         operators=frozenset(operators),
         tape_marker=_PERCENT not in comment_leads and _PERCENT not in skip_codes,
         colon_program=block_number.get("mode") != "leading-integer" and _COLON not in comment_leads,
@@ -600,6 +633,9 @@ def _build_spec(cp: CompiledProfile) -> _LexSpec:
         assignment=cp.patterns.get("assignment"),
         calls=syntax.get("calls") is True,
         names=cp.patterns.get("names"),
+        program_names=cp.patterns.get("program_names"),
+        program_name_lead=program_name_lead,
+        mask_lead_pattern=mask_lead_pattern,
     )
 
 
@@ -608,6 +644,43 @@ def _lex_spec(cp: CompiledProfile) -> _LexSpec:
     if cp.spec is None:
         cp.spec = _build_spec(cp)
     return cp.spec
+
+
+def _escape_for_char_class(char: str) -> str:
+    """Escapes a character for use inside a ``[...]`` character class."""
+    return "\\" + char if char in "]\\^-" else char
+
+
+def _build_mask_lead_pattern(
+    comments: List[_CommentMarker],
+    strings: bool,
+    program_name_source: Optional[str],
+    program_name_lead: int,
+) -> Optional[Any]:
+    """Builds ``_LexSpec.mask_lead_pattern``; mirrors ``buildMaskLeadPattern`` (``tokenizer.ts``).
+
+    A comment marker's lead goes in both cases, because ``_comment_at`` compares
+    case-folded (``_to_upper`` on both sides); the program-name lead goes in exactly as it
+    is, because ``_program_name_end_at`` compares it raw, with no case folding — mirroring
+    that quirk is what keeps the fast path byte-identical to the loop it replaces.
+    """
+    if program_name_source is not None and program_name_lead == _NO_CHAR:
+        return None
+
+    leads = set()
+    for marker in comments:
+        leads.add(marker.code)
+        leads.add(marker.code + 32 if 0x41 <= marker.code <= 0x5A else marker.code)
+    if strings:
+        leads.add(_QUOTE)
+    if program_name_source is not None:
+        leads.add(program_name_lead)
+
+    if not leads:
+        return re.compile(r"(?!)")  # never matches: nothing this profile masks ever starts a span
+
+    chars = "".join(_escape_for_char_class(chr(code)) for code in sorted(leads))
+    return re.compile(f"[{chars}]")
 
 
 # ---------------------------------------------------------------------------
@@ -706,6 +779,23 @@ def _name_end_at(line: str, p: int, limit: int, spec: _LexSpec) -> int:
     return min(match.end(), limit)
 
 
+def _program_name_end_at(line: str, p: int, limit: int, spec: _LexSpec) -> int:
+    """End of the program name at ``p`` (``syntax.programNames``: ``<SHAFT_T12>``), or ``p``.
+
+    ``p`` comes back when the profile declares none or none starts there. Shared with
+    :func:`mask_comments`, which masks exactly the names the tokenizer reads.
+    """
+    regex = spec.program_names
+    if regex is None or p >= limit:
+        return p
+    if spec.program_name_lead != _NO_CHAR and ord(line[p]) != spec.program_name_lead:
+        return p
+    match = regex.match(line, p)
+    if match is None or match.end() == p or match.end() > limit:
+        return p
+    return match.end()
+
+
 def _argument_list_at(line: str, p: int, identifier_end: int, after_blanks: int, limit: int, spec: _LexSpec) -> int:
     """Where the argument list of the identifier ``line[p:identifier_end]`` opens, or -1.
 
@@ -765,13 +855,18 @@ def _expression_end_at(line: str, p: int, limit: int) -> int:
 
 
 def _number_end_at(line: str, p: int, limit: int, spec: _LexSpec) -> int:
-    """End of the number that starts at ``p``, or ``p`` when there is none (a sign is not one)."""
+    """End of the number that starts at ``p``, or ``p`` when there is none (a sign is not one).
+
+    ``decimal_point_alt`` (the Klartext decimal comma, §7.16 / R4) starts a fraction
+    exactly as ``decimal_point`` does; ``_read_value`` decides which one it was, and only
+    when the strict parse of the text this scans fails.
+    """
     i = p
     digits = False
     while i < limit and _is_digit(ord(line[i])):
         i += 1
         digits = True
-    if i < limit and ord(line[i]) == spec.decimal_point:
+    if i < limit and ord(line[i]) in (spec.decimal_point, spec.decimal_point_alt):
         after_point = i + 1
         j = after_point
         while j < limit and _is_digit(ord(line[j])):
@@ -789,6 +884,28 @@ class _ValueRead:
     value: Optional[NumericLiteral]
 
 
+def _parse_value(text: str, spec: _LexSpec) -> Optional[NumericLiteral]:
+    """``parse_number``, plus the Klartext decimal comma (§7.16 / R4): retried with
+    ``decimal_point_alt`` read as the point when the strict parse fails.
+
+    ``parse_number`` itself stays exactly the contract it always was — ``.`` only, no
+    comma, no profile — mirroring ``parseNumber`` in ``core/nc/numbers.ts``, so neither
+    side widens what a number is for every other dialect. ``text`` only ever carries a
+    comma here because ``_number_end_at`` already decided, from the profile's own
+    ``decimalSeparatorAlt``, that this text is a number; the retry just reads the digits
+    it already agreed to. The result keeps ``text`` as ``raw``, comma included, so
+    ``format_number`` can tell which separator to write back.
+    """
+    value = parse_number(text)
+    if value is not None or spec.decimal_point_alt == _NO_CHAR:
+        return value
+    alt = chr(spec.decimal_point_alt)
+    if alt not in text:
+        return None
+    normalized = parse_number(text.replace(alt, "."))
+    return None if normalized is None else replace(normalized, raw=text)
+
+
 def _read_value(line: str, p: int, limit: int, spec: _LexSpec, allow_lone_sign: bool) -> Optional[_ValueRead]:
     """Reads the value of a word at ``p``: a number, a variable or a bracket expression.
 
@@ -804,7 +921,7 @@ def _read_value(line: str, p: int, limit: int, spec: _LexSpec, allow_lone_sign: 
     number_end = _number_end_at(line, start, limit, spec)
     if number_end > start:
         text = line[p:number_end]
-        return _ValueRead(end=number_end, text=text, value=parse_number(text))
+        return _ValueRead(end=number_end, text=text, value=_parse_value(text, spec))
 
     if spec.variables is not None and start < limit:
         match = spec.variables.match(line, start)
@@ -1147,6 +1264,13 @@ def tokenize_line(
         a name the program gives itself (``XNOW``, ``LAST_CUT``) is one ``unknown`` token;
         a keyword is one only where the name at its position is no longer than it
 
+    Phase 2 adds one for the ISO dialects, opt-in the same way (plan §7.16):
+
+    ``programNames``
+        a program name in place of a program number (Fanuc ``<SHAFT_T12>``, at the head
+        of a program and behind ``M98``/``G65``) is one ``programMarker`` with no address,
+        wherever it stands
+
     A block-skip level is one digit, ``0`` included: ``/0`` is the level ``/`` means.
     """
     spec = _lex_spec(cp)
@@ -1279,6 +1403,16 @@ def tokenize_line(
             end = _string_end_at(line, p, limit)
             _push(tokens, "string", line, p, end)
             p = end
+            continue
+
+        # A program name (`syntax.programNames`) is one program marker wherever it stands:
+        # at the head of a program it is what `O1234` would be, behind `M98` or `G65` the
+        # program called. The control reads its characters like comment text, so nothing in
+        # it is a word: letter by letter, `<SHAFT_F12>` held a feed a script would scale.
+        program_name_end = _program_name_end_at(line, p, limit, spec)
+        if program_name_end > p:
+            _push(tokens, "programMarker", line, p, program_name_end)
+            p = program_name_end
             continue
 
         # Where the profile declares names, a keyword is only one when the name that starts
@@ -1488,6 +1622,7 @@ def tokenize_line(
         if (
             _is_digit(code)
             or code == spec.decimal_point
+            or code == spec.decimal_point_alt
             or ((code == _PLUS or code == _MINUS) and not _ends_operand(tokens, spec))
         ):
             stop = limit if spec.packed else chunk_from(p)
@@ -1561,6 +1696,10 @@ def block_number_of(line: str, cp: CompiledProfile) -> Optional[Dict[str, Any]]:
     return {"value": int(text, 10), "text": text, "start": block.start, "end": block.end}
 
 
+#: The characters of a program name that the mask turns into ``_``.
+_MASK_NAME = re.compile(r"[A-Za-z0-9]")
+
+
 def mask_comments(line: str, cp: CompiledProfile) -> str:
     """``line`` with every comment blanked out, same length. Mirrors ``maskComments``.
 
@@ -1575,6 +1714,11 @@ def mask_comments(line: str, cp: CompiledProfile) -> str:
     same two the tokenizer reads in one piece: a string (``MSG("A;B")`` is one Sinumerik
     call, and its ``;`` is text) and the file header of ``syntax.header``
     (``$PART.MIN%``), which detection reads off the masked line.
+
+    A program name (``syntax.programNames``: Fanuc ``<SHAFT_T12>``) is neither blanked nor
+    kept: each letter and digit becomes ``_`` and the rest stays (``<SHAFT-T12>`` masks as
+    ``<_____-___>``). No code pattern finds a ``T12`` or an ``M30`` in it, a rule that
+    looks for the name's shape still does, and the name is not mistaken for a comment.
     """
     spec = _lex_spec(cp)
 
@@ -1600,6 +1744,14 @@ def mask_comments(line: str, cp: CompiledProfile) -> str:
         if match is not None and match.end() > 0:
             p = min(match.end(), limit)
 
+    # Whole-line fast path: see ``maskComments`` (``mask.ts``) for why. ``search(line, p)``
+    # is Python's equivalent of the TS side's global-regex ``lastIndex`` scan — the first
+    # match at or after ``p``, wherever in the rest of the line it falls.
+    if p < limit and spec.mask_lead_pattern is not None:
+        found = spec.mask_lead_pattern.search(line, p)
+        if found is None or found.start() >= limit:
+            return line if copied == 0 else masked + line[copied:]
+
     while p < limit:
         code = ord(line[p])
         # Only in a dialect that has strings. Fanuc has none, so a stray `"` there is just
@@ -1613,6 +1765,12 @@ def mask_comments(line: str, cp: CompiledProfile) -> str:
             continue
         marker = _comment_at(line, p, spec) if spec.comments else None
         if marker is None:
+            name_end = _program_name_end_at(line, p, limit, spec)
+            if name_end > p:
+                masked += line[copied:p] + _MASK_NAME.sub("_", line[p:name_end])
+                copied = name_end
+                p = name_end
+                continue
             p += 1
             continue
         end = max(_comment_end_at(line, p, limit, marker, spec), p + 1)
@@ -1796,7 +1954,41 @@ def format_number(
     elif plus == "keep" and (original.sign if original is not None else parsed.sign) == "+":
         sign = "+"
 
-    return "%s%s%s%s" % (sign, integer, "." if point else "", fraction)
+    # The Klartext decimal comma (§7.16 / R4): a rewrite keeps the separator the value was
+    # written with. `parse_number` reads only `.`, so a comma only ever reaches
+    # `original.raw` when the tokenizer's own alt-separator retry put it there
+    # (`_parse_value` above) — which happens only for a profile that declares one. A value
+    # with no `original` (nothing to keep the style of) is written with the point, as it
+    # always was. Mirrors `formatNumber` in `core/nc/numberFormat.ts`.
+    separator = "," if original is not None and "," in original.raw else "."
+
+    return "%s%s%s%s" % (sign, integer, separator if point else "", fraction)
+
+
+def _decimal_text(literal: NumericLiteral) -> str:
+    """``literal`` as text ``Decimal()`` accepts: always a point, whatever it was written
+    with. ``scale_decimal`` sees `raw` text a tokenizer already accepted as a number —
+    Klartext's decimal comma included (§7.16 / R4) — and `Decimal("1000,5")` raises, so the
+    arithmetic is built from the parsed parts instead of the written text.
+    """
+    frac = literal.frac_part or ""
+    return "%s%s%s" % (literal.sign, literal.int_part or "0", ("." + frac) if literal.has_point else "")
+
+
+def _lenient_number(raw: str) -> Optional[NumericLiteral]:
+    """``parse_number``, plus a comma retried as the point when the strict parse fails.
+
+    ``scale_decimal`` has no profile to read `syntax.decimalSeparatorAlt` from — its
+    signature is pinned (plan §7.10) — so it reads the one comma that can ever reach it:
+    ``scale_feed``/``scale_speed`` pass a token's own `value.raw`, and the only dialect
+    whose tokenizer ever puts a comma there is Klartext (`_parse_value` above). A comma
+    here is that decimal comma, never a thousands separator or a stray character.
+    """
+    value = parse_number(raw)
+    if value is not None or "," not in raw:
+        return value
+    alt = parse_number(raw.replace(",", "."))
+    return None if alt is None else replace(alt, raw=raw)
 
 
 def scale_decimal(raw: str, percent: str) -> str:
@@ -1811,8 +2003,8 @@ def scale_decimal(raw: str, percent: str) -> str:
 
     Raises ``ValueError`` when either argument is not a decimal number.
     """
-    left = parse_number(raw.strip() if isinstance(raw, str) else "")
-    right = parse_number(str(percent).strip())
+    left = _lenient_number(raw.strip() if isinstance(raw, str) else "")
+    right = _lenient_number(str(percent).strip())
     if left is None:
         raise ValueError("scale_decimal: not a decimal number: %r" % (raw,))
     if right is None:
@@ -1822,10 +2014,32 @@ def scale_decimal(raw: str, percent: str) -> str:
         # Enough digits that the product is exact: the two operands' digits plus the two
         # the division by a hundred shifts, and a wide margin on top.
         context.prec = len(left.raw) + len(right.raw) + 20
-        product = Decimal(left.raw) * Decimal(right.raw)
+        product = Decimal(_decimal_text(left)) * Decimal(_decimal_text(right))
         scaled = product.scaleb(-2)
     text = format(scaled, "f")
     return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def decimal_of(number: Any) -> Optional[Decimal]:
+    """The exact value of a written number as a :class:`~decimal.Decimal`, or ``None``.
+
+    ``number`` is a :class:`NumericLiteral` (a token's ``value``) or the text of one (what
+    :func:`format_number` wrote). ``Decimal(literal.raw)`` is **not** the same thing: a
+    Klartext decimal comma stays in ``raw`` (`F500,5`, §7.16 #34) so that a rewrite writes
+    it back, and ``Decimal("500,5")`` raises. The value is built from the parsed parts
+    instead, the way :func:`scale_decimal` does it; text is read by the same lenient rule
+    (a strict parse, then the comma retried as the point). ``None`` for anything that is
+    not a number.
+    """
+    if isinstance(number, NumericLiteral):
+        literal: Optional[NumericLiteral] = number
+    elif isinstance(number, str):
+        literal = _lenient_number(number.strip())
+    else:
+        literal = None
+    if literal is None:
+        return None
+    return Decimal(_decimal_text(literal))
 
 
 # ---------------------------------------------------------------------------

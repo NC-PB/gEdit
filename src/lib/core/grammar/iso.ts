@@ -120,6 +120,12 @@ export function isoRules(p: Profile, db: CodeDb): GrammarRule[] {
   const continuation = p.syntax?.continuation;
   if (typeof continuation === 'string' && continuation !== '') rules.push([continuation, 'operator']);
 
+  // A program name (`syntax.programNames`, Fanuc `<SHAFT_T12>`) is one program marker
+  // wherever it stands, at the head of a program or behind `M98`, as the tokenizer reads
+  // it: painted letter by letter, `T12` in it would look like a tool call (§7.16).
+  const programNames = p.syntax?.programNames;
+  if (typeof programNames === 'string' && programNames !== '') rules.push([programNames, 'programMarker']);
+
   // 4, 5 block skip — before the block number, and after it as one grouped rule
   const prefixes = blockNumberPrefixes(p);
   const prefix = namesPattern(prefixes);

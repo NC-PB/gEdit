@@ -44,6 +44,12 @@
 //                                  one-letter words, and a keyword only where the name at
 //                                  its position is no longer than the keyword
 //
+// Phase 2 adds one more for the ISO dialects, opt-in the same way (§7.16):
+//
+//   syntax.programNames            a program name in place of a program number (Fanuc
+//                                  `<SHAFT_T12>`, at the head of a program and behind
+//                                  `M98`/`G65`): one `programMarker`, wherever it stands
+//
 // Token shapes that the contract in `types.ts` leaves open, decided here:
 //
 //   - A value without an address (`GOTO 100`'s target, `LBL 1`'s number, `BLK FORM 0.1`'s
@@ -52,6 +58,8 @@
 //     `NLAP1` reports `LAP1` (the block-number prefix is the prefix, exactly as a block
 //     number reports its digits) and `LOOP_A:` reports `LOOP_A`. A file header carries no
 //     `address` and no value: what the program is called is `program.start`'s answer.
+//     A program name (`<SHAFT_T12>`, `syntax.programNames`) is the same: a `programMarker`
+//     with neither, at the head of a line and behind a call word alike.
 //   - A variable keeps its own rule in front of `assignment`, which is the rule order both
 //     dialects propose for themselves: `R1=R2*2` and `V5=V5+1` set a parameter and read
 //     `R1`/`V5` as variables, exactly as Fanuc `#1=#2-5` and Klartext `Q200=2` already do,
@@ -179,6 +187,8 @@ interface LexSpec {
   /** Upper-case `syntax.incrementalPrefix`. */
   incremental: number;
   decimalPoint: number;
+  /** `syntax.decimalSeparatorAlt` (the Klartext decimal comma), or `NO_CHAR` when unset. */
+  decimalPointAlt: number;
   operators: Set<number>;
   /** `%` at the head of a line is a tape marker unless the profile uses it otherwise. */
   tapeMarker: boolean;
@@ -198,6 +208,22 @@ interface LexSpec {
   calls: boolean;
   /** M8 integration `syntax.names`, sticky: a name the program gives itself is one token. */
   names: RegExp | null;
+  /** Phase 2 `syntax.programNames`, sticky: a program name (`<SHAFT_T12>`) is one token. */
+  programNames: RegExp | null;
+  /** The literal first character of `syntax.programNames` (`<`), so it is tried only there. */
+  programNameLead: number;
+  /**
+   * `mask.ts`'s whole-line fast path: a global pattern of every character that can start
+   * something the mask changes (a comment marker, `"` when the profile has strings, the
+   * program-name lead). `null` when `programNames` cannot be reduced to a literal lead
+   * character (a regex marker) — the fast path is unsafe there, so `mask.ts` always takes
+   * the character loop for that profile. A profile with nothing at all to mask still gets
+   * a real pattern, one that matches nothing (`/[]/g`), so the fast path applies to it too.
+   *
+   * @internal Shared with `mask.ts`, built once here because comment markers and the
+   * program-name lead are already computed in this function.
+   */
+  maskLeadPattern: RegExp | null;
 }
 
 const SPECS = new WeakMap<CompiledProfile, LexSpec>();
@@ -250,8 +276,17 @@ function buildSpec(cp: CompiledProfile): LexSpec {
     (value): value is string => typeof value === 'string' && value !== '',
   );
 
+  // Compiled here rather than in `compile.ts`, which this field has not reached yet; the
+  // spec is built once per compiled profile, so it is still compiled once.
+  const programNameSource = typeof syntax.programNames === 'string' && syntax.programNames !== '' ? syntax.programNames : null;
+  const programNames = programNameSource === null ? null : new RegExp(programNameSource, `${cp.flags}y`);
+  const programNameLead =
+    programNameSource !== null && /^[^\\^$.|?*+()[\]{}]/.test(programNameSource) ? programNameSource.charCodeAt(0) : NO_CHAR;
+
   const commentLeads = new Set(comments.map((marker) => marker.code));
   const skipCodes = new Set(skip?.codes ?? []);
+
+  const maskLeadPattern = buildMaskLeadPattern(comments, syntax.strings === true, programNameSource, programNameLead);
 
   return {
     packed: syntax.wordSeparatorRequired !== true,
@@ -269,6 +304,7 @@ function buildSpec(cp: CompiledProfile): LexSpec {
     programStart: cp.re.programStart,
     incremental: typeof syntax.incrementalPrefix === 'string' && syntax.incrementalPrefix.length === 1 ? toUpper(syntax.incrementalPrefix.charCodeAt(0)) : NO_CHAR,
     decimalPoint: (syntax.decimalSeparator ?? '.').charCodeAt(0),
+    decimalPointAlt: typeof syntax.decimalSeparatorAlt === 'string' && syntax.decimalSeparatorAlt.length === 1 ? syntax.decimalSeparatorAlt.charCodeAt(0) : NO_CHAR,
     operators,
     tapeMarker: !commentLeads.has(PERCENT) && !skipCodes.has(PERCENT),
     colonProgram: syntax.blockNumber?.mode !== 'leading-integer' && !commentLeads.has(COLON),
@@ -282,7 +318,47 @@ function buildSpec(cp: CompiledProfile): LexSpec {
     assignment: cp.re.assignment ? new RegExp(cp.re.assignment.source, `${cp.flags}y`) : null,
     calls: syntax.calls === true,
     names: cp.re.names ? new RegExp(cp.re.names.source, `${cp.flags}y`) : null,
+    programNames,
+    programNameLead,
+    maskLeadPattern,
   };
+}
+
+/** Escapes a character for use inside a `[...]` character class. */
+function escapeForCharClass(char: string): string {
+  return /[\]\\^-]/.test(char) ? `\\${char}` : char;
+}
+
+/**
+ * Builds `LexSpec.maskLeadPattern` (see its doc comment): a global character-class pattern
+ * of every character that can start a span `mask.ts` changes, or `null` when the
+ * program-name pattern has no literal lead character to add to it.
+ *
+ * A comment marker's lead goes in both cases, because `commentAt` compares case-folded
+ * (`toUpper` on both sides); the program-name lead goes in exactly as it is, because
+ * `programNameEndAt` compares it raw, with no case folding — mirroring that quirk is what
+ * keeps the fast path byte-identical to the loop it replaces.
+ */
+function buildMaskLeadPattern(
+  comments: CommentMarker[],
+  strings: boolean,
+  programNameSource: string | null,
+  programNameLead: number,
+): RegExp | null {
+  if (programNameSource !== null && programNameLead === NO_CHAR) return null;
+
+  const leads = new Set<number>();
+  for (const marker of comments) {
+    leads.add(marker.code);
+    leads.add(marker.code >= 0x41 && marker.code <= 0x5a ? marker.code + 32 : marker.code);
+  }
+  if (strings) leads.add(QUOTE);
+  if (programNameSource !== null) leads.add(programNameLead);
+
+  if (leads.size === 0) return /[]/g; // nothing this profile masks ever starts a span
+
+  const chars = [...leads].map((code) => escapeForCharClass(String.fromCharCode(code))).join('');
+  return new RegExp(`[${chars}]`, 'g');
 }
 
 /**
@@ -389,6 +465,22 @@ function nameEndAt(line: string, p: number, limit: number, spec: LexSpec): numbe
 }
 
 /**
+ * End of the program name at `p` (`syntax.programNames`: `<SHAFT_T12>`), or `p` when the
+ * profile declares none or none starts there.
+ *
+ * @internal Shared with `mask.ts`, which masks exactly the names this tokenizer reads.
+ */
+export function programNameEndAt(line: string, p: number, limit: number, spec: LexSpec): number {
+  const re = spec.programNames;
+  if (re === null || p >= limit) return p;
+  if (spec.programNameLead !== NO_CHAR && line.charCodeAt(p) !== spec.programNameLead) return p;
+  re.lastIndex = p;
+  const match = re.exec(line);
+  if (!match || match.index !== p || match[0].length === 0 || p + match[0].length > limit) return p;
+  return p + match[0].length;
+}
+
+/**
  * Where the argument list of the identifier `[p, identifierEnd)` opens, or -1 when it is
  * not a call.
  *
@@ -445,7 +537,13 @@ function expressionEndAt(line: string, p: number, limit: number): number {
   return limit;
 }
 
-/** End of the number that starts at `p`, or `p` when there is none (a sign is not one). */
+/**
+ * End of the number that starts at `p`, or `p` when there is none (a sign is not one).
+ *
+ * `decimalPointAlt` (the Klartext decimal comma, §7.16 / R4) starts a fraction exactly as
+ * `decimalPoint` does; which mark it was does not matter here — `readValue` decides that
+ * once, from the text this scans, and only when the strict parse of it fails.
+ */
 function numberEndAt(line: string, p: number, limit: number, spec: LexSpec): number {
   let i = p;
   let digits = false;
@@ -453,7 +551,7 @@ function numberEndAt(line: string, p: number, limit: number, spec: LexSpec): num
     i++;
     digits = true;
   }
-  if (i < limit && line.charCodeAt(i) === spec.decimalPoint) {
+  if (i < limit && (line.charCodeAt(i) === spec.decimalPoint || line.charCodeAt(i) === spec.decimalPointAlt)) {
     const afterPoint = i + 1;
     let j = afterPoint;
     while (j < limit && isDigit(line.charCodeAt(j))) j++;
@@ -472,6 +570,26 @@ interface ValueRead {
 }
 
 /**
+ * `parseNumber`, plus the Klartext decimal comma (§7.16 / R4): retried with
+ * `decimalPointAlt` read as the point when the strict parse fails.
+ *
+ * `parseNumber` itself stays exactly the contract it always was — `.` only, no comma, no
+ * profile — so `numbers.ts` never widens what a number is for every other dialect. `text`
+ * only ever carries a comma here because `numberEndAt` already decided, from the
+ * profile's own `decimalSeparatorAlt`, that this text is a number; the retry just reads
+ * the digits it already agreed to. The result keeps `text` as `raw`, comma included, so
+ * `formatNumber` can tell which separator to write back.
+ */
+function parseValue(text: string, spec: LexSpec): NumericLiteral | null {
+  const value = parseNumber(text);
+  if (value !== null || spec.decimalPointAlt === NO_CHAR) return value;
+  const alt = String.fromCharCode(spec.decimalPointAlt);
+  if (!text.includes(alt)) return null;
+  const normalized = parseNumber(text.split(alt).join('.'));
+  return normalized === null ? null : { ...normalized, raw: text };
+}
+
+/**
  * Reads the value of a word at `p`: a number, a variable, a bracket expression, each with
  * an optional sign. `allowLoneSign` accepts a sign on its own, which is how Klartext
  * writes a rotation direction (`DR-`).
@@ -485,7 +603,7 @@ function readValue(line: string, p: number, limit: number, spec: LexSpec, allowL
   const numberEnd = numberEndAt(line, start, limit, spec);
   if (numberEnd > start) {
     const text = line.slice(p, numberEnd);
-    return { end: numberEnd, text, value: parseNumber(text) };
+    return { end: numberEnd, text, value: parseValue(text, spec) };
   }
 
   if (spec.variables && start < limit) {
@@ -915,6 +1033,18 @@ export function tokenizeLine(line: string, cp: CompiledProfile, prev?: LineState
       continue;
     }
 
+    // A program name (`syntax.programNames`) is one program marker wherever it stands: at
+    // the head of a program it is what `O1234` would be, behind `M98` or `G65` the program
+    // called. The control reads the characters between the brackets like comment text, so
+    // nothing in it is a word: letter by letter, `<SHAFT_F12>` held a feed a script would
+    // scale into another program's name, and `<PART_T12>` a lathe tool change.
+    const programNameEnd = programNameEndAt(line, p, limit, spec);
+    if (programNameEnd > p) {
+      push(tokens, 'programMarker', line, p, programNameEnd);
+      p = programNameEnd;
+      continue;
+    }
+
     // Where the profile declares names, a keyword is only one when the name that starts
     // here is no longer than it: `LOOP_A` and `GOTO100` are names, `LOOP` and `GOTOF`
     // keywords, `IF[` still a conditional.
@@ -1139,7 +1269,12 @@ export function tokenizeLine(line: string, cp: CompiledProfile, prev?: LineState
     }
 
     // A value without an address: a jump target, a label number, a right-hand side.
-    if (isDigit(code) || code === spec.decimalPoint || ((code === PLUS || code === MINUS) && !endsOperand(tokens, spec))) {
+    if (
+      isDigit(code) ||
+      code === spec.decimalPoint ||
+      code === spec.decimalPointAlt ||
+      ((code === PLUS || code === MINUS) && !endsOperand(tokens, spec))
+    ) {
       const stop = spec.packed ? limit : chunkFrom(p);
       const value = readValue(line, p, stop, spec, false);
       if (value) {

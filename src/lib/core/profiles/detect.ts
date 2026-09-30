@@ -10,7 +10,7 @@
 //      first 400 non-empty lines. A line counts only for its **strongest** matching
 //      pattern, so a file does not win on the same line twice.
 //   3. The highest score wins; a tie goes to the higher `detect.priority`, then to a user
-//      profile over a built-in (M6: a user who writes a profile for his own posts means
+//      profile over a built-in (M6: a user who writes a profile for their own posts means
 //      it to win over the one we shipped), then to `fallback`, then to the first profile
 //      in registry order.
 //   4. Nothing scored at all (an empty file, an unknown extension, no marker) keeps
@@ -20,6 +20,13 @@
 // question in the P3 hand-off: the extension is a **weight**, not a verdict, so a
 // Klartext program called `a.nc` is now read as Klartext. See `detect.test.ts` for the
 // list of results that moved.
+//
+// R1 (the source review of 2026-09) made detection unable to wreck a program on its own:
+// a header is decisive (`DECISIVE_WEIGHT`), certain syntax outweighs a page of shared lines
+// (`CERTAIN_WEIGHT`), and an extension is a tie-breaker, not a verdict (Okuma's `.MIN`
+// weighs 20 now, so a Fanuc mill program saved as `.MIN` stays a mill). What detection
+// still gets wrong, or what the user chooses by hand against the text, is caught before a
+// rewrite by `contradiction.ts`.
 //
 // A content pattern sees the line trimmed, which is what the M0 sniffer did and what the
 // profiles are written for (`^\s*` in front of a rule is therefore redundant, not wrong).
@@ -32,6 +39,27 @@ import type { CompiledProfile, MachineParamsDecl, Pattern, VariantDecl } from '.
 
 /** How many non-empty lines of a file are scored (the M0 limit, kept). */
 export const MAX_SNIFF_LINES = 400;
+
+/**
+ * The weight of a **decisive** header (R1): the Okuma `$NAME.MIN%` line, the Sinumerik
+ * `%_N_…_MPF` and `;$PATH=` lines, a Klartext `BEGIN PGM` block. A header is written by
+ * one control only, so it decides the way a folder does — unless the content contradicts
+ * it **hard**, which in this scoring means: another dialect's header, or so many lines of
+ * another dialect's certain syntax (rules of [`CERTAIN_WEIGHT`] or more) that they add up
+ * past this weight on their own — 250 lines at 20, 50 at 100, 13 Okuma machining-centre
+ * offsets at 400. A page of ordinary lines never does: every rule below
+ * `CERTAIN_WEIGHT` scores at most 8 a line, and 400 lines of that stay under 5000
+ * (`detect.test.ts` holds the built-ins to it).
+ */
+export const DECISIVE_WEIGHT = 5000;
+
+/**
+ * From this weight on a content rule is **certain** (R1): it matches syntax that only its
+ * own control writes (an Okuma `SB=`, a LAP call by name, a `G15 H` work offset). Every
+ * rule below it may also match another dialect's line, and none of them can outvote a
+ * decisive header whatever the number of lines.
+ */
+export const CERTAIN_WEIGHT = 20;
 
 /** Where a profile came from, for the tie-break (M6; the registry knows, a profile does not). */
 export type ProfileOrigin = 'builtin' | 'user';

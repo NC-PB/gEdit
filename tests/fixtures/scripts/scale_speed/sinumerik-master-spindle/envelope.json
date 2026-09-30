@@ -4,12 +4,12 @@
     {
       "line": 21,
       "severity": "info",
-      "message": "S3=2400 is the speed of spindle 3, named by its number; this run scales only the plain S word of the master spindle, so it is left as it is. Switch on \"Also scale other spindles\" to scale it with the others."
+      "message": "S3=2400 is the speed of spindle 3, named by its number; this run scales only the speed of the main spindle, spindle 1, so it is left as it is. Switch on \"Also scale other spindles\" to scale it with the others."
     },
     {
       "line": 34,
       "severity": "info",
-      "message": "S500 drives spindle 3, which SETMS(3) on line 33 made the master spindle; this run cannot tell whether that is the machine's main spindle, so it is left as it is. Switch on \"Also scale other spindles\" to scale it with the others."
+      "message": "S500 drives spindle 3, which SETMS(3) on line 33 made the master spindle; the main spindle is spindle 1, so it is left as it is. Switch on \"Also scale other spindles\" to scale it with the others."
     },
     {
       "line": 36,

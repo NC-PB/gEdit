@@ -98,5 +98,12 @@ export function formatNumber(
   else if (fmt.plusSign === 'always') sign = '+';
   else if (fmt.plusSign === 'keep' && (original ? original.sign : parsed.sign) === '+') sign = '+';
 
-  return `${sign}${integer}${point ? '.' : ''}${fraction}`;
+  // The Klartext decimal comma (§7.16 / R4): a rewrite keeps the separator the value was
+  // written with. `parseNumber` reads only `.`, so a comma only ever reaches `original.raw`
+  // when the tokenizer's own alt-separator retry put it there (`parseValue` in
+  // `tokenizer.ts`) — which happens only for a profile that declares one. A value with no
+  // `original` (nothing to keep the style of) is written with the point, as it always was.
+  const separator = original && original.raw.includes(',') ? ',' : '.';
+
+  return `${sign}${integer}${point ? separator : ''}${fraction}`;
 }

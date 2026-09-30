@@ -1,0 +1,16 @@
+{
+  "note": "Two lathe programs named instead of numbered (30i family, syntax-fanuc §2.2). A name line is a program marker like O1234: it gets no number, and with the shipped 'Start over at each program start' the subprogram counts from N10 again. The call M98 <SUB_N10> keeps its name, whose N10 is no block number.",
+  "profile": "fanuc-lathe",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      { "line": 1, "severity": "info" },
+      { "line": 2, "severity": "info" },
+      { "line": 7, "severity": "info" },
+      { "line": 10, "severity": "info" }
+    ],
+    "warnings": [],
+    "preflight": null
+  }
+}

@@ -11,11 +11,6 @@
   ],
   "ownerReviewed": false,
   "gaps": {
-    "nc/owner-public/heidenhain-klartext/5X_MILLING_VECTOR.H": {
-      "why": "Opens as Fanuc (ISO) mill (a detection gap), so the map finds no TOOL CALL and no BEGIN PGM.",
-      "profile": "heidenhain-klartext",
-      "tools": [[14, "1"]]
-    },
     "nc/owner-public/okuma-osp/2.5D_MILLING.min": {
       "why": "An Okuma milling program read with the turning profile, whose tool rule wants a four- or six-digit T word: T1 M6 is no tool change there.",
       "profile": "okuma-osp",
@@ -32,7 +27,7 @@
       "tools": [[6, "1"], [73, "2"], [4982, "3"], [5008, "5"], [5027, "4"]]
     },
     "nc/owner-public/sinumerik/2.5D_Milling.mpf": {
-      "why": "Opens as Fanuc (ISO) mill (a detection gap). With the Sinumerik turning profile every T word is a tool change, so the preselected next tool (T2 after T1 D1 and M6) would be one too.",
+      "why": "Opens as Sinumerik, the turning profile until a milling one exists (R2), where every T word is a tool change: the preselected next tool (T2 after T1 D1 and M6) is listed as one too.",
       "profile": "sinumerik",
       "tools": [[9, "1"], [227, "2"], [646, "3"], [758, "4"]]
     },

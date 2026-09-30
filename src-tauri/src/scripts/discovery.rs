@@ -1052,7 +1052,7 @@ mod tests {
 
     /// The same names against a folder that really holds those files. Only Unix can
     /// hold them, which is why the case matters: M8 walked past `aux.py` and `con/`
-    /// and the user lost two scripts he could see in Finder, with nothing said
+    /// and the user lost two scripts they could see in Finder, with nothing said
     /// anywhere (G8 M8).
     #[cfg(unix)]
     #[test]

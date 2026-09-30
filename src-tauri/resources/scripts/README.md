@@ -149,7 +149,14 @@ should survive with defaults, or a clear message, rather than a traceback.
 
 `profile` and `codes` are what make a script dialect-agnostic: comment syntax, addresses,
 keywords, number format and what each code *means* all come from there. Nothing in a good
-script hardcodes Fanuc.
+script hardcodes Fanuc. A `codes` entry can carry `tapping` (the code taps a thread —
+a cycle, a rigid-tapping call, or a mode such as Fanuc `G63`), `tappingElsewhere` (set with
+`pitchFeedAmbiguous`: the code is a tap on the *other* kind of machine its dual meaning
+points at, e.g. Okuma `G84`/`G88`, the Fanuc lathe's `G74`) and `wordsAreData` (the words of
+the block are arguments or data, not a feed or a position — `G65`, `G66`, `G10`); a profile
+can carry `addresses.mainSpindle` (which spindle number is the main one, Sinumerik `"1"`)
+and `syntax.programNames`/`syntax.decimalSeparatorAlt` (a program-name token, a second
+decimal separator). `scale_feed.py` and `scale_speed.py` read all of these.
 
 Both are **effective**: the profile is resolved through its `extends` chain and the
 document's machine configuration is already applied to it, so the chosen G-code system has
@@ -293,9 +300,10 @@ docstrings in the file are the detail.
 | `continues_block(line, cp)` | whether the line belongs to the block above it by a marker at its start (Okuma `$`) |
 | `normalize_code(code)` | the canonical form of a written code: `G01` → `G1`, `cycl  def 200` → `CYCL DEF 200` |
 | `parse_number`, `format_number`, `scale_decimal` | NC numbers as decimal strings, never as floats |
+| `decimal_of(literal_or_text)` | the exact value of a token's value or raw text, read strictly and then, on failure, with a Klartext-style decimal comma retried as the point — beyond §7.10, used where a value has to be exact rather than merely "roughly the right class" (a limit check, a same-value comparison) |
 | `number_format_of(profile)` | the profile's number format with its defaults filled in, for `format_number` and `write_back` |
 | `ModalInterpreter(cp, codes)` | what is in force after a block — see below |
-| `FeedModeTracker(codes)` | the older, smaller view: `feed_mode` (`G93`/`G94`/`G95`, or Klartext `FU`/`FZ`), `css` (between `G96` and `G97`), `active_cycle`, `pitch_feed` (the block's `F` is a thread pitch), `pitch_feed_ambiguous` and `ambiguous_code` (a code that is a threading cycle on another kind of machine, in the other G-code system or on another make of control), `f_not_feed` and `f_not_feed_code` (a dwell). Without a code database it still reads `G93`–`G95` and `G96`/`G97` by their usual meaning, but knows no cycle and no thread pitch |
+| `FeedModeTracker(codes)` | the older, smaller view: `feed_mode` (`G93`/`G94`/`G95`, or Klartext `FU`/`FZ`), `css` (between `G96` and `G97`), `active_cycle`, `pitch_feed` (the block's `F` is a thread pitch), `pitch_feed_ambiguous` and `ambiguous_code` (a code that is a threading cycle on another kind of machine, in the other G-code system or on another make of control), `f_not_feed` and `f_not_feed_code` (a dwell). Without a code database it still reads `G93`–`G95` and `G96`/`G97` by their usual meaning, but knows no cycle and no thread pitch. Also: `tapping` and `tapping_code` (a tapping code or cycle is in force), `pitch_mode` (a `pitchFeed` code that is modal and sits in a group of its own outside `cycle`/`motion` — Fanuc `G63` — is in force, so its feed is a lead too), `data_code` (a `wordsAreData` code's block — its words are not fed at all), `written` (a `CodeEntry.tapping` code was restated or an axis moved in this block, for `scale_speed`'s tapping rule) |
 | `prime_tracker(tracker, lines, cp, first=None)` | walks the lines above a selection through a tracker and returns the `LineState` the selection begins in (§6); `first` is the first selected line |
 | `speed_limit_of(codes, tokens)` | the code in this block whose `sets.speedLimit` makes the block's `S` a clamp, or `None` |
 | `machine_type_of(profile)`, `incremental_axes(profile)`, `diameter_axes(profile)` | `'mill'` or `'lathe'`, the `{'U': 'X', 'W': 'Z'}` pairs, and the words written as a diameter |

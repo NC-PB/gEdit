@@ -1,0 +1,35 @@
+{
+  "message": "Scaled 2 of 7 feed rates to 80 %; 4 left as a thread pitch, 1 left under a code the database does not know, 1 argument or data word left as written. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 7,
+      "severity": "warning",
+      "message": "F900. is a thread pitch (G84.2), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    },
+    {
+      "line": 10,
+      "severity": "warning",
+      "message": "F900. is a thread pitch (G84.3), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    },
+    {
+      "line": 15,
+      "severity": "warning",
+      "message": "F500. is a thread pitch (G63), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    },
+    {
+      "line": 16,
+      "severity": "warning",
+      "message": "F500. is a thread pitch (G63), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    },
+    {
+      "line": 18,
+      "severity": "info",
+      "message": "F3000. is an argument or a data value of G65, not a feed rate of this program, so it is left as written."
+    },
+    {
+      "line": 20,
+      "severity": "warning",
+      "message": "F487. is not scaled: this block writes G195, which the code database does not know, so gEdit cannot tell whether its F is a feed rate or the lead of a builder's cycle. Check the block and scale it by hand if it really is a feed."
+    }
+  ]
+}

@@ -256,6 +256,34 @@ describe('the mill and the lathe against each other', () => {
     expect(insideFamily(`/work/${rel}`, text)).toEqual({ by: 'score', margin: 5 });
   });
 
+  it('reads a five-digit T word as a turret word too (owner decision of 2026-09-27)', () => {
+    // A lathe post of the owner writes `T12345`: a three-digit tool and a two-digit offset.
+    // It counts as lathe evidence exactly like `T0101`, and a mill program whose tool
+    // numbers have five digits stays a mill on its `M6`, as with four (`mill-4digit-t.nc`).
+    const turning = ['%', 'O0510', 'T12345', 'G96 S180 M03', 'G00 X50. Z2.', 'G01 Z-30. F0.2', 'G00 X200. Z200.', 'T10101', 'G97 S800 M03', 'M30', '%', ''].join('\n');
+    expect(scores(null, 'T12345').get(LATHE)).toBe(3);
+    expect(scores(null, 'T12345').get(MILL)).toBe(0);
+    // Two turret words, three points each over the mill: the rest is the spindle modes.
+    expect(insideFamily(null, turning)).toEqual({ by: 'score', margin: 12 });
+    expect(insideFamily(null, turning.replace(/T\d{5}/g, 'T1'))).toEqual({ by: 'score', margin: 6 });
+    expect(detectProfile(BUILTINS, '/work/a.nc', turning, MILL)).toBe(LATHE);
+    const milling = readFixture('nc/ambiguous/mill-4digit-t.nc').replace(/T1(\d{3})/g, 'T10$1');
+    expect(milling).toMatch(/T10\d{3}/);
+    expect(ranked('/work/a.nc', milling).winner).toBe(MILL);
+  });
+
+  it('keeps a Fanuc lathe program that calls a builder macro G183 a lathe (R1)', () => {
+    // M8 re-review F2. The program is kept under expected/detect/programs because the code
+    // databases cannot describe a builder's macro code, which every nc/ fixture must be.
+    const text = readFileSync(join(FIXTURES_DIR, 'expected/detect/programs/l08-g183-macro.nc'), 'utf8');
+    for (const path of ['/work/flange.nc', null]) {
+      const { winner, runnerUp, margin } = ranked(path, text);
+      expect(winner, String(path)).toBe(LATHE);
+      expect(margin, `${String(path)}: +${margin} over ${runnerUp}`).toBeGreaterThanOrEqual(MIN_MARGIN);
+      expect(detectProfile(BUILTINS, path, text, 'okuma-osp'), String(path)).toBe(LATHE);
+    }
+  });
+
   it('keeps the mill-turn fixture of Phase 1 a mill', () => {
     // `f04-feed-modes.nc` carries `G50 S2500` and `G96 S180` on a mill-turn machine, both
     // of them lathe markers. P1 read it as a mill and it still does (§5, M6 goals).
@@ -374,8 +402,14 @@ describe('the turret tool rule', () => {
     ['T0', false, undefined],
     ['T0000', false, undefined],
     ['G00 X100. Z100. T0100', false, undefined],
-    // Five digits are not a turret word on these controls.
-    ['T10101', false, undefined],
+    // Owner decision 3 (2026-09-27): a five-digit T word is a 3-digit tool plus a 2-digit
+    // offset, and its own cancel form (a 3-digit station followed by "00") is not a
+    // change either — one more digit each way than the 4-digit form above.
+    ['T10101', true, '101'],
+    ['T12345', true, '123'],
+    ['T12300', false, undefined],
+    // A sixth digit is outside every rule this pattern knows, so the word is left alone.
+    ['T123456', false, undefined],
   ])('%s', (line, change, tool) => {
     expect(isToolChange(line), line).toBe(change);
     if (change) expect(station(line), line).toBe(tool);
@@ -420,7 +454,10 @@ describe('the turret tool rule', () => {
     const mill = compiled(MILL);
     expect(mill.re.toolTrigger.test('T1 M6')).toBe(true);
     expect(mill.re.toolTrigger.test('T2')).toBe(false);
-    expect(mill.re.toolIgnore).toBeUndefined();
+    // `M6 T0` unloads the spindle (5-Axis.NC, owner-public/fanuc-gcode): no tool, so `T0`
+    // on an `M6` line is ignored rather than listed as tool T0.
+    expect(mill.re.toolIgnore?.test('M6 T0')).toBe(true);
+    expect(mill.re.toolIgnore?.test('M6 T5')).toBe(false);
   });
 });
 

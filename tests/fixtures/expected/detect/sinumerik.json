@@ -21,6 +21,7 @@
     "nc/sinumerik/s02-drill.MPF": "sinumerik",
     "nc/sinumerik/s03-sub.SPF": "sinumerik",
     "nc/sinumerik/s04-packed.MPF": "sinumerik",
-    "nc/sinumerik/s05-diameter.MPF": "sinumerik"
+    "nc/sinumerik/s05-diameter.MPF": "sinumerik",
+    "nc/sinumerik/s06-milling.txt": "sinumerik"
   }
 }

@@ -151,6 +151,29 @@
       ]
     },
     {
+      "code": "G9",
+      "description": "The tool slows down to a stop at the end of this block before the next one starts. It applies to this block only; G61 does the same for every block.",
+      "group": "nonmodal",
+      "label": "Exact stop for this block"
+    },
+    {
+      "code": "G10",
+      "description": "Writes a tool offset, a work coordinate system or a parameter from the program: L says which table, P which entry. The other words of the block are the values written there, not a move, a feed or a speed.",
+      "group": "nonmodal",
+      "label": "Data setting",
+      "params": [
+        {
+          "address": "L",
+          "label": "Which table"
+        },
+        {
+          "address": "P",
+          "label": "Which entry"
+        }
+      ],
+      "wordsAreData": true
+    },
+    {
       "code": "G17",
       "description": "Selects XY as the working plane. Arcs use I and J, and a drilling cycle feeds along Z.",
       "group": "plane",
@@ -393,6 +416,82 @@
       ]
     },
     {
+      "code": "G61",
+      "description": "The tool slows down to a stop at the end of every cutting block before the next one starts. In force until G62, G63 or G64.",
+      "group": "pathmode",
+      "label": "Exact stop mode",
+      "modal": true
+    },
+    {
+      "code": "G62",
+      "description": "Lowers the feed at inside corners while the cutter radius compensation is on. In force until G61, G63 or G64.",
+      "group": "pathmode",
+      "label": "Automatic corner override",
+      "modal": true
+    },
+    {
+      "code": "G63",
+      "description": "Tapping with a compensating chuck: the feed override and the feed hold have no effect and the tool does not slow down at the end of a block. The feed is the spindle speed times the pitch, so neither may be scaled on its own. In force until G61, G62 or G64.",
+      "group": "pathmode",
+      "label": "Tapping mode",
+      "modal": true,
+      "pitchFeed": true,
+      "tapping": true
+    },
+    {
+      "code": "G64",
+      "description": "The normal mode: the next block starts without the tool stopping at the end of the last one. Ends G61, G62 and G63.",
+      "group": "pathmode",
+      "label": "Cutting mode",
+      "modal": true
+    },
+    {
+      "code": "G65",
+      "description": "Runs the macro program P once. The other words of the block are its arguments, handed over as local variables, not moves, feeds or speeds of this program.",
+      "group": "nonmodal",
+      "label": "Macro call",
+      "params": [
+        {
+          "address": "P",
+          "label": "Macro program number",
+          "required": true
+        },
+        {
+          "address": "L",
+          "label": "Repeat count",
+          "min": 1
+        }
+      ],
+      "wordsAreData": true
+    },
+    {
+      "code": "G66",
+      "description": "Runs the macro program P after every following move until G67. The other words of this block are its arguments, not moves, feeds or speeds of this program.",
+      "group": "macro",
+      "label": "Modal macro call",
+      "modal": true,
+      "params": [
+        {
+          "address": "P",
+          "label": "Macro program number",
+          "required": true
+        },
+        {
+          "address": "L",
+          "label": "Repeat count",
+          "min": 1
+        }
+      ],
+      "wordsAreData": true
+    },
+    {
+      "code": "G67",
+      "description": "Ends the modal macro call of G66.",
+      "group": "macro",
+      "label": "Modal macro call off",
+      "modal": true
+    },
+    {
       "code": "G73",
       "description": "Drills in steps of Q and pulls back only a short way between the steps to break the chip. On lathes in G-code system A, G73 repeats a profile for a pre-shaped blank instead.",
       "group": "cycle",
@@ -487,7 +586,8 @@
       "pitchFeed": true,
       "sets": {
         "cycle": "start"
-      }
+      },
+      "tapping": true
     },
     {
       "code": "G76",
@@ -743,7 +843,108 @@
       "pitchFeed": true,
       "sets": {
         "cycle": "start"
-      }
+      },
+      "tapping": true
+    },
+    {
+      "code": "G84.2",
+      "description": "Rigid tapping of a right-hand thread, written in the block format of an older control generation. F carries the pitch, so scaling the feed would change the thread.",
+      "group": "cycle",
+      "label": "Rigid tapping cycle, older block format",
+      "modal": true,
+      "params": [
+        {
+          "address": "X",
+          "label": "Hole position X"
+        },
+        {
+          "address": "Y",
+          "label": "Hole position Y"
+        },
+        {
+          "address": "Z",
+          "label": "Hole bottom",
+          "required": true
+        },
+        {
+          "address": "R",
+          "label": "Retract plane",
+          "required": true
+        },
+        {
+          "address": "F",
+          "label": "Feed from the thread pitch",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "P",
+          "label": "Dwell at the bottom in milliseconds",
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "L",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
+        }
+      ],
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      },
+      "tapping": true
+    },
+    {
+      "code": "G84.3",
+      "description": "Rigid tapping of a left-hand thread, written in the block format of an older control generation. F carries the pitch, so scaling the feed would change the thread.",
+      "group": "cycle",
+      "label": "Left-hand rigid tapping cycle, older block format",
+      "modal": true,
+      "params": [
+        {
+          "address": "X",
+          "label": "Hole position X"
+        },
+        {
+          "address": "Y",
+          "label": "Hole position Y"
+        },
+        {
+          "address": "Z",
+          "label": "Hole bottom",
+          "required": true
+        },
+        {
+          "address": "R",
+          "label": "Retract plane",
+          "required": true
+        },
+        {
+          "address": "F",
+          "label": "Feed from the thread pitch",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "P",
+          "label": "Dwell at the bottom in milliseconds",
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "L",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
+        }
+      ],
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      },
+      "tapping": true
     },
     {
       "code": "G85",
@@ -1156,7 +1357,8 @@
       "code": "M29",
       "description": "Announces rigid tapping for the tapping cycle in the next block, so the control drives the spindle and the feed in step instead of relying on a compensating chuck. Which M number does this is set by a machine parameter and can differ on your machine.",
       "group": "spindle",
-      "label": "Rigid tapping on"
+      "label": "Rigid tapping on",
+      "tapping": true
     },
     {
       "code": "M30",

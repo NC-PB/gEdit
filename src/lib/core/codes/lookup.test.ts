@@ -161,13 +161,14 @@ describe('lookupWord', () => {
 });
 
 describe('completionsFor', () => {
+  // 2026-09: with the older-format rigid tapping cycles, kept next to their base code.
   it('offers G80 to G89 for the prefix G8', () => {
     const hits = completionsFor(fanuc, 'G8', false).map((e) => e.code);
-    expect(hits).toEqual(['G80', 'G81', 'G82', 'G83', 'G84', 'G85', 'G86', 'G87', 'G88', 'G89']);
+    expect(hits).toEqual(['G80', 'G81', 'G82', 'G83', 'G84', 'G84.2', 'G84.3', 'G85', 'G86', 'G87', 'G88', 'G89']);
   });
 
   it('ignores case and zero padding in the prefix', () => {
-    const g8 = ['G80', 'G81', 'G82', 'G83', 'G84', 'G85', 'G86', 'G87', 'G88', 'G89'];
+    const g8 = ['G80', 'G81', 'G82', 'G83', 'G84', 'G84.2', 'G84.3', 'G85', 'G86', 'G87', 'G88', 'G89'];
     expect(completionsFor(fanuc, 'g8', false).map((e) => e.code)).toEqual(g8);
     expect(completionsFor(fanuc, 'G08', false).map((e) => e.code)).toEqual(g8);
   });

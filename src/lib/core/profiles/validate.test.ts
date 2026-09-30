@@ -189,6 +189,14 @@ describe('the turning syntax fields', () => {
     expect(pathsOf((p) => (syntaxOf(p).variables = '#\\d+'))).toEqual([]);
     expect(pathsOf((p) => (syntaxOf(p).systemVariables = 'V[A-Z][A-Z0-9]{3}'))).toEqual([]);
   });
+
+  // Phase 2 (§7.16): the Fanuc program name, one token like a variable.
+  it('refuse a program-name pattern that can match an empty string, or that does not compile', () => {
+    const empty = 'can match an empty string, and a program name has to take at least one character';
+    expect(errorsOf((p) => (syntaxOf(p).programNames = '(?:<[A-Z_]+>)?'))).toEqual([`syntax.programNames: ${empty}`]);
+    expect(pathsOf((p) => (syntaxOf(p).programNames = '<[A-Z'))).toEqual(['syntax.programNames']);
+    expect(pathsOf((p) => (syntaxOf(p).programNames = '<[A-Za-z0-9+\\-_.]+>'))).toEqual([]);
+  });
 });
 
 describe('the tool call', () => {

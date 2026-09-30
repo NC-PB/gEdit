@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 4 feed rates to 80 %; 2 feeds under addresses of their own left as written (E). No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 11,
+      "severity": "info",
+      "message": "E0.3 is left as written: this run scales only the F word, and an E word is a feed of its own along a contour definition on some controls, a thread lead or a dwell on others. Change it by hand if it should follow the other feeds."
+    },
+    {
+      "line": 12,
+      "severity": "info",
+      "message": "E0.25 is left as written: this run scales only the F word, and an E word is a feed of its own along a contour definition on some controls, a thread lead or a dwell on others. Change it by hand if it should follow the other feeds."
+    }
+  ]
+}

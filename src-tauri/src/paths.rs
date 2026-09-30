@@ -80,7 +80,7 @@ const VERBATIM_UNC: &str = r"\\?\UNC\";
 /// `COM0` and `LPT0` are **not** on Microsoft's list and are refused anyway, as a
 /// deliberate margin — the unit is matched as any ASCII digit. Both directions of the
 /// over-reach are harmless and the two places this is used make that so: refusing a
-/// name only ever costs a user the one script name `COM0.py`, which he can spell
+/// name only ever costs a user the one script name `COM0.py`, which they can spell
 /// `COM0_.py`, while treating it as a device in [`plain`] only ever *keeps* a `\\?\`
 /// prefix, and a kept prefix always names the file it already named. Narrowing it to
 /// Microsoft's exact list would be the direction that can go wrong: whether the

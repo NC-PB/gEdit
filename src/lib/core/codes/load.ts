@@ -219,9 +219,13 @@ function readEntry(
   if (bool(raw.modal)) entry.modal = true;
   if (bool(raw.pitchFeed)) entry.pitchFeed = true;
   if (bool(raw.pitchFeedAmbiguous)) entry.pitchFeedAmbiguous = true;
+  if (bool(raw.tappingElsewhere)) entry.tappingElsewhere = true;
   // P8: a dwell block's `F` is a time. The loader is what the scripts and the interpreter
   // read, so a flag the file sets and the loader drops would be a flag that does nothing.
   if (bool(raw.fNotFeed)) entry.fNotFeed = true;
+  // 2026-09: the scripts read these two from the loaded database as well.
+  if (bool(raw.tapping)) entry.tapping = true;
+  if (bool(raw.wordsAreData)) entry.wordsAreData = true;
   if (bool(raw.verify)) entry.verify = true;
   const description = str(raw.description);
   if (description) entry.description = description;

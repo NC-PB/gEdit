@@ -50,6 +50,12 @@ export interface CodeParam {
  */
 export interface CodeSets {
   feedUnit?: 'per-minute' | 'per-rev' | 'per-tooth' | 'inverse-time';
+  /**
+   * On an entry for a word written with `=` (Sinumerik `SVC=`), which is a value and never
+   * a code (§7.5) and so switches nothing, `'surface'` says what the word's own value is:
+   * a cutting speed, which scale_speed treats like the `S` of constant surface speed
+   * (2026-09).
+   */
   speedUnit?: 'rpm' | 'surface';
   distance?: 'absolute' | 'incremental';
   units?: 'mm' | 'inch';
@@ -100,6 +106,18 @@ export interface CodeEntry {
    * the number is refused and the line is reported.
    */
   pitchFeedAmbiguous?: boolean;
+  /**
+   * 2026-09 (review finding NC1). Set together with [`pitchFeedAmbiguous`]: the reading of
+   * the number on the other kind of machine is a **tap**, not a thread (Okuma `G84`, a LAP
+   * code on the lathe and the tapping cycle of the machining centres, whose programs open
+   * with the Okuma profile; Okuma `G88`; the lathe's `G74`, the left-hand tap of a mill).
+   * A tap's speed and feed are tied by the pitch, and the feed of such a block is refused
+   * already, so anything that scales speeds leaves the speed of the block, and the speed in
+   * force when it runs, as written too (owner decision 1 of 2026-09-27). A code whose other
+   * reading is a thread (`G76`, `G92`) keeps its speed scaled with a warning, as a thread
+   * does.
+   */
+  tappingElsewhere?: boolean;
   label: string;
   description?: string;
   params?: CodeParam[];
@@ -117,6 +135,24 @@ export interface CodeEntry {
    * range of the program report.
    */
   fNotFeed?: boolean;
+  /**
+   * 2026-09 (owner decision of 2026-09-27). The code taps a thread: a tapping cycle, a
+   * rigid-tapping call or a tapping mode (Fanuc `G84`, `M29`, `G63`; Sinumerik `G331`,
+   * `CYCLE84`; Klartext cycle 207). The spindle speed and the feed of a tap are tied by
+   * the pitch, so the speed of such a block, and the speed in force when it runs, is left
+   * as written by anything that scales speeds. Threading (`G32`, `G76`) is not tapping.
+   *
+   * Independent of [`pitchFeed`]: a rigid-tapping cycle whose lead is one of its own
+   * arguments (`CYCLE84`) taps without taking its lead from the feed word.
+   */
+  tapping?: boolean;
+  /**
+   * 2026-09. The address words of a block with this code are its arguments or its data,
+   * not the program's feed and speed: the arguments of a macro call (`G65 P9810 F3000.`)
+   * and the values of a data-setting block (`G10`). Anything that scales feeds or speeds
+   * leaves them as written and says so.
+   */
+  wordsAreData?: boolean;
 }
 
 /** One dialect's database, as stored in JSON. */

@@ -24,6 +24,7 @@ comment mask. Every NC line in this file was written for gEdit from the lexical 
 from __future__ import annotations
 
 import copy
+import dataclasses
 import json
 import os
 import re
@@ -52,6 +53,21 @@ SPELLED_OUT = ["address", "valueText", "incremental"]
 
 KEEP = {"decimals": "keep", "trailingZeros": "keep", "keepPoint": True, "plusSign": "keep"}
 
+
+def _parse_original(text):
+    """``original`` the way a comma-decimal case (§7.16 / R4) writes it in the fixture.
+
+    ``.`` still parses with the untouched, contract-pinned ``parse_number``; a comma is
+    read the way ``_nc_lex.py``'s ``_parse_value`` reads one — retried with it as the
+    point, ``raw`` kept as the text this fixture wrote. Mirrors ``parseOriginal`` in
+    ``numberFormat.test.ts``.
+    """
+    direct = gedit_nc.parse_number(text)
+    if direct is not None or "," not in text:
+        return direct
+    alt = gedit_nc.parse_number(text.replace(",", "."))
+    return None if alt is None else dataclasses.replace(alt, raw=text)
+
 #: The opt-in `syntax` fields of the turning dialects (plan AD-24, and `names` from §7.16),
 #: each with the key `compile_profile` files its pattern under; `None` for the two that are
 #: switches rather than patterns.
@@ -78,6 +94,7 @@ PATTERN_PATHS = [
     "syntax.systemVariables",
     "syntax.header",
     "syntax.names",
+    "syntax.programNames",
     "toolCall.trigger",
     "toolCall.tool",
     "toolCall.ignore",
@@ -543,7 +560,7 @@ class TestNumberFormatGoldens(unittest.TestCase):
     def test_every_case_formats_the_way_typescript_does(self):
         for number, case in enumerate(self.cases, 1):
             with self.subTest(case=number, note=case.get("note", "")):
-                original = None if case["original"] is None else gedit_nc.parse_number(case["original"])
+                original = None if case["original"] is None else _parse_original(case["original"])
                 if case["original"] is not None:
                     self.assertIsNotNone(original, "original %r does not parse" % case["original"])
                 self.assertEqual(
@@ -637,6 +654,50 @@ class TestScaleDecimal(unittest.TestCase):
             gedit_nc.scale_decimal("F100", "90")
         with self.assertRaises(ValueError):
             gedit_nc.scale_decimal("100", "ninety")
+
+    def test_a_klartext_comma_feed_is_scaled_and_written_back_with_its_comma(self):
+        # §7.16 / R4: `scale_feed.py`/`scale_speed.py` pass a token's own `value.raw`
+        # straight to `scale_decimal`, with no profile to read `decimalSeparatorAlt` from
+        # (`scale_decimal`'s signature is pinned, plan §7.10) — so this goes through the
+        # real tokenizer first, exactly as the bundled scripts do, not a hand-built literal.
+        cp = gedit_nc.compile_profile(helpers.load_profile("heidenhain-klartext"))
+        tokens, _ = gedit_nc.tokenize_line("12 L F1000,5", cp)
+        feed = next(t for t in tokens if t.address == "F")
+        self.assertEqual(feed.value.raw, "1000,5")
+
+        scaled = gedit_nc.scale_decimal(feed.value.raw, "90")
+        self.assertEqual(scaled, "900.45")
+        # `original` (`F1000,5`) was written with one decimal, so `'keep'` rounds to one.
+        self.assertEqual(gedit_nc.format_number(scaled, feed.value, KEEP), "900,5")
+
+        # `X+25,` (5-Axis-1.H): a comma with nothing after it scales too.
+        tokens, _ = gedit_nc.tokenize_line("13 L X+25,", cp)
+        axis = next(t for t in tokens if t.address == "X")
+        self.assertEqual(gedit_nc.scale_decimal(axis.value.raw, "100"), "25")
+        self.assertEqual(gedit_nc.format_number("25", axis.value, KEEP), "+25,")
+
+    def test_decimal_of_reads_a_klartext_comma_that_decimal_refuses(self):
+        # 2026-09 (review finding NC2): the scripts compared and limited a token's value
+        # with `Decimal(token.value.raw)`, which raises on `500,5`; a comma F or S made
+        # Scale feed and Scale speed exit with a traceback at every percentage.
+        from decimal import Decimal, InvalidOperation
+
+        cp = gedit_nc.compile_profile(helpers.load_profile("heidenhain-klartext"))
+        tokens, _ = gedit_nc.tokenize_line("12 L X-10,25 F500,5", cp)
+        feed = next(t for t in tokens if t.address == "F")
+        axis = next(t for t in tokens if t.address == "X")
+        with self.assertRaises(InvalidOperation):
+            Decimal(feed.value.raw)
+        self.assertEqual(gedit_nc.decimal_of(feed.value), Decimal("500.5"))
+        self.assertEqual(gedit_nc.decimal_of(axis.value), Decimal("-10.25"))
+        # Text that `format_number` wrote back with the comma, and the plain forms.
+        self.assertEqual(gedit_nc.decimal_of("250,25"), Decimal("250.25"))
+        self.assertEqual(gedit_nc.decimal_of("1500,"), Decimal("1500"))
+        self.assertEqual(gedit_nc.decimal_of("700."), Decimal("700"))
+        self.assertEqual(gedit_nc.decimal_of(".5"), Decimal("0.5"))
+        for text in ["", "abc", "1e3", "1,2,3", None]:
+            with self.subTest(text=text):
+                self.assertIsNone(gedit_nc.decimal_of(text))
 
 
 class TestToPyRegex(unittest.TestCase):
@@ -904,6 +965,12 @@ class TestMaskCommentsInTheTurningDialects(unittest.TestCase):
         self.assertEqual(gedit_nc.mask_comments("G00 X10 (ROUGH) $A.MIN%", self.okuma), "G00 X10         $A.MIN%")
 
 
+def is_program_name(token, cp):
+    """True for a program marker that is a program name (``<SHAFT_T12>``), not ``O1234``."""
+    regex = cp.patterns.get("program_names")
+    return token.kind == "programMarker" and regex is not None and regex.fullmatch(token.text) is not None
+
+
 class TestMaskAgreesWithTheTokenizer(unittest.TestCase):
     """``mask_comments`` blanks exactly the spans ``tokenize_line`` reads as comments.
 
@@ -932,6 +999,9 @@ class TestMaskAgreesWithTheTokenizer(unittest.TestCase):
             span = masked[token.start : token.end]
             if token.kind == "comment":
                 self.assertEqual(span, " " * len(token.text), dump(tokens))
+            elif is_program_name(token, cp):
+                # Phase 2 (§7.16): a program name masks its letters and digits as `_`.
+                self.assertEqual(span, re.sub(r"[A-Za-z0-9]", "_", token.text), dump(tokens))
             else:
                 self.assertEqual(span, token.text, dump(tokens))
 

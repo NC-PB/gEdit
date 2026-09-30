@@ -103,7 +103,7 @@
           "weight": 1
         },
         {
-          "pattern": "(?<![A-Z])T\\d{4}(?!\\d)",
+          "pattern": "(?<![A-Z])T\\d{4,5}(?!\\d)",
           "weight": 3
         },
         {
@@ -362,6 +362,10 @@
         "pattern": "^\\s*[O:](?<name>\\d+)"
       },
       {
+        "kind": "program",
+        "pattern": "^\\s*<(?<name>[A-Za-z0-9+\\-_.]+)>"
+      },
+      {
         "kind": "comment",
         "pattern": "^\\s*\\((?<text>[^)]*)\\)\\s*$"
       },
@@ -371,7 +375,7 @@
       },
       {
         "kind": "subprogram-call",
-        "pattern": "(?<![A-Z])(?<text>M0*98\\s*[PQ]\\d+(?:\\s*L\\d+)?|G0*65\\s*P\\d+)"
+        "pattern": "(?<![A-Z])(?<text>M0*98\\s*(?:[PQ]\\d+|<[A-Za-z0-9+\\-_.]+>)(?:\\s*L\\d+)?|G0*65\\s*(?:P\\d+|<[A-Za-z0-9+\\-_.]+>))"
       },
       {
         "kind": "end",
@@ -384,7 +388,8 @@
       ],
       "start": [
         "^\\s*O(?<name>\\d+)",
-        "^\\s*:(?<name>\\d+)"
+        "^\\s*:(?<name>\\d+)",
+        "^\\s*<(?<name>[A-Za-z0-9+\\-_.]+)>"
       ]
     },
     "shortName": "Fanuc T",
@@ -426,14 +431,15 @@
         "XOR",
         "MOD"
       ],
+      "programNames": "<[A-Za-z0-9+\\-_.]+>",
       "variables": "#\\d+",
       "wordSeparatorRequired": false
     },
     "toolCall": {
-      "ignore": "(?<![A-Z])T(?:\\d{0,2}00|0+)(?!\\d)",
-      "tool": "(?<![A-Z])T(?<tool>\\d{1,2}?)(?:\\d{2})?(?!\\d)",
+      "ignore": "(?<![A-Z])T(?:\\d{0,3}00|0+)(?!\\d)",
+      "tool": "(?<![A-Z])T(?<tool>\\d{1,3}?)(?:\\d{2})?(?!\\d)",
       "toolFrom": "same-line",
-      "trigger": "(?<![A-Z])T\\d{1,4}(?!\\d)"
+      "trigger": "(?<![A-Z])T\\d{1,5}(?!\\d)"
     },
     "toolList": {
       "commentFilter": "^[-*=_\\s]*$",

@@ -1,0 +1,20 @@
+{
+  "message": "Scaled 6 spindle speeds to 80 %; 3 words for other spindles left as written (S after SETMS(2), S2=, SVC[n]=).",
+  "findings": [
+    {
+      "line": 10,
+      "severity": "info",
+      "message": "S500 drives spindle 2, which SETMS(2) on line 9 made the master spindle; the main spindle is spindle 1, so it is left as it is. Switch on \"Also scale other spindles\" to scale it with the others."
+    },
+    {
+      "line": 14,
+      "severity": "info",
+      "message": "S2=300 is the speed of spindle 2, named by its number; this run scales only the speed of the main spindle, spindle 1, so it is left as it is. Switch on \"Also scale other spindles\" to scale it with the others."
+    },
+    {
+      "line": 17,
+      "severity": "info",
+      "message": "SVC[2]=90 is the speed of spindle 2, named by its number; this run scales only the speed of the main spindle, spindle 1, so it is left as it is. Switch on \"Also scale other spindles\" to scale it with the others."
+    }
+  ]
+}

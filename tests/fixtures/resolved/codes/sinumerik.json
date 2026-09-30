@@ -139,7 +139,8 @@
       "pitchFeed": true,
       "sets": {
         "cycle": "start"
-      }
+      },
+      "tapping": true
     },
     {
       "code": "G9",
@@ -223,7 +224,8 @@
       "group": "motion",
       "label": "Rigid tapping, into the hole",
       "modal": true,
-      "pitchFeed": true
+      "pitchFeed": true,
+      "tapping": true
     },
     {
       "code": "G332",
@@ -231,7 +233,8 @@
       "group": "motion",
       "label": "Rigid tapping, back out",
       "modal": true,
-      "pitchFeed": true
+      "pitchFeed": true,
+      "tapping": true
     },
     {
       "code": "G34",
@@ -758,7 +761,8 @@
       ],
       "sets": {
         "cycle": "start"
-      }
+      },
+      "tapping": true
     },
     {
       "code": "CYCLE840",
@@ -818,7 +822,8 @@
       "pitchFeed": true,
       "sets": {
         "cycle": "start"
-      }
+      },
+      "tapping": true
     },
     {
       "code": "CYCLE85",
@@ -1742,6 +1747,15 @@
       "description": "Switches the spindle over to position control as a rotary axis.",
       "group": "spindle",
       "label": "Spindle to axis mode"
+    },
+    {
+      "code": "SVC",
+      "description": "SVC=100 gives the cutting speed of the active milling or drilling tool in metres per minute, feet in an inch program; the control works out the spindle speed from the tool radius. Without an index it is meant for the master spindle, SVC[2]= for spindle 2. An S word ends it, and so do G96 and SPOS.",
+      "group": "tool",
+      "label": "Cutting speed of the tool",
+      "sets": {
+        "speedUnit": "surface"
+      }
     },
     {
       "code": "SETMS",

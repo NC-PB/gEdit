@@ -265,6 +265,10 @@
         "pattern": "^\\s*[O:](?<name>\\d+)"
       },
       {
+        "kind": "program",
+        "pattern": "^\\s*<(?<name>[A-Za-z0-9+\\-_.]+)>"
+      },
+      {
         "kind": "comment",
         "pattern": "^\\s*\\((?<text>[^)]*)\\)\\s*$"
       },
@@ -274,7 +278,7 @@
       },
       {
         "kind": "subprogram-call",
-        "pattern": "(?<![A-Z])(?<text>M0*98\\s*[PQ]\\d+(?:\\s*L\\d+)?|G0*65\\s*P\\d+)"
+        "pattern": "(?<![A-Z])(?<text>M0*98\\s*(?:[PQ]\\d+|<[A-Za-z0-9+\\-_.]+>)(?:\\s*L\\d+)?|G0*65\\s*(?:P\\d+|<[A-Za-z0-9+\\-_.]+>))"
       },
       {
         "kind": "end",
@@ -287,7 +291,8 @@
       ],
       "start": [
         "^\\s*O(?<name>\\d+)",
-        "^\\s*:(?<name>\\d+)"
+        "^\\s*:(?<name>\\d+)",
+        "^\\s*<(?<name>[A-Za-z0-9+\\-_.]+)>"
       ]
     },
     "shortName": "Fanuc",
@@ -329,10 +334,12 @@
         "XOR",
         "MOD"
       ],
+      "programNames": "<[A-Za-z0-9+\\-_.]+>",
       "variables": "#\\d+",
       "wordSeparatorRequired": false
     },
     "toolCall": {
+      "ignore": "(?<![A-Z])T0+(?!\\d)",
       "tool": "(?<![A-Z])T(?<tool>\\d+)",
       "toolFrom": "same-line-or-last",
       "trigger": "(?<![A-Z])M0*6(?!\\d)"

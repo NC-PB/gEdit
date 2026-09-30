@@ -66,5 +66,14 @@
   {"line":"F2,5","tokens":[{"kind":"word","text":"F2","address":"F","valueText":"2"},{"kind":"operator","text":","},{"kind":"word","text":"5","valueText":"5"}]},
   {"line":"","tokens":[]},
   {"line":"   ","tokens":[]},
-  {"line":"%","tokens":[{"kind":"programMarker","text":"%","address":"%"}]}
+  {"line":"%","tokens":[{"kind":"programMarker","text":"%","address":"%"}]},
+  {"line":"<BRACKET_OP10>","tokens":[{"kind":"programMarker","text":"<BRACKET_OP10>"}]},
+  {"line":"<BRACKET_OP10> (MILL SIDE)","tokens":[{"kind":"programMarker","text":"<BRACKET_OP10>"},{"kind":"comment","text":"(MILL SIDE)"}]},
+  {"line":"<part-2.nc>","tokens":[{"kind":"programMarker","text":"<part-2.nc>"}]},
+  {"line":"M98 <POCKET_F12> L2","tokens":[{"kind":"word","text":"M98","address":"M","valueText":"98"},{"kind":"programMarker","text":"<POCKET_F12>"},{"kind":"word","text":"L2","address":"L","valueText":"2"}]},
+  {"line":"M98<SUB_M30>","tokens":[{"kind":"word","text":"M98","address":"M","valueText":"98"},{"kind":"programMarker","text":"<SUB_M30>"}]},
+  {"line":"N40 G65 <PROBE-X+1.5> A1. B2.","tokens":[{"kind":"blockNumber","text":"N40","address":"N","valueText":"40"},{"kind":"word","text":"G65","address":"G","valueText":"65"},{"kind":"programMarker","text":"<PROBE-X+1.5>"},{"kind":"word","text":"A1.","address":"A","valueText":"1."},{"kind":"word","text":"B2.","address":"B","valueText":"2."}]},
+  {"line":"G66 <MACRO_A> A1.","tokens":[{"kind":"word","text":"G66","address":"G","valueText":"66"},{"kind":"programMarker","text":"<MACRO_A>"},{"kind":"word","text":"A1.","address":"A","valueText":"1."}]},
+  {"line":"G1 X10. (<NOT_A_NAME_T1>)","tokens":[{"kind":"word","text":"G1","address":"G","valueText":"1"},{"kind":"word","text":"X10.","address":"X","valueText":"10."},{"kind":"comment","text":"(<NOT_A_NAME_T1>)"}]},
+  {"line":"<A B>","tokens":[{"kind":"operator","text":"<"},{"kind":"word","text":"A","address":"A"},{"kind":"word","text":"B","address":"B"},{"kind":"operator","text":">"}]}
 ]

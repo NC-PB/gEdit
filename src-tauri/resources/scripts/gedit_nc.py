@@ -109,9 +109,12 @@ Beyond section 7.10
 :func:`continues_block` are not in the section 7.10 list. The first four are ports of code
 the TypeScript side has as well; the next two are the M5 carry-over above, and the last
 one answers whether a line belongs to the block above it by a leading marker (M8: Okuma
-``$`` lines), which :meth:`FeedModeTracker.update` takes as ``continued``. They are public,
-documented and covered by the tests, but the contract that may not move is the section
-7.10 one.
+``$`` lines), which :meth:`FeedModeTracker.update` takes as ``continued``.
+:func:`decimal_of` (2026-09) is the exact value of a written number: a Klartext decimal
+comma stays in a token's ``value.raw`` so that it is written back, which makes
+``Decimal(value.raw)`` raise, and a script compares and limits values through this one
+instead. They are public, documented and covered by the tests, but the contract that may
+not move is the section 7.10 one.
 """
 
 from __future__ import annotations
@@ -132,6 +135,7 @@ from _nc_lex import (
     block_number_of,
     compile_profile,
     continues_block,
+    decimal_of,
     format_number,
     mask_comments,
     normalize_code,
@@ -199,6 +203,7 @@ __all__ = [
     "mask_comments",
     "block_number_of",
     "continues_block",
+    "decimal_of",
     "normalize_code",
     "number_format_of",
     "CONTEXT_ENV",

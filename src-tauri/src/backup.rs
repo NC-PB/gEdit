@@ -114,7 +114,7 @@ pub const MAX_BACKUP_COUNT: u32 = 50;
 ///
 /// Deliberately its own constant and not [`crate::config::BAK_SUFFIX`], which names
 /// the rescue copy of an app JSON file gEdit could not parse. The two spell the same
-/// four characters today and mean different things: one is the user's backup of his
+/// four characters today and mean different things: one is the user's backup of their
 /// program, the other is gEdit getting its own broken file out of the way.
 pub const SIBLING_SUFFIX: &str = ".bak";
 
@@ -306,7 +306,7 @@ pub fn backup(
     copy_atomic(source, &target)?;
     if settings.mode == BackupMode::History {
         // The copy is on disk. Pruning is housekeeping from here on: if it fails,
-        // the user still has this backup and one more old one than he asked for,
+        // the user still has this backup and one more old one than they asked for,
         // which is the harmless direction to fail in.
         if let Some(folder) = target.parent() {
             if let Err(err) = prune(folder, settings.count) {
@@ -455,7 +455,7 @@ fn civil_from_days(days: i64) -> (i64, u64, u64) {
 /// Narrowing the mode is **best effort**; creating the folder is not. A volume that
 /// cannot express Unix permissions would otherwise be a volume on which no save ever
 /// gets a backup, and what goes in here is the *previous version of a file the user
-/// already has on disk*, under whatever permissions he keeps it.
+/// already has on disk*, under whatever permissions they keep it.
 fn history_dir(dirs: &AppDirs, source: &Path) -> Result<PathBuf, String> {
     let folder = source
         .parent()
@@ -1255,7 +1255,7 @@ mod tests {
                 component.len()
             );
         }
-        // And it is still the user's file: the head of the name he gave it, and the
+        // And it is still the user's file: the head of the name they gave it, and the
         // extension that says what it is.
         let folder = target
             .parent()
@@ -1379,8 +1379,8 @@ mod tests {
 
     /// M8: the same Windows folder reaches `files_backup` as `C:\nc` from the file
     /// dialog and as `\\?\C:\nc` from anything that canonicalized it, and the second
-    /// spelling would open a second history — the five versions the user thinks he
-    /// has would be split over two folders, neither of them full.
+    /// spelling would open a second history — the five versions the user thinks they
+    /// have would be split over two folders, neither of them full.
     #[test]
     fn the_two_windows_spellings_of_one_folder_share_one_history() {
         assert_eq!(

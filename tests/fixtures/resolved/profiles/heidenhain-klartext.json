@@ -23,6 +23,10 @@
   "detect": {
     "content": [
       {
+        "pattern": "^\\s*\\d+\\s+BEGIN\\s+PGM\\s+\\S+\\s+(?:MM|INCH)(?![A-Z0-9_])",
+        "weight": 5000
+      },
+      {
         "pattern": "^\\s*(\\d+\\s+)?BEGIN\\s+PGM\\b",
         "weight": 5
       },
@@ -31,8 +35,8 @@
         "weight": 5
       },
       {
-        "pattern": "^\\s*\\d+\\s+(L|CC|C|CR|LBL)\\b",
-        "weight": 1
+        "pattern": "^\\s*\\d+\\s+(?:(?:L|LN|LP|CC|C|CR|CT|CP|RND|CHF|APPR|DEP|LBL|CYCL|FN|PLANE|FUNCTION|TOOL|BLK|END)(?![A-Z0-9_])|[*;]|[MQ]\\d)",
+        "weight": 2
       },
       {
         "pattern": "\\bFMAX\\b",
@@ -69,11 +73,11 @@
   "outline": [
     {
       "kind": "section",
-      "pattern": "^\\s*\\d+\\s+\\*\\s*-?\\s*(?<text>.*)$"
+      "pattern": "^\\s*(?:/\\s*)?\\d+\\s+(?:/\\s*)?\\*\\s*-?\\s*(?<text>.*)$"
     },
     {
       "kind": "comment",
-      "pattern": "^\\s*\\d+\\s*;\\s*(?<text>.*)$"
+      "pattern": "^\\s*(?:/\\s*)?\\d+\\s*(?:/\\s*)?;\\s*(?<text>.*)$"
     },
     {
       "kind": "program",
@@ -112,7 +116,7 @@
     },
     "blockSkip": {
       "chars": "/",
-      "position": "after-number"
+      "position": "either"
     },
     "comments": [
       {
@@ -124,6 +128,7 @@
     "continuationMark": "~",
     "decimalPointSignificant": false,
     "decimalSeparator": ".",
+    "decimalSeparatorAlt": ",",
     "incrementalPrefix": "I",
     "keywords": [
       "BEGIN PGM",
@@ -171,13 +176,13 @@
       "MM",
       "INCH"
     ],
-    "sectionHeading": "^\\s*\\d+\\s+\\*",
+    "sectionHeading": "^\\s*(?:/\\s*)?\\d+\\s+(?:/\\s*)?\\*",
     "strings": true,
     "variables": "Q[LRS]?\\d+",
     "wordSeparatorRequired": true
   },
   "toolCall": {
-    "tool": "TOOL\\s+CALL\\s+(?<tool>\\d+(\\.\\d)?|\"[^\"]+\"|QS\\d+)",
+    "tool": "TOOL\\s+CALL\\s+(?<tool>\\d+(\\.\\d)?|\"[^\"]+\"|QS\\d+)\\s*(?<axis>[XYZ])?\\b",
     "toolFrom": "same-line",
     "trigger": "\\bTOOL\\s+CALL\\s+(\\d|\"|QS\\d)"
   },

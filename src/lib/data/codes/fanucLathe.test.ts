@@ -64,7 +64,8 @@ const FANUC_DIALECTS = [MILL, A, B];
 // them together). `G73 R` is one row the table does not have — see the hand-off note.
 
 /** The mill's canned cycles: the `G81`–`G89` rows of §8.2 cover all of them. */
-const MILL_CYCLES = ['G73', 'G74', 'G76', 'G81', 'G82', 'G83', 'G84', 'G85', 'G86', 'G87', 'G88', 'G89'];
+// 2026-09: with the older-format rigid tapping cycles `G84.2` and `G84.3` (TODO Next up 8).
+const MILL_CYCLES = ['G73', 'G74', 'G76', 'G81', 'G82', 'G83', 'G84', 'G84.2', 'G84.3', 'G85', 'G86', 'G87', 'G88', 'G89'];
 
 type Unit = NonNullable<CodeParam['unit']>;
 
@@ -130,6 +131,13 @@ describe('the shipped Fanuc databases', () => {
     // a whole program's feeds for no reason, and a missing one scraps a thread.
     for (const e of entriesOf(dialect)) {
       if (e.pitchFeed !== true) continue;
+      // 2026-09: or a modal **mode** of its own group, the tapping mode `G63` (in force
+      // until `G61`, `G62` or `G64` replaces it; `FeedModeTracker.pitch_mode`).
+      if (e.code === 'G63') {
+        expect(e.group, `${dialect} ${e.code}`).toBe('pathmode');
+        expect(e.modal, `${dialect} ${e.code}`).toBe(true);
+        continue;
+      }
       expect(e.group, `${dialect} ${e.code}`).toMatch(/^(cycle|motion)$/);
       // A cycle that cuts a thread starts one; a motion that does is one block.
       if (e.group === 'cycle') expect(e.sets?.cycle, `${dialect} ${e.code}`).toBe('start');
@@ -142,6 +150,28 @@ describe('the shipped Fanuc databases', () => {
       if (e.pitchFeedAmbiguous !== true) continue;
       expect(e.pitchFeed, `${dialect} ${e.code}`).toBeUndefined();
       expect(e.group, `${dialect} ${e.code}`).toMatch(/^(cycle|motion|nonmodal)$/);
+    }
+    // 2026-09 (review finding NC1): of those, the lathe's G74 is a tap on the other kind of
+    // machine (the mill's left-hand tapping cycle), so its speed is left like its feed. The
+    // mill's G76 and G92 are threads on a lathe, whose speed stays scaled with a warning.
+    const elsewhere = entriesOf(dialect).filter((e) => e.tappingElsewhere === true).map((e) => e.code);
+    expect(elsewhere, dialect).toEqual(dialect === MILL ? [] : ['G74']);
+    for (const code of elsewhere) expect(entry(dialect, code)?.pitchFeedAmbiguous, code).toBe(true);
+  });
+
+  // Owner decision of 2026-09-27: scale_speed leaves the speed of a tap as written, and it
+  // knows a tap by this flag alone. System B inherits the tapping cycles of system A.
+  it.each(FANUC_DIALECTS)('%s marks its tapping codes, and only them, as tapping', (dialect) => {
+    const tapping = entriesOf(dialect).filter((e) => e.tapping === true).map((e) => e.code).sort();
+    const want =
+      dialect === 'fanuc'
+        ? ['G63', 'G74', 'G84', 'G84.2', 'G84.3', 'M29']
+        : ['G63', 'G84', 'G84.2', 'G88', 'M29'];
+    expect(tapping, dialect).toEqual(want);
+    // A tap that is not a mode or an M code takes its lead from F.
+    for (const code of tapping) {
+      if (code === 'M29') continue;
+      expect(entry(dialect, code)?.pitchFeed, `${dialect} ${code}`).toBe(true);
     }
   });
 
@@ -312,13 +342,16 @@ describe('the lathe database of G-code system A (§8.2)', () => {
     expect(p76?.label).toContain('Counted, not measured');
     // Tapping and threading are the only lathe entries that carry it. The source review
     // (2026-09) added the variable-lead thread G34 and the older-format rigid tap G84.2,
-    // both in the lathe's own G-code list.
+    // both in the lathe's own G-code list, and the 2026-09 scaling pass the tapping mode
+    // G63, which the lathe's list has in all three G-code systems.
     expect(
       entriesOf(A)
         .filter((e) => e.pitchFeed === true)
         .map((e) => e.code)
         .sort(),
-    ).toEqual(['G32', 'G33', 'G34', 'G76', 'G84', 'G84.2', 'G88', 'G92']);
+    ).toEqual(['G32', 'G33', 'G34', 'G63', 'G76', 'G84', 'G84.2', 'G88', 'G92']);
+    // The left-hand older-format tap is a mill code only.
+    expect(entry(A, 'G84.3')).toBeUndefined();
   });
 
   it('starts a cycle on every code that starts one, and only there', () => {

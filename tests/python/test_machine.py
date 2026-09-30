@@ -12,6 +12,7 @@ context written before M6 keep working, and the two ways a script can hand a mac
 
 from __future__ import annotations
 
+import dataclasses
 import unittest
 
 from tests.python import helpers
@@ -26,8 +27,16 @@ KEEP = {"decimals": "keep", "trailingZeros": "keep", "keepPoint": True, "plusSig
 
 
 def literal(raw):
-    """A golden literal as the tokenizer would have produced it."""
+    """A golden literal as the tokenizer would have produced it.
+
+    A comma is read the way the Klartext tokenizer reads its decimal comma (2026-09): the
+    strict parse first, then the comma retried as the point, ``raw`` kept as written.
+    Mirrors ``literalOf`` in ``numbers.test.ts``.
+    """
     parsed = gedit_nc.parse_number(raw)
+    if parsed is None and "," in raw:
+        alt = gedit_nc.parse_number(raw.replace(",", "."))
+        parsed = None if alt is None else dataclasses.replace(alt, raw=raw)
     if parsed is None:
         raise AssertionError("%r does not parse" % (raw,))
     return parsed

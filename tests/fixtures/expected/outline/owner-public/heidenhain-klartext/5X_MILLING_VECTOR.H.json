@@ -1,0 +1,12 @@
+{
+  "profile": "heidenhain-klartext",
+  "ownerReviewed": false,
+  "items": [
+    {"kind":"program","line":1,"text":"BEGIN PGM 5X_MILLING MM","endLine":99157},
+    {"kind":"section","line":13,"text":"KUGELFRASER D10 L25 SD10","endLine":13},
+    {"kind":"tool","line":14,"text":"T1 — KUGELFRASER D10 L25 SD10","tool":"1","endLine":99157},
+      {"kind":"section","line":17,"text":"SWEEP-BEARBEITUNG (5X)","endLine":17},
+      {"kind":"section","line":18,"text":"A : 0  ; C : 0","endLine":99157},
+      {"kind":"end","line":99156,"text":"END PGM"}
+  ]
+}

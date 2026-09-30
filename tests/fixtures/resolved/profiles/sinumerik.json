@@ -21,6 +21,7 @@
       "X"
     ],
     "feed": "F",
+    "mainSpindle": "1",
     "speedLimitWords": [
       "LIMS"
     ],
@@ -32,14 +33,30 @@
     "content": [
       {
         "pattern": "^%_N_\\w+_(?:MPF|SPF)",
-        "weight": 8
+        "weight": 5000
       },
       {
         "pattern": "^;\\$PATH=",
-        "weight": 6
+        "weight": 5000
       },
       {
-        "pattern": "(?<![A-Z0-9_$])CYCLE\\d+[ \\t]*\\(",
+        "pattern": "(?<![A-Z0-9_$])CYCLE\\d+(?![A-Z0-9_])",
+        "weight": 4
+      },
+      {
+        "pattern": "=[ \\t]*(?:AC|IC|DC|ACP|ACN)[ \\t]*\\(",
+        "weight": 4
+      },
+      {
+        "pattern": "(?<![A-Z0-9_$])CR[ \\t]*=",
+        "weight": 4
+      },
+      {
+        "pattern": "(?<![A-Z0-9_$])(?:TRAORI|TRAFOOF|TRACYL|TRANSMIT|ORIWKS|ORIAXES|MCALL|SUPA)(?![A-Z0-9_])",
+        "weight": 4
+      },
+      {
+        "pattern": "(?<![A-Z0-9_$])WORKPIECE[ \\t]*\\(",
         "weight": 4
       },
       {
@@ -59,7 +76,7 @@
         "weight": 4
       },
       {
-        "pattern": "(?<![A-Z0-9_$])MSG[ \\t]*\\(",
+        "pattern": "(?<![A-Z0-9_$])MSG[ \\t]*\\([ \\t]*[\")]",
         "weight": 3
       },
       {

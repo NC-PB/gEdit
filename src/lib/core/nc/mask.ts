@@ -25,14 +25,27 @@
 //     start of a comment (P8, AD-24).
 //   - A file header (`syntax.header`: `$PART.MIN%`, `%_N_PART_MPF`). It is one program
 //     marker, and detection reads it, so it must survive the mask whole.
+//
+// A program name (`syntax.programNames`: Fanuc `<SHAFT_T12>`) is neither blanked nor kept.
+// The control reads its characters like comment text, so no code pattern may find a word
+// in it — `T12` is no tool change and `M30` no end — yet the program-start and call rules
+// of the map have to see that a name stands there. Each letter and digit becomes `_` and
+// everything else stays, so `<SHAFT-T12>` masks as `<_____-___>`. Not as blanks: a run of
+// blanks is how the map finds a comment, and the name would become a tool's description.
+// The map reads the name itself off the real line, at the offsets the mask keeps.
 
 import type { CompiledProfile } from '$lib/core/profiles/types';
-import { commentAt, commentEndAt, lexSpec } from './tokenizer';
+import { commentAt, commentEndAt, lexSpec, programNameEndAt } from './tokenizer';
 
 const QUOTE = 0x22;
 
 function blanks(count: number): string {
   return count > 0 ? ' '.repeat(count) : '';
+}
+
+/** A program name as the mask writes it: every letter and digit `_`, the rest as it is. */
+function maskName(name: string): string {
+  return name.replace(/[A-Za-z0-9]/g, '_');
 }
 
 /** Returns `line` with every comment blanked out, same length. */
@@ -63,6 +76,22 @@ export function maskComments(line: string, cp: CompiledProfile): string {
     if (match && match.index === 0 && match[0].length > 0) p = Math.min(match[0].length, limit);
   }
 
+  // Whole-line fast path (G7): a CAM post writes almost every line with no comment, no
+  // string and no program name, so most of the time nothing between `p` and `limit` can
+  // start a span the mask changes. `maskLeadPattern` (`tokenizer.ts`) holds every character
+  // that could — the loop below can only ever act on one of those — so when none of them
+  // appear, the loop would just walk to `limit` doing nothing, and skipping it straight to
+  // the same return the loop would reach is one native scan instead of a function call at
+  // every character. `null` means the program-name pattern has no literal lead (a regex
+  // marker) and the fast path cannot be trusted, so every such profile takes the loop.
+  if (p < limit && spec.maskLeadPattern) {
+    spec.maskLeadPattern.lastIndex = p;
+    const found = spec.maskLeadPattern.exec(line);
+    if (found === null || found.index >= limit) {
+      return copied === 0 ? line : masked + line.slice(copied);
+    }
+  }
+
   while (p < limit) {
     const code = line.charCodeAt(p);
     // Only in a dialect that has strings. Fanuc has none (`syntax-fanuc` §3.7), so a
@@ -78,6 +107,13 @@ export function maskComments(line: string, cp: CompiledProfile): string {
     }
     const marker = spec.comments.length > 0 ? commentAt(line, p, spec) : null;
     if (!marker) {
+      const nameEnd = programNameEndAt(line, p, limit, spec);
+      if (nameEnd > p) {
+        masked += line.slice(copied, p) + maskName(line.slice(p, nameEnd));
+        copied = nameEnd;
+        p = nameEnd;
+        continue;
+      }
       p++;
       continue;
     }

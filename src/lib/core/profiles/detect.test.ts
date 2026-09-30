@@ -11,7 +11,15 @@ import { describe, expect, it } from 'vitest';
 import { BUILTIN_PROFILE_JSON } from '$lib/data/profiles';
 import { FIXTURES_DIR, listFixtures, openFixture } from '../../../../tests/unit/helpers/fixtures';
 import { compileProfile } from './compile';
-import { MAX_SNIFF_LINES, VARIANT_MARGIN, detectProfile, detectVariants, extensionOf } from './detect';
+import {
+  CERTAIN_WEIGHT,
+  DECISIVE_WEIGHT,
+  MAX_SNIFF_LINES,
+  VARIANT_MARGIN,
+  detectProfile,
+  detectVariants,
+  extensionOf,
+} from './detect';
 import { validateProfile } from './validate';
 import type { CompiledProfile, Profile } from './types';
 
@@ -168,14 +176,15 @@ describe('the content score', () => {
 
 describe('ties', () => {
   it('go to the higher priority before they reach the fallback', () => {
-    // One `%` against one Klartext line: 5 against 5 on the shipped profiles.
+    // One `%` against one Klartext line: 5 against 5 on the shipped profiles. (R1: the
+    // line is a `TOOL CALL`, because a numbered `BEGIN PGM` block is decisive now.)
     //
     // In P1 this went to the fallback, because no built-in carried a priority. M6/WP6.2
     // gave the Fanuc mill `detect.priority: 1` so that a Fanuc file scoring the same as
     // the Fanuc lathe stays a mill (AD-18, §8.1), and the priority is the **first**
     // tie-break of AD-11 — so it now settles this stand-off as well. The fallback still
     // decides between profiles of equal priority; `the content score` above shows that.
-    expect(detectBoth('/work/a.txt', '%\n0 BEGIN PGM A MM\n')).toEqual([FANUC, FANUC]);
+    expect(detectBoth('/work/a.txt', '%\n1 TOOL CALL 5 Z S2000\n')).toEqual([FANUC, FANUC]);
   });
 
   /**
@@ -239,7 +248,7 @@ describe('ties', () => {
     expect(detectProfile([second, first], null, 'X\n', 'someone-else')).toBe('second');
   });
 
-  // M6: the user wrote his profile for his own posts, so it beats the one we guessed at.
+  // M6: the user wrote their profile for their own posts, so it beats the one we guessed at.
   it('go to a user profile before a built-in, but after the priority', () => {
     const rule = { content: [{ pattern: 'X', weight: 5 }] };
     const shipped = variant('shipped', rule);
@@ -268,6 +277,71 @@ describe('ties', () => {
     expect(detectProfile([shipped, important], null, 'X\n', 'shipped')).toBe('important');
     // Nothing to tell them apart: the fallback, then the registry order.
     expect(detectProfile([shipped, mine], null, 'X\n', 'shipped')).toBe('shipped');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R1: detection that cannot wreck a program (source review 2026-09, §5)
+// ---------------------------------------------------------------------------
+
+describe('decisive headers', () => {
+  /** A page of mill moves: one point a line for the Fanuc mill's `Y` rule. */
+  const millPage = (count: number): string[] =>
+    Array.from({ length: count }, (_, i) => `X${i}.5 Y${i}.25 Z-1.`);
+
+  it('decide the dialect against a full page of lines that score for another', () => {
+    // 5X_MILLING_VECTOR.H and the Siemens milling programs opened as Fanuc mill: every
+    // line that moves Y scored for the mill, and nothing outweighed 400 of them.
+    const cases: [string, string][] = [
+      ['0 BEGIN PGM VECTOR MM', KLARTEXT],
+      ['%_N_PLATE_MPF', SINUMERIK],
+      [';$PATH=/_N_WKS_DIR/_N_PLATE_WPD', SINUMERIK],
+      ['$PLATE.MIN%', OKUMA],
+    ];
+    for (const [header, expected] of cases) {
+      const text = [header, ...millPage(MAX_SNIFF_LINES - 1)].join('\n');
+      for (const path of ['/work/prog.nc', '/work/prog.txt', null]) {
+        expect(detectBoth(path, text), `${header} ${String(path)}`).toEqual([expected, expected]);
+      }
+    }
+  });
+
+  it('carry the decisive weight, and no rule below the certain weight can reach it', () => {
+    const headers = new Map<string, number>();
+    for (const cp of BUILTINS) {
+      for (const rule of cp.re.detectContent) {
+        if (rule.weight >= DECISIVE_WEIGHT) headers.set(`${cp.profile.id} ${rule.re.source}`, rule.weight);
+        // "Hard" (detect.ts): only certain syntax can add up past a header.
+        if (rule.weight < CERTAIN_WEIGHT) expect(rule.weight * MAX_SNIFF_LINES, rule.re.source).toBeLessThan(DECISIVE_WEIGHT);
+      }
+    }
+    expect([...headers.values()].every((weight) => weight === DECISIVE_WEIGHT)).toBe(true);
+    expect([...headers.keys()].map((key) => key.split(' ')[0]).sort()).toEqual([KLARTEXT, OKUMA, SINUMERIK, SINUMERIK]);
+  });
+
+  it('give way only where the content contradicts them hard', () => {
+    // Another dialect's header is the plainest contradiction: the second one decides by
+    // the rest of the file. And 60 lines of Okuma calls add up past a Klartext header.
+    const both = ['0 BEGIN PGM A MM', '%_N_A_MPF', 'N10 G0 X0 Z0', 'N20 DIAMON', '1 L X+0 R0 FMAX'].join('\n');
+    expect(detectProfile(BUILTINS, '/work/a.txt', both, FANUC)).toBe(SINUMERIK);
+    const calls = ['0 BEGIN PGM A MM', ...Array.from({ length: 60 }, (_, i) => `CALL O${1000 + i}`)].join('\n');
+    expect(detectProfile(BUILTINS, '/work/a.h', calls, KLARTEXT)).toBe(OKUMA);
+    // A `BEGIN PGM` that is not a numbered block is only a Klartext line, not a header.
+    expect(detectProfile(BUILTINS, '/work/a.nc', ['BEGIN PGM A MM', ...millPage(10)].join('\n'), KLARTEXT)).toBe(FANUC);
+  });
+});
+
+describe('Klartext blocks', () => {
+  it('count every numbered Klartext statement, LN included, over a line that moves Y', () => {
+    // Without the header: the LN program's body alone, as a fragment would be.
+    const body = Array.from(
+      { length: MAX_SNIFF_LINES },
+      (_, i) => `${25 + i} LN X${i}.5 Y1.3 Z-2.5 NX-0.23 NY-0.66 NZ0.70 TX-0.23 TY-0.66 TZ0.70`,
+    ).join('\n');
+    expect(detectBoth('/work/vector.txt', body)).toEqual([KLARTEXT, KLARTEXT]);
+    for (const line of ['12 LN X+1 Y+2', '13 RND R2', '14 APPR LCT X+0 Y+0 R5 RR', '15 CYCL DEF 200 BOHREN', '16 * - NOTE', '17 M3', '18 Q1 = 5']) {
+      expect(detectProfile(BUILTINS, null, line, FANUC), line).toBe(KLARTEXT);
+    }
   });
 });
 

@@ -1,0 +1,12 @@
+{
+  "profile": "okuma-osp",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":2,"text":"THREADED SPIGOT - NO HEADER, NO EXTENSION"},
+    {"kind":"comment","line":5,"text":"OD ROUGH"},
+    {"kind":"tool","line":6,"text":"T1 — OD ROUGH","tool":"01","endLine":12},
+      {"kind":"comment","line":12,"text":"THREAD M30X2"},
+    {"kind":"tool","line":13,"text":"T7 — THREAD M30X2","tool":"07","endLine":20},
+      {"kind":"end","line":19,"text":"M02"}
+  ]
+}

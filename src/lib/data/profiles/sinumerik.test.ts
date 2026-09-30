@@ -247,6 +247,46 @@ describe('a Sinumerik program is recognised as one', () => {
     expect((table.get(MILL) ?? 0) - (table.get(SINUMERIK) ?? 0)).toBeGreaterThanOrEqual(MIN_MARGIN);
   });
 
+  it('counts the syntax only a Siemens post writes on a line that moves Y as well (R1)', () => {
+    // Three of the owner's five published Siemens programs are milling programs and opened
+    // as Fanuc mill: nearly every line moves Y, and the neutral rules leave such a line to
+    // the mill. The markers below are Siemens-only, so they count on those lines too.
+    for (const line of [
+      'N110 G2 X130 Y40 CR=15',
+      'N240 X=AC(100) Y=AC(20)',
+      'N250 X100 Y=IC(40)',
+      'N100 CYCLE800(1,"TABLE",0,27,0,0,0,0,0,0,0,0,0,-1)',
+      'N20 CYCLE800',
+      'N220 MCALL CYCLE81(5,0,2,-12,)',
+      'N320 TRAORI',
+      'WORKPIECE(,,,"BOX",112,0,-30,-80,0,0,120,80)',
+      'MSG("OP1 - FACING")',
+      'N100 MSG()',
+    ]) {
+      const table = scores(null, line);
+      expect(table.get(SINUMERIK), line).toBeGreaterThanOrEqual(3);
+      expect(table.get(SINUMERIK), line).toBeGreaterThan(Math.max(table.get(MILL) ?? 0, table.get(LATHE) ?? 0));
+    }
+    // An Okuma message is `MSG (TEXT)`, with no string: not a Siemens marker.
+    expect(scores(null, 'MSG (CHECK THE JAWS)').get(SINUMERIK)).toBe(0);
+  });
+
+  it('opens a Siemens milling program with this profile, header or not, until R2', () => {
+    // `%_N_…_MPF` and `;$PATH=` are decisive (detect.ts, `DECISIVE_WEIGHT`); without them
+    // the markers carry the file: `s06-milling.txt` is Demo_1.mpf's case, content only.
+    for (const rel of ['nc/owner-public/sinumerik/2.5D_Milling.mpf', 'nc/owner-public/sinumerik/5X_Milling.mpf']) {
+      const text = readFixture(rel);
+      for (const path of ['/work/prog.nc', '/work/prog.txt', null]) {
+        expect(detectProfile(BUILTINS, path, text, MILL), `${rel} ${String(path)}`).toBe(SINUMERIK);
+      }
+    }
+    for (const rel of ['nc/owner-public/sinumerik/Demo_1.mpf', 'nc/sinumerik/s06-milling.txt']) {
+      const { winner, mine, others } = margins(null, readFixture(rel));
+      expect(winner, rel).toBe(SINUMERIK);
+      for (const [family, score] of others) expect(mine - score, `${rel}: ${family}`).toBeGreaterThanOrEqual(MIN_MARGIN);
+    }
+  });
+
   it('stays Sinumerik at 450 lines when a post writes a point behind every whole number', () => {
     // `X64.` instead of `X64`: a Fanuc post has to write it, a Siemens post may. The
     // neutral lines tie either way, so the markers still decide.

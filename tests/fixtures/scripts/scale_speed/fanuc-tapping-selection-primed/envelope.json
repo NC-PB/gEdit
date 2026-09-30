@@ -1,0 +1,20 @@
+{
+  "message": "Scaled 1 of 2 spindle speeds to 90 %; 1 tapping speed left as written.",
+  "findings": [
+    {
+      "line": 8,
+      "severity": "info",
+      "message": "This run saw only the selection, from line 8, but the 7 lines above it were read for the modal state: the tapping code G84 is in force here."
+    },
+    {
+      "line": 8,
+      "severity": "warning",
+      "message": "S450 is the speed of a tapping block (G84). A tap's feed follows from its speed and its pitch, so the speed is left as written: scaled on its own it would break the tap. Change the speed and the feed together by hand if the tap should run at another speed."
+    },
+    {
+      "line": 10,
+      "severity": "info",
+      "message": "S800 was scaled and is still the speed in force at the end of the selection (line 11). The lines below the selection were not read: if a tapping or threading block further down runs at this speed, its feed was written for the old one. Run the command on the whole program, or check those blocks by hand."
+    }
+  ]
+}

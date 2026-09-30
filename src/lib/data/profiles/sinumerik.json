@@ -17,14 +17,18 @@
   "detect": {
     "extensions": { "mpf": 8, "spf": 8 },
     "content": [
-      { "pattern": "^%_N_\\w+_(?:MPF|SPF)", "weight": 8 },
-      { "pattern": "^;\\$PATH=", "weight": 6 },
-      { "pattern": "(?<![A-Z0-9_$])CYCLE\\d+[ \\t]*\\(", "weight": 4 },
+      { "pattern": "^%_N_\\w+_(?:MPF|SPF)", "weight": 5000 },
+      { "pattern": "^;\\$PATH=", "weight": 5000 },
+      { "pattern": "(?<![A-Z0-9_$])CYCLE\\d+(?![A-Z0-9_])", "weight": 4 },
+      { "pattern": "=[ \\t]*(?:AC|IC|DC|ACP|ACN)[ \\t]*\\(", "weight": 4 },
+      { "pattern": "(?<![A-Z0-9_$])CR[ \\t]*=", "weight": 4 },
+      { "pattern": "(?<![A-Z0-9_$])(?:TRAORI|TRAFOOF|TRACYL|TRANSMIT|ORIWKS|ORIAXES|MCALL|SUPA)(?![A-Z0-9_])", "weight": 4 },
+      { "pattern": "(?<![A-Z0-9_$])WORKPIECE[ \\t]*\\(", "weight": 4 },
       { "pattern": "(?<![A-Z0-9_$])T\\d*[ \\t]*=[ \\t]*\"", "weight": 4 },
       { "pattern": "(?<![A-Z0-9_$])LIMS[ \\t]*=", "weight": 4 },
       { "pattern": "(?<![A-Z0-9_$])DIAM(?:ON|OF|90)(?![A-Z0-9_])", "weight": 4 },
       { "pattern": "(?<![A-Z0-9_$])G0*9[67](?![\\d.])", "weight": 4 },
-      { "pattern": "(?<![A-Z0-9_$])MSG[ \\t]*\\(", "weight": 3 },
+      { "pattern": "(?<![A-Z0-9_$])MSG[ \\t]*\\([ \\t]*[\")]", "weight": 3 },
       { "pattern": "(?<![A-Z0-9_$])GOTO[FB](?![A-Z0-9_])", "weight": 3 },
       { "pattern": "(?<![A-Z0-9_$])DEF[ \\t]+(?:REAL|INT)(?![A-Z0-9_])", "weight": 3 },
       { "pattern": "(?<![A-Z0-9_$])[MST]\\d+[ \\t]*=", "weight": 3 },
@@ -152,7 +156,8 @@
     "arcCenterMode": "incremental",
     "diameter": ["X"],
     "angular": ["C", "AR", "SF"],
-    "speedLimitWords": ["LIMS"]
+    "speedLimitWords": ["LIMS"],
+    "mainSpindle": "1"
   },
   "toolCall": {
     "trigger": "^(?:[^\"]*\"[^\"]*\")*[^\"]*?(?<![A-Z_$])T(?:\\d*\\s*=\\s*\"[^\"]*\"|\\d*\\s*=\\s*(?!0+(?![\\d.]))\\d+(?![\\d._])|(?!0+(?![\\d.]))\\d+(?![\\d._])(?!\\s*=))",

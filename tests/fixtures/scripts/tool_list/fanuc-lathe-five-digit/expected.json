@@ -1,0 +1,46 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "offsets",
+      "label": "Offsets"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [
+    {
+      "tool": "T123",
+      "offsets": "45",
+      "description": "",
+      "line": 5,
+      "calls": 1,
+      "feed": "0.2 /rev",
+      "speed": "1200"
+    }
+  ],
+  "message": "1 tool, 1 without a description",
+  "findings": []
+}

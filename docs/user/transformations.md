@@ -269,7 +269,10 @@ Every comment that was kept is listed in Results with the reason.
 Converts the program to upper or lower case. Comments are left alone unless you switch off
 **Leave comments as they are**. Text in quotes in the code keeps its case — a tool name in
 `TOOL CALL "MILL_D10"` or `T="drill_d8"`, the text of a `MSG("…")` — but inside a comment
-you chose to convert, a quote is just a character and its text converts with the rest.
+you chose to convert, a quote is just a character and its text converts with the rest. **A
+Fanuc program name in `<angle brackets>` is not kept apart yet**: `<mac_f1>` becomes
+`<MAC_F1>`, and the control may read a name as case-sensitive, which would break a call to
+the lower-case original — check a program that calls another by name before converting it.
 
 | Option | What it does |
 |---|---|

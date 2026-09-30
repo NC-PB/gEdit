@@ -1,0 +1,8 @@
+{
+  "profile": "okuma-osp",
+  "items": [
+    {"kind":"comment","line":2,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"program","line":3,"text":"O5678","endLine":7},
+    {"kind":"end","line":6,"text":"NEND (UNLOAD) M02"}
+  ]
+}

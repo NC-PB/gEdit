@@ -238,7 +238,7 @@ async function pickLathe(/** @type {any} */ h, /** @type {string} */ label) {
   await h.idle()
 }
 
-/** Puts the cursor where the programmer left it and marks the blocks he marked. */
+/** Puts the cursor where the programmer left it and marks the blocks they marked. */
 async function place(/** @type {any} */ h, /** @type {string} */ id, /** @type {{ line: number, bookmarks: number[] }} */ program) {
   const ctx = context(h)
   for (const line of program.bookmarks) ctx.bookmarks.toggle(id, line)

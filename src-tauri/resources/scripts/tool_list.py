@@ -116,7 +116,7 @@ from __future__ import annotations
 
 import re
 import sys
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import gedit_nc
@@ -203,6 +203,12 @@ class Spec:
             self.drop_leading_zeros = tool_list.get("dropLeadingZeros") is True
 
         self.collapse_offset_digits = tool_list.get("collapseOffsetDigits") is True
+        #: `toolCall.tool` carries an `(?<axis>...)` group (Klartext's tool axis): a `TOOL
+        #: CALL` with no tool argument is always a speed change, and one that repeats the
+        #: tool already in the spindle is one too when it names no axis (syntax-heidenhain
+        #: §5.1). False for every other profile's `tool` pattern, so :func:`is_speed_only`
+        #: never runs there.
+        self.axis_aware = "(?<axis>" in (tool_call.get("tool") or "")
         self.comment_filter = cp.patterns.get("comment_filter")
         self.comments = [
             {"start": marker.get("start"), "end": marker.get("end")}
@@ -229,7 +235,7 @@ class Spec:
 class Mark:
     """What one line contributes. Mirrors the outline index's per-line classification."""
 
-    __slots__ = ("kind", "is_tool", "tool", "offset", "description")
+    __slots__ = ("kind", "is_tool", "tool", "axis", "offset", "description", "unload")
 
     def __init__(
         self,
@@ -238,13 +244,22 @@ class Mark:
         tool: Optional[str],
         description: Optional[str],
         offset: Optional[str] = None,
+        axis: bool = False,
+        unload: bool = False,
     ) -> None:
         self.kind = kind
         self.is_tool = is_tool
         self.tool = tool
         #: The digits the tool word carries after the station: `T0101` -> `01`.
         self.offset = offset
+        #: The `tool` match's `axis` group took part (Klartext's tool axis, `spec.axis_aware`
+        #: only). False on every other profile, and false when `tool` is `None`.
+        self.axis = axis
         self.description = description
+        #: `tool` is written the way `toolCall.ignore` says a tool is unloaded (`T0`): a
+        #: tool change that takes its tool from this preselection (`T0`, then `M6` alone)
+        #: unloads the spindle, exactly as `M6 T0` on one line does.
+        self.unload = unload
 
 
 class Row:
@@ -429,17 +444,23 @@ def classify(line: str, cp: gedit_nc.CompiledProfile, spec: Spec) -> Optional[Ma
     # to retract with it (plan §7.1). Counting those would put a tool in the list for
     # every retract.
     ignore = cp.patterns.get("tool_ignore")
-    is_tool = cp.patterns["tool_trigger"].search(masked) is not None and not (
-        ignore is not None and ignore.search(masked) is not None
-    )
+    ignored = ignore is not None and ignore.search(masked) is not None
+    is_tool = cp.patterns["tool_trigger"].search(masked) is not None and not ignored
     tool: Optional[str] = None
     offset: Optional[str] = None
+    axis = False
     if is_tool or spec.tool_from_last:
         match = cp.patterns["tool"].search(masked)
         if match is not None:
             group = group_of(match, "tool")
-            tool = (group if group is not None and group != "" else match.group(0)).strip()
-            offset = offset_of(match, masked)
+            # A group that took no part in the match is one the pattern made optional
+            # (Klartext's tool number, so an axis or an `S` alone can still be read): no
+            # fallback to the whole match, which would turn "no tool" into a garbage one.
+            tool = group.strip() if group is not None and group != "" else None
+            if tool is not None:
+                offset = offset_of(match, masked)
+            axis_group = group_of(match, "axis")
+            axis = axis_group is not None and axis_group != ""
 
     description: Optional[str] = None
     if kind in ("comment", "section"):
@@ -455,7 +476,15 @@ def classify(line: str, cp: gedit_nc.CompiledProfile, spec: Spec) -> Optional[Ma
 
     if kind is None and not is_tool and tool is None and description is None:
         return None
-    return Mark(kind=kind, is_tool=is_tool, tool=tool, description=description, offset=offset)
+    return Mark(
+        kind=kind,
+        is_tool=is_tool,
+        tool=tool,
+        description=description,
+        offset=offset,
+        axis=axis,
+        unload=tool is not None and ignored,
+    )
 
 
 def offset_of(match: Any, subject: str) -> Optional[str]:
@@ -531,6 +560,33 @@ def tool_number_of(tool: str, spec: Spec) -> Optional[str]:
         return None
     value = bare_tool(tool, spec)
     return LEADING_ZEROS.sub("", value) if ALL_DIGITS.match(value) else None
+
+
+def same_tool(a: str, b: str, spec: Spec) -> bool:
+    """Whether ``a`` and ``b`` name the same station — the test a row is keyed by.
+
+    A Klartext ``TOOL CALL`` matches "the tool already in the spindle" exactly when it
+    would land in the same row: numerically for a number, literally for a name or ``QS``.
+    """
+    a_number = tool_number_of(a, spec)
+    b_number = tool_number_of(b, spec)
+    if a_number is not None or b_number is not None:
+        return a_number == b_number
+    return bare_tool(a, spec) == bare_tool(b, spec)
+
+
+def is_speed_only(mark: Mark, previous_tool: Optional[str], spec: Spec) -> bool:
+    """A speed-only ``TOOL CALL`` on an axis-aware profile (§5.1).
+
+    True with no tool argument at all, or with the same tool as ``previous_tool`` and no
+    axis named. Always ``False`` off an axis-aware profile, so no other dialect's ``M6`` or
+    bare ``T`` is ever downgraded by it.
+    """
+    if not spec.axis_aware:
+        return False
+    if mark.tool is None:
+        return True
+    return not mark.axis and previous_tool is not None and same_tool(mark.tool, previous_tool, spec)
 
 
 def tool_list_entry(description: Optional[str]) -> Optional[Tuple[str, str]]:
@@ -630,10 +686,9 @@ def numeric(token: gedit_nc.Token) -> Optional[Decimal]:
     """The token's value as a comparable decimal, or ``None`` when it is not a number."""
     if token.value is None or token.value_text is None:
         return None
-    try:
-        return Decimal(token.value.raw)
-    except InvalidOperation:  # pragma: no cover - parse_number already rejected these
-        return None
+    # Not `Decimal(token.value.raw)`: a Klartext decimal comma stays in `raw` (`S5000,5`),
+    # and `Decimal` refuses it, which left the speed and feed columns blank.
+    return gedit_nc.decimal_of(token.value)
 
 
 def build(
@@ -664,6 +719,8 @@ def build(
     findings: List[Dict[str, Any]] = []
     from_list: Dict[str, str] = {}
     last_tool: Optional[str] = None
+    #: That `T` word unloads the spindle (`T0`, `Mark.unload`).
+    last_unload = False
     current: Optional[Row] = None
     unnamed = 0
     #: Tool words seen anywhere, and the first line one stood on. A program full of them
@@ -690,8 +747,12 @@ def build(
         number_line = base_line + i
 
         if mark is not None:
+            # The tool in the spindle before this line, for `is_speed_only` — a Klartext
+            # `TOOL CALL` that repeats it without an axis is a speed change, not a new call.
+            previous_tool = last_tool
             if mark.tool is not None:
                 last_tool = mark.tool
+                last_unload = mark.unload
                 tool_words += 1
                 if first_tool_word == 0:
                     first_tool_word = number_line
@@ -704,7 +765,10 @@ def build(
                 if listed is not None and listed[0] not in from_list:
                     from_list[listed[0]] = listed[1]
 
-            if mark.is_tool:
+            # `T0` preselected, then `M6` alone: the tool change loads the pending `T0`, so
+            # it unloads the spindle and is no tool change, as `M6 T0` on one line is not.
+            unloads = mark.tool is None and spec.tool_from_last and last_unload
+            if mark.is_tool and not unloads and not is_speed_only(mark, previous_tool, spec):
                 tool = mark.tool if mark.tool is not None else (last_tool if spec.tool_from_last else None)
                 if tool is None:
                     findings.append(

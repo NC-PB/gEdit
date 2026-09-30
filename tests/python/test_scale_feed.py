@@ -192,6 +192,11 @@ REQUIRED_CASES = [
     "sinumerik-mcall-tapping",
     "sinumerik-variable-lead",
     "sinumerik-variable-lead-under-g33",
+    # 2026-09 (TODO Next up 8 and 2, R10): the leads the databases did not know, a selection
+    # inside a modal tapping call, and the feeds of an Okuma LAP contour.
+    "fanuc-leads-the-database-knows",
+    "sinumerik-mcall-tapping-selection",
+    "okuma-lap-shape-feeds",
 ]
 
 #: The addresses this script is allowed to rewrite. Everything else has to come back
@@ -655,6 +660,31 @@ class TestRules(unittest.TestCase):
         listed = [f for f in tapping["findings"] if f["message"].startswith("Q")]
         self.assertEqual([f["message"].split(" ")[0] for f in listed], ["Q206"])
         self.assertIn("   Q239=+1.25 ;THREAD PITCH ~", tapping["text"].split("\n"))
+
+    # Review finding NC2 (2026-09): the tokenizer keeps a Klartext decimal comma in the
+    # value's raw text, and `Decimal(raw)` raised: the script exited with a traceback at
+    # every percentage. The run has to scale it and write the comma back.
+    def test_a_klartext_comma_feed_is_scaled_and_keeps_its_comma(self):
+        lines = self.lines("klartext-decimal-comma")
+        self.assertIn("6 L Z-2,25 F250,3", lines)
+        self.assertIn("8 L Y+50, F400,", lines)
+        self.assertIn("7 L X+50 F500", lines)
+        # With a feed limit the value is read too (`value_of`), so the limit applies.
+        payload = self.output("klartext-decimal-comma-limit")
+        limited = payload["text"].split("\n")
+        self.assertIn("8 L Y+50, F1500,", limited)
+        self.assertIn("6 L Z-2,25 F1001,0", limited)
+        self.assertNotIn("without a limit check", payload["message"])
+
+    # Review finding NC4 (2026-09): a block skip in front of the number turned a `*`
+    # structure block into words, and the run rewrote the F and S inside its text.
+    def test_a_skipped_klartext_heading_is_a_heading_and_left_alone(self):
+        lines = self.lines("klartext-skipped-heading")
+        self.assertIn("/1 * - SCHRUPPEN F500 S3000 TOOL 12", lines)
+        self.assertIn("4 / * - SCHLICHTEN F800 S4000", lines)
+        self.assertIn("/5 ; F500 S3000", lines)
+        # A skipped block that moves is still scaled.
+        self.assertIn("/6 L X+10 F250", lines)
 
 
 class TestSelectionPriming(unittest.TestCase):
@@ -1605,3 +1635,104 @@ class TestTurningDialects(unittest.TestCase):
             ["5", "0", "2", "-30", "", "-8", '"A,B"', "AC(1,2)", "[R1,2]"],
         )
         self.assertEqual(scale_feed.call_arguments(None), [])
+
+class TestLeadsTheDatabaseKnows(unittest.TestCase):
+    """2026-09: TODO Next up 8, the first two items of Next up 2, R10 and review §6.
+
+    Every rule is the database's: a lead of a code it marks ``pitchFeed`` (G84.2, G84.3, the
+    tapping mode G63), a block whose words are data (``wordsAreData``: G65, G66, G10), and a
+    code it does not know at all, under the letter it writes its moves with.
+    """
+
+    def case(self, name):
+        return next(case for case in helpers.script_cases("scale_feed") if case.name == name)
+
+    def output(self, name):
+        case = self.case(name)
+        result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context_of(case))
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], case.expected_text())
+        return payload
+
+    def rows(self, name):
+        return {f["line"]: f["message"] for f in self.output(name)["findings"]}
+
+    def test_the_older_format_rigid_taps_keep_their_lead(self):
+        lines = self.output("fanuc-leads-the-database-knows")["text"].split("\n")
+        self.assertEqual(lines[6], "G98 G84.2 X20. Y10. Z-15. R3. F900.")
+        self.assertEqual(lines[9], "G98 G84.3 X60. Y10. Z-15. R3. F900.")
+        rows = self.rows("fanuc-leads-the-database-knows")
+        self.assertIn("F900. is a thread pitch (G84.2)", rows[7])
+        self.assertIn("F900. is a thread pitch (G84.3)", rows[10])
+
+    def test_the_tapping_mode_keeps_every_feed_until_the_cutting_mode(self):
+        lines = self.output("fanuc-leads-the-database-knows")["text"].split("\n")
+        self.assertEqual(lines[14:17], ["G63 G1 Z-12. F500.", "G1 Z3. F500.", "G64 G1 X70. F640."])
+        rows = self.rows("fanuc-leads-the-database-knows")
+        self.assertIn("F500. is a thread pitch (G63)", rows[15])
+        self.assertIn("F500. is a thread pitch (G63)", rows[16])
+
+    def test_the_arguments_of_a_macro_call_are_no_feed(self):
+        payload = self.output("fanuc-leads-the-database-knows")
+        self.assertIn("G65 P9810 Z-5. F3000.", payload["text"].split("\n"))
+        self.assertIn("F3000. is an argument or a data value of G65", self.rows("fanuc-leads-the-database-knows")[18])
+        self.assertIn("1 argument or data word left as written", payload["message"])
+
+    def test_a_feed_under_a_code_the_database_does_not_know_is_reported_not_scaled(self):
+        payload = self.output("fanuc-leads-the-database-knows")
+        self.assertIn("G195 X40. F487.", payload["text"].split("\n"))
+        self.assertIn(
+            "this block writes G195, which the code database does not know",
+            self.rows("fanuc-leads-the-database-knows")[20],
+        )
+        self.assertIn("1 left under a code the database does not know", payload["message"])
+        # A known code in the next block is scaled as ever.
+        self.assertIn("G1 X80. F480.", payload["text"].split("\n"))
+
+    def test_the_letter_of_the_moves_comes_from_the_database(self):
+        helpers.import_gedit_nc()
+        import scale_feed  # the bundled folder is on sys.path now
+
+        self.assertEqual(scale_feed.code_letters([{"code": "G1", "group": "motion", "label": "x"}]), frozenset({"G"}))
+        # Klartext writes its moves as keywords, so no letter is a code letter there.
+        klartext = helpers.effective_context("heidenhain-klartext")["codes"]
+        self.assertEqual(scale_feed.code_letters(klartext), frozenset())
+        # Without a database nothing is unknown: the run says what it could not know.
+        profile = helpers.load_profile("fanuc-gcode")
+        context = helpers.make_context(params={"percent": 50}, profile=profile, codes=[])
+        result = helpers.run_script(SCRIPT, stdin="G195 X40. F400.\n", context=context)
+        self.assertTrue(result.ok, result.stderr)
+        self.assertEqual(result.json()["text"], "G195 X40. F200.\n")
+
+    def test_a_selection_inside_a_modal_tapping_call_keeps_the_next_lead(self):
+        # The re-review of the M8 fixes: F520 was scaled with no finding, because the walk
+        # for the leads of a call started at the selection.
+        payload = self.output("sinumerik-mcall-tapping-selection")
+        lines = payload["text"].split("\n")
+        self.assertEqual(lines[0], "N80 X40 Y0 F520")
+        self.assertEqual(lines[2], "N100 G1 X60 F400")
+        self.assertIn("F520 is written while CYCLE840 (line 7) repeats after every move", payload["findings"][0]["message"])
+
+    def test_an_e_word_no_code_of_its_block_explains_is_reported(self):
+        # Okuma LAP: E is the feed along the contour of the high-speed bar turning cycle,
+        # F the finishing feed (OSP manual, LAP section). E is never the F word, so it is
+        # left; the finishing F beside it is scaled, and the dwell E of G181 is a parameter.
+        payload = self.output("okuma-lap-shape-feeds")
+        lines = payload["text"].split("\n")
+        self.assertEqual(lines[10:12], ["G01 X20 Z0 F0.16 E0.3", "G01 Z-20 E0.25"])
+        self.assertEqual(lines[16], "G181 X0 Z-12 F64.00 E0.5")
+        rows = self.rows("okuma-lap-shape-feeds")
+        self.assertEqual(sorted(rows), [11, 12])
+        self.assertIn("E0.3 is left as written", rows[11])
+        self.assertIn("(E)", payload["message"])
+
+    def test_an_okuma_dollar_line_without_a_blank_continues_the_block(self):
+        # Review §6, fixed in dec/int: `continuationStart` of okuma-osp.json now tells a
+        # continuation line (`$H2.45 …`, no `%`) from the `$NAME.MIN%` header by the `%`,
+        # so the lead on `$H2.45 … F2` is left, not scaled.
+        context = helpers.effective_context("okuma-osp", params={"percent": 80})
+        program = "N001 G71 X27.55 Z-30 B60 D0.7 U0.1\n$H2.45 L2 F2.5 M23\n"
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        self.assertEqual(result.json()["text"], program)

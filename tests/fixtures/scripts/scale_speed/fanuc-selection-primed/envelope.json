@@ -10,6 +10,11 @@
       "line": 8,
       "severity": "info",
       "message": "S200 is a surface speed (G96), so it is not scaled."
+    },
+    {
+      "line": 10,
+      "severity": "info",
+      "message": "S1500 was scaled and is still the speed in force at the end of the selection (line 10). The lines below the selection were not read: if a tapping or threading block further down runs at this speed, its feed was written for the old one. Run the command on the whole program, or check those blocks by hand."
     }
   ]
 }

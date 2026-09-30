@@ -53,6 +53,7 @@ function entry(code: string, db: CodeDb): CodeEntry {
 }
 
 describe('completion: what is offered', () => {
+  // 2026-09: with the older-format rigid tapping cycles G84.2 and G84.3.
   it('offers G80 to G89 for "G8"', () => {
     expect(labels('N10 G8|', fanucProfile, fanuc)).toEqual([
       'G80',
@@ -60,6 +61,8 @@ describe('completion: what is offered', () => {
       'G82',
       'G83',
       'G84',
+      'G84.2',
+      'G84.3',
       'G85',
       'G86',
       'G87',

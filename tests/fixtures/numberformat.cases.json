@@ -55,5 +55,9 @@
   {"note":"a value with fewer decimals than the original is padded","decimal":"9.5","original":"10.500","fmt":{"decimals":"keep","trailingZeros":"keep","keepPoint":true,"plusSign":"keep"},"significant":true,"expected":"9.500"},
   {"note":"an increment-unit original keeps the value an integer","decimal":"45","original":"50","fmt":{"decimals":"keep","trailingZeros":"keep","keepPoint":true,"plusSign":"keep"},"significant":true,"expected":"45"},
   {"note":"and rounds it when the arithmetic left a fraction","decimal":"45.6","original":"50","fmt":{"decimals":"keep","trailingZeros":"keep","keepPoint":true,"plusSign":"keep"},"significant":true,"expected":"46"},
-  {"note":"trailing zeros of a value below one","decimal":"0.100","original":".100","fmt":{"decimals":"keep","trailingZeros":"drop","keepPoint":true,"plusSign":"keep"},"significant":true,"expected":".1"}
+  {"note":"trailing zeros of a value below one","decimal":"0.100","original":".100","fmt":{"decimals":"keep","trailingZeros":"drop","keepPoint":true,"plusSign":"keep"},"significant":true,"expected":".1"},
+  {"note":"Klartext decimal comma (\u00a77.16 / R4): unchanged, the value keeps the comma it was written with","decimal":"636.62","original":"636,62","fmt":{"decimals":"keep","trailingZeros":"keep","keepPoint":true,"plusSign":"keep"},"significant":true,"expected":"636,62"},
+  {"note":"a scaled F1000,5 is written with a comma again","decimal":"1000.5","original":"1000,5","fmt":{"decimals":"keep","trailingZeros":"keep","keepPoint":true,"plusSign":"keep"},"significant":true,"expected":"1000,5"},
+  {"note":"X+25, (5-Axis-1.H): a comma with nothing after it is still the separator that decides","decimal":"25","original":"+25,","fmt":{"decimals":"keep","trailingZeros":"keep","keepPoint":true,"plusSign":"keep"},"significant":true,"expected":"+25,"},
+  {"note":"the comma is only kept where the original had one; a value with none is written with the point","decimal":"636.62","original":null,"fmt":{"decimals":"keep","trailingZeros":"keep","keepPoint":true,"plusSign":"keep"},"significant":true,"expected":"636.62"}
 ]

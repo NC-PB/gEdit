@@ -168,4 +168,9 @@ export default {
   outputNoStdout: 'The script printed nothing on stdout.',
   outputCut_one: '… 1 more character, not shown here.',
   outputCut_other: '… {count} more characters, not shown here.',
+  // R1, core/profiles/contradiction.ts: a script whose result replaces text, on a program
+  // that says it is another dialect's. Not in SCRIPT_STATUS_KEYS: the guard's own module
+  // emits it, as `readOnly` does for the lock.
+  contradiction:
+    '{action} did not run: line {line} ({evidence}) is {likely} syntax, but the program is read as {profile}. Choose Change Dialect… or click the dialect in the status bar, pick {likely}, and run it again. If {profile} is right, check that line first.',
 } as const satisfies Messages;

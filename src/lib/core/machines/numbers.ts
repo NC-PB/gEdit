@@ -108,9 +108,23 @@ function pow10(n: number): bigint {
   return out;
 }
 
+/**
+ * A written number, read the way the tokenizer reads one: strictly, and then (2026-09) with
+ * a comma retried as the point. A Klartext literal keeps its decimal comma in `raw`
+ * (`F500,5`, §7.16 #34) so that a rewrite writes it back, and a strict parse of that `raw`
+ * failed: the word had no value, and a script's feed limits were not applied to it. Only a
+ * tokenizer that reads the comma puts one into a literal, so here it is always that comma.
+ */
+function parseWritten(text: string): NumericLiteral | null {
+  const direct = parseNumber(text);
+  if (direct !== null || !text.includes(',')) return direct;
+  const alt = parseNumber(text.replace(',', '.'));
+  return alt === null ? null : { ...alt, raw: text };
+}
+
 /** A written number as an exact decimal, or null when it is not one. */
 function toDec(text: string): Dec | null {
-  const parsed = parseNumber(typeof text === 'string' ? text.trim() : '');
+  const parsed = parseWritten(typeof text === 'string' ? text.trim() : '');
   if (!parsed) return null;
   const fraction = parsed.fracPart ?? '';
   const digits = `${parsed.intPart}${fraction}`;
@@ -436,7 +450,7 @@ export function writeBack(
   const useFmt: NumberFormatOptions = !asWritten && !original.hasPoint ? { ...fmt, decimals: 0 } : fmt;
   const text = formatNumber(decText(literal), original, useFmt, { decimalPointSignificant: true });
 
-  const back = parseNumber(text);
+  const back = parseWritten(text);
   const readBack = back === null ? null : valueOf(back, cls, m, units);
   const rounded = readBack === null || readBack !== decText(wanted);
   if (rounded && o?.refuseRounding === true) {

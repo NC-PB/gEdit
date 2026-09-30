@@ -170,7 +170,7 @@ describe('the shipped Okuma database', () => {
     ];
     const codes = new Set(ENTRIES.map((e) => e.code));
     expect(expected.filter((code) => !codes.has(code))).toEqual([]);
-    // Nothing a machine builder numbers for himself: every other M number stays "machine
+    // Nothing a machine builder numbers for themselves: every other M number stays "machine
     // specific" in hover, never an error and never a guess (§8 header).
     expect(codesWith((e) => e.code.startsWith('M') && /^M\d+$/.test(e.code) && !expected.includes(e.code))).toEqual([]);
   });
@@ -299,11 +299,29 @@ describe('the words a script must not scale', () => {
     }
   });
 
+  // Owner decision of 2026-09-27: the speed of a tap is not scaled. The OSP manuals name
+  // G77/G78 (compound tapping), G107/G108 (spindle synchronized tapping), G178/G179 and
+  // G184 (driven-tool tapping) and G36/G37 (synchronized tapping of the driven tool); the
+  // driven-tool threads G185–G188 and the thread passes are threading, not tapping.
+  it('marks the tapping codes, and no threading code, as tapping', () => {
+    expect(codesWith((e) => e.tapping === true)).toEqual([
+      'G36', 'G37', 'G77', 'G78', 'G107', 'G108', 'G178', 'G179', 'G184',
+    ]);
+    for (const code of codesWith((e) => e.tapping === true)) {
+      expect(entry(code).pitchFeed, code).toBe(true);
+    }
+  });
+
   it('refuses the F of a code that is a thread or a tap on other lathe controls', () => {
     // A Fanuc lathe program opened as Okuma — a `.MIN` file decides on its extension — would
     // otherwise have the lead of its G76 threading cycle scaled as a corner-round feed.
     // G10 M8: and of its G92 thread passes, a code this control does not assign at all.
     expect(codesWith((e) => e.pitchFeedAmbiguous === true)).toEqual(['G76', 'G84', 'G88', 'G92']);
+    // 2026-09 (review finding NC1): G84 is the tapping cycle of the machining centres, whose
+    // programs open with this profile (their `G15 H`/`G56 H` offsets), and G88 a tapping
+    // cycle on other lathe controls. Their feed is refused, so their speed is left too;
+    // G76 and G92 are threads elsewhere, whose speed stays scaled with a warning.
+    expect(codesWith((e) => e.tappingElsewhere === true)).toEqual(['G84', 'G88']);
     expect(entry('G92').label).toBe('Not assigned on this control');
     expect(entry('G92').group).toBeUndefined();
     expect(entry('G92').modal).toBeUndefined();

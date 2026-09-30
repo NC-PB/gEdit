@@ -38,6 +38,7 @@ import { modals as appModals } from '$lib/app/modals';
 import { status as appStatus } from '$lib/app/status';
 import { lockRefusal } from '$lib/app/readOnlyLock';
 import { initialValues } from '$lib/core/forms/values';
+import { GUARDED_TRANSFORMS, contradictionRefusal } from '$lib/core/profiles/contradiction';
 import { transformScope } from '$lib/core/transforms/scope';
 import { applyLines as applyLinesToModel } from '$lib/monaco/applyLines';
 import { editor as appEditor } from '$lib/monaco/editorService';
@@ -182,6 +183,17 @@ export function createTransformService(deps: TransformDeps): TransformService {
       const availability = def.available(cp);
       if (availability !== true) {
         say(availability, true);
+        return null;
+      }
+
+      // R1: a rewrite by this dialect's syntax refuses a program that says it is another
+      // dialect's, before anything is asked or computed (`core/profiles/contradiction.ts`).
+      const read = (first: number, last: number): string[] => deps.editor.getLines(docId, first, last);
+      const contradicted = GUARDED_TRANSFORMS.has(def.id)
+        ? contradictionRefusal(cp, read, deps.editor.getLineCount(docId), t(def.title), 'transforms')
+        : null;
+      if (contradicted !== null) {
+        say(contradicted, true);
         return null;
       }
 

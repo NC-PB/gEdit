@@ -6,7 +6,7 @@ Klartext is Heidenhain's plain-language program format. Heidenhain calls it "con
 
 Primary source: the TNC 640 user manual for Klartext programming (German edition, NC software 34059x-07, 2016). The source review of 2026-09 ([source-review-2026-09.md](../source-review-2026-09.md)) added the 34059x-08 edition (2017) of the same manual and the TNC 640 cycle programming manuals for -07 and -08, and settled most of what these notes had marked. Anything that comes from general knowledge and not from those manuals is marked **(verify)**. All examples below were written for this document. The manual's own examples are not reproduced.
 
-The German manual prints some examples with a decimal comma (`DL+0,2`). This document uses points throughout, but **CAM output with a decimal comma exists**: six of the seven Klartext programs the owner has published write `X241,781` and `Q206=636,62`. gEdit reads only the point today, so such a number is an unknown token and a script reads `636` for `636,62` (see §10 and [TODO.md](../../../TODO.md)).
+The German manual prints some examples with a decimal comma (`DL+0,2`). This document uses points throughout, but **CAM output with a decimal comma exists**: six of the seven Klartext programs the owner has published write `X241,781` and `Q206=636,62`. gEdit now reads both the point and the comma in a Klartext number (`syntax.decimalSeparatorAlt`, `dec/klartext`), and writes a value back with whichever mark it was written with; see §10.
 
 ---
 
@@ -122,8 +122,9 @@ On a real control, the words after the cycle number (`BOHREN`) and after `;` in 
 ```
 
 - **Block number:** an integer at line start (after optional whitespace), followed by whitespace. It is present on every logical block, and `0` is valid.
-- **Block skip:** `/` marks a block that is skipped when the operator enables skipping. The manuals show it after the block number (`12 /L …`), on the numbered line only, never on a continuation line; the whole logical block is skipped. It has no effect on `TOOL DEF`. **One of the owner's posts writes it in front of the number** (`/15 L …`, five of his programs), which gEdit does not read today: renumbering then writes a second number into the block (`15 /15 L …`, see [TODO.md](../../../TODO.md)).
+- **Block skip:** `/` marks a block that is skipped when the operator enables skipping. The manuals show it after the block number (`12 /L …`), on the numbered line only, never on a continuation line; the whole logical block is skipped. It has no effect on `TOOL DEF`. **One of the owner's posts writes it in front of the number** (`/15 L …`, five of the owner's programs); gEdit now reads and renumbers both orders (`syntax.blockSkip.position: "either"`, `dec/klartext`).
 - **Continuation line:** an indented line with no block number, belonging to the previous block. It always follows a line ending in `~`.
+- **A structure block (`*`) or `;` comment may carry the block skip the same way** (`/N *`): `syntax.sectionHeading` and the outline's `section`/`comment` rules read the skip before or after the number (NC4, the M8 re-review's fix, `dec/int`); before this fix such a line was read as a plain heading and lost the mark.
 - **Whitespace** separates words. Most words have **no** space between letter and value (`X+10`, `S3200`, `F900`, `R0`, `Q200=2`, `SPB+30`, `DIST50`). A few need a space: `MB 50` / `MB MAX` (after `M140`), `REP 4` (verify), `FN 0:`.
 - **Multi-word function names** are separated by single spaces: `BEGIN PGM`, `END PGM`, `BLK FORM`, `TOOL CALL`, `TOOL DEF`, `CYCL DEF`, `CYCL CALL [PAT|POS]`, `CALL LBL`, `CALL PGM`, `SEL PGM`, `CALL SELECTED PGM`, `PLANE SPATIAL` (etc.), `PLANE RESET`, `FUNCTION TCPM`, `FUNCTION RESET TCPM`, `TRANS DATUM AXIS|TABLE|RESET`, `DECLARE STRING`, `FUNCTION DWELL`, `PATTERN DEF`, `APPR LT|LN|CT|LCT`, `DEP LT|LN|CT|LCT` (plus polar `APPR PLT|PLN|PCT|PLCT`, `DEP PLCT`, …). The tokenizer should allow `\s+` between the parts.
 - **Case:** the control writes upper case, and tool and label names are upper-cased on save. Tokenize case-insensitively (keep `ignoreCase: true`), but lint lower case as a warning (verify: whether the control accepts lower case on import).
@@ -158,7 +159,7 @@ On a real control, the words after the cycle number (`BOHREN`) and after `;` in 
 | Program call | `CALL PGM <path>` | `<path>` is a bare name or `TNC:\dir\file.H`, which may include `.I` (verify: quoting of paths with spaces). |
 | PLANE words | `SPATIAL PROJECTED EULER VECTOR POINTS RELATIV AXIAL RESET`, `SPA SPB SPC`, `MOVE TURN STAY`, `DIST`, `MB`, `SEQ[+-]`, `TABLE ROT`, `COORD ROT` | |
 | TCPM words | `FUNCTION TCPM`, `F TCP`, `F CONT`, `AXIS POS`, `AXIS SPAT`, `PATHCTRL AXIS`, `PATHCTRL VECTOR`, `REFPNT TIP-TIP` (the default), `REFPNT TIP-CENTER`, `REFPNT CENTER-CENTER`, `FUNCTION RESET TCPM` | `CENTER-CENTER` is for CAM output on cutter-centre paths with a tool measured to the tip. The `REFPNT` words are not keywords in the profile yet (`TIP-TIP` is an unknown token). |
-| Numbers | `[+-]?(\d+\.?\d*\|\.\d+)` | Positions are written with an explicit sign by the control (`X+10`). CAM posts do the same. Unsigned is probably accepted (verify). Decimal point only. |
+| Numbers | `[+-]?(\d+\.?\d*\|\.\d+)` | Positions are written with an explicit sign by the control (`X+10`). CAM posts do the same. Unsigned is probably accepted (verify). The manual's own examples use the decimal point; a value written with a comma instead (`X241,781`, real CAM output — see the note at the top) is also read now, and kept when the value is written back. |
 | Unknown | — | Use a neutral default token (e.g. `''` or `source`), **not** `invalid`. Leave error marking to the linter. |
 
 Numeric formats seen from CAM:
@@ -269,7 +270,7 @@ M functions that take effect at block start run before those at block end. Other
 - `TOOL CALL "EM_D10_R0.5" Z …` – name, at most 32 characters, upper case, allowed characters `A–Z 0–9` and `# $ % & . , - _` (no `@`). Forbidden: space and ``! " ' ( ) * + : ; < = > ? [ / ] ^ ` { | } ~``.
 - `TOOL CALL QS3 Z …` – name taken from a string parameter (verify file syntax).
 - `TOOL CALL Z S5000` / `TOOL CALL S5000` – **no tool argument**: only changes speed (and/or axis/feed). **Not a tool change.** The outline should show it as a speed change or ignore it.
-- `TOOL CALL 5 S4000` while tool 5 is in the spindle, **without a tool axis**, also only changes the speed (with an axis the control may swap in a sister tool). The tool list and F7 count it as a second call today ([TODO.md](../../../TODO.md)).
+- `TOOL CALL 5 S4000` while tool 5 is in the spindle, **without a tool axis**, also only changes the speed (with an axis the control may swap in a sister tool). The tool list and F7 no longer count it as a second call (`dec/tools`: `toolCall.tool` gained an optional trailing axis group, and the outline/`tool_list.py` compare the tool with the one in force one line back).
 
 Remaining `TOOL CALL` words (all optional, dialog order): tool axis `X|Y|Z`, `S<rpm>` (or `VC` cutting speed), `F`/`FU`/`FZ`, `DL±` (delta length), `DR±` (delta radius), `DR2±` (delta corner radius).
 
@@ -385,7 +386,7 @@ Pocket and stud cycles (251–258) and face milling (232/233) are only emitted b
 | 19 tilt (old) | see §4.6 |
 | 247 preset | Q-style, one parameter `Q339` |
 
-Reset values are 0. The owner's CAM post writes 7, 9 and 247 with `PLANE`, his older programs 19 and 7; the database has none of them yet, and hover cannot reach a sub-block such as `32.1` ([TODO.md](../../../TODO.md)).
+Reset values are 0. The owner's CAM post writes 7, 9 and 247 with `PLANE`, the owner's older programs 19 and 7; the database has none of them yet, and hover cannot reach a sub-block such as `32.1` ([TODO.md](../../../TODO.md)).
 
 ---
 
@@ -535,17 +536,17 @@ Lines to surface. In CAM files, most of them carry a block-number prefix.
 
 1. ~~Exact continuation format.~~ The owner's CAM post settles the form (§2): header ` ~`, four-space indent, last line without `~`. Whether single-line cycle definitions are accepted on import is open.
 2. Structure block syntax (`* - text`) and how nesting depth is encoded in the file. Structure blocks have a depth and at most 252 characters of text; the file form of deeper levels is open.
-3. ~~Position of the block-skip `/`.~~ The manuals put it after the number; one of the owner's posts writes it in front (§3.1). Both occur.
+3. ~~Position of the block-skip `/`.~~ The manuals put it after the number; one of the owner's posts writes it in front (§3.1). Both occur, and both are read and renumbered (`dec/klartext`).
 4. Import behaviour when block numbers are missing, duplicated or have gaps (renumbered? rejected?).
 5. Does the name after `BEGIN PGM` have to match the file name? What happens on a mismatch?
 6. File encoding (UTF-8 vs ISO-8859-1) and line endings as written by the control and by typical transfer tools. Are umlauts allowed in comments?
-7. ~~Is a decimal comma ever accepted?~~ Yes: CAM output writes it (see the note at the top). Open: unsigned coordinates (`X10`) and lower-case words.
+7. ~~Is a decimal comma ever accepted?~~ Yes: CAM output writes it (see the note at the top), and gEdit reads and writes it now (`dec/klartext`). Open: unsigned coordinates (`X10`) and lower-case words.
 8. Does the control ignore the language-dependent cycle names and `;` parameter labels on import (for example, does a German program load on an English control)?
 9. File syntax of `VC` and `TOOL CALL QSn`, and the modality of FU/FZ. (The manual writes both `F MAX`/`F AUTO` and `FMAX`/`FAUTO`; both are aliases already. Where FU/FZ are allowed: §4.4.)
 10. ~~Word order in `PLANE …`.~~ Settled (§4.6).
 11. ~~`FUNCTION TCPM` reference-point options.~~ Settled (§3.2).
 12. ~~`CYCL CALL POS`, cycles 7, 247, 19, 9 and 32.~~ Settled (§5, §6).
-13. ~~Parameter lists of 202–209 and 240/241.~~ Settled (§6.3). Which cycles his posts emit: the one CAM-posted program of his has no 200-series drilling cycle, so whether his posts write `Q395` is still open.
+13. ~~Parameter lists of 202–209 and 240/241.~~ Settled (§6.3). Which cycles the owner's posts emit: the one CAM-posted program of the owner's has no 200-series drilling cycle, so whether the owner's posts write `Q395` is still open.
 14. ~~M functions with arguments.~~ `M128 F`, `M140 MB n|MB MAX [F]`, `M120 LA n`, `M103 F factor`, `M94 [axis]`.
 15. Maximum line length. Structure text: 252 characters; Q numbers 0–1999; feeds up to 99999.999; positions up to ±99999.9999.
 16. Differences between control generations: TNC 426/430 (no `PLANE`, older cycle forms), iTNC 530, TNC 620/640, and newer controls. Are there syntax changes that affect tokenizing?

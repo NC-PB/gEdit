@@ -29,7 +29,7 @@ from __future__ import annotations
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation, localcontext
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from _nc_lex import format_number, parse_number
+from _nc_lex import _lenient_number, decimal_of, format_number
 
 #: Every value that comes from the profile rather than from a machine (§7.15 ParamSource).
 _PROFILE = "profile"
@@ -231,10 +231,13 @@ def _decimal(text: Any) -> Optional[Decimal]:
     """A written number as an exact :class:`~decimal.Decimal`, or ``None``.
 
     It goes through :func:`gedit_nc.parse_number`, so exactly the NC number grammar is
-    accepted: no exponent, no thousands separator, nothing around it.
+    accepted: no exponent, no thousands separator, nothing around it — except that a comma
+    is retried as the point (2026-09), the way the tokenizer reads one. A Klartext literal
+    keeps its decimal comma in ``raw`` (`F500,5`) so that a rewrite writes it back, and the
+    value is built from the parsed parts, never from that text (:func:`gedit_nc.decimal_of`).
+    Mirrors ``parseWritten`` in ``numbers.ts``.
     """
-    parsed = parse_number(text.strip()) if isinstance(text, str) else None
-    return Decimal(parsed.raw) if parsed is not None else None
+    return decimal_of(text) if isinstance(text, str) else None
 
 
 def _dec_text(value: Decimal) -> str:
@@ -565,7 +568,7 @@ def write_back(
         use_fmt["decimals"] = 0
     text = format_number(_dec_text(literal), original, use_fmt, True)
 
-    back = parse_number(text)
+    back = _lenient_number(text)
     read_back = value_of(back, number_class, machine, units) if back is not None else None
     rounded = read_back is None or read_back != _dec_text(wanted)
     if rounded and refuse_rounding:

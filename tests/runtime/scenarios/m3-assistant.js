@@ -86,7 +86,8 @@ scenario('m3-assistant', { timeout: 300 }, async (h) => {
   const g8 = await suggestAt(h, fanucId, 7, 7)
   const labels = g8.db.map((row) => row.label)
   h.check('the suggest widget is drawn', g8.showing && g8.db.length > 0, g8.rows)
-  h.check('G8 offers G80 to G89 from the database', g8.db.length === 10 && labels.every((label) => /^G8\d$/.test(label)), labels)
+  // 2026-09: the database gained the older-format rigid taps G84.2 and G84.3 (TODO Next up 8).
+  h.check('G8 offers G80 to G89 from the database, G84.2 and G84.3 among them', g8.db.length === 12 && labels.every((label) => /^G8\d(\.\d)?$/.test(label)) && labels.includes('G84.2') && labels.includes('G84.3'), labels)
   h.check('G81 is among them (the plan names it)', labels.includes('G81'), labels)
   h.check('every code is offered once: nothing registers a second provider', new Set(labels).size === labels.length, labels)
   h.check('a suggestion carries the label from the database', g8.rows.some((row) => row.text.includes('Peck drilling cycle')), g8.rows.map((r) => r.text))
@@ -98,7 +99,7 @@ scenario('m3-assistant', { timeout: 300 }, async (h) => {
   const expanding = g8.db.filter((row) => row.label !== 'G80')
   h.check(
     'a cycle with words to fill in is offered as a snippet',
-    expanding.length === 9 && expanding.every((row) => row.icon === 'symbol-snippet'),
+    expanding.length === 11 && expanding.every((row) => row.icon === 'symbol-snippet'),
     expanding.map((r) => `${r.label}:${r.icon}`),
   )
   h.check('G80 has nothing to fill in and is not drawn as a snippet', iconOf('G80') === 'symbol-function', iconOf('G80'))
@@ -137,7 +138,7 @@ scenario('m3-assistant', { timeout: 300 }, async (h) => {
   // is exact: the word under the cursor is the `G8` at the end, not `N90G0G90X0Y0G8`.
   const packedFresh = await suggestAt(h, fanucId, 11, packedLine.length + 3)
   const packedFreshLabels = packedFresh.db.map((row) => row.label)
-  h.check('the word under the cursor in a packed block is the G8 at its end', packedFreshLabels.length === 10 && packedFreshLabels.every((label) => /^G8\d$/.test(label)), {
+  h.check('the word under the cursor in a packed block is the G8 at its end', packedFreshLabels.length === 12 && packedFreshLabels.every((label) => /^G8\d(\.\d)?$/.test(label)), {
     rows: packedFreshLabels,
     line: ctx.editor.getLines(fanucId, 11, 11)[0],
   })
@@ -228,7 +229,7 @@ scenario('m3-assistant', { timeout: 300 }, async (h) => {
   h.check('on manual, typing opens nothing by itself', !suggestShowing(), { rows: suggestLabels(), line: ctx.editor.getLines(fanucId, 11, 11)[0] })
   ctx.editor.triggerAction('editor.action.triggerSuggest')
   const manual = await h.waitFor(() => (suggestShowing() && suggestLabels().length > 0 ? suggestLabels() : undefined), { timeout: 3000 })
-  h.check('but Ctrl+Space still answers from the database', (manual ?? []).length === 10 && (manual ?? []).every((label) => /^G8\d$/.test(label)), manual)
+  h.check('but Ctrl+Space still answers from the database', (manual ?? []).length === 12 && (manual ?? []).every((label) => /^G8\d(\.\d)?$/.test(label)), manual)
   ctx.editor.triggerAction('hideSuggestWidget')
   ctx.editor.triggerAction('undo')
   await h.waitFor(() => (ctx.editor.getLines(fanucId, 11, 11)[0] ?? '') === packedLine, { timeout: 3000 })
@@ -236,7 +237,7 @@ scenario('m3-assistant', { timeout: 300 }, async (h) => {
   await ctx.settings.save({ 'assist.completion': 'auto' })
   await h.waitFor(() => ctx.settings.get('assist.completion') === 'auto', { timeout: 5000 })
   const onAgain = await suggestAt(h, fanucId, 7, 7)
-  h.check('back on auto, the database answers again', onAgain.db.length === 10, onAgain.db.map((r) => r.label))
+  h.check('back on auto, the database answers again', onAgain.db.length === 12, onAgain.db.map((r) => r.label))
   h.check(
     'no file on disk was touched: everything ran in untitled buffers',
     ctx.docs.all().filter((d) => d.path !== null).length === 0 || ctx.docs.all().filter((d) => d.path !== null).every((d) => !d.dirty),

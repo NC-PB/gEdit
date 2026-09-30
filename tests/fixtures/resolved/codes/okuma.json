@@ -460,6 +460,7 @@
       "label": "Feed in step with the driven tool, forward",
       "modal": true,
       "pitchFeed": true,
+      "tapping": true,
       "verify": true
     },
     {
@@ -469,6 +470,7 @@
       "label": "Feed in step with the driven tool, reverse",
       "modal": true,
       "pitchFeed": true,
+      "tapping": true,
       "verify": true
     },
     {
@@ -869,7 +871,8 @@
       "pitchFeed": true,
       "sets": {
         "cycle": "start"
-      }
+      },
+      "tapping": true
     },
     {
       "code": "G78",
@@ -900,7 +903,8 @@
       "pitchFeed": true,
       "sets": {
         "cycle": "start"
-      }
+      },
+      "tapping": true
     },
     {
       "code": "G80",
@@ -928,7 +932,7 @@
     },
     {
       "code": "G84",
-      "description": "Gives a LAP roughing cycle a new depth of cut and a new feed part-way through. It stands on a line that starts with $ and continues the G85 block: from the point XA= (ZA= on the face) the cycle cuts with DA= and FA=, and from XB= (ZB=) with DB= and FB=. The same number is a tapping cycle on other lathe controls, so gEdit will not scale the F of such a block.",
+      "description": "Gives a LAP roughing cycle a new depth of cut and a new feed part-way through. It stands on a line that starts with $ and continues the G85 block: from the point XA= (ZA= on the face) the cycle cuts with DA= and FA=, and from XB= (ZB=) with DB= and FB=. The same number is a tapping cycle on other lathe controls and on the machining centres, so gEdit scales neither the F of such a block nor the spindle speed it runs at.",
       "group": "lap",
       "label": "New depth and feed within LAP roughing",
       "params": [
@@ -975,7 +979,8 @@
           "min": 0
         }
       ],
-      "pitchFeedAmbiguous": true
+      "pitchFeedAmbiguous": true,
+      "tappingElsewhere": true
     },
     {
       "code": "G85",
@@ -1061,7 +1066,7 @@
     },
     {
       "code": "G88",
-      "description": "Cuts a thread along the shape whose sequence name follows the code; the leads are written in that shape. The same number is a tapping cycle on other lathe controls, so gEdit will not scale the F of such a block.",
+      "description": "Cuts a thread along the shape whose sequence name follows the code; the leads are written in that shape. The same number is a tapping cycle on other lathe controls, so gEdit scales neither the F of such a block nor the spindle speed it runs at.",
       "group": "lap",
       "label": "LAP continuous threading",
       "params": [
@@ -1095,7 +1100,8 @@
           "unit": "length"
         }
       ],
-      "pitchFeedAmbiguous": true
+      "pitchFeedAmbiguous": true,
+      "tappingElsewhere": true
     },
     {
       "code": "G90",
@@ -1173,6 +1179,7 @@
       "sets": {
         "cycle": "start"
       },
+      "tapping": true,
       "verify": true
     },
     {
@@ -1185,6 +1192,7 @@
       "sets": {
         "cycle": "start"
       },
+      "tapping": true,
       "verify": true
     },
     {
@@ -1279,7 +1287,8 @@
       "pitchFeed": true,
       "sets": {
         "cycle": "start"
-      }
+      },
+      "tapping": true
     },
     {
       "code": "G179",
@@ -1290,7 +1299,8 @@
       "pitchFeed": true,
       "sets": {
         "cycle": "start"
-      }
+      },
+      "tapping": true
     },
     {
       "code": "G180",
@@ -1526,7 +1536,8 @@
       "pitchFeed": true,
       "sets": {
         "cycle": "start"
-      }
+      },
+      "tapping": true
     },
     {
       "code": "G185",

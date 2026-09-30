@@ -119,8 +119,15 @@ function paramsOf(name: string | null): MachineParams {
   return { numberInput: inputOf(name), units: 'mm', diameter: null, variants: {}, modalInitial: {} };
 }
 
+/**
+ * A golden literal as the tokenizer would have produced it. A comma is read the way the
+ * Klartext tokenizer reads its decimal comma (2026-09): the strict parse first, then the
+ * comma retried as the point, `raw` kept as written. Mirrors `literal` in `test_machine.py`.
+ */
 function literalOf(raw: string): NumericLiteral {
-  const parsed = parseNumber(raw);
+  const direct = parseNumber(raw);
+  const alt = direct === null && raw.includes(',') ? parseNumber(raw.replace(',', '.')) : null;
+  const parsed = direct ?? (alt === null ? null : { ...alt, raw });
   expect(parsed, `${raw} does not parse`).not.toBeNull();
   return parsed as NumericLiteral;
 }

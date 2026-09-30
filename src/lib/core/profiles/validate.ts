@@ -507,8 +507,21 @@ function checkSyntax(value: unknown, p: Problems): void {
   optPattern(syntax.header, 'syntax.header', p);
   // M8 integration (§7.16): the names a program gives itself, one token each.
   optPattern(syntax.names, 'syntax.names', p);
+  // Phase 2 (§7.16): a program name in place of a program number (Fanuc `<SHAFT_T12>`).
+  const programNames = syntax.programNames;
+  optPattern(programNames, 'syntax.programNames', p);
+  if (typeof programNames === 'string' && matchesEmpty(programNames, caseSensitive)) {
+    p.add('syntax.programNames', 'can match an empty string, and a program name has to take at least one character');
+  }
 
   enumOf(syntax.decimalSeparator, 'syntax.decimalSeparator', p, ['.', ','] as const);
+  // §7.16 / R4: the decimal comma. A profile may accept it *alongside* the separator
+  // above when reading a number (Klartext CAM output writes both), but not as the same
+  // character twice.
+  optEnum(syntax.decimalSeparatorAlt, 'syntax.decimalSeparatorAlt', p, ['.', ','] as const);
+  if (typeof syntax.decimalSeparatorAlt === 'string' && syntax.decimalSeparatorAlt === (syntax.decimalSeparator ?? '.')) {
+    p.add('syntax.decimalSeparatorAlt', 'is the same character as syntax.decimalSeparator');
+  }
   bool(syntax.decimalPointSignificant, 'syntax.decimalPointSignificant', p);
   bool(syntax.wordSeparatorRequired, 'syntax.wordSeparatorRequired', p);
   optStr(syntax.incrementalPrefix, 'syntax.incrementalPrefix', p, ADDRESS);
@@ -547,6 +560,8 @@ function checkAddresses(value: unknown, p: Problems): void {
   // P8. `LIMS` is an address, not a code: it has to look like one so that a script can
   // find it and leave it alone.
   optStrArr(addresses.speedLimitWords, 'addresses.speedLimitWords', p, { allow: ADDRESS });
+  // 2026-09: the main spindle's number, as a spindle word writes it (`S1=` is spindle 1).
+  optStr(addresses.mainSpindle, 'addresses.mainSpindle', p, /^[A-Za-z0-9]+$/);
 
   const feedUnitWords = optObj(addresses.feedUnitWords, 'addresses.feedUnitWords', p);
   if (feedUnitWords) {

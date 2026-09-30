@@ -197,7 +197,11 @@ describe('what a code does to the modal state', () => {
     // G962 and G972 keep the feed unit they find.
     expect(entry('G962')?.sets).toEqual({ speedUnit: 'surface' });
     expect(entry('G972')?.sets).toEqual({ speedUnit: 'rpm' });
-    const feedType = codesWith((e) => e.sets?.speedUnit !== undefined || e.sets?.feedUnit !== undefined);
+    // 2026-09: SVC= is a value word (§7.5) that switches nothing; its `speedUnit` says that
+    // its own value is a cutting speed, which scale_speed reads like the S under G96.
+    expect(entry('SVC')?.sets).toEqual({ speedUnit: 'surface' });
+    expect(entry('SVC')?.group).toBe('tool');
+    const feedType = codesWith((e) => e.code !== 'SVC' && (e.sets?.speedUnit !== undefined || e.sets?.feedUnit !== undefined));
     expect(feedType).toEqual(['G93', 'G94', 'G942', 'G95', 'G952', 'G96', 'G961', 'G962', 'G97', 'G971', 'G972', 'G973']);
     for (const code of feedType) expect(entry(code)?.group, code).toBe('feedmode');
     expect(codesWith((e) => e.group === 'spindlemode')).toEqual([]);
@@ -294,6 +298,16 @@ describe('the words a script must not scale', () => {
     expect(entry('G33')?.description).toMatch(/lead, given in I, J or K/);
     expect(db.addresses.K.label).toMatch(/thread lead/);
     expect(db.addresses.I.label).toMatch(/thread lead/);
+  });
+
+  // Owner decision of 2026-09-27: the speed of a tap is not scaled. CYCLE84 taps with its
+  // lead as an argument, so it is tapping without pitchFeed; G33 is threading.
+  it('marks the tapping codes, and no threading code, as tapping', () => {
+    expect(codesWith((e) => e.tapping === true)).toEqual(['CYCLE84', 'CYCLE840', 'G331', 'G332', 'G63']);
+    expect(entry('CYCLE84')?.pitchFeed).toBeUndefined();
+    for (const code of ['G33', 'G34', 'G35', 'G335', 'G336', 'CYCLE97', 'CYCLE99']) {
+      expect(entry(code)?.tapping, code).toBeUndefined();
+    }
   });
 
   it('marks G4 as the one code whose F is a time, and says its S is not a speed', () => {

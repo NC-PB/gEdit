@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// gedit
 # name = "Scale feed rates"
-# description = "Multiplies F values by a percentage. Thread pitches, rapid moves and feeds written as variables are left alone and reported."
+# description = "Multiplies F values by a percentage. Thread pitches, rapid moves, feeds written as variables and feeds under a code the database does not know are left alone and reported."
 # input = "selection-or-document"
 # output = "replace"
 # envelope = true
@@ -100,8 +100,27 @@ Thread pitches
     in tapping and thread-cutting blocks the ``F`` word carries the pitch or the lead, not
     a speed. Which codes those are comes from the code database's ``pitchFeed`` flag
     (`FeedModeTracker`), because the same number means different things per dialect: Fanuc
-    `G84`, `G74`, `G32`, `G33` and the Klartext tapping cycles carry a pitch. The database
-    decides; this script has no table of its own.
+    `G84`, `G74`, `G84.2`, `G84.3`, `G32`, `G33` and the Klartext tapping cycles carry a
+    pitch. The database decides; this script has no table of its own. A tapping **mode** is
+    one too (Fanuc `G63`, a modal code of its own group): every `F` while it is the active
+    code of its group is a tap's feed, until `G61`, `G62` or `G64` replaces it
+    (``FeedModeTracker.pitch_mode``, the 2026-09 decision on `pitchFeed` outside a cycle or
+    motion group).
+Codes the database does not know
+    a builder's cycle under a G number of its own (a radial tapping cycle) had its lead
+    scaled like a feed. The `F` of a block that writes a code the database does not know,
+    under the letter the database writes its moves with (`G` on the ISO dialects, none on
+    Klartext), is reported and left: what that `F` is cannot be told (R10). A run without a
+    database says so once and scales as before.
+Arguments and data
+    the words of a block whose code the database marks ``wordsAreData`` are the arguments of
+    a macro call (`G65 P9810 Z-5. F3000.`, `G66`) or the values of a data-setting block
+    (`G10`), not feeds of this program. They are reported and left, and not counted as
+    feed rates.
+A second feed address
+    `E` is never the F word: the feed along an Okuma LAP contour, a thread lead or a dwell
+    elsewhere. Where no code of its block, and not the cycle in force, declares `E` as a
+    parameter, and the block is no thread and no dwell, it is reported and left.
 Codes that mean two things
     `G76` is a fine boring cycle on the shipped mill dialect and a multi-pass threading
     cycle on a lathe in G-code system A; `G92` sets the coordinate system on the one and
@@ -156,7 +175,9 @@ A tapping cycle written as a call
     (`MCALL CYCLE840(…)`) repeats after every following move until that keyword stands on
     its own again, so every `F` written in between is left too. A cycle whose lead is one
     of its own arguments (a rigid tapping cycle, a thread-turning cycle) carries no
-    ``pitchFeed`` and changes nothing here.
+    ``pitchFeed`` and changes nothing here. The walk for these starts at the top of the
+    document, the lines above a selection included, so a selection that starts inside a
+    modal call, or below the feed a call runs with, is read as the whole document is.
 Feeds of their own
     a feed written under an address that extends the feed address and takes `=` (a
     chamfer or corner feed `FRC=`, `FRCM=`, the feeds `FA=` / `FB=` of a contour
@@ -261,6 +282,13 @@ FEED_PARAM_LABEL = re.compile(r"\bfeed", re.IGNORECASE)
 #: factor follows the feed it multiplies, so listing it as a feed left alone would invite a
 #: hand edit that doubles the change; it is not listed.
 CALL_FEED_LABEL = re.compile(r"\bfeed\b(?!\s+factor)", re.IGNORECASE)
+
+#: The second feed-like address of the ISO dialects: a contour feed of its own inside a
+#: turning-cycle shape on one control (the feed along an Okuma LAP contour), a thread lead
+#: on another, a dwell or a lead change as a cycle parameter. It is never the F word, so it
+#: is never scaled; where no code of its block declares it as a parameter it is reported,
+#: because it may be a feed that did not follow the others (the M8 re-review).
+SECOND_FEED_ADDRESS = "E"
 
 #: At most this many findings; the rest are counted in the message. A 100k-line program
 #: with a G95 section would otherwise hand the results panel tens of thousands of rows.
@@ -731,6 +759,8 @@ class Counts:
         self.other_addresses: List[str] = []
         #: `F` words of a dwell block (`fNotFeed`): times, never feed rates, never scaled.
         self.dwell = 0
+        #: `F` words of a block whose words are data (`wordsAreData`: `G65`, `G10`).
+        self.data = 0
         #: Written further from the exact scaled value than ROUNDING_NOTICE allows.
         self.rounded = 0
         #: Rounded whole because the dialect's decimal point is significant.
@@ -934,7 +964,7 @@ def lead_carriers(
     cp: gedit_nc.CompiledProfile,
     codes: Sequence[Dict[str, Any]],
     params: Params,
-    state: Optional[gedit_nc.LineState],
+    preceding: Optional[Sequence[str]],
     base_line: int,
 ) -> Carriers:
     """The feed words a tapping cycle written as a call may take as its thread lead.
@@ -956,6 +986,12 @@ def lead_carriers(
       another modal call replaces it), because each following move runs the cycle again
       with the feed in force then.
 
+    The walk starts at the top of the document: the lines above a selection (``preceding``)
+    are walked first, so a selection that starts inside a modal call, or below the feed a
+    call runs with, is read as the whole document is (the re-review of the M8 fixes found the
+    next tap's lead scaled with no finding when a selection started inside a modal
+    `MCALL CYCLE840`). Only feed words of the selection itself are answered.
+
     A dwell block's `F` is a time and is never the feed in force. The walk only runs on a
     profile whose tokenizer writes calls at all (``syntax.calls``), so every other dialect
     pays nothing for it, and only on a program whose text names such a call somewhere: a
@@ -966,15 +1002,20 @@ def lead_carriers(
     if as_dict(cp.profile.get("syntax")).get("calls") is not True or not codes:
         return carriers
     names = {code.upper() for code in (entry.get("code") for entry in codes if entry.get("pitchFeed") is True) if isinstance(code, str) and code}
-    text = "\n".join(lines).upper()
+    above = list(preceding or ())
+    walk = above + list(lines)
+    text = "\n".join(walk).upper()
     if not any(name in text for name in names):
         return carriers
     lookup = gedit_nc.FeedModeTracker(codes)
-    #: The feed word in force, `(index, start)`, or `None` when it is not a number.
+    #: The feed word in force, `(index, start)`, or `None` when it is not a number. The
+    #: index is the selection's: a line above it has a negative one and is never answered.
     in_force: Optional[Tuple[int, int]] = None
     #: `(keyword, code, line)` while a modal call that may take its lead from F repeats.
     modal: Optional[Tuple[str, str, int]] = None
-    for index, line in enumerate(lines):
+    state: Optional[gedit_nc.LineState] = None
+    for walked, line in enumerate(walk):
+        index = walked - len(above)
         tokens, state = gedit_nc.tokenize_line(line, cp, state)
         entries = block_entries(tokens, lookup)
         if not any(entry.get("fNotFeed") is True for entry in entries):
@@ -982,7 +1023,7 @@ def lead_carriers(
                 if not feed_word(token, params):
                     continue
                 in_force = (index, token.start) if token.value is not None else None
-                if modal is not None and in_force is not None:
+                if modal is not None and in_force is not None and index >= 0:
                     carriers.setdefault(in_force, (modal[1], modal[2], "repeat"))
         keywords = {name for name in (cycle_keyword(token, lookup) for token in tokens) if name}
         calls = [token for token in tokens if token.kind == "call" and token.address]
@@ -993,7 +1034,7 @@ def lead_carriers(
             if keywords:
                 # A new modal call replaces the one before it, whether it taps or not.
                 modal = (sorted(keywords)[0], code, base_line + index) if pitch else None
-            if pitch and in_force is not None:
+            if pitch and in_force is not None and in_force[0] >= 0:
                 carriers.setdefault(in_force, (code, base_line + index, "in-force"))
         if not calls and modal is not None and modal[0] in keywords:
             modal = None
@@ -1046,7 +1087,7 @@ def report_other_feed(
     token: gedit_nc.Token, line: int, findings: Findings, counts: Counts
 ) -> None:
     """A feed under an address of its own: reported, never scaled."""
-    address = (token.address or "").upper()
+    address = (token.address or "").upper() + "="
     counts.other += 1
     if address not in counts.other_addresses:
         counts.other_addresses.append(address)
@@ -1056,6 +1097,95 @@ def report_other_feed(
         "%s is a feed under an address of its own, not the F word, so it is left as it is. "
         "Change it by hand if it should follow the other feeds." % token.text.strip(),
     )
+
+
+def second_feed_word(
+    token: gedit_nc.Token,
+    tracker: gedit_nc.FeedModeTracker,
+    entries: Sequence[Dict[str, Any]],
+) -> bool:
+    """True for an `E` word this run has to report (:data:`SECOND_FEED_ADDRESS`).
+
+    Not in a block whose feed is a lead or a time, whose words are data, or where a code
+    of the block or the cycle in force declares `E` as a parameter of its own (a dwell, a
+    change of lead): there it is what that parameter says, and none of this run's business.
+    """
+    if token.kind != "word" or (token.address or "").upper() != SECOND_FEED_ADDRESS or assignment_word(token):
+        return False
+    if tracker.pitch_feed or tracker.pitch_feed_ambiguous or tracker.f_not_feed or tracker.data_code is not None:
+        return False
+    declaring = list(entries)
+    cycle = tracker.entry(tracker.active_cycle) if tracker.active_cycle else None
+    if cycle is not None:
+        declaring.append(cycle)
+    for entry in declaring:
+        for param in entry.get("params") or []:
+            if isinstance(param, dict) and str(param.get("address") or "").upper() == SECOND_FEED_ADDRESS:
+                return False
+    return True
+
+
+def report_second_feed(token: gedit_nc.Token, line: int, findings: Findings, counts: Counts) -> None:
+    """An `E` word no code of its block explains: reported, never scaled."""
+    counts.other += 1
+    if SECOND_FEED_ADDRESS not in counts.other_addresses:
+        counts.other_addresses.append(SECOND_FEED_ADDRESS)
+    findings.add(
+        line,
+        "info",
+        "%s is left as written: this run scales only the F word, and an E word is a feed "
+        "of its own along a contour definition on some controls, a thread lead or a dwell "
+        "on others. Change it by hand if it should follow the other feeds." % token.text.strip(),
+    )
+
+
+def code_letters(codes: Sequence[Dict[str, Any]]) -> frozenset:
+    """The address letters the database writes its moves with: `G` on the ISO dialects.
+
+    Read off the database's ``motion`` group, whose codes are a letter and a number there
+    (`G1`); a dialect whose moves are keywords (Klartext `L`) has none. A code under such a
+    letter decides what the block's feed is, so one the database does not know is reported
+    (:func:`unknown_code`).
+    """
+    out = set()
+    for entry in codes or ():
+        code = entry.get("code") if isinstance(entry, dict) else None
+        if entry.get("group") == "motion" and isinstance(code, str) and re.match(r"^[A-Z]\d", code):
+            out.add(code[0])
+    return frozenset(out)
+
+
+def unknown_code(
+    tokens: Sequence[gedit_nc.Token], tracker: gedit_nc.FeedModeTracker, letters: frozenset
+) -> Optional[str]:
+    """The first code of the block under one of ``letters`` that the database does not know.
+
+    A builder's cycle (a radial tapping cycle under a G number of its own) had its lead
+    scaled like a feed: the database cannot say what the `F` of such a block is, so the run
+    does not guess (R10).
+    """
+    if not letters:
+        return None
+    for token in tokens:
+        if token.kind != "word" or not token.address or assignment_word(token):
+            continue
+        if token.address.upper() not in letters or not token.value_text:
+            continue
+        written = token.address + token.value_text
+        if tracker.entry(written) is None:
+            return written.upper()
+    return None
+
+
+def ambiguous_kind(tracker: gedit_nc.FeedModeTracker) -> str:
+    """``'tapping'`` when the code in force taps on the other kind of machine, else ``'threading'``.
+
+    The database says which (`tappingElsewhere`, 2026-09): Okuma `G84` is the tapping cycle
+    of the machining centres and a LAP code on the lathe, and calling it a threading cycle
+    sent the reader of a drilling program the wrong way (review finding NC1).
+    """
+    entry = tracker.entry(tracker.ambiguous_code) if tracker.ambiguous_code else None
+    return "tapping" if entry is not None and entry.get("tappingElsewhere") is True else "threading"
 
 
 def pitch_code_of(entries: Sequence[Dict[str, Any]], tracker: gedit_nc.FeedModeTracker) -> Optional[str]:
@@ -1070,7 +1200,7 @@ def pitch_code_of(entries: Sequence[Dict[str, Any]], tracker: gedit_nc.FeedModeT
             code = entry.get("code")
             if isinstance(code, str) and code != "":
                 return code
-    return tracker.active_cycle
+    return tracker.active_cycle or tracker.pitch_mode
 
 
 def readings_text(readings: Sequence[Dict[str, Any]]) -> str:
@@ -1099,6 +1229,7 @@ def scale_token(
     line: int,
     findings: Findings,
     counts: Counts,
+    unknown: Optional[str] = None,
 ) -> Optional[Tuple[int, int, str]]:
     """The edit this feed word needs, or ``None`` — with a finding when it is left alone."""
     word = token.text.strip()
@@ -1130,10 +1261,23 @@ def scale_token(
         findings.add(
             line,
             "warning",
-            "%s is not scaled: %s is a threading cycle on another kind of machine or in "
+            "%s is not scaled: %s is a %s cycle on another kind of machine or in "
             "another G-code system, where this F is the thread lead and not a feed rate. "
             "Check the block and scale it by hand if it really is a feed."
-            % (word, tracker.ambiguous_code),
+            % (word, tracker.ambiguous_code, ambiguous_kind(tracker)),
+        )
+        return None
+
+    # A code the database does not know: what its F is cannot be told (R10).
+    if unknown is not None:
+        counts.skip("unknown")
+        findings.add(
+            line,
+            "warning",
+            "%s is not scaled: this block writes %s, which the code database does not know, "
+            "so gEdit cannot tell whether its F is a feed rate or the lead of a builder's "
+            "cycle. Check the block and scale it by hand if it really is a feed."
+            % (word, unknown),
         )
         return None
 
@@ -1143,7 +1287,7 @@ def scale_token(
         findings.add(line, "info", "%s is %s, so it is not scaled." % (word, reading.mode_text(mode)))
         return None
 
-    value = Decimal(token.value.raw)
+    value = exact_value(token.value)
 
     # What the limits compare (plan §7.15, AD-31). Only a run that set one needs it, and a
     # run that did not must not pay for working it out on every feed of a 100,000-line
@@ -1226,7 +1370,7 @@ def scale_token(
     # A feed of zero is not a slow feed, it is a block that does not cut. The finding has
     # to name which of the two ways the run got there, because the fix is different: a
     # rounded-away value needs more decimal places, a zero limit needs a different limit.
-    if Decimal(new_text) == 0:
+    if exact_value(new_text) == 0:
         counts.zero += 1
         if limit_text is not None:
             why = "the %s is %s" % (limit_label, limit_text)
@@ -1235,7 +1379,7 @@ def scale_token(
             why = "%s %% of %s is %s, which written with %s is %s" % (
                 trim(params.percent),
                 token.value_text,
-                trim(Decimal(limited)),
+                trim(exact_value(limited)),
                 result_precision(token, params),
                 new_text,
             )
@@ -1257,7 +1401,7 @@ def scale_token(
         #
         # A value the run did not change at all — 100 %, or a feed already at the limit —
         # is not reported: nothing was asked of it and nothing happened.
-        if Decimal(limited) != value:
+        if exact_value(limited) != value:
             findings.add(
                 line,
                 "info",
@@ -1267,7 +1411,7 @@ def scale_token(
                     word,
                     trim(params.percent),
                     token.value_text,
-                    trim(Decimal(limited)),
+                    trim(exact_value(limited)),
                     result_precision(token, params),
                     new_text,
                 ),
@@ -1297,8 +1441,8 @@ def scale_token(
     else:
         # The value moved, but rounding to the written precision moved it further than
         # asked. See ROUNDING_NOTICE.
-        exact = Decimal(limited)
-        written = Decimal(new_text)
+        exact = exact_value(limited)
+        written = exact_value(new_text)
         if exact != 0 and abs(written - exact) > ROUNDING_NOTICE * abs(exact):
             counts.rounded += 1
             findings.add(
@@ -1319,6 +1463,19 @@ def scale_token(
 
     counts.changed += 1
     return (token.end - len(token.value_text), token.end, new_text)
+
+
+def exact_value(number: Any) -> Decimal:
+    """The exact value of a token's literal or of a written number (`gedit_nc.decimal_of`).
+
+    Not ``Decimal(literal.raw)``: a Klartext decimal comma stays in ``raw`` (`F500,5`) so
+    that the rewrite writes it back, and ``Decimal("500,5")`` raises. Only ever called with
+    a number the tokenizer or ``format_number`` produced, so ``None`` cannot come back.
+    """
+    value = gedit_nc.decimal_of(number)
+    if value is None:  # pragma: no cover - the tokenizer and format_number write numbers
+        raise ValueError("not a number: %r" % (number,))
+    return value
 
 
 def decimals_text(count: int) -> str:
@@ -1353,10 +1510,10 @@ def result_precision(token: gedit_nc.Token, params: Params) -> str:
 
 def same_number(text: str, other: Optional[str]) -> bool:
     """Whether two written decimals are the same value: ``700.`` and ``700`` are."""
-    left, right = gedit_nc.parse_number(text), gedit_nc.parse_number(other or "")
+    left, right = gedit_nc.decimal_of(text), gedit_nc.decimal_of(other or "")
     if left is None or right is None:
         return False
-    return Decimal(left.raw) == Decimal(right.raw)
+    return left == right
 
 
 def clamp(
@@ -1390,7 +1547,10 @@ def clamp(
     text, rounded, error = reading.write_back(wanted or "0", token, number_class, fmt)
     if text is None or error is not None:  # pragma: no cover - a value resolved, so it writes
         return scaled, None, "", False
-    return text, wanted, label, rounded
+    # `write_back` writes a Klartext decimal comma back (`F1500,`), and the caller hands this
+    # text to `format_number`, which reads a decimal with a point and writes the comma
+    # itself from the original literal.
+    return text.replace(",", "."), wanted, label, rounded
 
 
 def write(value: str, token: gedit_nc.Token, params: Params) -> Tuple[str, bool]:
@@ -1417,8 +1577,8 @@ def inherited_text(tracker: gedit_nc.FeedModeTracker, reading: Reading) -> Optio
         parts.append("the thread-pitch cycle %s" % tracker.active_cycle)
     elif tracker.pitch_feed_ambiguous and tracker.ambiguous_code is not None:
         parts.append(
-            "%s, which is a threading cycle on another kind of machine or in another "
-            "G-code system" % tracker.ambiguous_code
+            "%s, which is a %s cycle on another kind of machine or in another "
+            "G-code system" % (tracker.ambiguous_code, ambiguous_kind(tracker))
         )
     elif tracker.active_cycle is not None:
         parts.append("the cycle %s" % tracker.active_cycle)
@@ -1513,7 +1673,8 @@ def run(
 
     # The feeds a tapping cycle written as a call may take as its lead. They can stand many
     # lines above the call, so they are found before the first word is scaled.
-    carriers = lead_carriers(lines, cp, codes, params, state, base_line)
+    carriers = lead_carriers(lines, cp, codes, params, preceding if primed else None, base_line)
+    letters = code_letters(codes)
 
     for index, line in enumerate(lines):
         # A line continues the block above when that one ended in a marker (Klartext `~`)
@@ -1539,10 +1700,14 @@ def run(
         if cycle is not None:
             list_cycle_feeds(cycle, tokens, number, findings, counts)
 
+        unknown = unknown_code(tokens, tracker, letters)
         edits: List[Tuple[int, int, str]] = []
         for token in tokens:
             if other_feed_word(token, params):
                 report_other_feed(token, number, findings, counts)
+                continue
+            if second_feed_word(token, tracker, entries):
+                report_second_feed(token, number, findings, counts)
                 continue
             if not feed_word(token, params):
                 continue
@@ -1552,12 +1717,23 @@ def run(
                 # and it leaves the feed in force as it was (AD-19 rule 6).
                 counts.dwell += 1
                 continue
+            if tracker.data_code is not None:
+                # `wordsAreData` (`G65 P9810 F3000.`, a `G10` block): an argument of the call
+                # or a value the block writes somewhere, not a feed of this program.
+                counts.data += 1
+                findings.add(
+                    number,
+                    "info",
+                    "%s is an argument or a data value of %s, not a feed rate of this "
+                    "program, so it is left as written." % (token.text.strip(), tracker.data_code),
+                )
+                continue
             counts.total += 1
             carried = carriers.get((index, token.start))
             if carried is not None:
                 report_carried(token, carried, number, findings, counts)
                 continue
-            edit = scale_token(token, tracker, params, reading, entries, number, findings, counts)
+            edit = scale_token(token, tracker, params, reading, entries, number, findings, counts, unknown)
             if edit is not None:
                 edits.append(edit)
 
@@ -1604,6 +1780,7 @@ def summary(counts: Counts, findings: Findings, params: Params, reading: Reading
     for reason, text in (
         ("pitch", "left as a thread pitch"),
         ("ambiguous", "left because the code means a threading cycle somewhere else"),
+        ("unknown", "left under a code the database does not know"),
         ("value", "left as a variable or an expression"),
         ("mode", "left in another feed mode"),
     ):
@@ -1635,11 +1812,13 @@ def summary(counts: Counts, findings: Findings, params: Params, reading: Reading
             "%s left as written (%s)"
             % (
                 count_text(counts.other, "feed under an address of its own", "feeds under addresses of their own"),
-                ", ".join(address + "=" for address in counts.other_addresses),
+                ", ".join(counts.other_addresses),
             )
         )
     if counts.dwell:
         parts.append("%s left as written" % count_text(counts.dwell, "dwell time"))
+    if counts.data:
+        parts.append("%s left as written" % count_text(counts.data, "argument or data word", "arguments and data words"))
     if counts.unresolved:
         parts.append(
             "%s scaled without a limit check" % "{:,}".format(counts.unresolved)

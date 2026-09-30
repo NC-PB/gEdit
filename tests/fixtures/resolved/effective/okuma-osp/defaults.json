@@ -67,10 +67,6 @@
           "weight": 100
         },
         {
-          "pattern": "^[^(]*(?<![A-Z])G0*18\\d(?![\\d.])",
-          "weight": 100
-        },
-        {
           "pattern": "^[^(]*(?<![A-Z])G0*8[5-8][ \\t]*N[A-Z0-9]{1,4}(?![A-Z0-9])",
           "weight": 100
         },
@@ -83,11 +79,23 @@
           "weight": 100
         },
         {
-          "pattern": "^\\$[ \\t]+[A-Z]",
+          "pattern": "^\\$(?:[ \\t]+[A-Z]|[A-Z]{1,2}[-+.\\d= \\t])",
           "weight": 100
         },
         {
+          "pattern": "^[^(]*(?<![A-Z])G0*1[56][ \\t]*H\\d",
+          "weight": 400
+        },
+        {
+          "pattern": "^(?![^(]*(?<![A-Z])G0*4[34](?![\\d.]))[^(]*(?<![A-Z])G0*56[ \\t]*H\\d",
+          "weight": 400
+        },
+        {
           "pattern": "^[^(]*(?<![A-Z])SB\\s*=",
+          "weight": 20
+        },
+        {
+          "pattern": "^(?![^(]*(?<![A-Z])P[-+]?[.\\d])(?![^(]*(?<![A-Z])G(?!0*7[12](?![\\d.]))\\d)(?=[^(]*(?<![A-Z])[XZ][-+]?[.\\d])[^(]*(?<![A-Z])G0*7[12](?![\\d.])",
           "weight": 20
         },
         {
@@ -127,16 +135,20 @@
           "weight": 3
         },
         {
+          "pattern": "^[^(]*(?<![A-Z])G0*18\\d(?![\\d.])",
+          "weight": 3
+        },
+        {
           "pattern": "^\\s*(N\\d+\\s*)?[GM]\\d{1,3}(\\.\\d)?(?![\\d.])",
           "weight": 1
         }
       ],
       "extensions": {
-        "min": 5000,
-        "ssb": 5000,
-        "sub": 5000
+        "min": 20,
+        "ssb": 20,
+        "sub": 20
       },
-      "priority": 0
+      "priority": -1
     },
     "files": {
       "defaultExtension": "min",
@@ -333,7 +345,7 @@
           "start": "("
         }
       ],
-      "continuationStart": "^[ \\t]*\\$(?=[ \\t]|$)",
+      "continuationStart": "^[ \\t]*\\$(?![^\\r\\n]*%)",
       "decimalPointSignificant": false,
       "decimalSeparator": ".",
       "header": "^\\$[^%]*%",

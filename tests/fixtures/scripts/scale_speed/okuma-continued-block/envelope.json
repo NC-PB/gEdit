@@ -1,0 +1,20 @@
+{
+  "message": "Scaled 3 of 4 spindle speeds to 80 %; 1 tapping speed left as written, 2 thread blocks to check by hand.",
+  "findings": [
+    {
+      "line": 8,
+      "severity": "warning",
+      "message": "This thread block (G71) runs at S800, which was scaled on line 6: the feed follows from the speed and the pitch, so check this block by hand."
+    },
+    {
+      "line": 9,
+      "severity": "warning",
+      "message": "S700 was scaled in a thread block (G71): the feed follows from the speed and the pitch, so check this block by hand."
+    },
+    {
+      "line": 16,
+      "severity": "warning",
+      "message": "SB=500 is the speed of a tapping block (G184). A tap's feed follows from its speed and its pitch, so the speed is left as written: scaled on its own it would break the tap. Change the speed and the feed together by hand if the tap should run at another speed."
+    }
+  ]
+}

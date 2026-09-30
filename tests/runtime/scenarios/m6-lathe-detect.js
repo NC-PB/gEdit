@@ -1,7 +1,7 @@
 // The Fanuc lathe profile in the running app (plan §5 M6 H6 `m6-lathe-detect`, WP6.1 and
 // WP6.2, AD-31): a posted turning program opens as `fanuc-lathe`, the G-code system it was
 // written for is read out of the text, the Phase 1 fixtures keep the dialect they had, and
-// the owner can still say so himself.
+// the owner can still say so themselves.
 //
 // **This is the NC-correctness scenario of the milestone.** Which G-code system a lathe
 // file is read as decides what `G92 S2200` means — a spindle clamp in system A, a thread
@@ -145,7 +145,7 @@ scenario('m6-lathe-detect', { timeout: 420 }, async (h) => {
   h.check(
     'and the three that matter on a lathe are the dialect defaults, not a machine’s: calculator-type input, millimetres, diameter on',
     tooltipLine(h, 'How the control reads numbers') ===
-      'How the control reads numbers: As written: X50 and X50. are both 50 mm; cycle steps in microns (Q6000 is 6 mm) — dialect default, assumed' &&
+      'How the control reads numbers: As written: X50 and X50. are both 50 mm; G74/G75 P and Q, G76 Q and G83/G87 Q are in microns (Q6000 is 6 mm) — dialect default, assumed' &&
       tooltipLine(h, 'Units at power-on') === 'Units at power-on: Millimetres (mm) — dialect default, assumed' &&
       tooltipLine(h, 'X and U are diameters at power-on') === 'X and U are diameters at power-on: on — dialect default, assumed',
     tooltipLabels.map((label) => tooltipLine(h, label)),

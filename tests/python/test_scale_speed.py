@@ -107,6 +107,13 @@ REQUIRED_CASES = [
     "sinumerik-limits",
     "sinumerik-master-spindle",
     "sinumerik-master-spindle-all",
+    # 2026-09: the owner's tapping decision, the main spindle, and `$` lines.
+    "fanuc-tapping-in-force",
+    "fanuc-tapping-selection-primed",
+    "klartext-tapping-speed",
+    "sinumerik-mcall-tapping-selection",
+    "sinumerik-setms-main",
+    "okuma-continued-block",
 ]
 
 #: The address this script is allowed to rewrite; everything else comes back token for
@@ -171,6 +178,12 @@ def shape_of(lines, cp):
     gedit_nc = helpers.import_gedit_nc()
     limits = (cp.profile.get("addresses") or {}).get("speedLimitWords") or []
     scaled = set(SCALED_ADDRESSES) | {word.upper() for word in limits if isinstance(word, str)}
+    # 2026-09: a cutting speed written as a word of its own (`SVC=`), which the code
+    # database marks with `sets.speedUnit: 'surface'` on the word's entry.
+    for entry in helpers.load_codes(cp.profile):
+        code = entry.get("code")
+        if isinstance(code, str) and code.isalpha() and (entry.get("sets") or {}).get("speedUnit") == "surface":
+            scaled.add(code.upper())
     out = []
     state = None
     for line in lines:
@@ -311,21 +324,37 @@ class TestRules(unittest.TestCase):
         self.assertIn("G96 S162 M3", every)
         self.assertIn("G97 S1080", every)
 
-    def test_a_tapping_block_is_scaled_and_warned_about(self):
+    def test_a_tapping_speed_is_left_as_written_and_reported(self):
+        # Owner decision of 2026-09-27: a tap's speed and feed are tied by the pitch, so the
+        # speed is refused, not scaled with a warning (it used to be `M29 S450`, `S360`).
         payload = self.output("fanuc-tapping")
         lines = payload["text"].split("\n")
-        self.assertIn("M29 S450", lines)
+        self.assertIn("M29 S500", lines)
+        self.assertIn("X60. Y10. S450", lines)
+        # Review finding NC8: `S400` on a line of its own moves no axis, so under the modal
+        # G84 it runs no tap, and the next tap (`X60. Y10. S450`) has a speed of its own.
+        # It is an ordinary speed (it used to be refused as "the speed of a tapping block").
         self.assertIn("S360", lines)
-        self.assertIn("X60. Y10. S405", lines)
-        # The speed of a tapping cycle is usually set in the block before it, so the
-        # warning has to reach the cycle as well as the speeds inside it.
         warnings = [f for f in payload["findings"] if f["severity"] == "warning"]
-        self.assertEqual([f["line"] for f in warnings], [9, 11, 12])
-        self.assertIn("runs at S500, which was scaled on line 7", warnings[0]["message"])
-        self.assertTrue(all("check this block by hand" in f["message"] for f in warnings))
+        self.assertEqual([f["line"] for f in warnings], [7, 12])
+        self.assertIn("S500 is the speed of a tapping block (M29)", warnings[0]["message"])
+        self.assertIn("S450 is the speed of a tapping block (G84)", warnings[1]["message"])
+        self.assertTrue(all("left as written" in f["message"] for f in warnings))
+        self.assertIn("2 tapping speeds left as written", payload["message"])
+        self.assertNotIn("thread block", payload["message"])
         # After G80 the cycle is over and the speed is an ordinary speed again.
         self.assertIn("S720 M3", lines)
         self.assertEqual(payload["findings"][-1]["line"], 12)
+
+    # Review finding NC2 (2026-09): a Klartext decimal comma stays in the value's raw text,
+    # and `Decimal(raw)` raised: the script exited with a traceback at every percentage.
+    def test_a_klartext_comma_speed_is_scaled_and_keeps_its_comma(self):
+        payload = self.output("klartext-decimal-comma")
+        lines = payload["text"].split("\n")
+        self.assertIn("1 TOOL CALL 5 Z S2500,3", lines)
+        self.assertIn("5 TOOL CALL Z S1500,", lines)
+        self.assertIn("7 TOOL CALL 6 Z S1000", lines)
+        self.assertEqual(payload["message"], "Scaled 3 spindle speeds to 50 %.")
 
     def test_a_speed_that_is_a_variable_or_an_expression_is_reported_and_left(self):
         lines = self.lines("fanuc-variables")
@@ -446,6 +475,248 @@ class TestCodeDatabase(unittest.TestCase):
         self.assertEqual(payload["findings"][0]["severity"], "warning")
         self.assertIn("no code database", payload["findings"][0]["message"])
         self.assertEqual(payload["findings"][0]["line"], 1)
+
+
+class TestTappingSpeed(unittest.TestCase):
+    """Owner decision of 2026-09-27: the speed of a tap is refused and reported, as written.
+
+    A tap's feed follows from its speed and its pitch, and scale_feed leaves that feed alone;
+    a scaled speed with the old feed breaks the tap. Threading keeps the old rule (scaled,
+    with a warning).
+    """
+
+    def output(self, name):
+        case = next(case for case in helpers.script_cases("scale_speed") if case.name == name)
+        result = run_case(case)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], case.expected_text())
+        return payload
+
+    def lines(self, name):
+        return self.output(name)["text"].split("\n")
+
+    def test_the_speed_in_force_when_a_tap_runs_is_left(self):
+        payload = self.output("fanuc-tapping-in-force")
+        lines = payload["text"].split("\n")
+        # The S of the tool change before G84.2, and the S before a G63 tapping mode.
+        self.assertIn("S600 M3", lines)
+        self.assertIn("S400 M3", lines)
+        # After G64 the mode is over, and the next tool's speed is scaled.
+        self.assertIn("S2700 M3", lines)
+        rows = {f["line"]: f["message"] for f in payload["findings"]}
+        self.assertIn("S600 is the speed in force when the tapping block on line 9 (G84.2) runs", rows[7])
+        self.assertIn("S400 is the speed in force when the tapping block on line 16 (G63) runs", rows[14])
+        self.assertIn("2 tapping speeds left as written", payload["message"])
+
+    def test_an_argument_of_a_macro_call_is_no_speed(self):
+        payload = self.output("fanuc-tapping-in-force")
+        self.assertIn("G65 P9010 S500 A1.", payload["text"].split("\n"))
+        rows = {f["line"]: f["message"] for f in payload["findings"]}
+        self.assertIn("S500 is an argument or a data value of G65", rows[21])
+        self.assertIn("1 argument or data word left as written", payload["message"])
+
+    def test_a_selection_that_starts_inside_a_tapping_cycle_knows_it(self):
+        payload = self.output("fanuc-tapping-selection-primed")
+        self.assertEqual(payload["text"].split("\n")[:3], ["X40. S450", "G80", "S720 M3"])
+        first = payload["findings"][0]
+        self.assertIn("the tapping code G84 is in force here", first["message"])
+        self.assertIn("S450 is the speed of a tapping block (G84)", payload["findings"][1]["message"])
+
+    def test_a_klartext_tap_runs_at_the_speed_in_force_when_its_cycle_is_called(self):
+        payload = self.output("klartext-tapping-speed")
+        lines = payload["text"].split("\n")
+        self.assertIn("4 TOOL CALL 5 Z S500", lines)
+        # A speed written between the definition and a call of it is the tap's as well.
+        self.assertIn("8 TOOL CALL S450", lines)
+        # A new cycle definition ends the tap; the drill's speed is scaled.
+        self.assertIn("12 TOOL CALL 6 Z S2400", lines)
+        rows = {f["line"]: f["message"] for f in payload["findings"]}
+        self.assertIn("(CYCL DEF 207)", rows[14])
+        self.assertIn("tapping block on line 15", rows[14])
+
+    def test_a_modal_call_of_a_tap_makes_the_speeds_written_under_it_tap_speeds(self):
+        payload = self.output("sinumerik-mcall-tapping-selection")
+        lines = payload["text"].split("\n")
+        self.assertEqual(lines[0], "N80 X40 Y0 S450 F560")
+        self.assertEqual(lines[4], "N120 S1200 M3")
+        self.assertIn("S450 is the speed of a tapping block (CYCLE840)", payload["findings"][0]["message"])
+
+    def test_a_continued_okuma_block_is_one_block_for_the_speed_as_well(self):
+        # The re-review found no `$` golden for this script. The S700 on the `$` line of a
+        # G71 block is that thread cycle's (scaled, warned); the SB=500 on the `$` line of a
+        # G184 block is that tap's, so the S700 above it is not blamed for it.
+        payload = self.output("okuma-continued-block")
+        lines = payload["text"].split("\n")
+        self.assertEqual(lines[8], "$ H2.45 L2 F2 S560 M23 M32 M73")
+        self.assertEqual(lines[15], "$ Q6 SB=500")
+        rows = {f["line"]: f["message"] for f in payload["findings"]}
+        self.assertIn("S700 was scaled in a thread block (G71)", rows[9])
+        self.assertIn("SB=500 is the speed of a tapping block (G184)", rows[16])
+
+    def test_the_flag_decides_and_not_the_pitch(self):
+        # A database that marks G84 as a pitch feed but not as a tap is read the old way:
+        # the speed is scaled and the thread block is named. No dialect is named anywhere.
+        codes = [
+            {"code": "G84", "group": "cycle", "modal": True, "pitchFeed": True, "sets": {"cycle": "start"}, "label": "tap"},
+            {"code": "G80", "group": "cycle", "modal": True, "sets": {"cycle": "cancel"}, "label": "cancel"},
+        ]
+        program = "S500 M3\nG84 X20. Z-10. R2. F625.\nG80\n"
+        profile = helpers.load_profile("fanuc-gcode")
+        context = helpers.make_context(params={"percent": 50}, profile=profile, codes=codes)
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        self.assertEqual(result.json()["text"], "S250 M3\nG84 X20. Z-10. R2. F625.\nG80\n")
+        tapped = [dict(entry, tapping=True) if entry["code"] == "G84" else entry for entry in codes]
+        context = helpers.make_context(params={"percent": 50}, profile=profile, codes=tapped)
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        self.assertEqual(result.json()["text"], program)
+
+    def test_a_threading_cycle_is_still_scaled_and_named(self):
+        payload = self.output("fanuc-lathe-threading")
+        self.assertIn("1 thread block to check by hand", payload["message"])
+        self.assertNotIn("tapping", payload["message"])
+
+    # Review finding NC1 (2026-09): R1 opens an Okuma machining-centre program with the
+    # Okuma profile, whose G84 is a LAP code there and the tapping cycle of the machining
+    # centre. Scale feed refuses its F (`pitchFeedAmbiguous`), so a scaled speed broke the
+    # tap: 148 rpm with the feed written for 295.
+    def test_a_code_that_taps_on_another_machine_keeps_its_speed_like_its_feed(self):
+        payload = self.output("okuma-machining-centre-tap")
+        lines = payload["text"].split("\n")
+        self.assertEqual(lines[6], "N660 S295 M3")
+        self.assertEqual(lines[11], "N710 G84 Z-2. R52. P0 F443 M54")
+        rows = {f["line"]: f["message"] for f in payload["findings"]}
+        self.assertIn("S295 is the speed in force when the G84 block on line 12 runs", rows[7])
+        self.assertIn("G84 is a tapping cycle on another kind of machine", rows[7])
+        self.assertIn("1 speed of a possible tap left as written", payload["message"])
+        # A code whose other reading is a thread (G76, fine boring here) keeps the old rule.
+        self.assertEqual(lines[18], "N770 S557 M3")
+        self.assertIn("(G76) is a threading cycle on another kind of machine", rows[23])
+
+    def test_the_owners_published_okuma_drilling_program_keeps_its_tap_a_pair(self):
+        path = helpers.FIXTURES_DIR / "nc" / "owner-public" / "okuma-osp" / "DRILLING.min"
+        program = helpers.read_text(path)
+        before = program.split("\n")
+        self.assertEqual(before[74], "N660 S295 M3")
+        self.assertEqual(before[80], "N710 G84 Z-2. R52. P0 F443 M54")
+        for script in (SCRIPT, "scale_feed.py"):
+            with self.subTest(script=script):
+                context = helpers.effective_context("okuma-osp", params={"percent": 50})
+                context["input"]["endLine"] = len(before)
+                result = helpers.run_script(script, stdin=program, context=context)
+                self.assertTrue(result.ok, result.stderr)
+                after = result.json()["text"].split("\n")
+                self.assertEqual(after[74], before[74])
+                self.assertEqual(after[80], before[80])
+                messages = [f["message"] for f in result.json()["findings"] if f["line"] in (75, 81)]
+                self.assertTrue(any("G84 is a tapping cycle on another kind of machine" in m for m in messages), messages)
+                if script == SCRIPT:
+                    # The drill's speed at the top is still scaled.
+                    self.assertEqual(after[7], "N50 S3183 M3")
+
+    # Review finding NC3 (2026-09): a Klartext definition that is active on definition
+    # (`CYCL DEF 7` datum shift, 19, 32, 247) counted as calling the armed tapping cycle,
+    # so after one tap every later tool's speed was refused.
+    def test_a_klartext_definition_after_a_tap_neither_runs_it_nor_ends_it(self):
+        payload = self.output("klartext-tapping-def-active")
+        lines = payload["text"].split("\n")
+        self.assertIn("12 TOOL CALL 3 Z S3000", lines)
+        self.assertIn("2 TOOL CALL 5 Z S500", lines)
+        # The tap is still defined after those definitions, so a CYCL CALL runs it again.
+        self.assertIn("21 TOOL CALL 4 Z S2000", lines)
+        rows = {f["line"]: f["message"] for f in payload["findings"]}
+        self.assertEqual(sorted(rows), [3, 28])
+        self.assertIn("tapping block on line 30 (CYCL DEF 207)", rows[28])
+
+    # Review finding NC8 (2026-09): a block of only S, M or T words under a modal tapping
+    # code runs no tap; its speed counts for the next block that does.
+    def test_a_speed_only_block_under_a_modal_tap_is_no_tapping_block(self):
+        payload = self.output("fanuc-tapping-idle-block")
+        lines = payload["text"].split("\n")
+        self.assertIn("S900", lines)  # in force for the tap at X30.
+        self.assertIn("S2000 M3", lines)  # the next tool's speed; G1 ends the cycle
+        rows = {f["line"]: f["message"] for f in payload["findings"]}
+        self.assertEqual(sorted(rows), [4, 9])
+        self.assertIn("S900 is the speed in force when the tapping block on line 10 (G84) runs", rows[9])
+        self.assertNotIn("thread block", payload["message"])
+        sinumerik = self.output("sinumerik-g332-idle-block")
+        self.assertIn("N70 S550 M3", sinumerik["text"].split("\n"))
+        self.assertIn("N50 G331 Z-20 K1.5 S600", sinumerik["text"].split("\n"))
+        self.assertEqual([f["line"] for f in sinumerik["findings"]], [6])
+
+    # Review finding NC5 (2026-09): the run never reads the lines below a selection, so a
+    # changed speed still in force at its end may be the speed of a tap below it.
+    def test_a_selection_that_ends_with_a_changed_speed_in_force_says_so(self):
+        payload = self.output("fanuc-selection-above-the-tap")
+        self.assertEqual(payload["text"].split("\n")[0], "S400 M3")
+        self.assertEqual(len(payload["findings"]), 1)
+        finding = payload["findings"][0]
+        self.assertEqual((finding["line"], finding["severity"]), (4, "info"))
+        self.assertIn("S800 was scaled and is still the speed in force at the end of the selection (line 6)", finding["message"])
+        # A whole-document run has nothing below it, and says nothing of the kind.
+        case = next(case for case in helpers.script_cases("scale_speed") if case.name == "fanuc-selection-above-the-tap")
+        whole = case.preceding_lines() + case.input_lines()
+        context = helpers.effective_context("fanuc-gcode", params={"percent": 50})
+        context["input"]["endLine"] = len(whole)
+        result = helpers.run_script(SCRIPT, stdin="\n".join(whole), context=context)
+        self.assertTrue(result.ok, result.stderr)
+        self.assertEqual(result.json()["findings"], [])
+
+
+class TestMainSpindle(unittest.TestCase):
+    """Owner decision of 2026-09-27: on a Sinumerik the main spindle is spindle 1.
+
+    A plain S while spindle 1 is the master (the default, or after `SETMS(1)`) and `S1=`
+    are its speed; `S2=`, `S[n]=` with n other than 1, and a plain S after `SETMS(2)` are
+    other spindles. The number is the profile's `addresses.mainSpindle`.
+    """
+
+    def output(self, name):
+        case = next(case for case in helpers.script_cases("scale_speed") if case.name == name)
+        result = run_case(case)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], case.expected_text())
+        return payload
+
+    def test_a_post_that_chooses_spindle_1_before_every_speed_is_scaled(self):
+        payload = self.output("sinumerik-setms-main")
+        lines = payload["text"].split("\n")
+        self.assertEqual(lines[5:8], ["N40 G97 S960 M3", "N50 S1=800", "N60 S[1]=720"])
+        # After SETMS(2) the plain S is spindle 2's, while S1= still names the main one.
+        self.assertEqual(lines[9:11], ["N80 S500 M3", "N90 S1=640"])
+        self.assertEqual(lines[12], "N110 S1200 M3")
+        self.assertEqual(lines[13], "N120 S2=300 M2=3")
+        rows = {f["line"]: f["message"] for f in payload["findings"]}
+        self.assertIn("the main spindle is spindle 1", rows[10])
+
+    def test_the_cutting_speed_of_a_tool_follows_the_surface_speed_option(self):
+        # SVC= is the tool's cutting speed on the master spindle (§2.6.2 of the programming
+        # manual), the same kind of number as the S under G96: "auto" is yes on this turning
+        # profile, and "no" reports it.
+        payload = self.output("sinumerik-setms-main")
+        lines = payload["text"].split("\n")
+        self.assertEqual(lines[15:17], ["N140 SVC=96 M3", "N150 SVC[2]=90"])
+        context = helpers.effective_context("sinumerik", params={"percent": 50, "surfaceSpeed": "no"})
+        result = helpers.run_script(SCRIPT, stdin="N10 SVC=120 M3\nN20 S1000 M3\n", context=context)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], "N10 SVC=120 M3\nN20 S500 M3\n")
+        self.assertEqual(
+            payload["findings"][0]["message"], "SVC=120 is the cutting speed of the tool (SVC), so it is not scaled."
+        )
+
+    def test_a_profile_that_names_no_main_spindle_treats_every_number_as_another_spindle(self):
+        context = helpers.effective_context("sinumerik", params={"percent": 50})
+        del context["profile"]["addresses"]["mainSpindle"]
+        program = "N10 SETMS(1)\nN20 S1000 M3\nN30 S1=800\n"
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], program)
+        self.assertIn("cannot tell whether that is the machine's main spindle", payload["findings"][0]["message"])
 
 
 class TestHeader(unittest.TestCase):
@@ -1036,8 +1307,10 @@ class TestTurningDialects(unittest.TestCase):
         # The main spindle's S1600 before it is scaled.
         self.assertEqual(lines[8], "N50 G97 S1280 M3")
         # Asked to scale other spindles, the run scales it and `S3=2400` too.
+        # S500 is the speed in force when the CYCLE84 taps run, so it stays as written
+        # (owner decision of 2026-09-27) while `S3=2400` is scaled.
         lines = self.output("sinumerik-master-spindle-all")["text"].split("\n")
-        self.assertEqual((lines[20], lines[33]), ("N170 S3=1920 M3=3", "N300 S400 M3"))
+        self.assertEqual((lines[20], lines[33]), ("N170 S3=1920 M3=3", "N300 S500 M3"))
 
     def test_setms_on_its_own_goes_back_to_the_configured_master_spindle(self):
         context = helpers.effective_context("sinumerik", params={"percent": 50})
@@ -1071,12 +1344,12 @@ class TestTurningDialects(unittest.TestCase):
         lines = self.output("sinumerik-indexed-words-all")["text"].split("\n")
         self.assertEqual(lines[:3], ["N40 LIMS=2240 LIMS[2]=1440", "N100 G96 S144 LIMS[1]=2000", "N110 S[2]=240 M[2]=3"])
 
-    def test_the_speed_of_a_g63_tap_is_scaled_and_the_block_named(self):
+    def test_the_speed_of_a_g63_tap_is_left_and_the_block_named(self):
         payload = self.output("sinumerik-g63")
-        self.assertEqual(payload["text"].split("\n")[2], "N190 G63 Z-20 F500 S320 M3")
+        self.assertEqual(payload["text"].split("\n")[2], "N190 G63 Z-20 F500 S400 M3")
         (finding,) = payload["findings"]
         self.assertEqual(finding["severity"], "warning")
-        self.assertIn("thread block (G63)", finding["message"])
+        self.assertIn("S400 is the speed of a tapping block (G63)", finding["message"])
 
     def test_on_this_control_the_feed_type_decides_whether_s_is_a_cutting_speed(self):
         # G96 and G97 belong to the feed type: after `G95` the S1800 is revolutions again,
@@ -1128,18 +1401,40 @@ class TestTurningDialects(unittest.TestCase):
         self.assertEqual(payload["findings"], [])
 
     def test_a_thread_after_another_spindle_speed_is_not_blamed_on_the_main_spindle(self):
-        # The driven tool taps at its own speed (`SB=500` with `M13`); the main spindle's
-        # scaled S1500 is not the speed that thread is cut at, so no warning says it is.
+        # The driven tool cuts a thread at its own speed (`SB=500` with `M13`); the main
+        # spindle's scaled S1500 is not the speed that thread is cut at, so no warning says
+        # it is. G185 is a driven-tool thread, not a tap, so its speed rule is threading's.
         context = helpers.effective_context("okuma-osp", params={"percent": 110})
-        program = "G97 S1500 M03\nG00 X50 Z5\nM05\nM110\nSB=500 M13\nG184 X50 Z-10 C0 K3 F750 Q6\nG180\n"
+        program = "G97 S1500 M03\nG00 X50 Z5\nM05\nM110\nSB=500 M13\nG185 X50 Z-10 F1.5\nG180\n"
         result = helpers.run_script(SCRIPT, stdin=program, context=context)
         self.assertTrue(result.ok, result.stderr)
         payload = result.json()
         self.assertIn("G97 S1650 M03", payload["text"])
         self.assertEqual([f["line"] for f in payload["findings"]], [5])
         self.assertNotIn("thread block", payload["message"])
-        # The same tap straight after the scaled main-spindle speed is reported.
-        program = "G97 S1500 M03\nG00 X50 Z5\nG184 X50 Z-10 C0 K3 F750 Q6\nG180\n"
+        # The same thread straight after the scaled main-spindle speed is reported.
+        program = "G97 S1500 M03\nG00 X50 Z5\nG185 X50 Z-10 F1.5\nG180\n"
         result = helpers.run_script(SCRIPT, stdin=program, context=context)
         self.assertTrue(result.ok, result.stderr)
         self.assertIn("1 thread block to check by hand", result.json()["message"])
+
+    def test_a_driven_tap_leaves_the_speed_it_runs_at_and_not_the_main_spindle(self):
+        # Owner decision of 2026-09-27. The last speed written before the tap is the one it
+        # runs at: the driven tool's `SB=500` (another spindle, reported as one), so the main
+        # spindle's S1500 above it is an ordinary speed and is scaled.
+        context = helpers.effective_context("okuma-osp", params={"percent": 110, "otherSpindles": True})
+        program = "G97 S1500 M03\nG00 X50 Z5\nM05\nM110\nSB=500 M13\nG184 X50 Z-10 C0 K3 F750 Q6\nG180\n"
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertIn("G97 S1650 M03", payload["text"])
+        self.assertIn("SB=500 M13", payload["text"])
+        (finding,) = payload["findings"]
+        self.assertEqual(finding["line"], 5)
+        self.assertIn("SB=500 is the speed in force when the tapping block on line 6 (G184) runs", finding["message"])
+        # Without a speed of its own, the tap runs at the main spindle's: left as written.
+        program = "G97 S1500 M03\nG00 X50 Z5\nG184 X50 Z-10 C0 K3 F750 Q6\nG180\n"
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        self.assertIn("G97 S1500 M03", result.json()["text"])
+        self.assertIn("1 tapping speed left as written", result.json()["message"])

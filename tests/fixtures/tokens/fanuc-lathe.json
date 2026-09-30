@@ -70,5 +70,11 @@
   {"line":"M30","tokens":[{"kind":"word","text":"M30","address":"M","valueText":"30"}]},
   {"line":"x30.z2.","tokens":[{"kind":"word","text":"x30.","address":"X","valueText":"30."},{"kind":"word","text":"z2.","address":"Z","valueText":"2."}]},
   {"line":"(UNCLOSED LATHE COMMENT","tokens":[{"kind":"comment","text":"(UNCLOSED LATHE COMMENT"}]},
-  {"line":"E1.5","tokens":[{"kind":"word","text":"E1.5","address":"E","valueText":"1.5"}]}
+  {"line":"E1.5","tokens":[{"kind":"word","text":"E1.5","address":"E","valueText":"1.5"}]},
+  {"line":"<SHAFT_T12-A>","tokens":[{"kind":"programMarker","text":"<SHAFT_T12-A>"}]},
+  {"line":"<SHAFT_T0101> (OD PIN)","tokens":[{"kind":"programMarker","text":"<SHAFT_T0101>"},{"kind":"comment","text":"(OD PIN)"}]},
+  {"line":"M98 <GROOVE_F0.2> L3","tokens":[{"kind":"word","text":"M98","address":"M","valueText":"98"},{"kind":"programMarker","text":"<GROOVE_F0.2>"},{"kind":"word","text":"L3","address":"L","valueText":"3"}]},
+  {"line":"G65 <THREAD+M30> A2.","tokens":[{"kind":"word","text":"G65","address":"G","valueText":"65"},{"kind":"programMarker","text":"<THREAD+M30>"},{"kind":"word","text":"A2.","address":"A","valueText":"2."}]},
+  {"line":"N10T0101M98<SUB1>","tokens":[{"kind":"blockNumber","text":"N10","address":"N","valueText":"10"},{"kind":"word","text":"T0101","address":"T","valueText":"0101"},{"kind":"word","text":"M98","address":"M","valueText":"98"},{"kind":"programMarker","text":"<SUB1>"}]},
+  {"line":"G96 S200 (<S999>)","tokens":[{"kind":"word","text":"G96","address":"G","valueText":"96"},{"kind":"word","text":"S200","address":"S","valueText":"200"},{"kind":"comment","text":"(<S999>)"}]}
 ]

@@ -15,4 +15,7 @@ export default {
   inSelection: '{summary} (selection)',
   skipped_one: '1 line is listed below.',
   skipped_other: '{count} lines are listed below.',
+  // R1, core/profiles/contradiction.ts: the program says it is another dialect's.
+  contradiction:
+    '{action} did not run: line {line} ({evidence}) is {likely} syntax, but the program is read as {profile}. Choose Change Dialect… or click the dialect in the status bar, pick {likely}, and run it again. If {profile} is right, check that line first.',
 } as const satisfies Messages;

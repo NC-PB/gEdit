@@ -15,6 +15,7 @@
     "nc/fanuc/f03-multi-program.nc": "fanuc-gcode",
     "nc/fanuc/f04-feed-modes.nc": "fanuc-gcode",
     "nc/fanuc/f05-comments-edge.nc": "fanuc-gcode",
-    "nc/fanuc/f07.tap": "fanuc-gcode"
+    "nc/fanuc/f07.tap": "fanuc-gcode",
+    "nc/fanuc/f08-tapping.MIN": "fanuc-gcode"
   }
 }

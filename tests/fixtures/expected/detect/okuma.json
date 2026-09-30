@@ -6,22 +6,27 @@
     "this folder too, and again with the content score alone by src/lib/data/profiles/okuma.test.ts.",
     "A value is a profile id, or 'fallback' when the content is inconclusive and the current profile",
     "stays, or 'refused' when decodeFile does not open the file at all.",
-    "The .MIN, .SUB and .SSB extensions belong to this control alone and decide on their own: line by",
-    "line an Okuma turning program reads like Fanuc lathe code, so no content outvotes them. Under any",
-    "other extension the $NAME.MIN% header decides just as firmly, and without a header the syntax only",
-    "this control writes does (CALL O, RTS, the driven-tool cycles G180-G189, a LAP call, a G71 thread",
-    "cycle with H and D, a G77 tap with K, a line continued with $). SHAFT-OP2 (no extension, no header)",
-    "and detect-okuma.txt carry no extension weight at all, so they are the files that say whether the",
-    "content rules alone carry the dialect; o05-lap-tap.MIN holds the lines the newer rules need.",
+    "The .MIN, .SUB and .SSB extensions weigh 20 (R1): more than any single ordinary line, less than a",
+    "clear Fanuc mill program (f08-tapping.MIN is one, saved as .MIN), so the extension decides only where",
+    "the content does not. The $NAME.MIN% header decides under any extension; without a header the syntax",
+    "only this control writes does (CALL O, RTS, a LAP call, a G71 thread cycle with H and D or with X/Z",
+    "and no P, a G77 tap with K, a line continued with $, and on a machining centre G15/G16 H and G56 H).",
+    "G180-G189 weigh 3 only: Fanuc lathes call builder macros by the same numbers. A program with none of",
+    "this ties with the Fanuc lathe and goes to it (priority -1 here). SHAFT-OP2, O06-THREAD (no extension,",
+    "no header) and detect-okuma.txt carry no extension weight at all, so they are the files that say",
+    "whether the content rules alone carry the dialect; O06-THREAD is the tie the thread cycle breaks.",
+    "o05-lap-tap.MIN holds the lines the newer rules need.",
     "Programs under a foreign extension, the reviewer's among them, are in _improvements.json."
   ],
   "fixtures": {
+    "nc/okuma/O06-THREAD": "okuma-osp",
     "nc/okuma/SHAFT-OP2": "okuma-osp",
     "nc/okuma/detect-okuma.txt": "okuma-osp",
     "nc/okuma/o01-flange.MIN": "okuma-osp",
     "nc/okuma/o02-thread.MIN": "okuma-osp",
     "nc/okuma/o03-live-tool.MIN": "okuma-osp",
     "nc/okuma/o04-sub.SUB": "okuma-osp",
-    "nc/okuma/o05-lap-tap.MIN": "okuma-osp"
+    "nc/okuma/o05-lap-tap.MIN": "okuma-osp",
+    "nc/okuma/o06-nend-comment.MIN": "okuma-osp"
   }
 }

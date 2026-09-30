@@ -1,0 +1,10 @@
+{
+  "message": "Scaled 2 of 3 spindle speeds to 50 %; 1 tapping speed left as written.",
+  "findings": [
+    {
+      "line": 6,
+      "severity": "warning",
+      "message": "S600 is the speed of a tapping block (G331). A tap's feed follows from its speed and its pitch, so the speed is left as written: scaled on its own it would break the tap. Change the speed and the feed together by hand if the tap should run at another speed."
+    }
+  ]
+}

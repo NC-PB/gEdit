@@ -428,7 +428,9 @@
     { "note": "and its dwell as written", "literal": "2", "class": "dwell", "input": null, "units": "mm", "expected": "2" },
     { "note": "a count is never converted, whatever the machine", "literal": "3", "class": "count", "input": "is-b", "units": "mm", "expected": null },
     { "note": "a word the class rules left without a class is never converted either", "literal": "1200", "class": null, "input": "is-b", "units": "mm", "expected": null },
-    { "note": "an unusable increment gives no value rather than a wrong one", "literal": "50", "class": "length", "input": "broken-zero", "units": "mm", "expected": null }
+    { "note": "an unusable increment gives no value rather than a wrong one", "literal": "50", "class": "length", "input": "broken-zero", "units": "mm", "expected": null },
+    { "note": "2026-09: a Klartext feed written with a decimal comma keeps the comma in its raw text, and it is the same value as the point", "literal": "500,5", "class": "feedPerMin", "input": "calculator", "units": "mm", "expected": "500.5" },
+    { "note": "2026-09: the comma is the point in an increment system too, so the word is millimetres as written", "literal": "-10,25", "class": "length", "input": "is-b", "units": "mm", "expected": "-10.25" }
   ],
 
   "writeBack": [
@@ -459,7 +461,8 @@
     { "note": "a count is not a value and is never written back", "value": "3", "original": "3", "class": "count", "input": "is-b", "units": "mm", "expected": { "error": "noReading" } },
     { "note": "and a word without a class has nothing to write back into", "value": "3", "original": "3", "class": null, "input": "is-b", "units": "mm", "expected": { "error": "noReading" } },
     { "note": "an unusable increment refuses the write instead of guessing", "value": "1", "original": "50", "class": "length", "input": "broken-zero", "units": "mm", "expected": { "error": "noReading" } },
-    { "note": "a value that is not a number is refused with its own reason", "value": "fifty", "original": "50", "class": "length", "input": "is-b", "units": "mm", "expected": { "error": "notANumber" } }
+    { "note": "a value that is not a number is refused with its own reason", "value": "fifty", "original": "50", "class": "length", "input": "is-b", "units": "mm", "expected": { "error": "notANumber" } },
+    { "note": "2026-09: a value written back into a word written with a decimal comma is written with the comma again", "value": "250.2", "original": "500,5", "class": "feedPerMin", "input": "calculator", "units": "mm", "expected": { "text": "250,2", "rounded": false } }
   ],
 
   "readings": [

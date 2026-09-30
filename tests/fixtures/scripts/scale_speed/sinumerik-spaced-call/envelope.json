@@ -1,10 +1,10 @@
 {
-  "message": "Scaled 1 spindle speed to 80 %; 1 thread block to check by hand.",
+  "message": "No spindle speed was changed; 1 tapping speed left as written.",
   "findings": [
     {
-      "line": 9,
+      "line": 7,
       "severity": "warning",
-      "message": "This thread block (CYCLE840) runs at S500, which was scaled on line 7: the feed follows from the speed and the pitch, so check this block by hand."
+      "message": "S500 is the speed in force when the tapping block on line 9 (CYCLE840) runs. A tap's feed follows from its speed and its pitch, so the speed is left as written: scaled on its own it would break the tap. Change the speed and the feed together by hand if the tap should run at another speed."
     }
   ]
 }

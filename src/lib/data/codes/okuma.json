@@ -292,6 +292,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "tapping": true,
       "verify": true,
       "label": "Feed in step with the driven tool, forward",
       "description": "Moves the feed axis in step with the turn of the driven-tool spindle. The feed is tied to that spindle like the pitch of a tap, so it may never be scaled on its own."
@@ -301,6 +302,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "tapping": true,
       "verify": true,
       "label": "Feed in step with the driven tool, reverse",
       "description": "Moves the feed axis in step with the driven-tool spindle turning the other way. The feed is tied to that spindle like the pitch of a tap, so it may never be scaled on its own."
@@ -453,6 +455,7 @@
       "group": "cycle",
       "sets": { "cycle": "start" },
       "pitchFeed": true,
+      "tapping": true,
       "label": "Tapping cycle, right-hand",
       "description": "Taps along Z from one block and reverses the spindle at the bottom; the spindle speed has to be set before it. The feed carries the pitch, so it may never be scaled.",
       "params": [
@@ -467,6 +470,7 @@
       "group": "cycle",
       "sets": { "cycle": "start" },
       "pitchFeed": true,
+      "tapping": true,
       "label": "Tapping cycle, left-hand",
       "description": "Taps a left-hand thread along Z from one block and reverses the spindle at the bottom; the spindle speed has to be set before it. The feed carries the pitch, so it may never be scaled.",
       "params": [
@@ -504,8 +508,9 @@
       "code": "G84",
       "group": "lap",
       "pitchFeedAmbiguous": true,
+      "tappingElsewhere": true,
       "label": "New depth and feed within LAP roughing",
-      "description": "Gives a LAP roughing cycle a new depth of cut and a new feed part-way through. It stands on a line that starts with $ and continues the G85 block: from the point XA= (ZA= on the face) the cycle cuts with DA= and FA=, and from XB= (ZB=) with DB= and FB=. The same number is a tapping cycle on other lathe controls, so gEdit will not scale the F of such a block.",
+      "description": "Gives a LAP roughing cycle a new depth of cut and a new feed part-way through. It stands on a line that starts with $ and continues the G85 block: from the point XA= (ZA= on the face) the cycle cuts with DA= and FA=, and from XB= (ZB=) with DB= and FB=. The same number is a tapping cycle on other lathe controls and on the machining centres, so gEdit scales neither the F of such a block nor the spindle speed it runs at.",
       "params": [
         { "address": "XA", "label": "First change point, as a diameter", "unit": "length" },
         { "address": "ZA", "label": "First change point along Z, on the face", "unit": "length" },
@@ -555,8 +560,9 @@
       "code": "G88",
       "group": "lap",
       "pitchFeedAmbiguous": true,
+      "tappingElsewhere": true,
       "label": "LAP continuous threading",
-      "description": "Cuts a thread along the shape whose sequence name follows the code; the leads are written in that shape. The same number is a tapping cycle on other lathe controls, so gEdit will not scale the F of such a block.",
+      "description": "Cuts a thread along the shape whose sequence name follows the code; the leads are written in that shape. The same number is a tapping cycle on other lathe controls, so gEdit scales neither the F of such a block nor the spindle speed it runs at.",
       "params": [
         { "address": "D", "label": "Depth of the first cut", "min": 0, "unit": "length" },
         { "address": "H", "label": "Thread height", "min": 0, "unit": "length" },
@@ -625,6 +631,7 @@
       "modal": true,
       "sets": { "cycle": "start" },
       "pitchFeed": true,
+      "tapping": true,
       "verify": true,
       "label": "Synchronized tapping, right-hand",
       "description": "Taps with the feed tied to the spindle turn, so the feed carries the pitch and may never be scaled."
@@ -635,6 +642,7 @@
       "modal": true,
       "sets": { "cycle": "start" },
       "pitchFeed": true,
+      "tapping": true,
       "verify": true,
       "label": "Synchronized tapping, left-hand",
       "description": "Taps a left-hand thread with the feed tied to the spindle turn, so the feed carries the pitch and may never be scaled."
@@ -722,6 +730,7 @@
       "modal": true,
       "sets": { "cycle": "start" },
       "pitchFeed": true,
+      "tapping": true,
       "label": "Driven-tool synchronized tapping, forward",
       "description": "Taps with the driven tool, its turn tied to the feed, until G180 cancels it. The feed carries the pitch, so it may never be scaled."
     },
@@ -731,6 +740,7 @@
       "modal": true,
       "sets": { "cycle": "start" },
       "pitchFeed": true,
+      "tapping": true,
       "label": "Driven-tool synchronized tapping, reverse",
       "description": "Taps a left-hand thread with the driven tool, its turn tied to the feed, until G180 cancels it. The feed carries the pitch, so it may never be scaled."
     },
@@ -807,6 +817,7 @@
       "modal": true,
       "sets": { "cycle": "start" },
       "pitchFeed": true,
+      "tapping": true,
       "label": "Driven-tool tapping",
       "description": "Taps with the driven tool at every following position until G180. The feed is the pitch times the driven-tool speed, so it may never be scaled on its own.",
       "params": [

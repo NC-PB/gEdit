@@ -1,0 +1,15 @@
+{
+  "profile": "fanuc-lathe",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"program","line":3,"text":"<SHAFT_T12-F0.2>","endLine":18},
+    {"kind":"tool","line":6,"text":"T1 — OD ROUGH","tool":"01","endLine":18},
+      {"kind":"subprogram-call","line":11,"text":"M98 <GROOVE_T3_M30> L2"},
+      {"kind":"subprogram-call","line":13,"text":"M98 <CHAMFER_F12>"},
+      {"kind":"end","line":18,"text":"M30"},
+    {"kind":"program","line":19,"text":"<GROOVE_T3_M30>","endLine":23},
+    {"kind":"end","line":23,"text":"M99"},
+    {"kind":"program","line":24,"text":"<CHAMFER_F12>","endLine":29},
+    {"kind":"end","line":27,"text":"M99"}
+  ]
+}

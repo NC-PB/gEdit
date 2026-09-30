@@ -11,6 +11,21 @@ import { describe, expect, it } from 'vitest';
 import type { NumberFormatOptions } from '$lib/core/profiles/types';
 import { formatNumber } from './numberFormat';
 import { parseNumber } from './numbers';
+import type { NumericLiteral } from './types';
+
+/**
+ * `original` the way a comma-decimal case (§7.16 / R4) writes it in the fixture: `.` still
+ * parses with the untouched, contract-pinned `parseNumber`, and a comma is read the way
+ * `tokenizer.ts`'s `parseValue` reads one — retried with it as the point, `raw` kept as
+ * the text this fixture wrote. `parseNumber` itself never learns the comma; only the
+ * fixture's own reading of "the literal that stood in the file" does.
+ */
+function parseOriginal(text: string): NumericLiteral | null {
+  const direct = parseNumber(text);
+  if (direct !== null || !text.includes(',')) return direct;
+  const alt = parseNumber(text.replace(',', '.'));
+  return alt === null ? null : { ...alt, raw: text };
+}
 
 interface FormatCase {
   note?: string;
@@ -33,7 +48,7 @@ describe('numberformat.cases.json', () => {
   });
 
   it.each(CASES.map((c, i) => [`${i + 1}. ${c.note ?? `${c.decimal} → ${c.expected}`}`, c] as const))('%s', (_name, c) => {
-    const original = c.original === null ? null : parseNumber(c.original);
+    const original = c.original === null ? null : parseOriginal(c.original);
     expect(c.original === null || original !== null, `original ${c.original} does not parse`).toBe(true);
     expect(formatNumber(c.decimal, original, c.fmt, { decimalPointSignificant: c.significant })).toBe(c.expected);
   });

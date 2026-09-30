@@ -37,7 +37,8 @@
     "decimalPointSignificant": true,
     "wordSeparatorRequired": false,
     "variables": "#\\d+",
-    "keywords": ["GOTO", "IF", "THEN", "WHILE", "DO", "END", "EQ", "NE", "GT", "LT", "GE", "LE", "AND", "OR", "XOR", "MOD"]
+    "keywords": ["GOTO", "IF", "THEN", "WHILE", "DO", "END", "EQ", "NE", "GT", "LT", "GE", "LE", "AND", "OR", "XOR", "MOD"],
+    "programNames": "<[A-Za-z0-9+\\-_.]+>"
   },
   "addresses": {
     "tool": "T",
@@ -49,18 +50,20 @@
   },
   "toolCall": {
     "trigger": "(?<![A-Z])M0*6(?!\\d)",
+    "ignore": "(?<![A-Z])T0+(?!\\d)",
     "tool": "(?<![A-Z])T(?<tool>\\d+)",
     "toolFrom": "same-line-or-last"
   },
   "program": {
-    "start": ["^\\s*O(?<name>\\d+)", "^\\s*:(?<name>\\d+)"],
+    "start": ["^\\s*O(?<name>\\d+)", "^\\s*:(?<name>\\d+)", "^\\s*<(?<name>[A-Za-z0-9+\\-_.]+)>"],
     "end": ["(?<![A-Z])M0*(30|2)(?!\\d)"]
   },
   "outline": [
     { "kind": "program", "pattern": "^\\s*[O:](?<name>\\d+)" },
+    { "kind": "program", "pattern": "^\\s*<(?<name>[A-Za-z0-9+\\-_.]+)>" },
     { "kind": "comment", "pattern": "^\\s*\\((?<text>[^)]*)\\)\\s*$" },
     { "kind": "stop", "pattern": "(?<![A-Z])M0*[01](?!\\d)" },
-    { "kind": "subprogram-call", "pattern": "(?<![A-Z])(?<text>M0*98\\s*[PQ]\\d+(?:\\s*L\\d+)?|G0*65\\s*P\\d+)" },
+    { "kind": "subprogram-call", "pattern": "(?<![A-Z])(?<text>M0*98\\s*(?:[PQ]\\d+|<[A-Za-z0-9+\\-_.]+>)(?:\\s*L\\d+)?|G0*65\\s*(?:P\\d+|<[A-Za-z0-9+\\-_.]+>))" },
     { "kind": "end", "pattern": "(?<![A-Z])M0*(?:30|2|99)(?!\\d)" }
   ],
   "numbering": {

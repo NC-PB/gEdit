@@ -20,7 +20,9 @@
 // Rules (plan §5 WP3.5, dialect-profiles.md "Outline (program map)"):
 //   - The first matching `outline` rule of the profile wins. `comment` and `section`
 //     rules see the raw line; every other rule sees the line with comments masked, so
-//     `(T1 M6)` in a comment is never a tool change.
+//     `(T1 M6)` in a comment is never a tool change. The mask also covers a program name
+//     (`<SHAFT-T12>` masks as `<_____-___>`, `mask.ts`), so a program or call rule shows
+//     the names in its match as the real line writes them.
 //   - A tool change outranks the `outline` rules: it is the spine of the map.
 //   - `toolCall.toolFrom: 'same-line-or-last'` takes the tool from the same line or from
 //     the last `T` word before it; a bare `T` word is not a tool change.
@@ -75,6 +77,17 @@ interface LineMark {
   isTool: boolean;
   /** The tool written on this line, trigger or not (`T2` on its own preselects a tool). */
   tool: string | null;
+  /**
+   * The `tool` match's `axis` group took part (Klartext's tool axis, `spec.axisAware`
+   * only). False on every other profile, and false here too when `tool` is null.
+   */
+  axis: boolean;
+  /**
+   * `tool` is written the way `toolCall.ignore` says a tool is unloaded (`T0`). A tool
+   * change that takes its tool from this preselection (`T0`, then `M6` on a line of its own)
+   * unloads the spindle, exactly as `M6 T0` on one line does.
+   */
+  unload: boolean;
   /** Comment or heading text of this line, usable as a tool description. */
   description: string | null;
 }
@@ -91,6 +104,17 @@ interface OutlineSpec {
   comments: { start: string; end: string | null }[];
   /** True when any code rule needs the masked line (all of them but comment/section). */
   needsMask: boolean;
+  /**
+   * `toolCall.tool` carries an `(?<axis>…)` group (Klartext's tool axis).
+   *
+   * On such a profile, a `TOOL CALL` with no tool argument at all is always a speed
+   * change (there is nothing to change tool *to*), and one whose tool number matches the
+   * tool already in the spindle is a speed change too when it gives no axis — a control
+   * only swaps in a sister tool when the axis is named (syntax-heidenhain §5.1). Every
+   * other profile's `tool` pattern has no `axis` group, so this is always false there and
+   * the rule below never runs.
+   */
+  axisAware: boolean;
 }
 
 const SPECS = new WeakMap<CompiledProfile, OutlineSpec>();
@@ -107,7 +131,9 @@ function buildSpec(cp: CompiledProfile): OutlineSpec {
     dropLeadingZeros: toolList?.dropLeadingZeros === true,
     collapseOffsetDigits: toolList?.collapseOffsetDigits === true,
     comments,
-    needsMask: comments.length > 0,
+    // A program name is masked too (`syntax.programNames`), comments or not.
+    needsMask: comments.length > 0 || typeof cp.profile.syntax?.programNames === 'string',
+    axisAware: cp.re.tool.source.includes('(?<axis>'),
   };
 }
 
@@ -172,12 +198,67 @@ function stripMarkers(text: string, spec: OutlineSpec): string {
  *
  * The match is preferred over the `name` group, because `O1001` and `LBL 1` read better
  * in the map than the bare `1001` and `1` the group carries.
+ *
+ * `end`, `label` and the other non-`comment`/`section` rules run over the *masked* line
+ * (§7.4), so a comment sitting inside their match — `NEND (UNLOAD) M02` — comes back as a
+ * run of blanks where `maskComments` erased it. `masked` is only passed when it differs
+ * from `line`, and then the `text` group's span is read off the real line instead: the
+ * group's value is always a contiguous slice of `match[0]` (a capture can be nothing
+ * else), so its offset inside `match[0]` is also its offset inside `line`.
  */
-function displayText(match: RegExpExecArray, line: string): string {
+function displayText(match: RegExpExecArray, line: string, masked?: string): string {
   const named = match.groups?.text;
-  if (typeof named === 'string' && named.trim() !== '') return named.trim();
+  if (typeof named === 'string' && named.trim() !== '') {
+    if (masked !== undefined && masked !== line) {
+      const offset = match[0].indexOf(named);
+      if (offset >= 0) {
+        const start = match.index + offset;
+        const unmasked = line.slice(start, start + named.length).trim();
+        if (unmasked !== '') return unmasked;
+      }
+    }
+    return named.trim();
+  }
   const whole = match[0].trim();
   return whole !== '' ? whole : line.trim();
+}
+
+/** An outline rule with the `d` flag, built on first use, so a match has its offsets. */
+const WITH_INDICES = new WeakMap<RegExp, RegExp>();
+
+function withIndices(re: RegExp): RegExp {
+  let found = WITH_INDICES.get(re);
+  if (!found) {
+    found = new RegExp(re.source, `${re.flags.replace(/[gyd]/g, '')}d`);
+    WITH_INDICES.set(re, found);
+  }
+  return found;
+}
+
+/**
+ * What a program or call rule shows, with the program names in it as they are written.
+ *
+ * The rule has to match the masked line, or a `T12` or an `M98 P1` inside a comment or a
+ * program name would count; but on the masked line a name is `<_____>` (`mask.ts`), and
+ * the map has to show `<SHAFT_T12>` and `M98 <SUB_1> L2`. So the text is the masked text
+ * of the match with every character the mask did not blank taken from the real line: a
+ * name comes back, and a comment the match ran over stays the blanks it always showed.
+ * A line whose mask changed nothing reads the same either way and skips the second match.
+ */
+function displayTextAsWritten(re: RegExp, masked: string, line: string): string | null {
+  if (masked === line) return null;
+  const match = withIndices(re).exec(masked);
+  if (match === null) return null;
+  const unmasked = (span: [number, number] | undefined): string => {
+    if (!span) return '';
+    let out = '';
+    for (let i = span[0]; i < span[1]; i++) out += masked.charCodeAt(i) === 0x20 ? ' ' : line[i];
+    return out.trim();
+  };
+  const named = unmasked(match.indices?.groups?.text);
+  if (named !== '') return named;
+  const whole = unmasked(match.indices?.[0]);
+  return whole !== '' ? whole : null;
 }
 
 /**
@@ -196,20 +277,28 @@ function classify(line: string, cp: CompiledProfile, spec: OutlineSpec): LineMar
     const match = rule.re.exec(raw ? line : masked);
     if (match === null) continue;
     kind = rule.kind;
-    text = displayText(match, line);
+    const asWritten = kind === 'program' || kind === 'subprogram-call' ? displayTextAsWritten(rule.re, masked, line) : null;
+    text = asWritten ?? displayText(match, line, raw ? undefined : masked);
     break;
   }
 
   // A trigger line that also matches `toolCall.ignore` is not a tool change: a Fanuc lathe
   // writes `T0100` to cancel the offset of station 1, and `G00 X100. Z100. T0100` to
   // retract with it. Counting those would put a tool step on every retract (§7.1).
-  const isTool = cp.re.toolTrigger.test(masked) && !(cp.re.toolIgnore?.test(masked) ?? false);
+  const ignored = cp.re.toolIgnore?.test(masked) ?? false;
+  const isTool = cp.re.toolTrigger.test(masked) && !ignored;
   let tool: string | null = null;
+  let axis = false;
   if (isTool || spec.toolFromLast) {
     const match = cp.re.tool.exec(masked);
     if (match !== null) {
       const group = match.groups?.tool;
-      tool = (typeof group === 'string' && group !== '' ? group : match[0]).trim();
+      // A group that took no part in the match is a group the pattern made optional
+      // (Klartext's tool number, so an axis or an `S` alone can still be read): no
+      // fallback to the whole match, which would turn "no tool" into a garbage one.
+      tool = typeof group === 'string' && group !== '' ? group.trim() : null;
+      const axisGroup = match.groups?.axis;
+      axis = typeof axisGroup === 'string' && axisGroup !== '';
     }
   }
 
@@ -227,7 +316,18 @@ function classify(line: string, cp: CompiledProfile, spec: OutlineSpec): LineMar
   // A tool change with neither a tool number nor a comment still needs a label, so the
   // line itself is kept as the last fallback (`M6` on its own after no `T` at all).
   if (isTool && kind === null && text === '') text = line.trim();
-  return { kind, text, isTool, tool, description };
+  return { kind, text, isTool, tool, axis, unload: tool !== null && ignored, description };
+}
+
+/**
+ * A speed-only `TOOL CALL` on an axis-aware profile: no tool argument at all, or the same
+ * tool as `previousTool` with no axis named (syntax-heidenhain §5.1). Always false off an
+ * axis-aware profile, so no other dialect's `M6` or bare `T` is ever downgraded by it.
+ */
+function isSpeedOnlyCall(mark: LineMark, previousTool: string | null, spec: OutlineSpec): boolean {
+  if (!spec.axisAware) return false;
+  if (mark.tool === null) return true;
+  return !mark.axis && previousTool !== null && sameTool(mark.tool, previousTool, spec);
 }
 
 /** True for a tool written as a name in quotation marks (`T="ROUGH_80"`, `T="007"`). */
@@ -278,6 +378,18 @@ function toolNumberOf(tool: string, spec: OutlineSpec): string | null {
   if (quoted(tool)) return null;
   const value = bareTool(tool, spec);
   return /^\d+$/.test(value) ? value.replace(LEADING_ZEROS, '') : null;
+}
+
+/**
+ * Whether `a` and `b` name the same station — the same test the tool list keys a row by,
+ * so a Klartext `TOOL CALL` matches "the tool already in the spindle" exactly when it
+ * would land in the same row: numerically for a number, literally for a name or `QS`.
+ */
+function sameTool(a: string, b: string, spec: OutlineSpec): boolean {
+  const an = toolNumberOf(a, spec);
+  const bn = toolNumberOf(b, spec);
+  if (an !== null || bn !== null) return an === bn;
+  return bareTool(a, spec) === bareTool(b, spec);
 }
 
 /**
@@ -465,6 +577,8 @@ export class OutlineIndex {
     let section: OutlineItem | null = null;
     /** The last `T` word seen, for `toolFrom: 'same-line-or-last'`. */
     let lastTool: string | null = null;
+    /** That `T` word unloads the spindle (`T0`, `LineMark.unload`). */
+    let lastUnload = false;
     /** Tool number → text of the header tool list, filled as the walk passes it. */
     const fromList = new Map<string, string>();
 
@@ -483,7 +597,13 @@ export class OutlineIndex {
       if (mark === null) continue;
       const line = i + 1;
 
-      if (mark.tool !== null) lastTool = mark.tool;
+      // The tool in the spindle before this line, for `isSpeedOnlyCall` — a Klartext
+      // `TOOL CALL` that repeats it without an axis is a speed change, not a new call.
+      const previousTool = lastTool;
+      if (mark.tool !== null) {
+        lastTool = mark.tool;
+        lastUnload = mark.unload;
+      }
 
       // A comment line of the header tool list (`(T5  D12 FLAT END MILL)`). The first
       // one per number wins, and it is registered before the tool change that uses it,
@@ -493,7 +613,10 @@ export class OutlineIndex {
         if (listed !== null && !fromList.has(listed.number)) fromList.set(listed.number, listed.text);
       }
 
-      if (mark.isTool) {
+      // `T0` preselected, then `M6` alone: the tool change loads the pending `T0`, so it
+      // unloads the spindle and is no tool change, as `M6 T0` on one line is not.
+      const unloads = mark.tool === null && this.spec.toolFromLast && lastUnload;
+      if (mark.isTool && !unloads && !isSpeedOnlyCall(mark, previousTool, this.spec)) {
         closeSegment(line);
         const tool = mark.tool ?? (this.spec.toolFromLast ? lastTool : null);
         const label = tool === null ? '' : toolLabel(tool, this.spec);

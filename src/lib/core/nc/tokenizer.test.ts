@@ -770,6 +770,103 @@ describe('system variables and file headers', () => {
   });
 });
 
+describe('a program name in place of a program number (`programNames`)', () => {
+  const shape = (line: string, cp: CompiledProfile = fanuc): string[][] =>
+    code(tokenizeLine(line, cp).tokens).map((token) => [token.kind, token.text]);
+  /** The Fanuc profile as it was before the field: the regression gate of this block. */
+  const without = compileProfile({
+    ...(fanucJson as unknown as Profile),
+    syntax: { ...(fanucJson as unknown as Profile).syntax, programNames: undefined },
+  });
+
+  // Letter by letter, the name was a row of address words: scale feed rewrote the `F12`
+  // of `<SHAFT_F12>` into another program's name, and on the lathe the `T12` of a name
+  // was a tool change.
+  it('reads the name as one program marker, never as address words', () => {
+    expect(shape('<SHAFT_F12>')).toEqual([['programMarker', '<SHAFT_F12>']]);
+    expect(shape('<SHAFT_F12>', without).map(([kind]) => kind)).toContain('word');
+    expect(shape('<PART_T12-A> (OD PIN)', lathe)).toEqual([
+      ['programMarker', '<PART_T12-A>'],
+      ['comment', '(OD PIN)'],
+    ]);
+  });
+
+  it('carries no address and no value, like a file header', () => {
+    const [token] = code(tokenizeLine('<SHAFT_F12>', fanuc).tokens);
+    expect(token.address).toBeUndefined();
+    expect(token.valueText).toBeUndefined();
+    expect(token.value).toBeUndefined();
+  });
+
+  // 30i manual: the name follows the call word directly (`M98`, `G65`, `G66`, `G66.1`,
+  // `M96`, `G72.1`, `G72.2`); packed words may leave the blank out.
+  it('reads the name behind a call word, packed or not', () => {
+    expect(shape('M98 <POCKET_F12> L2')).toEqual([
+      ['word', 'M98'],
+      ['programMarker', '<POCKET_F12>'],
+      ['word', 'L2'],
+    ]);
+    expect(shape('N10T0101M98<SUB1>', lathe)).toEqual([
+      ['blockNumber', 'N10'],
+      ['word', 'T0101'],
+      ['word', 'M98'],
+      ['programMarker', '<SUB1>'],
+    ]);
+    expect(shape('G72.1<CONTOUR.2>L3X0Y0R90.').slice(0, 3)).toEqual([
+      ['word', 'G72.1'],
+      ['programMarker', '<CONTOUR.2>'],
+      ['word', 'L3'],
+    ]);
+  });
+
+  it('takes the characters the manual allows, in either case', () => {
+    expect(shape('<part-2.nc>')).toEqual([['programMarker', '<part-2.nc>']]);
+    expect(shape('<A+B_C-D.E>')).toEqual([['programMarker', '<A+B_C-D.E>']]);
+    expect(shape('<1234>')).toEqual([['programMarker', '<1234>']]);
+  });
+
+  // The control allows 32 characters; a longer one it refuses. Reading the letters of the
+  // longer one as words would still hand a script an `F` it could scale, so the token does
+  // not stop at 32 — refusing the name is the program check's job, not the tokenizer's.
+  it('reads a name longer than the control allows as one token as well', () => {
+    const long = `<${'SHAFT_F12_'.repeat(4)}>`;
+    expect(shape(long)).toEqual([['programMarker', long]]);
+  });
+
+  it('is no name with a blank or without its closing bracket, and never inside a comment', () => {
+    expect(shape('<A B>').map(([kind]) => kind)).not.toContain('programMarker');
+    expect(shape('<SHAFT F12').map(([kind]) => kind)).not.toContain('programMarker');
+    expect(shape('<>')).toEqual([
+      ['operator', '<'],
+      ['operator', '>'],
+    ]);
+    expect(shape('G1 X10. (<SUB_T1>)')).toEqual([
+      ['word', 'G1'],
+      ['word', 'X10.'],
+      ['comment', '(<SUB_T1>)'],
+    ]);
+  });
+
+  // The field is opt-in like the M8 ones: a dialect that writes `<` as a comparison keeps it.
+  it('is off unless the profile declares it', () => {
+    expect(sinumerik.profile.syntax.programNames).toBeUndefined();
+    expect(shape('IF R1<R2 GOTOF END_A', sinumerik).map(([kind]) => kind)).not.toContain('programMarker');
+  });
+
+  it('stays linear on a long line of names that never close', () => {
+    const lengths = [4000, 8000, 16000, 32000];
+    const ms: number[] = [];
+    for (const length of lengths) {
+      const line = '<SHAFT'.repeat(Math.floor(length / 6));
+      const started = performance.now();
+      const { tokens } = tokenizeLine(line, fanuc);
+      ms.push(performance.now() - started);
+      expect(tokens[tokens.length - 1].end).toBe(line.length);
+    }
+    expect(Math.max(...ms), lengths.map((n, i) => `${n}: ${ms[i].toFixed(1)} ms`).join(', ')).toBeLessThan(250);
+  });
+});
+
 describe('the new fields are opt-in', () => {
   it.each([
     ['fanuc-gcode', fanuc],

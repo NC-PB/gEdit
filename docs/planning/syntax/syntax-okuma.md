@@ -274,7 +274,7 @@ A `$` at the start of any line after line 1 is the continuation of the block abo
 | `G73` | Longitudinal grooving cycle | cycle | |
 | `G74` | Face grooving / axial peck drilling | cycle | See §6 |
 | `G77` / `G78` | Tapping cycle, right-hand / left-hand | cycle | |
-| `G80`–`G88` | LAP: shape definition and roughing/finishing calls | — | **Not drilling cycles as on Fanuc.** Optional. See §6.4. |
+| `G80`–`G88` | LAP: shape definition and roughing/finishing calls | — | **Not drilling cycles as on Fanuc.** Optional. See §6.4. `G84` (a LAP change of cutting conditions here, §6.4) and `G88` (continuous threading here) are also the machining centres' tapping cycle on this control family, so gEdit marks them `CodeEntry.tappingElsewhere` — `scale_speed` leaves the speed of such a block as written, like its feed, because it cannot tell which kind of machine the program is really for (`dec/scaling`, owner decision 1, 2026-09-27). |
 | `G92` | Not assigned on this control | — | The code table leaves it empty. It is the single-pass thread cycle of a Fanuc lathe in G-code system A, so the database marks it as a code whose `F` may be a lead: a Fanuc program opened as Okuma keeps its thread leads. |
 | `G180`–`G189` | Live-tool cycles: `G180` cancel; `G181` drill; `G182` bore; `G183` deep-hole drill; `G184` tap; `G185`–`G188` threading; `G189` ream | cycle, active until `G180` | See §6.3. The manual's cycle list (Section 7 §8) settles it for `G181`–`G184`, `G189`, `G178` and `G179`: they repeat at every following position until `G180` (the second hole's block only writes what changes). `G185`–`G188` run once; the database keeps them in force until `G180` all the same, so a lead in a following block is never scaled. |
 | `G107` / `G108` | Synchronized tapping with the main spindle, right / left hand | cycle | Optional: `G107 X Z K F D` — X, Z the target, K the distance from the cycle start to the cutting start, **F the pitch** (under `G94` the pitch is F÷S; always one thread), D the spindle angle at the cutting start. Whether it stays active over several blocks is **(verify)**. |
@@ -381,7 +381,7 @@ Examples (own):
 - `T010101`: nose radius set 1, tool 1, offset 1.
 - `T020305`: nose radius set 2, tool 3, offset 5.
 
-The manual gives the 6-digit order as "nose radius number, tool number, offset number", and the P300 manual confirms it. **Which form a machine uses is its equipment:** 4 digits where nose-radius compensation is not fitted, 6 where it is. Offset sets hold 32, 64 or 96 entries, or 200, 500 or 999 on some machines, and with those the offset part has **three** digits: the plain form becomes station + 3 digits (`T2000` is station 2), and a 3-digit form `T100` (station 1) exists too. The profile's rule reads 4 and 6 digits only, so `T2000` is tool 20 today. Multi-tasking machines write tool words of their own (`TL=`, `TD=`). The owner's turning post writes 6 digits. How many offsets each of his lathes has is a machine fact (a tool-word parameter, like D49 for the Fanuc lathe).
+The manual gives the 6-digit order as "nose radius number, tool number, offset number", and the P300 manual confirms it. **Which form a machine uses is its equipment:** 4 digits where nose-radius compensation is not fitted, 6 where it is. Offset sets hold 32, 64 or 96 entries, or 200, 500 or 999 on some machines, and with those the offset part has **three** digits: the plain form becomes station + 3 digits (`T2000` is station 2), and a 3-digit form `T100` (station 1) exists too. The profile's rule reads 4 and 6 digits only, so `T2000` is tool 20 today. Multi-tasking machines write tool words of their own (`TL=`, `TD=`). The owner's turning post writes 6 digits. How many offsets each of the owner's lathes has is a machine fact (a tool-word parameter, like D49 for the Fanuc lathe).
 
 ### 5.2 Behaviour
 
@@ -545,7 +545,7 @@ The target must be in the same program.
 | Stops | `M00`, `M01` | Stop / optional stop |
 | End | `M02`, `M30`, `RTS`, `END` (schedule) | End |
 
-A line can be two items at once: `NEND M02` is the jump target `NEND` and the end of the program. The program map shows one item per line, the first rule that matches, and a rule in front of the label rule lists such a line as the end, with the name in its text (`NEND M02`), because the end is the item that must not go missing (G10 M8, as for the Sinumerik `LOOP_END: M30`; a map that shows both needs the outline to allow several items per line).
+A line can be two items at once: `NEND M02` is the jump target `NEND` and the end of the program. The program map shows one item per line, the first rule that matches, and a rule in front of the label rule lists such a line as the end, with the name in its text (`NEND M02`), because the end is the item that must not go missing (G10 M8, as for the Sinumerik `LOOP_END: M30`; a map that shows both needs the outline to allow several items per line). A comment on such a line — `NEND (UNLOAD) M02` — now shows its real text rather than blanks: `displayText()` recovers the unmasked characters of the matched `text` group generally, not only for this rule (`dec/tools`, the M8 re-review's finding).
 
 ---
 
@@ -588,7 +588,7 @@ Severity: **E** = likely error, **W** = warning, **I** = info.
 
 1. Do posts write the `$NAME.MIN%` header and a closing `%`? The owner's posts write neither, and no `O` line either (aggregate). Other posts may.
 2. ~~Default unit.~~ The unit system decides (§3.3); all of the owner's programs are 1 mm.
-3. ~~`T` order.~~ Settled (§5.1); how many offsets each of his lathes has is open. Does `T00xx` cancel?
+3. ~~`T` order.~~ Settled (§5.1); how many offsets each of the owner's lathes has is open. Does `T00xx` cancel?
 4. Do current OSP versions (P300L and later) accept `;` comments, `G54`-style offsets, lower case, or packed words?
 5. Is a comment allowed on the same line as the `O` name?
 6. Do posts use alphanumeric sequence names (for example `NT01`) to mark tool sections? If so, use them as map labels.
@@ -706,7 +706,7 @@ A new `okuma.ts` should follow §3.8.
 
 Unlike §11.1–§11.6, this is the state of the M8 profile, not of the code before M3.
 
-- **`$` continuation lines are read as part of their block, not joined.** The profile declares the leading marker (`syntax.continuationStart`, plan §7.16 #27), and the modal interpreter and the three bundled scripts read a line that starts with `$` as part of the block above it (§3.1), so the lead on the `$` line of a `G71` block stays a lead. The tokenizer still reads the line on its own, so a code counts from the line it stands on: a thread code written on a `$` line would not cover an `F` on the block's first line. Renumbering leaves such lines alone only because `$` is in `skipStartingWith`, a list the user can edit in the form; with `$` taken out of it, renumbering numbers the line and cuts it off its block (M8 re-review, [TODO.md](../../../TODO.md)). The profile's marker also requires a blank after the `$`, which the manuals do not: `$H1.8 …` is read as a line of its own, and a lead on it is scaled.
+- **`$` continuation lines are read as part of their block, not joined.** The profile declares the leading marker (`syntax.continuationStart`, plan §7.16 #27), and the modal interpreter and the three bundled scripts read a line that starts with `$` as part of the block above it (§3.1), so the lead on the `$` line of a `G71` block stays a lead. The tokenizer still reads the line on its own, so a code counts from the line it stands on: a thread code written on a `$` line would not cover an `F` on the block's first line. Renumbering leaves such lines alone only because `$` is in `skipStartingWith`, a list the user can edit in the form; with `$` taken out of it, renumbering numbers the line and cuts it off its block (M8 re-review, [TODO.md](../../../TODO.md)). ~~The profile's marker also requires a blank after the `$`, which the manuals do not~~ — **fixed, `dec/int`**: the pattern now tells a continuation line from the `$NAME.MIN%` header by the `%`, not by a blank, so `$H1.8 …` (the manuals' own layout) is read as a continuation and its lead stays a lead.
 - **One program-map item per line.** `NEND M02` is listed as the program end, with the name in its text, not as the label `NEND` (§8).
 - **The `E` feed of a shape block** is neither scaled nor reported by the feed script: an `E` word can also be a dwell or a lead change, and only being inside a LAP shape tells them apart (§6.4). The feeds of a LAP condition change (`FA=`, `FB=`) are reported and left as written.
 - **What a G-code macro's words mean** (§7.1) depends on the machine's setup; the map lists the call and nothing reads its arguments.
