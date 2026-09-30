@@ -1,0 +1,28 @@
+{
+  "profile": "heidenhain-klartext",
+  "ownerReviewed": false,
+  "items": [
+    {"kind":"program","line":1,"text":"BEGIN PGM 2.5D_MILLING MM","endLine":849},
+    {"kind":"section","line":13,"text":"PLANFRASER D63 A90 L10 SD41","endLine":13},
+    {"kind":"tool","line":14,"text":"T1 — PLANFRASER D63 A90 L10 SD41","tool":"1","endLine":233},
+      {"kind":"section","line":17,"text":"PLANEN","endLine":17},
+      {"kind":"section","line":18,"text":"C : 0  ; A : 0","endLine":73},
+      {"kind":"section","line":74,"text":"PLANEN","endLine":232},
+      {"kind":"section","line":233,"text":"UMFANGSFRASER D10 L35 SD10","endLine":233},
+    {"kind":"tool","line":234,"text":"T2 — UMFANGSFRASER D10 L35 SD10","tool":"2","endLine":672},
+      {"kind":"section","line":237,"text":"TASCHENRAUMEN","endLine":237},
+      {"kind":"section","line":238,"text":"C : 0  ; A : 0","endLine":557},
+      {"kind":"section","line":558,"text":"TASCHENRAUMEN","endLine":671},
+      {"kind":"section","line":672,"text":"UMFANGSFRASER D10 L35 SD10","endLine":672},
+    {"kind":"tool","line":673,"text":"T3 — UMFANGSFRASER D10 L35 SD10","tool":"3","endLine":783},
+      {"kind":"section","line":676,"text":"BOHREN DURCH UMFAHREN","endLine":676},
+      {"kind":"section","line":677,"text":"C : 0  ; A : 0","endLine":703},
+      {"kind":"section","line":704,"text":"UMFANGSFRASEN","endLine":750},
+      {"kind":"section","line":751,"text":"UMFANGSFRASEN","endLine":782},
+      {"kind":"section","line":783,"text":"NC-ANBOHRER UBERLANGE D10 SD10","endLine":783},
+    {"kind":"tool","line":784,"text":"T4 — NC-ANBOHRER UBERLANGE D10 SD10","tool":"4","endLine":849},
+      {"kind":"section","line":787,"text":"FRASEN: KANTEN BRECHEN","endLine":787},
+      {"kind":"section","line":788,"text":"C : 0  ; A : 0","endLine":849},
+      {"kind":"end","line":848,"text":"END PGM"}
+  ]
+}

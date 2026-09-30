@@ -247,10 +247,17 @@ describe('what a code does to the modal state', () => {
     expect(entry('G96').sets).toEqual({ speedUnit: 'surface' });
     expect(entry('G97').sets).toEqual({ speedUnit: 'rpm' });
     for (const code of ['G90', 'G91', 'G94', 'G95', 'G96', 'G97']) expect(entry(code).modal, code).toBe(true);
-    // Nothing on this control switches the plane in a way the notes confirm, and nothing
-    // switches diameter programming: X is a diameter throughout (§8.4).
+    // Nothing on this control switches the plane in a way the notes confirm. Diameter
+    // programming is switched off by coordinate conversion (G137) and the Y-axis mode
+    // (G138), where X is a radius, and back on by G136 (source review 2026-09, §4.1).
     expect(codesWith((e) => e.sets?.plane !== undefined)).toEqual([]);
-    expect(codesWith((e) => e.sets?.diameter !== undefined)).toEqual([]);
+    expect(codesWith((e) => e.sets?.diameter !== undefined)).toEqual(['G136', 'G137', 'G138']);
+    expect(entry('G136').sets).toEqual({ diameter: 'on' });
+    for (const code of ['G137', 'G138']) expect(entry(code).sets, code).toEqual({ diameter: 'off' });
+    for (const code of ['G136', 'G137', 'G138']) {
+      expect(entry(code).modal, code).toBe(true);
+      expect(entry(code).group, code).toBe('diametermode');
+    }
   });
 
   it('marks G50 as the spindle clamp, and nothing else', () => {
@@ -313,20 +320,22 @@ describe('the words a script must not scale', () => {
     }
     expect(entry('M98').description).toMatch(/not a subprogram call/);
     expect(entry('M99').description).toMatch(/does not end a subprogram/);
-    // M17 is an optional function the manual only names: shown in completion, not in hover.
-    expect(entry('M17').verify).toBe(true);
+    // M17 is an optional function; the lathe manual of 2020 describes it (source review).
+    expect(entry('M17').verify).toBeUndefined();
     expect(entry('M17').description).toMatch(/does not end a subprogram/);
   });
 
   it('keeps the optional synchronized and arc-thread feeds away from the feed script', () => {
-    // G36/G37 tie the feed to the driven tool, G112/G113 cut a thread along an arc. The
-    // manual only names them, so they stay out of hover, but their F is never scaled.
+    // G36/G37 tie the feed to the driven tool, G112/G113 cut a thread along an arc. Their
+    // F is never scaled. The special-functions manual gives the format of G112/G113, so
+    // they are shown; no manual gives the format of G36/G37, so they stay out of hover.
     for (const code of ['G36', 'G37', 'G112', 'G113']) {
       expect(entry(code).pitchFeed, code).toBe(true);
       expect(entry(code).modal, code).toBe(true);
       expect(entry(code).group, code).toBe('motion');
-      expect(entry(code).verify, code).toBe(true);
     }
+    for (const code of ['G36', 'G37']) expect(entry(code).verify, code).toBe(true);
+    for (const code of ['G112', 'G113']) expect(entry(code).verify, code).toBeUndefined();
   });
 
   it('names the spindle selection of multi-spindle machines without making it a spindle state', () => {
@@ -335,8 +344,11 @@ describe('the words a script must not scale', () => {
     for (const code of ['G140', 'G141', 'G142', 'G143']) {
       expect(entry(code).group, code).toBe('spindle');
       expect(entry(code).modal, code).toBeUndefined();
-      expect(entry(code).verify, code).toBe(true);
     }
+    // The multi-tasking operation manual describes G140/G141; G142/G143 appear only in the
+    // code table of the older lathe manual (source review 2026-09).
+    for (const code of ['G140', 'G141']) expect(entry(code).verify, code).toBeUndefined();
+    for (const code of ['G142', 'G143']) expect(entry(code).verify, code).toBe(true);
   });
 
   it('marks G4 as the one code whose F is a time', () => {
@@ -491,12 +503,12 @@ describe('what is confirmed and what is not', () => {
   it('marks for verification exactly what the notes do not settle', () => {
     // G10 M8: the manual settles the turret selection (its Section 11), droop control
     // (Section 4), LAP (Section 8), the turret the constant cutting speed follows, and the
-    // driven-tool tapping and threading cycles (Section 7 §8). Codes it only names in its
-    // code table stay here: G17-G21, G36/G37, G107/G108, G112/G113, G140-G143, M17.
-    expect(codesWith((e) => e.verify === true)).toEqual([
-      'END', 'G17', 'G18', 'G19', 'G20', 'G21', 'G36', 'G37', 'G107', 'G108', 'G112', 'G113',
-      ...range(140, 143), 'G190', 'G191', 'GET', 'M17', 'PSELECT', 'PUT', 'READ', 'WRITE',
-    ]);
+    // driven-tool tapping and threading cycles (Section 7 §8). The source review (2026-09)
+    // read the 2020 lathe manual and two option manuals, which settle G17-G21, G112/G113,
+    // G140/G141, G190/G191, M17 and the schedule and serial-line statements. Left: the
+    // format of G36/G37, the modality of G107/G108, and G142/G143, which only the older
+    // code table names.
+    expect(codesWith((e) => e.verify === true)).toEqual(['G36', 'G37', 'G107', 'G108', 'G142', 'G143']);
   });
 
   it('keeps the turning core in hover', () => {

@@ -350,10 +350,11 @@ describe('completionItems', () => {
   });
 
   it('says when an entry is not verified yet', () => {
-    const [item] = completionItems([entry('G87', fanuc)], { t });
+    // WHILE carries `verify: true` (G87 did until the source review of 2026-09).
+    const [item] = completionItems([entry('WHILE', fanuc)], { t });
     expect(item.documentation).toContain('Not verified yet');
     // It is still offered: completion may guess, hover may not.
-    expect(item.label).toBe('G87');
+    expect(item.label).toBe('WHILE');
   });
 
   it('marks a word-shaped code as a keyword', () => {

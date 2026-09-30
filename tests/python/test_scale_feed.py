@@ -402,6 +402,44 @@ class TestRules(unittest.TestCase):
             self.assertIn("thread lead", finding["message"])
         self.assertIn("threading cycle somewhere else", result.json()["message"])
 
+    def test_the_tapping_and_threading_codes_of_the_source_review_keep_their_lead(self):
+        # The source review (2026-09) ran scale feed on codes the databases did not know:
+        # the variable-lead thread G34 (mill and lathe) and the older-format rigid tap G84.2
+        # (lathe) had their lead scaled with nothing said. Their entries now carry
+        # `pitchFeed`, so the F stays as written and is reported.
+        for profile_id, program in (
+            ("fanuc-gcode", "N10 G34 Z-30. F2.0 K0.1\n"),
+            ("fanuc-lathe", "N10 G34 Z-30. F2.0 K0.1\n"),
+            ("fanuc-lathe", "N10 G97 S300 M3\nN20 G84.2 Z-20. F1.5\nN30 G80\n"),
+        ):
+            with self.subTest(profile=profile_id, program=program):
+                profile = helpers.load_profile(profile_id)
+                context = helpers.make_context(
+                    params={"percent": 80}, profile=profile, codes=helpers.load_codes(profile)
+                )
+                result = helpers.run_script(SCRIPT, stdin=program, context=context)
+                self.assertTrue(result.ok, result.stderr)
+                self.assertEqual(result.json()["text"], program)
+                findings = result.json()["findings"]
+                self.assertTrue(findings, "the kept lead is reported")
+                self.assertTrue(all(finding["severity"] == "warning" for finding in findings), findings)
+
+    def test_a_klartext_feed_per_revolution_is_not_raised_to_a_feed_limit(self):
+        # The source review (2026-09): after M136 a plain F is millimetres per revolution.
+        # Read as a feed per minute, a "smallest feed" of 50 turned F0.2 into F50.0, which
+        # is 50 mm per revolution. M136 now sets the feed unit, and a feed per revolution is
+        # left alone on this milling dialect unless the user asks for it.
+        profile = helpers.load_profile("heidenhain-klartext")
+        context = helpers.make_context(
+            params={"percent": 110, "minFeed": 50}, profile=profile, codes=helpers.load_codes(profile)
+        )
+        program = "0 BEGIN PGM T MM\n1 TOOL CALL 5 Z S800\n2 M136\n3 L X+10 F0.2\n4 M137\n5 L X+20 F200\n6 END PGM T MM\n"
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        lines = result.json()["text"].split("\n")
+        self.assertEqual(lines[3], "3 L X+10 F0.2")
+        self.assertEqual(lines[5], "5 L X+20 F220")
+
     def test_the_ambiguous_code_is_recognised_however_the_block_is_written(self):
         """The refusal has to survive the ways a post actually writes a code.
 

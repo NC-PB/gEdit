@@ -221,34 +221,30 @@
     {
       "code": "G17",
       "group": "plane",
-      "label": "Compensation plane XY, for driven-tool milling",
-      "verify": true
+      "label": "Compensation plane XY, for driven-tool milling on the face"
     },
     {
       "code": "G18",
+      "description": "In force at power-on and after a reset, and selected again by M109.",
       "group": "plane",
-      "label": "Compensation plane ZX, for driven-tool milling",
-      "verify": true
+      "label": "Compensation plane ZX, the turning plane"
     },
     {
       "code": "G19",
       "group": "plane",
-      "label": "Compensation plane YZ, for driven-tool milling",
-      "verify": true
+      "label": "Compensation plane YZ, for driven-tool milling on the side"
     },
     {
       "code": "G20",
       "description": "Moves to the home position. It is not the inch switch it is on other controls.",
       "group": "nonmodal",
-      "label": "Home position return",
-      "verify": true
+      "label": "Home position return"
     },
     {
       "code": "G21",
       "description": "Moves to the home position for a tool change. It is not the metric switch it is on other controls.",
       "group": "nonmodal",
-      "label": "Tool-change home position return",
-      "verify": true
+      "label": "Tool-change home position return"
     },
     {
       "code": "G31",
@@ -1205,34 +1201,61 @@
     },
     {
       "code": "G112",
-      "description": "Cuts a thread along a clockwise arc, for example in the shape of a LAP thread. F is the lead, never a feed rate.",
+      "description": "Cuts a thread along a clockwise arc, for example in the shape of a LAP thread. The arc is given by a centre in I and K or a radius in L. F is the lead, never a feed rate, and E changes it per thread.",
       "group": "motion",
       "label": "Thread along an arc, clockwise",
       "modal": true,
-      "pitchFeed": true,
-      "verify": true
+      "pitchFeed": true
     },
     {
       "code": "G113",
-      "description": "Cuts a thread along a counter-clockwise arc, for example in the shape of a LAP thread. F is the lead, never a feed rate.",
+      "description": "Cuts a thread along a counter-clockwise arc, for example in the shape of a LAP thread. The arc is given by a centre in I and K or a radius in L. F is the lead, never a feed rate, and E changes it per thread.",
       "group": "motion",
       "label": "Thread along an arc, counter-clockwise",
       "modal": true,
-      "pitchFeed": true,
-      "verify": true
+      "pitchFeed": true
+    },
+    {
+      "code": "G136",
+      "description": "Ends G137 and G138: X is a diameter again. It stands in a block of its own.",
+      "group": "diametermode",
+      "label": "Coordinate conversion and Y-axis mode off",
+      "modal": true,
+      "sets": {
+        "diameter": "on"
+      }
+    },
+    {
+      "code": "G137",
+      "description": "Machines the face in Cartesian X and Y instead of X and C: the C of the block gives the direction of the new X axis, and from here on X and Y are radius values until G136.",
+      "group": "diametermode",
+      "label": "Coordinate conversion on",
+      "modal": true,
+      "sets": {
+        "diameter": "off"
+      }
+    },
+    {
+      "code": "G138",
+      "description": "X, Y and Z are programmed as a Cartesian system, X as a radius, until G136. The mode survives a reset, so a post writes G136 or G138 before the first move of a tool.",
+      "group": "diametermode",
+      "label": "Y-axis mode on",
+      "modal": true,
+      "sets": {
+        "diameter": "off"
+      }
     },
     {
       "code": "G140",
+      "description": "The blocks that follow machine a part held in the main spindle, in its program coordinate system and with its zero offset. It stands at the start of a program, or right after G13 or G14.",
       "group": "spindle",
-      "label": "Machining with the main spindle",
-      "verify": true
+      "label": "Machining with the main spindle"
     },
     {
       "code": "G141",
-      "description": "The blocks that follow machine a part held in the sub spindle, so a spindle speed there may not be the main spindle's.",
+      "description": "The blocks that follow machine a part held in the sub spindle, in its own program coordinate system and with its own zero offset, whose Z runs the other way. Speeds and M codes are written as for the main spindle, so a plain S there may not be the main spindle's.",
       "group": "spindle",
-      "label": "Machining with the sub spindle",
-      "verify": true
+      "label": "Machining with the sub spindle"
     },
     {
       "code": "G142",
@@ -1605,22 +1628,20 @@
     {
       "code": "G190",
       "group": "cycle",
-      "label": "Driven-tool keyway cutting",
+      "label": "Driven-tool keyway cutting on the face",
       "modal": true,
       "sets": {
         "cycle": "start"
-      },
-      "verify": true
+      }
     },
     {
       "code": "G191",
       "group": "cycle",
-      "label": "Driven-tool keyway cutting along Z",
+      "label": "Driven-tool keyway cutting on the side",
       "modal": true,
       "sets": {
         "cycle": "start"
-      },
-      "verify": true
+      }
     },
     {
       "code": "M0",
@@ -1712,8 +1733,7 @@
     {
       "code": "M17",
       "description": "Hands the result of a gauge that measures after machining on over the serial line. It does not end a subprogram as on some other controls.",
-      "label": "Send the gauging data",
-      "verify": true
+      "label": "Send the gauging data"
     },
     {
       "code": "M19",
@@ -1931,39 +1951,37 @@
     {
       "code": "END",
       "group": "program",
-      "label": "End of a schedule program",
-      "verify": true
+      "label": "End of a schedule program"
     },
     {
       "code": "PSELECT",
       "description": "Names the program a schedule program runs next.",
       "group": "program",
-      "label": "Select a program",
-      "verify": true
+      "label": "Select a program"
     },
     {
       "code": "GET",
+      "description": "Takes characters from the buffer that READ filled and puts them into a variable.",
       "group": "program",
-      "label": "Take a machine resource",
-      "verify": true
+      "label": "Read characters into a variable"
     },
     {
       "code": "PUT",
+      "description": "Puts a variable, a quoted text or a hexadecimal value into the buffer that WRITE sends.",
       "group": "program",
-      "label": "Give a machine resource back",
-      "verify": true
+      "label": "Write a value into the output buffer"
     },
     {
       "code": "READ",
+      "description": "Reads one line from a device on a serial channel into the buffer GET takes from.",
       "group": "program",
-      "label": "Read data into a variable",
-      "verify": true
+      "label": "Read data into a variable"
     },
     {
       "code": "WRITE",
+      "description": "Sends the buffer that PUT filled to a device on a serial channel.",
       "group": "program",
-      "label": "Write data out of a variable",
-      "verify": true
+      "label": "Write data out of a variable"
     },
     {
       "code": "EQ",

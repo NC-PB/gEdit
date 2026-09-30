@@ -57,6 +57,7 @@ These are design notes. The manual for the program as it stands is [docs/user](.
 | [roadmap.md](roadmap.md) | Phases 0 to 3, backlog and not-planned list |
 | [phase-1-implementation.md](phase-1-implementation.md) | The executed plan for Phase 0 cleanup and Phase 1: architecture, milestones M0–M5, the binding contracts (§7) and where the implementation deviated from them (§7.12), owner decisions, deferred items (§10) |
 | [phase-2-implementation.md](phase-2-implementation.md) | The plan being executed now: the scope decision per roadmap row (§2), milestones M6–M12 (§6), the contracts they add (§7), with the test ids (§7.12) and where the implementation deviated (§7.16), the dialect and machine-parameter data they ship (§8), fixtures (§9), the owner decisions behind them (§10) and what was deferred or cut (§11) |
+| [source-review-2026-09.md](source-review-2026-09.md) | What the control manuals, the builders' handbooks and the owner's example programs showed after M8: what gEdit missed, the corrections made, and roadmap proposals for the owner to decide |
 | [syntax/syntax-fanuc.md](syntax/syntax-fanuc.md) | Fanuc syntax notes for the CAM-output subset |
 | [syntax/syntax-heidenhain.md](syntax/syntax-heidenhain.md) | Heidenhain Klartext syntax notes |
 | [syntax/syntax-sinumerik.md](syntax/syntax-sinumerik.md) | Siemens Sinumerik syntax notes |

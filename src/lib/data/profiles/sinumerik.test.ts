@@ -295,8 +295,13 @@ describe('a Sinumerik program is recognised as one', () => {
     // comment, which a Klartext fragment without block numbers writes too (§8.5). Every
     // other rule is a marker and must not fire outside this dialect.
     const own = FIXTURES.flatMap((rel) => sniffLines(readFixture(rel)));
+    // The owner's own Sinumerik programs (`nc/owner-public/sinumerik/`) are this dialect
+    // too, not a negative line.
     const foreign = listFixtures('nc')
-      .filter((rel) => !rel.startsWith('nc/sinumerik/') && openFixture(rel).refused === null)
+      .filter(
+        (rel) =>
+          !rel.startsWith('nc/sinumerik/') && !rel.startsWith('nc/owner-public/sinumerik/') && openFixture(rel).refused === null,
+      )
       .flatMap((rel) => sniffLines(readFixture(rel)));
     const neutral = new Set([
       '^(?![^;]*(?<![A-Z_$])Y)N\\d+',

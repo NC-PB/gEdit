@@ -462,10 +462,9 @@
     {
       "code": "CYCL CALL POS",
       "group": "cycle",
-      "verify": true,
       "sets": { "cycle": "cancel" },
       "label": "Cycle call at a position",
-      "description": "Moves to the position written in the block and runs the cycle that was defined last there."
+      "description": "Moves to the position written in the block and runs the cycle that was defined last there. The block names all three axes, and its positions are absolute."
     },
     {
       "code": "CYCL DEF 200",
@@ -735,7 +734,6 @@
         {
           "address": "Q208",
           "label": "Retract feed",
-          "required": true,
           "min": 0
         },
         {
@@ -927,29 +925,27 @@
     },
     {
       "code": "PLANE SPATIAL",
-      "group": "plane",
-      "verify": true,
+      "group": "tilt",
       "label": "Tilt the working plane by spatial angles",
       "description": "Turns the working plane by three angles around the machine axes. All three are written even when one is zero, and a following word says whether the machine swivels with a compensating move, turns the rotary axes only, or stays put."
     },
     {
       "code": "PLANE RESET",
-      "group": "plane",
-      "verify": true,
+      "group": "tilt",
       "label": "Reset the tilted working plane",
       "description": "Switches the tilted plane off again. Use it rather than writing zero angles."
     },
     {
       "code": "FUNCTION TCPM",
       "group": "tcpm",
-      "verify": true,
+      "modal": true,
       "label": "Tool centre point management on",
-      "description": "Keeps the tool tip on the programmed path while the rotary axes move, and says how the feed and the rotary positions are read."
+      "description": "Keeps the tool tip on the programmed path while the rotary axes move, and says how the feed and the rotary positions are read. Switch it off before a tool call or a machine-coordinate block."
     },
     {
       "code": "FUNCTION RESET TCPM",
       "group": "tcpm",
-      "verify": true,
+      "modal": true,
       "label": "Tool centre point management off",
       "description": "Switches tool centre point management off again."
     },
@@ -1054,7 +1050,7 @@
       "code": "M92",
       "group": "program",
       "label": "Builder reference point for this block",
-      "description": "The positions in this block are read from a reference point that the machine builder set. It counts for this block only."
+      "description": "The positions in this block are read from a reference point that the machine builder set, and the tool length is not applied. It counts for this block only."
     },
     {
       "code": "M94",
@@ -1122,6 +1118,22 @@
       "modal": true,
       "label": "Keep the tool tip on the path off",
       "description": "Takes back M128 at the end of the block."
+    },
+    {
+      "code": "M136",
+      "group": "feedmode",
+      "modal": true,
+      "sets": { "feedUnit": "per-rev" },
+      "label": "Feed per spindle revolution",
+      "description": "From this block on, F is read in millimetres per spindle revolution. M137 switches back."
+    },
+    {
+      "code": "M137",
+      "group": "feedmode",
+      "modal": true,
+      "sets": { "feedUnit": "per-minute" },
+      "label": "Feed per spindle revolution off",
+      "description": "Takes back M136: F is read as a distance per minute again."
     },
     {
       "code": "M140",

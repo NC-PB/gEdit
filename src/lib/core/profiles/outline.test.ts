@@ -13,6 +13,8 @@
 // fixture, so the Python side (§7.10) and a future profile can be checked against the
 // same tables. Regenerate them with `npx vitest run outline -u`.
 
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { BUILTIN_PROFILE_JSON } from '$lib/data/profiles';
 import { editorText, listFixtures, openFixture } from '../../../../tests/unit/helpers/fixtures';
@@ -61,8 +63,14 @@ function outlineOf(rel: string): { profileId: string; text: string; items: Outli
   return { profileId, text, items: index(text, compiled(profileId)).items() };
 }
 
-/** JSON with one row per line, so a golden diff stays readable. */
-function format(profileId: string, items: OutlineItem[]): string {
+/** The owner's real programs (plan §9.2): their goldens stay unreviewed until he reads them. */
+const OWNER_PUBLIC = 'nc/owner-public/';
+
+/**
+ * JSON with one row per line, so a golden diff stays readable. A golden of one of the
+ * owner's programs carries `"ownerReviewed": false` (plan §9.2, owner-public intake step 2).
+ */
+function format(profileId: string, items: OutlineItem[], rel = ''): string {
   const rows: string[] = [];
   for (const item of items) {
     const { children, ...own } = item;
@@ -70,8 +78,24 @@ function format(profileId: string, items: OutlineItem[]): string {
     for (const child of children ?? []) rows.push(`      ${JSON.stringify(child)}`);
   }
   const list = rows.length > 0 ? `[\n${rows.join(',\n')}\n  ]` : '[]';
-  return `{\n  "profile": ${JSON.stringify(profileId)},\n  "items": ${list}\n}\n`;
+  const reviewed = rel.startsWith(OWNER_PUBLIC) ? '  "ownerReviewed": false,\n' : '';
+  return `{\n  "profile": ${JSON.stringify(profileId)},\n${reviewed}  "items": ${list}\n}\n`;
 }
+
+/**
+ * The owner's programs whose map gEdit gets wrong today, with the map they need
+ * (`expected/outline/owner-public/_known-gaps.json`). They get no golden — a golden would
+ * record the wrong map as the right one — and run as expected failures instead.
+ */
+interface OutlineGap {
+  why: string;
+  profile: string;
+  tools: [number, string][];
+}
+const GAPS_FILE = fileURLToPath(new URL(`${GOLDENS}owner-public/_known-gaps.json`, import.meta.url));
+const GAPS: Record<string, OutlineGap> = existsSync(GAPS_FILE)
+  ? (JSON.parse(readFileSync(GAPS_FILE, 'utf8')) as { gaps: Record<string, OutlineGap> }).gaps
+  : {};
 
 /** 1-based number of the first line that reads exactly `content` (trimmed). */
 function lineOf(text: string, content: string): number {
@@ -95,14 +119,31 @@ const openable = listFixtures('nc').filter((rel) => openFixture(rel).refused ===
 
 describe('outline goldens', () => {
   for (const rel of openable) {
+    const gap = GAPS[rel];
+    if (gap) {
+      // Fails today on purpose; see GAPS. When it passes, replace the entry by a golden.
+      it.fails(`${rel} (known gap, see _known-gaps.json)`, () => {
+        const { profileId, items } = outlineOf(rel);
+        const tools = items
+          .flatMap((item) => [item, ...(item.children ?? [])])
+          .filter((item) => item.kind === 'tool')
+          .map((item) => [item.line, item.tool]);
+        expect({ profileId, tools }).toEqual({ profileId: gap.profile, tools: gap.tools });
+      });
+      continue;
+    }
     it(rel, async () => {
       const { profileId, items } = outlineOf(rel);
-      await expect(format(profileId, items)).toMatchFileSnapshot(`${GOLDENS}${rel.replace(/^nc\//, '')}.json`);
+      await expect(format(profileId, items, rel)).toMatchFileSnapshot(`${GOLDENS}${rel.replace(/^nc\//, '')}.json`);
     });
   }
 
   it('covers every fixture that opens', () => {
     expect(openable.length).toBeGreaterThanOrEqual(20);
+  });
+
+  it('lists a known gap only for a fixture that opens', () => {
+    expect(Object.keys(GAPS).filter((rel) => !openable.includes(rel))).toEqual([]);
   });
 });
 

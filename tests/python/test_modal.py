@@ -651,6 +651,26 @@ class TestTurningDialects(ModalTestCase):
         self.assertEqual([state["block"]["pitchFeed"] for state in states], [False, True, True, False])
         self.assertEqual([state["block"]["cycle"] for state in states], [None, "G71", "G71", None])
 
+    def test_the_shipped_okuma_database_switches_x_to_a_radius_in_y_axis_mode(self) -> None:
+        # The source review (2026-09): coordinate conversion (G137) and the Y-axis mode
+        # (G138) program X as a radius until G136, so extents and address arithmetic must
+        # not read the X of a live-tool section at twice its value.
+        context = helpers.effective_context("okuma-osp")
+        lines = ["G00 X100 Z50", "G138", "G01 X20 Y5 F200", "G136", "G137 C0", "G01 X10 Y10", "G136"]
+        states = self.walk(context["profile"], context["codes"], lines)
+        self.assertEqual(
+            [state["diameter"]["mode"] for state in states],
+            ["on", "off", "off", "on", "off", "off", "on"],
+        )
+
+    def test_the_shipped_klartext_database_reads_m136_as_feed_per_revolution(self) -> None:
+        # The source review (2026-09): M136 makes F a distance per spindle revolution until
+        # M137. Without it a plain F under M136 was read as a feed per minute.
+        context = helpers.effective_context("heidenhain-klartext")
+        lines = ["1 TOOL CALL 5 Z S800", "2 M136", "3 L X+10 F0.2", "4 M137", "5 L X+20 F200"]
+        states = self.walk(context["profile"], context["codes"], lines)
+        self.assertEqual([state["feedUnit"] for state in states][1:], ["per-rev", "per-rev", "per-minute", "per-minute"])
+
     def test_the_shipped_sinumerik_database_reads_the_feed_type_as_one_group(self) -> None:
         # The M8 NC review: on this control G94, G95, G96 and G97 are one group. G96 makes
         # the feed a feed per revolution, and G95 ends the constant cutting speed.

@@ -1,0 +1,12 @@
+{
+  "profile": "heidenhain-klartext",
+  "ownerReviewed": false,
+  "items": [
+    {"kind":"program","line":1,"text":"BEGIN PGM 5X_MILLING MM","endLine":44633},
+    {"kind":"section","line":13,"text":"KUGELFRASER D10 L25 SD10","endLine":13},
+    {"kind":"tool","line":14,"text":"T1 — KUGELFRASER D10 L25 SD10","tool":"1","endLine":44633},
+      {"kind":"section","line":17,"text":"5 ACHSEN KONSTANT Z (5X)","endLine":17},
+      {"kind":"section","line":18,"text":"A : 0  ; C : 0","endLine":44633},
+      {"kind":"end","line":44632,"text":"END PGM"}
+  ]
+}

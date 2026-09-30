@@ -6,12 +6,10 @@
     "G43",
     "G44",
     "G49",
-    "G54.1",
     "G81",
     "G82",
     "G86",
     "G91",
-    "G93",
     "G95"
   ],
   "addresses": {
@@ -507,10 +505,18 @@
       ]
     },
     {
+      "code": "G84.2",
+      "group": "cycle",
+      "modal": true,
+      "pitchFeed": true,
+      "sets": { "cycle": "start" },
+      "label": "Rigid tapping cycle, older block format",
+      "description": "Rigid tapping written in the format of an older control generation. F is the thread lead, so scaling the feed would change the thread."
+    },
+    {
       "code": "G85",
       "group": "cycle",
       "modal": true,
-      "verify": true,
       "sets": { "cycle": "start" },
       "label": "Boring cycle on the face",
       "description": "Feeds along Z into the face and feeds back out again, which leaves a cleaner wall than a rapid retract.",
@@ -603,7 +609,6 @@
       "code": "G89",
       "group": "cycle",
       "modal": true,
-      "verify": true,
       "sets": { "cycle": "start" },
       "label": "Boring cycle on the side",
       "description": "Feeds along X into the side and feeds back out again, which leaves a cleaner wall than a rapid retract.",

@@ -199,17 +199,20 @@ describe('the mill corrections of §8.3', () => {
     // like cancelling radius compensation to anything that reads modal groups.
     for (const code of ['G43', 'G44', 'G49']) expect(entry(MILL, code)?.group, code).toBe('lengthComp');
     for (const code of ['G40', 'G41', 'G42']) expect(entry(MILL, code)?.group, code).toBe('compensation');
-    expect(entry(MILL, 'G44')?.verify).toBe(true);
+    // The source review (2026-09): the control's G-code list confirms G44.
+    expect(entry(MILL, 'G44')?.verify).toBeUndefined();
   });
 
-  it('keeps reading the S of a mill G50 or G92 block as a clamp, and says it is unsure', () => {
-    // syntax-fanuc §4.1 marks both of these mill meanings **(verify)**, and a lathe
-    // program opened with the mill profile by hand has to stay protected: the `S` clamp
-    // and the pitch-feed warning are what protect it (§8.3).
+  it('keeps reading the S of a mill G50 or G92 block as a clamp', () => {
+    // The control's G-code list settles both mill meanings (source review, 2026-09): G50
+    // cancels scaling, G92 sets the coordinate system or clamps the top speed. A lathe
+    // program opened with the mill profile by hand has to stay protected all the same:
+    // the `S` clamp and the pitch-feed warning are what protect it (§8.3).
     for (const code of ['G50', 'G92']) {
       expect(entry(MILL, code)?.sets, code).toEqual({ speedLimit: true });
-      expect(entry(MILL, code)?.verify, code).toBe(true);
+      expect(entry(MILL, code)?.verify, code).toBeUndefined();
     }
+    expect(entry(MILL, 'G50')?.label).toBe('Scaling cancel');
     expect(entry(MILL, 'G92')?.pitchFeedAmbiguous).toBe(true);
     expect(entry(MILL, 'G76')?.pitchFeedAmbiguous).toBe(true);
     // Ambiguous, not certain: the mill entries must not claim to know it is a pitch.
@@ -235,10 +238,13 @@ describe('the mill corrections of §8.3', () => {
 
 describe('the lathe database of G-code system A (§8.2)', () => {
   it('drops the mill codes a turret lathe does not have', () => {
-    for (const code of ['G43', 'G44', 'G49', 'G54.1', 'G81', 'G82', 'G86', 'G91', 'G93', 'G95']) {
+    for (const code of ['G43', 'G44', 'G49', 'G81', 'G82', 'G86', 'G91', 'G95']) {
       expect(entry(A, code), code).toBeUndefined();
       expect(entry(MILL, code), code).toBeDefined();
     }
+    // The source review (2026-09): the lathe's own G-code list has the extended work
+    // offsets and inverse-time feed in all three G-code systems, so they stay.
+    for (const code of ['G54.1', 'G93']) expect(entry(A, code), code).toEqual(entry(MILL, code));
   });
 
   it('reads G98 and G99 as the feed modes, and G94 and G90 as single cycles', () => {
@@ -304,13 +310,15 @@ describe('the lathe database of G-code system A (§8.2)', () => {
     const p76 = entry(A, 'G76')?.params?.find((param) => param.address === 'P');
     expect(p76?.unit).toBe('count');
     expect(p76?.label).toContain('Counted, not measured');
-    // Tapping and threading are the only lathe entries that carry it.
+    // Tapping and threading are the only lathe entries that carry it. The source review
+    // (2026-09) added the variable-lead thread G34 and the older-format rigid tap G84.2,
+    // both in the lathe's own G-code list.
     expect(
       entriesOf(A)
         .filter((e) => e.pitchFeed === true)
         .map((e) => e.code)
         .sort(),
-    ).toEqual(['G32', 'G33', 'G76', 'G84', 'G88', 'G92']);
+    ).toEqual(['G32', 'G33', 'G34', 'G76', 'G84', 'G84.2', 'G88', 'G92']);
   });
 
   it('starts a cycle on every code that starts one, and only there', () => {
@@ -318,16 +326,18 @@ describe('the lathe database of G-code system A (§8.2)', () => {
       .filter((e) => e.sets?.cycle === 'start')
       .map((e) => e.code)
       .sort();
-    expect(starts).toEqual(['G70', 'G71', 'G72', 'G73', 'G74', 'G75', 'G76', 'G83', 'G84', 'G85', 'G87', 'G88', 'G89']);
+    expect(starts).toEqual(['G70', 'G71', 'G72', 'G73', 'G74', 'G75', 'G76', 'G83', 'G84', 'G84.2', 'G85', 'G87', 'G88', 'G89']);
     expect(entriesOf(A).filter((e) => e.sets?.cycle === 'cancel').map((e) => e.code)).toEqual(['G80']);
     // AD-19 rule 2: the multi-pass cycles are one-shot, so their `start` applies to their
     // own block only; the drilling cycles stay active until `G80`.
     for (const code of ['G70', 'G71', 'G72', 'G73', 'G74', 'G75', 'G76']) {
       expect(entry(A, code)?.modal, code).toBeUndefined();
     }
-    for (const code of ['G80', 'G83', 'G84', 'G85', 'G87', 'G88', 'G89']) {
+    for (const code of ['G80', 'G83', 'G84', 'G84.2', 'G85', 'G87', 'G88', 'G89']) {
       expect(entry(A, code)?.modal, code).toBe(true);
     }
+    // The source review (2026-09): the lathe list confirms both boring cycles.
+    for (const code of ['G85', 'G89']) expect(entry(A, code)?.verify, code).toBeUndefined();
   });
 
   it('declares no distance code at all, which is what makes its positions absolute', () => {
@@ -380,10 +390,11 @@ describe('the system-B variant database (§8.2)', () => {
     // `G50 S2500` is the top-speed clamp in system A. Dropping the entry took the
     // `speedLimit` flag with it, and a speed scaling run **raised** the clamp of a
     // constant-surface-speed program — the change that lets the spindle run away as the
-    // diameter falls. B does not use the number (syntax-fanuc §4.1, marked verify), so
-    // the entry stays out of hover and only keeps the conservative reading.
+    // diameter falls. In B the number cancels scaling (the control's G-code list, source
+    // review 2026-09), so the entry says so and keeps the conservative reading.
     expect(entry(B, 'G50')?.sets).toEqual({ speedLimit: true });
-    expect(entry(B, 'G50')?.verify).toBe(true);
+    expect(entry(B, 'G50')?.verify).toBeUndefined();
+    expect(entry(B, 'G50')?.label).toMatch(/^Scaling cancel/);
     // The multi-pass cycles are the same as in A (syntax-fanuc §4.1).
     for (const code of ['G70', 'G71', 'G72', 'G73', 'G74', 'G75', 'G76', 'G83', 'G87']) {
       expect(entry(B, code), code).toEqual(entry(A, code));

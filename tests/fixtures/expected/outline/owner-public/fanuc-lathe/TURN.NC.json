@@ -1,0 +1,21 @@
+{
+  "profile": "fanuc-lathe",
+  "ownerReviewed": false,
+  "items": [
+    {"kind":"program","line":2,"text":"O00001","endLine":713},
+    {"kind":"tool","line":7,"text":"T1 — C80-RAUTENFORM L AUSSENDREHWERKZEUG R 0.8 IC 12.7","tool":"1","endLine":160},
+    {"kind":"tool","line":161,"text":"T2 — D55-RAUTENFORM L AUSSENDREHWERKZEUG R 0.4 IC 12.7","tool":"2","endLine":192},
+    {"kind":"tool","line":193,"text":"T3 — ISO-METRISCH L-166-KF L AUSSENGEWINDEDREHWERKZEUG P2 IS 2.38","tool":"3","endLine":212},
+    {"kind":"tool","line":213,"text":"T4 — UMFANGSFRASER D20 L35 SD20","tool":"4","endLine":266},
+    {"kind":"tool","line":267,"text":"T4","tool":"4","endLine":272},
+    {"kind":"tool","line":273,"text":"T5 — SPIRALBOHRER D6 L35 SD6","tool":"5","endLine":309},
+    {"kind":"tool","line":310,"text":"T5","tool":"5","endLine":315},
+    {"kind":"tool","line":316,"text":"T6 — SPIRALBOHRER D10 L35 SD10","tool":"6","endLine":352},
+    {"kind":"tool","line":353,"text":"T6","tool":"6","endLine":358},
+    {"kind":"tool","line":359,"text":"T7 — UMFANGSFRASER D10 L35 SD10","tool":"7","endLine":656},
+    {"kind":"tool","line":657,"text":"T7","tool":"7","endLine":662},
+    {"kind":"tool","line":663,"text":"T8 — GEWINDEBOHRER D10 P1.5 L30 SD10","tool":"8","endLine":705},
+    {"kind":"tool","line":706,"text":"T8","tool":"8","endLine":713},
+      {"kind":"end","line":711,"text":"M30"}
+  ]
+}

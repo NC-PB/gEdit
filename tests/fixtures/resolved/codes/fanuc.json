@@ -223,6 +223,26 @@
       "pitchFeed": true
     },
     {
+      "code": "G34",
+      "description": "Cuts a thread whose lead grows or shrinks by K with every spindle revolution. F is the lead at the start point, not a feed rate, so scaling the feed would change the thread.",
+      "group": "motion",
+      "label": "Thread cutting with a variable lead",
+      "modal": true,
+      "params": [
+        {
+          "address": "F",
+          "label": "Lead at the start point",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "K",
+          "label": "Change of the lead per spindle revolution"
+        }
+      ],
+      "pitchFeed": true
+    },
+    {
       "code": "G40",
       "description": "Turns radius compensation off. Do it during a retract move, not in an arc.",
       "group": "compensation",
@@ -276,7 +296,7 @@
     },
     {
       "code": "G44",
-      "description": "Applies the tool length from the offset register named by H the other way round than G43. CAM output normally writes G43. Check what your control does with it.",
+      "description": "Applies the tool length from the offset register named by H the other way round than G43. CAM output normally writes G43.",
       "group": "lengthComp",
       "label": "Tool length offset, negative",
       "modal": true,
@@ -291,8 +311,7 @@
           "min": 0,
           "required": true
         }
-      ],
-      "verify": true
+      ]
     },
     {
       "code": "G49",
@@ -303,13 +322,12 @@
     },
     {
       "code": "G50",
-      "description": "Not described for milling in the syntax notes: on many mills this number cancels scaling, on others it sets the coordinate system. With an S word it is the top spindle speed for constant surface speed, which is how lathes in G-code system A write it, so gEdit keeps reading the S of this block as a clamp. Check what your control does with it.",
+      "description": "Ends scaling on a machining centre; G51 switches it on. gEdit still reads an S word in such a block as a spindle-speed clamp, because a lathe program in G-code system A writes its clamp as G50 S and may be opened with this profile by mistake.",
       "group": "nonmodal",
-      "label": "Scaling cancel, or coordinate set with a speed clamp",
+      "label": "Scaling cancel",
       "sets": {
         "speedLimit": true
-      },
-      "verify": true
+      }
     },
     {
       "code": "G53",
@@ -458,6 +476,12 @@
           "label": "Dwell at the bottom in milliseconds",
           "min": 0,
           "unit": "count"
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
         }
       ],
       "pitchFeed": true,
@@ -500,6 +524,18 @@
           "label": "Boring feed",
           "min": 0,
           "required": true
+        },
+        {
+          "address": "P",
+          "label": "Dwell at the bottom in milliseconds",
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
         }
       ],
       "pitchFeedAmbiguous": true,
@@ -691,6 +727,17 @@
           "label": "Dwell at the bottom in milliseconds",
           "min": 0,
           "unit": "count"
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "Q",
+          "label": "Peck depth, for peck tapping",
+          "min": 0
         }
       ],
       "pitchFeed": true,
@@ -728,6 +775,12 @@
           "label": "Boring feed",
           "min": 0,
           "required": true
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
         }
       ],
       "sets": {
@@ -764,6 +817,12 @@
           "label": "Boring feed",
           "min": 0,
           "required": true
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
         }
       ],
       "sets": {
@@ -805,12 +864,23 @@
           "label": "Boring feed",
           "min": 0,
           "required": true
+        },
+        {
+          "address": "P",
+          "label": "Dwell at the bottom in milliseconds",
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
         }
       ],
       "sets": {
         "cycle": "start"
-      },
-      "verify": true
+      }
     },
     {
       "code": "G88",
@@ -848,12 +918,17 @@
           "label": "Boring feed",
           "min": 0,
           "required": true
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
         }
       ],
       "sets": {
         "cycle": "start"
-      },
-      "verify": true
+      }
     },
     {
       "code": "G89",
@@ -891,6 +966,12 @@
           "label": "Boring feed",
           "min": 0,
           "required": true
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
         }
       ],
       "sets": {
@@ -919,14 +1000,13 @@
     },
     {
       "code": "G92",
-      "description": "The same job as G50 on lathes in G-code system B and C: set the coordinate system, and with an S word clamp the top spindle speed. In system A this number is the single-pass threading cycle instead.",
+      "description": "Sets the work coordinate system, or with an S word clamps the top spindle speed; lathes in G-code system B and C use the number the same way. In system A this number is the single-pass threading cycle instead, so gEdit never scales the F of such a block.",
       "group": "nonmodal",
       "label": "Coordinate set, spindle speed clamp",
       "pitchFeedAmbiguous": true,
       "sets": {
         "speedLimit": true
-      },
-      "verify": true
+      }
     },
     {
       "code": "G93",

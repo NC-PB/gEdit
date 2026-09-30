@@ -143,12 +143,13 @@ describe('hoverText: what the database does not describe', () => {
   });
 
   it('keeps an entry that is not verified yet out of hover', () => {
-    // G87 carries `verify: true`; its label and description must not reach the user.
-    const text = fanucHover('N10 G87 Z-10.', 'G87');
-    expect(text).toContain('**G87**');
-    expect(text).not.toContain('Back boring');
+    // Okuma G36 carries `verify: true`; its label and description must not reach the user.
+    // (Fanuc G87 and Klartext PLANE SPATIAL were the examples until the source review of
+    // 2026-09 confirmed them.)
+    const text = okumaHover('G36 Z-10 F1.5', 'G36');
+    expect(text).toContain('**G36**');
+    expect(text).not.toContain('driven tool');
     expect(text).toContain('does not describe this word yet');
-    expect(klartextHover('30 PLANE SPATIAL SPA+0 SPB+30 SPC+90', 'PLANE')).toContain('does not describe this word yet');
   });
 
   // The ones the plan names as M3 deliverables do reach the user: a cycle a post writes

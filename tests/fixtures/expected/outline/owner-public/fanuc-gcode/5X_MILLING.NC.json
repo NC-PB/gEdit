@@ -1,0 +1,12 @@
+{
+  "profile": "fanuc-gcode",
+  "ownerReviewed": false,
+  "items": [
+    {"kind":"program","line":2,"text":"O0001","endLine":44630},
+    {"kind":"comment","line":8,"text":"KUGELFRASER D10 L25 SD10"},
+    {"kind":"tool","line":9,"text":"T1 — KUGELFRASER D10 L25 SD10","tool":"1","endLine":44630},
+      {"kind":"comment","line":12,"text":"5 ACHSEN KONSTANT Z  5X"},
+      {"kind":"comment","line":13,"text":"A : 0  ; C : 0"},
+      {"kind":"end","line":44628,"text":"M2"}
+  ]
+}

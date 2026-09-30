@@ -1,0 +1,49 @@
+{
+  "note": [
+    "Expected profile detection for tests/fixtures/nc/owner-public: the owner's own programs, published",
+    "by him and cleared for public use (plan §9.2, D45). Read by src/lib/core/profiles/detect.test.ts and",
+    "src/lib/data/profiles/fanucLathe.test.ts like every other folder's table.",
+    "A value is the profile the program has to open with: the profile of the control it was written for,",
+    "or, where gEdit has only the turning profile of that control, that profile. The Okuma milling",
+    "programs therefore expect okuma-osp, which is what they get; that the turning profile then misreads",
+    "them is an outline gap (expected/outline/owner-public/_known-gaps.json), not a detection one.",
+    "'knownGaps' lists the programs gEdit detects wrongly today, with the reason. Their entry above is",
+    "still the right answer, never what gEdit answers: detect.test.ts runs them as expected failures, so",
+    "the day one is fixed its test fails and the entry has to be removed. fanucLathe.test.ts leaves them",
+    "out of the margin table, because there the winner is the wrong profile.",
+    "'ownerReviewed' stays false until the owner has read these answers (§9.2, owner-public intake step 2)."
+  ],
+  "ownerReviewed": false,
+  "fixtures": {
+    "nc/owner-public/fanuc-gcode/2.5D_MILLING.NC": "fanuc-gcode",
+    "nc/owner-public/fanuc-gcode/5-Axis.NC": "fanuc-gcode",
+    "nc/owner-public/fanuc-gcode/5X_MILLING.NC": "fanuc-gcode",
+    "nc/owner-public/fanuc-lathe/TURN.NC": "fanuc-lathe",
+    "nc/owner-public/fanuc-lathe/TURN_1.NC": "fanuc-lathe",
+    "nc/owner-public/heidenhain-klartext/2.5D_MILLING.H": "heidenhain-klartext",
+    "nc/owner-public/heidenhain-klartext/5-Axis-1.H": "heidenhain-klartext",
+    "nc/owner-public/heidenhain-klartext/5X_MILLING.H": "heidenhain-klartext",
+    "nc/owner-public/heidenhain-klartext/5X_MILLING_VECTOR.H": "heidenhain-klartext",
+    "nc/owner-public/heidenhain-klartext/DRILLING.H": "heidenhain-klartext",
+    "nc/owner-public/heidenhain-klartext/Demo_1.H": "heidenhain-klartext",
+    "nc/owner-public/okuma-osp/2.5D_MILLING.min": "okuma-osp",
+    "nc/owner-public/okuma-osp/5X_MILLING.min": "okuma-osp",
+    "nc/owner-public/okuma-osp/DRILLING.min": "okuma-osp",
+    "nc/owner-public/okuma-osp/TURN.min": "okuma-osp",
+    "nc/owner-public/sinumerik/2.5D_Milling.mpf": "sinumerik",
+    "nc/owner-public/sinumerik/5X_Milling.mpf": "sinumerik",
+    "nc/owner-public/sinumerik/DRILLING.mpf": "sinumerik",
+    "nc/owner-public/sinumerik/Demo_1.mpf": "sinumerik",
+    "nc/owner-public/sinumerik/TURN_1.mpf": "sinumerik"
+  },
+  "variants": {
+    "nc/owner-public/fanuc-lathe/TURN.NC": { "gcodeSystem": "A", "detected": true },
+    "nc/owner-public/fanuc-lathe/TURN_1.NC": { "gcodeSystem": "A", "detected": true }
+  },
+  "knownGaps": {
+    "nc/owner-public/heidenhain-klartext/5X_MILLING_VECTOR.H": "Opens as Fanuc (ISO) mill despite .H and BEGIN PGM: its LN blocks score nothing for Klartext and one point each for the mill's Y rule, so 400 LN lines outvote the extension and the header.",
+    "nc/owner-public/sinumerik/2.5D_Milling.mpf": "A Siemens milling program: opens as Fanuc (ISO) mill, because the Sinumerik profile leaves out every line that moves Y (docs/user/dialects.md, Milling on Okuma and Sinumerik).",
+    "nc/owner-public/sinumerik/5X_Milling.mpf": "A Siemens milling program: opens as Fanuc (ISO) mill, as 2.5D_Milling.mpf.",
+    "nc/owner-public/sinumerik/Demo_1.mpf": "A Siemens milling program without the %_N_ header: opens as Fanuc (ISO) mill."
+  }
+}

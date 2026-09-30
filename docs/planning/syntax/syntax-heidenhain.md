@@ -4,9 +4,9 @@ Dialect id in gEdit: `heidenhain-klartext`.
 
 Klartext is Heidenhain's plain-language program format. Heidenhain calls it "conversational", but CAM post-processors emit it, so it is in scope. What is excluded is input that only makes sense at the control, such as FK free contours (§1).
 
-Primary source: the TNC 640 user manual for Klartext programming (German edition, NC software 34059x-07, 2016). Anything that comes from general knowledge and not from that manual is marked **(verify)**. All examples below were written for this document. The manual's own examples are not reproduced.
+Primary source: the TNC 640 user manual for Klartext programming (German edition, NC software 34059x-07, 2016). The source review of 2026-09 ([source-review-2026-09.md](../source-review-2026-09.md)) added the 34059x-08 edition (2017) of the same manual and the TNC 640 cycle programming manuals for -07 and -08, and settled most of what these notes had marked. Anything that comes from general knowledge and not from those manuals is marked **(verify)**. All examples below were written for this document. The manual's own examples are not reproduced.
 
-The German manual prints some examples with a decimal comma (`DL+0,2`). NC files use a decimal **point**, so this document uses points throughout (see §10).
+The German manual prints some examples with a decimal comma (`DL+0,2`). This document uses points throughout, but **CAM output with a decimal comma exists**: six of the seven Klartext programs the owner has published write `X241,781` and `Q206=636,62`. gEdit reads only the point today, so such a number is an unknown token and a script reads `636` for `636,62` (see §10 and [TODO.md](../../../TODO.md)).
 
 ---
 
@@ -50,10 +50,10 @@ The German manual prints some examples with a decimal comma (`DL+0,2`). NC files
 | Block numbers | Every logical block starts with an integer block number. Numbering is ascending from `0` (`BEGIN PGM`) in steps of 1. The control generates the numbers itself (verify: behaviour on import when numbers are missing, duplicated or have gaps; probably renumbered). |
 | Stock (optional) | `BLK FORM 0.1 <axis> X Y Z` (MIN point) + `BLK FORM 0.2 X Y Z` (MAX point, absolute or incremental). Variants: `BLK FORM CYLINDER <axis> R\|D… L… [DIST…] [RI\|DI…]` and `BLK FORM ROTATION <axis> DIM_R\|DIM_D LBL…`. Only needed for simulation. |
 | Program end | `M2` or `M30` (usually on its own block or on the final retract), followed by `END PGM`. Subprograms (`LBL n … LBL 0`) go **after** M2/M30. |
-| Multi-line blocks | Cycle definitions (and `PATTERN DEF`) span several physical lines. Every line except the last ends with `~`, and the continuation lines carry **no** block number and are indented (verify: exact indentation and whether `~` is required). A *logical block* is one numbered line plus its continuation lines. |
+| Multi-line blocks | Cycle definitions (and `PATTERN DEF`) span several physical lines. Every line except the last ends with `~`, and the continuation lines carry **no** block number and are indented. The owner's CAM post writes the header ending in a blank and `~`, each parameter line indented by four spaces as `Qnnn=value ;LABEL ~` with one blank before `;` and before `~`, and no `~` on the last line. A comment block must not end in `~`. A *logical block* is one numbered line plus its continuation lines. |
 | Units | `MM`: coordinates in mm, F in mm/min. `INCH`: coordinates in inch, **F in 1/10 inch/min** (F100 = 10 in/min). Feed for rotary axes is in deg/min in both. |
 | Encoding | Plain text (ASCII). The control stores programs internally in its own format and converts on transfer (verify). Unsure whether UTF-8 or ISO-8859-1 is used for umlauts in comments (verify); the safe choice is to read as UTF-8 with a Latin-1 fallback and to keep the original encoding on save. |
-| Line endings | CRLF is typical for files transferred from the control (verify). Preserve whatever the file has. |
+| Line endings | CRLF is typical for files transferred from the control, and the owner's CAM post writes CRLF too. Preserve whatever the file has. |
 | Size | The control accepts up to 2 GB per program, so CAM files can be very large. The editor must stay usable with files of several hundred MB (tokenizer and outline must be linear-time). |
 
 ### Example (own, CAM-style, 3-axis)
@@ -122,7 +122,7 @@ On a real control, the words after the cycle number (`BOHREN`) and after `;` in 
 ```
 
 - **Block number:** an integer at line start (after optional whitespace), followed by whitespace. It is present on every logical block, and `0` is valid.
-- **Block skip:** `/` marks a block that is skipped when the operator enables skipping. It sits after the block number (verify: `12 /L …` vs `/12 L …`, and whether a space follows).
+- **Block skip:** `/` marks a block that is skipped when the operator enables skipping. The manuals show it after the block number (`12 /L …`), on the numbered line only, never on a continuation line; the whole logical block is skipped. It has no effect on `TOOL DEF`. **One of the owner's posts writes it in front of the number** (`/15 L …`, five of his programs), which gEdit does not read today: renumbering then writes a second number into the block (`15 /15 L …`, see [TODO.md](../../../TODO.md)).
 - **Continuation line:** an indented line with no block number, belonging to the previous block. It always follows a line ending in `~`.
 - **Whitespace** separates words. Most words have **no** space between letter and value (`X+10`, `S3200`, `F900`, `R0`, `Q200=2`, `SPB+30`, `DIST50`). A few need a space: `MB 50` / `MB MAX` (after `M140`), `REP 4` (verify), `FN 0:`.
 - **Multi-word function names** are separated by single spaces: `BEGIN PGM`, `END PGM`, `BLK FORM`, `TOOL CALL`, `TOOL DEF`, `CYCL DEF`, `CYCL CALL [PAT|POS]`, `CALL LBL`, `CALL PGM`, `SEL PGM`, `CALL SELECTED PGM`, `PLANE SPATIAL` (etc.), `PLANE RESET`, `FUNCTION TCPM`, `FUNCTION RESET TCPM`, `TRANS DATUM AXIS|TABLE|RESET`, `DECLARE STRING`, `FUNCTION DWELL`, `PATTERN DEF`, `APPR LT|LN|CT|LCT`, `DEP LT|LN|CT|LCT` (plus polar `APPR PLT|PLN|PCT|PLCT`, `DEP PLCT`, …). The tokenizer should allow `\s+` between the parts.
@@ -157,7 +157,7 @@ On a real control, the words after the cycle number (`BOHREN`) and after `;` in 
 | Labels | `LBL (\d+\|"name"\|QS\d+)`, `CALL LBL … [REP n]` | |
 | Program call | `CALL PGM <path>` | `<path>` is a bare name or `TNC:\dir\file.H`, which may include `.I` (verify: quoting of paths with spaces). |
 | PLANE words | `SPATIAL PROJECTED EULER VECTOR POINTS RELATIV AXIAL RESET`, `SPA SPB SPC`, `MOVE TURN STAY`, `DIST`, `MB`, `SEQ[+-]`, `TABLE ROT`, `COORD ROT` | |
-| TCPM words | `FUNCTION TCPM`, `F TCP`, `F CONT`, `AXIS POS`, `AXIS SPAT`, `PATHCTRL AXIS`, `PATHCTRL VECTOR`, `FUNCTION RESET TCPM` | Newer software adds reference-point options (`REFPNT …`) (verify). |
+| TCPM words | `FUNCTION TCPM`, `F TCP`, `F CONT`, `AXIS POS`, `AXIS SPAT`, `PATHCTRL AXIS`, `PATHCTRL VECTOR`, `REFPNT TIP-TIP` (the default), `REFPNT TIP-CENTER`, `REFPNT CENTER-CENTER`, `FUNCTION RESET TCPM` | `CENTER-CENTER` is for CAM output on cutter-centre paths with a tool measured to the tip. The `REFPNT` words are not keywords in the profile yet (`TIP-TIP` is an unknown token). |
 | Numbers | `[+-]?(\d+\.?\d*\|\.\d+)` | Positions are written with an explicit sign by the control (`X+10`). CAM posts do the same. Unsigned is probably accepted (verify). Decimal point only. |
 | Unknown | — | Use a neutral default token (e.g. `''` or `source`), **not** `invalid`. Leave error marking to the linter. |
 
@@ -217,7 +217,8 @@ Working plane: the tool axis in `TOOL CALL` sets it (Z → XY, Y → ZX, X → Y
 | `F<n>` | Feed (mm/min, or 1/10 in/min in INCH programs) | yes |
 | `FMAX` | Rapid | **block-wise only**. The previous numeric F applies again afterwards |
 | `FAUTO` | Feed from the last `TOOL CALL` | block (verify) |
-| `FU<n>` / `FZ<n>` | Feed per revolution / per tooth | yes (verify) |
+| `FU<n>` / `FZ<n>` | Feed per revolution / per tooth; allowed in `TOOL CALL` (from software -05) and in positioning blocks. `FU` may not be combined with `M136` in an INCH program | yes (verify) |
+| `M136` / `M137` | From here on `F` is in mm per spindle revolution / back to per minute; takes effect at block start | yes (in the database since the source review) |
 | `FQ<n>` | Feed from Q parameter (CAM posts often define Q feeds at the program start) | yes |
 
 ### 4.5 M functions typical in CAM output
@@ -231,16 +232,17 @@ Working plane: the tool axis in `TOOL CALL` sets it (Z → XY, Y → ZX, X → Y
 | M6 | Tool change (machine-dependent). **Not** used for tool detection: `TOOL CALL` performs the change | end | – |
 | M8 / M9 | Coolant on / off | start / end | coolant group |
 | M13 / M14 | Spindle CW / CCW **and** coolant on | start | spindle+coolant |
-| M89 | Modal cycle call (machine-dependent) | – | – |
-| M91 | Coordinates in this block refer to machine zero | start | block only. Tool length is not applied |
-| M92 | Coordinates refer to a machine-builder reference position | start | block only |
+| M89 | Modal cycle call or a free M function, set by a machine parameter. As a call, it runs the cycle after every following positioning block until `M99` on the last position or the next `CYCL DEF` | – | – |
+| M91 | Coordinates in this block refer to machine zero | start | block only. Tool length is not applied; incremental values refer to the last `M91` position |
+| M92 | Coordinates refer to a machine-builder reference position | start | block only. Tool length is not applied |
 | M94 | Reduce rotary-axis display below 360° | start | block |
 | M99 | Call the last defined cycle once at this block's end position | end | block only |
 | M116 / M117 | Rotary feed in mm/min on/off | | modal |
 | M126 / M127 | Shortest-path rotary positioning on/off | | modal |
 | M128 [F…] / M129 | Keep tool tip position when tilt axes move (TCPM) on/off; F = feed for compensating moves | M128 start, M129 end | modal. Must be reset before `TOOL CALL`, M91 and M92 |
 | M140 MB n\|MB MAX [F…] | Retract along tool axis by distance / to travel limit | start | block only |
-| M101 / M102, M107 / M108, M120, M136 / M137, M138, M144 / M145, M148 / M149 | Less common; highlight only | | |
+| M136 / M137 | Feed per spindle revolution on / off (§4.4) | start | modal |
+| M101 / M102, M107 / M108, M120 `LA n`, M138, M144 / M145, M148 / M149 | Less common; highlight only | | |
 
 M functions that take effect at block start run before those at block end. Otherwise they run in the programmed order.
 
@@ -248,13 +250,13 @@ M functions that take effect at block start run before those at block end. Other
 
 | Code | Meaning | Notes |
 |---|---|---|
-| `PLANE SPATIAL SPA… SPB… SPC… <MOVE\|TURN\|STAY> …` | Tilt the working plane by spatial angles (rotations about machine X, Y, Z) | All three angles are mandatory, even if 0. `MOVE [DIST d] F…\|FMAX\|FAUTO` swivels with compensating motion. `TURN [MB n\|MB MAX] F…\|FMAX` swivels rotary axes only. `STAY` means the angles go to Q120–Q122 and a separate `L A+Q120 …` positions. Optional `SEQ+/-` (solution choice) and `TABLE ROT`/`COORD ROT` (verify word order) |
+| `PLANE SPATIAL SPA… SPB… SPC… <MOVE\|TURN\|STAY> …` | Tilt the working plane by spatial angles (rotations about machine X, Y, Z) | All three angles are mandatory, even if 0, and one of `MOVE`/`TURN`/`STAY` is mandatory. `MOVE [DIST d] F…\|FMAX\|FAUTO` swivels with compensating motion. `TURN [MB n\|MB MAX] F…\|FMAX` swivels rotary axes only. `STAY` means the angles go to Q120–Q122 and a separate `L A+Q120 …` positions. Optional `SEQ+/-` (solution choice) and `COORD ROT` (the default) or `TABLE ROT`. The `F` of a `MOVE`/`TURN` is the swivel feed, not the path feed |
 | `PLANE PROJECTED / EULER / VECTOR / POINTS / RELATIV / AXIAL` | Other plane definitions | CAM mostly uses SPATIAL, sometimes VECTOR or AXIAL |
-| `PLANE RESET [MOVE\|TURN\|STAY …]` | Reset the tilted plane (also resets cycle 19) | Always reset with this, not with zero angles |
-| `CYCL DEF 19.0 … / 19.1 A… B… C…` | Older tilt cycle | Some posts still emit it (verify exact sub-block words) |
-| `M128` / `M129` | TCPM on/off (older form) | see §4.5 |
-| `FUNCTION TCPM F TCP\|F CONT AXIS POS\|AXIS SPAT PATHCTRL AXIS\|PATHCTRL VECTOR` | TCPM with explicit feed interpretation / rotary meaning / interpolation | Reset with `FUNCTION RESET TCPM`. Auto-reset on program select |
-| `LN X Y Z NX NY NZ [TX TY TZ] [R0\|RL\|RR] F M` | Line with 3D tool compensation | X/Y/Z and NX/NY/NZ are **always all present**, in the same axis order. TX/TY/TZ = normalised tool orientation (numbers only). Without TCPM, the offset is applied along the normal by the sum of the delta values. With TCPM + TX/TY/TZ + RL/RR, 3D radius comp applies (peripheral milling) |
+| `PLANE RESET [MOVE\|TURN\|STAY …]` | Reset the tilted plane (also resets cycle 19) | Always reset with this; zero angles do not reset. It takes `MOVE`/`TURN`/`STAY` as well |
+| `CYCL DEF 19.0 … / 19.1 A… B… C… [F…] [distance]` | Older tilt cycle | The owner's older programs emit it. The feed and the safety distance are used when the control swivels by itself. Reset: define it again with all angles 0, then once more with no angle. Whether the angles are spatial or axis angles is a machine parameter |
+| `M128 [F…]` / `M129` | TCPM on/off (older form) | see §4.5. The `F` of `M128` is the feed of the compensating moves, not the path feed |
+| `FUNCTION TCPM F TCP\|F CONT AXIS POS\|AXIS SPAT PATHCTRL AXIS\|PATHCTRL VECTOR [REFPNT …]` | TCPM with explicit feed interpretation / rotary meaning / interpolation | Modal until `FUNCTION RESET TCPM`; reset automatically on program select. Like `M128`, it must be switched off before a `TOOL CALL` and before `M91`/`M92` |
+| `LN X Y Z [NX NY NZ] [TX TY TZ] [R0\|RL\|RR] F M` | Line with 3D tool compensation | Words in X,Y,Z / NX,NY,NZ / TX,TY,TZ order. The normals are all or none, and a block that carries them repeats all three every time. An `LN` with `TX TY TZ` and **no** normal is valid for peripheral milling with RL/RR under TCPM. TX/TY/TZ = normalised tool orientation (numbers only), ignored unless `M128` or `FUNCTION TCPM` is on. CAM should write 7 decimals; a vector component lies within ±9.99999999. Without TCPM, the offset is applied along the normal by the sum of the delta values |
 
 ---
 
@@ -264,13 +266,14 @@ M functions that take effect at block start run before those at block end. Other
 
 - `TOOL CALL 12 Z S8000 F1200` – number (range 0–32767). `TOOL CALL 0` = null tool (L=0, R=0; cancels length comp).
 - `TOOL CALL 12.1 Z …` – indexed tool (index `.1`–`.9`, e.g. a step drill with several lengths).
-- `TOOL CALL "EM_D10_R0.5" Z …` – name, at most 32 characters, upper case, allowed characters `A–Z 0–9 # $ % & , - _ . @`. Forbidden: space and ``! " ' ( ) * + : ; < = > ? [ / ] ^ ` { | } ~``.
+- `TOOL CALL "EM_D10_R0.5" Z …` – name, at most 32 characters, upper case, allowed characters `A–Z 0–9` and `# $ % & . , - _` (no `@`). Forbidden: space and ``! " ' ( ) * + : ; < = > ? [ / ] ^ ` { | } ~``.
 - `TOOL CALL QS3 Z …` – name taken from a string parameter (verify file syntax).
 - `TOOL CALL Z S5000` / `TOOL CALL S5000` – **no tool argument**: only changes speed (and/or axis/feed). **Not a tool change.** The outline should show it as a speed change or ignore it.
+- `TOOL CALL 5 S4000` while tool 5 is in the spindle, **without a tool axis**, also only changes the speed (with an axis the control may swap in a sister tool). The tool list and F7 count it as a second call today ([TODO.md](../../../TODO.md)).
 
 Remaining `TOOL CALL` words (all optional, dialog order): tool axis `X|Y|Z`, `S<rpm>` (or `VC` cutting speed), `F`/`FU`/`FZ`, `DL±` (delta length), `DR±` (delta radius), `DR2±` (delta corner radius).
 
-- Positive delta = oversize, negative = undersize. The limit is ±99.999 mm. Delta values may be Q parameters.
+- Positive delta = oversize, negative = undersize. The limit is ±99.9999 mm. Delta values may be Q parameters.
 - `TOOL DEF <nr|"name"|Q>` after a tool call = **pre-selection of the next tool** (machine-dependent). Show it as a hint, not a change.
 - `TOOL DEF <nr> L±… R±…` defines tool geometry in the program (old style, rare in CAM output).
 
@@ -284,8 +287,8 @@ Remaining `TOOL CALL` words (all optional, dialog order): tool axis `X|Y|Z`, `S<
 
 | Form | Meaning |
 |---|---|
-| `CYCL DEF 247 …` with `Q339=<n>` | Activate preset (datum) line n from the preset table (verify: Q339 as parameter number) |
-| `CYCL DEF 7.0 …` / `7.1 X…` / `7.2 Y…` / `7.3 Z…` | Datum shift by values (old-style cycle with numbered sub-blocks). `7.1 #n` = line n of the datum table (verify) |
+| `CYCL DEF 247 …` with `Q339=<n>` | Activate preset (datum) line n (0–65535) from the preset table |
+| `CYCL DEF 7.0 …` / `7.1 X…` / `7.2 Y…` / `7.3 Z…` | Datum shift by values (old-style cycle with numbered sub-blocks). `7.1 #n` = line n of the datum table |
 | `TRANS DATUM AXIS X… Y… Z…` / `TRANS DATUM TABLE TABLINE n` / `TRANS DATUM RESET` | Newer datum-shift function |
 | `L … M91` / `M92` | Machine-coordinate moves (safe retract, tool-change position). These are not offsets but are useful to flag |
 
@@ -296,21 +299,23 @@ Remaining `TOOL CALL` words (all optional, dialog order): tool axis `X|Y|Z`, `S<
 ### 6.1 General form
 
 - **Old-style cycles (0–39):** one numbered block per sub-line, `CYCL DEF <nr>.<sub> …`. Example: cycle 32 is `32.0 <name>` / `32.1 T<tol>` / `32.2 HSC-MODE:<0|1> TA<deg>`.
-- **Q-style cycles (200+):** a header `CYCL DEF <nr> <name> ~`, then one indented line per parameter, `Qnnn=<value> ;<label> ~`, with the last line having no `~`. The control identifies cycles by number and parameters by Q number. The name and labels are language-dependent text (verify: that the control ignores them on import).
-- **Parameter values** are numbers (with sign) or Q parameters. Some feed parameters also accept `FAUTO`/`FMAX`/`FU`-style values (verify).
+- **Q-style cycles (200+):** a header `CYCL DEF <nr> <name> ~`, then one indented line per parameter, `Qnnn=<value> ;<label> ~`, with the last line having no `~`. The control identifies cycles by number and parameters by Q number. The name after the number and the `;` labels are dialog-language text; the labels are comments, the name is not, so a re-post in another dialog language changes every cycle header (verify: that the control ignores them on import).
+- **New parameters are appended.** A later software version adds a cycle parameter as an optional one at the **end** of the cycle; a program without it runs with the default, while a program with it gets ERROR blocks on older software. `Q395` came to cycles 200, 203 and 205, and `Q208` to 205, with software 34059x-04. So an unknown trailing Q number is normal, and "required" means "present in every software version".
+- **Parameter values** are numbers (with sign) or Q parameters. `Q206` also accepts `FAUTO` and `FU`; `Q208` accepts `FMAX` and `FAUTO`, and `Q208=0` means "retract at Q206".
+- Cycle numbers 300–399 (`CYCL DEF`) and 500–599 (probing) belong to the machine builder; gEdit gives them no meaning.
 
 **DEF-active vs CALL-active:**
 
-- Cycles 7, 8, 9, 10, 11, 19, 32 and 247 act as soon as they are defined.
-- Machining cycles (200-series) only store data and run on a call:
+- Cycles 7, 8, 9, 10, 11, 19, 26, 32 and 247 act as soon as they are defined and are never called. One of them may stand between a machining cycle's definition and its call.
+- Machining cycles (200-series) only store data and run on a call. **A call does not remove the definition**: one `CYCL DEF` serves every following call until the next machining `CYCL DEF`. So Klartext needs a "defined cycle" state, not the "active cycle" of a Fanuc canned cycle, and a tool change with a cycle still defined is normal:
 
 | Call | Effect |
 |---|---|
 | `CYCL CALL` | Run the cycle at the current position |
-| `CYCL CALL POS X… Y… Z…` | Run at the given position (verify) |
+| `CYCL CALL POS X… Y… Z…` | Run at the given position: all three axes, absolute positions, its `F` for the approach only, moved with `R0` |
 | `CYCL CALL PAT` | Run at every point of a preceding `PATTERN DEF` or point table |
 | `L X… Y… R0 FMAX M99` | Move there, then call once |
-| `M89` | Modal call (machine-dependent) |
+| `M89` | Modal call, if the machine parameter makes it one: after every following positioning block, until `M99` or the next `CYCL DEF` |
 
 **Common CAM pattern:**
 
@@ -328,7 +333,7 @@ Z pre-positioning is usually handled by the cycle itself: it rapids to `Q203+Q20
 | `HSC-MODE:0/1` | 0 = finishing (accuracy), 1 = roughing (speed) |
 | `TA` | Tolerance for rotary axes in degrees (5-axis) |
 
-Reset: `CYCL DEF 32.0` + `32.1` without values (verify). CAM usually emits it once per operation. The outline can show it as an operation-quality hint.
+Reset: define the cycle again without a tolerance, or select a new program. CAM usually emits it once per operation. The outline can show it as an operation-quality hint.
 
 ### 6.3 Drilling cycles (own descriptions of parameters)
 
@@ -351,16 +356,18 @@ Shared Q parameters:
 |---|---|---|
 | 200 | Drilling / pecking with full retract | Q200 Q201 Q206 Q202 Q210 Q203 Q204 Q211 Q395 |
 | 201 | Reaming | Q200 Q201 Q206 Q211 Q208 Q203 Q204 |
-| 202 | Boring (oriented spindle stop, lift-off) | Q200 Q201 Q206 Q211 Q208 Q203 Q204 Q214 (lift-off direction) Q336 (spindle angle) (verify) |
-| 203 | Universal drilling (decreasing pecks, chip breaking) | Q200 Q201 Q206 Q202 Q210 Q203 Q204 Q212 (peck decrement) Q213 (breaks before retract) Q205 (min peck) Q211 Q208 Q256 (chip-break retract) Q395 (verify) |
-| 204 | Back boring | (verify) |
-| 205 | Universal deep-hole drilling | Q200 Q201 Q206 Q202 Q203 Q204 Q212 Q205 Q258/Q259 (advance stop distances) Q257 (depth per chip break) Q256 Q211 Q379 (deepened start) Q253 (pre-position feed) Q208 Q395 (verify) |
-| 206 | Tapping with floating holder | Q200 Q201 Q206 (= S × pitch) Q211 Q203 Q204 (verify) |
-| 207 | Rigid tapping | Q200 Q201 Q239 (pitch; sign = right/left hand) Q203 Q204 (verify) |
-| 208 | Bore milling (helical) | Q200 Q201 Q206 Q334 (pitch per rev) Q203 Q204 Q335 (nominal diameter) Q342 (pre-drilled diameter) Q351 (climb/up-cut) (verify) |
-| 209 | Rigid tapping with chip breaking | Q200 Q201 Q239 Q203 Q204 Q257 Q256 Q336 Q403 (retract speed factor) (verify) |
-| 240 | Centering (to depth or diameter) | Q200 Q343 (0 = depth, 1 = diameter) Q201 Q344 (diameter) Q206 Q211 Q203 Q204 (verify) |
-| 241 | Single-lip deep-hole drilling | (verify) |
+| 202 | Boring (oriented spindle stop, lift-off) | Q200 Q201 Q206 Q211 Q208 Q203 Q204 Q214 (lift-off direction) Q336 (spindle angle) |
+| 203 | Universal drilling (decreasing pecks, chip breaking) | Q200 Q201 Q206 Q202 Q210 Q203 Q204 Q212 (peck decrement) Q213 (breaks before retract) Q205 (min peck) Q211 Q208 Q256 (chip-break retract) Q395 |
+| 204 | Back boring | Q200 Q249 Q250 Q251 Q252 Q253 Q254 Q255 Q203 Q204 Q214 Q336 |
+| 205 | Universal deep-hole drilling | Q200 Q201 Q206 Q202 Q203 Q204 Q212 Q205 Q258/Q259 (advance stop distances) Q257 (depth per chip break) Q256 Q211 Q379 (deepened start) Q253 (pre-position feed) Q208 Q395 — Q208 and Q395 are the optional trailing pair |
+| 206 | Tapping with floating holder | Q200 Q201 Q206 (= S × pitch) Q211 Q203 Q204 |
+| 207 | Rigid tapping | Q200 Q201 Q239 (pitch; sign = right/left hand) Q203 Q204 |
+| 208 | Bore milling (helical) | Q200 Q201 Q206 Q334 (pitch per rev) Q203 Q204 Q335 (nominal diameter) Q342 (pre-drilled diameter) Q351 (climb/up-cut) |
+| 209 | Rigid tapping with chip breaking | Q200 Q201 Q239 Q203 Q204 Q257 Q256 Q336 Q403 (retract speed factor) |
+| 240 | Centering (to depth or diameter) | Q200 Q343 (0 = depth, 1 = diameter) Q201 Q344 (diameter) Q206 Q211 Q203 Q204 |
+| 241 | Single-lip deep-hole drilling | Q200 Q201 Q206 Q211 Q203 Q204 Q379 Q253 Q208 Q426 Q427 Q428 Q429 Q430 Q435 Q401 Q202 Q212 Q205 |
+
+These orders are the same in the -07 and -08 cycle manuals, and `heidenhain.json` follows them.
 | 262–267 | Thread milling variants | Optional, only if posts emit them (verify) |
 
 Pocket and stud cycles (251–258) and face milling (232/233) are only emitted by some posts in "cycle output" mode. Highlight them generically, with no special support.
@@ -369,13 +376,16 @@ Pocket and stud cycles (251–258) and face milling (232/233) are only emitted b
 
 | Cycle | Sub-block form |
 |---|---|
-| 7 datum shift | `7.0` / `7.1 X…` / `7.2 Y…` / `7.3 Z…` |
-| 9 dwell | `9.0` / `9.1 V.ZEIT t` (German label) (verify) |
-| 10 rotation | `10.0` / `10.1 ROT±a` |
+| 7 datum shift | `7.0` / `7.1 X…` / `7.2 Y…` / `7.3 Z…`, or `7.1 #n` for a datum-table line |
+| 8 mirror | `8.0` / `8.1` with the axes |
+| 9 dwell | `9.0` / `9.1` with a dialog-language label and the seconds |
+| 10 rotation | `10.0` / `10.1 ROT±a` (also `IROT`) |
+| 11 scaling | `11.0` / `11.1 SCL f` |
+| 26 axis-specific scaling | `26.0` / `26.1` with the axes and a centre |
 | 19 tilt (old) | see §4.6 |
-| 247 preset | Q-style, one parameter |
+| 247 preset | Q-style, one parameter `Q339` |
 
-Reset values are 0.
+Reset values are 0. The owner's CAM post writes 7, 9 and 247 with `PLANE`, his older programs 19 and 7; the database has none of them yet, and hover cannot reach a sub-block such as `32.1` ([TODO.md](../../../TODO.md)).
 
 ---
 
@@ -396,7 +406,7 @@ Reset values are 0.
   |---|---|---|
   | `Q` | global | 0–1999 (0–99 and 1600–1999 are for the user; 100–199 system; 200–1199 control cycles; 1200–1599 machine-builder cycles) |
   | `QL` | local to the program | 0–499 |
-  | `QR` | persistent | 0–499 |
+  | `QR` | persistent | 0–499 (0–99 user, 100–199 control, 200–499 machine builder) |
   | `QS` | string | same ranges as Q, up to 255 characters |
 
 - **Assignment forms:**
@@ -488,12 +498,13 @@ Lines to surface. In CAM files, most of them carry a block-number prefix.
 - Tool name with lower case (warn), > 32 characters, or forbidden characters.
 - Unbalanced `"`.
 - `TOOL CALL` while `M128` or TCPM is active (should be reset first).
-- `M91`/`M92` while `M128` is active.
+- `M91`/`M92` while `M128` or `FUNCTION TCPM` is active.
+- A code a TNC 640 refuses at run time, from a post written for an older control: `M104`, `M105`/`M106`, `M112`/`M113`, `M114`/`M115`, `M124`, `M134`/`M135`, `M142`, `M150`, `M200`–`M204`, `FN 15`, `FT`/`FMAXT`, cycles 1–6 and 15–17 (behind a machine setting, since the control generation decides).
 
 **Cycles:**
 
-- `CYCL DEF 2xx` never called (no `CYCL CALL`/`M99`/`M89`/`CYCL CALL PAT|POS` before the next `CYCL DEF`, `TOOL CALL` or end).
-- `M99`/`CYCL CALL` with no cycle defined.
+- `CYCL DEF 2xx` never called (no `CYCL CALL`/`M99`/`M89`/`CYCL CALL PAT|POS` before the next `CYCL DEF` or the end; a `TOOL CALL` does not end a definition).
+- `M99`/`CYCL CALL` with no machining cycle defined. `CYCL CALL POS` without all three axes.
 - Missing required Q parameters for known cycle numbers (table-driven from §6.3).
 - Q201 = 0 (no-op) or with a sign that points away from the material (info).
 - Duplicate Q numbers inside one cycle.
@@ -505,8 +516,9 @@ Lines to surface. In CAM files, most of them carry a block-number prefix.
 - `PLANE` active at the next `TOOL CALL` or `END PGM` without `PLANE RESET` (info).
 - `M128` without `M129` before the end.
 - `FUNCTION TCPM` without `FUNCTION RESET TCPM`.
-- `LN` missing one of X/Y/Z/NX/NY/NZ.
+- `LN` with only some of NX/NY/NZ (the normals are all or none), or `TX..TZ` while TCPM is off (ignored).
 - `LN` with a Q parameter in TX/TY/TZ.
+- `M136` with `FU` in an INCH program. Switching `FUNCTION MODE` while a tilt or TCPM is active.
 - Vector not normalised (|v| deviating from 1 by more than about 1e-5).
 
 **General:**
@@ -515,30 +527,31 @@ Lines to surface. In CAM files, most of them carry a block-number prefix.
 - Unknown first word after the block number.
 - Assignments to Q100–Q199 (system range) (warn).
 - F values that are implausibly high for the unit (INCH programs use 1/10 in/min).
-- Decimal comma used in numbers.
+- Decimal comma used in numbers (info, not an error: real CAM output writes it, §10).
 
 ---
 
 ## 10. Open questions / to verify on real CAM output
 
-1. Exact continuation format: is `~` mandatory on every continued line? How much indentation is used? Are single-line cycle definitions accepted on import?
-2. Structure block syntax (`* - text`) and how nesting depth is encoded in the file.
-3. Position and spacing of the block-skip `/`.
+1. ~~Exact continuation format.~~ The owner's CAM post settles the form (§2): header ` ~`, four-space indent, last line without `~`. Whether single-line cycle definitions are accepted on import is open.
+2. Structure block syntax (`* - text`) and how nesting depth is encoded in the file. Structure blocks have a depth and at most 252 characters of text; the file form of deeper levels is open.
+3. ~~Position of the block-skip `/`.~~ The manuals put it after the number; one of the owner's posts writes it in front (§3.1). Both occur.
 4. Import behaviour when block numbers are missing, duplicated or have gaps (renumbered? rejected?).
 5. Does the name after `BEGIN PGM` have to match the file name? What happens on a mismatch?
 6. File encoding (UTF-8 vs ISO-8859-1) and line endings as written by the control and by typical transfer tools. Are umlauts allowed in comments?
-7. Is a decimal comma ever accepted? Are unsigned coordinates (`X10`) and lower-case words accepted?
+7. ~~Is a decimal comma ever accepted?~~ Yes: CAM output writes it (see the note at the top). Open: unsigned coordinates (`X10`) and lower-case words.
 8. Does the control ignore the language-dependent cycle names and `;` parameter labels on import (for example, does a German program load on an English control)?
-9. File syntax of `FAUTO` vs `F AUTO`, `VC`, `FU`/`FZ` and `TOOL CALL QSn`, and the modality of FU/FZ.
-10. Word order in `PLANE … TURN MB … F… SEQ… TABLE ROT|COORD ROT`, and `PLANE RESET` options.
-11. `FUNCTION TCPM` reference-point options on newer software (`REFPNT …`).
-12. `CYCL CALL POS` syntax, cycle 7 datum-table form (`#n`), cycle 247 parameter number, cycle 19 sub-block words, cycle 9 label text, and cycle 32 reset form.
-13. Full, current parameter lists for cycles 202–209 and 240/241 (cycle manual not in the provided sources). Which cycles do common CAM posts actually emit?
-14. Other M functions that take arguments (`M120 LA`, `M101 BT`, …).
-15. Maximum line length and maximum comment length (structure text: 252 characters).
+9. File syntax of `VC` and `TOOL CALL QSn`, and the modality of FU/FZ. (The manual writes both `F MAX`/`F AUTO` and `FMAX`/`FAUTO`; both are aliases already. Where FU/FZ are allowed: §4.4.)
+10. ~~Word order in `PLANE …`.~~ Settled (§4.6).
+11. ~~`FUNCTION TCPM` reference-point options.~~ Settled (§3.2).
+12. ~~`CYCL CALL POS`, cycles 7, 247, 19, 9 and 32.~~ Settled (§5, §6).
+13. ~~Parameter lists of 202–209 and 240/241.~~ Settled (§6.3). Which cycles his posts emit: the one CAM-posted program of his has no 200-series drilling cycle, so whether his posts write `Q395` is still open.
+14. ~~M functions with arguments.~~ `M128 F`, `M140 MB n|MB MAX [F]`, `M120 LA n`, `M103 F factor`, `M94 [axis]`.
+15. Maximum line length. Structure text: 252 characters; Q numbers 0–1999; feeds up to 99999.999; positions up to ±99999.9999.
 16. Differences between control generations: TNC 426/430 (no `PLANE`, older cycle forms), iTNC 530, TNC 620/640, and newer controls. Are there syntax changes that affect tokenizing?
 17. Should `.I` (Heidenhain ISO) get its own dialect, or be treated as a generic ISO dialect? What is its header format?
-18. Path quoting in `CALL PGM` for names with spaces or special characters.
+18. Path quoting in `CALL PGM` for names with spaces or special characters. (A bare name means the same folder; a full `TNC:\…` path and a relative `..\` path are allowed; an ISO program needs `.I`.)
+19. New, for the owner: the control generation and NC software number of each Heidenhain machine (decides `Q395`, the legacy-code check and the TCPM form), whether cycle 19 reads spatial or axis angles, whether `M89` is a modal call, the dialog language, and whether any machine has the turning option.
 
 ---
 

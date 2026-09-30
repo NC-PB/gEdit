@@ -41,7 +41,7 @@
       "label": "Subprogram call"
     },
     "LIMS": {
-      "description": "Highest speed the control may run while the constant cutting speed is on. It is a limit, not a speed: changing it changes the guard the programmer set.",
+      "description": "Highest speed the control may run under G96, G961 and G97 (not under G971). It is a limit, not a speed: changing it changes the guard the programmer set. It cannot raise the G26 or setting-data limit, stays in force after the program ends, and LIMS[n]= sets it for spindle n.",
       "label": "Spindle speed limit"
     },
     "M": {
@@ -923,7 +923,7 @@
     },
     {
       "code": "CYCLE87",
-      "description": "Stops the spindle and the program at depth; the operator retracts the tool.",
+      "description": "Bores to depth, then stops the spindle without orienting it and stops the program. On the next NC start the cycle pulls the tool out to the retraction plane at rapid by itself.",
       "group": "cycle",
       "label": "Boring cycle with a stop at depth",
       "params": [
@@ -955,12 +955,11 @@
       ],
       "sets": {
         "cycle": "start"
-      },
-      "verify": true
+      }
     },
     {
       "code": "CYCLE88",
-      "description": "Waits at depth, then stops the spindle and the program there.",
+      "description": "Like CYCLE87 with a dwell at depth: waits, stops the spindle and the program, and pulls out at rapid on the next NC start.",
       "group": "cycle",
       "label": "Boring cycle with a dwell and a stop at depth",
       "params": [
@@ -997,12 +996,11 @@
       ],
       "sets": {
         "cycle": "start"
-      },
-      "verify": true
+      }
     },
     {
       "code": "CYCLE89",
-      "description": "Waits at depth and feeds back out at the cutting feed.",
+      "description": "Waits at depth and feeds back out at the cutting feed, then leaves at rapid.",
       "group": "cycle",
       "label": "Boring cycle with a dwell, feed out",
       "params": [
@@ -1034,8 +1032,7 @@
       ],
       "sets": {
         "cycle": "start"
-      },
-      "verify": true
+      }
     },
     {
       "code": "CYCLE93",
@@ -1708,6 +1705,43 @@
       "group": "spindle",
       "label": "Spindle orientation",
       "verify": true
+    },
+    {
+      "code": "M40",
+      "description": "Lets the control choose the gear stage from the programmed speed.",
+      "group": "spindle",
+      "label": "Automatic gear stage"
+    },
+    {
+      "code": "M41",
+      "group": "spindle",
+      "label": "Gear stage 1"
+    },
+    {
+      "code": "M42",
+      "group": "spindle",
+      "label": "Gear stage 2"
+    },
+    {
+      "code": "M43",
+      "group": "spindle",
+      "label": "Gear stage 3"
+    },
+    {
+      "code": "M44",
+      "group": "spindle",
+      "label": "Gear stage 4"
+    },
+    {
+      "code": "M45",
+      "group": "spindle",
+      "label": "Gear stage 5"
+    },
+    {
+      "code": "M70",
+      "description": "Switches the spindle over to position control as a rotary axis.",
+      "group": "spindle",
+      "label": "Spindle to axis mode"
     },
     {
       "code": "SETMS",

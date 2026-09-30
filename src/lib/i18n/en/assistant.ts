@@ -36,6 +36,8 @@ export default {
     motion: 'Motion',
     nonmodal: 'Non-modal',
     plane: 'Working plane',
+    /** Klartext `PLANE …`: a tilted working plane, kept apart from the G17–G19 plane group. */
+    tilt: 'Tilted working plane',
     /** Keeping the tool tip on the path while rotary axes move: not a plane at all. */
     tcpm: 'Tool centre point',
     units: 'Units',

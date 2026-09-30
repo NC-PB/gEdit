@@ -1,0 +1,10 @@
+{
+  "profile": "fanuc-gcode",
+  "ownerReviewed": false,
+  "items": [
+    {"kind":"program","line":2,"text":"O1000","endLine":206},
+    {"kind":"tool","line":4,"text":"T2","tool":"2","endLine":202},
+    {"kind":"tool","line":203,"text":"T0","tool":"0","endLine":206},
+      {"kind":"end","line":205,"text":"M30"}
+  ]
+}

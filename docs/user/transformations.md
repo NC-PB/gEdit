@@ -71,9 +71,9 @@ the first run in a dialect:
 |---|---|
 | **Start at** | The number the first block gets (default 10) |
 | **Increment** | The step between blocks (default 10) |
-| **Digits** | Pad with leading zeros to this width; 0 writes the number as short as it is. On a control with a hard limit, at most as many digits as its highest block number (Okuma: 4) |
-| **Maximum** | Leave empty for no maximum (default 99999 on Fanuc and Sinumerik, 9999 on Okuma). On Okuma it is required and at most 9999, the highest block number the control accepts |
-| **Above the maximum** | Start over at the start value, or stop and warn (Okuma: stop by default) |
+| **Digits** | Pad with leading zeros to this width; 0 writes the number as short as it is. On a control with a hard limit, at most as many digits as its highest block number (Okuma: 4, Sinumerik: 10) |
+| **Maximum** | Leave empty for no maximum (default 99999 on Fanuc). On Okuma and Sinumerik it is required and at most the highest block number the control accepts: 9999 on Okuma, 2147483647 on Sinumerik (a whole number there, so real 5-axis posts that number past N3,700,000 still fit) |
+| **Above the maximum** | Start over at the start value, or stop and warn (Okuma and Sinumerik: stop by default) |
 | **Spaces after the number** | Between `N120` and the rest of the block |
 | **Skip lines starting with** | Separated by spaces. Fanuc skips `%`, `O` and `(`; Okuma `$`, `%`, `O` and `(`; Sinumerik `%`, `;`, `PROC`, `DEF` and `EXTERN`. A program marker (`%`, `O1001`, Okuma's `$NAME.MIN%`, Sinumerik's `%_N_…`) is never numbered, whatever the list says — on Okuma only an `O` line with nothing behind it counts as one, so `O1001 (NAME)` is protected only by the `O` in the list |
 | **Skip empty lines** | On by default |

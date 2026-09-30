@@ -215,6 +215,26 @@
       "description": "One straight threading pass; this is how G-code systems B and C spell G32. F carries the thread lead per revolution, not a feed rate."
     },
     {
+      "code": "G34",
+      "group": "motion",
+      "modal": true,
+      "pitchFeed": true,
+      "label": "Thread cutting with a variable lead",
+      "description": "Cuts a thread whose lead grows or shrinks by K with every spindle revolution. F is the lead at the start point, not a feed rate, so scaling the feed would change the thread.",
+      "params": [
+        {
+          "address": "F",
+          "label": "Lead at the start point",
+          "required": true,
+          "min": 0
+        },
+        {
+          "address": "K",
+          "label": "Change of the lead per spindle revolution"
+        }
+      ]
+    },
+    {
       "code": "G40",
       "group": "compensation",
       "modal": true,
@@ -270,9 +290,8 @@
       "code": "G44",
       "group": "lengthComp",
       "modal": true,
-      "verify": true,
       "label": "Tool length offset, negative",
-      "description": "Applies the tool length from the offset register named by H the other way round than G43. CAM output normally writes G43. Check what your control does with it.",
+      "description": "Applies the tool length from the offset register named by H the other way round than G43. CAM output normally writes G43.",
       "params": [
         {
           "address": "Z",
@@ -296,10 +315,9 @@
     {
       "code": "G50",
       "group": "nonmodal",
-      "verify": true,
       "sets": { "speedLimit": true },
-      "label": "Scaling cancel, or coordinate set with a speed clamp",
-      "description": "Not described for milling in the syntax notes: on many mills this number cancels scaling, on others it sets the coordinate system. With an S word it is the top spindle speed for constant surface speed, which is how lathes in G-code system A write it, so gEdit keeps reading the S of this block as a clamp. Check what your control does with it."
+      "label": "Scaling cancel",
+      "description": "Ends scaling on a machining centre; G51 switches it on. gEdit still reads an S word in such a block as a spindle-speed clamp, because a lathe program in G-code system A writes its clamp as G50 S and may be opened with this profile by mistake."
     },
     {
       "code": "G53",
@@ -448,6 +466,12 @@
           "label": "Dwell at the bottom in milliseconds",
           "min": 0,
           "unit": "count"
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
         }
       ]
     },
@@ -488,6 +512,18 @@
           "label": "Boring feed",
           "required": true,
           "min": 0
+        },
+        {
+          "address": "P",
+          "label": "Dwell at the bottom in milliseconds",
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
         }
       ]
     },
@@ -669,6 +705,17 @@
           "label": "Dwell at the bottom in milliseconds",
           "min": 0,
           "unit": "count"
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "Q",
+          "label": "Peck depth, for peck tapping",
+          "min": 0
         }
       ]
     },
@@ -703,6 +750,12 @@
           "label": "Boring feed",
           "required": true,
           "min": 0
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
         }
       ]
     },
@@ -737,6 +790,12 @@
           "label": "Boring feed",
           "required": true,
           "min": 0
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
         }
       ]
     },
@@ -744,7 +803,6 @@
       "code": "G87",
       "group": "cycle",
       "modal": true,
-      "verify": true,
       "sets": { "cycle": "start" },
       "label": "Back boring cycle",
       "description": "Bores a face on the underside of the workpiece, shifting by Q to get the tool through the hole. On lathes in G-code system A, G87 drills into the side of the part along X instead.",
@@ -777,6 +835,18 @@
           "label": "Boring feed",
           "required": true,
           "min": 0
+        },
+        {
+          "address": "P",
+          "label": "Dwell at the bottom in milliseconds",
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
         }
       ]
     },
@@ -784,7 +854,6 @@
       "code": "G88",
       "group": "cycle",
       "modal": true,
-      "verify": true,
       "sets": { "cycle": "start" },
       "label": "Boring cycle with manual retract",
       "description": "Feeds down to Z, dwells and stops so that the operator pulls the tool out by hand. It is rare in CAM output. On lathes in G-code system A, G88 taps along X instead.",
@@ -818,6 +887,12 @@
           "label": "Boring feed",
           "required": true,
           "min": 0
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
         }
       ]
     },
@@ -858,6 +933,12 @@
           "label": "Boring feed",
           "required": true,
           "min": 0
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
         }
       ]
     },
@@ -881,10 +962,9 @@
       "code": "G92",
       "group": "nonmodal",
       "pitchFeedAmbiguous": true,
-      "verify": true,
       "sets": { "speedLimit": true },
       "label": "Coordinate set, spindle speed clamp",
-      "description": "The same job as G50 on lathes in G-code system B and C: set the coordinate system, and with an S word clamp the top spindle speed. In system A this number is the single-pass threading cycle instead."
+      "description": "Sets the work coordinate system, or with an S word clamps the top spindle speed; lathes in G-code system B and C use the number the same way. In system A this number is the single-pass threading cycle instead, so gEdit never scales the F of such a block."
     },
     {
       "code": "G93",

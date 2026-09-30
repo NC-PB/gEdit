@@ -249,6 +249,26 @@
       "pitchFeed": true
     },
     {
+      "code": "G34",
+      "description": "Cuts a thread whose lead grows or shrinks by K with every spindle revolution. F is the lead at the start point, not a feed rate, so scaling the feed would change the thread.",
+      "group": "motion",
+      "label": "Thread cutting with a variable lead",
+      "modal": true,
+      "params": [
+        {
+          "address": "F",
+          "label": "Lead at the start point",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "K",
+          "label": "Change of the lead per spindle revolution"
+        }
+      ],
+      "pitchFeed": true
+    },
+    {
       "code": "G40",
       "description": "Turns nose radius compensation off. Do it during a retract move, not in an arc.",
       "group": "compensation",
@@ -325,6 +345,21 @@
       "group": "offset",
       "label": "Work offset 6",
       "modal": true
+    },
+    {
+      "code": "G54.1",
+      "description": "Selects one of the additional work coordinate systems. P names which one.",
+      "group": "offset",
+      "label": "Extended work offset",
+      "modal": true,
+      "params": [
+        {
+          "address": "P",
+          "label": "Extended work offset number",
+          "min": 1,
+          "required": true
+        }
+      ]
     },
     {
       "code": "G73",
@@ -557,8 +592,7 @@
       ],
       "sets": {
         "cycle": "start"
-      },
-      "verify": true
+      }
     },
     {
       "code": "G87",
@@ -656,8 +690,7 @@
       ],
       "sets": {
         "cycle": "start"
-      },
-      "verify": true
+      }
     },
     {
       "code": "G90",
@@ -714,6 +747,24 @@
       "pitchFeed": true,
       "sets": {
         "speedLimit": true
+      }
+    },
+    {
+      "code": "G93",
+      "description": "The F word no longer gives a speed but the reciprocal of the time the block may take, so F12.5 runs the block in 4.8 seconds. Every move needs its own F while this mode is on.",
+      "group": "feedmode",
+      "label": "Inverse time feed",
+      "modal": true,
+      "params": [
+        {
+          "address": "F",
+          "label": "One divided by the block time in minutes",
+          "min": 0,
+          "required": true
+        }
+      ],
+      "sets": {
+        "feedUnit": "inverse-time"
       }
     },
     {
@@ -1172,6 +1223,17 @@
       "label": "Facing pass (G-code system B)",
       "modal": true,
       "verify": true
+    },
+    {
+      "code": "G84.2",
+      "description": "Rigid tapping written in the format of an older control generation. F is the thread lead, so scaling the feed would change the thread.",
+      "group": "cycle",
+      "label": "Rigid tapping cycle, older block format",
+      "modal": true,
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      }
     }
   ],
   "dialect": "fanuc-lathe",

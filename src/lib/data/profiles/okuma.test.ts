@@ -143,10 +143,16 @@ const FIXTURES = listFixtures('nc/okuma');
 /** The fixtures that carry no Okuma extension: the content rules alone have to decide. */
 const CONTENT_ONLY = FIXTURES.filter((rel) => !['min', 'sub', 'ssb'].includes(extensionOf(rel)));
 
-/** Every line of the other dialects' fixtures as detection reads it: the negative set. */
+/**
+ * Every line of the other dialects' fixtures as detection reads it: the negative set. The
+ * owner's own Okuma programs (`nc/owner-public/okuma-osp/`) are this dialect, not another.
+ */
 function otherDialectLines(): string[] {
   return listFixtures('nc')
-    .filter((rel) => !rel.startsWith('nc/okuma/') && !rel.startsWith('nc/encoding/'))
+    .filter(
+      (rel) =>
+        !rel.startsWith('nc/okuma/') && !rel.startsWith('nc/owner-public/okuma-osp/') && !rel.startsWith('nc/encoding/'),
+    )
     .flatMap((rel) => {
       const opened = openFixture(rel);
       return opened.refused === null ? sniffLines(opened.text) : [];

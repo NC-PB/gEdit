@@ -7,6 +7,7 @@ Sources:
 - The control maker's NC programming manual for the 840D sl, software 4.92, edition 06/2019 (German). It settles most of what the first version of these notes had to leave open; the tag below cites its section and page. The notes say what it says in their own words and quote nothing.
 - An 840D sl programming manual from a machine builder (German). Most of it covers the builder's own cycles, which are out of scope. Only general control syntax that is visible in its examples was used.
 - General DIN 66025 introductions (German).
+- Added by the source review of 2026-09 ([source-review-2026-09.md](../source-review-2026-09.md)): the control maker's cycles manual (01/2008), its fundamentals and job-planning manuals (2006, 2013), its measuring-cycles manuals (2008, 2019), its 5-axis machining handbook (2009) and its training material on the high-level language (2010). Where one of them settles a point below, the text says so without a page tag.
 - General knowledge where those sources say nothing.
 
 Source tags used below:
@@ -46,7 +47,7 @@ Where a whole section is general knowledge, its first paragraph says so once.
 
 - Conversational work-step programs written with the control's graphical front-end. They are stored as G-code with large blocks of hidden, machine-generated lines.
 - Machine-builder cycles. They show up as ordinary subprogram calls such as `NAME(1,2)` and are highlighted generically.
-- ISO dialect mode (`G291` [P §3.23.7, p.1025], or a program called with `ISOCALL` [P §3.2.3.7, p.544]), in which the control reads Fanuc-style code with the ISO settings of its machine data. gEdit's decision: such a file is read with a Fanuc profile.
+- ISO dialect mode (`G291` [P §3.23.7, p.1025], or a program called with `ISOCALL` [P §3.2.3.7, p.544]), in which the control reads Fanuc-style code with the ISO settings of its machine data; `G290` switches back to Siemens mode, the reset state. gEdit's decision: such a file is read with a Fanuc profile. Two of the five programs in the owner's Siemens folder look like ISO-mode programs (parenthesis comments, no `MSG` or `LIMS`), so this case is real; the database has neither `G290` nor `G291` yet.
 - Definition files: `.GUD`, `.DEF`, `.INI`, tool offset files (`.TOA`), archives (`.ARC`). Open them as plain text.
 - Backplot and DNC.
 
@@ -106,7 +107,7 @@ The first two lines are only present in files moved through the transfer format.
 | Declaration in caller | `EXTERN <name>(<type>, …)` before a parameterized call of a subprogram in the workpiece or global folder; cycles need none | [M]; [P §3.2.3.2, p.536] |
 | Definitions | Local and program-global variables are defined in the definition part at the top of a program, one data definition per block and one data type per definition | [P §3.1.1.5, p.404] |
 | Block | One line = one block. There is no continuation character: `&` is a formatting character that reads like a space. | [P §2.2.2.2, p.50; §2.3.2, p.56] |
-| Block number | `N` and a positive whole number. The order is free, but a number should occur once, or a block search is ambiguous. | [P §2.2.2.2, p.50] |
+| Block number | `N` and a positive whole number (an INT, so there is no five-digit limit). The order is free, but a number should occur once, or a block search is ambiguous. Real 5-axis posts number past N3,700,000, which is why the profile's renumbering maximum is the INT limit 2147483647 and it stops rather than wraps (a maximum that stops is the control's hard limit to the renumber form). | [P §2.2.2.2, p.50; address table p.1215] |
 | Line end | A block ends with LF. CR LF is accepted on import **[GK: verify]**. Keep the original line ending when saving. | [P §2.2.2.2, p.50] |
 | Encoding | Plain ASCII in CAM output. Older controls use Latin-1 for umlauts in comments; newer ones may use UTF-8. Never convert silently. Characters that cannot be shown are read as spaces. | [GK: verify]; [P §2.3.2, p.56] |
 | Block length | At most 512 characters, the comment and the LF included | [P §2.2.2.2, p.50] |
@@ -260,10 +261,13 @@ The G groups, their members, which of them are modal and which is the control's 
 | `G63` | Tapping with a compensating chuck, one block | 2 | Axis word, direction `M3`/`M4`, speed `S`, feed `F` = spindle speed × pitch; afterwards the move type in force before it applies again. The retract is a second `G63` block with the reversed direction. [P §2.9.12.1, p.247–248] |
 | `G9` | Exact stop for this block only | 11 | [P §4.3.11, p.1230] |
 | `G60` / `G64` | Exact-stop mode (the reset state) / continuous-path mode | 10 | [P §4.3.10, p.1230] |
-| `G641` / `G642` / `G643` / `G644` / `G645` | Continuous path with rounding by distance (`ADIS=`) / by axis tolerances / tolerances inside the block / greatest dynamics / tangential transitions too | 10 | [P §4.3.10, p.1230]. `G642` is common in CAM output, usually set by `CYCLE832` **[GK: verify]** |
+| `G641` / `G642` / `G643` / `G644` / `G645` | Continuous path with rounding by distance (`ADIS=`) / by axis tolerances / tolerances inside the block / greatest dynamics / tangential transitions too | 10 | [P §4.3.10, p.1230]. `CYCLE832` switches the path mode, the compressor, `SOFT`/`BRISK` and feed-forward itself, and the cycles manual says the CAM program after it should not repeat them; a post that does not use it writes them directly |
 | `SOFT` / `BRISK` / `DRIVE` | Jerk-limited / step (the reset state) / speed-dependent acceleration, modal | 21 | [P §4.3.21, p.1233] |
 | `FFWON` / `FFWOF` | Feed-forward control on/off | 24 | |
-| `COMPON` / `COMPCURV` / `COMPCAD` / `COMPSURF` / `COMPOF` | Compressor for short linear blocks; `COMPOF` is the reset state | 30 | [P §4.3.30, p.1236]. `COMPCAD` is typical for mould and surface CAM output **[GK: verify]** |
+| `COMPON` / `COMPCURV` / `COMPCAD` / `COMPSURF` / `COMPOF` | Compressor for short linear blocks; `COMPOF` is the reset state | 30 | [P §4.3.30, p.1236]. Usually switched by `CYCLE832` (see `G642`) |
+| `G601` / `G602` / `G603` | Block change at fine / coarse exact stop / at the end of interpolation | 12 | Missing from the database |
+| `DYNNORM` / `DYNPOS` / `DYNROUGH` / `DYNSEMIFIN` / `DYNFINISH` / `DYNPREC` | Dynamics response per technology | 59 | Missing from the database |
+| `CTOL=` / `OTOL=` / `ADIS=` | Contour tolerance (a length) / orientation tolerance (an angle) / rounding distance; a negative tolerance clears it | – | Missing from the database |
 
 ### 4.2 Plane, units, dimensions, feed type
 
@@ -294,6 +298,8 @@ The G groups, their members, which of them are modal and which is the control's 
 | `G54`–`G57` | Settable work offsets 1–4 | 8 | |
 | `G505`–`G599` | Further settable work offsets; how many a control has is machine data | 8 | [P §4.3.8, p.1229] |
 | `G53` / `G153` / `SUPA` | Suppress offsets for this block: the programmable and settable frames / and the base frames / and handwheel, external and preset offsets | 9 | Used for safe retract before tool change [P §4.3.9, p.1229] |
+| `G58` / `G59` | Programmable **axial** offsets (replace / add), not work offsets as on Fanuc | 3 | Their axis words are offsets, not positions |
+| `G74` / `G75` | Reference-point approach / approach a fixed machine point (`G75 X0 Z0 FP=n`): the axis value is not a position | 2 | Common in milling posts as a retract; not allowed while radius compensation or a transformation is active. Missing from the database |
 | `TRANS` / `ATRANS` | Programmable translation (absolute / additive) | 3 (non-modal, own block; the frame it sets stays) | `TRANS` alone resets the programmable frame [P §4.3.4, p.1227] |
 | `ROT` / `AROT` | Programmable rotation around axes, or `RPL=` in plane | 3 | Used for 3+2 when the post does not use `CYCLE800` |
 | `SCALE` / `ASCALE`, `MIRROR` / `AMIRROR` | Scaling / mirroring | 3 | Rare in CAM output |
@@ -303,11 +309,12 @@ The G groups, their members, which of them are modal and which is the control's 
 | Code | Meaning | Notes |
 |---|---|---|
 | `CYCLE800(…)` | Swivel the working plane (standard Siemens cycle, common in CAM output for 3+2) | See §6.2 |
-| `TRAORI` | Switch on the 4- or 5-axis transformation (tool-centre-point programming) | Optional arguments (transformation number, offsets) |
+| `TRAORI` | Switch on the 4- or 5-axis transformation (tool-centre-point programming) | Optional arguments `(n, x,y,z, a,b)`. After it, X/Y/Z are the tool tip |
 | `TRAFOOF` | Switch off the active transformation | Must follow every `TRAORI`/`TRANSMIT`/`TRACYL` section |
 | `ORIWKS` / `ORIMKS` | Orientation in workpiece / machine coordinates | |
 | `ORIAXES` / `ORIVECT` | Interpolate orientation axis-wise / as a vector (great circle) | |
-| `A3= B3= C3=` | Tool direction vector (alternative to rotary axis words) | |
+| `A3= B3= C3=` | Tool direction vector (alternative to rotary axis words) | Also `A2/B2/C2` (angles), `A4`…`C8`, `LEAD`/`TILT`/`THETA` |
+| `ORIEULER` / `ORIRPY`, `ORIPATH` / `ORIPLANE` / `ORICURVE`, `ORIRESET(…)` | How orientation angles are read / interpolated; `ORIRESET` only while `TRAORI` is on | Missing from the database |
 | `TRANSMIT` / `TRACYL` / `TRAANG` | Face-end (polar) / peripheral-surface / inclined-axis transformation for mill-turn | Named in [M] as control functions |
 
 ### 4.5 Spindle, tool, M functions
@@ -324,11 +331,13 @@ The G groups, their members, which of them are modal and which is the control's 
 | `M0` / `M1` | Program stop / optional stop | | [M] |
 | `M2` / `M30` | Program end | | [M] |
 | `M17` | Subprogram end | | [M]; [P §3.2.2.8, p.522] |
-| `M7` / `M8` / `M9` | Coolant (mist, flood, off). Machine-dependent. | | [GK: verify] |
+| `M7` / `M8` / `M9` | Coolant (mist, flood, off). Machine-dependent: they are not among the control's predefined M functions. | | [GK: verify] |
+| `M40` / `M41`–`M45` | Automatic gear stage / gear stage 1–5; predefined by the control. All five programs in the owner's Siemens folder write `M41` | | [P §2.13, p.348–349] |
+| `M70` | Spindle switched to axis mode; predefined | | [P §2.13, p.349] |
 | `MSG("…")` / `MSG()` | Show / clear an operator message. CAM posts often use it for the operation name **(verify)**. | | [M] |
 | `STOPRE` | Stop look-ahead (pre-processing stop) | | [M] |
 
-M-numbers above 30 are machine-specific. Keep them in a user-editable machine table; do not mark them as errors.
+M-numbers above 30 are machine-specific, except the predefined `M40`–`M45` and `M70`. `M0`, `M1`, `M2`, `M17` and `M30` never take an address extension, and a block holds at most five M functions. Keep the rest in a user-editable machine table; do not mark them as errors.
 
 ### 4.6 Differences from Fanuc that matter for the editor
 
@@ -392,20 +401,20 @@ Parameters shared by all drilling cycles:
 | RFP | Reference plane (absolute; top of hole) |
 | SDIS | Safety distance above RFP (no sign) |
 | DP | Final depth (absolute) |
-| DPR | Final depth relative to RFP. Which of DP and DPR counts follows the mode argument `_AMODE`; in its compatible setting, from which of the two is programmed **(verify precedence)**. |
+| DPR | Final depth relative to RFP. Which of DP and DPR counts follows the mode argument `_AMODE`; in its compatible setting, `DPR` decides when both are programmed. |
 
 | Cycle | Purpose | Further parameters (in order) |
 |---|---|---|
 | `CYCLE81` | Drill, centre drill | DTB: dwell at depth — the compatible setting reads a positive value as seconds and a negative one as spindle revolutions — then `_GMODE`, `_DMODE`, `_AMODE` [P §3.25.1.21, p.1082–1083] |
-| `CYCLE82` | Drill or counterbore with dwell | DTB (as above), then the mode arguments and the pre- and through-drilling depths and feeds [P §3.25.1.22, p.1083–1086] |
+| `CYCLE82` | Drill or counterbore with dwell | DTB (as above), then the mode arguments and the pre- and through-drilling depths and feeds: 14 arguments, of which 12 (`S_FA`) and 14 (`S_FD`) are feeds, as a value or in % [P §3.25.1.22, p.1083–1086]. The database lists only the first six |
 | `CYCLE83` | Deep-hole drilling with pecks | FDEP / FDPR: first peck depth (abs / rel), `_DAM`: how much each further peck is reduced (an amount, or a factor by its sign or `_AMODE`), DTB: dwell at depth, DTS: dwell at start / for chip removal (both by sign as above), FRF: feed factor for the first peck (a factor 0.001–1, or a percentage by `_AMODE`), VARI: 0 = chip breaking, 1 = full retract, then further mode parameters [P §3.25.1.23, p.1086–1089] |
-| `CYCLE84` | Rigid tapping (spindle position-controlled) | DTB in seconds, SDAC: spindle direction after cycle, MPIT: metric thread size or PIT: pitch, POSS: spindle stop angle, SST: tapping speed, SST1: retract speed, then further parameters. **The lead and the speed are its own arguments.** [P §3.25.1.24, p.1089–1092] |
+| `CYCLE84` | Rigid tapping (spindle position-controlled) | DTB in seconds, SDAC: spindle direction after cycle, MPIT: metric thread size or PIT: pitch (in mm, TPI, inch or module as `_PITA` says), POSS: spindle stop angle, SST: tapping speed, SST1: retract speed, then further parameters. **The lead and the speed are its own arguments.** [P §3.25.1.24, p.1089–1092] |
 | `CYCLE840` | Tapping with compensating chuck | DTB in seconds, SDR: retract direction, SDAC, ENC, MPIT/PIT, …. **ENC (argument 9) decides where the lead comes from:** 0 and 20 with a spindle encoder, 11 without, all three from MPIT/PIT; **1 without an encoder, from the programmed feed, which then has to be the speed times the pitch.** [P §3.25.1.39, p.1129–1131] |
 | `CYCLE85` | Ream, feed in and feed out | DTB, FFR: feed in, RFF: feed out [P §3.25.1.25, p.1092–1093] |
 | `CYCLE86` | Bore, oriented spindle stop, lift off, rapid out | DTB, SDIR: spindle direction (3 = M3, 4 = M4), RPA/RPO/RPAP: lift-off in the three plane axes, POSS: stop angle [P §3.25.1.26, p.1093–1094] |
-| `CYCLE87` | Bore with stop at depth (operator retracts) | SDIR — not in the 4.92 cycle list **(verify)** |
-| `CYCLE88` | Bore with dwell and stop at depth | DTB, SDIR — not in the 4.92 cycle list **(verify)** |
-| `CYCLE89` | Bore with dwell, feed out | DTB — not in the 4.92 cycle list **(verify)** |
+| `CYCLE87` | Bore, then spindle stop without orientation (`M5`) and program stop (`M0`) at depth; on NC start the cycle retracts at rapid by itself | SDIR — not in the 4.92 cycle list; described in the 01/2008 cycles manual |
+| `CYCLE88` | As `CYCLE87` with a dwell at depth | DTB, SDIR — as above |
+| `CYCLE89` | Bore with dwell, feed back out to the safety distance, then rapid to the retraction plane | DTB — as above |
 
 Hole patterns: `HOLES1` (row), `HOLES2` (circle), `CYCLE801` (grid), `CYCLE802` (list of positions). CAM posts usually write explicit positions after `MCALL` instead. Recognize the names only.
 
@@ -424,7 +433,9 @@ A standard Siemens cycle that post-processors often write before each tilted ope
 9. fine retract / tool alignment
 10. further mode parameters on newer versions
 
-For gEdit, treat the call as opaque: show parameter names in signature help and add a "plane change" map item. `CYCLE800()` with no arguments resets the swivel **(verify)**.
+The 4.92 signature has 16 arguments: `_FR, _TC, _ST, _MODE, _X0, _Y0, _Z0, _A, _B, _C, _X1, _Y1, _Z1, _DIR, _FR_I, _DMODE`; the 2008 edition has 15 (no `_DMODE`). `_TC="0"` deselects the swivel data set, and **`CYCLE800()` deselects it and clears the swivel frames**; the manual recommends clearing it (and `TRAFOOF`) at program start. Posts also write a bare `CYCLE800` with no brackets. The reference points `_X0…_Z1` are absolute positions, so a Z shift of the program has to move them or refuse.
+
+For gEdit, treat the call as opaque: show parameter names in signature help and add a "plane change" map item.
 
 ### 6.3 `CYCLE832`: high-speed settings
 
@@ -434,7 +445,7 @@ Written at the start of an operation (for example `CYCLE832(0.01,_FINISH,1)`) an
 - machining mode: off, finish, semi-finish, rough; newer versions add orientation variants
 - further mode words
 
-Older software uses numeric mode codes. Newer software uses symbolic constants such as `_ROUGH` **(verify per version)**. Internally the cycle switches `G64x`, the compressor, `SOFT` and `FFWON`, so posts that do not use it write those commands directly (§4.1), often with `CTOL=`/`OTOL=` tolerances.
+The 4.92 signature is `(S_TOL, S_TOLM, S_OTOL)`: `S_TOLM` 0 off, 1 finish, 2 semi-finish, 3 rough, 4 precision, plus 10 when argument 3 is an orientation tolerance (and a higher digit for the surface mode); symbolic forms `_OFF`, `_FINISH`, `_SEMIFIN`, `_ROUGH`, `_PRECISION`, `_ORI_…`. Argument 3 has to be written even on a 3-axis machine. The 2008 signature is `(_TOL, _TOLM)`, where `_TOLM` is a **packed multi-digit code** (machining type, transformation, path mode, feed-forward, compressor). So the second argument means different things in different versions: hover must show the raw value and never decode an old code with the new table. Tolerance 0 or `CYCLE832()` switches it off. Internally the cycle switches `G64x`, the compressor, `SOFT` and `FFWON` (older versions `TRAORI` too, so a `TRAORI` check must stay at info level), and posts that do not use it write those commands directly (§4.1), often with `CTOL=`/`OTOL=` tolerances.
 
 ### 6.4 Turning cycles
 
@@ -452,7 +463,7 @@ The turning cycles of the 4.92 cycle list [P §3.25.1.2, p.1043]:
 | `CYCLE62` | Contour call for the contour cycles | | [P §3.25.1.12, p.1064] |
 | `CYCLE95` | Stock removal along a contour subprogram (described in its own section, though the overview table leaves it out) | `FF1`, `FF2`, `FF3` (arguments 6–8: roughing, plunging, finishing) | [P §3.25.1.28, p.1096–1098] |
 
-`CYCLE93` (groove) and `CYCLE97` (thread) are not in the 4.92 list; they are recognized by name and stay marked for verification. `POCKET3/4`, `SLOT1/2`, `CYCLE61` (face milling), `CYCLE72` (contour milling) are milling cycles: show them in the map as "cycle".
+`CYCLE93` (groove) and `CYCLE97` (thread) are not in the 4.92 list; they are recognized by name and stay marked for verification until their parameters are in the database. The 01/2008 cycles manual gives both: `CYCLE93` has 18 parameters (`SPD, SPL, WIDG, DIAG, STA1, ANG1, ANG2, RCO1, RCO2, RCI1, RCI2, FAL1, FAL2, IDEP, DTB, VARI, _VRT, _DN`), `CYCLE97` 17, lead first (`PIT, MPIT, SPL, FPL, DM1, DM2, APP, ROP, TDEP, FAL, IANG, NSP, NRC, NID, VARI, NUMT, _VRT`). `POCKET3/4`, `SLOT1/2`, `CYCLE61` (face milling), `CYCLE72` (contour milling) are milling cycles: show them in the map as "cycle". The measuring cycles (`CYCLE961`–`CYCLE998`, `CYCLE150`) read their inputs from `_` variables in the 2008 version and take bracketed arguments in 4.92.
 
 A thread or tapping cycle whose lead is one of its own arguments does not take anything from the feed in force; `CYCLE840` with ENC = 1 does, which is why the database marks only `CYCLE840` with `pitchFeed` among the calls.
 
@@ -488,6 +499,13 @@ A subprogram call, cycles included, has to stand in a block of its own [P §3.2.
 - The target is a label, a main or sub-block number (`GOTOF 200`, `GOTOF N300`), or a `STRING` variable that holds either — also built at run time (`GOTOF "N"<<R10`). A target can only be a block of the same program. [P §3.1.5.2, p.473–475]
 - A jump without a condition stands in a block of its own; several conditional jumps may share a block. [P §3.1.5.2, p.474]
 - Conditional jump: `IF <condition> GOTOF <label>` [M]; [P §3.1.5.2, p.472].
+
+### 7.2a Channel coordination (for M10)
+
+- `WAITM(mark, ch, ch, …)` is a rendezvous: marks 0–99 in a multi-channel system (only mark 0 with one channel), the own channel need not be listed, the mark is cleared after the rendezvous, and a channel holds at most 10 marks at a time. The channel arguments may be numbers, channel **names** (when machine data enables them) or variables, so a machine needs aliases. `WAITMC` is a conditional rendezvous that does not stop the axes but still blocks.
+- `WAITE(ch, …)` waits for the **end of the program** in the other channels. It is not a mark, and a check that compared how many `WAITE` each channel has would flag the normal case.
+- `SETM`/`CLEARM` set or clear marks **without waiting**, and survive a reset. `INIT(ch, "prog")` and `START(ch)` select and start another channel's program.
+- At least two motion blocks must separate `INIT`/`START`/`WAITE`/`WAITM`/`SETM`/`CLEARM` from a following `WAITMC`.
 - Structured blocks: `IF`/`ELSE`/`ENDIF` [M]; `LOOP`/`ENDLOOP`, `FOR`/`TO`/`ENDFOR`, `WHILE`/`ENDWHILE`, `REPEAT`/`UNTIL` [P §3.1.7.1–3.1.7.5, p.484–489]; `CASE … OF … DEFAULT` [P §3.1.5.3, p.475].
 
 ### 7.3 What the editor needs
@@ -544,26 +562,30 @@ Severity: **E** = likely error, **W** = warning, **I** = info.
 18. **I** `DEF` after the first NC block.
 19. **I** Unknown G-code (list-driven; unknown M-codes are never errors).
 20. **W** A subprogram call, `SETMS`, `RET`, `G4` or an unconditional jump shares its block with other words [P §3.2.3.1, p.534; §2.6.1, p.94; §2.14.7, p.371; §3.1.5.2, p.474].
+21. **E** A cutting move after `G332` without a new `S`: leaving `G331`/`G332` sets the spindle speed to zero. (Switching from `G96`/`G961`/`G962` into `G331`/`G332` zeroes the cutting speed.)
+22. **E** `G75` while radius compensation or a transformation is active. **W** A frame instruction (`TRANS`, `ROT`, …) that shares its block with other words.
+23. **W** `G291` in a Sinumerik document: from there the control reads ISO code.
 
 ---
 
 ## 10. Open questions / verify on real CAM output
 
 1. Do posts write the `%_N_…_MPF` / `;$PATH=` header, or plain files? Should gEdit add or strip it on save (a profile option)?
-2. Which `CYCLE832` signature and mode constants do current posts emit (numeric vs. `_FINISH` style)? Collect samples for several software versions.
-3. `CYCLE800` argument list per software version. Does `CYCLE800()` reset the swivel?
+2. ~~Which `CYCLE832` signature?~~ Settled per version (§6.3); which version each of the owner's machines runs is open.
+3. ~~`CYCLE800` arguments; does `CYCLE800()` reset?~~ Settled (§6.2).
 4. Drilling cycle argument count on current versions (extra mode parameters after the classic list). *The 4.92 lists are in §6.1; older posts may write fewer.*
 5. Tool change in mill-turn output: `T="…"` + `M6` vs. `T1=…` spindle-addressed forms vs. builder cycles.
 6. Is packed output (`G1X10Y20`) ever produced? Is a space after `N` guaranteed?
 7. Encoding of umlauts in comments (Latin-1 vs. UTF-8) on current 840D sl / ONE controls.
 8. ~~Block length limit and maximum program-name length on current versions.~~ Settled: 512 characters per block, 24 per program name (§2.2).
 9. How `"` is escaped inside strings.
-10. `DP` vs. `DPR` precedence in `CYCLE81`–`CYCLE89` in the compatible `_AMODE` setting.
+10. ~~`DP` vs. `DPR` precedence.~~ Settled: `DPR` decides when both are given (§6.1).
 11. ~~Leading-zero rule for `L` numbers (`L1` vs `L01`).~~ Settled: leading zeros are part of the name (§7.1).
 12. ~~Are the modal group numbers in §4 correct for current software?~~ Settled by the group tables (§4).
 13. Should Sinumerik ONE get its own profile, or is it covered by the same dialect? (Assume one dialect with a version option.)
-14. Which spindle number is the master spindle on the owner's machines, and do his posts write `SETMS(n)` for driven tools and the counter spindle? (`scale_speed` leaves a plain `S` after `SETMS(n)` alone unless asked.)
+14. Which spindle number is the master spindle on the owner's machines, and do his posts write `SETMS(n)` for driven tools and the counter spindle? (`scale_speed` leaves a plain `S` after `SETMS(n)` alone unless asked, so on a post that writes `SETMS(1)` before every `S` it scales nothing.) On one builder's turning centres the main spindle is 4, the counter spindle 3 and the driven tools of the two turrets 1 and 2.
 15. Do his posts write `CYCLE840` with ENC = 1, and `G63` directly? (A `G63` block without its own `F` would tap with the feed in force; `scale_feed` protects the feed in force only for calls.)
+16. New: which of the owner's machines run ISO mode (`G291`), and which Fanuc G-code system and number reading they emulate there.
 
 ---
 

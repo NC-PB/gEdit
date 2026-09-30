@@ -265,6 +265,26 @@
       "pitchFeed": true
     },
     {
+      "code": "G34",
+      "description": "Cuts a thread whose lead grows or shrinks by K with every spindle revolution. F is the lead at the start point, not a feed rate, so scaling the feed would change the thread.",
+      "group": "motion",
+      "label": "Thread cutting with a variable lead",
+      "modal": true,
+      "params": [
+        {
+          "address": "F",
+          "label": "Lead at the start point",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "K",
+          "label": "Change of the lead per spindle revolution"
+        }
+      ],
+      "pitchFeed": true
+    },
+    {
       "code": "G40",
       "description": "Turns nose radius compensation off. Do it during a retract move, not in an arc.",
       "group": "compensation",
@@ -287,13 +307,12 @@
     },
     {
       "code": "G50",
-      "description": "The sources do not use this number in G-code system B, where G92 sets the coordinate system and the top spindle speed. It is kept here because a program posted for system A is opened with a system-B machine often enough, and the S of such a block is a speed limit and not a speed to scale: raising the clamp of a constant-surface-speed program is what lets the spindle run away as the diameter falls. Check what your control does with it.",
+      "description": "In G-code system B this code ends scaling, and G92 sets the coordinate system and the top spindle speed. gEdit still reads an S word in such a block as a speed limit, because a program posted for system A writes its clamp as G50 S and is opened with a system-B machine often enough: raising the clamp of a constant-surface-speed program is what lets the spindle run away as the diameter falls.",
       "group": "nonmodal",
-      "label": "Coordinate set, top spindle speed (G-code system A)",
+      "label": "Scaling cancel (G-code system B)",
       "sets": {
         "speedLimit": true
-      },
-      "verify": true
+      }
     },
     {
       "code": "G53",
@@ -342,6 +361,21 @@
       "group": "offset",
       "label": "Work offset 6",
       "modal": true
+    },
+    {
+      "code": "G54.1",
+      "description": "Selects one of the additional work coordinate systems. P names which one.",
+      "group": "offset",
+      "label": "Extended work offset",
+      "modal": true,
+      "params": [
+        {
+          "address": "P",
+          "label": "Extended work offset number",
+          "min": 1,
+          "required": true
+        }
+      ]
     },
     {
       "code": "G73",
@@ -574,8 +608,7 @@
       ],
       "sets": {
         "cycle": "start"
-      },
-      "verify": true
+      }
     },
     {
       "code": "G87",
@@ -673,8 +706,7 @@
       ],
       "sets": {
         "cycle": "start"
-      },
-      "verify": true
+      }
     },
     {
       "code": "G90",
@@ -694,6 +726,24 @@
       "pitchFeedAmbiguous": true,
       "sets": {
         "speedLimit": true
+      }
+    },
+    {
+      "code": "G93",
+      "description": "The F word no longer gives a speed but the reciprocal of the time the block may take, so F12.5 runs the block in 4.8 seconds. Every move needs its own F while this mode is on.",
+      "group": "feedmode",
+      "label": "Inverse time feed",
+      "modal": true,
+      "params": [
+        {
+          "address": "F",
+          "label": "One divided by the block time in minutes",
+          "min": 0,
+          "required": true
+        }
+      ],
+      "sets": {
+        "feedUnit": "inverse-time"
       }
     },
     {
@@ -1185,6 +1235,17 @@
           "min": 0
         }
       ]
+    },
+    {
+      "code": "G84.2",
+      "description": "Rigid tapping written in the format of an older control generation. F is the thread lead, so scaling the feed would change the thread.",
+      "group": "cycle",
+      "label": "Rigid tapping cycle, older block format",
+      "modal": true,
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      }
     },
     {
       "code": "G91",

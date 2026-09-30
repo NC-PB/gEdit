@@ -5,9 +5,10 @@ Proposed dialect id in gEdit: `okuma-osp`, with a `lathe` profile first and a `m
 Sources:
 
 - OSP-P200L / P20L programming manual (English). It covers 2-axis and two-turret lathes, C-axis and live tools.
+- Added by the source review of 2026-09 ([source-review-2026-09.md](../source-review-2026-09.md)): the OSP-P300S/L lathe programming manual (German, the 2014 and the 2020 edition), the special-functions manual for the same controls (2020, the options: arc threading, synchronized tapping, work coordinate systems, 3D coordinate conversion, turret synchronous mode) and the operation manual of a multi-tasking turning-centre series (2017: Y-axis and tilted mode, sub-spindle mode, tool words). Where they settle a point below, the text says so.
 - General DIN 66025 introductions (German).
 
-Anything marked **(verify)** is general knowledge or an interpretation that the manual does not state clearly. Check it against real CAM output before hard-coding it. Okuma machining centres (OSP "M" controls) share much of the lexical syntax but differ in code meanings. They are not covered here.
+Anything marked **(verify)** is general knowledge or an interpretation that the manuals do not state clearly. Check it against real CAM output before hard-coding it. Okuma machining centres (OSP "M" controls) share much of the lexical syntax but differ in code meanings. They are not covered here, and none of the manuals above covers them either: four of the owner's five Okuma programs are machining-centre programs, which open with this lathe profile today (see the review).
 
 ---
 
@@ -31,7 +32,7 @@ Anything marked **(verify)** is general knowledge or an interpretation that the 
 
 - `MODIN`/`MODOUT`, `GET`/`PUT`, `READ`/`WRITE`, system variables (`VZOFZ`, `VTOFX[…]`, …).
 - Two-turret synchronization: the `P` sync codes and `M100`. (`G13`/`G14`, which select the turret a block is for, are described since M8; §4.1.)
-- Y-axis and coordinate conversion (`G136`–`G138`), contour generation (`G101`–`G133`), `G140`-series spindle selection (in the database with **(verify)** since M8).
+- Contour generation (`G101`–`G103`, `G132`/`G133`): described in §4.1 since the source review, not in the database yet.
 - Schedule programs (`.SDF`, `PSELECT`).
 
 LAP (automatic roughing and finishing, `G80`–`G88`) was in this list until M8. The manual describes its codes and parameters in full, so the database describes them now; §6.4 has what the editor needs.
@@ -87,7 +88,7 @@ The feeds, the index position and the `G74` arguments are illustrative only. `T0
 | File extensions | `.MIN` main program, `.SUB` user subprogram, `.SSB` system subprogram (supplied with the control), `.SDF` schedule program |
 | File name | Up to 16 alphanumeric characters, starting with a letter, plus an extension of up to 3 letters. Hyphens appear in the manual's examples (`SHAFT-A.MIN`). |
 | Tape/serial header | First line `$<FILENAME>.<EXT>%`, for example `$FLANGE-OP1.MIN%`. Programs on tape end with `%` **(verify)**. Whether files stored on disk or USB keep the header: **(verify)**. A `$` at the start of a later line is not a header: it continues the block above (§3.1). |
-| Program name | `O` + up to 4 characters: letters and digits if the first character is a letter, digits only if the first character is a digit. Names are compared as text, so `O0123` ≠ `O123` and `O0` ≠ `O00`. |
+| Program name | `O` + up to 4 characters: letters and digits if the first character is a letter, digits only if the first character is a digit. Names are compared as text, so `O0123` ≠ `O123` and `O0` ≠ `O00`. With an option parameter a subprogram name may have up to 16 characters; the profile's `CALL`/`O` patterns stop at 4. |
 | Program-name block | Contains nothing else. Whether a comment on the same line is accepted: **(verify)**; CAM posts put the comment on the next line. |
 | Main program | The `O` name is optional. Ends with `M02` or `M30`. |
 | Subprogram | The `O` name is mandatory. Ends with `RTS`. A `.SUB` file can hold several `O` programs **(verify)**. |
@@ -124,7 +125,7 @@ The feeds, the index position and the `G74` arguments are illustrative only. `T0
 |---|---|---|
 | Letter + number | `X64.` `Z-40` `F0.25` `G01` `M42` `T0202` `S180` | |
 | Letter `=` expression or variable | `Z=V1+V2` `X=DIA1` `X=100+XP2` | `=` is required when the value is not a plain number. Spaces around `=` are allowed. |
-| Two-letter extended address | `SB=1200` `QA=5` `DA=1.5` | **`=` is always required.** Reserved set: one of the letters `A D F I K L R S T U W X Z` followed by `A` or `B` (`SA`, `SB`, `DA`, `ZB`, …), plus `BC` and `BR`. The manual also uses `QA` (C-axis revolutions) and `SA` (C-axis speed in thread cycles). |
+| Two-letter extended address | `SB=1200` `QA=5` `DA=1.5` | **`=` is always required.** Reserved set: one of the letters `A D F I K L R S T U W X Z` followed by `A` or `B` (`SA`, `SB`, `DA`, `ZB`, …), plus `BC` and `BR`. The manual also uses `QA` (C-axis revolutions) and `SA` (C-axis speed in thread cycles). Option functions add more: `CL` (retract in arc threading), `CP`/`CQ`/`CR` (3D coordinate conversion), `SX`/`SY`/`SZ` (a zero-shift macro), and on multi-tasking machines `TL`, `TD`, `TS` and others; the grammar paints them as local variables today. |
 | Keyword word | `CALRG` | Selects the larger arc (over 180°) in an `L`-radius arc block |
 
 ### 3.3 Numbers
@@ -135,7 +136,7 @@ The feeds, the index position and the `G74` arguments are illustrative only. `T0
   - 1 µm: `X50000` is 50 mm, `X50000.5` is 50.0005 mm, `F250` is 0.25 mm/rev, `F12.5` is 0.0125 mm/rev;
   - 1 mm: `X50`, `X50.` and `X50.000` are all 50 mm, `F0.25` is 0.25 mm/rev.
 
-  The file itself does not say which system the machine uses. (Corrected in M8: this section used to say that only numbers *without* a point depend on the parameter. The row on number values in §4.4 and item 18 of §9 were corrected with it: the unit is what matters, a point never does.)
+  The file itself does not say which system the machine uses. (Corrected in M8: this section used to say that only numbers *without* a point depend on the parameter. The row on number values in §4.4 and item 18 of §9 were corrected with it: the unit is what matters, a point never does. The 2020 P300 manual confirms this reading, and all five of the owner's Okuma programs make sense only in the 1 mm system.)
 - The unit is not the same for every kind of word. What a "1" is worth, per system:
 
   | Kind of word | Words | 1 µm | 10 µm | 1 mm | 1/10000 inch | 1 inch |
@@ -158,7 +159,7 @@ The feeds, the index position and the `G74` arguments are illustrative only. `T0
 | C | ±359.999 |
 | F | Up to 8 significant digits |
 | G | 0–999 |
-| M | 0–511 |
+| M | 0–511 in the code list; option functions use four digits (`M1292`) |
 | S | 0–9999 in the range table, 0–65535 in the S section |
 | T | 4 or 6 digits |
 | O, N | 4 characters |
@@ -262,12 +263,13 @@ A `$` at the start of any line after line 1 is the continuation of the block abo
 | `G94` / `G95` | Feed per minute / per revolution. `G95` after reset. | modal | |
 | `G96` / `G97` | Constant cutting speed (m/min) / fixed rpm | modal | **A `G96`/`G97` block must contain `S`.** No threading in `G96`. |
 | `G110` / `G111` | With `G96`: the constant cutting speed is kept for the tool of turret A / of turret B | — | Two-turret machines; `G111` moves it to turret B, `G110` brings it back (manual Section 4 §6 and Section 11) |
-| `G13` / `G14` | The blocks that follow are for turret A / turret B | — | Optional; two-turret machines. The two-turret programming section (manual Section 11 §1) describes them; a program may switch as often as it needs. |
-| `G17` / `G18` / `G19` | Cutter radius compensation plane (live-tool milling) | — | Optional |
+| `G13` / `G14` | The blocks that follow are for turret A / turret B | — | Optional; two-turret machines. The two-turret programming section (manual Section 11 §1) describes them; a program may switch as often as it needs. `G313` selects a third turret. |
+| `G15` / `G16` | Select a work (program) coordinate system: `G15 Hn` modal, `G16 Hn` for one block, n up to 10, 50 or 100 by machine | modal / one-shot | Optional. After a reset the last `G15` system is in force; not allowed under `G96` or `G41`/`G42`; chosen per saddle and per spindle. Missing from the database |
+| `G17` / `G18` / `G19` | Compensation plane: X-Y (face contour, with the C axis connected) / X-Z (nose-radius compensation, the turning plane) / Y-Z | modal | `G18` is in force at power-on and after a reset, and `M109` selects it again |
 | `G31` / `G33` | Longitudinal thread cycle, one pass per block | cycle | `X` pass diameter, `Z` end, `F` lead, taper `I` or `A`, `E`/`K` start shift, `L` chamfer, `J` thread count, `C` phase |
 | `G32` | Face thread cycle | cycle | |
 | `G34` / `G35` | Variable-lead thread (increasing / decreasing lead) | cycle | |
-| `G36` / `G37` | Feed axis moved in step with the driven-tool spindle, forward / reverse | — | Optional; only the code table names them, so the format and whether `F` is a pitch are **(verify)**. The database refuses to scale their `F` until that is settled. |
+| `G36` / `G37` | Feed axis moved in step with the driven-tool spindle, forward / reverse | — | Optional. The special-functions manual calls this synchronized tapping, so `F` is tied to the pitch and the database refuses to scale it. No manual gives the word format **(verify)**. |
 | `G71` / `G72` | Multi-pass thread cycle, longitudinal / face | cycle | See §6. **Not roughing cycles as on Fanuc.** Its parameters may run on over a `$` line (§3.1). |
 | `G73` | Longitudinal grooving cycle | cycle | |
 | `G74` | Face grooving / axial peck drilling | cycle | See §6 |
@@ -275,14 +277,19 @@ A `$` at the start of any line after line 1 is the continuation of the block abo
 | `G80`–`G88` | LAP: shape definition and roughing/finishing calls | — | **Not drilling cycles as on Fanuc.** Optional. See §6.4. |
 | `G92` | Not assigned on this control | — | The code table leaves it empty. It is the single-pass thread cycle of a Fanuc lathe in G-code system A, so the database marks it as a code whose `F` may be a lead: a Fanuc program opened as Okuma keeps its thread leads. |
 | `G180`–`G189` | Live-tool cycles: `G180` cancel; `G181` drill; `G182` bore; `G183` deep-hole drill; `G184` tap; `G185`–`G188` threading; `G189` ream | cycle, active until `G180` | See §6.3. The manual's cycle list (Section 7 §8) settles it for `G181`–`G184`, `G189`, `G178` and `G179`: they repeat at every following position until `G180` (the second hole's block only writes what changes). `G185`–`G188` run once; the database keeps them in force until `G180` all the same, so a lead in a following block is never scaled. |
-| `G107` / `G108` | Synchronized tapping (main spindle) | | Optional; only the code table names them **(verify)** |
+| `G107` / `G108` | Synchronized tapping with the main spindle, right / left hand | cycle | Optional: `G107 X Z K F D` — X, Z the target, K the distance from the cycle start to the cutting start, **F the pitch** (under `G94` the pitch is F÷S; always one thread), D the spindle angle at the cutting start. Whether it stays active over several blocks is **(verify)**. |
 | `G178` / `G179` | Synchronized tapping with the driven tool, forward / reverse | cycle, until `G180` | Optional; the driven-tool cycle list gives the format (`X Z C R I/K F D J Q`, manual Section 7 §8) |
-| `G112` / `G113` | Thread along an arc, clockwise / counter-clockwise | modal | Optional; used in the shape of a LAP thread (`G88`). `F` is a lead. Format **(verify)**. |
-| `G140`–`G143` | Machining with the main spindle / the sub spindle / the pick-off spindle / the pick-off spindle and a third turret | — | Optional, multi-spindle machines; only the code table names them **(verify)**. After `G141` or `G142` a plain `S` may belong to another spindle, like Sinumerik `SETMS`. |
-| `G161`–`G170`, `G171`, `G205`–`G214` | G-code macros: a code the machine's setup ties to a macro program, called once (`G171`, `G205`–`G214`) or after every move like `MODIN` (`G161`–`G170`) | — | Optional. The program map lists them as calls. What the macro does, and what its words mean, depends on the machine. |
-| `G136` / `G137` / `G138` | End conversion or Y-axis mode off / start coordinate conversion / Y-axis mode on | | Optional (mill-turn) |
-| `G20` / `G21` | Home position return / ATC home return | — | **Not inch/metric as on Fanuc.** Optional. |
-| `G54`–`G59` | Not defined on this control. The work zero lives in the control's zero-offset data; programs shift it with `G50 X Z`. | — | Newer OSP versions: **(verify)** |
+| `G112` / `G113` | Thread along an arc, clockwise / counter-clockwise | modal | Optional; used in the shape of a LAP thread (`G88`). End `X Z`; the centre as `I K` from the start point, or a radius `L` (then both X and Z, and the arc under 180°). `F` is the lead (per `J` threads when `J` is given), `E` the lead change per thread (positive grows, negative shrinks), `M26`/`M27` the lead axis, `CL` a retract for a slide hold. |
+| `G140` / `G141` | Machining with the main spindle / the sub spindle | — | Optional, multi-spindle machines. **The program coordinate system and the zero offset switch with them** (the sub spindle's Z runs the other way). One stands at the program start, or right after `G13`/`G14`; the B turret is always in `G140`. Refused under `G91`, `G96`, nose-radius compensation, LAP or a pending chamfer. A program after `G141` is written like one for the main spindle, so a plain `S` there drives the sub spindle (an inference, like Sinumerik `SETMS`; **verify** once). |
+| `G142` / `G143` | Machining with the pick-off spindle / with it and a third turret | — | Only the P200L code table names them; the P300 list has `G144`/`G145` (W-axis control) instead **(verify)** |
+| `G161`–`G170`, `G171`–`G176`, `G205`–`G214` | G-code macros: a code the machine's setup ties to a macro program, called once (`G171`–`G175`, the P200-compatible `G176`, `G205`–`G214`) or after every move like `MODIN` (`G161`–`G170`) | — | Optional. The program map lists them as calls (today only up to `G171`). What the macro does, and what its words mean, depends on the machine; on multi-tasking machines `G174 SX= SY= SZ=` is a zero shift and `G175` cancels it. |
+| `G136` / `G137` / `G138` | End conversion and Y-axis mode / start coordinate conversion / Y-axis mode on | modal | Optional (mill-turn). **After `G137` or `G138`, X is a radius**: G137 machines the face in Cartesian X and Y (the block's `C` gives the direction of the new X axis; the first block after it needs both X and Y, and `G91` right after it is an alarm), G138 programs X, Y, Z as a Cartesian system. `G136` ends both, alone in its block. The Y-axis mode survives a reset and a power-off, and on a Y-axis machine an axis move before the first `G136`/`G138` is an alarm, so posts write one at every tool start (the owner's does). In the database since the source review, with `sets.diameter`. |
+| `G101` / `G102` / `G103` | Contour generation: straight line / arc CW / arc CCW in X, C (and Z), arcs with the radius in `L`; with `G137` in X and Y | modal | `F` is in mm/min here. The owner's post writes them in every face-milling section. Missing from the database |
+| `G132` / `G133` | Arc CW / CCW on the cylinder surface: `Z C L F` | modal | Missing from the database |
+| `G119` | Compensation plane C-X-Z (side contour) | modal | Missing from the database |
+| `G20` / `G21` | Home position return / ATC home return (`G24`/`G25` the same without interpolation) | — | **Not inch/metric as on Fanuc.** Optional. |
+| `G54`–`G59` | Not defined on this control. The work zero lives in the control's zero-offset data; programs shift it with `G50 X Z`, and on machines with the option select a work coordinate system with `G15`/`G16 H`. | — | |
+| `G93` | Inverse-time feed | modal | Optional. Missing from the database |
 
 ### 4.2 M-codes most relevant for CAM output
 
@@ -295,7 +302,7 @@ A `$` at the start of any line after line 1 is the continuation of the block abo
 | `M08` / `M09` | Coolant on / off |
 | `M12` / `M13` / `M14` | Live-tool spindle stop / forward / reverse |
 | `M15` / `M16` | C-axis positioning in positive / negative direction |
-| `M17` | Sends the result of a post-process gauge over the serial line (optional, **verify**). **Not a subprogram end** as on some other controls. |
+| `M17` | Sends the result of a post-process gauge over the serial line (optional). **Not a subprogram end** as on some other controls. |
 | `M19` | Spindle orientation |
 | `M22` / `M23` | Thread-end chamfer off / on |
 | `M24` / `M25` | Chuck barrier off / on |
@@ -307,6 +314,7 @@ A `$` at the start of any line after line 1 is the continuation of the block abo
 | `M60` / `M61` | Constant speed: wait for speed / do not wait |
 | `M73` / `M74` / `M75` | Thread infeed pattern 1 / 2 / 3 |
 | `M83` / `M84` | Chuck clamp / unclamp |
+| `M85` | LAP: no return to the start point after roughing |
 | `M88` / `M89` | Air blow off / on |
 | `M98` / `M99` | Tailstock quill pressing with its low / high force. **Not the subprogram call and return of a Fanuc control**, which are `CALL` and `RTS` here. |
 | `M109` / `M110` | C-axis mode off / on. `M110` must be alone in its block. |
@@ -373,7 +381,7 @@ Examples (own):
 - `T010101`: nose radius set 1, tool 1, offset 1.
 - `T020305`: nose radius set 2, tool 3, offset 5.
 
-The manual gives the 6-digit order as "nose radius number, tool number, offset number". The 4-digit order (tool then offset) follows from a grooving-cycle example that switches `T0101` → `T0102` for a second offset on the same tool. **(verify both on a machine)**. Offset sets hold 32, 64 or 96 entries depending on the machine.
+The manual gives the 6-digit order as "nose radius number, tool number, offset number", and the P300 manual confirms it. **Which form a machine uses is its equipment:** 4 digits where nose-radius compensation is not fitted, 6 where it is. Offset sets hold 32, 64 or 96 entries, or 200, 500 or 999 on some machines, and with those the offset part has **three** digits: the plain form becomes station + 3 digits (`T2000` is station 2), and a 3-digit form `T100` (station 1) exists too. The profile's rule reads 4 and 6 digits only, so `T2000` is tool 20 today. Multi-tasking machines write tool words of their own (`TL=`, `TD=`). The owner's turning post writes 6 digits. How many offsets each of his lathes has is a machine fact (a tool-word parameter, like D49 for the Fanuc lathe).
 
 ### 5.2 Behaviour
 
@@ -421,7 +429,7 @@ G74 X… Z… [I…] [K…] D… [L…] [DA=…] [E…] F… [T…]
   G77 X… Z… K… F…
   ```
 
-  `X`: start position, `Z`: tap depth, `K`: rapid approach distance, `F`: feed (= pitch × rpm under `G94`, or lead under `G95`, **verify** which the post uses). The spindle speed must be set before the cycle.
+  `X`: start position, `Z`: tap depth, `K`: rapid approach distance, `F`: the cutting feed in the feed mode in force, so it is tied to the pitch (= pitch × rpm under `G94`, the lead under `G95`; which one the post uses is **verify**). The spindle speed must be set before the cycle. A parameter can make `G77`/`G78` run as synchronized tapping (`G107`/`G108`).
 - `G33`/`G31` single-pass thread: one block per pass. CAM posts often write a list of these blocks, one per infeed. Parameters as in §4.1.
 - `G71` multi-pass longitudinal thread (`G72` face):
 
@@ -497,7 +505,7 @@ LAP is an optional function of the control, described in full in the manual (Sec
 
 A long variable list goes on over lines that start with `$` (§3.1): `CALL O1000 V1=0101 V2=0202 …` and then `$ DX1=30 DX2=50`. (Corrected in M8: these notes used to give `&`, which the manual does not use.)
 
-G-code macros (optional) call a macro program through a code of its own: `G171` and `G205`–`G214` once, like `CALL`, and `G161`–`G170` after every following move, like `MODIN`. Which program a code runs is part of the machine's setup, not of the program.
+G-code macros (optional) call a macro program through a code of its own: `G171`–`G176` and `G205`–`G214` once, like `CALL`, and `G161`–`G170` after every following move, like `MODIN`. Which program a code runs is part of the machine's setup, not of the program. The program map's call rule stops at `G171` today.
 
 ### 7.2 Labels and jumps
 
@@ -558,7 +566,7 @@ Severity: **E** = likely error, **W** = warning, **I** = info.
 11. **E** `G75`/`G76` outside `G01` mode, or with both `X` and `Z`.
 12. **E** `G90` and `G91` in one block. **E** `T` word in a `G50` block. **E** `M110` not alone in its block.
 13. **E** More than one `S`, more than one `T`, or more than eight `M` codes in one block.
-14. **E** `T` word with other than 4 or 6 digits. **W** Mixed 4- and 6-digit `T` words in one file.
+14. **W** `T` word the machine's tool-word format does not describe. (Was "E: other than 4 or 6 digits". Not as planned: 3-digit offsets on machines with 200 or more offsets, `TL=`/`TD=` tool words, and every tool call of a machining-centre program opened with this profile would be flagged. It needs the tool-word machine parameter of §5.1 first.) **W** Mixed 4- and 6-digit `T` words in one file.
 15. **E** Unclosed `(` comment in a block. **W** Nested `(`.
 16. **E** Two-letter extended address without `=` (`SB1200`).
 17. **E** Block longer than 158 characters.
@@ -568,23 +576,30 @@ Severity: **E** = likely error, **W** = warning, **I** = info.
 21. **W** Fanuc-only constructs in an Okuma file: `G54`–`G59`, `R` on an arc, `G04 P`, `M98 P…` or `M99 P…` (a program or block number after them; the bare `M98`/`M99` are the tailstock codes here), `G92` (not assigned), `#` variables, `U`/`W` used as incremental moves, `;`. This probably means the wrong dialect or post.
 22. **I** Local variable name that clashes with a function or operator name, or starts with `O`/`N`/`V`.
 23. **I** Non-ASCII characters in comments (parity checks and tape codes).
+24. **E** `G140`/`G141` or `G15`/`G16` while `G96` or nose-radius compensation is active.
+25. **E** After `G137`: a first block without both X and Y, or `G91` right after it; `G136` with other words in its block.
+26. **E** On a Y-axis machine: an axis move before the first `G136` or `G138` (the mode survives a reset).
+27. **E** Two turrets: a block with `S`, `M00`/`M01`/`M03`/`M04`/`M05`/`M41`–`M44` or `G96` on one side without a `P` code of the same number on the other side (the two sides must agree on spindle commands).
+28. **W** `M100` counts that differ between the sides (the control then goes on **without** waiting, silently); `M100` during nose-radius compensation; a `P` wait on one side met by `M100` on the other (no wait either).
 
 ---
 
 ## 10. Open questions / verify on real CAM output
 
-1. Do posts write the `$NAME.MIN%` header and a closing `%`? Should gEdit add or strip it on save (profile option)?
-2. Default unit for numbers without a decimal point on typical machines (mm vs. µm). Do posts always write decimal points?
-3. 4-digit `T` order (tool + offset) and 6-digit order (nose R + tool + offset): confirm with posts and machines. Does `T00xx` cancel?
+1. Do posts write the `$NAME.MIN%` header and a closing `%`? The owner's posts write neither, and no `O` line either (aggregate). Other posts may.
+2. ~~Default unit.~~ The unit system decides (§3.3); all of the owner's programs are 1 mm.
+3. ~~`T` order.~~ Settled (§5.1); how many offsets each of his lathes has is open. Does `T00xx` cancel?
 4. Do current OSP versions (P300L and later) accept `;` comments, `G54`-style offsets, lower case, or packed words?
 5. Is a comment allowed on the same line as the `O` name?
 6. Do posts use alphanumeric sequence names (for example `NT01`) to mark tool sections? If so, use them as map labels.
 7. How common are LAP calls (`G85`/`G87`) in current CAM output compared with long-hand moves?
-8. The `$` continuation (§3.1) is settled by the manual (LAP condition changes, `CALL` variable lists, `G71` examples). Open: does CAM output ever use it, and for which blocks?
+8. The `$` continuation (§3.1) is settled by the manual (LAP condition changes, `CALL` variable lists, `G71` examples). The owner's posts never write it (aggregate); other posts may.
 9. Tapping feed convention in `G77`/`G78` and `G184` (lead vs. feed per minute) as emitted by posts.
 10. Line endings and encoding of files saved on the control and on USB.
 11. Can a `.SUB` file hold several `O` programs, and how does the control resolve a `CALL O…` across files?
-12. Okuma milling (OSP "M") needs its own profile: different G-codes, work offsets and tool change. Collect sample programs before planning it.
+12. Okuma milling (OSP "M") needs its own profile: different G-codes, work offsets and tool change. Sample programs now exist (four of the owner's five Okuma programs, aggregate: `G15 H` at the start, `T… M6` with a pre-select, `G56 H` length offsets, `G41 D`, arcs with `R`, drilling cycles with `R`/`P`/`Q`, `G169`/`G170` around 5-axis moves, five-digit block numbers). What is missing is a programming manual for the machining-centre control.
+13. New: on the machining centre, what `G16 H0`, `G71 Z`, `M54`, the `P` of the drilling cycles and `G169`/`G170` do, and whether five-digit `N` is accepted.
+14. New: does the owner have a B-axis multi-tasking turning centre (tool words `TL=`/`TD=`, `G127` tilted machining, `G303` 3D frames)?
 
 ---
 
@@ -680,11 +695,18 @@ A new `okuma.ts` should follow §3.8.
   - live-tool drill: `M110` / `SB= M13` / `G181 …` / `G180` / `M109`
   - program end: `M09` / `M05` / `M02` / `%`
 
+### 11.7a Two-turret synchronization, from the P300 manual (for M10)
+
+- A `P` code is `P` and up to four digits. Execution runs from the smaller number to the larger; equal numbers run together (a rendezvous); when one side has finished, the other goes on. The numbers must ascend in execution order. This is the `ordered` semantics of the channel plan.
+- Spindle commands need the same `P` number on both sides (§9 item 27); `M100` is the id-less wait (`count`), with the pitfalls of §9 item 28.
+- A second coupling: turret synchronous mode is switched on with `M207` from one side or `M1292` from the other and off with `M206`, and both sides wait. `M200`–`M202` couple the Z feed without being waits.
+- On a machine that cuts with the sub-spindle base, `G14` selects the base, not a turret; only `G00`/`G01`/`G94`/`G95` are allowed on that side.
+
 ### 11.7 After M8 (G10 review): what the Okuma profile still does not do
 
 Unlike §11.1–§11.6, this is the state of the M8 profile, not of the code before M3.
 
-- **`$` continuation lines are read as part of their block, not joined.** The profile declares the leading marker (`syntax.continuationStart`, plan §7.16 #27), and the modal interpreter and the three bundled scripts read a line that starts with `$` as part of the block above it (§3.1), so the lead on the `$` line of a `G71` block stays a lead. The tokenizer still reads the line on its own, so a code counts from the line it stands on: a thread code written on a `$` line would not cover an `F` on the block's first line. Renumbering leaves such lines alone (`$` is in `skipStartingWith`).
+- **`$` continuation lines are read as part of their block, not joined.** The profile declares the leading marker (`syntax.continuationStart`, plan §7.16 #27), and the modal interpreter and the three bundled scripts read a line that starts with `$` as part of the block above it (§3.1), so the lead on the `$` line of a `G71` block stays a lead. The tokenizer still reads the line on its own, so a code counts from the line it stands on: a thread code written on a `$` line would not cover an `F` on the block's first line. Renumbering leaves such lines alone only because `$` is in `skipStartingWith`, a list the user can edit in the form; with `$` taken out of it, renumbering numbers the line and cuts it off its block (M8 re-review, [TODO.md](../../../TODO.md)). The profile's marker also requires a blank after the `$`, which the manuals do not: `$H1.8 …` is read as a line of its own, and a lead on it is scaled.
 - **One program-map item per line.** `NEND M02` is listed as the program end, with the name in its text, not as the label `NEND` (§8).
 - **The `E` feed of a shape block** is neither scaled nor reported by the feed script: an `E` word can also be a dwell or a lead change, and only being inside a LAP shape tells them apart (§6.4). The feeds of a LAP condition change (`FA=`, `FB=`) are reported and left as written.
 - **What a G-code macro's words mean** (§7.1) depends on the machine's setup; the map lists the call and nothing reads its arguments.

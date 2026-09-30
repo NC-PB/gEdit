@@ -119,7 +119,8 @@ describe('built-in code databases', () => {
   // refuse it while no lathe profile exists.
   it('marks the tapping and threading codes the plan names as pitchFeed', () => {
     const fanucPitch = fanuc.db.codes.filter((e) => e.pitchFeed).map((e) => e.code);
-    expect(fanucPitch.sort()).toEqual(['G32', 'G33', 'G74', 'G84']);
+    // The source review (2026-09) added the variable-lead thread G34 from the control's list.
+    expect(fanucPitch.sort()).toEqual(['G32', 'G33', 'G34', 'G74', 'G84']);
     expect(fanuc.db.codes.find((e) => e.code === 'G76')?.pitchFeed).toBeUndefined();
 
     const klartextPitch = heidenhain.db.codes.filter((e) => e.pitchFeed).map((e) => e.code);
@@ -180,10 +181,12 @@ describe('built-in code databases', () => {
     for (const code of want) expect(codes, code).toContain(code);
   });
 
-  it('marks PLANE and FUNCTION TCPM as unverified and leaves the rest of Klartext confirmed', () => {
+  it('confirms PLANE and FUNCTION TCPM, and leaves the rest of Klartext confirmed', () => {
+    // The source review (2026-09): the TNC 640 manual settles the PLANE and TCPM forms,
+    // so nothing in the Klartext database is waiting for verification any more.
     const verify = new Set(heidenhain.db.codes.filter((e) => e.verify).map((e) => e.code));
-    for (const code of ['PLANE SPATIAL', 'PLANE RESET', 'FUNCTION TCPM', 'FUNCTION RESET TCPM']) {
-      expect(verify, code).toContain(code);
+    for (const code of ['PLANE SPATIAL', 'PLANE RESET', 'FUNCTION TCPM', 'FUNCTION RESET TCPM', 'CYCL CALL POS']) {
+      expect(verify, code).not.toContain(code);
     }
     // The 200-series cycles whose parameter list the syntax notes flag.
     for (const code of ['CYCL DEF 200', 'CYCL DEF 201']) expect(verify, code).not.toContain(code);
@@ -212,11 +215,15 @@ describe('built-in code databases', () => {
 
   it('writes every parameter of a Klartext cycle block, so a snippet is complete', () => {
     // A Q-style cycle definition carries one line per parameter, so all of them are
-    // required. Q395 is the exception: older controls do not know it.
+    // required. The exceptions are the optional parameters a later software version
+    // appended at the end, which older controls do not know: Q395, and Q208 of cycle 205
+    // (both from software 34059x-04, source review 2026-09).
+    const optional = (code: string, address: string) =>
+      address === 'Q395' || (code === 'CYCL DEF 205' && address === 'Q208');
     for (const entry of heidenhain.db.codes.filter((e) => e.code.startsWith('CYCL DEF '))) {
       for (const param of entry.params ?? []) {
         const label = `${entry.code} ${param.address}`;
-        if (param.address === 'Q395') expect(param.required, label).toBeUndefined();
+        if (optional(entry.code, param.address)) expect(param.required, label).toBeUndefined();
         else expect(param.required, label).toBe(true);
       }
     }
@@ -463,8 +470,12 @@ describe('the database against the rest of the app', () => {
   });
 
   it('describes every G and M word the shipped fixtures contain', () => {
+    // The owner's real programs (`nc/owner-public/`) are left out: they carry standard
+    // codes the databases do not describe yet and builder codes they never will, which
+    // `tests/fixtures/README.md` lists as known gaps. The synthetic fixtures are written
+    // from the syntax notes, so for them a missing entry is a mistake in the data.
     const missing = new Map<string, string[]>();
-    for (const rel of listFixtures('nc')) {
+    for (const rel of listFixtures('nc').filter((path) => !path.startsWith('nc/owner-public/'))) {
       const opened = openFixture(rel);
       if (opened.refused !== null) continue;
       const text = editorText(opened.text);
@@ -502,12 +513,18 @@ describe('the database against the rest of the app', () => {
 
   it('keeps tool centre point management out of the working-plane group', () => {
     // TCPM holds the tool tip on the path while rotary axes move; it neither selects nor
-    // tilts a plane, and `plane` is what Fanuc G17 to G19 mean.
+    // tilts a plane, and `plane` is what Fanuc G17 to G19 mean. A tilted plane is a group
+    // of its own for the same reason (source review, 2026-09): `plane` is the modal group
+    // whose `sets.plane` says XY, ZX or YZ.
     const groupOf = (code: string) => heidenhain.db.codes.find((e) => e.code === code)?.group;
     for (const code of ['FUNCTION TCPM', 'FUNCTION RESET TCPM', 'M128', 'M129']) {
       expect(groupOf(code), code).toBe('tcpm');
     }
-    expect(groupOf('PLANE SPATIAL')).toBe('plane');
+    for (const code of ['FUNCTION TCPM', 'FUNCTION RESET TCPM']) {
+      expect(heidenhain.db.codes.find((e) => e.code === code)?.modal, code).toBe(true);
+    }
+    expect(groupOf('PLANE SPATIAL')).toBe('tilt');
+    expect(groupOf('PLANE RESET')).toBe('tilt');
     expect(fanuc.db.codes.find((e) => e.code === 'G17')?.group).toBe('plane');
   });
 

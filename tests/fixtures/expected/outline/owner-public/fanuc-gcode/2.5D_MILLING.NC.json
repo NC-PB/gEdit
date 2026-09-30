@@ -1,0 +1,28 @@
+{
+  "profile": "fanuc-gcode",
+  "ownerReviewed": false,
+  "items": [
+    {"kind":"program","line":2,"text":"O0001","endLine":815},
+    {"kind":"comment","line":8,"text":"PLANFRASER D63 A90 L10 SD41"},
+    {"kind":"tool","line":9,"text":"T1 — PLANFRASER D63 A90 L10 SD41","tool":"1","endLine":224},
+      {"kind":"comment","line":12,"text":"PLANEN"},
+      {"kind":"comment","line":13,"text":"C : 0  ; A : 0"},
+      {"kind":"comment","line":69,"text":"PLANEN"},
+      {"kind":"comment","line":224,"text":"UMFANGSFRASER D10 L35 SD10"},
+    {"kind":"tool","line":225,"text":"T2 — UMFANGSFRASER D10 L35 SD10","tool":"2","endLine":641},
+      {"kind":"comment","line":228,"text":"TASCHENRAUMEN"},
+      {"kind":"comment","line":229,"text":"C : 0  ; A : 0"},
+      {"kind":"comment","line":552,"text":"TASCHENRAUMEN"},
+      {"kind":"comment","line":641,"text":"UMFANGSFRASER D10 L35 SD10"},
+    {"kind":"tool","line":642,"text":"T3 — UMFANGSFRASER D10 L35 SD10","tool":"3","endLine":750},
+      {"kind":"comment","line":645,"text":"BOHREN DURCH UMFAHREN"},
+      {"kind":"comment","line":646,"text":"C : 0  ; A : 0"},
+      {"kind":"comment","line":673,"text":"UMFANGSFRASEN"},
+      {"kind":"comment","line":720,"text":"UMFANGSFRASEN"},
+      {"kind":"comment","line":750,"text":"NC-ANBOHRER UBERLANGE D10 SD10"},
+    {"kind":"tool","line":751,"text":"T4 — NC-ANBOHRER UBERLANGE D10 SD10","tool":"4","endLine":815},
+      {"kind":"comment","line":754,"text":"FRASEN: KANTEN BRECHEN"},
+      {"kind":"comment","line":755,"text":"C : 0  ; A : 0"},
+      {"kind":"end","line":813,"text":"M2"}
+  ]
+}

@@ -46,6 +46,12 @@ function variant(id: string, detect: Partial<Profile['detect']>): CompiledProfil
 
 interface ExpectedDetect {
   fixtures: Record<string, string>;
+  /**
+   * Fixtures gEdit detects wrongly today, with the reason (`owner-public.json`, the owner's
+   * real programs). Their `fixtures` entry is still the right answer and is run as an
+   * expected failure, so a fix shows up as a failing test instead of passing unnoticed.
+   */
+  knownGaps?: Record<string, string>;
 }
 
 interface ExpectedImprovements {
@@ -64,14 +70,14 @@ function readExpected(name: string): unknown {
  * in one file of its own, and no two work packages edit the same JSON. A name that starts
  * with `_` is not a folder (`_improvements.json`).
  */
-const EXPECTED: ExpectedDetect = {
-  fixtures: Object.assign(
-    {},
-    ...readdirSync(EXPECTED_DIR)
-      .filter((name) => name.endsWith('.json') && !name.startsWith('_'))
-      .sort()
-      .map((name) => (readExpected(name) as ExpectedDetect).fixtures),
-  ) as Record<string, string>,
+const FOLDER_FILES = readdirSync(EXPECTED_DIR)
+  .filter((name) => name.endsWith('.json') && !name.startsWith('_'))
+  .sort()
+  .map((name) => readExpected(name) as ExpectedDetect);
+
+const EXPECTED: Required<ExpectedDetect> = {
+  fixtures: Object.assign({}, ...FOLDER_FILES.map((file) => file.fixtures)) as Record<string, string>,
+  knownGaps: Object.assign({}, ...FOLDER_FILES.map((file) => file.knownGaps ?? {})) as Record<string, string>,
 };
 
 const IMPROVEMENTS = readExpected('_improvements.json') as ExpectedImprovements;
@@ -482,8 +488,14 @@ describe('every NC fixture', () => {
     expect(Object.keys(EXPECTED.fixtures).sort()).toEqual(listFixtures('nc'));
   });
 
+  it('lists a known gap only for a fixture it has an answer for', () => {
+    expect(Object.keys(EXPECTED.knownGaps).filter((rel) => !(rel in EXPECTED.fixtures))).toEqual([]);
+  });
+
   for (const [rel, expected] of Object.entries(EXPECTED.fixtures)) {
-    it(`${rel} -> ${expected}`, () => {
+    // A known gap fails today on purpose: the answer above is the right one, not gEdit's.
+    const test = rel in EXPECTED.knownGaps ? it.fails : it;
+    test(`${rel} -> ${expected}`, () => {
       const opened = openFixture(rel);
       if (expected === 'refused') {
         expect(opened.refused).toBeTypeOf('string');

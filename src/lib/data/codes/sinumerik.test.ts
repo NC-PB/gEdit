@@ -20,8 +20,9 @@
 // Which entries carry `verify: true` follows one rule, written down here because G10
 // reads it: a meaning the notes tag [M] or [P] (the 840D sl programming manual, 06/2019), a
 // DIN 66025 meaning, or one the owner decided (D35) is shown in hover; what the manual
-// only lists (G942, G952), what the machine sets up (M6, M19) and the cycles it does not
-// describe (CYCLE87–CYCLE89, CYCLE93, CYCLE97) is not.
+// only lists (G942, G952), what the machine sets up (M6, M19) and the cycles whose
+// parameters are not described (CYCLE93, CYCLE97) is not. The source review (2026-09) read
+// the cycles manual of 01/2008, which describes CYCLE87–CYCLE89.
 //
 // The database is read through `resolveCodeDbFiles` (AD-17) so it is the merge result the
 // app uses that is checked, and through `loadCodeDb` where the loaded shape matters.
@@ -162,11 +163,13 @@ describe('the shipped Sinumerik database', () => {
   it('describes no machine-builder code', () => {
     // §1 of the notes and the M8 brief: a builder's own cycles show up as ordinary calls
     // (`L7xx`, `NAME(…)`) and are highlighted generically, and an M code above 30 is the
-    // builder's. Shipping one as a built-in would put a claim about somebody else's
+    // builder's — except the ones the control itself predefines, the gear stages M40–M45
+    // and M70 (the programming manual's list of M functions, source review 2026-09).
+    // Shipping a builder's code as a built-in would put a claim about somebody else's
     // machine into hover.
     expect(ENTRIES.filter((e) => /^L\d+$/.test(e.code)).map((e) => e.code)).toEqual([]);
     const mCodes = ENTRIES.filter((e) => /^M\d+$/.test(e.code)).map((e) => Number(e.code.slice(1)));
-    expect(mCodes.filter((n) => n > 30)).toEqual([]);
+    expect(mCodes.filter((n) => n > 30)).toEqual([40, 41, 42, 43, 44, 45, 70]);
   });
 });
 
@@ -394,9 +397,7 @@ describe('what is confirmed and what is not', () => {
     // list and the language. What it only lists, what the machine sets up and the cycles
     // it does not describe stay out of hover (§8.7 items 3 and 6). The flags a script
     // reads — `pitchFeed`, `sets` — work regardless.
-    expect(codesWith((e) => e.verify === true)).toEqual([
-      'CYCLE87', 'CYCLE88', 'CYCLE89', 'CYCLE93', 'CYCLE97', 'G942', 'G952', 'M19', 'M6',
-    ]);
+    expect(codesWith((e) => e.verify === true)).toEqual(['CYCLE93', 'CYCLE97', 'G942', 'G952', 'M19', 'M6']);
   });
 
   it('shows what the notes tag [M], what DIN 66025 fixes and what the owner decided', () => {

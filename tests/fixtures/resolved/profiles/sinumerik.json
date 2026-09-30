@@ -146,9 +146,9 @@
   "name": "Sinumerik 840D (turning)",
   "numbering": {
     "digits": 0,
-    "max": 99999,
+    "max": 2147483647,
     "mode": "free",
-    "onOverflow": "wrap",
+    "onOverflow": "stop",
     "references": [
       {
         "addresses": [

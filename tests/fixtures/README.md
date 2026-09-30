@@ -4,18 +4,18 @@ Sample NC files for unit tests, performance generators and the runtime harness.
 
 ## Provenance
 
-Every file here is synthetic. It was written for gEdit by the project, from the syntax
-notes in `docs/planning/syntax/`, and was not copied from a machine, a CAM system, a
-control manual or a customer program. None of these programs is meant to run on a
-machine.
+Every file here is synthetic, with one exception below. It was written for gEdit by the
+project, from the syntax notes in `docs/planning/syntax/`, and was not copied from a
+machine, a CAM system, a control manual or a customer program. None of these programs is
+meant to run on a machine.
 
-The one planned exception is `nc/owner-public/<profileId>/` (empty so far): programs the
-owner handed over as safe to publish (phase 2 plan §9.2, owner decision D45), checked with
-`tests/gen/check-anonymized.mjs` first. They keep the bytes the control wrote, carry no
-marker, and each gets a line in a `## nc/owner-public/` section here: the control, a
-generic description of what it makes, the hand-over date and "published with the owner's
-permission". Any other real program stays in the gitignored `tests/real/` and is never
-committed.
+The one exception is `nc/owner-public/<profileId>/`: programs the owner handed over as
+safe to publish (phase 2 plan §9.2, owner decision D45), checked with
+`tests/gen/check-anonymized.mjs` first. They keep the bytes the CAM system wrote, carry no
+marker, and each has a line in the [`nc/owner-public/`](#ncowner-public-the-owners-own-programs)
+section here: the control, a generic description of what it makes, the hand-over date and
+the owner's permission. Any other real program stays in the gitignored `tests/real/` and
+is never committed.
 
 Each file starts with a comment that says so (`WRITTEN FOR GEDIT ...`). The
 exceptions are:
@@ -147,6 +147,97 @@ extension, and three short synthetic programs written during the NC review (no h
 | `mill-4digit-t.nc` | A milling program whose tool numbers have four digits (`T1001 M6`), so it matches the lathe's turret-word rule and stays a mill on the mill markers (`M6`, `G43 … H`, `G17`, `Y` words). |
 | `empty.txt` | Zero bytes. |
 
+## `nc/owner-public/`: the owner's own programs
+
+Real CAM output, not written for gEdit: the owner published these programs at
+github.com/NC-PB/NC-Code and handed them over for this folder on 2026-09-25. Every file
+below is **published by the owner at github.com/NC-PB/NC-Code, cleared for public use on
+2026-09-25**, and is committed byte for byte as it is published there (LF endings, ASCII).
+The folder names the profile each program has to open with. Most of them come in the
+same few parts posted for several controls, which is what makes them useful: the same
+operations in five dialects. `tests/gen/check-anonymized.mjs` flagged cycle numbers, label
+numbers and the `%_N_1_MPF` header, nothing personal.
+
+Their goldens carry `"ownerReviewed": false` until the owner has read them (plan §9.2):
+`expected/detect/owner-public.json` and `expected/outline/owner-public/`. Where gEdit gets a
+program wrong today, the golden holds the **right** answer and the test runs it as an
+expected failure (`knownGaps` in the detection table, `_known-gaps.json` for the program
+map), so a wrong result is never recorded as the right one and a fix shows up as a test to
+update. The known gaps are listed after the tables. The largest program is
+`5X_MILLING_VECTOR.H` (9 MB, 99,156 lines); the owner's 376,000-line versions of the 3D
+and 5-axis part were left out on 2026-09-27 (41.5 MB for nothing the smaller files do not
+show). Speed tests use `gen-large.mjs`, not these files.
+
+**`fanuc-gcode/`** — Fanuc mill.
+
+| File | Contents |
+|---|---|
+| `2.5D_MILLING.NC` | A 2.5D part with four tools: face milling, pocketing, a contour and chamfering; `T1 M6` with the next tool preselected in the block after it, `G43 … H`, `G69` and `G54` in the header, `M2`. |
+| `5-Axis.NC` | A short simultaneous 5-axis program on B and C with one tool, `T2 M6` and `M6 T0` at the end, no comments. |
+| `5X_MILLING.NC` | 5-axis milling at constant Z with one ball mill and tool centre point control (`G43.4`), 44,629 lines. |
+
+**`fanuc-lathe/`** — Fanuc-style lathes, G-code system A.
+
+| File | Contents |
+|---|---|
+| `TURN_1.NC` | A turning part with eight tools, without `%`: OD roughing and finishing under `G50 S`, `G96`/`G97` and `G99`, a two-block `G76` thread, and driven tools under `G98` on the C axis: face and side drilling (`G83`, `G87`), polar-coordinate milling (`G12.1`) and side tapping (`G88`, the feed written as speed × pitch). |
+| `TURN.NC` | The same part for a lathe whose control writes Fanuc-style ISO code with codes of its builder, every block ended with `;`: 3-digit `T` words, `G76` in one block, and the builder's own cycles for polar milling, radial drilling and radial tapping. |
+
+**`heidenhain-klartext/`** — Heidenhain TNC Klartext.
+
+| File | Contents |
+|---|---|
+| `2.5D_MILLING.H` | The 2.5D part: `CYCL DEF 7` and `247`, `PLANE SPATIAL`/`PLANE RESET`, `BLK FORM`, `* -` section headings, `TOOL CALL` with a `TOOL DEF` preselect, a speed-only `TOOL CALL S…`; numbers with a **decimal comma** (`X241,781`). |
+| `5-Axis-1.H` | An older-style program: `CYCL DEF 19` tilting, datum shifts with `IX+Q1`, `F MAX` and `R F` written apart, numbers ending in a comma (`X+25,`), `STOP M30`. |
+| `5X_MILLING.H` | 5-axis at constant Z with `M128 F…`, decimal comma. |
+| `5X_MILLING_VECTOR.H` | Sweep finishing with `LN` blocks and normal and tool vectors (`NX…TZ`), decimal comma, 99,156 lines. |
+| `DRILLING.H` | Drilling, tapping, reaming and boring with five tools: cycles 200–203, 206 and 209 as `~` continuation blocks with `;` parameter comments, `CYCL CALL`, `M99` repeats; decimal comma in the Q values (`Q239=1,5`, a pitch). |
+| `Demo_1.H` | A 3+2 program with decimal points: `;` comment blocks, `CALL LBL` to datum and swivel labels after `M30`, `PLANE SPATIAL … TURN MB MAX FMAX SEQ-`, `F AUTO`, a speed-only `TOOL CALL`. |
+
+**`okuma-osp/`** — Okuma OSP. The three milling programs are for a machining-centre control;
+gEdit has only the turning profile, and they open with it.
+
+| File | Contents |
+|---|---|
+| `2.5D_MILLING.min` | The 2.5D part for the machining-centre control: `G15 H1` work offsets, `G56 H1` length offsets, `T1 M6`, no header and no program number. |
+| `5X_MILLING.min` | 5-axis at constant Z between `G169` and `G170`. |
+| `DRILLING.min` | Drilling, tapping (`G84`), reaming and boring cycles over modal hole positions, and a tapping pass with chip breaking written out as single `G1` moves between `M3`/`M4`/`M5` reversals, 5,044 lines. |
+| `TURN.min` | The turning part for the OSP lathe: `G140`, six-digit `T010101`, `G50 S`, `G96`/`G97`, `G95`, the one-block thread cycle `G71 … F2`, and driven tools with `SB=`, `M13`, `G101` and the tapping cycle `G184`. |
+
+**`sinumerik/`** — Siemens Sinumerik 840D. Four milling programs and one turning program;
+gEdit has only the turning profile.
+
+| File | Contents |
+|---|---|
+| `2.5D_Milling.mpf` | The 2.5D part: `%_N_1_MPF` and `;$PATH=`, `CYCLE800` without arguments, `T1 D1` then `M6` with the next tool preselected, `CR=` arcs. |
+| `5X_Milling.mpf` | 5-axis at constant Z under `TRAORI`. |
+| `DRILLING.mpf` | Drilling, tapping, reaming and boring with `MCALL CYCLE81`–`CYCLE86 (…)`, a blank before the bracket, the feed in a block of its own before each call. |
+| `Demo_1.mpf` | A 3+2 program without the transfer header: a `;` comment header, `WORKPIECE(…)`, `T="…" D1` and `M6`, `CYCLE800(…)` swivels, `MSG("…")`. |
+| `TURN_1.mpf` | The turning part: `SETMS(1)`/`SETMS(2)`, `LIMS=`, `DIAMON`, `G95`/`G96`, `L131`, `CYCLE97` threading, and driven tools with `S2=`, `CYCLE81` and `CYCLE84`. |
+
+**Known gaps** (what these programs show gEdit getting wrong; the tests hold the right
+answer):
+
+- **Detection.** `5X_MILLING_VECTOR.H` opens as Fanuc mill: its `LN` blocks score nothing
+  for Klartext and a point each for the mill's `Y` rule, which outvotes the extension and
+  `BEGIN PGM`. `2.5D_Milling.mpf`, `5X_Milling.mpf` and `Demo_1.mpf`
+  open as Fanuc mill (the Sinumerik milling gap of `docs/user/dialects.md`).
+- **Program map.** The three Okuma milling programs show no tool change (the turning tool
+  rule wants a four- or six-digit `T` word). `DRILLING.mpf` lists every preselected tool as
+  a change of its own. The files above that open with the wrong profile get the wrong map.
+- **Tokens.** A Klartext number with a decimal comma is an `unknown` token, and a `Q`
+  value with one splits (`Q206=636,62` reads `636`); the `;` that ends every block of
+  `TURN.NC` is `unknown`; `CYCLE800` without arguments is `unknown` on Sinumerik; the free
+  cycle name after `CYCL DEF 247` (`INIT.`, `REF.PKT`) is `unknown`.
+- **Code help.** No entry for `G69`, `G43.4` and `G64` (mill), `G12.1`/`G13.1` (lathe);
+  the builder codes of `TURN.NC`; the Okuma lathe's `G101`–`G103` and `G136`–`G138`; and
+  every machining-centre code of the Okuma milling programs (`G15`, `G16`, `G56`, `G169`,
+  `G170`), which the turning database cannot have. `load.test.ts` leaves this folder out
+  of its every-code check for that reason.
+- **Scripts.** Scale feed scales the `F` of `TURN.NC`'s radial tapping cycle, a code the
+  database does not know, and the `F` of `M128`; scale speed changes nothing in
+  `TURN_1.mpf`, whose post writes `SETMS(1)`.
+
 ## `nc/encoding/`: byte-level cases, generated by `tests/gen/gen-encoding.mjs`
 
 All of them except `nul-heavy.bin` hold the same short milling program.
@@ -181,6 +272,7 @@ walks `nc/` only, so these files are checked by the tests that read them.
 |---|---|---|
 | `expected/detect/<folder>.json` | `src/lib/core/profiles/detect.test.ts` (also `src/lib/data/profiles/fanucLathe.test.ts`) | The expected profile for every file under `nc/` (`fallback` and `refused` are answers too); `fanuc-lathe.json` adds the expected G-code system. The keys together must equal the `nc/` listing, so a new fixture without an entry fails. |
 | `expected/detect/_improvements.json` | `src/lib/core/profiles/detect.test.ts` and `src/lib/data/profiles/okuma.test.ts` | Hand-written detection cases as inline text, each with the answer the first detection (M0) gave and the one it gives now; the leading `_` keeps the file out of the per-folder glob. |
+| `expected/detect/owner-public.json` (`knownGaps`) and `expected/outline/owner-public/_known-gaps.json` | `detect.test.ts`, `fanucLathe.test.ts` and `outline.test.ts` | The owner's programs gEdit gets wrong today, each with the reason and the **right** answer (the profile; for the map, every tool change as `[line, tool]`). They run as expected failures (`it.fails`) and get no golden, so a fix fails its test and the entry is replaced by a golden. |
 | `tokens/fanuc-gcode.json` | `src/lib/core/nc/tokenizer.test.ts` and `tests/python/test_gedit_nc.py` | 68 golden lines, 184 tokens. Each entry is `{ line, tokens }` plus an optional `prev` (the incoming `LineState`, default not-a-continuation) and an optional `state` (the expected outgoing one). An entry is compared on the fields it lists; whitespace tokens are left out. |
 | `tokens/fanuc-lathe.json` | the same | 72 golden lines, 197 tokens, same format, written for turning: every `T` spelling, `U`/`W` words, the two-block cycles, `G4U2`, `C90000` and `E1.5`. |
 | `tokens/heidenhain-klartext.json` | the same | 67 golden lines, 323 tokens, same format. |

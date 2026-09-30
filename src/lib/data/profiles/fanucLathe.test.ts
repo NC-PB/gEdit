@@ -187,6 +187,8 @@ interface ExpectedFile {
   fixtures: Record<string, string>;
   /** WP6.2: fixture → the `gcodeSystem` the variant rules answer with. */
   variants?: Record<string, { gcodeSystem: string; detected: boolean }>;
+  /** Fixtures detected wrongly today (the owner's real programs); see `owner-public.json`. */
+  knownGaps?: Record<string, string>;
 }
 
 const EXPECTED_DIR = join(FIXTURES_DIR, 'expected/detect');
@@ -202,10 +204,16 @@ const FIXTURE_VARIANT: Record<string, { gcodeSystem: string; detected: boolean }
   ...EXPECTED.map((e) => e.variants ?? {}),
 );
 
-/** Every fixture that opens and that one profile wins outright. */
+const KNOWN_GAPS: Record<string, string> = Object.assign({}, ...EXPECTED.map((e) => e.knownGaps ?? {}));
+
+/**
+ * Every fixture that opens and that one profile wins outright. A known detection gap is
+ * left out: its winner is the wrong profile, so a margin over the runner-up means nothing,
+ * and `detect.test.ts` already runs it as an expected failure.
+ */
 const decided = listFixtures('nc').filter((rel) => {
   const expected = FIXTURE_PROFILE[rel];
-  return expected !== undefined && expected !== 'fallback' && expected !== 'refused';
+  return expected !== undefined && expected !== 'fallback' && expected !== 'refused' && !(rel in KNOWN_GAPS);
 });
 
 describe('the profile margin on every NC fixture', () => {

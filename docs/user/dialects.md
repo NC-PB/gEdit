@@ -141,7 +141,7 @@ choose between.
 | Program start / end | `O1234` or `:1234` / `M30`, `M2` | the same | `BEGIN PGM name` / `END PGM` |
 | Renumber defaults | start 10, step 10, no padding, at most 99999 and then starting over, restart at each program start, skip `%`, `O` and comment lines | the same | consecutive from 0, step 1 |
 | Jumps that point at a block number | `M98 Q`, `GOTO`; `M99 P` and the `P`/`Q` of `G70`–`G73` are listed, never rewritten | `M98 Q`, `G70`–`G73` `P`/`Q`, `GOTO`; `M99 P` is listed, never rewritten | none — `CALL LBL` points at a label, not at a block number |
-| Code help entries | 82 codes (12 not verified yet) and 25 addresses | 79 codes (12 not verified yet) and 26 addresses in system A, 81 codes (10 not verified yet) in system B | 80 codes (5 not verified yet) and 34 addresses |
+| Code help entries | 83 codes (7 not verified yet) and 25 addresses | 83 codes (10 not verified yet) and 26 addresses in system A, 85 codes (7 not verified yet) in system B | 82 codes (all verified) and 34 addresses |
 
 And the two turning profiles of the other controls:
 
@@ -158,9 +158,9 @@ And the two turning profiles of the other controls:
 | Tool call | the `T` word alone: four digits (station, offset) or six (nose-radius set, station, offset); not a `T` inside a cycle block, not station `00` | every `T` word except `T0`: `T3`, `T="NAME"`, `T1=5` for spindle 1; never a `T` inside a string |
 | Axes | `X` `Z` `C` `Y`; `X` is a diameter, in incremental mode too. `U` and `W` are finish allowances, not incremental moves | `X` `Z` `C` `Y`; `X` is a diameter while diameter programming is on, which is how a program is assumed to start |
 | Program start / end | `O` plus up to four letters or digits, on a line of its own / `M02`, `M30`, and `RTS` for a subprogram | the `%_N_NAME_MPF` header or `PROC name` / `M30`, `M2`, and `M17` or `RET` for a subprogram |
-| Renumber defaults | start 10, step 10, no padding, at most 9999 and then it stops, restart at each `O` program, skip `$`, `%`, `O` and comment lines; a name such as `NLAP1` is never renumbered | start 10, step 10, no padding, at most 99999 and then starting over, restart at each program start, skip `%`, `;`, `PROC`, `DEF` and `EXTERN` lines; a label is never renumbered |
+| Renumber defaults | start 10, step 10, no padding, at most 9999 and then it stops, restart at each `O` program, skip `$`, `%`, `O` and comment lines; a name such as `NLAP1` is never renumbered | start 10, step 10, no padding, at most 2147483647 (the control's limit) and then it stops (the control wants every number once), restart at each program start, skip `%`, `;`, `PROC`, `DEF` and `EXTERN` lines; a label is never renumbered |
 | Jumps that point at a block number | `GOTO N…`, `IF […] N…`, and a LAP call (`G85`–`G88`) whose shape starts at a numbered block | `GOTOF`, `GOTOB`, `GOTO` and `GOTOC` followed by `N…`; a jump to a label goes by its name |
-| Code help entries | 145 codes (24 not verified yet) and 28 addresses | 176 codes (9 not verified yet) and 20 addresses |
+| Code help entries | 148 codes (6 not verified yet) and 28 addresses | 183 codes (6 not verified yet) and 20 addresses |
 
 The extensions row is what the Open and Save As dialogs list for each dialect on Windows
 and Linux; which of them count in detection is under
@@ -170,9 +170,10 @@ whatever the dialect — see [transformations.md](transformations.md#renumber-bl
 
 "Not verified yet" means the project wrote the entry but has not been able to check it
 against the control's own documentation: the hover leaves it out and the completion list
-marks it (see [Code help](README.md#code-help)). On Okuma that is 24 entries, among them
-`G20`/`G21` and optional functions the manual only names; on Sinumerik it is nine:
-`CYCLE87`–`CYCLE89`, `CYCLE93`, `CYCLE97`, `G942`, `G952`, `M6` and `M19`.
+marks it (see [Code help](README.md#code-help)). On Okuma that is six entries: `G36`/`G37`,
+whose format no manual gives, `G107`/`G108`, and `G142`/`G143`, which only an older code
+table names; on Sinumerik it is six as well: `CYCLE93`, `CYCLE97`, `G942`, `G952`, `M6` and
+`M19`.
 
 The decimal-point row says "by default" for the two Fanuc profiles because there it **is** a
 machine setting: choosing a machine changes it, in either direction. On Sinumerik it is
@@ -298,7 +299,7 @@ twice:
 | `G80`–`G88` | the drilling cycles, and `G80`, which cancels them | LAP: the definition of a finished shape and its automatic roughing and finishing |
 | Drilling with a driven tool | `G83`–`G89`, cancelled by `G80` | `G181`–`G189`, cancelled by `G180` |
 | `G90`, `G91` | in G-code system A, `G90` is a turning cycle and `U`/`W` move incrementally | absolute and incremental positions; `X` stays a diameter |
-| `G20`, `G21` | inch and metric | a home-position return and the return for a tool change (not verified yet) |
+| `G20`, `G21` | inch and metric | a home-position return and the return for a tool change |
 | Dwell | `G04 X`, `U` or `P` | `G04 F`: the time is in `F` |
 | `U`, `W` | incremental `X` and `Z` | finish allowances in the cycles; incremental moves are written with `G91` |
 | Arc radius | `R` | `L` |
@@ -310,9 +311,8 @@ twice:
 
 The code help takes its meanings from this dialect's own database, so where it describes
 one of these codes it describes the right-hand column. Where an entry is not verified yet —
-`G20`/`G21` and optional codes the manual only names, such as `G36`/`G37`, `G112`/`G113`
-and `G140`–`G143`, among them — the hover says the database does not describe the word
-rather than borrow the Fanuc meaning. The feed and speed scripts read the same database:
+optional codes such as `G36`/`G37` and `G142`/`G143` — the hover says the database does not
+describe the word rather than borrow the Fanuc meaning. The feed and speed scripts read the same database:
 
 - **A feed can be a time or a lead.** The `F` of `G04` is a dwell, and scaling feeds leaves
   it alone. In the thread cycles (`G31`–`G35`, `G71`, `G72`), the threads along an arc
@@ -345,9 +345,10 @@ help either leaves them out or marks them as not verified:
 - the synchronization of two-turret machines: `M100` and the other synchronization codes are
   not described, and the `P` word only by name; the turret selection `G13`/`G14` is
   explained;
-- `GET`, `PUT`, `READ`, `WRITE` and the system variables;
-- Y-axis milling (the planes `G17`–`G19` are marked not verified), coordinate conversion,
-  contour generation, and the spindle selection codes `G140`–`G143` (not verified);
+- the system variables;
+- contour generation (`G101`–`G103`, `G132`/`G133`) and the pick-off spindle codes
+  `G142`/`G143` (not verified); the Y-axis mode and coordinate conversion (`G136`–`G138`,
+  where `X` is a radius) and the spindle selection `G140`/`G141` are explained;
 - the G-code macro calls `G161`–`G171` and `G205`–`G214`: the map lists them as calls, and
   the code help has no entry for them;
 - schedule programs (`.SDF`, `PSELECT`).
@@ -499,9 +500,9 @@ and keeps it.
 **Recognised, but not explained yet.** These are read and coloured correctly, and the code
 help either leaves them out or marks them as not verified:
 
-- the older cycles `CYCLE87`–`CYCLE89`, `CYCLE93` and `CYCLE97`, which the programming manual
-  of the current software does not describe; completion offers them, marked as not
-  verified. `CYCLE940`, `CYCLE98` and `CYCLE62` are explained, their parameters not yet;
+- the older cycles `CYCLE93` and `CYCLE97`, whose parameters the database does not describe
+  yet; completion offers them, marked as not verified (`CYCLE87`–`CYCLE89` are explained).
+  `CYCLE940`, `CYCLE98` and `CYCLE62` are explained, their parameters not yet;
   the pocket and slot cycles, `CYCLE800` and `CYCLE832` are coloured and listed in the
   program map as calls, with no code help at all;
 - `G942` and `G952`, which the manual only lists;

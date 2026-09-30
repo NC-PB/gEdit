@@ -231,12 +231,19 @@ describe('availability and options', () => {
   });
 
   it('leaves the maximum open where it is only the point the counter starts over', () => {
-    for (const id of [FANUC, 'sinumerik']) {
-      const byId = new Map((renumber.options?.(compiled(id)) ?? []).map((field) => [field.id, field]));
-      expect(byId.get('digits')?.max, id).toBe(9);
-      expect(byId.get('max')?.required, id).toBe(false);
-      expect(byId.get('max')?.max, id).toBe(999999999);
-    }
+    const byId = new Map((renumber.options?.(compiled(FANUC)) ?? []).map((field) => [field.id, field]));
+    expect(byId.get('digits')?.max).toBe(9);
+    expect(byId.get('max')?.required).toBe(false);
+    expect(byId.get('max')?.max).toBe(999999999);
+  });
+
+  // Sinumerik's N is a whole number (INT): no five-digit limit, but a limit all the same,
+  // and a 5-axis post numbers past N3,700,000, so wrapping would write duplicates.
+  it('bounds Sinumerik by the INT limit of its block number and stops there', () => {
+    const byId = new Map((renumber.options?.(compiled('sinumerik')) ?? []).map((field) => [field.id, field]));
+    expect(byId.get('digits')).toMatchObject({ default: 0, max: 10 });
+    expect(byId.get('max')).toMatchObject({ default: 2147483647, max: 2147483647, required: true });
+    expect(byId.get('onOverflow')?.default).toBe('stop');
   });
 
   it('holds a caller that skipped the form to the same limit, and says so', () => {
