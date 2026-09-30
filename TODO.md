@@ -6,14 +6,11 @@ An item moves out when it is done. The plans in [docs/planning](docs/planning/RE
 
 ## Next up
 
-The roadmap was re-cut on 2026-09-30 ([roadmap](docs/planning/roadmap.md#phase-2-real-cam-output-safely-in-progress); accepted by the owner on 2026-10-01, D69 and D70). M8 is implemented; the order now is: verify it, land it, release it, and have the owner try the release.
+The roadmap was re-cut on 2026-09-30 ([roadmap](docs/planning/roadmap.md#phase-2-real-cam-output-safely-in-progress); accepted by the owner on 2026-10-01, D69 and D70). M8 and everything since are on `main` (G6 m0–m8: 84 of 84 on 2026-09-30, CI green on all jobs), and **v0.2.0 is a draft release** on GitHub with installers for all three platforms (universal macOS `.dmg`, Windows `.msi` and `-setup.exe`, Linux `.deb`, `.rpm` and `.AppImage`, `SHA256SUMS`).
 
-1. [ ] **Run the cumulative runtime suite m0–m8 (G6) on this build** — a locked screen blocked it before, and many scenarios changed since the last full pass (the detection margins, three M8 scenarios, `m3-assistant`'s G8/G9 count, the read-only and session scenarios — see each hand-off's own "Runtime scenarios for G6" section). **Owner:** leave the Mac idle and unlocked for about 30 minutes; the first build after the machine's restart is cold ([P2 §5.2](docs/planning/phase-2-implementation.md#52-changes-to-the-milestone-protocol))
-2. [ ] **Land the batch on `main`** as squash commits (M8, the Next-up fixes, the source review and the decision batch; G9) and push, together with the housekeeping pass ([P1 §4.3](docs/planning/phase-1-implementation.md#43-gates-all-must-pass-before-the-milestone-commit))
-3. [ ] **The CI release workflow and v0.2 as a draft release** — a small infrastructure task (S): on a version tag, `tauri build` for macOS, Windows and Linux, the bundles attached to a draft GitHub release that the owner publishes. **Owner:** your OK to add the workflow and to tag v0.2 (D70, below)
-4. [ ] **Your check of the v0.2 bundles on Windows and Linux** — this is also the open Phase 1 exit check: open, edit, save byte-exact, the close guard, one script with and without Python (the full list is under Manual checks). **Owner**
-
-Then M9 ([Ahead](#ahead)). The last item of the old list, having scale feed refuse a Fanuc-lathe `G71`/`G72` `F` without a `P`, moved there (WP9.5).
+1. [ ] **Your check of the v0.2.0 draft, then publish it** — download the installers from the draft (only you see it), run [the release checklist](docs/releases/checklist.md) on macOS, Windows and Linux (open, edit, save byte-exact, the close guard, one script with and without Python, the unsigned-install step of each system), and publish the draft when it passes. This is also the open Phase 1 exit check. **Owner**
+2. [ ] **A tag ruleset on `refs/tags/v*`** (GitHub Settings ▸ Rules ▸ Rulesets: only you may create, move or delete release tags), so nobody else can start a release ([CONTRIBUTING.md](CONTRIBUTING.md#releases)). **Owner**
+3. [ ] **M9: Real programs read right** — the next milestone ([Ahead](#ahead), [plan](docs/planning/phase-2-implementation.md#m9-real-programs-read-right)); it also takes the last item of the old list, scale feed refusing a Fanuc-lathe `G71`/`G72` `F` without a `P` (WP9.5).
 
 ## Waiting on the owner
 
