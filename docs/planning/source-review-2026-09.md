@@ -8,6 +8,8 @@ What the new control manuals and the owner's example programs showed, what gEdit
 
 **Status 2026-09-30 (placements moved by the re-cut of the roadmap).** The milestones this review names were renumbered; the findings and headings below keep the old names. R2, R3, R4 and R6 now go into M9, "Real programs read right" (the prelude of the old M9 became a milestone of its own). R7 now goes into WP10.2 (program checks, M10). R8 now goes into M10, with its smallest version in the prelude of WP10.4, and is needed before M10 starts. R5 now goes into the prelude of M12 (multi-channel programs, the old M10) and is needed before M12 starts. The "M12 user profiles" of the old plan are M13. Where a proposal below says M9, M10, M11 or M12, read this paragraph first.
 
+**Status 2026-10-01.** R5 and R8 (their smallest versions) were accepted by the owner, and so was the re-cut itself; R9 and the rest of R10 are still open.
+
 ## 1. What was read
 
 | Source | What it gave |

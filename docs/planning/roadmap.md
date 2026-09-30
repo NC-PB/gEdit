@@ -67,7 +67,7 @@ Status: shipped. Every row below exists, except what §10 of [phase-1-implementa
 
 Exit criteria: users can open the real output of their posts in all five dialects and trust what the editor reads, check a program before it goes to the machine, shift an address value without corrupting cycle depths, compare re-posted programs without numbering noise, check that the wait codes of a multi-channel program match, and describe their own machines, dialects and codes. Fanuc lathe output and Okuma OSP and Sinumerik turning are supported; Sinumerik milling is added in M9. The testable version is §2.2 of [phase-2-implementation.md](phase-2-implementation.md#22-phase-2-exit-criteria-testable), which also records the scope decision for every row below (§2.1) and what was deferred or cut (§11).
 
-**Re-cut on 2026-09-30 (proposed, owner to confirm; [D69](../../TODO.md#decisions)).** Reading the owner's real programs right had no milestone of its own, although every later feature (checks, extents, address arithmetic, compare) reads values; it now comes first, as M9. Address arithmetic needs only the Python interpreter that shipped in M6, and a Z shift is a daily task that can scrap parts on Klartext and Sinumerik cycle depths, so it moved to M10 beside the checks and extents. The code inspector, hover with modal context, the TypeScript modal interpreter and the templates help understanding and writing but do not make CAM output safer, so they moved to Phase 3. Nothing has been released yet, and Phase 2's exit was four large milestones away, so the plan now releases after each milestone (table below) and real use can steer the next one.
+**Re-cut on 2026-09-30 (accepted 2026-10-01; [D69](phase-2-implementation.md#101-decided-by-the-owner-2026-09-22)).** Reading the owner's real programs right had no milestone of its own, although every later feature (checks, extents, address arithmetic, compare) reads values; it now comes first, as M9. Address arithmetic needs only the Python interpreter that shipped in M6, and a Z shift is a daily task that can scrap parts on Klartext and Sinumerik cycle depths, so it moved to M10 beside the checks and extents. The code inspector, hover with modal context, the TypeScript modal interpreter and the templates help understanding and writing but do not make CAM output safer, so they moved to Phase 3. Nothing has been released yet, and Phase 2's exit was four large milestones away, so the plan now releases after each milestone (table below) and real use can steer the next one.
 
 Status, milestone by milestone:
 
@@ -83,16 +83,16 @@ Status, milestone by milestone:
 | [M12](phase-2-implementation.md#m12-multi-channel-programs) | Multi-channel programs: channels and wait codes in the machine configuration, the wait-code check, the map and tool list per channel, sync-point navigation, a one-way split into channel documents | planned |
 | [M13](phase-2-implementation.md#m13-your-own-dialects-and-codes-and-the-phase-2-exit) | Your own dialects and codes, and the Phase 2 exit: user profiles and code files, the Profiles page, import and export of profiles and machines, typing options | planned |
 
-Releases (proposed, owner to confirm; [D70](../../TODO.md#decisions)). A tagged release follows each milestone that lands on `main`. A new CI release workflow builds the app for macOS, Windows and Linux on a version tag and attaches the bundles to a **draft** GitHub release; publishing it is the owner's call every time. Each release comes with a short owner checklist: open, edit, save byte-exact, the close guard, and one script with and without Python, on the three platforms. That checklist is also how the open Phase 1 exit check (the bundles on Windows and Linux) finally gets done.
+Releases (accepted 2026-10-01; [D70](phase-2-implementation.md#101-decided-by-the-owner-2026-09-22)). A tagged release follows each milestone that lands on `main`. A new CI release workflow builds the app for macOS, Windows and Linux on a version tag and attaches the bundles to a **draft** GitHub release; publishing it is the owner's call every time. Each release comes with a short owner checklist: open, edit, save byte-exact, the close guard, and one script with and without Python, on the three platforms. That checklist is also how the open Phase 1 exit check (the bundles on Windows and Linux) finally gets done.
 
 | Release | Contents | Status |
 |---|---|---|
-| v0.2 | M6–M8 with the fixes made since; the release workflow comes first (size S) | proposed |
-| v0.3 | M9 | proposed |
-| v0.4 | M10 | proposed |
-| v0.5 | M11 | proposed |
-| v0.6 | M12 | proposed |
-| 1.0 | M13, the Phase 2 exit | proposed |
+| v0.2 | M6–M8 with the fixes made since; the release workflow comes first (size S) | next |
+| v0.3 | M9 | planned |
+| v0.4 | M10 | planned |
+| v0.5 | M11 | planned |
+| v0.6 | M12 | planned |
+| 1.0 | M13, the Phase 2 exit | planned |
 
 Row by row:
 
