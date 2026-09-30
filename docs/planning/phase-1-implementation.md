@@ -9,7 +9,7 @@ Path shorthands:
 - `NM` = `node_modules`
 - `SP` = a scratch directory outside the repo (worktrees, cargo target dirs, hand-off notes)
 
-All other paths are relative to the repo root, `/Users/peterburgener/Repositories/gEdit`.
+All other paths are relative to the repository root.
 
 ---
 

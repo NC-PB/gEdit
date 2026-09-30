@@ -2,7 +2,7 @@
 
 Thanks for helping. gEdit is a small project run by part-time contributors, so focused pull requests with tests are the easiest to review.
 
-Three documents to know about before you start: [docs/user](docs/user/README.md) is what the app does today, from a CNC programmer's point of view; [docs/planning](docs/planning/README.md) is what we plan to build and why; and [phase-1-implementation.md](docs/planning/phase-1-implementation.md) is the executed plan for Phase 1 — architecture, the binding contracts in §7, and the decisions behind them.
+Four documents to know about before you start: [docs/user](docs/user/README.md) is what the app does today, from a CNC programmer's point of view; [docs/planning](docs/planning/README.md) is what we plan to build and why; [phase-1-implementation.md](docs/planning/phase-1-implementation.md) is the executed plan for Phase 1 — architecture, the binding contracts in §7, and the decisions behind them; and [phase-2-implementation.md](docs/planning/phase-2-implementation.md) is the plan being executed now (M6–M12): the contracts it adds (its §7, with the test ids in §7.12 and the deviations in §7.16), the dialect and machine data (§8) and the owner decisions (§10). What is still open, in the code and in the decisions, is collected in [TODO.md](TODO.md).
 
 ## Setup
 
@@ -28,7 +28,7 @@ npm run tauri dev      # start the app with hot reload
 | Command | What it does |
 |---|---|
 | `npm run tauri dev` | Runs the app in development mode. |
-| `npm run check` | Type check (svelte-check). Must report 0 errors. |
+| `npm run check` | Type check (svelte-check). Must report 0 errors and 0 warnings. |
 | `npm test` | Unit tests (vitest, node environment). `npm run test:watch` reruns on change. |
 | `npm run build` | Builds the frontend into `build/`. |
 | `npm run tauri build` | Builds the installers. `npx tauri build --debug` gives a faster, unoptimized bundle. |
@@ -42,8 +42,8 @@ Rust checks run inside `src-tauri/`. Build the frontend first, because `tauri::g
 npm run build
 cd src-tauri
 cargo fmt --check
-cargo clippy --all-targets -- -D warnings
-cargo test
+cargo clippy --all-targets --locked -- -D warnings
+cargo test --locked
 ```
 
 Python tests (the bundled scripts and their shared library): `python3 -m unittest discover -s tests/python -t .`
@@ -69,7 +69,8 @@ The runtime harness is not part of CI, because it needs a real macOS desktop.
 src/lib/
   core/        Pure TypeScript: no Svelte, Monaco or Tauri at runtime (type imports are fine).
                Text codecs, key specs, NC tokenizer, profiles, grammar, codes, navigation,
-               transforms, forms, settings, scripting. Unit tested in node.
+               transforms, forms, settings, scripting, machines (number rules and the
+               effective profile of a machine). Unit tested in node.
   app/         Services and wiring: contracts (types.ts), bootstrap, contribution loader,
                registries, file operations, dialogs, status, test hook.
   stores/      svelte/store modules for shared state (documents, layout, settings, ...).
@@ -79,9 +80,10 @@ src/lib/
   components/  Svelte components (shell, editor, panels, status, menus, forms, dialogs).
   i18n/        t() and the English message files, one namespace per feature.
   data/        Profiles, code database, blocks, and the generated licenses.json.
+  utils/       Small helpers: platform detection, path spelling (plainPath), the code-block lookup.
 src-tauri/src/ Rust: a thin lib.rs plus one module per concern (menu, files, config, state, scripts, ...).
 src-tauri/resources/scripts/  Bundled Python scripts and gedit_nc.py (see its README.md).
-tests/         fixtures/ gen/ unit/ python/ runtime/ perf/
+tests/         fixtures/ gen/ unit/ python/ runtime/ real/ (real/ is gitignored except its README)
 docs/user/     The user guide. docs/planning/ is the design and roadmap notes.
 ```
 
@@ -96,7 +98,7 @@ docs/user/     The user guide. docs/planning/ is the design and roadmap notes.
 
 ### Features are contributions
 
-- A feature is one file in `src/lib/contrib/` that default-exports a `Contribution` (commands, ribbon items, panels, status items, keybinding removals, `activate()`).
+- A feature is one file in `src/lib/contrib/` that default-exports a `Contribution` (commands, ribbon items, ribbon groups, panels, status items, keybinding removals, `activate()`).
 - The files are loaded with `import.meta.glob`, sorted by name. Adding a feature therefore never means editing the ribbon, the status bar, `+page.svelte` or a central list.
 
 ### Commands and keys
@@ -111,6 +113,7 @@ docs/user/     The user guide. docs/planning/ is the design and roadmap notes.
 - There is one editor and one Monaco model per document. Model text is LF-normalized; saving joins the lines with the document's own line ending, so CRLF and CR-only files keep their bytes.
 - **One undo step per operation.** Transforms, script results, reloads and inserts all apply their edits as `pushStackElement`, `pushEditOperations`, `pushStackElement`. `setValue` is only used when a model is created.
 - Never change encoding, line endings or bytes the user did not ask to change.
+- **One file is one string.** A path is put into one spelling before it is compared or stored — `paths::plain` in Rust, `plainPath` in `src/lib/utils/platform.ts` — because `canonicalize` on Windows answers with the `\\?\` form while other paths arrive in the ordinary one, and the two spellings must still be one tab, one recent entry and one backup history. Script and snapshot names are checked against the Windows device names (`CON`, `NUL`, `COM1`…), which name a device whatever the extension. CI runs the Rust tests on Windows, so gate a test to Unix only when the behaviour itself is Unix-only.
 
 ### UI strings
 
@@ -132,21 +135,22 @@ Completion texts, code descriptions, templates, help and documentation are writt
 
 ### Bundled Python scripts
 
-`src-tauri/resources/scripts/` ships with the app, and a script there is a user-visible feature with a public contract. Read [its README](src-tauri/resources/scripts/README.md) before adding or changing one. In short: standard library only, it has to run on Python 3.9 as well as on the newest release, work on tokens from `gedit_nc.tokenize_line` rather than on a regex over raw lines, and use `scale_decimal` / `format_number` for every number. `gedit_nc.py`'s tokenizer and number formatting are ports of `src/lib/core/nc/*.ts` and are held to the same goldens under `tests/fixtures/`: when one side changes, the fixture changes with it and **both** sides are re-run.
+`src-tauri/resources/scripts/` ships with the app, and a script there is a user-visible feature with a public contract. Read [its README](src-tauri/resources/scripts/README.md) before adding or changing one. In short: standard library only, it has to run on Python 3.9 as well as on the newest release, work on tokens from `gedit_nc.tokenize_line` rather than on a regex over raw lines, and use `scale_decimal` / `format_number` for every number. The tokenizer and number formatting of `gedit_nc` are ports of `src/lib/core/nc/*.ts`, and its number rules a port of `src/lib/core/machines/numbers.ts`; they are held to the same goldens under `tests/fixtures/` (`tokens/`, `numberformat.cases.json`, `machines/numbers.json`), and the Python modal interpreter to `tests/fixtures/modal/`. When one side changes, the fixture changes with it and **both** sides are re-run.
 
 ### Documentation
 
 Three audiences, three places. Keep them apart.
 
 - **`docs/user/`** — the user guide, written for a CNC programmer, not for a developer. No file paths, no module names, no milestone numbers. It describes what the shipped app does, and it is honest about what it does not do: the limits section is as much a part of it as the feature list. A pull request that changes behaviour a user can see updates it in the same change.
-- **`docs/planning/`** — design notes and the roadmap: what we intend, why, and what is deferred. [phase-1-implementation.md](docs/planning/phase-1-implementation.md) additionally carries the binding contracts (§7) and the record of where the implementation deviated from them.
+- **`docs/planning/`** — design notes and the roadmap: what we intend, why, and what is deferred. [phase-1-implementation.md](docs/planning/phase-1-implementation.md) and [phase-2-implementation.md](docs/planning/phase-2-implementation.md) additionally carry the binding contracts (§7 in each) and the record of where the implementation deviated from them (§7.12 in Phase 1, §7.16 in Phase 2).
 - **Module headers** — why this code is shaped this way. They are the first thing to read before changing a module, and the place a decision belongs when it would otherwise be lost.
 
-The generated surfaces are not documentation to maintain by hand: the shortcut dialog is built from the command registry, and the About dialog's notices from `licenses.json`. `docs/user/shortcuts.md` mirrors the dialog for people who want to read it before installing, and says the dialog wins if the two disagree.
+The generated surfaces are not documentation to maintain by hand: the shortcut dialog is built from the command registry, and the About dialog's notices from `licenses.json`. `docs/user/shortcuts.md` mirrors the dialog for people who want to read it before installing, and adds the editor component's own editing keys, which the dialog lists without a key (the gEdit commands that wrap them deliberately carry none). For every key gEdit assigns, the dialog wins if the two disagree.
 
 ### Test fixtures are synthetic
 
-- Every NC program under `tests/fixtures/` is written for gEdit and says so in a comment at the top. Never commit real customer or shop programs, not even anonymized ones. The rules and a description of every file are in [tests/fixtures/README.md](tests/fixtures/README.md).
+- Every NC program under `tests/fixtures/` is written for gEdit and says so in a comment at the top. Never commit real customer or shop programs, not even anonymized ones. The rules and a description of every file are in [tests/fixtures/README.md](tests/fixtures/README.md). The one exception is reserved: `tests/fixtures/nc/owner-public/`, for the few programs the owner hands over as safe to publish. Each one needs a permission line in that README and goes in only after the owner has gone through what `node tests/gen/check-anonymized.mjs` flags in it (a reading aid, not a filter; Phase 2 plan §9.2).
+- Your own programs belong in `tests/real/` (gitignored except its README) or in a folder named by `GEDIT_REAL_FIXTURES`. `npm test -- realFixtures` and `tests/python/test_real_fixtures.py` check them on your machine and print counts only, never a file name or program text; without such a folder they skip. See [tests/real/README.md](tests/real/README.md).
 - Fixtures are byte-exact: `.gitattributes` marks them `-text`, so git never rewrites their line endings. Encoding fixtures are produced by `tests/gen/gen-encoding.mjs`; change the generator, not the files, and run `node tests/gen/gen-encoding.mjs` to rewrite them.
 - Large test programs come from `tests/gen/gen-large.mjs` and go into `.perf/`, which is not committed.
 
@@ -166,7 +170,7 @@ These rules are checked in review. Changing one needs a discussion first.
 5. No dependency that uses `eval` or `Function(…)`, with or without `new`.
 6. Scripts never run automatically. The webview sends a script id, never a script path or an interpreter path.
 
-Scripts go through `src-tauri/src/scripts/`, whose module documentation states both what those rules buy (no path traversal, no editable bundled script, no shell, a bounded deadline, capped output, killed on exit) and what they do not: a script is an ordinary program with the user's rights, and gEdit cannot sandbox it. Do not restate that guarantee more strongly than the module does — the user guide's "only run scripts you trust" is the actual security model, and the CSP is the primary barrier. The first script runner (`run_python_script` and `list_python_scripts`, which take a folder) predates rules 3 and 6 and is removed at the end of Phase 1; do not build on it.
+Scripts go through `src-tauri/src/scripts/`, whose module documentation states both what those rules buy (no path traversal, no editable bundled script, no shell, a bounded deadline, capped output, killed on exit) and what they do not: a script is an ordinary program with the user's rights, and gEdit cannot sandbox it. Do not restate that guarantee more strongly than the module does — the user guide's "only run scripts you trust" is the actual security model, and the CSP is the primary barrier. The first script runner (`run_python_script` and `list_python_scripts`, which took a folder) predated rules 3 and 6 and was removed at the end of Phase 1 (plan D14); `m0-main` checks that neither command answers any more.
 
 ## Tests
 
@@ -180,19 +184,19 @@ Scripts go through `src-tauri/src/scripts/`, whose module documentation states b
 The harness in `tests/runtime/` builds a test variant of the app and drives it like a user would: native key and mouse events, stubbed file dialogs that grant paths like the real ones, real alerts, and real quit handling. It reads the app state through `data-testid` attributes and the `window.__gedit` test hook. Prerequisites and the full reference are in `tests/runtime/README.md`.
 
 ```sh
-tests/runtime/sync.sh                                # copy the repo to $GEDIT_RH_DIR (default $TMPDIR/gedit-rh), patch in the harness, build
+tests/runtime/sync.sh                                # copy the repo to $GEDIT_RH_DIR/app (default $TMPDIR/gedit-rh/app), patch in the harness, build
 tests/runtime/run.sh m0-main                         # run one scenario; exits 0 on pass
-tests/runtime/suite.sh tests/runtime/suites/m0.txt   # run a suite and print a PASS/FAIL table
+tests/runtime/suite.sh tests/runtime/suites/m0.txt   # run a suite; prints a PASS/FLAKY/FAIL/BLOCKED table (non-zero exit on FAIL or BLOCKED)
 ```
 
 - Your working tree is not modified; the harness is patched into the copy.
-- The app window is visible and receives native input, so do not use the Mac while a run is in progress. Runs are serialized with a lock.
-- Each run gets a fresh `HOME` and an explicit `GEDIT_PYTHON`, so your real settings and recent files are never touched and results do not depend on your shell setup. The scenarios that test the interpreter lookup itself deliberately leave `GEDIT_PYTHON` unset.
-- A run fails on any failed check, on a CSP violation the scenario did not ask for, and on a console error that is neither expected nor known noise. It also fails when the app asks for a file dialog nobody queued, when a queued dialog answer is left unused, or when the app exits when it should not have (or does not exit when it should).
+- The app window is visible and receives native input, so do not use the Mac while a run is in progress. Runs and syncs are serialized with a lock; two harness folders on one Mac share one lock through `GEDIT_RH_LOCK`.
+- Each run gets a fresh `HOME` and an explicit `GEDIT_PYTHON`, so your real settings and recent files are never touched and results do not depend on your shell setup. Two exceptions are deliberate: a numbered scenario (`…-2`) reads the `HOME` its predecessors wrote, and the scenarios that test the interpreter lookup itself leave `GEDIT_PYTHON` unset.
+- A run fails on any failed check, on a CSP violation the scenario did not ask for, and on a console error that is neither expected nor known noise. It also fails when the app asks for a file dialog nobody queued, when a queued dialog answer is left unused, when the app exits when it should not have (or does not exit when it should), or when an alert is left open. A run that could not get the keyboard (a locked screen, another app in front) is BLOCKED rather than failed, and `suite.sh` runs a failed scenario once more and reports a pass on the retry as FLAKY.
 
 Writing scenarios:
 
-- Find elements by `data-testid` (the list is in §7.9 of the plan), never by visible text. If you need a new test id, add it to that table in the same pull request.
+- Find elements by `data-testid` (the lists are §7.9 of phase-1-implementation.md and §7.12 of phase-2-implementation.md), never by visible text. If you need a new test id, add it to the Phase 2 table in the same pull request.
 - Read state through `h.app` (the test hook) rather than by parsing the DOM where the hook offers it.
 - The test hook only exists in builds made with `VITE_GEDIT_TEST=1`. The production bundle must not contain `__gedit`; CI checks this.
 - `tests/runtime/harness/harness.rs` is compiled only inside the patched copy, so `cargo fmt` and `clippy` in `src-tauri/` never see it. Run `rustfmt --edition 2021 tests/runtime/harness/harness.rs` after editing it; CI checks the formatting.

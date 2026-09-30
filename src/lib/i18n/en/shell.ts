@@ -4,7 +4,7 @@
 import type { Messages } from '../types';
 
 export default {
-  workspace: 'gEdit / Workspace',
+  workspace: 'gEdit',
   ribbon: 'Ribbon',
   ribbonTabs: 'Ribbon tabs',
   statusBar: 'Status bar',

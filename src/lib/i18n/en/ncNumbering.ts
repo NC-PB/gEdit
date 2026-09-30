@@ -63,8 +63,8 @@ export default {
     /** M6: the three outcomes of a reference. Rewritten is good news and says so plainly. */
     referencesRewritten_one: '{count} jump, return or cycle was rewritten with the new block number.',
     referencesRewritten_other: '{count} jumps, returns and cycles were rewritten with the new block numbers.',
-    referencesKept_one: '{count} reference names a block of the calling program and was left as it is; check it.',
-    referencesKept_other: '{count} references name blocks of the calling program and were left as they are; check them.',
+    referencesKept_one: '{count} reference was left as it is because this dialect never rewrites it; check it.',
+    referencesKept_other: '{count} references were left as they are because this dialect never rewrites them; check them.',
     referencesUnresolved_one: '{count} reference could not be followed and was left as it is; check it.',
     referencesUnresolved_other: '{count} references could not be followed and were left as they are; check them.',
 
@@ -74,7 +74,8 @@ export default {
     skippedNotNumbered: 'Skipped: the block had no number and only numbered blocks are renumbered.',
     skippedStopped: 'Skipped: numbering stopped at the maximum.',
     skippedProgramMarker: 'Skipped: this is a program marker, not a block.',
-    referenceKeptRow: 'This block number may be in the calling program, which this file does not show, so it was left as it is.',
+    referenceKeptRow:
+      'This dialect never rewrites this reference: it may name a block of the calling program or of another program, or be a turning cycle read with a milling profile. It was left as it is.',
     referenceMissingRow: 'This line points at a block number that this program does not have, so it was left as it is.',
     referenceDuplicateRow: 'This line points at a block number that this program uses more than once, so it was left as it is.',
     referenceOutsideRow: 'This line points at a block outside the renumbered lines, which keeps the number it has.',
@@ -97,7 +98,7 @@ export default {
       spacesAfter: { label: 'Spaces after the number' },
       skipStartingWith: {
         label: 'Skip lines starting with',
-        help: 'Separated by spaces. Leave empty to number every line.',
+        help: 'Separated by spaces. A program marker such as % or O1001 is never numbered, whatever this list says.',
       },
       skipEmpty: { label: 'Skip empty lines' },
       restartAtProgramStart: { label: 'Start over at each program start' },
@@ -110,7 +111,7 @@ export default {
   },
 
   removeBlockNumbers: {
-    title: 'Remove Block Numbers',
+    title: 'Remove Block Numbers…',
     /** `available()`: a control that needs numbers would refuse the whole program. */
     mandatory: 'This dialect needs a number on every block, so they cannot be removed.',
 

@@ -6,7 +6,10 @@ platform, macOS included.
 
 The same list, with the keys as they are on the machine you are sitting at, is in the
 program: **View ▸ Keyboard Shortcuts**. That dialog is generated from the commands
-themselves, so if it ever disagrees with this page, it is right and this page is stale.
+themselves, so for every key gEdit assigns — everything on this page except the Editing
+table and Quick outline — it is right, and this page is stale if the two ever disagree.
+The editing keys come with the editor component: the dialog lists those commands without
+a key, and the keys work all the same.
 
 **F1** opens the command palette, which finds any command by name — including the many
 that have no shortcut at all.
@@ -25,9 +28,12 @@ On a Mac laptop the F-keys may need the `fn` key, depending on your keyboard set
 | `Cmd/Ctrl+W` | Close the tab |
 | `Cmd/Ctrl+Shift+W` | Close the window |
 
-Close All, Open Recent, Clear Recent Files, and the three status-bar pickers (dialect,
-encoding, line ending) have no shortcut — they are on the Home tab, in the palette, or in
-the status bar.
+Close All, Open Recent…, Clear Recent Files, Lock Against Editing, Show Recovered Work,
+Manage Machines…, Open Machines File and the four status-bar pickers (dialect, machine,
+encoding, line ending) have no shortcut. All of them are in the palette; Open Recent and
+Clear Recent Files are also in the Home tab's Recent list, and the pickers are in the
+status bar. Lock Against Editing has no key on purpose: an accidental one would look like
+a broken keyboard.
 
 ## Tabs and panels
 
@@ -50,12 +56,13 @@ on the View tab, without shortcuts.
 | `F2` / `Shift+F2` | Next / previous bookmark |
 | `Cmd/Ctrl+Shift+O` | Quick outline — jump to a tool call or section |
 
-`Ctrl+G` is the Control key even on a Mac, because `Cmd+G` is "find next" and because
-`Ctrl+G` is the combination the controls themselves use. Clear Bookmarks has no shortcut.
+`Ctrl+G` is the Control key even on a Mac: `Cmd+G` is "find next" there, and `Ctrl+G` is
+the editor component's own key for going to a line, which gEdit takes over so that it
+finds a block number too. Clear Bookmarks has no shortcut.
 
 **Two editor defaults were taken over:** `F2` and `Cmd/Ctrl+F2` are bookmark keys here,
-not rename and rename-all. Selecting every occurrence of a word is still
-`Cmd/Ctrl+Shift+L`.
+not *Rename Symbol* and *Change All Occurrences*. Selecting every occurrence of a word is
+still `Cmd/Ctrl+Shift+L`.
 
 ## Editing
 
@@ -90,8 +97,10 @@ one-at-a-time operations and are reached from the ribbon or from `F1`. See
 | `F9` | Pick a script and run it |
 | `Cmd/Ctrl+F9` | Run the last script again, straight away, with the values you used last time — it does not open the parameter form |
 
-**Stop**, **New Script**, **Copy to My Scripts**, **Edit Script**, **Rescan** and
-**Add Folder** are on the Tools tab and in the palette. See [scripts.md](scripts.md).
+**Run Script**, **Stop**, **New Script**, **Edit Script**, **Rescan** and **Add Folder**
+are on the Tools tab and in the palette. **Copy to My Scripts** is in the palette only;
+**Edit Script** on a bundled script offers the same copy (*Copy and edit*). See
+[scripts.md](scripts.md).
 
 ## Compare, settings, help
 

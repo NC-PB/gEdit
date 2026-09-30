@@ -33,7 +33,7 @@ export default {
   whereUntitled: 'Was never saved to a file. It reopens as an untitled document.',
   whereUnchanged: 'Reopens {path}, which has not changed since this snapshot.',
   whereChanged:
-    '{path} CHANGED ON DISK after this snapshot. It reopens with your unsaved text and the file is left as it is; gEdit shows the difference, and you decide what to save.',
+    '{path} CHANGED ON DISK after this snapshot. It reopens with your unsaved text and the file is left as it is; the changed-on-disk bar comes up so you can compare before you decide what to save.',
   whereMissing: '{path} is no longer there. It reopens with your unsaved text, and saving writes the file again.',
   whereUnknown:
     'gEdit cannot tell whether {path} changed since this snapshot. Compare it before you save over it.',
@@ -93,5 +93,5 @@ export default {
 
   // --- the command ---------------------------------------------------------
   category: 'File',
-  showPending: 'Show recovered work',
+  showPending: 'Show Recovered Work',
 } as const satisfies Messages;

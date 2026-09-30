@@ -17,7 +17,8 @@ export default {
   toggle: 'Lock Against Editing',
 
   /** Monaco's own message on a refused keystroke; it is markdown, so no line breaks. */
-  editorMessage: 'This document is locked against editing. Use File ▸ Lock Against Editing to unlock it.',
+  editorMessage:
+    'This document is locked against editing. To unlock it, click Read-only in the status bar or use Lock Against Editing in the command palette (F1).',
 
   // Status bar (`data-item="readonly"`) and the tab
   item: 'Read-only',

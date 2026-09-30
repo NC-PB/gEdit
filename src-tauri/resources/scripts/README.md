@@ -6,23 +6,24 @@ to `scripts/`), so at runtime it is `resource_dir()/scripts`. It is also what gE
 `PYTHONPATH`, so **any** script — bundled or your own — can `import gedit_nc`.
 
 Bundled scripts are **read-only**. The app never grants one to the webview's file scope: to
-change one, use "Copy to user folder", which puts a copy in `<config>/scripts`, where it
-shadows the bundled file of the same name (plan §3, AD-13).
+change one, use **Copy to My Scripts** (command palette) or **Edit Script ▸ Copy and edit**,
+which puts a copy in `<config>/scripts`, where it shadows the bundled file of the same name
+unless an extra folder holds one too (Phase 1 plan §3, AD-13).
 
-| File | Owner | What |
-| --- | --- | --- |
-| `gedit_nc.py` | **WP4.6** | the shared library, and the only import path a script may use: context, tokenizer, number formatting, modal state, machine parameters, report and envelope output (plan §7.10) |
-| `_nc_lex.py` | **P6** | the tokenizer and the number formatting behind it |
-| `_nc_modal.py` | **WP6.4** | `ModalInterpreter` and `FeedModeTracker`: what is in force after a block |
-| `_nc_machine.py` | **WP6.9** | the machine parameters, and what a written number is worth on one |
-| `tool_list.py` | **WP4.6** | tools in order of first use, with descriptions and call counts — `output = "report"` |
-| `scale_feed.py` | **WP4.7** | multiply `F` values by a percentage — `output = "replace"` |
-| `scale_speed.py` | **WP4.7** | multiply `S` values by a percentage — `output = "replace"` |
+| File | What |
+| --- | --- |
+| `gedit_nc.py` | the shared library, and the only import path a script may use: context, tokenizer, number formatting, modal state, machine parameters, report and envelope output (Phase 1 plan §7.10) |
+| `_nc_lex.py` | the tokenizer and the number formatting behind it |
+| `_nc_modal.py` | `ModalInterpreter` and `FeedModeTracker`: what is in force after a block |
+| `_nc_machine.py` | the machine parameters, and what a written number is worth on one |
+| `tool_list.py` | tools in order of first use, with descriptions and call counts — `output = "report"` |
+| `scale_feed.py` | multiply `F` values by a percentage — `output = "replace"` |
+| `scale_speed.py` | multiply `S` values by a percentage — `output = "replace"` |
 
-`gedit_nc.py` and any file whose name starts with `_` are **not listed as scripts**:
-discovery skips them, because they are library code, not commands. The `_nc_*` modules are
-the internals of `gedit_nc`, which re-exports everything that is public — a script imports
-`gedit_nc` and nothing else, so the split can move without breaking anyone.
+`gedit_nc.py`, and any file or folder whose name starts with `_` or `.`, is **not listed as
+a script**: discovery skips them, because they are library code, not commands. The `_nc_*`
+modules are the internals of `gedit_nc`, which re-exports everything that is public — a
+script imports `gedit_nc` and nothing else, so the split can move without breaking anyone.
 
 ---
 
@@ -30,8 +31,9 @@ the internals of `gedit_nc`, which re-exports everything that is public — a sc
 
 It is written for someone putting their own `.py` into the user scripts folder. Everything
 below is what gEdit guarantees and what it expects back; the bundled scripts are worked
-examples of it, and `src-tauri/src/scripts/template.py` is the skeleton "New script"
-writes.
+examples of it, and `src-tauri/src/scripts/template.py` is the skeleton **New Script**
+writes. The user guide's [Scripts](../../../docs/user/scripts.md) page describes the same
+things for the person running the scripts.
 
 ## 1. Where your script goes, and what it is called
 
@@ -42,28 +44,33 @@ writes.
 | extra | each folder in the `scripts.folders` setting | `extra0:my_script.py` |
 
 An id is `root:name.py` or `root:group/name.py`. Every segment is a plain file name — no
-separators, no `.` or `..`, nothing starting with `.` — the file ends in `.py`, and the
-resolved path has to stay inside its root, so a symlink cannot point out of the folder. One
-sub-folder deep is a group, which is how the Scripts menu builds its sub-menus.
+separators, no `.` or `..`, nothing starting with `.`, `_` or a blank — the file ends in
+`.py`, and the resolved path has to stay inside its root, so a symlink cannot point out of
+the folder. A segment may not be `gedit_nc.py`, may not end in `.` or a space, and may not
+contain `:` or a control character; on Windows a device name (`CON`, `PRN`, `AUX`, `NUL`,
+`COM0`–`COM9`, `LPT0`–`LPT9`, with any extension) is refused too, and **New Script** refuses
+those names on every platform. One sub-folder deep is a group, which is how the Tools tab
+groups its script buttons.
 
-A user script with the same name as a bundled one **shadows** it; only one of the two is
-listed.
+A script shadows one with the same file name — in any group — in an earlier root: user
+over bundled, an extra folder over both, a later extra folder over an earlier one. Only the
+winner is listed.
 
 ## 2. The header
 
 A script declares itself in a block the backend reads as TOML. Without one it still runs,
-in v1 mode: stdin in, raw stdout in the Output panel.
+in panel mode, on every dialect: stdin in, raw stdout in the Script Output panel.
 
 ```python
 #!/usr/bin/env python3
 # /// gedit
-# name = "Scale feed rates"
+# name = "Scale lathe feeds"
 # description = "Multiply F values by a percentage."
-# profiles = ["fanuc-gcode", "heidenhain-klartext"]   # omit = every profile
-# input = "selection-or-document"                     # document | selection | selection-or-document | none
-# output = "replace"                                  # replace | new-document | report | panel
-# timeout = 60                                        # 1..86400 s; omit = scripts.timeoutSeconds
-# envelope = true                                     # stdout is {"text", "message", "findings"}
+# profiles = ["fanuc-lathe", "okuma-osp", "sinumerik"]   # omit = every profile
+# input = "selection-or-document"                       # document | selection | selection-or-document | none
+# output = "replace"                                    # replace | new-document | report | panel
+# timeout = 60                                          # 1..86400 s; omit = scripts.timeoutSeconds
+# envelope = true                                       # stdout is {"text", "message", "findings"}
 #
 # [[params]]
 # id = "percent"
@@ -75,15 +82,35 @@ in v1 mode: stdin in, raw stdout in the Output panel.
 # ///
 ```
 
-`[[params]]` entries are `FieldSpec`s (plan §7.5) and become the form gEdit shows **before**
-the script runs; the values arrive in `context["params"]` under their `id`. The types are
-`number`, `integer`, `text`, `bool`, `choice`, `file`, `folder` and `address-list`. A
-`choice` carries `choices = [{ label = …, value = … }]`; an optional field sets
-`required = false` and no `default`.
+An example. The bundled `scale_feed.py` declares no `profiles`, so it is offered on every
+dialect. `profiles` is compared exactly: a script for `fanuc-gcode` is not offered on
+`fanuc-lathe`, an empty list means every profile, and an unknown id is not reported.
 
-The header is read out of the first 64 KiB of the file. **A header that does not parse is
-not a script that half works**: gEdit falls back to `panel`, because a half-understood
-script must never be read as `replace`.
+The block has to come first: only blank lines, a `#!` line (line 1) and a coding line
+(line 1 or 2) may stand above it. Every line of it is a comment, it ends at `# ///`, and it
+has to close within the first 64 KiB of the file. `name` is required. A key gEdit does not
+know is recorded as a warning that nothing shows, and is otherwise ignored — so a misspelt
+`ouput = "replace"` leaves the script in panel mode. `documents` is accepted (`"active"`,
+`"all-open"` or `"pick"`), but every value means the active document.
+
+`[[params]]` entries are `FieldSpec`s (Phase 1 plan §7.5) and become the form gEdit shows
+**before** the script runs; the values arrive in `context["params"]` under their `id`. The
+types are `number`, `integer`, `text`, `bool`, `choice`, `file`, `folder` and
+`address-list`. A `choice` carries `choices = [{ label = …, value = … }]`, each with a label
+and a plain value. An `address-list` offers only its own `choices`: a script's form has no
+document to take the dialect's addresses from.
+
+Every field needs an `id` (ASCII letters, digits, `_` and `-`, not starting with a digit,
+and not used twice), a `label` and a `type`. A field is optional unless it sets
+`required = true`. `min` may not be above `max`, `decimals` is at most 10, and a `default`
+must suit the type (an `address-list` default is a list of text). An optional number,
+integer or choice left empty is absent from `context["params"]`; an empty text, file or
+folder arrives as `""`, a bool as `false`, an address list as `[]`.
+
+**A header that does not parse is not a script that half works**: gEdit falls back to
+`panel`, because a half-understood script must never be read as `replace`. The Tools tab
+then lists the script under its file name, and its tooltip says that the header could not
+be read — not why.
 
 ## 3. What your script is given
 
@@ -92,15 +119,16 @@ or the selection, according to `input`. `selection-or-document` is resolved *bef
 run, so the context always says which one you got. The document keeps its own encoding and
 line ending; gEdit puts them back when it saves.
 
-**Everything else** is JSON in the file named by the `GEDIT_CONTEXT` environment variable.
-`gedit_nc.load_context()` reads it, and answers `{}` when it is missing — a v1 run, which
-your script should survive with defaults rather than a traceback.
+**Everything else** is JSON in the file named by the `GEDIT_CONTEXT` environment variable,
+which every run gets. `gedit_nc.load_context()` reads it, and answers `{}` when it is
+missing — a script started outside gEdit, from a terminal or a test — which your script
+should survive with defaults, or a clear message, rather than a traceback.
 
 ```jsonc
 {
   "contract": 2,
   "document": {
-    "path": "/Users/x/parts/O1234.nc",   // null for an untitled document
+    "path": "/jobs/parts/O1234.nc",      // null for an untitled document
     "name": "O1234.nc",
     "profile": "fanuc-gcode",
     "encoding": "utf-8", "hasBom": false, "lineEnding": "crlf",
@@ -123,7 +151,7 @@ your script should survive with defaults rather than a traceback.
 keywords, number format and what each code *means* all come from there. Nothing in a good
 script hardcodes Fanuc.
 
-Both are **effective** (M6): the profile is resolved through its `extends` chain and the
+Both are **effective**: the profile is resolved through its `extends` chain and the
 document's machine configuration is already applied to it, so the chosen G-code system has
 picked the code database, the machine's power-on codes are in `modal.initial` and
 `syntax.decimalPointSignificant` follows how that control reads a number. A script that
@@ -131,10 +159,12 @@ scales values never has to know that machines exist.
 
 `machine` is the machine itself, for the scripts that do: `{id, name, choice, params,
 source}`, where `source` says per parameter whether it came from the machine, from what was
-detected in this program, or from the profile's documented default. Read it with
-`gedit_nc.machine_params(context)`, which answers the profile's own defaults — every source
-`"profile"` — for a document with no machine and for a context from before M6 that does not
-carry the member at all.
+detected in this program, or from the profile's documented default. For a document with no
+machine the member holds the profile's documented defaults — every source `"profile"`
+except a variant detected in the program (and the power-on codes that variant brings),
+whose source is `"detected"`. Read it with `gedit_nc.machine_params(context)`; for a context
+without the member — from a gEdit older than machine configurations — it answers those
+defaults with every source `"profile"`.
 
 ## 4. What your script hands back
 
@@ -143,7 +173,7 @@ means the result is good.
 
 | `output` | stdout | Applied as |
 | --- | --- | --- |
-| `panel` | anything | shown raw in the Output panel — the default, and the fallback |
+| `panel` | anything | shown raw in the Script Output panel — the default, and the fallback |
 | `replace` | the new text for `startLine..endLine` | one undo step, minimal edits |
 | `new-document` | the text | a new untitled tab with the same profile |
 | `report` | the JSON of `gedit_nc.report(...)` | a table in the Results panel |
@@ -153,14 +183,17 @@ With `envelope = true` on a `replace` or `new-document` script, stdout is
 a summary and a list of things you refused to touch:
 
 ```json
-{"text": "…the whole program…",
+{"text": "…the new text for the input lines…",
  "message": "Scaled 12 of 14 feed rates to 90 %; 2 left as a thread pitch.",
  "findings": [{"line": 41, "severity": "warning", "message": "F625. is a thread pitch …"}]}
 ```
 
 `gedit_nc.report(title, columns, rows, message, findings)` carries its own `message` and
 `findings`, so a `report` script does not set `envelope`. A row or finding with a `line` is
-clickable in the Results panel. `severity` is `info`, `warning` or `error`.
+clickable in the Results panel. `severity` is `info`, `warning` or `error`. `line` is a line
+number of the **document**, not of stdin: in a selection run add `startLine - 1`. A finding
+needs `line` and `message`, or the whole result is refused. At most 1000 findings and 5000
+rows are taken, and the Results panel says how many more there were.
 
 Two details worth knowing:
 
@@ -172,8 +205,8 @@ Two details worth knowing:
 
 ## 5. What gEdit does with the answer — and what it refuses to do
 
-This is the safety bar (plan §5 M5). It bounds what the *editor* does with your result; it
-is not a sandbox around your script.
+This is the safety bar (Phase 1 plan §5, M5). It bounds what the *editor* does with your
+result; it is not a sandbox around your script.
 
 * **Nothing runs without the user asking.** There is no run-on-open and no run-on-save.
 * A result is applied as **one undo step**, or not at all.
@@ -181,20 +214,26 @@ is not a sandbox around your script.
   version is taken before stdin is built and compared afterwards; a mismatch offers the
   text in a new tab instead of overwriting.
 * A failure is **visible**. A non-zero exit, a signal, a timeout, a cancel, truncated
-  stdout and a malformed envelope or report all end as an error with a reason, and your
-  stderr is kept for the Output panel. Nothing is applied on any of them.
+  stdout (outside `panel`) and a malformed envelope or report all end as an error with a
+  reason, and your stderr is kept for the Script Output panel. Nothing is applied on any of
+  them.
 
 The run itself: your script's own folder is the working directory; `PYTHONPATH` is **set**
 (not extended) to this folder; `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8` and
 `PYTHONDONTWRITEBYTECODE=1` are set; stdout is capped at 64 MiB and stderr at 1 MiB; the
 deadline is your `timeout`, else `scripts.timeoutSeconds` (60 s by default); and on Unix the
-child gets its own process group, so a cancel takes your grandchildren with it.
+child gets its own process group, so a cancel takes your grandchildren with it. On Windows
+only the script itself is killed. Every run is killed when the app exits. The context file
+sits in a folder of its own — readable by you alone on macOS and Linux — that is deleted
+after the run. The interpreter is `GEDIT_PYTHON`, else `scripts.python` when it names an
+existing file, else the lookup the user guide describes, and it has to be Python 3.9 or
+newer.
 
 **A script is an ordinary program with the user's rights, and gEdit cannot sandbox it**
-(AD-13). The id grammar bounds *which file* runs — no traversal, no editing a bundled
-script, one source of truth for the interpreter and the folder list, a bounded deadline,
-capped output, no shell — and says nothing about what is inside that file. Run scripts you
-trust, the way you would any other program.
+(Phase 1 plan AD-13). The id grammar bounds *which file* runs — no traversal, no editing a
+bundled script, one source of truth for the interpreter and the folder list, a bounded
+deadline, capped output, no shell — and says nothing about what is inside that file. Run
+scripts you trust, the way you would any other program.
 
 ## 6. Selections are the middle of a sentence
 
@@ -203,14 +242,15 @@ cancels it. A run over a **selection** therefore starts mid-program, and a scrip
 begins at the top-of-program state reads the fragment wrong: it scales a thread pitch it
 cannot recognise, or a per-revolution feed as a per-minute one.
 
-`input.precedingLines` carries the document lines **above** `startLine`, and two lines at
+`input.precedingLines` carries the document lines **above** `startLine`, and a few lines at
 the top of your run fix it:
 
 ```python
 context = gedit_nc.load_context()
+cp = gedit_nc.compile_profile(context["profile"])
 tracker = gedit_nc.FeedModeTracker(context.get("codes") or [])
-above = gedit_nc.preceding_lines(context)      # [] when it was not sent, or cannot be used
-state = gedit_nc.prime_tracker(tracker, above, cp)   # also the LineState line 1 begins in
+above = gedit_nc.preceding_lines(context)             # [] when it was not sent, or cannot be used
+state = gedit_nc.prime_tracker(tracker, above, cp)    # also the LineState line 1 begins in
 ```
 
 `prime_tracker` returns the `LineState` to pass to your first `tokenize_line`, so a Klartext
@@ -236,23 +276,32 @@ the results panel.
 
 ## 7. What `gedit_nc` gives you
 
-Plan §7.10 is the contract; the docstrings in the file are the detail.
+The Phase 1 plan §7.10, and the Phase 2 plan §7.4 and §7.15, are the contract; the
+docstrings in the file are the detail.
 
 | | |
 | --- | --- |
-| `load_context()`, `read_input()` | the context dictionary and stdin as lines |
-| `compile_profile(profile)` | every pattern of the profile compiled once |
-| `tokenize_line(line, cp, prev_state)` | one block's tokens, and the state the next line needs |
+| `load_context()`, `read_input()` | the context dictionary (`{}` without `GEDIT_CONTEXT`, or when the file cannot be read) and stdin as lines |
+| `preceding_lines(context)` | the lines above a selection, or `[]` when they may not be used (§6) |
+| `CONTEXT_ENV`, `CONTRACT` | `"GEDIT_CONTEXT"`, and the contract version this module understands (`2`) |
+| `compile_profile(profile)` | every pattern of the profile compiled once, as a `CompiledProfile`; a profile it cannot use raises `ValueError`, naming the field |
+| `to_py_regex(pattern)` | a profile pattern, written in the subset both languages read, as Python `re` source |
+| `tokenize_line(line, cp, prev_state=None)` | one block's tokens, and the `LineState` the next line needs (Klartext's `~`) |
+| `Token`, `NumericLiteral`, `LineState` | a token: `kind`, `start`, `end`, `text`, `address`, `value_text`, `value` (a `NumericLiteral`, or `None` for `F#101` and `F=R1`), `incremental`; a number as written: `raw`, `sign`, `int_part`, `frac_part`, `has_point`; the state between lines: `continuation` |
 | `mask_comments(line, cp)` | the line with the comments blanked, same offsets — what a profile's own patterns run against |
+| `block_number_of(line, cp)` | the block number of a line, as `{value, text, start, end}`, or `None` |
+| `continues_block(line, cp)` | whether the line belongs to the block above it by a marker at its start (Okuma `$`) |
+| `normalize_code(code)` | the canonical form of a written code: `G01` → `G1`, `cycl  def 200` → `CYCL DEF 200` |
 | `parse_number`, `format_number`, `scale_decimal` | NC numbers as decimal strings, never as floats |
+| `number_format_of(profile)` | the profile's number format with its defaults filled in, for `format_number` and `write_back` |
 | `ModalInterpreter(cp, codes)` | what is in force after a block — see below |
-| `FeedModeTracker(codes)` | G93/G94/G95, G96/G97, the active cycle, whether its `F` is a thread pitch, and whether the code means a threading cycle in another G-code system |
+| `FeedModeTracker(codes)` | the older, smaller view: `feed_mode` (`G93`/`G94`/`G95`, or Klartext `FU`/`FZ`), `css` (between `G96` and `G97`), `active_cycle`, `pitch_feed` (the block's `F` is a thread pitch), `pitch_feed_ambiguous` and `ambiguous_code` (a code that is a threading cycle on another kind of machine, in the other G-code system or on another make of control), `f_not_feed` and `f_not_feed_code` (a dwell). Without a code database it still reads `G93`–`G95` and `G96`/`G97` by their usual meaning, but knows no cycle and no thread pitch |
+| `prime_tracker(tracker, lines, cp, first=None)` | walks the lines above a selection through a tracker and returns the `LineState` the selection begins in (§6); `first` is the first selected line |
 | `speed_limit_of(codes, tokens)` | the code in this block whose `sets.speedLimit` makes the block's `S` a clamp, or `None` |
 | `machine_type_of(profile)`, `incremental_axes(profile)`, `diameter_axes(profile)` | `'mill'` or `'lathe'`, the `{'U': 'X', 'W': 'Z'}` pairs, and the words written as a diameter |
-| `machine_params(context)` | the document's machine: `params` (how numbers are read, units, diameter, variants, power-on codes) and `source` for each of them — `"machine"`, `"detected"` or `"profile"`. A context from before M6, or a document with no machine, answers the profile's own defaults with every source `"profile"` |
-| `number_class_of`, `value_of`, `write_back`, `readings_of`, `resolve_value` | what a word's number **is** on this machine, and how to write a value back into it |
-| `preceding_lines(context)`, `prime_tracker(tracker, lines, cp, first=None)` | the lines above a selection, and the modal state they leave behind (§6); `first` is the first selected line |
-| `continues_block(line, cp)` | whether the line belongs to the block above it by a marker at its start (Okuma `$`) |
+| `machine_params(context)` | the document's machine: `params` (how numbers are read, units, diameter, variants, power-on codes) and `source` for each of them — `"machine"`, `"detected"` or `"profile"` (§3) |
+| `number_class_of`, `value_of`, `readings_of`, `resolve_value`, `write_back` | what a word's number **is** on this machine, and how to write a value back into it — see [below](#why-your-script-needs-the-number-rules) |
+| `WRITE_BACK_ERRORS` | the message `write_back` answers with when it refuses, by code: `rounded`, `noReading`, `notANumber` |
 | `report(...)`, `envelope(...)` | the two JSON result shapes |
 
 `tokenize_line`, `parse_number` and `format_number` are ports of
@@ -273,8 +322,12 @@ from the compiled profile and the context's `codes`, feed it every line in progr
 and ask it what is in force:
 
 ```python
+context = gedit_nc.load_context()
+cp = gedit_nc.compile_profile(context["profile"])
 interp = gedit_nc.ModalInterpreter(cp, context["codes"])
-for number, line in enumerate(lines, 1):
+lines = gedit_nc.read_input()
+state = None
+for number, line in enumerate(lines, context["input"]["startLine"]):   # document lines
     tokens, state = gedit_nc.tokenize_line(line, cp, state)
     interp.update(tokens, number, gedit_nc.mask_comments(line, cp))
     if interp.pitch_feed:
@@ -342,27 +395,52 @@ starts inside the block above it, thread cycle and all.
 parameter, not a property of the dialect. A script that only *scales* can ignore all of this
 — scaling is unit-free, and the effective `syntax.decimalPointSignificant` already follows
 the machine. A script that **compares** a value with a limit, or **computes** with one, has
-to ask:
+to ask. The whole loop, for the words a script compares; it runs as it stands, on a whole
+program or a selection, on every shipped dialect:
 
 ```python
+context = gedit_nc.load_context()
+profile = context["profile"]
+cp = gedit_nc.compile_profile(profile)
 machine = gedit_nc.machine_params(context)
-cls = gedit_nc.number_class_of(token.address, context["profile"], tracker.feed_unit,
-                               block_codes, tracker.pitch_feed)
-value, readings = gedit_nc.resolve_value(token.value, cls, machine,
-                                         context["profile"], units)
-if value is None:
-    # No class, or a reading that depends on a machine nobody chose. Report the word —
-    # `readings` says what each preset would make of it — and leave it alone.
-    ...
+interp = gedit_nc.ModalInterpreter(cp, context["codes"])
+first = context["input"]["startLine"]
+above = gedit_nc.preceding_lines(context)          # the lines above a selection, or []
+state = None
+for number, line in enumerate(above + gedit_nc.read_input(), first - len(above)):
+    tokens, state = gedit_nc.tokenize_line(line, cp, state)
+    interp.update(tokens, number, gedit_nc.mask_comments(line, cp))
+    if number < first:
+        continue                                    # above the selection: its state only
+    units = interp.state["units"]["value"]          # "mm" or "inch" in this block
+    # The database entries of the codes this block writes (G84, M3, CYCLE840(…)).
+    written = [t.address if t.kind == "call" else t.text
+               for t in tokens if t.kind in ("word", "call")]
+    block_codes = [entry for entry in map(interp.entry, written) if entry is not None]
+    for token in tokens:
+        if token.kind != "word" or token.address not in ("X", "Z", "F"):
+            continue                                # the words this script compares
+        cls = gedit_nc.number_class_of(token.address, profile, interp.feed_unit,
+                                       block_codes, interp.pitch_feed)
+        value, readings = gedit_nc.resolve_value(token.value, cls, machine, profile, units)
+        if value is None:
+            # No number (F#101), no class, or a reading that depends on a machine nobody
+            # chose. Report the word — `readings` says what each preset would make of it —
+            # and leave it alone.
+            ...
 ```
 
-`value` is decimal text in millimetres, inches, degrees or seconds. To put a value back into
-the word it came from, use `write_back`, which keeps the word's own form (a point stays a
-point, a point-less word stays a count) and tells you when the value had to be rounded:
+`number_class_of` wants the feed unit and the thread flag **in force** and the database
+entries of the block's codes, so it takes them from a `ModalInterpreter` that has just been
+given the block; a `FeedModeTracker` does not carry the feed unit. `units` follows the
+program: the machine's power-on units until a `G20` or `G21` changes them. `value` is
+decimal text in millimetres, inches, degrees or seconds. To put a value back into the word
+it came from, use `write_back`, which keeps the word's own form (a point stays a point, a
+point-less word stays a count) and tells you when the value had to be rounded:
 
 ```python
 text, rounded, error = gedit_nc.write_back(new_value, token.value, cls, machine, units,
-                                           gedit_nc.number_format_of(context["profile"]))
+                                           gedit_nc.number_format_of(profile))
 ```
 
 Never divide by a thousand yourself, and never assume a point-less word is a count: the
@@ -370,31 +448,21 @@ machine decides, and where no machine was chosen gEdit refuses to decide for it.
 
 ## 8. Writing one
 
-Standard library only, and it has to run on Python 3.9 as well as on the newest release —
-no `match`, no `X | Y` outside annotations, and `from __future__ import annotations` at the
-top. There is no pip install step, by design: an NC programmer should be able to run
-gEdit's scripts on a fresh machine with nothing but Python.
+A script you share, or one that ships with gEdit, uses the standard library only, and it
+has to run on Python 3.9 as well as on the newest release — no `match`, no `X | Y` outside
+annotations, and `from __future__ import annotations` at the top. There is no pip install
+step, by design: an NC programmer should be able to run gEdit's scripts on a fresh machine
+with nothing but Python. A script of your own may use a virtual environment's interpreter
+(`scripts.python`).
 
-Four rules that matter more than any feature:
-
-1. **Work on tokens, never on a regex over raw lines.** `gedit_nc.tokenize_line` knows what
-   is a comment, a string, a variable and an expression in *this* dialect. A naive `re.sub`
-   rewrites the `G1` inside `(FINISH G1 PASS)` and corrupts the program.
-2. **Never widen or narrow a number by accident.** Use `scale_decimal` and `format_number`;
-   they keep `10.` from becoming `10`, keep the written precision, and round the same way
-   the editor's own transforms do. Never use a float.
-3. **Ask the code database what a value means, not a table of your own.** The same `F` is a
-   feed, a thread pitch or a thread lead depending on what is in force. `FeedModeTracker`
-   reads that out of `context["codes"]`, so an unknown dialect degrades to "nothing is in
-   force" rather than to a wrong answer.
-4. **When you are not sure, refuse and say exactly what you skipped and why.** Not a count
-   in a summary — a finding on the line, naming the value, the reason, and what the user
-   can do about it. Refusing a real boring feed costs one manual edit; scaling a thread
-   lead scraps the part.
+The rules that matter more than any feature — prime a selection, work on tokens, never let a
+number change its form by accident, ask the code database, and when in doubt leave the value
+alone and say so — are written out once, in the user guide:
+[Five rules that matter more than any feature](../../../docs/user/scripts.md#five-rules-that-matter-more-than-any-feature).
 
 ## 9. Tests
 
-`tests/python/` (standard library `unittest`, run by gate G4):
+`tests/python/` (standard library `unittest`, run by CI on Python 3.9 and 3.12):
 
 ```sh
 python3 -m unittest discover -s tests/python -t .
@@ -417,7 +485,10 @@ A case folder holds
 | `case.json` | optional | `{"profile": "heidenhain-klartext"}`, and any context member to replace |
 
 `case.json` defaults to the `fanuc-gcode` profile with its code database, and the whole
-document as the input. A case with a `preceding.nc` is worth checking **twice** — once as
+document as the input. Two of its keys are not context members: `machine` (the machine's
+parameters) runs the case against the effective profile generated for it — run
+`UPDATE_RESOLVED=1 npm test -- resolved` after adding one — and `machineName` is the name it
+carries in the messages. A case with a `preceding.nc` is worth checking **twice** — once as
 it stands and once with `precedingLines` taken back out — because a golden on its own only
 proves the script is self-consistent, not that the priming does anything. The
 `TestSelectionPriming` classes in `tests/python/test_scale_feed.py` and

@@ -3,33 +3,59 @@
 The **NC** tab holds the changes you make to a whole program rather than to one line:
 renumbering it, unpacking or packing it, throwing out empty lines or comments, and fixing
 the case. They are built into the editor, so they work whether or not Python is installed.
-Feeds, speeds and tool lists are done by scripts instead — see [scripts.md](scripts.md).
+Feeds, speeds and tool lists are done by scripts instead — see [Scripts](scripts.md).
 
 ## Four rules that hold for all of them
 
 **1. Selection or program.** With text selected, the transformation runs on the selected
 lines; with nothing selected, on the whole program. A selection is always extended to
-whole lines — half a block is not a block.
+whole lines — half a block is not a block. With several cursors only the main selection
+counts, and a selection that ends at the very start of a line does not take that line.
 
 The scope is taken **when you pick the command**, before any options dialog opens. A click
 in the dialog can never quietly widen a run to the whole program.
 
 **2. One undo step.** However many lines a run changed, one `Cmd/Ctrl+Z` puts the program
 back exactly as it was. Only the lines that actually differ are rewritten, so bookmarks
-and folded sections outside the change survive.
+and folded sections outside the change survive. On a big run — a thousand or more changed
+lines, such as renumbering a long program or removing the comments of a big CAM file — the
+change is applied in one piece, and bookmarks and folds between the first and the last
+changed line can move.
 
 **3. It tells you what it did, and what it did not do.** The status bar gets a one-line
 summary ("Renumbered 412 blocks"). Anything the run refused to touch goes to the
 **Results** panel with the line number and the reason; click a row to jump there. A run
 with nothing to report clears its own previous report.
 
-**4. It asks before it does something you may not want.** A transformation that would
-break a jump, or write a program your control will refuse, asks first and lets you say no.
+When there is something to report, the panel opens by itself. Its heading repeats the
+summary and adds what is worth knowing — how many jumps were rewritten, that the numbering
+started over. Each row gives the line, a severity and the reason: **Info** for a line left
+alone on purpose (a program marker, a skipped prefix, a kept comment, a number kept because
+a jump points at it), **Warning** for one to check before the program goes to the machine.
+Renumber Blocks and Remove Block Numbers list at most 200 rows and say how many there
+were. **Copy CSV** and **Open as text** take the table elsewhere. Closing the program
+clears its report.
 
-Behind all of this is a tokenizer that knows the active dialect: it knows what is a
-comment, a string, a variable, an expression and a keyword, so a `G1` inside
-`(FINISH G1 PASS)` is a comment and stays a comment. Where a rewrite is not provably safe,
-the line is left as written and listed in Results rather than changed and hoped for.
+**4. It asks before it does something you may not want.** A transformation that would
+leave a jump pointing at the wrong block or delete its target, renumber only part of a
+Klartext program, or write lower case for a control that reads only upper case, asks first
+and lets you say no. Remove Empty Lines and Remove Comments, which can leave gaps in
+Klartext's block numbers, say so afterwards and offer to renumber. That offer renumbers
+what the run worked on: after a run on a selection it renumbers only the selection, so
+answer no there and renumber the whole program instead.
+
+**The options are remembered.** Every dialog on this tab opens with the answers you gave
+last time — on any program, in any dialect, also after a restart. Only the first time do
+they come from the dialect.
+
+**The lock does not cover this tab.** Read-only stops your typing, not a transformation:
+run one on a locked program and the text changes (Save still goes to Save As). Unlock on
+purpose, or work on a copy.
+
+Behind all of this, gEdit reads each line the way the active dialect's control does: it
+knows what is a comment, a string, a variable, an expression and a keyword, so a `G1`
+inside `(FINISH G1 PASS)` is a comment and stays a comment. Where a rewrite is not provably
+safe, the line is left as written and listed in Results rather than changed and hoped for.
 
 ---
 
@@ -37,30 +63,36 @@ the line is left as written and listed in Results rather than changed and hoped 
 
 ### Renumber Blocks…
 
-Writes a fresh set of block numbers. The options come pre-filled from the dialect and
-remember what you used last time:
+Writes a fresh set of block numbers. Because the dialog opens with your last answers
+whatever the dialect, check **Maximum**, **Above the maximum** and **Skip lines starting
+with** when you move between controls: otherwise an Okuma program gets the Fanuc answers,
+not its own. The defaults are the ones of the first run:
 
 | Option | What it does |
 |---|---|
-| **Start at** | The number the first block gets (Fanuc default 10) |
-| **Increment** | The step between blocks (Fanuc default 10) |
+| **Start at** | The number the first block gets (default 10) |
+| **Increment** | The step between blocks (default 10) |
 | **Digits** | Pad with leading zeros to this width; 0 writes the number as short as it is |
-| **Maximum** | Leave empty for no maximum (Fanuc default 99999) |
-| **Above the maximum** | Start over at the start value, or stop and warn |
+| **Maximum** | Leave empty for no maximum (default 99999 on Fanuc and Sinumerik, 9999 on Okuma) |
+| **Above the maximum** | Start over at the start value, or stop and warn (Okuma: stop by default) |
 | **Spaces after the number** | Between `N120` and the rest of the block |
-| **Skip lines starting with** | Separated by spaces. Fanuc skips `%`, `O` and `(` |
+| **Skip lines starting with** | Separated by spaces. Fanuc skips `%`, `O` and `(`; Okuma `$`, `%`, `O` and `(`; Sinumerik `%`, `;`, `PROC`, `DEF` and `EXTERN`. A program marker (`%`, `O1001`, Okuma's `$NAME.MIN%`, Sinumerik's `%_N_…`) is never numbered, whatever the list says — on Okuma only an `O` line with nothing behind it counts as one, so `O1001 (NAME)` is protected only by the `O` in the list |
 | **Skip empty lines** | On by default |
-| **Start over at each program start** | For files that hold several programs |
+| **Start over at each program start** | For files that hold several programs. On by default |
 | **Only renumber blocks that already have a number** | Leaves unnumbered blocks unnumbered |
 | **Also read these as a block number** | Other prefixes in the file; the new numbers are always written with the profile's own |
+
+On Klartext there is no dialog: the control needs its blocks numbered from 0 in steps of 1,
+so that is what the command writes, and the continuation lines of a `~` block get no number.
 
 #### Jumps and cycles that point at a block number
 
 `GOTO 100`, `M98 Q100`, `M99 P100` and, on a lathe, the `P`/`Q` of `G70`–`G73` all name a
 block by its number, and so do `GOTO N100`, `IF […] N100` and a LAP call on Okuma and
-`GOTOF N100` or `GOTOB N100` on Sinumerik. **Renumbering rewrites the ones it can prove and
-reports the rest.** A jump to a name — an Okuma sequence name such as `NLOOP`, a Sinumerik
-label such as `LAST_CUT` — needs nothing, because names are never renumbered.
+`GOTO`, `GOTOF`, `GOTOB` or `GOTOC` followed by `N100` on Sinumerik. **Renumbering rewrites
+the ones it can prove and reports the rest.** A jump to a name — an Okuma sequence name such
+as `NLOOP`, a Sinumerik label such as `LAST_CUT` — needs nothing, because names are never
+renumbered.
 
 A reference is rewritten when all four of these hold:
 
@@ -75,46 +107,65 @@ A reference is rewritten when all four of these hold:
    send the return somewhere else entirely. The same goes for `M98 P2000 Q50`: the `Q`
    names a block of program 2000, not of this one.
 
+A turning program opened with the Fanuc **mill** profile is the same case: the mill does not
+know `G70`–`G73` as turning cycles, so their `P` and `Q` are never rewritten — you are asked
+first and the lines are listed — while the blocks they name are renumbered like any other,
+so afterwards `P` and `Q` point at numbers that are gone. Set the lathe profile first (see
+[Dialects](dialects.md#which-dialect-a-file-gets)).
+
 Anything else is left exactly as written and listed in Results with the reason: the target
 is missing, the target occurs twice — **before or after** the run — the target is outside
-the run, the reference is a variable or an expression (`GOTO #100`), the block carries the
-same address twice so nothing can say which word is meant, or the rule forbids it. A jump
-target rewritten wrongly is worse than one left behind — the program still runs, and lands
-in the wrong place.
+the run, the jump itself is outside the run and points into it, the reference is a variable
+or an expression (`GOTO #100`), the block carries the same address twice so nothing can say
+which word is meant, or the rule forbids it. A jump target rewritten wrongly is worse than
+one left behind — the program still runs, and lands in the wrong place.
 
 The rules do not care in which order a block writes its words, and they allow a space
-between an address and its value: `G71 P 100 Q 200` and `N50 P2000 M98 Q50` are read
-exactly like the forms without the space.
-
-**Numbers or names.** A Fanuc or Sinumerik control reads a block number as a number:
-`N0100` and `N100` are the same block, and a rewritten `GOTO 0100` keeps the four digits it
-was written with. An Okuma control reads its sequence numbers as names: `N0100` and `N100`
-are two blocks. There a jump follows only the block written exactly like it, is rewritten
-with exactly the text that block gets — also when only the zeros change — and a jump whose
-zeros match no block is reported as a missing target.
+between an address and its value: `G71 P 100 Q 200` is read like `G71 P100 Q200`, and
+`N50 P2000 M98 Q50` like `N50 M98 P2000 Q50`.
 
 The references it **can** follow are not worth a dialog, so it does not raise one for them.
 If there are any it cannot follow, you are asked before it starts, and afterwards the
-summary says how many were rewritten and how many need your eye. Those are worth checking
-before the program goes to the machine.
+Results panel says how many were rewritten and how many need your eye. Those are worth
+checking before the program goes to the machine.
 
 The search is over the whole document, not over your selection: a `GOTO` *above* a selection
-points into it just as well.
+points into it just as well. Such a jump is outside the lines the run may change, so it is
+**not** rewritten: you are asked first, and afterwards it is listed as a warning. The same
+goes for a jump below the selection. Renumber the whole program, or fix the jump by hand.
 
-Other things it will tell you about:
+##### Numbers or names
 
-- If the numbers pass the maximum and start over, the program then has **duplicate block
-  numbers** — the control takes the first match, and block search, `GOTO` and `M99 P`
-  become ambiguous. You are asked before a run that might need more numbers than the
-  maximum allows, and no reference is rewritten in a program whose numbering repeats: a
-  value that names several blocks is not an answer. Use a larger maximum, a smaller
-  increment, or "Stop and warn".
+A Fanuc or Sinumerik control reads a block number as a number: `N0100` and `N100` are the
+same block, and a rewritten `GOTO 0100` keeps the four digits it was written with (more only
+if the new number needs them). An Okuma control reads its sequence numbers as names:
+`N0100` and `N100` are two blocks. There a jump follows only the block written exactly like
+it, is rewritten with exactly the text that block gets — also when only the zeros change —
+and a jump whose zeros match no block is reported as a missing target.
+
+#### Other things it tells you about
+
+- If the numbers pass the maximum and start over (with **Above the maximum** set to
+  **Start over at the start value**), the program then has **duplicate block numbers** —
+  the control takes the first match, and block search, `GOTO` and `M99 P` become
+  ambiguous. When the program has jumps or cycle calls you are asked before a run that might
+  need more numbers than the maximum allows; without any, it runs and warns afterwards, and
+  the block where the numbering starts over is listed. A jump whose new target number the
+  program now carries twice is not rewritten but listed: a value that names several blocks
+  is not an answer. Use a larger maximum, a smaller increment, or "Stop and warn".
+- Renumbering a selection starts at **Start at** and does not look at the numbers around
+  it. Nothing warns you when a new number is one that a block outside the selection already
+  carries, unless a jump inside the selection, or one pointing into it, names that number —
+  choose a start above the numbers in front of the selection.
 - On a dialect that numbers blocks consecutively (Klartext), renumbering only a selection
   does not fit the blocks around it, and you are asked first.
-- A selection that may start in the middle of a block is flagged rather than guessed at.
+- A selection that starts inside a Klartext block (below a line that ends in `~`) is read
+  together with the lines above it, so the rest of that block gets no number of its own.
 
-Program markers, named blocks and skipped prefixes are listed in Results with the reason
-they kept their number.
+Lines that get no new number are listed in Results with the reason: program markers, named
+blocks, skipped prefixes, unnumbered blocks when only numbered ones are renumbered, and every
+line from the one where the numbering stopped at the maximum; the block where the numbering
+starts over is listed too.
 
 ### Remove Block Numbers
 
@@ -130,8 +181,8 @@ target outright, and the control alarms. That is why the option above exists and
 on: with it, a program comes out clean except for the handful of blocks that have to keep
 their numbers, and each of those is listed in Results with the reason.
 
-Switch it off and every number goes. Then you are asked first, and afterwards every line
-that still points at a number which is now gone is listed so you can fix the jumps by hand.
+Switch it off and every number goes. Then you are asked first, and afterwards every line in
+the run that points at a block number is listed so you can fix the jumps by hand.
 
 There is one pointer the option cannot keep: a **computed** jump such as `GOTO #100` works
 its target out while the program runs, so there is no number to hold on to and that block
@@ -147,56 +198,64 @@ Lines that held nothing but their block number end up empty; they are counted an
 ### Insert Spaces
 
 Unpacks CAM output: `N10G0G90X0Y0` becomes `N10 G0 G90 X0 Y0`. Spaces only ever go
-*between* two words the tokenizer found, so comments, strings, variables (`#101`, `Q1`),
-expressions (`[#1+2.]`), keywords like `TOOL CALL`, signs (`X-10`) and a lathe's `,R1.`
-are never pulled apart. Every rewritten line is read back and has to come out as the same
-words; a line that does not is kept as it was and listed in Results.
+*between* two words gEdit found, so comments, strings, variables (`#101`, `V1`, `R1`),
+expressions (`[#1+2.]`), keywords (`GOTO100` stays one word), signs (`X-10`) and a lathe's
+`,R1.` are never pulled apart. Every rewritten line is read back and has to come out as the
+same words; a line that does not is kept as it was and listed in Results.
 
-On a dialect that already separates its words (Klartext) there is nothing to unpack, and
-the command says so instead of pushing `LBL 0` and `REP 5` apart.
+On a dialect that already separates its words (Klartext) there is nothing to unpack: the
+command changes nothing and says so ("Nothing to do: the words are already separated.").
 
 ### Remove Spaces
 
 The other direction, and the dangerous one, because a space that carried meaning cannot
 come back. Not available on Klartext, which needs its spaces.
 
-A space is removed only when joining the two sides gives back exactly the same words:
-`X10 5` would join into `X105`, so that space stays. Comments and strings keep every space
-they had; a keyword keeps its own. Leading indentation and trailing blanks go — making the
-program compact is the point.
+A space is removed only when joining the two sides gives back exactly the same words.
+`X10 5` would join into `X105`, so a line like `N10 G0 X10 5` is left exactly as written —
+every space of it — and listed in Results.
 
-Two dialects need a word of their own. On **Okuma** the space after a sequence number or
-name stays, because the control requires one (`N100 G00X50`, never `N100G00X50`); whether it
-accepts packed words anywhere else is not confirmed. On **Sinumerik** the project's notes
-do not settle whether the control reads a packed block the way gEdit does, and a name of the
-program's own right behind a block number (`N30XNOW=62`) may be read as one longer name.
-Do not remove the spaces from a Sinumerik program that goes to a machine until that is
-confirmed — see [dialects.md](dialects.md#the-sinumerik-840d-turning-profile).
+Comments and strings keep every space inside them; the spaces around a comment go
+(`O1001 (BRACKET)` becomes `O1001(BRACKET)`). A keyword keeps its own space and the ones on
+either side of it (`GOTO 100`, `IF [#1 EQ 1] THEN`, Okuma `CALL O100`), and so do variables
+and expressions, a call such as `MSG("…")`, a label or a sequence name (`LAST_CUT:`, Okuma
+`NLOOP`), a name standing on its own (`GOTOF LAST_CUT`, `DEF REAL XNOW`) and a block-skip
+mark. Leading indentation and trailing blanks go — making the program compact is the point.
+
+On **Okuma** the space after a sequence number or name stays too, because the control
+requires one (`N100 G00X50`, never `N100G00X50`). Whether it accepts packed words anywhere
+else is not confirmed — check a packed Okuma program before it goes to a machine. On
+**Sinumerik** it is not confirmed that the control reads a packed block the way gEdit does,
+and a name written against a block number (`N30 XNOW=62` becomes `N30XNOW=62`) may be read
+as one longer name. Do not remove the spaces from a Sinumerik program that goes to a
+machine until that is confirmed.
 
 ### Remove Empty Lines
 
 Removes every line that holds nothing but whitespace. A line with only a block number is
 not empty, and neither is a comment.
 
-The final newline of the file is kept. On Klartext, where block numbers have to stay
-consecutive, the run warns that the program needs renumbering and offers to do it — it
-does not renumber behind your back.
+The final newline of the file is kept (on a selection, its last line stays even when it is
+empty). On Klartext, where block numbers have to stay consecutive, the run warns that the
+program needs renumbering and offers to do it — it does not renumber behind your back.
 
 ### Remove Comments…
 
-Finds comments with the tokenizer, not with a search for `(`, so an unclosed bracket at
-the end of a file or a `(` inside a string does not take half the program with it.
+Finds comments the way the control reads them, not with a search for `(`, so an unclosed
+bracket at the end of a file or a `(` inside a string does not take half the program with
+it.
 
 | Option | What it does |
 |---|---|
 | **Remove lines that become empty** | A line that held nothing but a comment goes instead of being left blank. On by default |
-| **Keep the program-name comment** | `O1001 (BRACKET)` — the one the control shows in its directory |
-| **Keep comments in the first lines** | The header block your shop stamps on every program; 0 keeps none |
-| **Keep section headings** | Klartext structure blocks such as `* - ROUGH`, offered only where the dialect has them |
+| **Keep the program-name comment** | The comment that names the program: `O1001 (BRACKET)` on Fanuc, the comment behind the file header on Okuma and Sinumerik (`$MAIN.MIN% (…)`, `%_N_…_MPF ;…`) — on Okuma not the one behind an `O` line. On by default |
+| **Keep comments in the first lines** | The header block your shop stamps on every program, counted from line 1 of the document even when you run on a selection. 0, the default, keeps none |
+| **Keep section headings** | Klartext structure blocks such as `* - ROUGH`, offered only where the dialect has them. On by default |
 
-On Fanuc a line left with nothing but its block number **stays**, because that number may
-be the target of a `GOTO`. On Klartext, where the numbers are positional and jumps go to
-labels, the line goes and the run warns that the program needs renumbering. A Klartext
+On Fanuc, Okuma and Sinumerik a line left with nothing but its block number **stays**,
+because that number may be the target of a `GOTO`. On Klartext, where the numbers are
+positional and jumps go to labels, the line goes (with **Remove lines that become empty**
+on), and the run warns that the program needs renumbering and offers to do it. A Klartext
 continuation `~` behind a comment survives: `12 ; SETUP ~` becomes `12 ~`, and the block
 stays one block.
 
@@ -208,14 +267,28 @@ Every comment that was kept is listed in Results with the reason.
 
 ### Convert Case…
 
-Converts the program to upper or lower case. Text in comments can be left alone (and text
-in quotes always is — a tool name in `T="drill_d8"` or the text of a `MSG("…")` keeps its
-case). Not available on a dialect where upper and lower case mean different things.
+Converts the program to upper or lower case. Comments are left alone unless you switch off
+**Leave comments as they are**. Text in quotes in the code keeps its case — a tool name in
+`TOOL CALL "MILL_D10"` or `T="drill_d8"`, the text of a `MSG("…")` — but inside a comment
+you chose to convert, a quote is just a character and its text converts with the rest.
 
-Lower case on a control that only reads upper case is a program that may be refused when
-it is loaded, so that direction asks first. A line whose converted form would not read
-back as the same words — `ß` becoming `SS` changes the length and every offset behind it —
-is kept as written and listed.
+| Option | What it does |
+|---|---|
+| **Convert to** | **UPPER CASE** (the default) or **lower case** |
+| **Leave comments as they are** | On by default. Tool names and other text in quotes in the code are always left alone |
+
+It runs on all five shipped dialects; a profile that declares upper and lower case to be
+different code refuses it. Lower case asks first on the two Fanuc profiles, whose controls
+read only upper case: such a program may be refused when it is loaded.
+
+A line whose converted form would not read back as the same words is kept as written and
+listed. A word or comment whose conversion would change its length — `ß` becoming `SS`
+moves every offset behind it — keeps its case while the rest of the line is converted, and
+the line is listed.
+
+The **Upper Case** and **Lower Case** buttons on the Home tab are the editor's plain text
+commands: they change the selected text as it is — with nothing selected, the word at the
+cursor — comments and quoted tool names included. Use **Convert Case…** on a program.
 
 ---
 
@@ -223,7 +296,7 @@ is kept as written and listed.
 
 | You want | Where |
 |---|---|
-| Scale feeds or spindle speeds | A bundled script — [scripts.md](scripts.md) |
-| A tool list | A bundled script — [scripts.md](scripts.md) |
+| Scale feeds or spindle speeds | A bundled script — [Scripts](scripts.md) |
+| A tool list | A bundled script — [Scripts](scripts.md) |
 | Coordinate arithmetic, mirroring, splitting by tool, program checks | Not in this version; write a script, or wait for the bundled library to grow |
 | Find and replace | The editor's own: `Cmd/Ctrl+F` to find, `Ctrl+H` on Windows and Linux or `Cmd+Alt+F` on macOS to replace |

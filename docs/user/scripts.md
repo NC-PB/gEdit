@@ -30,18 +30,24 @@ gEdit looks for an interpreter at startup, in this order:
      it — the Windows folder included, so a launcher installed for all users is found
      whatever is on `PATH`.
 
-**If no interpreter is found, the script commands are disabled and say so. Everything else
-in gEdit keeps working.** On Windows that covers the case that looks least like it: a
+`GEDIT_PYTHON` is read from the environment gEdit was started with: a variable exported in
+a shell profile reaches it only when gEdit is started from that shell, not from the Dock or
+Finder; on Windows, set it as a user environment variable. gEdit looks again when you
+change the interpreter setting; after installing Python while gEdit runs, restart it.
+
+**If no interpreter is found — or only one older than 3.9 — the commands that run a script
+are disabled and say so. Everything else in gEdit keeps working**, writing and editing
+scripts included. On Windows that covers the case that looks least like it: a
 clean Windows 10 or 11 already has `python.exe` and `python3.exe` on `PATH` before Python
 is installed, as placeholders that open the Microsoft Store instead of running anything.
-gEdit never takes one of those for an interpreter and reports "Python was not found". A
-Python you really did install from the Store is used as usual.
+gEdit never takes one of those for an interpreter, and the Tools tab says "Python 3.9 or
+newer was not found". A Python you really did install from the Store is used as usual.
 
 ## Running a script
 
-Scripts are on the **Tools** tab, grouped by the folder they live in, with the script's
-own description as the tooltip. A script that declares which dialects it is for is only
-offered on those.
+Scripts are in the **Python Scripts** group of the **Tools** tab — a subfolder's scripts
+under its name, the rest under "Scripts" — with the script's own description as the
+tooltip. A script that declares which dialects it is for is only offered on those.
 
 | | |
 |---|---|
@@ -61,7 +67,7 @@ What then happens, in order:
    selected. A selection is extended to whole lines. The text goes to the script as UTF-8
    with LF line endings, whatever the file's own encoding and line ending are.
 3. **The run.** The status bar shows that a script is running: click it to stop the run.
-   The Output panel has a **Stop** button too. One script runs at a time.
+   The **Script Output** panel has a **Stop** button too. One script runs at a time.
 4. **The result.** What happens depends on the script — see below.
 
 A run that takes longer than the time limit is stopped. The limit is
@@ -75,7 +81,7 @@ header sets one. A stopped or cancelled run changes nothing.
 | `replace` | Replaces the input lines, as **one undo step** |
 | `new-document` | Opens the text in a new untitled tab, in the same dialect |
 | `report` | Shows a table and findings in the **Results** panel; a row with a line number jumps there when you click it |
-| `panel` | Shows the raw output in the **Output** panel, with the JSON view when it is JSON |
+| `panel` | Shows the raw output in the **Script Output** panel, with a **Structured result** section when it is JSON |
 
 `panel` is also what a script with no header gets, and what a script with a header gEdit
 could not read gets. That is deliberate: a half-understood script must never be treated as
@@ -92,20 +98,28 @@ not whatever failed first:
    on its error output is shown.
 4. **Its output was cut off** at the size cap. A prefix of a program is a program that
    ends in the middle of a cut, so it is refused rather than applied.
-5. **It produced nothing**, in `replace` mode. Otherwise a broken script would silently
+5. **It did not return a usable result**: a `report` whose JSON is not a report, or an
+   envelope whose JSON is not `{"text", …}`.
+6. **It produced nothing**, in `replace` mode. Otherwise a broken script would silently
    delete your selection.
-6. **You edited the document while it ran.** The answer no longer fits the question: the
-   lines it would overwrite have moved. Nothing is applied, and you are offered
-   **Open result in new tab** so the work is not lost.
+7. **You edited the document while it ran.** The answer no longer fits the question: the
+   lines it would overwrite have moved. Nothing is applied, and a dialog — *The program
+   changed while the script ran* — offers **Open in new tab** so the work is not lost.
+
+A run can also be refused before it starts: no program is open, the script is not for this
+dialect, it needs a selection, its header asks to replace an input it does not take,
+another script is running, or no Python was found. The status bar says which.
 
 Nothing is ever applied silently: every run ends in a summary, a result, or a message
 saying why not.
 
 ## The scripts that ship with gEdit
 
-They are read-only. To change one, use **Copy to My Scripts** — the copy lands in your own
+They are read-only. To change one, use **Copy to My Scripts** in the `F1` palette, or
+**Edit Script**, which offers the copy (**Copy and edit**). The copy lands in your own
 scripts folder, where it takes the place of the bundled one with the same file name, and
-gEdit opens it for editing.
+gEdit opens it for editing. A file of that name already in your folder is never
+overwritten: the copy is refused and says so.
 
 ### Scale feed rates
 
@@ -113,21 +127,33 @@ Multiplies `F` values by a percentage.
 
 | Parameter | |
 |---|---|
-| Percentage | 100 % leaves every feed as it is |
+| Percentage | 0.1 to 1000; 100 % leaves every feed as it is |
 | Decimal places | As written, or 0 to 4 |
 | Smallest feed / Largest feed | A scaled feed outside the range is pulled back to it. Empty means no limit |
 | Only feeds above / Only feeds below | Leaves the others as they are |
-| Per-revolution feeds | Automatic, yes or no. **Automatic** scales them on a turning program and leaves them alone on a milling one, which is what each of them usually wants |
-| Inverse-time feeds | `G93`, where `F` is the reciprocal of the time the block may take. Off by default |
+| Also scale per-revolution feeds | Automatically, yes or no. **Automatically** scales them on a turning dialect and leaves them alone on a milling one, which is what each of them usually wants |
+| Also scale inverse-time feeds | `G93`, where `F` is the reciprocal of the time the block may take. Off by default |
+
+With **As written** a value keeps the decimals it was written with. Whatever the decimals,
+the run warns when rounding puts a result more than 5 % away from the exact value (`F0.3`
+at 50 % becomes `F0.2`). Where the decimal point matters, a feed written without one never
+gets one, and a value that would round to zero is left as it was and reported.
 
 It leaves alone, and reports, the feeds it must not touch: **thread leads** (in a tapping
 or threading cycle the `F` carries a lead rather than a feed rate — the finding names the
-code of the block, so you can see which cycle it was), feeds on rapid moves, and feeds
-written as a variable (`F#101`, `F=R1`, `F=V1`): the control works out those values, gEdit
-cannot. A feed written under an address of its own — a chamfer feed `FRC=`, the `FA=` of a
-change of cutting conditions — is not the `F` word either; it is reported and left. An
-Okuma line that starts with `$` belongs to the block above it, so the lead a `G71` thread
-cycle carries on its `$` line is a thread lead like any other.
+code of the block, so you can see which cycle it was) and feeds written as a variable
+(`F#101`, `F=R1`, `F=V1`): the control works out those values, gEdit cannot. A feed written
+under an address of its own — a chamfer feed `FRC=`, the `FA=` of a change of cutting
+conditions — is not the `F` word either; it is reported and left. An Okuma line that starts
+with `$` belongs to the block above it, so the lead a `G71` thread cycle carries on its `$`
+line is a thread lead like any other. Klartext `FMAX` and `FAUTO` are not numbers and are
+never touched; an `F` on a rapid block (`G0 … F`) is scaled like any other.
+
+**A code that means two things is refused.** Some codes cut a thread on another kind of
+machine, in the other G-code system or on another make of control — `G76` and `G92` on the
+Fanuc mill profile, `G74` and `G78` (system A) or `G74` and `G92` (system B) on the Fanuc
+lathe, `G76`, `G84`, `G88` and `G92` on an Okuma. Nothing in the block says which reading is
+meant, so their `F` is left alone with a warning.
 
 **A dwell is not a feed.** In a dwell block the `F` word is a time — Okuma `G04 F2`,
 Sinumerik `G4 F2` — so it is never scaled and not counted as a feed rate; the summary says
@@ -144,12 +170,15 @@ arguments, scale that feed by hand. A cycle that always takes its lead from its 
 (`CYCLE84`, `CYCLE99`) changes nothing about the feeds around it.
 
 Feed *mode* is tracked as it goes, out of the dialect's own code database rather than out
-of a table in the script: on a mill that is `G93`/`G94`/`G95`, on a lathe `G98`/`G99` in
-G-code system A and `G94`/`G95` in system B. A feed inside the finishing profile of a
-`G71`–`G73` cycle is an ordinary feed and is scaled like one.
+of a table in the script: on the Fanuc mill that is `G93`/`G94`/`G95`; on a Fanuc lathe
+`G98`/`G99` in G-code system A and `G94`/`G95` in system B; on an Okuma `G94`/`G95`; on a
+Sinumerik `G93`/`G94`/`G95`, and there `G96`/`G97` (per revolution) and `G961`/`G971` (per
+minute) switch the feed unit too. On a Fanuc lathe, a feed inside the finishing profile of
+a `G71`–`G73` roughing cycle is an ordinary feed and is scaled like one; on an Okuma, `G71`
+and `G72` are thread cycles and their `F` is a lead.
 
 **The limits are compared against real values.** If gEdit can work out what a feed is worth
-on this document's [machine](machines.md), your smallest and largest are compared against
+on this document's [machine](machines.md), your limits and thresholds are compared against
 that value, and a feed that has to be clamped is written back in the form the word was
 written in. If it cannot — a feed whose reading depends on a machine nobody chose — the
 feed is still **scaled** and simply not compared, and the run says which ones those were.
@@ -170,21 +199,23 @@ those blocks by hand.
 
 ### Scale spindle speeds
 
-The same, for `S`. Leaves alone, and reports, speeds written as a variable, and by default
-surface speeds and speed limits as well.
+The same, for `S`. Leaves alone, and reports, speeds written as a variable and — unless you
+ask — speed limits and the speeds of other spindles.
 
 **Constant surface speeds** (`G96`) are a three-way choice like the per-revolution feeds:
-automatic, yes or no. Under `G96` the `S` word is a surface speed in metres or feet per
-minute, not revolutions per minute, so scaling it is a different decision from scaling an
-rpm — and one you should make deliberately.
+**Also scale constant surface speeds**, automatically, yes or no. Under `G96` the `S` word
+is a surface speed in metres or feet per minute, not revolutions per minute, so scaling it
+is a different decision from scaling an rpm — and one you should make deliberately.
+**Automatically** scales them on a turning dialect, where nearly every cut is one, and
+leaves them alone, and reports them, on a milling one.
 
 **A speed limit is not a speed.** The `S` of the block that clamps the top speed for
-constant surface speed — `G50 S` in G-code system A, `G92 S` in system B, `G26 S` on a
-Sinumerik, and the lower limit `G25 S` — is left alone by default and reported, and so is a
-clamp written as a word of its own (`LIMS=3000`, `LIMS[2]=1800`). In such a block every
-speed word is a limit, the ones for other spindles included (`G26 S3000 S2=2000`). Which
-code or word that is comes from the dialect's code database and profile, so the script is
-right on every dialect without knowing any of them.
+constant surface speed — `G50 S` on a Fanuc lathe in G-code system A and on an Okuma,
+`G92 S` in system B, `G26 S` on a Sinumerik, and the lower limit `G25 S` — is left alone
+by default and reported, and so is a clamp written as a word of its own (`LIMS=3000`,
+`LIMS[2]=1800`). In such a block every speed word is a limit, the ones for other spindles
+included (`G26 S3000 S2=2000`). Which code or word that is comes from the dialect's code
+database and profile, so the script is right on every dialect without knowing any of them.
 
 **Other spindles are left alone unless you ask.** Only the master spindle's plain `S` is
 scaled by default. A speed written with an address of its own — `SB=2000` for a driven tool,
@@ -204,27 +235,37 @@ from the lines above it in exactly the same way, and warns in exactly the same c
 ### Tool list
 
 One row per tool, in order of first use: the tool, the comment that describes it, the line
-of its first call, and how many times it is called. Optionally the range of feeds and speeds
-each tool is used with. Click a row to jump to the call.
+of its first call, how many times it is called, and — unless you switch it off — the range
+of feeds and speeds each tool is used with. Click a row to jump to the call.
 
-On a turning program it lists the **turret stations**, and an extra column shows the
-offsets each station was called with (`01, 11`) — so a station used with two different
-offsets is one row and tells you both. `T0100`, which cancels the offset rather than
-changing the tool, is not a call. A six-digit Okuma `T010203` is nose-radius set 01,
-station 02 and offset 03, and a `T` inside a cycle block only switches the offset.
+On a Fanuc or Okuma turning program it lists the **turret stations**, and an extra column
+shows the offsets each station was called with (`01, 11`) — so a station used with two
+different offsets is one row and tells you both. On a Fanuc lathe, `T0100`, which cancels
+the offset rather than changing the tool, is not a call; on an Okuma, `T0100` is station 1
+with offset 00, and only station `00` (`T0001`) is no tool. A six-digit Okuma `T010203` is
+nose-radius set 01, station 02 and offset 03, and a `T` inside a cycle block only switches
+the offset. A Sinumerik `T` carries no offset, so its list has no such column.
 
 A speed or feed written **before** the turret indexes (`G97 S1500 M03`, then `T0202`)
 belongs to the new tool: a value counts for the tool that moves next. A dwell is in no range,
 and neither is a driven tool's `SB=` or a numbered spindle's `S3=`: the speed column is the
-plain `S` of the spindle the tool runs on.
+plain `S` of the main spindle, so a driven tool shows no speed of its own.
+
+A range is in one unit: the one the control starts in — per revolution on a lathe, marked
+`/rev` — or, for a tool with no value in that unit, the one it has (`/tooth` and `surface`
+are marked as well; per minute and rpm carry no mark). A value in another unit is left out
+of the range and listed under the table, and so are thread pitches and speed limits.
 
 A tool named in quotation marks is a name, whatever it is made of: `T="007"` and tool
 number 7 are two rows, and a name keeps its zeros and, when it is all digits, its quotation
 marks.
 
-Where the description comes from is a parameter (the dialect's own rule, or the comment
-above, below or at the end of the call line), as is whether `T01` and `T1` are written the
-same way.
+Where the description comes from is a parameter — the dialect's rule; the end of the call
+line, else above, else below; or only the lines above, the lines below or the end of the
+call line — and a numbered tool without one takes it from a tool list comment elsewhere in
+the program (`(T5 D12 FLAT END MILL)`), the first such line for each number. Another
+parameter decides whether the list writes `T1` or `T01` (as the first call wrote it);
+`T01` and `T1` are always the same tool.
 
 If a program has `T` words but no tool change at all, the list says so rather than coming
 back silently empty. On a milling dialect that usually means the program is really a turning
@@ -234,31 +275,39 @@ program opened with a mill profile — switch the dialect in the status bar.
 
 | Folder | |
 |---|---|
-| The bundled folder, inside the application | Read-only. Hide it with `Settings ▸ Scripts ▸ Show the scripts that ship with gEdit` |
-| **Your own folder**, `scripts/` next to `settings.json` | Created on first start. The settings dialog shows the path |
-| **Extra folders** you add | `Settings ▸ Scripts ▸ Extra script folders`, or the "Add folder" command. A shop can keep its scripts on a share this way |
+| The bundled folder, inside the application | Read-only. Hide it with `Settings ▸ Scripts ▸ Show the scripts that ship with gEdit`, then **Rescan** |
+| **Your own folder**, `scripts`, in the folder that holds your settings ([Where things are](README.md#where-things-are)) | Created on first start. The settings dialog shows the path |
+| **Extra folders** you add | `Settings ▸ Scripts ▸ Extra script folders`, or the **Add Folder** command. A shop can keep its scripts on a share this way |
 
 Rules worth knowing:
 
-- **One level of subfolders** becomes the groups in the menu. Deeper folders are ignored.
+- **One level of subfolders** becomes the groups on the Tools tab. Deeper folders are
+  ignored.
 - A script **takes the place of** one with the same file name in an earlier folder: yours
   wins over a bundled one, an extra folder wins over both.
 - `gedit_nc.py`, and any file whose name starts with `_` or `.`, is library code and is
-  not listed as a script.
-- A folder that is missing — an unmounted share, say — is not an error. It is reported as
-  missing and the rest of the menu works.
-- After adding or editing scripts outside gEdit, use **Rescan** to pick them up.
+  not listed as a script. A subfolder whose name starts with `_` or `.` is skipped too.
+- A folder that is missing — an unmounted share, say — is not an error: its scripts are
+  simply not listed until it is back and the list is read again (**Rescan**, or a restart),
+  and the rest of the list works.
+- **The list is read once, not at every run.** After you change a script's header — in
+  gEdit or outside it — or add a script outside gEdit, use **Rescan**: the name, the
+  description, the dialects, the input, the form and the output mode are all read when the
+  list is built. Of the header, only `timeout` is read again at every run; the code itself
+  always runs as it is saved.
 
-The script commands also include **New script** (writes a commented template into your
-folder and opens it for editing) and **Open script** (opens the source of one of your own
-scripts; a bundled script is never made writable).
+The script commands also include **New Script** (writes a commented template into your
+folder, opens it for editing and lists it) and **Edit Script** (opens the source of a
+script in your own folder or an extra folder; on a bundled script it offers **Copy and
+edit** instead — the bundled file itself is never made writable).
 
 ---
 
 ## Writing a script
 
-**New script** gives you a working template with the whole header commented. What follows
-is the reference.
+**New Script** gives you a working template with the whole header commented. What follows
+is the reference; the [script contract](../../src-tauri/resources/scripts/README.md) that
+ships next to the bundled scripts has the same rules in full, for a developer.
 
 ### The header
 
@@ -268,9 +317,9 @@ never has to.
 ```python
 #!/usr/bin/env python3
 # /// gedit
-# name = "Scale feed rates"
+# name = "Scale lathe feeds"
 # description = "Multiply F values by a percentage."     # the tooltip
-# profiles = ["fanuc-gcode", "heidenhain-klartext"]      # omit = offered everywhere
+# profiles = ["fanuc-lathe", "okuma-osp", "sinumerik"]   # omit = offered everywhere
 # input = "selection-or-document"                        # document | selection | selection-or-document | none
 # output = "replace"                                     # panel | replace | new-document | report
 # timeout = 60                                           # seconds; omit = the setting
@@ -286,7 +335,24 @@ never has to.
 # ///
 ```
 
-A script with no header still runs: stdin in, raw output in the Output panel.
+An example. The bundled **Scale feed rates** declares no `profiles`, so it is offered on
+every dialect.
+
+`profiles` lists dialect ids — `fanuc-gcode`, `fanuc-lathe`, `heidenhain-klartext`,
+`okuma-osp`, `sinumerik` — compared exactly: a script for `fanuc-gcode` is not offered on
+`fanuc-lathe`. An empty list means every dialect, and an id gEdit does not know is not
+reported.
+
+The block has to come first: only blank lines, a `#!` line (line 1) and a coding line
+(line 1 or 2) may stand above it. Every line of it is a comment, it ends at `# ///`, and it
+has to close within the first 64 KiB of the file. `name` is required. A key gEdit does not
+know is ignored without a message, so a misspelt `ouput = "replace"` leaves the script in
+panel mode. `documents` is accepted (`"active"`, `"all-open"` or `"pick"`), but a script
+always gets the active document.
+
+When gEdit refuses a header, the script is listed under its file name, runs in panel mode,
+and its tooltip says that the header could not be read — not why. A script with no header
+at all runs the same way: stdin in, raw output in the Script Output panel.
 
 ### Parameters
 
@@ -300,10 +366,15 @@ values arrive in the context as `params`. Fields are remembered per script.
 | `bool` | A checkbox |
 | `choice` | One of `choices = [{ label = "...", value = ... }]` |
 | `file`, `folder` | A path, picked with the system dialog |
-| `address-list` | Check boxes over the addresses of the dialect |
+| `address-list` | Check boxes over the `choices` you list; the value is the list of the checked values |
 
 `label` is what the form shows, `help` the line under it, `default` the pre-filled value,
 `required` whether it may be left empty.
+
+Every field needs an `id` (ASCII letters, digits, `_` and `-`, not starting with a digit,
+and not used twice), a `label` and a `type`. A field is optional unless it sets
+`required = true`. A `choice` needs `choices`, and a `default` must suit the type.
+Otherwise gEdit refuses the whole header, and the script runs in panel mode.
 
 ### What the script gets
 
@@ -315,13 +386,13 @@ values arrive in the context as `params`. Fields are remembered per script.
 ```json
 {
   "contract": 2,
-  "document": { "path": "/jobs/part42.nc", "name": "part42.nc", "profile": "fanuc-gcode",
+  "document": { "path": "/jobs/part42.nc", "name": "part42.nc", "profile": "fanuc-lathe",
                 "encoding": "windows-1252", "hasBom": false, "lineEnding": "crlf", "modified": true },
   "input":    { "scope": "selection", "startLine": 120, "endLine": 180,
                 "precedingLines": ["%", "O1000 (BRACKET)", "..."] },
   "cursor":   { "line": 130, "column": 5 },
-  "params":   { "percent": 90, "maxFeed": null },
-  "profile":  { "id": "fanuc-gcode", "syntax": {}, "addresses": {}, "numbering": {} },
+  "params":   { "percent": 90 },
+  "profile":  { "id": "fanuc-lathe", "syntax": {}, "addresses": {}, "numbering": {} },
   "codes":    [ { "code": "G84", "group": "cycle", "pitchFeed": true } ],
   "machine":  { "id": "lathe-2", "name": "Lathe 2", "choice": "document",
                 "params": { "numberInput": { "mode": "increment", "incrementMm": "0.001" },
@@ -330,14 +401,20 @@ values arrive in the context as `params`. Fields are remembered per script.
                             "modalInitial": { "feedmode": "G95" } },
                 "source": { "numberInput": "machine", "units": "profile",
                             "diameter": "profile", "variants": { "gcodeSystem": "machine" },
-                            "modalInitial": { "feedmode": "machine" } } }
+                            "modalInitial": { "feedmode": "machine", "plane": "profile",
+                                              "spindlemode": "profile" } } }
 }
 ```
+
+A number field left empty — and a choice with no default that nobody picked — is not in
+`params` at all: read it with `params.get(…)`. An empty text, file or folder field arrives
+as `""`, an unticked box as `false`, an empty address list as `[]`.
 
 `profile` is the dialect and `codes` is its code database, so a script can ask what a
 comment looks like, how blocks are numbered or what `G84` means **in this dialect** instead
 of assuming Fanuc. `contract: 2` marks the shape; a script started without a context gets
-`{}` and should fall back to defaults rather than fail.
+`{}` and should fall back to defaults, or say what it is missing, rather than fail with a
+traceback.
 
 Both of them arrive with the document's [machine](machines.md) **already applied**: the
 G-code system the machine is set to has picked the code database, its power-on modes are in
@@ -346,23 +423,32 @@ script that only scales values never has to know that machines exist.
 
 `machine` is the machine itself, for the scripts that do. `source` says where each parameter
 came from — `"machine"`, `"detected"` or `"profile"` — so a script can tell a value it was
-told from one it is assuming. A document with no machine still gets the member, with the
-dialect's documented defaults and every source `"profile"`. Read it with
-`gedit_nc.machine_params(context)`, which answers the same thing for a context from an older
-version of gEdit that does not carry the member at all.
+told from one it is assuming. A document with no machine still gets the member: the
+dialect's documented defaults, except a G-code system gEdit detected in the program, and
+the power-on feed mode that system brings, whose source is then `"detected"`; every other
+source is `"profile"`. Read it with `gedit_nc.machine_params(context)`, which answers the
+defaults, every source `"profile"`, for a context from an older version of gEdit that does
+not carry the member at all.
+
+`choice` is `"document"` (chosen for this program or remembered for its file; `id` is
+`null` when that choice was "none"), `"default"` (the dialect's default machine) or
+`"none"` (nothing chosen and no default set). Test `id`, not `choice`.
 
 `input.precedingLines` is what makes a selection run trustworthy: the document lines above
 `startLine`, so a script can work out the modal state — feed mode, the active cycle,
 constant surface speed — that the selection is really written in. It is **absent** for a
-whole-document run, which already sees everything, and absent when there is too much text
-above the selection to send. Read it with `gedit_nc.preceding_lines(context)`, which
-answers `[]` in both of those cases and in every case where the field cannot be trusted; a
-script that gets `[]` for a selection should say so rather than guess.
+whole-document run, which already sees everything, for a selection that starts on line 1,
+and when more than 50,000 lines or about 4 MB of text stand above the selection. Read it
+with `gedit_nc.preceding_lines(context)`, which answers `[]` in all of those cases and in
+every case where the field cannot be trusted; a script that gets `[]` for a selection that
+does not start on line 1 should say so rather than guess.
 
 Also set for you: `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8` (so comments with umlauts
 survive on Windows), the working directory is the script's own folder (so a helper module
-next to it imports), and the bundled folder is on `PYTHONPATH` (so `import gedit_nc`
-works from your own scripts too).
+next to it imports), and `PYTHONPATH` is set to the bundled folder (so `import gedit_nc`
+works from your own scripts too) — replacing one of your own, so keep helpers next to the
+script or use a virtual environment's interpreter. `PYTHONDONTWRITEBYTECODE=1` keeps
+`__pycache__` out of your folders.
 
 Write **the result** to stdout and anything else to stderr.
 
@@ -394,74 +480,65 @@ gedit_nc.report(
 ```
 
 A row or a finding that carries `line` is clickable. `severity` is `info`, `warning` or
-`error`.
+`error`. `line` is a line number of the document, not of stdin: in a selection run add
+`context["input"]["startLine"] - 1`. A finding needs `line` and `message`, or the whole
+result is refused. At most 1000 findings and 5000 rows are taken, and the panel says how
+many more there were.
 
-`envelope = true`: stdout is always JSON, so a script can hand back new text **and** a
-summary **and** warnings together — `gedit_nc.envelope(text, message, findings)`. This is
-how the bundled scale scripts report the feeds they refused to touch.
+`envelope = true` on a `replace` or `new-document` script: stdout is always JSON, so a
+script can hand back new text **and** a summary **and** warnings together —
+`gedit_nc.envelope(text, message, findings)`. This is how the bundled scale scripts report
+the feeds they refused to touch.
 
 ### The library
 
-`gedit_nc.py` sits next to the bundled scripts and is importable from yours.
+`gedit_nc.py` sits next to the bundled scripts and is importable from yours: it reads the
+context and the input, reads a line the way the dialect does (`tokenize_line`), keeps NC
+numbers as decimal text rather than floats, follows what is modal (`ModalInterpreter`, and
+the smaller `FeedModeTracker`), reads a word's number the way the machine does, and writes
+the two JSON result shapes. Every public name, with what it is for, is listed in
+[the library reference](../../src-tauri/resources/scripts/README.md#7-what-gedit_nc-gives-you);
+the docstrings in the file have the detail.
 
-| | |
-|---|---|
-| `load_context()`, `read_input()` | the context dictionary, and stdin as lines |
-| `compile_profile(profile)` | the dialect's patterns, compiled once |
-| `tokenize_line(line, cp, prev_state)` | one block's tokens, and the state the next line needs |
-| `mask_comments(line, cp)` | the line with comments blanked out, same offsets |
-| `parse_number`, `format_number`, `scale_decimal` | NC numbers as decimal strings, never as floats |
-| `ModalInterpreter(cp, codes)` | everything that is in force after a block: the code per modal group, the feed and speed units, distance, diameter, units, plane, the last tool, feed, speed and speed clamp, and the active cycle |
-| `FeedModeTracker(codes)` | the older, smaller view of the same thing: feed mode, `G96`/`G97`, the active cycle, whether its `F` is a thread pitch, and whether the block is a dwell (`f_not_feed`) |
-| `speed_limit_of(codes, tokens)` | the code in this block that makes its `S` a clamp rather than a speed, or `None` |
-| `machine_type_of`, `incremental_axes`, `diameter_axes` | `'mill'` or `'lathe'`, the `U`→`X` pairs, and the words written as a diameter |
-| `machine_params(context)` | the document's [machine](machines.md), with the source of each parameter |
-| `number_class_of`, `value_of`, `resolve_value`, `readings_of`, `write_back` | what a word's number actually **is** on this machine, and how to put a value back into it |
-| `preceding_lines(context)` | the lines above a selection, or `[]` when there are none to trust |
-| `prime_tracker(tracker, lines, cp)` | feeds those lines through a tracker and hands back the state the first selected line begins in |
-| `report(...)`, `envelope(...)` | the two JSON result shapes |
+### Five rules that matter more than any feature
 
-**Three rules that matter more than any feature:**
-
-0. **A selection is a fragment of a modal language.** `G95` three hundred blocks above the
+1. **A selection is a fragment of a modal language.** `G95` three hundred blocks above the
    selection still decides what every `F` in it means. Prime your tracker with
    `preceding_lines` + `prime_tracker`, and when they give you nothing, say so in a finding
    instead of assuming the top-of-program state.
-1. **Work on tokens, not on a regular expression over raw lines.** `tokenize_line` knows
+2. **Work on tokens, not on a regular expression over raw lines.** `tokenize_line` knows
    what is a comment, a string, a variable and an expression *in this dialect*. A naive
    `re.sub` rewrites the `G1` inside `(FINISH G1 PASS)` and corrupts the program.
-2. **Never widen or narrow a number by accident.** Use `scale_decimal` and `format_number`.
-   They keep `10.` from becoming `10`, keep the precision each value was written with, and
-   round the way the editor's own transformations do.
+3. **Never widen or narrow a number by accident.** Use `scale_decimal` and `format_number`,
+   never a float. They keep `10.` from becoming `10`, keep the precision each value was
+   written with, and round the way the editor's own transformations do.
+4. **Ask the code database what a value means, not a table of your own.** The same `F` is a
+   feed, a thread pitch or a thread lead depending on what is in force, and the dialect's
+   database in `context["codes"]` is what says which; the trackers read it for you.
+5. **When you are not sure, leave the value alone and say so** in a finding on its line —
+   the value, the reason, what to do. Refusing a feed costs one edit; scaling a thread lead
+   scraps the part.
 
 Write for Python 3.9 as well as for the newest release: no `match`, no `X | Y` outside
-annotations, and `from __future__ import annotations` at the top.
+annotations, and `from __future__ import annotations` at the top. A script you share, like
+the bundled ones, uses the standard library only; your own may use a virtual environment's
+interpreter.
 
 ### Numbers, and the machine
 
 `X50` is 50 mm on one control and 0.050 mm on the next, and which one it is depends on a
-machine parameter rather than on the dialect ([machines.md](machines.md)).
+machine parameter rather than on the dialect ([Machines](machines.md)).
 
 A script that only **scales** can ignore all of it. Multiplying is unit-free: the same
 arithmetic is right in every reading, and `syntax.decimalPointSignificant` already follows
 the machine. A script that **compares** a value with a limit, or **computes** with one, has
-to ask:
-
-```python
-machine = gedit_nc.machine_params(context)
-cls = gedit_nc.number_class_of(token.address, context["profile"], tracker.feed_unit,
-                               block_codes, tracker.pitch_feed)
-value, readings = gedit_nc.resolve_value(token.value, cls, machine,
-                                         context["profile"], units)
-if value is None:
-    # No class, or a reading that depends on a machine nobody chose. Report the word —
-    # `readings` says what each preset would make of it — and leave it alone.
-    ...
-```
-
-`value` is decimal text in millimetres, inches, degrees or seconds. `write_back` puts a
-value back into the word it came from, keeping the word's own form — a point stays a point,
-a point-less word stays a count — and telling you when it had to round.
+to ask: `machine_params` for the machine, `number_class_of` for what kind of number the word
+is in this block, `resolve_value` for what it is worth — decimal text in millimetres,
+inches, degrees or seconds, or nothing when the reading depends on a machine nobody chose —
+and `write_back` to put a value back into the word in its own form: a point stays a point,
+a point-less word stays a count, and you are told when it had to round.
+[The library reference](../../src-tauri/resources/scripts/README.md#why-your-script-needs-the-number-rules)
+has the whole loop as a worked example that runs as it stands.
 
 **Never divide by a thousand yourself, and never assume a point-less word is a count.** The
 machine decides, and where no machine was chosen gEdit refuses to decide for it. Say so in a
@@ -485,6 +562,9 @@ import gedit_nc
 
 def main() -> int:
     context = gedit_nc.load_context()
+    if not context.get("profile"):
+        print("Run this from gEdit: it needs the dialect.", file=sys.stderr)
+        return 1
     cp = gedit_nc.compile_profile(context["profile"])
     kept = []
     state = None
@@ -520,15 +600,15 @@ What gEdit does guarantee:
   be read as a command line.
 - **Bundled scripts are never writable.** The scripts that ship with gEdit are the scripts
   that run.
-- **A run is bounded**: a time limit, a Cancel button, capped output, its own process group
-  where the system has them, and it is killed when the app exits. A script does not outlive
-  the window.
+- **A run is bounded**: a time limit, a **Stop** button, capped output (64 MiB of result,
+  1 MiB of error output), and it is killed when the app exits. On macOS and Linux the
+  processes the script started are stopped with it; on Windows only the script itself is.
 
 What that does **not** mean: it bounds *which file* runs, for how long and how much it may
 say — it says nothing about what is **in** that file. The interpreter and the script
 folders are ordinary settings; anything that can change your settings file can point gEdit
-at a different interpreter, and the "New script" command creates a writable, runnable file
-by design.
+at a different interpreter, and **New Script** creates a writable, runnable file by
+design.
 
 So the rule is the one at the top of this page: **only run scripts you trust.** Read a
 script before you run it, the same way you would read a macro somebody mailed you. They
@@ -538,9 +618,9 @@ are short, and they are meant to be read.
 
 | | |
 |---|---|
-| The script commands are greyed out | No Python was found. Set `Settings ▸ Scripts ▸ Python interpreter` to the interpreter's path |
-| A script is not in the menu | It may be for other dialects (`profiles` in its header), it may be hidden behind a file of the same name in a later folder, or its name starts with `_`. Use **Rescan** after adding it |
-| It appears, but its description is wrong or missing | Its header could not be read as TOML; it then runs in the simplest mode and shows raw output only |
-| "Nothing was applied" after an edit | You typed in the document while it ran. Run it again, or take **Open result in new tab** |
-| It is stopped every time | It needs longer than the time limit: raise `Settings ▸ Scripts ▸ Script timeout`, or set `timeout` in the script's header |
-| Nothing comes back at all | Look in the **Output** panel: whatever the script wrote to its error output is there |
+| The Tools tab says "Python 3.9 or newer was not found" | No Python, or one older than 3.9. Set `Settings ▸ Scripts ▸ Python interpreter` to the interpreter's path |
+| A script is not on the Tools tab | It may be for other dialects (`profiles` in its header), it may be hidden behind a file of the same name in a later folder, its name or its subfolder's name starts with `_` or `.`, it sits more than one folder deep, or the bundled scripts are hidden. Use **Rescan** after adding it |
+| It appears under its file name, and the tooltip says the header could not be read | gEdit refused the header (see [The header](#the-header)); it then runs in panel mode and shows raw output only. Fix it, then **Rescan** |
+| *The program changed while the script ran* | You typed in the document while it ran, so nothing was applied. Run it again, or take **Open in new tab** |
+| It is stopped every time | It needs longer than the time limit: raise `Settings ▸ Scripts ▸ Script timeout` (up to an hour), or set `timeout` in the script's header (up to a day) |
+| Nothing comes back at all | Look in the **Script Output** panel: whatever the script wrote to its error output is there |

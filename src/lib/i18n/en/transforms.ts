@@ -13,6 +13,6 @@ export default {
   failed: '{title} could not finish.',
   continue: 'Continue',
   inSelection: '{summary} (selection)',
-  skipped_one: '1 line was left unchanged.',
-  skipped_other: '{count} lines were left unchanged.',
+  skipped_one: '1 line is listed below.',
+  skipped_other: '{count} lines are listed below.',
 } as const satisfies Messages;

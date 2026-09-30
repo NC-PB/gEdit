@@ -23,11 +23,10 @@ program starts — is a separate thing, and it lives in a
 | **Okuma OSP lathe** | `Okuma` | Turning programs for Okuma OSP lathe controls of the OSP-P200L kind: one or two turrets, the C axis and driven tools |
 | **Sinumerik 840D (turning)** | `Sinumerik` | Turning programs for Siemens Sinumerik 840D controls, written in the control's own language |
 
-The Okuma and Sinumerik profiles are **turning profiles**, and that is a deliberate first
-step: the machines behind them are lathes. A program for an Okuma or a Siemens machining
-centre is not covered yet — see
-[Milling on Okuma and Sinumerik](#milling-on-okuma-and-sinumerik) for what happens to one
-today.
+The Okuma and Sinumerik profiles are **turning profiles**: they were written for turning
+programs first, on purpose. A program for an Okuma or a Siemens machining centre is not
+covered yet — [Milling on Okuma and Sinumerik](#milling-on-okuma-and-sinumerik) says what
+happens to one today.
 
 A Siemens control can also be switched to read Fanuc-style ISO code. A program written for
 that mode is Fanuc code: read it with a Fanuc profile. Its content usually takes it there by
@@ -35,31 +34,37 @@ itself, even as an `.MPF` file; if the status bar says Sinumerik, change it by h
 
 ## Which dialect a file gets
 
-When you open a file, gEdit scores each profile:
+A dialect you picked by hand for a file wins: gEdit remembers it for that file
+([Coming back where you left off](README.md#coming-back-where-you-left-off)). Otherwise it
+scores each profile:
 
-1. The **extension** counts. `.nc` and `.tap` point at Fanuc, `.h` points strongly at
-   Klartext, `.mpf` and `.spf` point at Sinumerik. `.min`, `.sub` and `.ssb` do more than
-   point: they decide for Okuma on their own (see below).
+1. The **extension** counts. `.nc` and `.tap` point at Fanuc, and `.cnc`, `.eia` and `.iso`
+   a little less; `.h` points strongly at Klartext; `.mpf` and `.spf` point at Sinumerik.
+   `.min`, `.sub` and `.ssb` do more than point: they decide for Okuma on their own (see
+   below). Any other extension, `.txt` included, counts for nothing.
 2. The **content** of the first 400 non-empty lines counts:
    - a leading `%`, an `O1234` program number or a line of `G`/`M` codes points at Fanuc;
    - `BEGIN PGM`, `TOOL CALL`, `FMAX` or a block that starts with a bare number points at
      Klartext;
    - a `%_N_NAME_MPF` header, a `;$PATH=` line, a cycle call such as `CYCLE83(…)`,
      `T="…"`, `LIMS=`, `DIAMON` or `MSG(…)` points at Sinumerik;
-   - a `$NAME.MIN%` header decides for Okuma on its own. `CALL O…`, `RTS`, a driven-tool
-     cycle (`G180`–`G189`), a LAP call such as `G85 NLAP1`, a `G71` thread cycle with `H`
-     and `D`, a `G77` tap with `K` or a line that continues its block with `$` count almost
-     as much, and `SB=`, `V1 =`, `IF […] N…`, a six-digit `T` word or a sequence name such
-     as `NLAP1` point at Okuma.
+   - a `$NAME.MIN%` header decides for Okuma on its own. `CALL O…` or `MODIN O…`, `RTS` or
+     `MODOUT`, a driven-tool cycle (`G180`–`G189`), a LAP call such as `G85 NLAP1`, a
+     `G71`/`G72` thread cycle with `H` and `D`, a `G77`/`G78` tap with `K`, or a line that
+     continues its block with `$` each count as much as a hundred ordinary lines, and
+     `SB=`, `V1 =`, `IF […] N…`, a six-digit `T` word or a sequence name such as `NLAP1`
+     point at Okuma.
 
    Each line counts once, for the strongest thing it matched.
 3. The highest total wins. A file that matched nothing at all — an empty file, an unknown
-   extension, a plain text note — keeps the default dialect from
+   extension, a plain text note — opens with the dialect of the document you were working
+   in, or, with no document open, with the default dialect from
    `Settings ▸ Files ▸ Default dialect`.
 
 The extension is a **hint, not a verdict**. A Klartext program that somebody saved as
 `part.nc` is still recognised as Klartext, because its content says so. A Fanuc-style
-program saved as `.MPF` opens as Fanuc for the same reason.
+program saved as `.MPF` usually opens as Fanuc too, when it has a `%` line or an `O` program
+number; without them the extension can win — check the status bar.
 
 **The Okuma extensions are the exception, and on purpose.** Line for line, an Okuma turning
 program is Fanuc lathe code: `G00 X600 Z400`, `G96 S180 M03` and `G50 S2500` read the same on
@@ -69,67 +74,62 @@ is the lead, a Fanuc `G71` roughs a contour and its `F` is a feed — read the w
 feed script would change the pitch of the thread. So a `.MIN`, `.SUB` or `.SSB` file
 always opens as Okuma, whatever is in it. Two things follow from that:
 
-- **A Fanuc program named `.MIN` now opens as Okuma.** `.min` used to count for Fanuc; it
+- **A Fanuc program named `.MIN` opens as Okuma.** `.min` used to count for Fanuc; it
   belongs to Okuma alone now. If your shop names Fanuc programs that way, set the dialect by
-  hand once per file — gEdit remembers the choice for that file
-  ([Coming back where you left off](README.md#coming-back-where-you-left-off)).
+  hand once per file — gEdit remembers the choice for that file.
 - **An Okuma program under another extension** — `.nc`, `.txt` or none at all — is judged
   on its content. Its `$NAME.MIN%` header decides on its own. Without a header, what only
   this control writes decides: `CALL`, `RTS`, the driven-tool cycles, a LAP call, a `G71`
   thread cycle with `H` and `D`, a `G77` tap with `K`, a line that starts with `$`; six-digit
   `T` words, `SB=`, `V` variables and named sequences help. A program that writes nothing
-  but `G` and `M` codes and four-digit `T` words scores the same on both lathes and can come
-  out as a Fanuc lathe program. Check the status bar.
+  but `G` and `M` codes and four-digit `T` words gives Okuma nothing to go on and usually
+  opens as a Fanuc lathe program; if the two lathes score exactly the same, the dialect of
+  the document you were working in wins when it is one of them. Check the status bar.
 
-A schedule program (`.SDF`) is not claimed by the Okuma profile; its content decides.
+A schedule program (`.SDF`) is not claimed by its extension, and on Windows and Linux the
+Open dialog lists it only under All files. Its content decides: a `$NAME.SDF%` header line
+decides for Okuma like the other Okuma headers.
 
 **Mill or lathe** is decided in the same scoring. The two Fanuc profiles share everything
 that makes a file Fanuc, so what separates them is the turning-specific content: a
-four-digit `T` word, `G50 S` or `G92 S`, `G96`/`G97`, a `G71`/`G70` pair with `P` and `Q`,
-`G28 U`, `U`/`W` words. A milling program is separated by `M6`, `G43 … H`, `G17` and `Y`
-words. A Fanuc file that shows neither goes to the **mill**, which is the tie-break. The
-Okuma and Sinumerik profiles have no milling partner, so a milling program for either
-control opens with the turning profile.
+four-digit `T` word, `G50 S` or `G92 S`, `G96`/`G97`, a `G70`–`G73` block with `P` and `Q`,
+a `G71`/`G72` with `U` and `R`, `G28 U`, `U`/`W` words. A milling program is separated by
+`M6`, `G43 … H`, `G17` and `Y` words. A Fanuc file that shows neither goes to the **mill**,
+which is the tie-break. The Okuma and Sinumerik profiles have no milling partner: an Okuma
+milling program opens with the turning profile, because its extension decides, and a
+Siemens milling program usually opens as **Fanuc (ISO) mill**, because the Sinumerik
+profile does not count the ordinary lines that move `Y` — see
+[Milling on Okuma and Sinumerik](#milling-on-okuma-and-sinumerik).
 
 That is not only true of a fragment or a file of nothing but comments. A turning program
 whose post writes short `T` words, absolute `X`/`Z` and no spindle-mode code at all can
 show nothing that says "lathe", and it then opens as a mill: the turret tool changes do
-not appear in the program map, and the `P`/`Q` of a `G70`–`G73` are not block numbers to
-that profile. **Set the dialect by hand when the status bar shows the wrong one.** The
-transformations know they are out of their depth there — renumbering or removing the block
-numbers of such a program asks first and lists every `P`/`Q` it will not touch — and
-`Tools ▸ Tool list` says to open the file with a lathe profile.
+not appear in the program map, and the `P`/`Q` of a `G70`–`G73` are never rewritten.
+**Set the dialect by hand when the status bar shows the wrong one.** The transformations
+know they are out of their depth there — renumbering or removing the block numbers of such
+a program asks first and lists every `P`/`Q` it will not touch — and `Tools ▸ Tool list`
+says to open the file with a lathe profile.
 
 The dialect of the document is shown in the status bar. Click it to change it — the
 highlighting, the code help, the program map and everything on the NC tab switch
-immediately. The dialect also decides the filters in the Save As dialog and the extension
-a new file is offered.
+immediately. On Windows and Linux the dialect also decides which file type the Save As
+dialog lists first (macOS lists none). On every system it decides the name Save As offers
+an untitled document — `program.nc`, `program.h`, `program.min` or `program.mpf` — and the
+line ending a new document starts with: CR LF, or LF on Sinumerik.
 
 Changing the dialect changes nothing in the text.
 
-## Which G-code system a lathe file gets
-
-Fanuc lathes come in G-code systems A and B, and the same numbers mean different things in
-each. That is a setting of the machine, not of the file, so:
-
-- If the document has a **machine configuration** whose G-code system is set, that wins.
-  Always. See [machines.md](machines.md).
-- Otherwise gEdit reads the program: `G50 S2500` points at A, a `G92 S2500` or a `G77`/`G78`
-  points at B. It needs a clear margin before it says so; a program with no sign either way
-  reads as **A**, which is the documented default.
-- Either way the status bar's machine item says what is in force, and marks it assumed when
-  it was not you who said it.
-
-If the text and your machine disagree, gEdit tells you once and changes nothing.
-
-Okuma and Sinumerik have no G-code systems to choose between.
+A Fanuc lathe program is read in G-code system A or B as well. That is a setting of the
+machine rather than of the file; how gEdit settles it when no machine says so is described
+in [machines.md](machines.md#the-fanuc-lathe). Okuma and Sinumerik have no G-code systems to
+choose between.
 
 ## What a profile decides
 
 | | Fanuc (ISO) mill | Fanuc (ISO) lathe | Heidenhain Klartext |
 |---|---|---|---|
 | File extensions | `.nc` `.tap` `.cnc` `.eia` `.iso` `.ncc` `.ptp` `.txt` | the same | `.h` |
-| Comments | `( ... )` | `( ... )` | `;` to the end of the line, plus text in `"` quotes |
+| Comments | `( ... )` | `( ... )` | `;` to the end of the line. Text in `"` quotes is a string — a tool name, say — not a comment |
 | Block numbers | `N` in front, optional | `N` in front, optional | a plain number at the start of the block, **required** |
 | Block skip | `/` before or after the number, with levels | the same | `/` after the number |
 | Decimal point | significant by default — `X10` and `X10.` are different values | **not** significant by default — both are 10 mm | not significant |
@@ -137,10 +137,10 @@ Okuma and Sinumerik have no G-code systems to choose between.
 | Variables | `#100` | `#100` | `Q`, `QL`, `QR`, `QS` numbers |
 | Continuation | — | — | a trailing `~` |
 | Tool call | `M6`, with the `T` word on the same line or the last one before it | the `T` word alone: station plus offset, `T0100` excluded | `TOOL CALL`, on the same line |
-| Axes | `X` `Y` `Z` `A` `B` `C` `U` `V` `W` | `X` `Z` `C` `Y`, with `U` and `W` as the incremental twins of `X` and `Z`, and `X`/`U` written as diameters | — |
+| Axes | `X` `Y` `Z` `A` `B` `C` `U` `V` `W` | `X` `Z` `C` `Y`, with `U` and `W` as the incremental twins of `X` and `Z`, and `X`/`U` written as diameters | `X` `Y` `Z` `A` `B` `C` `U` `V` `W`; an `I` in front makes the value incremental (`IX+10`) |
 | Program start / end | `O1234` or `:1234` / `M30`, `M2` | the same | `BEGIN PGM name` / `END PGM` |
-| Renumber defaults | start 10, step 10, no padding, restart at each program start, skip `%`, `O` and comment lines | the same | consecutive from 0, step 1 |
-| Jumps that point at a block number | `M99 P`, `M98 Q`, `GOTO` | `M99 P`, `M98 Q`, `G70`–`G73` `P`/`Q`, `GOTO` | none — `CALL LBL` points at a label, not at a block number |
+| Renumber defaults | start 10, step 10, no padding, at most 99999 and then starting over, restart at each program start, skip `%`, `O` and comment lines | the same | consecutive from 0, step 1 |
+| Jumps that point at a block number | `M98 Q`, `GOTO`; `M99 P` and the `P`/`Q` of `G70`–`G73` are listed, never rewritten | `M98 Q`, `G70`–`G73` `P`/`Q`, `GOTO`; `M99 P` is listed, never rewritten | none — `CALL LBL` points at a label, not at a block number |
 | Code help entries | 82 codes (12 not verified yet) and 25 addresses | 79 codes (12 not verified yet) and 26 addresses in system A, 81 codes (10 not verified yet) in system B | 80 codes (5 not verified yet) and 34 addresses |
 
 And the two turning profiles of the other controls:
@@ -151,28 +151,34 @@ And the two turning profiles of the other controls:
 | Comments | `( ... )` | `;` to the end of the line. Text in `"` quotes is a string, not a comment, and a `;` inside it is just a character |
 | Block numbers | `N` in front, optional: up to four digits, or a **name** that starts with a letter (`NLAP1`). A space has to follow it | `N` in front, optional. A label `NAME:` at the start of a block is a jump target of its own |
 | Block skip | `/` at the very start of the block or directly after the sequence number, no levels | `/`, or `/0` to `/9` with a level, in front of the block |
-| Decimal point | **never** significant: the machine's unit system scales every number, with a point or without — see [machines.md](machines.md#okuma-the-unit-system-scales-every-number) | not significant by default — `X10` and `X10.` are both 10 mm — but a machine set to count increments makes it significant |
+| Decimal point | **never** significant: the machine's unit system scales every number, with a point or without — see [machines.md](machines.md#okuma-the-unit-system-scales-every-number) | not significant: `X10` and `X10.` are both 10 mm. The control's own language has no reading in increments, so no machine changes that |
 | Words | separated by spaces in the manual's own examples; gEdit also reads them packed | separated by spaces; packed single-letter words (`G1X10`) are read too |
 | Variables | `V1`…, system variables such as `VZOFZ`, and names of the program's own (`DIA1`) | `R1`…, `$` system variables (`$AA_IM[X]`), `DEF` variables and other names |
-| Continuation | — | — |
+| Continuation | a line that starts with `$` continues the block above it | — |
 | Tool call | the `T` word alone: four digits (station, offset) or six (nose-radius set, station, offset); not a `T` inside a cycle block, not station `00` | every `T` word except `T0`: `T3`, `T="NAME"`, `T1=5` for spindle 1; never a `T` inside a string |
 | Axes | `X` `Z` `C` `Y`; `X` is a diameter, in incremental mode too. `U` and `W` are finish allowances, not incremental moves | `X` `Z` `C` `Y`; `X` is a diameter while diameter programming is on, which is how a program is assumed to start |
 | Program start / end | `O` plus up to four letters or digits, on a line of its own / `M02`, `M30`, and `RTS` for a subprogram | the `%_N_NAME_MPF` header or `PROC name` / `M30`, `M2`, and `M17` or `RET` for a subprogram |
-| Renumber defaults | start 10, step 10, no padding, at most 9999, restart at each `O` program, skip `$`, `%`, `O` and comment lines; a name such as `NLAP1` is never renumbered | start 10, step 10, no padding, at most 99999, restart at each program start, skip `%`, `;`, `PROC`, `DEF` and `EXTERN` lines; a label is never renumbered |
+| Renumber defaults | start 10, step 10, no padding, at most 9999 and then it stops, restart at each `O` program, skip `$`, `%`, `O` and comment lines; a name such as `NLAP1` is never renumbered | start 10, step 10, no padding, at most 99999 and then starting over, restart at each program start, skip `%`, `;`, `PROC`, `DEF` and `EXTERN` lines; a label is never renumbered |
 | Jumps that point at a block number | `GOTO N…`, `IF […] N…`, and a LAP call (`G85`–`G88`) whose shape starts at a numbered block | `GOTOF`, `GOTOB`, `GOTO` and `GOTOC` followed by `N…`; a jump to a label goes by its name |
-| Code help entries | 133 codes (36 not verified yet) and 28 addresses | 157 codes (106 not verified yet) and 20 addresses |
+| Code help entries | 145 codes (24 not verified yet) and 28 addresses | 176 codes (9 not verified yet) and 20 addresses |
+
+The extensions row is what the Open and Save As dialogs list for each dialect on Windows
+and Linux; which of them count in detection is under
+[Which dialect a file gets](#which-dialect-a-file-gets). The renumber defaults are what the
+Renumber dialog offers the first time. After that it opens with what you used last,
+whatever the dialect — see [transformations.md](transformations.md#renumber-blocks).
 
 "Not verified yet" means the project wrote the entry but has not been able to check it
 against the control's own documentation: the hover leaves it out and the completion list
-marks it (see [Code help](README.md#code-help)). On Sinumerik that is two entries in three,
-the drilling cycles among them, because much of what the profile was written from is
-general knowledge about the control rather than its manual. Treat the code help there as a
-head start, not as a reference.
+marks it (see [Code help](README.md#code-help)). On Okuma that is 24 entries, among them
+`G20`/`G21` and optional functions the manual only names; on Sinumerik it is nine:
+`CYCLE87`–`CYCLE89`, `CYCLE93`, `CYCLE97`, `G942`, `G952`, `M6` and `M19`.
 
-The decimal-point row says "by default" for the Fanuc and Sinumerik profiles because that
-one **is** a machine setting: choosing a machine changes it, in either direction. On Okuma
-the point never changes a value, but the machine's unit system decides what every number
-is worth — see [machines.md](machines.md).
+The decimal-point row says "by default" for the two Fanuc profiles because there it **is** a
+machine setting: choosing a machine changes it, in either direction. On Sinumerik it is
+not — the control's own language reads every number as written. On Okuma the point never
+changes a value, but the machine's unit system decides what every number is worth — see
+[machines.md](machines.md#okuma-the-unit-system-scales-every-number).
 
 The program map lists what each profile calls worth listing:
 
@@ -187,16 +193,16 @@ The program map lists what each profile calls worth listing:
   item, and a named block that ends the program (`NEND M02`) is listed as the end, with
   the name in its text;
 - for **Sinumerik**, the `%_N_…` header and `PROC`, labels, whole-line `;` comments (lines of
-  `-`, `*` or `=` left out), the text of every `MSG("…")`, subprogram and cycle calls,
+  `-`, `*`, `=` or `_` left out), the text of every `MSG("…")`, subprogram and cycle calls,
   `M0`/`M1` stops and the ends (`M30`, `M2`, `M17`, `RET`).
 
 Tool calls are in all of them.
 
-## The lathe profile
+## The Fanuc (ISO) lathe profile
 
-Turning programs get a profile of their own. It is a child of the mill profile — the same
-comments, the same block numbers, the same cleanups — and it changes the handful of things
-that are genuinely different about turning.
+Fanuc-style turning programs get a profile of their own. It is a child of the mill profile —
+the same comments, the same block numbers, the same cleanups — and it changes the handful
+of things that are genuinely different about turning.
 
 **The tool word changes the tool.** A turret lathe has no `M6`. The profile reads a `T` word
 as station plus offset: four digits are two and two (`T0101` is station 1, offset 01), three
@@ -206,27 +212,28 @@ cancels the offset rather than changing the tool, and is left out of the program
 `F7` tool-change navigation and out of the tool list.
 
 If your posts write a short `T` word whose last digit is an offset, this rule is wrong for
-your machine. It is data in the profile, so correcting it is a change to the profile and not
-to the program's code.
+your machine. It is part of the shipped profile and this version has no setting for it:
+tell the project.
 
-**Feed modes are `G98` and `G99`** (per minute and per revolution) in G-code system A, and
-`G94`/`G95` in system B. The speed clamp is `G50 S` in A and `G92 S` in B, and `G96`/`G97`
-switch constant surface speed on and off. All of this now reaches the feed and speed
-tracker, so the scaling scripts read a turning program correctly.
+**Feed modes and the speed clamp depend on the G-code system.** `G98`/`G99` (per minute and
+per revolution) and `G50 S` in system A, `G94`/`G95` and `G92 S` in system B; `G96`/`G97`
+switch constant surface speed on and off in both. Which system a program is read in is a
+machine setting — see [machines.md](machines.md#the-fanuc-lathe). The feed and speed
+scripts read a turning program by the same rules.
 
 **The multi-pass cycles point at block numbers.** `G70`–`G73` name the first and last block
 of the finishing profile with `P` and `Q`, and renumbering rewrites them — see
 [transformations.md](transformations.md#renumber-blocks).
 
-**Thread leads are protected, whichever system the file is read in.** In `G32`, `G76`,
-`G92` (system A) and `G33`, `G78` (system B) the `F` word is a lead rather than a feed
-rate. The hover says so, and the scaling script refuses those blocks and reports them;
-scaling one cuts a different thread. The refusal does not depend on gEdit having picked
-the right G-code system: a `G78` is left alone in system A too, where that number means
-nothing, and a `G92 … F` is left alone in system B, where it sets the coordinate system —
-in both cases the results panel says the code means a threading cycle somewhere else and
-asks you to check the block. The same holds for `G74`, which pecks a face on a lathe and
-cuts a left-hand thread on a mill.
+**Thread leads are protected, whichever system the file is read in.** In `G32`, `G33` and
+`G76`, in the tapping cycles `G84` and `G88`, and in `G92` (system A) or `G78` (system B),
+the `F` word is a lead rather than a feed rate. The hover says so, and the scaling script
+refuses those blocks and reports them; scaling one cuts a different thread. The refusal
+does not depend on gEdit having picked the right G-code system: a `G78` is left alone in
+system A too, and a `G92 … F` in system B, where it sets the coordinate system — in both
+cases the results panel says the code means a threading cycle somewhere else and asks you
+to check the block. The same holds for `G74`, which pecks a face on a lathe and taps a
+left-hand thread on a mill.
 
 **A speed clamp is not a speed.** `G50 S` (system A) and `G92 S` (system B) give the
 highest spindle speed a `G96` program may reach. gEdit reads the `S` of either block as a
@@ -240,7 +247,7 @@ constant-surface-speed program is what lets the spindle run away as the diameter
 until the program names one.
 
 **X is a diameter, and the G-code system is a machine setting.** Both of those belong to the
-control rather than the file: [machines.md](machines.md).
+control rather than the file: [machines.md](machines.md#the-fanuc-lathe).
 
 ## The Okuma OSP lathe profile
 
@@ -253,11 +260,9 @@ driven-tool cycles, comments, sequence names, block skip, `CALL`/`RTS` subprogra
 sequence *name*, a label a jump or a LAP call can point at. Both have to be followed by a
 space or a tab, and leading zeros count: `N0123` and `N123` are two different blocks. The
 program map lists every name, renumbering leaves names alone, and the highlighting colours
-them like section headings. **Remove Spaces keeps the space after a sequence number or name**
-— the control needs it — as well as the one after a control word such as `CALL` or `GOTO`
-and the spaces around `EQ`, `LT`, `AND` and the other comparison words. Whether the control
-accepts packed words anywhere else is not confirmed: the manual never shows any. Check a
-packed program before it goes to a machine.
+them like section headings. **Remove Spaces keeps the space after a sequence number or
+name**, which the control needs; what else it keeps, and why a packed program needs
+checking, is in [transformations.md](transformations.md#remove-spaces).
 
 **Block skip** is a `/` at the very start of the block or directly after the sequence
 number. The control has no numbered skip levels.
@@ -269,6 +274,10 @@ only switches the offset used at the cycle's end point, and station `00` is read
 neither is a tool change. Every other `T` word is an entry of its own — a repeat of the same
 station or a change of its offset included — because in CAM output each one starts a new
 operation, even when the turret does not move for it.
+
+On a two-turret machine the program map, `F7` and the tool list do not tell the turrets
+apart: `T0101` after `G13` and after `G14` are both station 1, and the tool list gives them
+one row.
 
 **Numbers depend on the machine's unit system.** An Okuma control can be set to read every
 number in micrometres, in hundredths of a millimetre or in millimetres, and **the decimal
@@ -289,7 +298,7 @@ twice:
 | `G80`–`G88` | the drilling cycles, and `G80`, which cancels them | LAP: the definition of a finished shape and its automatic roughing and finishing |
 | Drilling with a driven tool | `G83`–`G89`, cancelled by `G80` | `G181`–`G189`, cancelled by `G180` |
 | `G90`, `G91` | in G-code system A, `G90` is a turning cycle and `U`/`W` move incrementally | absolute and incremental positions; `X` stays a diameter |
-| `G20`, `G21` | inch and metric | a home-position return and the return for a tool change |
+| `G20`, `G21` | inch and metric | a home-position return and the return for a tool change (not verified yet) |
 | Dwell | `G04 X`, `U` or `P` | `G04 F`: the time is in `F` |
 | `U`, `W` | incremental `X` and `Z` | finish allowances in the cycles; incremental moves are written with `G91` |
 | Arc radius | `R` | `L` |
@@ -327,19 +336,20 @@ shape starts at a numbered block name a block by its number, and renumbering rew
 under the usual rules
 ([transformations.md](transformations.md#jumps-and-cycles-that-point-at-a-block-number)).
 A jump to a name — `GOTO NLOOP`, `G85 NLAP1` — needs nothing, because names are never
-renumbered. Sequence numbers are compared as they are written, so `N0020` and `N20` are
-two blocks: a jump follows the block written exactly like it and takes over exactly the
-text that block gets, even when only the zeros change (`IF [V1 EQ 5] N0020` becomes `… N20`
-when `N0020` becomes `N20`), and a jump whose zeros match no block is reported as missing.
+renumbered. Sequence numbers are compared as they are written, so `N0020` and `N20` are two
+blocks — see [Numbers or names](transformations.md#numbers-or-names).
 
 **Recognised, but not explained yet.** These are read and coloured correctly, and the code
 help either leaves them out or marks them as not verified:
 
-- the synchronization of two-turret machines (the `P` codes, `M100`); the turret selection
-  `G13`/`G14` is explained;
+- the synchronization of two-turret machines: `M100` and the other synchronization codes are
+  not described, and the `P` word only by name; the turret selection `G13`/`G14` is
+  explained;
 - `GET`, `PUT`, `READ`, `WRITE` and the system variables;
-- the Y axis and coordinate conversion, contour generation, and the spindle selection
-  codes of mill-turn machines;
+- Y-axis milling (the planes `G17`–`G19` are marked not verified), coordinate conversion,
+  contour generation, and the spindle selection codes `G140`–`G143` (not verified);
+- the G-code macro calls `G161`–`G171` and `G205`–`G214`: the map lists them as calls, and
+  the code help has no entry for them;
 - schedule programs (`.SDF`, `PSELECT`).
 
 M-codes the database does not describe are machine functions set up by the builder; they are
@@ -361,8 +371,10 @@ cover that `F` — posts write the code on the first line.
 **What it cannot tell apart.** A Fanuc system A program saved as `.MIN` opens as Okuma. Its
 `G76`, `G84`, `G88` and `G92` blocks are protected — those numbers cut a thread or a tap on
 a Fanuc lathe, so their `F` is left alone and reported — but everything else is read with
-this control's meanings: a `G71 P… Q…` as a thread cycle, `M98` as the tailstock. Set the
-dialect of such a file by hand.
+this control's meanings: a `G71 P… Q…` as a thread cycle, `M98` as the tailstock. A Fanuc
+mill program saved as `.MIN` is worse off: its `G74` tapping cycle reads as an Okuma face
+grooving cycle, so a feed script scales the tap's pitch. Set the dialect of such a file by
+hand.
 
 ## The Sinumerik 840D turning profile
 
@@ -401,18 +413,17 @@ written, capitals included, and a name made of digits is still a name: the tool 
 `M6` as well is set up by the machine builder, and this profile takes the turret answer;
 see [Milling on Okuma and Sinumerik](#milling-on-okuma-and-sinumerik) for the other one.
 
-**Numbers are read as written.** In the control's own language `X50` is 50 mm and `X50.` is
-50 mm too; there is no reading in increments. The profile therefore has one number reading,
-and a program has its values with no machine chosen. A program written for the control's ISO
-mode is Fanuc-style code; it opens with a Fanuc profile, and that profile has the increment
-readings.
+**Numbers are read as written.** In the control's own language `X50` and `X50.` are both
+50 mm; there is no reading in increments, so the profile has one number reading and a
+program has its values with no machine chosen
+([machines.md](machines.md#sinumerik-diameter-programming-and-the-rest)). A program written
+for the control's ISO mode is Fanuc-style code: read it with a Fanuc profile (set it by
+hand if the status bar says Sinumerik), which has the increment readings.
 
 **X is a diameter at the start of a program.** Diameter programming (`DIAMON`) is the
-documented default of this turning profile — a decision for turning programs, and not the
-control's own delivery state: out of the box the control starts in radius programming
-(`DIAMOF`), and the machine builder can change that, as turning machines are often set up
-with diameter programming on. A program's own `DIAMON`, `DIAMOF` and `DIAM90` switch it. A control that
-starts with it off is told so with a machine configuration — see
+documented default of this turning profile — a decision for turning programs, not the
+control's own delivery state. A program's own `DIAMON`, `DIAMOF` and `DIAM90` switch it, and
+a control that starts in radius programming is told so with a machine configuration — see
 [machines.md](machines.md#sinumerik-diameter-programming-and-the-rest).
 
 **The feed type and the spindle mode are one setting.** On this control `G94`, `G95`, `G96`
@@ -478,16 +489,12 @@ and keeps it.
 
 **Two cleanups to be careful with:**
 
-- **Remove Spaces** packs a program the way gEdit reads it: `N10 G18 G90` becomes
-  `N10G18G90`, and `N30 XNOW=62` becomes `N30XNOW=62`. The project's notes do not settle
-  whether the control reads packed words the same way — they call packing accepted for
-  single-letter addresses, and also warn that two words written together can turn into one
-  name. `N30XNOW=62` is exactly that case. Until it is confirmed on a real control, **do
-  not remove the spaces from a Sinumerik program that goes to a machine.**
-- **Remove Comments** treats a `;$PATH=…` line as the comment it is. Together with the
-  `%_N_…` header, which stays, that line tells the control which folder a program belongs
-  in when it is moved in the control's transfer format; keep it with "Keep comments in the
-  first lines" if your files travel that way.
+- **Remove Spaces** packs a program the way gEdit reads it, and whether the control reads it
+  the same way is not confirmed: **do not remove the spaces from a Sinumerik program that
+  goes to a machine** — see [transformations.md](transformations.md#remove-spaces).
+- **Remove Comments** removes the `;$PATH=…` line that the control's transfer format uses to
+  file a program in its folder; the `%_N_…` header stays. How to keep it:
+  [transformations.md](transformations.md#remove-comments).
 
 **Recognised, but not explained yet.** These are read and coloured correctly, and the code
 help either leaves them out or marks them as not verified:
@@ -506,19 +513,22 @@ help either leaves them out or marks them as not verified:
   special treatment; CAM output does not usually contain them.
 
 M-codes above 30 are set up by the machine builder and are never errors. Definition files
-(`.GUD`, `.DEF`, `.INI`), tool data and archives are not NC programs; open them as plain
-text.
+(`.GUD`, `.DEF`, `.INI`), tool data and archives are not NC programs. gEdit has no
+plain-text mode: such a file opens with whichever dialect scores highest, and its colours
+and code help mean nothing there.
 
 ## Milling on Okuma and Sinumerik
 
-The two profiles are for lathes, because the machines they were written for are lathes.
 A milling program for either control is not covered yet, and it helps to know what happens
 to one.
 
-**It opens with the turning profile.** A `.MPF` from a Siemens machining centre is a
-Sinumerik program, and nothing in gEdit offers a milling alternative. Most of it reads
-correctly — comments, strings, block numbers, labels, cycle calls and the highlighting —
-but three things are turning assumptions:
+**A Siemens milling program usually opens as Fanuc (ISO) mill.** The Sinumerik profile
+leaves every ordinary line that moves `Y` out of its score, so a program full of `X`/`Y`
+moves outscores its header, its `.MPF` extension and its `T="…"` words; only a short
+program stays Sinumerik. Read as Fanuc code, its `;` comments, quoted tool names and cycle
+calls come out as ISO words. Set the dialect to Sinumerik by hand — gEdit remembers it for
+the file. Read that way, most of it is right — comments, strings, block numbers, labels,
+cycle calls and the highlighting — but three things are turning assumptions:
 
 - **Every `T` word is a tool change.** A milling post often preselects the next tool right
   after the change (`T="DRILL_D8"` a few blocks after `M6`). The turning profile lists that
@@ -527,14 +537,18 @@ but three things are turning assumptions:
   feed per revolution.
 - The code help describes the codes the way a turning program uses them.
 
-For Sinumerik, a [machine configuration](machines.md) takes you part of the way: switch off
-the setting that makes `X` a diameter at power-on, and set the power-on plane to `G17` and the
-feed type to `G94`. The tool rule stays the turning one.
+For Sinumerik, once the dialect is set by hand, a [machine configuration](machines.md)
+takes you part of the way: switch off the setting that makes `X` a diameter at power-on,
+and set the power-on plane to `G17` and the feed type to `G94`. The tool rule stays the
+turning one.
 
-**On Okuma it is worse, and there is no workaround.** Okuma's machining-centre controls
-share the look of the lathe language but not the meaning of its codes. A milling program
-opened with the lathe profile gets lathe meanings for its G-codes; **do not trust the code
-help on it**.
+**On Okuma it is worse, and there is no workaround.** An Okuma milling program opens with
+the turning profile, because its extension decides. Okuma's machining-centre controls share
+the look of the lathe language but not the meaning of its codes: a milling program opened
+with the lathe profile gets lathe meanings for its G-codes — **do not trust the code help on
+it**. Its tool changes are not seen either: the lathe profile reads only a four- or
+six-digit `T` word as a tool change, so a shorter tool word (`T12` with `M6`) puts no tool
+in the map and no stop for `F7`.
 
 **A milling profile is a small child of the turning one.** When gEdit reads profiles from
 your own folder — not in this version, see [Writing your own profile](#writing-your-own-profile)
@@ -559,13 +573,14 @@ power-on plane and feed. Something like this:
       { "pattern": "(?<![A-Z0-9_$])G17(?![\\d.])", "weight": 3 },
       { "pattern": "(?<![A-Z0-9_$])MSG[ \\t]*\\(", "weight": 3 },
       { "pattern": "^;", "weight": 1 },
-      { "pattern": "^N\\d+", "weight": 1 }
+      { "pattern": "^N\\d+", "weight": 1 },
+      { "pattern": "^(?:N\\d+[ \\t]*)?[GM]\\d{1,3}(?![\\d.])", "weight": 1 },
+      { "pattern": "^(?:N\\d+[ \\t]*)?[XYZ][-+]?\\.?\\d", "weight": 1 }
     ]
   },
-  "addresses": { "axes": ["X", "Y", "Z", "A", "B", "C"], "diameter": [], "angular": ["A", "B", "C"] },
+  "addresses": { "axes": ["X", "Y", "Z", "A", "B", "C"], "diameter": [], "angular": ["A", "B", "C", "AR", "SF"] },
   "toolCall": {
     "trigger": "(?<![A-Z0-9_$])M0*6(?![\\d.]|\\s*=)",
-    "tool": "^(?:[^\"]*\"[^\"]*\")*[^\"]*?(?<![A-Z_$])T(?:\\s*=\\s*)?(?<tool>\\d+|\"[^\"]*\")",
     "toolFrom": "same-line-or-last"
   },
   "modal": { "initial": { "plane": "G17", "feedmode": "G94" } },
@@ -574,11 +589,16 @@ power-on plane and feed. Something like this:
 ```
 
 Everything it does not mention — comments, strings, labels, block numbers, the number
-presets, the code database — it takes from the turning profile. `M6` changes the tool, with
-the `T` word of the same block or the last one before it, so a preselected tool is no
-longer a change. The `detect` rules are restated in full, because a child's list replaces
-its parent's, and `M6` and `G17` are what make a milling program score higher here than
-with the turning profile.
+presets, the code database, the pattern that reads the tool number out of a `T` word — it
+takes from the turning profile. `M6` changes the tool, with the `T` word of the same block
+or the last one before it, so a preselected tool is no longer a change. A member that is an
+object, such as `addresses` or `toolCall`, is merged key by key; a list it writes replaces
+the parent's whole, which is why `angular` keeps `AR` and `SF`. The `detect` rules are
+restated in full for the same reason. `M6` and `G17` are what make a milling program score
+higher here than with the turning profile, and the last two rules count the lines that
+start with a `G`/`M` code or a move — the lines the turning profile leaves out when they
+move `Y`, and the ones the Fanuc mill profile counts. They look only at the start of a
+line, so a Klartext block (`12 L X+10`) does not count for them.
 
 An Okuma milling profile needs more than that: a code database of its own, because on those
 controls the same numbers mean different things. That waits for real milling programs to
