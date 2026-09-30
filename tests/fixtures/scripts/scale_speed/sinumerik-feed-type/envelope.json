@@ -1,0 +1,20 @@
+{
+  "message": "Scaled 2 of 5 spindle speeds to 80 %; 1 left as a speed limit, 2 left as a surface speed.",
+  "findings": [
+    {
+      "line": 6,
+      "severity": "info",
+      "message": "S200 is a surface speed (G96), so it is not scaled."
+    },
+    {
+      "line": 6,
+      "severity": "info",
+      "message": "LIMS=3000 is a spindle speed limit, so it is not scaled."
+    },
+    {
+      "line": 10,
+      "severity": "info",
+      "message": "S250 is a surface speed (G96), so it is not scaled."
+    }
+  ]
+}

@@ -307,6 +307,21 @@ describe('tool labels', () => {
     });
     expect(index('T01 M6\n', keepZeros).items()[0].text).toBe('T01');
   });
+
+  // G10 M8: with tool management a quoted value is a tool's name, and `T="007"` is not the
+  // magazine place `T7`. The name keeps its zeros, and its quotes because it is all digits,
+  // and it is never labelled by a header comment that describes tool 7.
+  it('keeps a quoted name apart from a tool number, digits and all', () => {
+    const text = '; T7 FACE MILL D63\nN160 T7 D1\nN170 G1 X40 F0.1\nN180 T="007" D1\nN190 T="ROUGH_80" D1\n';
+    const tools = index(text, compiled('sinumerik'))
+      .items()
+      .filter((item) => item.kind === 'tool');
+    expect(tools.map((item) => [item.tool, item.text])).toEqual([
+      ['7', 'T7 — FACE MILL D63'],
+      ['"007"', '"007"'],
+      ['"ROUGH_80"', 'ROUGH_80'],
+    ]);
+  });
 });
 
 describe('the tree and the segments', () => {

@@ -1,0 +1,20 @@
+{
+  "message": "Scaled 3 feed rates to 110 %; 1 dwell time left as written, 3 scaled without a limit check. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 11,
+      "severity": "warning",
+      "message": "F250 is scaled, but the feed limits were not applied to it: what it is worth depends on the machine (250 (Unit 1 mm: every number as written, point or not: X50 and X50. are both 50 mm, F0.25 is 0.25 mm/rev, G04 F2 waits 2 s), 0.25 (Unit 1 µm: every number scaled, point or not: X50 and X50. are both 0.05 mm, X50000 is 50 mm, F250 is 0.25 mm/rev, G04 F200 waits 2 s) or 2.5 (Unit 10 µm, metric only: every number scaled, point or not: X50 and X50. are both 0.5 mm, X0.1 is 0.001 mm, F25 is 0.25 mm/rev, G04 F20 waits 2 s)), and none is chosen."
+    },
+    {
+      "line": 14,
+      "severity": "warning",
+      "message": "F234.56 is scaled, but the feed limits were not applied to it: what it is worth depends on the machine (234.56 (Unit 1 mm: every number as written, point or not: X50 and X50. are both 50 mm, F0.25 is 0.25 mm/rev, G04 F2 waits 2 s), 0.23456 (Unit 1 µm: every number scaled, point or not: X50 and X50. are both 0.05 mm, X50000 is 50 mm, F250 is 0.25 mm/rev, G04 F200 waits 2 s) or 2.3456 (Unit 10 µm, metric only: every number scaled, point or not: X50 and X50. are both 0.5 mm, X0.1 is 0.001 mm, F25 is 0.25 mm/rev, G04 F20 waits 2 s)), and none is chosen."
+    },
+    {
+      "line": 15,
+      "severity": "warning",
+      "message": "F150 is scaled, but the feed limits were not applied to it: what it is worth depends on the machine (150 (Unit 1 mm: every number as written, point or not: X50 and X50. are both 50 mm, F0.25 is 0.25 mm/rev, G04 F2 waits 2 s), 0.15 (Unit 1 µm: every number scaled, point or not: X50 and X50. are both 0.05 mm, X50000 is 50 mm, F250 is 0.25 mm/rev, G04 F200 waits 2 s) or 1.5 (Unit 10 µm, metric only: every number scaled, point or not: X50 and X50. are both 0.5 mm, X0.1 is 0.001 mm, F25 is 0.25 mm/rev, G04 F20 waits 2 s)), and none is chosen."
+    }
+  ]
+}

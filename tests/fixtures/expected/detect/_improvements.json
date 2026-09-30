@@ -3,7 +3,12 @@
     "The detection results that moved from the M0 characterization (utils/detectLanguage.ts).",
     "Not a folder of fixtures: these are hand-written texts, so the file name starts with an",
     "underscore and the per-folder glob skips it.",
-    "Every fixture above answers exactly as it did at M0: only the cases below moved."
+    "Every fixture above answers exactly as it did at M0: only the cases below moved.",
+    "M8 (G10 review) adds the Okuma cases: an Okuma program under a Fanuc extension or under none at",
+    "all, which M0 read as Fanuc. The $NAME.MIN% header now decides wherever the file came from, and",
+    "the syntax only this control writes (a G71 thread cycle with H and D, a G77 tap with K, a line",
+    "that continues its block with $) outweighs the lines both lathes share. The Okuma fixtures",
+    "themselves are in okuma.json; these are the reviewer's own programs and two written for this case."
   ],
   "improvements": [
     {
@@ -26,6 +31,48 @@
       "text": "O123456\n",
       "m0": "fallback",
       "expected": "fanuc-gcode"
+    },
+    {
+      "case": "G10 M8: tests/fixtures/nc/okuma/o01-flange.MIN saved as .nc: its $O01-FLANGE.MIN% header decides",
+      "path": "/work/prog.nc",
+      "text": "$O01-FLANGE.MIN%\n(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)\nO1001\n(FLANGE D72 - OP1 - SIX AND FOUR DIGIT T WORDS ON PURPOSE)\nN1 (FACE AND OD ROUGH)\nG50 S2500\nG00 X600 Z400\nT010101\nG96 S180 M03 M42\nG00 X76 Z2 M08\nG95 G01 Z0.2 F0.25\nX-1.6\nG00 Z2\nX66\nG01 Z-40 F0.3\nX76\nG00 X600 Z400 M09\nN2 (OD FINISH)\nT030303\nG96 S220 M03\nG42 G00 X62 Z2 M08\nG01 Z0 F0.12\nX64 Z-1\nZ-40\nG40 G00 X76 Z2 M09\nG00 X600 Z400\nN3 (CENTRE DRILL)\nG97 S1500 M03\nT0202\nG00 X0 Z5 M08\nG74 X0 Z-12 D3 E0.5 F0.12 T0203\nG00 Z5 M09\nG00 X600 Z400\nN4 (FACE GROOVE)\nG97 S600 M03\nT0707\nG00 X56 Z3 M08\nG74 X44 Z-4 I4 D1 F0.05 T0708\nG00 Z5 M09\nG00 X600 Z400\nM05\nM02\n%\n",
+      "m0": "fanuc-gcode",
+      "expected": "okuma-osp"
+    },
+    {
+      "case": "G10 M8: the same program saved as .txt",
+      "path": "/work/prog.txt",
+      "text": "$O01-FLANGE.MIN%\n(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)\nO1001\n(FLANGE D72 - OP1 - SIX AND FOUR DIGIT T WORDS ON PURPOSE)\nN1 (FACE AND OD ROUGH)\nG50 S2500\nG00 X600 Z400\nT010101\nG96 S180 M03 M42\nG00 X76 Z2 M08\nG95 G01 Z0.2 F0.25\nX-1.6\nG00 Z2\nX66\nG01 Z-40 F0.3\nX76\nG00 X600 Z400 M09\nN2 (OD FINISH)\nT030303\nG96 S220 M03\nG42 G00 X62 Z2 M08\nG01 Z0 F0.12\nX64 Z-1\nZ-40\nG40 G00 X76 Z2 M09\nG00 X600 Z400\nN3 (CENTRE DRILL)\nG97 S1500 M03\nT0202\nG00 X0 Z5 M08\nG74 X0 Z-12 D3 E0.5 F0.12 T0203\nG00 Z5 M09\nG00 X600 Z400\nN4 (FACE GROOVE)\nG97 S600 M03\nT0707\nG00 X56 Z3 M08\nG74 X44 Z-4 I4 D1 F0.05 T0708\nG00 Z5 M09\nG00 X600 Z400\nM05\nM02\n%\n",
+      "m0": "fanuc-gcode",
+      "expected": "okuma-osp"
+    },
+    {
+      "case": "G10 M8: the same program saved without an extension",
+      "path": "/work/prog",
+      "text": "$O01-FLANGE.MIN%\n(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)\nO1001\n(FLANGE D72 - OP1 - SIX AND FOUR DIGIT T WORDS ON PURPOSE)\nN1 (FACE AND OD ROUGH)\nG50 S2500\nG00 X600 Z400\nT010101\nG96 S180 M03 M42\nG00 X76 Z2 M08\nG95 G01 Z0.2 F0.25\nX-1.6\nG00 Z2\nX66\nG01 Z-40 F0.3\nX76\nG00 X600 Z400 M09\nN2 (OD FINISH)\nT030303\nG96 S220 M03\nG42 G00 X62 Z2 M08\nG01 Z0 F0.12\nX64 Z-1\nZ-40\nG40 G00 X76 Z2 M09\nG00 X600 Z400\nN3 (CENTRE DRILL)\nG97 S1500 M03\nT0202\nG00 X0 Z5 M08\nG74 X0 Z-12 D3 E0.5 F0.12 T0203\nG00 Z5 M09\nG00 X600 Z400\nN4 (FACE GROOVE)\nG97 S600 M03\nT0707\nG00 X56 Z3 M08\nG74 X44 Z-4 I4 D1 F0.05 T0708\nG00 Z5 M09\nG00 X600 Z400\nM05\nM02\n%\n",
+      "m0": "fanuc-gcode",
+      "expected": "okuma-osp"
+    },
+    {
+      "case": "G10 M8, the reviewer's program: no header, four-digit T words, and a G71 thread cycle (H and D, no P) that only this control writes",
+      "path": "/work/okuma_noheader.txt",
+      "text": "(G10 REVIEW - SYNTHETIC, NOT FOR A MACHINE)\nN1 (OD ROUGH)\nG50 S2500\nG00 X600 Z400\nT0101\nG96 S180 M03\nG00 X76 Z2 M08\nG95 G01 Z0.2 F0.25\nX-1.6\nG00 Z2\nG01 X66 Z-40 F0.3\nG00 X600 Z400 M09\nN2 (THREAD)\nT0707\nG97 S800 M03\nG00 X34 Z8\nG71 X27.55 Z-30 B60 D0.7 U0.1 H2.45 F2 M32 M73\nG00 X600 Z400\nM02\n",
+      "m0": "fanuc-gcode",
+      "expected": "okuma-osp"
+    },
+    {
+      "case": "M8: no header and nothing Okuma but a G77 tap with a K approach, which a Fanuc lathe would read as a turning pass",
+      "path": "/work/tap.nc",
+      "text": "O0077\n(TAP M10X1.25 - SYNTHETIC)\nN1 (CENTRE DRILL)\nT0202\nG97 S1500 M03\nG00 X0 Z5 M08\nG74 X0 Z-12 D3 F0.12\nG00 X600 Z400 M09\nN2 (TAP)\nT0909\nG97 S300 M03\nG00 X0 Z10 M08\nG77 X0 Z-20 K5 F1.25\nG00 X600 Z400 M09\nM05\nM02\n%\n",
+      "m0": "fanuc-gcode",
+      "expected": "okuma-osp"
+    },
+    {
+      "case": "M8: a thread block continued on a line that starts with $, which only this control writes",
+      "path": "/work/thread.nc",
+      "text": "O0101\n(THREAD WITH A CONTINUED BLOCK - SYNTHETIC)\nN1 (THREAD)\nT0707\nG97 S800 M03\nG00 X34 Z8 M08\nN001 G71 X27.55 Z-30 B60 D0.7 U0.1\n$ H2.45 L2 F2 M23 M32 M73\nG00 X600 Z400 M09\nM02\n%\n",
+      "m0": "fanuc-gcode",
+      "expected": "okuma-osp"
     }
   ]
 }

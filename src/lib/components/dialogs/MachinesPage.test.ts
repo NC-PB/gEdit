@@ -314,7 +314,12 @@ describe('while the machines file could not be read', () => {
 describe('Add', () => {
   it('offers exactly the dialects that declare machine parameters', () => {
     const choices = profileChoices(deps);
-    expect(choices.map((choice) => choice.value)).toEqual(['fanuc-gcode', 'fanuc-lathe']);
+    expect(choices.map((choice) => choice.value)).toEqual([
+      'fanuc-gcode',
+      'fanuc-lathe',
+      'okuma-osp',
+      'sinumerik',
+    ]);
     const field = profileField(deps)[0];
     expect(field.id).toBe(FIELD_PROFILE);
     expect(field.type).toBe('choice');

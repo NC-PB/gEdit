@@ -269,11 +269,11 @@ describe('the mill and the lathe against each other', () => {
   it('claims the same extensions as the mill', () => {
     // `detect.extensions` is an object, and objects merge key by key (AD-16), so the
     // extension list the lathe file restates **adds** to the mill's rather than replacing
-    // it: `min` is inherited and stays until M8 hands it to Okuma (F22). It costs
-    // nothing — a `.min` file scores the same 2 on both Fanuc profiles and the tie goes
-    // to the mill — but it is worth knowing before somebody reads §8.1 as a removal.
+    // it. That is why dropping `min` from the mill in M8 (F22) dropped it from the lathe
+    // too, and why a `.MIN` file now reaches the Okuma profile instead of either of them.
     expect(compiled(LATHE).profile.detect.extensions).toEqual(compiled(MILL).profile.detect.extensions);
-    expect(detectProfile(BUILTINS, '/work/a.min', '', KLARTEXT)).toBe(MILL);
+    expect(compiled(LATHE).profile.detect.extensions.min).toBeUndefined();
+    expect(detectProfile(BUILTINS, '/work/a.min', '', KLARTEXT)).toBe('okuma-osp');
   });
 });
 

@@ -1,0 +1,10 @@
+{
+  "message": "Scaled 1 spindle speed to 80 %; 1 thread block to check by hand.",
+  "findings": [
+    {
+      "line": 9,
+      "severity": "warning",
+      "message": "This thread block (CYCLE840) runs at S500, which was scaled on line 7: the feed follows from the speed and the pitch, so check this block by hand."
+    }
+  ]
+}

@@ -46,6 +46,18 @@
 // every caller reports rather than guesses (the standing rule of §5 M6: refuse, do not
 // guess). The same goes for a value longer than [`MAX_TARGET_DIGITS`], which no control
 // takes as a block number and which JavaScript can no longer hold exactly.
+//
+// ## Numbers or names (M8)
+//
+// A Fanuc control reads a block number as a number: `N0100` and `N100` are the same
+// block, and `GOTO 0100` finds it however it is written. A control whose sequence numbers
+// are **names** (`syntax.sequenceNames`, Okuma) compares them as the text they are
+// written in, so `N0100` and `N100` are two different blocks and `GOTO N0100` finds only
+// the first (syntax-okuma.md §3.1). [`BlockKey`] is how a block is told apart on each kind
+// of control, and everything that looks a target up — the index of a program, the
+// question "is this number still unique after the run" — looks it up by that key.
+// Resolving an Okuma jump by its value sent `IF [V1 EQ 5] N0020` to a block `N20` it never
+// named, and renumbering then wrote a jump to a block that no longer existed (G10 M8).
 
 import { tokenizeLine } from '$lib/core/nc/tokenizer';
 import { documentOf } from './fragment';
@@ -56,6 +68,34 @@ import type { TransformContext } from './types';
 
 /** Digits a block number may have before this module refuses to read it as one. */
 export const MAX_TARGET_DIGITS = 9;
+
+/**
+ * What tells two blocks apart: the number (`100` for both `N100` and `N0100`) on a control
+ * that reads block numbers as numbers, the digits as written (`'0100'`) on one whose
+ * sequence numbers are names. A program is indexed by one kind only, so a number and a
+ * string never meet in the same map.
+ */
+export type BlockKey = number | string;
+
+/**
+ * True when the dialect compares its sequence numbers as text (`syntax.sequenceNames`,
+ * Okuma: `N0123` and `N123` are two names). Every other dialect compares them as numbers.
+ */
+export function comparesByText(cp: CompiledProfile): boolean {
+  return cp.profile.syntax?.sequenceNames === true;
+}
+
+/**
+ * The key of a block number or a reference value, or null when the text is not one.
+ *
+ * `text` is the digits without the address. On a dialect that compares by text the key
+ * is that text exactly, zero padding included; elsewhere it is the number it spells.
+ */
+export function blockKeyOf(text: string, byText: boolean): BlockKey | null {
+  const target = targetOf(text);
+  if (target === null) return null;
+  return byText ? text : target;
+}
 
 /**
  * The line with its comments blanked out, same length and same offsets.
@@ -104,6 +144,12 @@ export interface ReferenceWord {
   text: string;
   /** The block number it names, or null when the value is not a plain block number. */
   target: number | null;
+  /**
+   * The block it names as the dialect tells blocks apart ([`BlockKey`]): `target` itself,
+   * or the digits exactly as written where sequence numbers are names. Null exactly when
+   * `target` is.
+   */
+  key: BlockKey | null;
   /** False when a rule that fires on this word says `rewrite: false` (`M99 P`, F42). */
   rewrite: boolean;
   /**
@@ -165,6 +211,7 @@ export function referencesOn(tokens: NcToken[], line: string, cp: CompiledProfil
   if (carried === null) return [];
 
   const masked = maskedOf(line, tokens);
+  const byText = comparesByText(cp);
   // Which addresses this block carries more than once: a rule fires on the line, so it
   // cannot say which of two `Q` words it means (see `ReferenceWord.ambiguous`).
   const seen = new Set<string>();
@@ -185,7 +232,16 @@ export function referencesOn(tokens: NcToken[], line: string, cp: CompiledProfil
       if (!ruleRewrites(cp, i)) rewrite = false;
     }
     if (!fired) continue;
-    found.push({ address, start, end, text, target: targetOf(text), rewrite, ambiguous: twice.has(address) });
+    found.push({
+      address,
+      start,
+      end,
+      text,
+      target: targetOf(text),
+      key: blockKeyOf(text, byText),
+      rewrite,
+      ambiguous: twice.has(address),
+    });
   }
   return found;
 }
@@ -228,16 +284,20 @@ export interface ProgramScan {
   /** The program each row belongs to: `segments[segmentOf[row]]`. */
   segmentOf: Int32Array;
   /**
-   * The block number each row carries, or -1. The same information as `segments` read the
-   * other way round, and the only way to ask what the numbering looks like **after** a run
-   * that rewrites it: a renumber that wraps hands numbers out twice, and a reference must
-   * not be rewritten with a value that is no longer unique (G8 M6).
-   *
-   * A block number has at most [`MAX_TARGET_DIGITS`] digits, which fits an `Int32Array`.
+   * True when the dialect tells its blocks apart by the text of the sequence number
+   * ([`comparesByText`]), so every key below is a string; numbers otherwise.
    */
-  numbers: Int32Array;
-  /** Per program: block number → where it stands. */
-  segments: Map<number, NumberSite>[];
+  byText: boolean;
+  /**
+   * The key of the block number each row carries ([`BlockKey`]), or null. The same
+   * information as `segments` read the other way round, and the only way to ask what the
+   * numbering looks like **after** a run that rewrites it: a renumber that wraps hands
+   * numbers out twice, and a reference must not be rewritten with a value that is no longer
+   * unique (G8 M6).
+   */
+  keys: (BlockKey | null)[];
+  /** Per program: block key → where it stands. */
+  segments: Map<BlockKey, NumberSite>[];
 }
 
 const NO_SCAN: ProgramScan = {
@@ -248,15 +308,16 @@ const NO_SCAN: ProgramScan = {
   count: 0,
   first: 0,
   segmentOf: new Int32Array(0),
-  numbers: new Int32Array(0),
+  byText: false,
+  keys: [],
   segments: [],
 };
 
-/** The block number a line carries, or null; read from the tokens, never from the text. */
-function blockNumberOfTokens(tokens: NcToken[]): number | null {
+/** The key of the block number a line carries, or null; read from the tokens, never from the text. */
+function blockKeyOfTokens(tokens: NcToken[], byText: boolean): BlockKey | null {
   for (const token of tokens) {
     if (token.kind !== 'blockNumber') continue;
-    return token.valueText === undefined ? null : targetOf(token.valueText);
+    return token.valueText === undefined ? null : blockKeyOf(token.valueText, byText);
   }
   return null;
 }
@@ -271,6 +332,9 @@ function blockNumberOfTokens(tokens: NcToken[]): number | null {
  * one ambiguous one. (`M99 P` is the exception that proves it: it names a block of the
  * *caller*, which is why its rule is `rewrite: false` and nothing here tries to resolve
  * it.)
+ *
+ * Blocks are indexed by their [`BlockKey`], so on a dialect whose sequence numbers are
+ * names `N0100` and `N100` are two entries, and a jump to one never finds the other.
  */
 export function scanProgram(lines: readonly string[], ctx: TransformContext): ProgramScan {
   if (ctx.cp.re.references.length === 0) return NO_SCAN;
@@ -285,9 +349,10 @@ export function scanProgram(lines: readonly string[], ctx: TransformContext): Pr
   const unchecked = document === null && ctx.firstLine > 1;
 
   const addresses = referenceAddresses(cp);
+  const byText = comparesByText(cp);
   const segmentOf = new Int32Array(scanned.length);
-  const numbers = new Int32Array(scanned.length).fill(-1);
-  const segments: Map<number, NumberSite>[] = [new Map()];
+  const keys: (BlockKey | null)[] = new Array<BlockKey | null>(scanned.length).fill(null);
+  const segments: Map<BlockKey, NumberSite>[] = [new Map()];
   const found: FoundReference[] = [];
   let segment = 0;
   let count = 0;
@@ -308,11 +373,11 @@ export function scanProgram(lines: readonly string[], ctx: TransformContext): Pr
     }
     segmentOf[row] = segment;
 
-    const number = blockNumberOfTokens(tokens);
-    if (number !== null) {
-      numbers[row] = number;
-      const site = segments[segment].get(number);
-      if (site === undefined) segments[segment].set(number, { count: 1, row, lastRow: row });
+    const key = blockKeyOfTokens(tokens, byText);
+    if (key !== null) {
+      keys[row] = key;
+      const site = segments[segment].get(key);
+      if (site === undefined) segments[segment].set(key, { count: 1, row, lastRow: row });
       else {
         site.count++;
         site.lastRow = row;
@@ -326,7 +391,7 @@ export function scanProgram(lines: readonly string[], ctx: TransformContext): Pr
     if (first === 0) first = firstLine + row;
   }
 
-  return { scanned, firstLine, unchecked, found, count, first, segmentOf, numbers, segments };
+  return { scanned, firstLine, unchecked, found, count, first, segmentOf, byText, keys, segments };
 }
 
 /**

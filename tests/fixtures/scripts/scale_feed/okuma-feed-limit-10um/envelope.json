@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 3 feed rates to 110 %; 2 clamped to a limit, 1 dwell time left as written. Machine 'Lathe 4'.",
+  "findings": [
+    {
+      "line": 11,
+      "severity": "info",
+      "message": "F25 would become 28; the largest feed (0.2) was used instead, written as 20."
+    },
+    {
+      "line": 14,
+      "severity": "info",
+      "message": "F23.456 would become 25.802; the largest feed (0.2) was used instead, written as 20.000."
+    }
+  ]
+}

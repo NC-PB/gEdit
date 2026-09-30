@@ -1,0 +1,16 @@
+{
+  "profile": "sinumerik",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":2,"text":"PACKED WORDS, BLOCK SKIPS, LOWER CASE AND EVERY FORM OF THE T WORD"},
+    {"kind":"comment","line":5,"text":"T1 ROUGH"},
+    {"kind":"tool","line":6,"text":"T1 — ROUGH","tool":"1","endLine":13},
+      {"kind":"comment","line":13,"text":"T12 FINISH"},
+    {"kind":"tool","line":14,"text":"T12 — FINISH","tool":"12","endLine":20},
+      {"kind":"stop","line":18,"text":"M0"},
+      {"kind":"stop","line":19,"text":"M1"},
+    {"kind":"tool","line":21,"text":"T5","tool":"5","endLine":26},
+    {"kind":"tool","line":27,"text":"PARTOFF","tool":"\"PARTOFF\"","endLine":35},
+      {"kind":"end","line":34,"text":"M30"}
+  ]
+}

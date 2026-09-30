@@ -1,0 +1,25 @@
+{
+  "message": "Scaled 1 of 5 feed rates to 80 %; 4 left in another feed mode. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 7,
+      "severity": "info",
+      "message": "F0.25 is a feed per revolution (G96), so it is not scaled."
+    },
+    {
+      "line": 8,
+      "severity": "info",
+      "message": "F0.3 is a feed per revolution (G96), so it is not scaled."
+    },
+    {
+      "line": 11,
+      "severity": "info",
+      "message": "F0.12 is a feed per revolution (G95), so it is not scaled."
+    },
+    {
+      "line": 13,
+      "severity": "info",
+      "message": "F0.1 is a feed per revolution (G95), so it is not scaled."
+    }
+  ]
+}

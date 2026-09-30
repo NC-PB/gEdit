@@ -15,7 +15,10 @@ import type { EffectiveMachine, MachineConfig } from '$lib/core/machines/types';
 const withFilters = createProfileRegistry({ filtersSupported: true });
 const noFilters = createProfileRegistry({ filtersSupported: false });
 
-const FANUC_EXTENSIONS = ['nc', 'tap', 'cnc', 'eia', 'iso', 'min', 'ncc', 'ptp', 'txt'];
+// M8: `min` moved to the Okuma profile (F22).
+const FANUC_EXTENSIONS = ['nc', 'tap', 'cnc', 'eia', 'iso', 'ncc', 'ptp', 'txt'];
+const OKUMA_EXTENSIONS = ['min', 'sub', 'ssb'];
+const SINUMERIK_EXTENSIONS = ['mpf', 'spf'];
 
 /** A registry over hand-written sources, with the problems it reported. */
 function registryOver(sources: readonly unknown[], defaultProfileId?: () => string) {
@@ -40,6 +43,8 @@ describe('the profile list', () => {
       'fanuc-gcode',
       'fanuc-lathe',
       'heidenhain-klartext',
+      'okuma-osp',
+      'sinumerik',
     ]);
     expect(withFilters.defaultId()).toBe('fanuc-gcode');
     expect(get(withFilters.all)).toEqual(withFilters.list());
@@ -112,7 +117,7 @@ describe('the default profile', () => {
 
 describe('loading', () => {
   it('skips a profile that does not validate and says which field is wrong', () => {
-    const { registry, problems } = registryOver([fanucWith({ id: 'broken', grammar: 'sinumerik' }), fanucJson]);
+    const { registry, problems } = registryOver([fanucWith({ id: 'broken', grammar: 'conversational' }), fanucJson]);
     expect(registry.list().map((p) => p.id)).toEqual(['fanuc-gcode']);
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain('broken was not loaded');
@@ -153,7 +158,8 @@ describe('detect', () => {
   it('scores the extension together with the content (AD-11)', () => {
     expect(withFilters.detect('/nc/a.h', klartext, 'fanuc-gcode')).toBe('heidenhain-klartext');
     expect(withFilters.detect('/nc/a.nc', fanuc, 'heidenhain-klartext')).toBe('fanuc-gcode');
-    expect(withFilters.detect('/nc/a.min', '', 'heidenhain-klartext')).toBe('fanuc-gcode');
+    // M8: `.min` is the Okuma main-program extension (F22).
+    expect(withFilters.detect('/nc/a.min', '', 'heidenhain-klartext')).toBe('okuma-osp');
   });
 
   // The M1 behaviour change: the extension is a weight, not a verdict. The full list of
@@ -187,7 +193,10 @@ describe('dialog filters', () => {
 
   it('offers one NC filter over every extension, plus All files', () => {
     expect(withFilters.openFilters()).toEqual([
-      { name: t('profiles.filterNc'), extensions: [...FANUC_EXTENSIONS, 'h'] },
+      {
+        name: t('profiles.filterNc'),
+        extensions: [...FANUC_EXTENSIONS, 'h', ...OKUMA_EXTENSIONS, ...SINUMERIK_EXTENSIONS],
+      },
       { name: t('profiles.filterAll'), extensions: ['*'] },
     ]);
   });
@@ -197,6 +206,8 @@ describe('dialog filters', () => {
       { name: 'Heidenhain Klartext', extensions: ['h'] },
       { name: 'Fanuc G-Code', extensions: FANUC_EXTENSIONS },
       { name: 'Fanuc lathe G-Code', extensions: FANUC_EXTENSIONS },
+      { name: 'Okuma OSP', extensions: OKUMA_EXTENSIONS },
+      { name: 'Sinumerik', extensions: SINUMERIK_EXTENSIONS },
       { name: t('profiles.filterAll'), extensions: ['*'] },
     ]);
   });
@@ -206,6 +217,8 @@ describe('dialog filters', () => {
       'Fanuc G-Code',
       'Fanuc lathe G-Code',
       'Heidenhain Klartext',
+      'Okuma OSP',
+      'Sinumerik',
       t('profiles.filterAll'),
     ]);
   });

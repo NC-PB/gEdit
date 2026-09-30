@@ -22,6 +22,9 @@ const LETTER_NUMBER = /^[A-Z]+\d/;
 /** A Klartext parameter word as the tokenizer hands it over: `Q200`, `QL5`, `QS3`. */
 const Q_PARAMETER = /^(Q[LRS]?)\d+$/;
 
+/** An address with a numeric extension in front of `=`: `S3`, `M1`, `T2` (P8). */
+const EXTENDED_ADDRESS = /^([A-Z_]+?)(\d+)$/;
+
 /**
  * Groups whose entries are words rather than `letter + number` codes but may still stand
  * in the middle of a block, so completion keeps offering them there: the Klartext radius
@@ -121,6 +124,16 @@ function lookupAddress(db: CodeDb, address: string): CodeLookup['address'] {
 }
 
 /**
+ * True for a word written with `=` behind its address (P8, AD-24 `syntax.assignment`):
+ * `SB=1200`, `CR=15`, `S3=2400`, `M3=3`, `T="DRILL"`. Its `valueText` is the right-hand
+ * side, so the address and the value are not one code spelled together.
+ */
+export function isAssignmentWord(token: NcToken): boolean {
+  if (token.kind !== 'word' || token.address === undefined) return false;
+  return /^\s*=/.test(token.text.slice(token.address.length));
+}
+
+/**
  * What the database knows about one token of a block.
  *
  * `null` means "nothing to say about this kind of token" — a comment, a string, a
@@ -130,17 +143,24 @@ function lookupAddress(db: CodeDb, address: string): CodeLookup['address'] {
  *
  * A multi-word Klartext code (`CYCL DEF 200`) reaches the database as the keyword token
  * `CYCL DEF`; the caller joins it with the number that follows and asks `lookupCode`.
+ *
+ * P8: a `call` (`CYCLE83(…)`, `MSG("…")`) is asked about by its name, like a keyword. An
+ * assignment word with a numeric extension on its address (`M3=3`, `S3=2400`, `T1=4`)
+ * names the spindle or holder in the extension and the code in the value: `M3=3` is `M3`
+ * for spindle 3, never a code `M33`, and `S3=` is the `S` address.
  */
 export function lookupWord(db: CodeDb, token: NcToken): CodeLookup | null {
-  if (token.kind === 'keyword') {
+  if (token.kind === 'keyword' || token.kind === 'call') {
     const entry = lookupCode(db, token.address ?? token.text);
     return entry ? { entry } : { entry: null, unknown: true };
   }
   if (token.kind !== 'word') return null;
 
   const address = token.address ?? '';
-  const entry = lookupCode(db, address + (token.valueText ?? ''));
-  const info = lookupAddress(db, address);
+  const extended = isAssignmentWord(token) ? EXTENDED_ADDRESS.exec(address) : null;
+  const base = extended ? extended[1] : address;
+  const entry = lookupCode(db, base + (token.valueText ?? ''));
+  const info = lookupAddress(db, address) ?? (extended ? lookupAddress(db, base) : undefined);
   if (entry) return info ? { entry, address: info } : { entry };
   if (info) return { entry: null, address: info };
   return { entry: null, unknown: true };

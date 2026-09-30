@@ -377,7 +377,7 @@ describe('lifecycle', () => {
 
   it('classifies nothing when the profile id is unknown', () => {
     const h = harness();
-    const id = h.add(PROGRAM, 'okuma-osp');
+    const id = h.add(PROGRAM, 'no-such-profile');
     h.flush();
     expect(get(h.outline.items(id))).toEqual([]);
     expect(h.outline.itemAt(id, 3)).toBeNull();

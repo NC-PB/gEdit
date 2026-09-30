@@ -1,0 +1,363 @@
+{
+  "addresses": {
+    "angular": [
+      "C",
+      "AR",
+      "SF"
+    ],
+    "arcCenter": [
+      "I",
+      "J",
+      "K"
+    ],
+    "arcCenterMode": "incremental",
+    "axes": [
+      "X",
+      "Z",
+      "C",
+      "Y"
+    ],
+    "diameter": [
+      "X"
+    ],
+    "feed": "F",
+    "speedLimitWords": [
+      "LIMS"
+    ],
+    "spindle": "S",
+    "tool": "T"
+  },
+  "codes": "sinumerik",
+  "detect": {
+    "content": [
+      {
+        "pattern": "^%_N_\\w+_(?:MPF|SPF)",
+        "weight": 8
+      },
+      {
+        "pattern": "^;\\$PATH=",
+        "weight": 6
+      },
+      {
+        "pattern": "(?<![A-Z0-9_$])CYCLE\\d+[ \\t]*\\(",
+        "weight": 4
+      },
+      {
+        "pattern": "(?<![A-Z0-9_$])T\\d*[ \\t]*=[ \\t]*\"",
+        "weight": 4
+      },
+      {
+        "pattern": "(?<![A-Z0-9_$])LIMS[ \\t]*=",
+        "weight": 4
+      },
+      {
+        "pattern": "(?<![A-Z0-9_$])DIAM(?:ON|OF|90)(?![A-Z0-9_])",
+        "weight": 4
+      },
+      {
+        "pattern": "(?<![A-Z0-9_$])G0*9[67](?![\\d.])",
+        "weight": 4
+      },
+      {
+        "pattern": "(?<![A-Z0-9_$])MSG[ \\t]*\\(",
+        "weight": 3
+      },
+      {
+        "pattern": "(?<![A-Z0-9_$])GOTO[FB](?![A-Z0-9_])",
+        "weight": 3
+      },
+      {
+        "pattern": "(?<![A-Z0-9_$])DEF[ \\t]+(?:REAL|INT)(?![A-Z0-9_])",
+        "weight": 3
+      },
+      {
+        "pattern": "(?<![A-Z0-9_$])[MST]\\d+[ \\t]*=",
+        "weight": 3
+      },
+      {
+        "pattern": "(?<![A-Z0-9_$])G0*64[0-9](?![\\d.])",
+        "weight": 2
+      },
+      {
+        "pattern": "^;",
+        "weight": 1
+      },
+      {
+        "pattern": "^(?![^;]*(?<![A-Z_$])Y)N\\d+",
+        "weight": 1
+      },
+      {
+        "pattern": "^(?![^;]*(?<![A-Z_$])Y)(?:N\\d+[ \\t]*)?[GM]\\d{1,3}(?![\\d.])",
+        "weight": 1
+      }
+    ],
+    "extensions": {
+      "mpf": 8,
+      "spf": 8
+    },
+    "priority": 0
+  },
+  "files": {
+    "defaultExtension": "mpf",
+    "encoding": "keep",
+    "extensions": [
+      "mpf",
+      "spf"
+    ],
+    "filterName": "Sinumerik",
+    "lineEnding": "keep",
+    "newFileLineEnding": "lf"
+  },
+  "grammar": "sinumerik",
+  "id": "sinumerik",
+  "machineParams": {
+    "diameter": "on",
+    "modalGroups": [
+      "feedmode",
+      "plane",
+      "distance"
+    ],
+    "numberInput": {
+      "default": "calculator",
+      "presets": [
+        {
+          "id": "calculator",
+          "label": "As written, the only reading in Siemens mode: X50 and X50. are both 50 mm, F0.2 is 0.2 mm/rev, G4 F2 waits 2 s",
+          "source": "syntax-sinumerik.md §3.3",
+          "value": {
+            "incrementDeg": "1",
+            "incrementInch": "1",
+            "incrementMm": "1",
+            "incrementSec": "1",
+            "mode": "calculator"
+          }
+        }
+      ]
+    },
+    "units": "mm"
+  },
+  "machineType": "lathe",
+  "modal": {
+    "initial": {
+      "feedmode": "G95",
+      "plane": "G18"
+    }
+  },
+  "name": "Sinumerik 840D (turning)",
+  "numbering": {
+    "digits": 0,
+    "max": 99999,
+    "mode": "free",
+    "onOverflow": "wrap",
+    "references": [
+      {
+        "addresses": [
+          "N"
+        ],
+        "trigger": "(?<![A-Z_])GOTO[FBC]?(?![A-Z0-9_])"
+      }
+    ],
+    "restartAtProgramStart": true,
+    "skipEmpty": true,
+    "skipStartingWith": [
+      "%",
+      ";",
+      "PROC",
+      "DEF",
+      "EXTERN"
+    ],
+    "spacesAfter": 1,
+    "start": 10,
+    "step": 10
+  },
+  "outline": [
+    {
+      "kind": "program",
+      "pattern": "^%_N_(?<name>\\w+)_(?:MPF|SPF)"
+    },
+    {
+      "kind": "program",
+      "pattern": "^\\s*(?:N\\d+[ \\t]+)?PROC[ \\t]+(?<name>[A-Z_][A-Z0-9_]*)"
+    },
+    {
+      "kind": "end",
+      "pattern": "^\\s*(?:/\\d?[ \\t]*)?(?:N\\d+[ \\t]+)?(?<text>[A-Z_][A-Z0-9_]*:(?!=).*?(?<![A-Z_])(?:M0*(?:2|30|17)(?![\\d.]|\\s*=)|RET(?![A-Z0-9_])))"
+    },
+    {
+      "kind": "label",
+      "pattern": "^\\s*(?:/\\d?\\s*)?(?:N\\d+[ \\t]+)?(?<text>[A-Z_][A-Z0-9_]*):(?!=)"
+    },
+    {
+      "kind": "comment",
+      "pattern": "^\\s*;(?![-*=_\\s]*$)(?<text>.*)$"
+    },
+    {
+      "kind": "comment",
+      "pattern": "(?<![A-Z_])MSG\\s*\\(\\s*\"(?<text>[^\"]*)\"\\s*\\)"
+    },
+    {
+      "kind": "subprogram-call",
+      "pattern": "^\\s*(?:/\\d?[ \\t]*)?(?:N\\d+[ \\t]+)?(?:MCALL[ \\t]+)?(?!(?:AC|IC|DC|ACP|ACN|MSG|IF|WHILE|FOR|CASE|UNTIL|REPEATB|REPEAT|LOOP|GOTOF|GOTOB|GOTOC|GOTO|DEF|SETMS|SETM|CLEARM|WAITMC|WAITM|WAITE|TRAORI|TRANSMIT|TRACYL|TRAANG|EXTCALL|CALLPATH)[ \\t]*\\()(?<text>[A-Z_][A-Z0-9_]*(?=\\()|[A-Z_]{2}[A-Z0-9_]*(?=[ \\t]+\\())[ \\t]*\\("
+    },
+    {
+      "kind": "subprogram-call",
+      "pattern": "(?<![A-Z_])(?<text>EXTCALL(?:[ \\t]*\\([ \\t]*(?:\"[^\"]*\"|[A-Z_][A-Z0-9_]*)[ \\t]*\\)|[ \\t]+\"[^\"]*\")|(?:PCALL|ISOCALL|CALL)(?:[ \\t]+(?:\"[^\"]*\"|[A-Z0-9_/]+)|[ \\t]*/[A-Z0-9_/]+)|L\\d+(?![\\d.]))"
+    },
+    {
+      "kind": "subprogram-call",
+      "pattern": "^\\s*(?:/\\d?[ \\t]*)?(?:N\\d+[ \\t]+)?(?=[A-Z_]*[0-9_]|[A-Z_][A-Z0-9_]*[ \\t]+P\\d)(?!(?:CUT3DC|DIAM90|B_AND|B_NOT|B_XOR|CUT2D|B_OR|CUT2DF|CUT3DFS|CUT3DFF|CUT3DF|CDOF2|ORIRPY2|WALCS\\d+)(?![A-Z0-9_]))(?<text>(?:[A-Z]{2}|_[A-Z])[A-Z0-9_]*(?:[ \\t]+P\\d+)?)[ \\t]*$"
+    },
+    {
+      "kind": "stop",
+      "pattern": "(?<![A-Z_])M0*[01](?![\\d.]|\\s*=)"
+    },
+    {
+      "kind": "end",
+      "pattern": "(?<![A-Z_])(?:M0*(?:2|30|17)(?![\\d.]|\\s*=)|RET(?![A-Z0-9_]))"
+    }
+  ],
+  "program": {
+    "end": [
+      "(?<![A-Z_])M0*(?:2|30|17)(?![\\d.]|\\s*=)",
+      "(?<![A-Z_])RET(?![A-Z0-9_])"
+    ],
+    "start": [
+      "^%_N_(?<name>\\w+)_(?:MPF|SPF)",
+      "^\\s*(?:N\\d+[ \\t]+)?PROC[ \\t]+(?<name>[A-Z_][A-Z0-9_]*)"
+    ]
+  },
+  "shortName": "Sinumerik",
+  "syntax": {
+    "assignment": "[A-Z_][A-Z0-9_]*(?=\\s*=(?!=))",
+    "blockNumber": {
+      "altPrefixes": [],
+      "mandatory": false,
+      "mode": "prefix",
+      "prefix": "N"
+    },
+    "blockSkip": {
+      "chars": "/",
+      "levels": true,
+      "position": "before-number"
+    },
+    "calls": true,
+    "comments": [
+      {
+        "end": null,
+        "start": ";"
+      }
+    ],
+    "decimalPointSignificant": false,
+    "decimalSeparator": ".",
+    "header": "^%_N_\\w+_(?:MPF|SPF)",
+    "keywords": [
+      "IF",
+      "ELSE",
+      "ENDIF",
+      "WHILE",
+      "ENDWHILE",
+      "FOR",
+      "TO",
+      "ENDFOR",
+      "REPEAT",
+      "REPEATB",
+      "UNTIL",
+      "LOOP",
+      "ENDLOOP",
+      "CASE",
+      "OF",
+      "DEFAULT",
+      "GOTO",
+      "GOTOF",
+      "GOTOB",
+      "GOTOC",
+      "RET",
+      "PROC",
+      "EXTERN",
+      "DEF",
+      "CALL",
+      "PCALL",
+      "MCALL",
+      "EXTCALL",
+      "BLOCK",
+      "AND",
+      "OR",
+      "NOT",
+      "XOR",
+      "DIV",
+      "MOD",
+      "B_AND",
+      "B_OR",
+      "B_XOR",
+      "B_NOT",
+      "TRAORI",
+      "TRAFOOF",
+      "TRANSMIT",
+      "TRACYL",
+      "TRAANG",
+      "TRANS",
+      "ATRANS",
+      "ROT",
+      "AROT",
+      "RPL",
+      "SCALE",
+      "ASCALE",
+      "MIRROR",
+      "AMIRROR",
+      "SUPA",
+      "DIAMON",
+      "DIAMOF",
+      "DIAM90",
+      "SOFT",
+      "BRISK",
+      "FFWON",
+      "FFWOF",
+      "COMPON",
+      "COMPCURV",
+      "COMPCAD",
+      "COMPOF",
+      "CUT2D",
+      "CUT3DC",
+      "CFC",
+      "CFTCP",
+      "CFIN",
+      "ORIWKS",
+      "ORIMKS",
+      "ORIAXES",
+      "ORIVECT",
+      "STOPRE",
+      "CIP",
+      "CT",
+      "AC",
+      "IC",
+      "DC",
+      "ACP",
+      "ACN",
+      "INT",
+      "REAL",
+      "BOOL",
+      "CHAR",
+      "STRING",
+      "AXIS",
+      "FRAME"
+    ],
+    "labels": "^\\s*(?:/\\d?\\s*)?(?:N\\d+[ \\t]+)?(?<name>[A-Z_][A-Z0-9_]*):(?!=)",
+    "maxLineLength": 512,
+    "names": "[A-Z_]{2}[A-Z0-9_]*",
+    "strings": true,
+    "systemVariables": "\\$[A-Z_][A-Z0-9_]*",
+    "variables": "R\\d+",
+    "wordSeparatorRequired": false
+  },
+  "toolCall": {
+    "tool": "^(?:[^\"]*\"[^\"]*\")*[^\"]*?(?<![A-Z_$])T(?:\\d*\\s*=\\s*)?(?<tool>\\d+|\"[^\"]*\")",
+    "toolFrom": "same-line",
+    "trigger": "^(?:[^\"]*\"[^\"]*\")*[^\"]*?(?<![A-Z_$])T(?:\\d*\\s*=\\s*\"[^\"]*\"|\\d*\\s*=\\s*(?!0+(?![\\d.]))\\d+(?![\\d._])|(?!0+(?![\\d.]))\\d+(?![\\d._])(?!\\s*=))"
+  },
+  "toolList": {
+    "commentFilter": "^[-*=_\\s]*$",
+    "description": "auto",
+    "dropLeadingZeros": true
+  },
+  "version": 1
+}

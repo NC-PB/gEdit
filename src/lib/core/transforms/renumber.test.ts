@@ -419,6 +419,45 @@ describe('references', () => {
   });
 });
 
+describe('sequence numbers that are names (G10 M8)', () => {
+  // The goldens `okuma-*` pin the reviewer's programs. What they cannot show side by side
+  // is the one program read by both rules: Fanuc finds `N0100` for `GOTO 100`, Okuma does
+  // not find `N0100` for `GOTO N100`, because on that control they are two names.
+  const okuma = compiled('okuma-osp');
+  const FREE = { start: 10, step: 10, skipStartingWith: '% O (', restartAtProgramStart: true };
+
+  it('does not follow a jump to a name written with other zeros', () => {
+    const result = renumber.run(['O1001', 'N0100 G00 X0', 'N5 GOTO N100', 'N6 M02'], context(okuma, FREE));
+    expect(result.lines).toEqual(['O1001', 'N10 G00 X0', 'N20 GOTO N100', 'N30 M02']);
+    expect(result.warnings.map((w) => w.key)).toEqual(['ncNumbering.renumber.referencesUnresolved']);
+    expect(result.skipped.map((s) => [s.line, s.severity])).toEqual([
+      [1, 'info'],
+      [3, 'warning'],
+    ]);
+    // …and asks before it runs, because the jump already names nothing.
+    expect(renumber.preflight?.(['O1001', 'N0100 G00 X0', 'N5 GOTO N100', 'N6 M02'], context(okuma, FREE))?.key).toBe(
+      'ncNumbering.renumber.references',
+    );
+  });
+
+  it('moves a jump whose block keeps its number but not its text', () => {
+    // N0010 becomes N10: the same number, another name. Left alone, GOTO N0010 would
+    // point at nothing, and the run used to say nothing about it.
+    const result = renumber.run(['O1001', 'N0010 G00 X0', 'N0020 GOTO N0010', 'N0030 M02'], context(okuma, FREE));
+    expect(result.lines).toEqual(['O1001', 'N10 G00 X0', 'N20 GOTO N10', 'N30 M02']);
+    expect(result.warnings).toEqual([{ key: 'ncNumbering.renumber.referencesRewritten', params: { count: 1 } }]);
+  });
+
+  it('reports a jump whose new name the run hands out twice', () => {
+    // A block outside the selection keeps the name N10, and the selection writes N10 as
+    // well: the jump that followed its block would name two of them.
+    const document = ['O1001', 'N10 G00 X0', 'N0050 G01 X1', 'N0060 GOTO N0050', 'N0070 M02'];
+    const result = renumber.run(document.slice(2), context(okuma, FREE, 3, document));
+    expect(result.lines).toEqual(['N10 G01 X1', 'N20 GOTO N0050', 'N30 M02']);
+    expect(result.warnings.map((w) => w.key)).toEqual(['ncNumbering.renumber.referencesUnresolved']);
+  });
+});
+
 describe('performance', () => {
   const fanuc = compiled(FANUC);
 

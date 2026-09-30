@@ -1,0 +1,60 @@
+{
+  "about": "Diameter programming on a Sinumerik turning program with no machine chosen: on at the top, assumed from the profile (owner decision D35); off after DIAMOF; DIAM90 reads absolute values as diameters and incremental ones as radii; on again after DIAMON. Also the G26 and LIMS= clamps, and a dwell of either kind, which is neither a feed nor a speed.",
+  "input": "../../nc/sinumerik/s05-diameter.MPF",
+  "states": [
+    {
+      "line": 3,
+      "about": "Nothing written yet: the power-on state of the profile, each value assumed.",
+      "after": {
+        "groups": { "plane": "=G18", "feedmode": "=G95" },
+        "plane": "ZX",
+        "feedUnit": "per-rev",
+        "units": "=mm",
+        "diameter": "=on",
+        "distance": "unknown"
+      }
+    },
+    {
+      "line": 4,
+      "about": "G710 states millimetres for geometry and feed, so the unit is no longer assumed.",
+      "after": {
+        "groups": { "plane": "G18", "feedmode": "G95", "distance": "G90", "units": "G710" },
+        "units": "mm",
+        "distance": "absolute",
+        "diameter": "=on"
+      }
+    },
+    {
+      "line": 6,
+      "about": "AD-19 rule 4: the S of G26 is the upper speed limit.",
+      "after": { "speedLimit": "3000", "speed": null, "block": { "speedLimit": true } }
+    },
+    { "line": 8, "after": { "tool": "\"ROUGH\"", "block": { "toolChange": true } } },
+    {
+      "line": 9,
+      "about": "LIMS= is a clamp wherever it stands (addresses.speedLimitWords); the S beside it is the cutting speed.",
+      "after": { "speedUnit": "surface", "speed": "200", "speedLimit": "2800", "block": { "speedLimit": false } }
+    },
+    { "line": 11, "after": { "feed": "0.3", "feedUnit": "per-rev" } },
+    { "line": 13, "after": { "groups": { "diametermode": "DIAMOF" }, "diameter": "off" } },
+    { "line": 17, "after": { "groups": { "diametermode": "DIAM90" }, "diameter": "absolute-only", "distance": "absolute" } },
+    {
+      "line": 19,
+      "about": "Under DIAM90 an incremental X step is a radius; the mode itself stays what DIAM90 set.",
+      "after": { "diameter": "absolute-only", "distance": "incremental" }
+    },
+    { "line": 20, "after": { "distance": "absolute" } },
+    { "line": 21, "after": { "groups": { "diametermode": "DIAMON" }, "diameter": "on" } },
+    {
+      "line": 22,
+      "about": "AD-19 rule 6: the F of G4 is the time the tool waits, so the feed in force stays 0.3.",
+      "after": { "feed": "0.3", "block": { "fNotFeed": true } }
+    },
+    {
+      "line": 23,
+      "about": "G4 S2 waits two spindle revolutions. That S is not a speed, so the speed in force stays 200.",
+      "after": { "speed": "200", "speedLimit": "2800", "block": { "fNotFeed": true, "speedLimit": false } }
+    },
+    { "line": 24, "after": { "block": { "fNotFeed": false } } }
+  ]
+}

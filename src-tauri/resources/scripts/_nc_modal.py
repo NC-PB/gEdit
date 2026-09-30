@@ -16,13 +16,26 @@ now a thin wrapper over the interpreter with its P1 attribute values (``'G94'``,
 …), so every P1 script keeps working.
 
 The rules, in one place, are AD-19; each is named in the code where it is applied.
+
+**What a code is (M8, WP8.7).** The turning dialects write things the ISO dialects never
+do, and three readings follow from the token contract (plan §7.5, AD-24) rather than from
+any dialect:
+
+* a ``call`` token names a code by its identifier, the way a keyword does: ``CYCLE84(…)``
+  is the code ``CYCLE84``, so its ``sets.cycle`` and ``pitchFeed`` reach the block;
+* an address written with ``=`` is a value, never a code: ``M3=3`` is neither the code
+  ``M33`` nor the master spindle's ``M3`` (it switches spindle 3, which this state does not
+  track), and ``S3=``, ``T1=``, ``SB=``, ``LIMS=`` and ``F=R1`` are values of their own;
+* a dwell block (``fNotFeed``) is a dwell as a whole: its feed word is a time (rule 6), and
+  its speed word, where a control writes one (Sinumerik ``G4 S2``, two revolutions), is not
+  a spindle speed either, so neither changes the feed or the speed in force.
 """
 
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from _nc_lex import CompiledProfile, LineState, Token, normalize_code, tokenize_line
+from _nc_lex import CompiledProfile, LineState, Token, continues_block, normalize_code, tokenize_line
 
 #: The feed modes plan §7.10 names, for a run **without** a code database. With one, the
 #: database decides (``sets.feedUnit``) and these are never consulted: on a lathe in G-code
@@ -125,6 +138,21 @@ def _next_code_token(tokens: Sequence[Token], start: int, count: int) -> Optiona
     return None
 
 
+def _is_assignment(token: Token) -> bool:
+    """True for an address written with ``=`` (plan §7.5, AD-24 ``syntax.assignment``).
+
+    ``SB=1200``, ``S3=2500``, ``M3=3``, ``LIMS=3000``, ``F=R1``: the token is a ``word`` whose
+    text carries an ``=`` straight after its address. Such a word is a **value** and never
+    a code; its address is exactly what stands in front of the ``=``, so ``S3`` is not
+    ``S`` while ``F=R1`` is the feed word with a value that is not a number. A profile
+    without ``syntax.assignment`` has no such token, so nothing changes for it.
+    """
+    if token.kind != "word" or not token.address:
+        return False
+    head, sep, _ = token.text.partition("=")
+    return sep == "=" and head.strip().upper() == token.address.upper()
+
+
 def _codes_in(tokens: Sequence[Token], index: Dict[str, Dict[str, Any]]) -> List[str]:
     """Every code this block writes, in the order it wrote them.
 
@@ -132,14 +160,22 @@ def _codes_in(tokens: Sequence[Token], index: Dict[str, Dict[str, Any]]) -> List
     writes it as a keyword, and a multi-word code carries its number in the next token
     (``CYCL DEF`` + ``207``), while a packed dialect already has it on the keyword itself
     (``GOTO100``). Both spellings end up as one written code here.
+
+    Two more come with the turning dialects (M8). A ``call`` token is the code of its
+    identifier (``CYCLE84(…)`` is ``CYCLE84``); an assignment word (:func:`_is_assignment`)
+    is a value and never a code, so ``M3=3`` does not become the code ``M33``.
     """
     out: List[str] = []
     count = len(tokens)
     for i, token in enumerate(tokens):
         if token.kind == "word":
             address = token.address or ""
-            if address != "":
+            if address != "" and not _is_assignment(token):
                 out.append(address + (token.value_text or ""))
+        elif token.kind == "call":
+            name = token.address or ""
+            if name != "":
+                out.append(name)
         elif token.kind == "keyword":
             name = token.address or token.text
             number = token.value_text
@@ -188,10 +224,14 @@ class ModalInterpreter:
     3. a ``motion`` entry without ``sets.cycle`` clears the active cycle, unless it carries
        ``pitchFeed`` — then it becomes the active cycle with a pitch feed until the next
        motion code;
-    4. ``sets.speedLimit`` makes **this block's** speed word a clamp, not a speed;
+    4. ``sets.speedLimit`` makes **this block's** speed word a clamp, not a speed; so does an
+       address the profile lists in ``addresses.speedLimitWords`` (Sinumerik ``LIMS=``),
+       wherever it stands;
     5. ``addresses.feedUnitWords`` switch the feed unit by word (Klartext ``FU`` / ``FZ``);
        a plain feed word returns to the unit the modal group gives;
-    6. ``fNotFeed`` makes the block's feed word a time, not a feed (M8);
+    6. ``fNotFeed`` makes the block's feed word a time, not a feed (M8). The block is a
+       dwell, so its speed word is not a speed either (Sinumerik ``G4 S2`` waits two
+       revolutions);
     7. a tool line (``toolCall.trigger``, not ``toolCall.ignore``) sets the tool;
     8. :meth:`reset` applies the **effective** profile's power-on state — ``modal.initial``,
        ``modal.units`` and ``modal.diameter`` — each assumed, at line 0, with the source
@@ -209,9 +249,11 @@ class ModalInterpreter:
     naming the machine parameters it runs with (§7.4).
 
     **A block, not a line.** :meth:`update` takes one line, but a Klartext block runs over
-    several of them with ``~`` continuations. A continued line belongs to the block above
-    it: ``block`` is not cleared, and a one-shot cycle of rule 2 stays in force to the end
-    of its parameter list.
+    several of them with ``~`` continuations, and an Okuma block over several with lines that
+    start with ``$`` (``syntax.continuationStart``, M8). A continued line belongs to the
+    block above it: ``block`` is not cleared, and a one-shot cycle of rule 2 stays in force
+    to the end of its parameter list — so the lead written on the ``$`` line of a ``G71``
+    block is still that thread cycle's lead.
     """
 
     def __init__(self, cp: CompiledProfile, codes: "Sequence[Dict[str, Any]]") -> None:
@@ -279,10 +321,9 @@ class ModalInterpreter:
         self._speed_limit: Optional[Dict[str, Any]] = None
         self._active_cycle: Optional[Dict[str, Any]] = None
         self._modal_ambiguous: Optional[str] = None
-        self._block_ambiguous: Optional[str] = None
         # Before the power-on codes below, which are applied through `_apply_sets` and may
         # touch the block's flags.
-        self._block = _empty_block()
+        self._clear_block()
         #: True while the line just applied ends in a continuation: the next one is the
         #: same block (a Klartext ``~`` parameter list).
         self._continued = False
@@ -333,19 +374,35 @@ class ModalInterpreter:
 
     # -- one block ----------------------------------------------------------
 
-    def update(self, tokens: "Sequence[Token]", line: int, masked: str = "") -> None:
+    def update(
+        self,
+        tokens: "Sequence[Token]",
+        line: int,
+        masked: str = "",
+        continued: Optional[bool] = None,
+    ) -> None:
         """Applies one line. ``masked`` is the line with its comments masked, for rule 7.
 
         Without ``masked`` the tool rule is not applied — a caller that does not need the
         tool (:class:`FeedModeTracker`) does not have to mask every line to use the rest.
+
+        ``continued`` says whether the line belongs to the block above it by a marker at its
+        **start** (:func:`continues_block`, Okuma ``$``). Left out, the interpreter asks its
+        own profile; a trailing marker (Klartext ``~``) needs neither, because the line above
+        carried it.
         """
-        continued = self._continued
+        if continued is None:
+            # The tokens cover the line, so they give it back; only a profile that declares
+            # the marker pays for the join.
+            continued = self._patterns.get("continuation_start") is not None and continues_block(
+                "".join(token.text for token in tokens), self.cp
+            )
+        same_block = self._continued or continued
         self._continued = any(token.kind == "continuation" for token in tokens)
-        if not continued:
+        if not same_block:
             # The flags of a block belong to that block. A continued line is the same
             # block, so they are kept and added to instead.
-            self._block = _empty_block()
-            self._block_ambiguous = None
+            self._clear_block()
 
         # Two passes, because a block is not a sentence: `G50 S2500` and `S2500 G50` mean
         # the same thing, so every code of the block is applied before a single address
@@ -355,6 +412,13 @@ class ModalInterpreter:
         self._apply_words(tokens, line)
         if masked:
             self._apply_tool(masked, line)
+
+    def _clear_block(self) -> None:
+        """Forgets what the block just applied said about itself (the §7.4 ``block`` flags)."""
+        self._block = _empty_block()
+        self._block_ambiguous: Optional[str] = None
+        #: The code that made this block a dwell (rule 6), for a finding that names it.
+        self._block_dwell: Optional[str] = None
 
     def _apply_code(self, code: str, line: int) -> None:
         entry = self._entries.get(normalize_code(code))
@@ -378,6 +442,7 @@ class ModalInterpreter:
         # Rule 6: the block's feed word is a time here, not a feed.
         if entry.get("fNotFeed") is True:
             self._block["fNotFeed"] = True
+            self._block_dwell = self._block_dwell or canonical
 
         cycle = sets.get("cycle")
         if cycle == "cancel":
@@ -469,6 +534,11 @@ class ModalInterpreter:
             elif address in self._speed_limit_words:
                 self._speed_limit = _word_seen(token, line)
             elif address == self._speed_address:
+                if self._block["fNotFeed"]:
+                    # Rule 6 again: a dwell block is a dwell, and a speed word in it
+                    # counts spindle revolutions (Sinumerik `G4 S2`). It is neither the
+                    # speed in force nor a clamp.
+                    continue
                 if self._block["speedLimit"]:
                     self._speed_limit = _word_seen(token, line)
                 else:
@@ -592,6 +662,11 @@ class ModalInterpreter:
         """This block's feed word is a time, not a feed (rule 6)."""
         return bool(self._block["fNotFeed"])
 
+    @property
+    def f_not_feed_code(self) -> Optional[str]:
+        """The code that makes this block a dwell (``G4``), or ``None`` (rule 6)."""
+        return self._block_dwell
+
     def entry(self, code: str) -> Optional[Dict[str, Any]]:
         """The database entry for a written code, following aliases, or ``None``."""
         return self._entries.get(normalize_code(code)) if code else None
@@ -664,6 +739,10 @@ class FeedModeTracker:
       G-code system B). The ``F`` of such a block is a boring feed on a mill and a thread
       lead on a lathe, and nothing in the block says which — so a scaling script refuses
       it and says why. ``ambiguous_code`` names the code that raised it.
+    * ``f_not_feed`` — ``True`` while the block is a **dwell** (``fNotFeed``, M8: Okuma
+      ``G04 F``, Sinumerik ``G4 F`` / ``G4 S``): its ``F`` word is a time, not a feed rate,
+      and a speed word in it counts spindle revolutions, not rpm. Neither may be scaled or
+      reported as a feed or a speed. ``f_not_feed_code`` names the code (``G4``).
 
     **M6: this is a wrapper.** The rules live in :class:`ModalInterpreter` and come out of
     the code database (plan AD-19), so a lathe in G-code system A — where ``G98`` / ``G99``
@@ -688,6 +767,8 @@ class FeedModeTracker:
     pitch_feed: bool
     pitch_feed_ambiguous: bool
     ambiguous_code: Optional[str]
+    f_not_feed: bool
+    f_not_feed_code: Optional[str]
 
     def __init__(self, codes: Optional[Sequence[Dict[str, Any]]] = None) -> None:
         """``codes`` is the context's code database (``CodeEntry`` dictionaries)."""
@@ -714,10 +795,16 @@ class FeedModeTracker:
         """The database entry for a written code, following aliases, or ``None``."""
         return self._interp.entry(code)
 
-    def update(self, tokens: Sequence[Token]) -> None:
-        """Applies one block's tokens. Call it for every line, in order."""
+    def update(self, tokens: Sequence[Token], continued: bool = False) -> None:
+        """Applies one block's tokens. Call it for every line, in order.
+
+        ``continued`` is True for a line that belongs to the block above it by a marker at
+        its start — pass ``continues_block(line, cp)`` (M8: Okuma ``$`` lines). The tracker
+        is built from the code database alone and cannot tell by itself; left out, every
+        line that does not follow a trailing ``~`` starts a block of its own, as in P1.
+        """
         self._line += 1
-        self._interp.update(tokens, self._line)
+        self._interp.update(tokens, self._line, continued=continued is True)
         self._apply_fallbacks(tokens)
         self._publish()
 
@@ -814,12 +901,17 @@ class FeedModeTracker:
         self.pitch_feed = interp.pitch_feed or (self._old_cycle is not None and self._old_pitch)
         self.ambiguous_code = interp.pitch_feed_ambiguous or self._old_ambiguous
         self.pitch_feed_ambiguous = self.ambiguous_code is not None
+        # M8: a dwell block. The flag is the database's (`fNotFeed`); the code is for the
+        # finding that says why a word was left alone.
+        self.f_not_feed = interp.block_f_not_feed
+        self.f_not_feed_code = interp.f_not_feed_code
 
 
 def prime_tracker(
     tracker: FeedModeTracker,
     lines: Sequence[str],
     cp: CompiledProfile,
+    first: Optional[str] = None,
 ) -> Optional[LineState]:
     """Runs ``lines`` through ``tracker`` and answers the state the next line begins in.
 
@@ -840,11 +932,15 @@ def prime_tracker(
     Nothing here resets the tracker first. Prime a tracker once, before its first
     :meth:`FeedModeTracker.update`; priming one that has already walked a program would
     layer two programs on top of each other.
+
+    ``first`` is the first line of the selection, when the caller has it (M8). A selection
+    that starts on a line continuing the block above it by a leading marker (Okuma ``$``)
+    starts **inside** that block, so what the block raised is still standing there.
     """
     state: Optional[LineState] = None
     for line in lines:
         tokens, state = tokenize_line(line, cp, state)
-        tracker.update(tokens)
+        tracker.update(tokens, continued=continues_block(line, cp))
     # What a block says applies to that block and to no other: a one-shot cycle (AD-19
     # rule 2) and a non-modal ambiguity (Fanuc `G92`) are over when their block is. If the
     # last line above the selection was such a block, what it raised must not still be
@@ -853,11 +949,13 @@ def prime_tracker(
     # primed block has no successor here, so they are cleared on the way out.
     #
     # A block that is still **open** (a Klartext `~` parameter list that runs into the
-    # selection) is left alone: the selection continues it, so its cycle is still in force
-    # at the first selected line.
-    if state is None or not state.continuation:
-        tracker._interp._block = _empty_block()
-        tracker._interp._block_ambiguous = None
+    # selection, or an Okuma block whose `$` line is the first one selected) is left alone:
+    # the selection continues it, so its cycle is still in force at the first selected line.
+    still_open = state is not None and state.continuation
+    if not still_open and first is not None and continues_block(first, cp):
+        still_open = True
+    if not still_open:
+        tracker._interp._clear_block()
         tracker._interp._continued = False
         tracker._publish()
     return state

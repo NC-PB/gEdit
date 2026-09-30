@@ -1,0 +1,14 @@
+{
+  "note": "G10 M8: a LAP roughing and finishing call whose shape starts at a numbered block. G85 N0100 and G87 N0100 follow the block N0100 G81 to its new name N70.",
+  "profile": "okuma-osp",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      { "line": 1, "severity": "info" },
+      { "line": 2, "severity": "info" }
+    ],
+    "warnings": ["ncNumbering.renumber.referencesRewritten"],
+    "preflight": null
+  }
+}

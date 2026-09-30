@@ -107,6 +107,16 @@ export interface CodeEntry {
   verify?: boolean;
   /** P6. What this code switches on, for the modal interpreter (AD-19). */
   sets?: CodeSets;
+  /**
+   * P8. The `F` word of a block with this code is a **time**, not a feed: the dwell of
+   * Okuma `G04` is `F` seconds, and so is Sinumerik `G4 F`.
+   *
+   * Everything that reads or changes feeds has to skip such a block. Scaling the dwell of
+   * a chip-breaking peck by the feed factor would change how long the tool stands still at
+   * the bottom of the hole, and reporting it as a feed would put a time into the feed
+   * range of the program report.
+   */
+  fNotFeed?: boolean;
 }
 
 /** One dialect's database, as stored in JSON. */

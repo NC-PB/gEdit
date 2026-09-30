@@ -1,0 +1,63 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [
+    {
+      "tool": "DRILL_D8",
+      "description": "",
+      "line": 2,
+      "calls": 1,
+      "feed": "120",
+      "speed": "2000"
+    },
+    {
+      "tool": "ROUGH_80",
+      "description": "",
+      "line": 5,
+      "calls": 1,
+      "feed": "0.25-0.3 /rev",
+      "speed": "200 surface"
+    },
+    {
+      "tool": "FINISH",
+      "description": "",
+      "line": 9,
+      "calls": 1,
+      "feed": "0.1-0.12 /rev",
+      "speed": "1800"
+    }
+  ],
+  "message": "3 tools, 3 without a description",
+  "findings": [
+    {
+      "line": 10,
+      "severity": "info",
+      "message": "FINISH: the S of 1 block is a surface speed (G96), not a spindle speed, so it is not in the range."
+    }
+  ]
+}

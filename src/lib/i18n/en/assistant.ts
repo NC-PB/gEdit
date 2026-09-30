@@ -40,6 +40,16 @@ export default {
     tcpm: 'Tool centre point',
     units: 'Units',
     distance: 'Distance mode',
+    /** P8: turning. Whether the cross axis is written as a diameter or as a radius. */
+    diametermode: 'Diameter programming',
+    /** P8: a programmable offset, rotation, scaling or mirroring — not a work offset. */
+    frame: 'Programmable frame',
+    /** WP8.5: exact stop against continuous path (Sinumerik G60, G64, G641, G642, G645). */
+    pathmode: 'Path mode',
+    /** WP8.3: which turret a block is for (Okuma G13, G14). */
+    turret: 'Turret selection',
+    /** WP8.3: the Okuma LAP codes that describe and run an automatic roughing contour. */
+    lap: 'LAP (automatic roughing)',
     feedmode: 'Feed mode',
     spindlemode: 'Spindle mode',
     cyclereturn: 'Cycle return',

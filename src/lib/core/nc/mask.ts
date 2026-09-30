@@ -17,6 +17,14 @@
 //   - A structure block (`12 * - TOOL CALL 5`) is a heading, not code. Its text is
 //     blanked from the `*` on, so a code pattern cannot match a caption. The block number
 //     stays, and the `section` outline rule reads the raw line anyway (WP3.5).
+//
+// Two spans are stepped over without being blanked, so that nothing inside them can open
+// a comment — the same two the tokenizer reads in one piece:
+//
+//   - A string. `MSG("A;B")` is one Sinumerik call and the `;` in it is text, not the
+//     start of a comment (P8, AD-24).
+//   - A file header (`syntax.header`: `$PART.MIN%`, `%_N_PART_MPF`). It is one program
+//     marker, and detection reads it, so it must survive the mask whole.
 
 import type { CompiledProfile } from '$lib/core/profiles/types';
 import { commentAt, commentEndAt, lexSpec } from './tokenizer';
@@ -48,6 +56,11 @@ export function maskComments(line: string, cp: CompiledProfile): string {
       copied = limit;
       p = limit;
     }
+  }
+
+  if (spec.header && p === 0) {
+    const match = spec.header.exec(line);
+    if (match && match.index === 0 && match[0].length > 0) p = Math.min(match[0].length, limit);
   }
 
   while (p < limit) {

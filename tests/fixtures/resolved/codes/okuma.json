@@ -1,0 +1,2031 @@
+{
+  "addresses": {
+    "A": {
+      "description": "Angle of a taper in a thread cycle, written instead of the taper amount.",
+      "label": "Taper angle"
+    },
+    "B": {
+      "description": "Angle at which a thread cycle feeds in along the flank, usually the angle of the insert tip.",
+      "label": "Infeed angle"
+    },
+    "C": {
+      "description": "Angle of the spindle while it works as the C axis, used to place holes and flats for driven tools. In a thread cycle it sets the start angle of the thread instead.",
+      "label": "C axis"
+    },
+    "D": {
+      "description": "Depth the cycle takes per pass or per peck.",
+      "label": "Depth of cut or peck"
+    },
+    "DA": {
+      "description": "How far a grooving or drilling cycle retracts after each peck. It is always written with an equals sign; without it the control uses its own setting.",
+      "label": "Pull-back after each peck"
+    },
+    "E": {
+      "description": "Time the tool waits at the bottom of a cycle, counted like the time of G04. In a variable-lead thread it is the change of lead per turn instead, and in a LAP shape it is the feed the roughing cycle uses along that part of the shape.",
+      "label": "Dwell, lead change or shape feed"
+    },
+    "F": {
+      "description": "Feed rate; the unit follows the feed mode, distance per minute with G94 and per spindle revolution with G95. With G04 it is the dwell time, and in a thread block it is the lead.",
+      "label": "Feed, dwell time or thread lead"
+    },
+    "G": {
+      "description": "Selects how the control reads the rest of the block: the kind of movement, the cycle, the feed mode and the measuring modes.",
+      "label": "Preparatory function"
+    },
+    "H": {
+      "description": "Height of the thread profile, written as a diameter, in the multi-pass thread cycles.",
+      "label": "Thread height"
+    },
+    "I": {
+      "description": "Distance from the start point to the arc centre across the turning axis, signed and always incremental. In the cycles it is a taper, a shift between passes or an approach distance instead.",
+      "label": "Arc centre on X, or a shift"
+    },
+    "J": {
+      "description": "How many threads share the lead written in F. It is a count.",
+      "label": "Threads within the lead"
+    },
+    "K": {
+      "description": "Distance from the start point to the arc centre along the turning axis, signed and always incremental. In the cycles it is a taper, a shift between passes or an approach distance instead.",
+      "label": "Arc centre on Z, or a shift"
+    },
+    "L": {
+      "description": "Radius of an arc, written instead of I and K; this control does not take R for it. In the other blocks it is the size of a chamfer or a corner round, the chamfer at the end of a thread, or the relief of a deep-hole cycle.",
+      "label": "Arc radius, chamfer or relief"
+    },
+    "M": {
+      "description": "Switches a machine function such as the spindle, the coolant or the gear range. Numbers this database does not describe are set up by the machine builder and are not errors.",
+      "label": "Machine function"
+    },
+    "N": {
+      "description": "Name of the block: digits, or a name that starts with a letter, up to four characters. A space has to follow it, and leading zeros count, so N0123 and N123 are two names.",
+      "label": "Sequence number or name"
+    },
+    "O": {
+      "description": "Name of the program, up to four characters. Names are compared as text, so O0123 and O123 are two different programs.",
+      "label": "Program name"
+    },
+    "P": {
+      "description": "Synchronization code between the two turrets of a two-turret machine.",
+      "label": "Turret synchronization code"
+    },
+    "Q": {
+      "description": "How often a subprogram call repeats, how many evenly spaced holes a driven-tool cycle makes, or how many starts a thread has. It is a count and never a length.",
+      "label": "Repeat or hole count"
+    },
+    "R": {
+      "description": "How far a driven-tool drilling or tapping cycle feeds in from its cutting start. The sign gives the direction, and along X it is a diameter.",
+      "label": "Infeed of a driven-tool cycle"
+    },
+    "S": {
+      "description": "Spindle speed in revolutions per minute, or the cutting speed while G96 is active. With G50 it is the speed the control may not exceed. The unit system of the machine does not change it.",
+      "label": "Spindle speed"
+    },
+    "SA": {
+      "description": "Speed of the C axis in the driven-tool thread cycles G185 to G188. It is always written with an equals sign.",
+      "label": "C-axis speed in a driven-tool thread"
+    },
+    "SB": {
+      "description": "Speed of the driven-tool spindle, not of the main spindle. It is always written with an equals sign, in the block of M13 or M14 or before it.",
+      "label": "Driven-tool speed"
+    },
+    "T": {
+      "description": "Four digits are the station and the offset number; six digits put the nose radius compensation number in front of them, so T020305 is station 03 with offset 05. The turret indexes before the axes of the same block move.",
+      "label": "Turret station, offset and nose radius"
+    },
+    "U": {
+      "description": "Material left on the diameter for the finishing pass. It is an allowance, not an incremental move: this control writes incremental moves with G91.",
+      "label": "Finish allowance on X"
+    },
+    "W": {
+      "description": "Material left along the turning axis for the finishing pass. It is an allowance, not an incremental move.",
+      "label": "Finish allowance on Z"
+    },
+    "X": {
+      "description": "Position across the turning axis, written as a diameter. It stays a diameter in incremental mode (G91).",
+      "label": "X axis, a diameter"
+    },
+    "Y": {
+      "description": "Position across the turning axis on machines that have a Y axis.",
+      "label": "Y axis"
+    },
+    "Z": {
+      "description": "Position along the turning axis.",
+      "label": "Z axis"
+    }
+  },
+  "codes": [
+    {
+      "code": "G0",
+      "description": "Moves to the position at rapid speed. Every axis goes at its own rapid rate instead of in step with the others, so the tool can leave the straight line between start and end.",
+      "group": "motion",
+      "label": "Rapid",
+      "modal": true
+    },
+    {
+      "code": "G1",
+      "description": "Moves to the position on a straight line at the feed in F.",
+      "group": "motion",
+      "label": "Linear feed move",
+      "modal": true
+    },
+    {
+      "code": "G2",
+      "description": "Cuts an arc clockwise in the turning plane. The centre is given by I and K, or the radius by L; with L both X and Z are needed and I and K may not stand in the block.",
+      "group": "motion",
+      "label": "Arc, clockwise",
+      "modal": true,
+      "params": [
+        {
+          "address": "X",
+          "label": "End point, as a diameter"
+        },
+        {
+          "address": "Z",
+          "label": "End point along Z"
+        },
+        {
+          "address": "I",
+          "label": "Centre across the turning axis, from the start point"
+        },
+        {
+          "address": "K",
+          "label": "Centre along Z, from the start point"
+        },
+        {
+          "address": "L",
+          "label": "Radius, written instead of I and K",
+          "min": 0,
+          "unit": "length"
+        }
+      ]
+    },
+    {
+      "code": "G3",
+      "description": "Cuts an arc counter-clockwise in the turning plane. The centre is given by I and K, or the radius by L; with L both X and Z are needed and I and K may not stand in the block.",
+      "group": "motion",
+      "label": "Arc, counter-clockwise",
+      "modal": true,
+      "params": [
+        {
+          "address": "X",
+          "label": "End point, as a diameter"
+        },
+        {
+          "address": "Z",
+          "label": "End point along Z"
+        },
+        {
+          "address": "I",
+          "label": "Centre across the turning axis, from the start point"
+        },
+        {
+          "address": "K",
+          "label": "Centre along Z, from the start point"
+        },
+        {
+          "address": "L",
+          "label": "Radius, written instead of I and K",
+          "min": 0,
+          "unit": "length"
+        }
+      ]
+    },
+    {
+      "code": "G4",
+      "description": "Holds the position for the time in F before the next block runs. F is a time here and not a feed, so nothing that scales feeds may touch it; the machine's unit system decides what one unit of it is.",
+      "fNotFeed": true,
+      "group": "nonmodal",
+      "label": "Dwell",
+      "params": [
+        {
+          "address": "F",
+          "label": "Dwell time",
+          "min": 0,
+          "required": true,
+          "unit": "dwell"
+        }
+      ]
+    },
+    {
+      "code": "G13",
+      "description": "On a machine with two turrets, the blocks that follow are for turret A.",
+      "group": "turret",
+      "label": "Turret A"
+    },
+    {
+      "code": "G14",
+      "description": "On a machine with two turrets, the blocks that follow are for turret B.",
+      "group": "turret",
+      "label": "Turret B"
+    },
+    {
+      "code": "G17",
+      "group": "plane",
+      "label": "Compensation plane XY, for driven-tool milling",
+      "verify": true
+    },
+    {
+      "code": "G18",
+      "group": "plane",
+      "label": "Compensation plane ZX, for driven-tool milling",
+      "verify": true
+    },
+    {
+      "code": "G19",
+      "group": "plane",
+      "label": "Compensation plane YZ, for driven-tool milling",
+      "verify": true
+    },
+    {
+      "code": "G20",
+      "description": "Moves to the home position. It is not the inch switch it is on other controls.",
+      "group": "nonmodal",
+      "label": "Home position return",
+      "verify": true
+    },
+    {
+      "code": "G21",
+      "description": "Moves to the home position for a tool change. It is not the metric switch it is on other controls.",
+      "group": "nonmodal",
+      "label": "Tool-change home position return",
+      "verify": true
+    },
+    {
+      "code": "G31",
+      "description": "Cuts one threading pass to the diameter in X, written the same way as G33. A following block with only a new X cuts the next pass. F is the lead of the thread, never a feed rate.",
+      "group": "motion",
+      "label": "Thread pass along Z",
+      "modal": true,
+      "params": [
+        {
+          "address": "X",
+          "label": "Thread diameter of this pass"
+        },
+        {
+          "address": "Z",
+          "label": "Thread end along Z"
+        },
+        {
+          "address": "F",
+          "label": "Thread lead",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "I",
+          "label": "Taper, as the difference in radius from start to end"
+        },
+        {
+          "address": "A",
+          "label": "Taper angle, written instead of I",
+          "unit": "angle"
+        },
+        {
+          "address": "L",
+          "label": "Chamfer at the end of the thread, with M23",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "J",
+          "label": "Threads within the lead",
+          "min": 1,
+          "unit": "count"
+        }
+      ],
+      "pitchFeed": true
+    },
+    {
+      "code": "G32",
+      "description": "Cuts one threading pass across the face to the X in the block, at the Z of the pass; the lead runs along X. F is the lead of the thread, never a feed rate.",
+      "group": "motion",
+      "label": "Face thread pass",
+      "modal": true,
+      "params": [
+        {
+          "address": "X",
+          "label": "Thread end across the face"
+        },
+        {
+          "address": "Z",
+          "label": "Z of this pass"
+        },
+        {
+          "address": "F",
+          "label": "Thread lead",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "K",
+          "label": "Taper, as the difference from start to end"
+        },
+        {
+          "address": "A",
+          "label": "Taper angle, written instead of K",
+          "unit": "angle"
+        },
+        {
+          "address": "L",
+          "label": "Chamfer at the end of the thread, with M23",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "J",
+          "label": "Threads within the lead",
+          "min": 1,
+          "unit": "count"
+        }
+      ],
+      "pitchFeed": true
+    },
+    {
+      "code": "G33",
+      "description": "Cuts one threading pass to the diameter in X and ends at Z. A following block with only a new X cuts the next pass, which is how a post writes a list of passes. F is the lead of the thread, never a feed rate.",
+      "group": "motion",
+      "label": "Thread pass along Z",
+      "modal": true,
+      "params": [
+        {
+          "address": "X",
+          "label": "Thread diameter of this pass"
+        },
+        {
+          "address": "Z",
+          "label": "Thread end along Z"
+        },
+        {
+          "address": "F",
+          "label": "Thread lead",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "I",
+          "label": "Taper, as the difference in radius from start to end"
+        },
+        {
+          "address": "A",
+          "label": "Taper angle, written instead of I",
+          "unit": "angle"
+        },
+        {
+          "address": "L",
+          "label": "Chamfer at the end of the thread, with M23",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "J",
+          "label": "Threads within the lead",
+          "min": 1,
+          "unit": "count"
+        }
+      ],
+      "pitchFeed": true
+    },
+    {
+      "code": "G34",
+      "description": "Cuts a thread whose lead grows by E every turn, starting from the lead in F. Neither F nor E is a feed rate.",
+      "group": "motion",
+      "label": "Variable-lead thread, lead growing",
+      "modal": true,
+      "params": [
+        {
+          "address": "X",
+          "label": "Thread end, as a diameter"
+        },
+        {
+          "address": "Z",
+          "label": "Thread end along Z"
+        },
+        {
+          "address": "F",
+          "label": "Lead at the start",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "E",
+          "label": "Change of the lead per turn",
+          "min": 0,
+          "unit": "feedPerRev"
+        },
+        {
+          "address": "J",
+          "label": "Threads within the lead",
+          "min": 1,
+          "unit": "count"
+        }
+      ],
+      "pitchFeed": true
+    },
+    {
+      "code": "G35",
+      "description": "Cuts a thread whose lead shrinks by E every turn, starting from the lead in F. Neither F nor E is a feed rate.",
+      "group": "motion",
+      "label": "Variable-lead thread, lead shrinking",
+      "modal": true,
+      "params": [
+        {
+          "address": "X",
+          "label": "Thread end, as a diameter"
+        },
+        {
+          "address": "Z",
+          "label": "Thread end along Z"
+        },
+        {
+          "address": "F",
+          "label": "Lead at the start",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "E",
+          "label": "Change of the lead per turn",
+          "min": 0,
+          "unit": "feedPerRev"
+        },
+        {
+          "address": "J",
+          "label": "Threads within the lead",
+          "min": 1,
+          "unit": "count"
+        }
+      ],
+      "pitchFeed": true
+    },
+    {
+      "code": "G36",
+      "description": "Moves the feed axis in step with the turn of the driven-tool spindle. The feed is tied to that spindle like the pitch of a tap, so it may never be scaled on its own.",
+      "group": "motion",
+      "label": "Feed in step with the driven tool, forward",
+      "modal": true,
+      "pitchFeed": true,
+      "verify": true
+    },
+    {
+      "code": "G37",
+      "description": "Moves the feed axis in step with the driven-tool spindle turning the other way. The feed is tied to that spindle like the pitch of a tap, so it may never be scaled on its own.",
+      "group": "motion",
+      "label": "Feed in step with the driven tool, reverse",
+      "modal": true,
+      "pitchFeed": true,
+      "verify": true
+    },
+    {
+      "code": "G40",
+      "group": "compensation",
+      "label": "Nose radius compensation off",
+      "modal": true
+    },
+    {
+      "code": "G41",
+      "description": "Offsets the path by the nose radius, with the tool on the left of the part seen along the direction of travel. The radius comes from the nose radius number of the six-digit T word.",
+      "group": "compensation",
+      "label": "Nose radius compensation, tool left",
+      "modal": true
+    },
+    {
+      "code": "G42",
+      "description": "Offsets the path by the nose radius, with the tool on the right of the part seen along the direction of travel. The radius comes from the nose radius number of the six-digit T word.",
+      "group": "compensation",
+      "label": "Nose radius compensation, tool right",
+      "modal": true
+    },
+    {
+      "code": "G50",
+      "description": "With S it is the highest speed the spindle may reach, which a program sets before it turns the constant cutting speed on; the limit holds until another one is set. With X or Z it shifts the zero point for the blocks that follow instead, and no T word may stand in that block.",
+      "group": "nonmodal",
+      "label": "Spindle speed limit, or zero shift",
+      "params": [
+        {
+          "address": "S",
+          "label": "Highest spindle speed"
+        },
+        {
+          "address": "X",
+          "label": "New X value of the present position, for a zero shift"
+        },
+        {
+          "address": "Z",
+          "label": "New Z value of the present position, for a zero shift"
+        }
+      ],
+      "sets": {
+        "speedLimit": true
+      }
+    },
+    {
+      "code": "G64",
+      "description": "Each move hands over to the next without waiting for the axes to catch up, so a sharp corner comes out slightly rounded.",
+      "group": "pathmode",
+      "label": "Corner droop control off"
+    },
+    {
+      "code": "G65",
+      "description": "The control lets each corner settle before the next move starts, so the path keeps sharp corners.",
+      "group": "pathmode",
+      "label": "Corner droop control on"
+    },
+    {
+      "code": "G71",
+      "description": "Cuts a whole thread in passes from one block; B, D and the M codes of the block decide the infeed, and U leaves an allowance for the last pass. It is a thread cycle on this control and not a roughing cycle. F is the lead, never a feed rate.",
+      "group": "cycle",
+      "label": "Multi-pass thread cycle along Z",
+      "params": [
+        {
+          "address": "X",
+          "label": "Final thread diameter",
+          "required": true
+        },
+        {
+          "address": "Z",
+          "label": "Thread end along Z",
+          "required": true
+        },
+        {
+          "address": "I",
+          "label": "Taper, as the difference in radius from start to end"
+        },
+        {
+          "address": "A",
+          "label": "Taper angle, written instead of I",
+          "unit": "angle"
+        },
+        {
+          "address": "B",
+          "label": "Infeed angle",
+          "unit": "angle"
+        },
+        {
+          "address": "D",
+          "label": "Depth of the first cut, as a diameter",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "U",
+          "label": "Allowance for the last pass, as a diameter",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "H",
+          "label": "Thread height, as a diameter",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "L",
+          "label": "Chamfer at the end of the thread, with M23",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "E",
+          "label": "Change of the lead per turn, for a variable-lead thread",
+          "unit": "feedPerRev"
+        },
+        {
+          "address": "F",
+          "label": "Thread lead",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "J",
+          "label": "Threads within the lead",
+          "min": 1,
+          "unit": "count"
+        },
+        {
+          "address": "Q",
+          "label": "Number of thread starts",
+          "min": 1,
+          "unit": "count"
+        }
+      ],
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "G72",
+      "description": "Cuts a whole face thread in passes from one block; B, D and the M codes of the block decide the infeed, and W leaves an allowance for the last pass. F is the lead, never a feed rate.",
+      "group": "cycle",
+      "label": "Multi-pass thread cycle on the face",
+      "params": [
+        {
+          "address": "X",
+          "label": "Thread end across the face",
+          "required": true
+        },
+        {
+          "address": "Z",
+          "label": "Z of the last pass",
+          "required": true
+        },
+        {
+          "address": "K",
+          "label": "Taper, as the difference from start to end"
+        },
+        {
+          "address": "A",
+          "label": "Taper angle, written instead of K",
+          "unit": "angle"
+        },
+        {
+          "address": "B",
+          "label": "Infeed angle",
+          "unit": "angle"
+        },
+        {
+          "address": "D",
+          "label": "Depth of the first cut",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "W",
+          "label": "Allowance for the last pass",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "H",
+          "label": "Thread height",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "L",
+          "label": "Chamfer at the end of the thread, with M23",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "E",
+          "label": "Change of the lead per turn, for a variable-lead thread",
+          "unit": "feedPerRev"
+        },
+        {
+          "address": "F",
+          "label": "Thread lead",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "J",
+          "label": "Threads within the lead",
+          "min": 1,
+          "unit": "count"
+        },
+        {
+          "address": "Q",
+          "label": "Number of thread starts",
+          "min": 1,
+          "unit": "count"
+        }
+      ],
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "G73",
+      "description": "Cuts grooves in pecks along X and shifts by K along Z between them. A T word in the block only changes the offset used at the end point; it is not a tool change.",
+      "group": "cycle",
+      "label": "Grooving cycle, infeed along X",
+      "params": [
+        {
+          "address": "X",
+          "label": "Groove bottom, as a diameter"
+        },
+        {
+          "address": "Z",
+          "label": "Position of the last groove along Z"
+        },
+        {
+          "address": "I",
+          "label": "Shift along X, as a diameter"
+        },
+        {
+          "address": "K",
+          "label": "Shift along Z between the grooves"
+        },
+        {
+          "address": "D",
+          "label": "Peck depth",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "L",
+          "label": "Depth after which the tool pulls fully out, as a diameter",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "DA",
+          "label": "Pull-back after each peck",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "E",
+          "label": "Dwell at the bottom",
+          "min": 0,
+          "unit": "dwell"
+        },
+        {
+          "address": "F",
+          "label": "Feed",
+          "min": 0
+        },
+        {
+          "address": "T",
+          "label": "Offset for the end point; not a tool change"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "G74",
+      "description": "Grooves into the face in pecks, or drills a hole in pecks with X at zero. A T word in the block only changes the offset used at the end point; it is not a tool change.",
+      "group": "cycle",
+      "label": "Face grooving or peck drilling",
+      "params": [
+        {
+          "address": "X",
+          "label": "Groove position, as a diameter; X0 drills on centre"
+        },
+        {
+          "address": "Z",
+          "label": "Depth along Z",
+          "required": true
+        },
+        {
+          "address": "I",
+          "label": "Shift along X between the grooves, as a diameter"
+        },
+        {
+          "address": "K",
+          "label": "Shift along Z"
+        },
+        {
+          "address": "D",
+          "label": "Peck depth",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "L",
+          "label": "Depth after which the tool pulls fully out",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "DA",
+          "label": "Pull-back after each peck",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "E",
+          "label": "Dwell at the bottom",
+          "min": 0,
+          "unit": "dwell"
+        },
+        {
+          "address": "F",
+          "label": "Feed",
+          "min": 0
+        },
+        {
+          "address": "T",
+          "label": "Offset for the end point; not a tool change"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "G75",
+      "description": "Adds a chamfer of size L at the end of the G01 move in the same block, which may carry only one of X and Z. It is not a grooving cycle as on other controls.",
+      "group": "nonmodal",
+      "label": "Chamfer at the end of a G01 move",
+      "params": [
+        {
+          "address": "L",
+          "label": "Chamfer size",
+          "unit": "length"
+        }
+      ]
+    },
+    {
+      "code": "G76",
+      "description": "Adds a round of radius L at the end of the G01 move in the same block, which may carry only one of X and Z. It is not a threading cycle here, but the same number cuts a thread on other lathe controls, so gEdit will not scale the F of such a block: a feed left alone costs one edit by hand, a scaled thread lead scraps the part.",
+      "group": "nonmodal",
+      "label": "Corner round at the end of a G01 move",
+      "params": [
+        {
+          "address": "L",
+          "label": "Radius of the round",
+          "unit": "length"
+        }
+      ],
+      "pitchFeedAmbiguous": true
+    },
+    {
+      "code": "G77",
+      "description": "Taps along Z from one block and reverses the spindle at the bottom; the spindle speed has to be set before it. The feed carries the pitch, so it may never be scaled.",
+      "group": "cycle",
+      "label": "Tapping cycle, right-hand",
+      "params": [
+        {
+          "address": "X",
+          "label": "Tapping position, as a diameter"
+        },
+        {
+          "address": "Z",
+          "label": "Tapping depth",
+          "required": true
+        },
+        {
+          "address": "K",
+          "label": "Rapid approach before the tap starts cutting"
+        },
+        {
+          "address": "F",
+          "label": "Tapping feed, tied to the pitch",
+          "min": 0,
+          "required": true
+        }
+      ],
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "G78",
+      "description": "Taps a left-hand thread along Z from one block and reverses the spindle at the bottom; the spindle speed has to be set before it. The feed carries the pitch, so it may never be scaled.",
+      "group": "cycle",
+      "label": "Tapping cycle, left-hand",
+      "params": [
+        {
+          "address": "X",
+          "label": "Tapping position, as a diameter"
+        },
+        {
+          "address": "Z",
+          "label": "Tapping depth",
+          "required": true
+        },
+        {
+          "address": "K",
+          "label": "Rapid approach before the tap starts cutting"
+        },
+        {
+          "address": "F",
+          "label": "Tapping feed, tied to the pitch",
+          "min": 0,
+          "required": true
+        }
+      ],
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "G80",
+      "description": "Ends the shape definition that G81, G82 or G83 started. It does not cancel a drilling cycle as on other controls.",
+      "group": "lap",
+      "label": "End of a LAP shape"
+    },
+    {
+      "code": "G81",
+      "description": "Starts the definition of the finished shape for automatic roughing along Z. Its block carries the sequence name the LAP call refers to. It is not a drilling cycle.",
+      "group": "lap",
+      "label": "Start of a LAP shape along Z"
+    },
+    {
+      "code": "G82",
+      "description": "Starts the definition of the finished shape for automatic roughing across the face. It is not a drilling cycle.",
+      "group": "lap",
+      "label": "Start of a LAP shape on the face"
+    },
+    {
+      "code": "G83",
+      "description": "Starts the definition of the blank for automatic roughing. It is not a drilling cycle.",
+      "group": "lap",
+      "label": "Start of the LAP blank shape"
+    },
+    {
+      "code": "G84",
+      "description": "Gives a LAP roughing cycle a new depth of cut and a new feed part-way through. It stands on a line that starts with $ and continues the G85 block: from the point XA= (ZA= on the face) the cycle cuts with DA= and FA=, and from XB= (ZB=) with DB= and FB=. The same number is a tapping cycle on other lathe controls, so gEdit will not scale the F of such a block.",
+      "group": "lap",
+      "label": "New depth and feed within LAP roughing",
+      "params": [
+        {
+          "address": "XA",
+          "label": "First change point, as a diameter",
+          "unit": "length"
+        },
+        {
+          "address": "ZA",
+          "label": "First change point along Z, on the face",
+          "unit": "length"
+        },
+        {
+          "address": "DA",
+          "label": "Depth of cut after the first point",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "FA",
+          "label": "Feed after the first point",
+          "min": 0
+        },
+        {
+          "address": "XB",
+          "label": "Second change point, as a diameter",
+          "unit": "length"
+        },
+        {
+          "address": "ZB",
+          "label": "Second change point along Z, on the face",
+          "unit": "length"
+        },
+        {
+          "address": "DB",
+          "label": "Depth of cut after the second point",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "FB",
+          "label": "Feed after the second point",
+          "min": 0
+        }
+      ],
+      "pitchFeedAmbiguous": true
+    },
+    {
+      "code": "G85",
+      "description": "Roughs along the shape whose sequence name follows the code, leaving U and W for finishing. No S, T or M word may stand in the block, and a change of cutting conditions (G84) goes on the lines after it that start with $.",
+      "group": "lap",
+      "label": "LAP roughing",
+      "params": [
+        {
+          "address": "D",
+          "label": "Depth of cut",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "F",
+          "label": "Roughing feed",
+          "min": 0
+        },
+        {
+          "address": "U",
+          "label": "Finish allowance on X, as a diameter",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "W",
+          "label": "Finish allowance on Z",
+          "min": 0,
+          "unit": "length"
+        }
+      ]
+    },
+    {
+      "code": "G86",
+      "description": "Roughs by copying the shape whose sequence name follows the code, which suits a cast or forged blank. No S, T or M word may stand in the block.",
+      "group": "lap",
+      "label": "LAP copy roughing",
+      "params": [
+        {
+          "address": "D",
+          "label": "Depth of cut",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "F",
+          "label": "Roughing feed, until the shape sets one with E",
+          "min": 0
+        },
+        {
+          "address": "U",
+          "label": "Finish allowance on X, as a diameter",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "W",
+          "label": "Finish allowance on Z",
+          "min": 0,
+          "unit": "length"
+        }
+      ]
+    },
+    {
+      "code": "G87",
+      "description": "Finishes along the shape whose sequence name follows the code, at the feeds the shape itself writes. No S, T or M word may stand in the block.",
+      "group": "lap",
+      "label": "LAP finishing",
+      "params": [
+        {
+          "address": "U",
+          "label": "Allowance left on X, as a diameter",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "W",
+          "label": "Allowance left on Z",
+          "min": 0,
+          "unit": "length"
+        }
+      ]
+    },
+    {
+      "code": "G88",
+      "description": "Cuts a thread along the shape whose sequence name follows the code; the leads are written in that shape. The same number is a tapping cycle on other lathe controls, so gEdit will not scale the F of such a block.",
+      "group": "lap",
+      "label": "LAP continuous threading",
+      "params": [
+        {
+          "address": "D",
+          "label": "Depth of the first cut",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "H",
+          "label": "Thread height",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "B",
+          "label": "Angle of the insert tip",
+          "unit": "angle"
+        },
+        {
+          "address": "U",
+          "label": "Finish allowance on X",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "W",
+          "label": "Finish allowance on Z",
+          "min": 0,
+          "unit": "length"
+        }
+      ],
+      "pitchFeedAmbiguous": true
+    },
+    {
+      "code": "G90",
+      "description": "Positions are distances from the zero point; this is the state after a reset. X stays a diameter.",
+      "group": "distance",
+      "label": "Absolute positions",
+      "modal": true,
+      "sets": {
+        "distance": "absolute"
+      }
+    },
+    {
+      "code": "G91",
+      "description": "Positions are distances from the point before, and X is still written as a diameter. G90 and G91 may not stand in the same block.",
+      "group": "distance",
+      "label": "Incremental positions",
+      "modal": true,
+      "sets": {
+        "distance": "incremental"
+      }
+    },
+    {
+      "code": "G92",
+      "description": "This control gives G92 no function. On lathe controls of other makes the same number cuts thread passes, and a program written for one of them may have been opened with this dialect, so gEdit will not scale the F of such a block.",
+      "label": "Not assigned on this control",
+      "pitchFeedAmbiguous": true
+    },
+    {
+      "code": "G94",
+      "description": "F is a distance per minute from here on. The driven-tool drilling and tapping cycles need it.",
+      "group": "feedmode",
+      "label": "Feed per minute",
+      "modal": true,
+      "sets": {
+        "feedUnit": "per-minute"
+      }
+    },
+    {
+      "code": "G95",
+      "description": "F is a distance per spindle revolution from here on; this is the state after a reset.",
+      "group": "feedmode",
+      "label": "Feed per revolution",
+      "modal": true,
+      "sets": {
+        "feedUnit": "per-rev"
+      }
+    },
+    {
+      "code": "G96",
+      "description": "S is a cutting speed from here on, and the control changes the spindle speed with the diameter. The block needs an S word, a speed limit should be set with G50 before it, and no thread may be cut while it is on.",
+      "group": "spindlemode",
+      "label": "Constant cutting speed",
+      "modal": true,
+      "sets": {
+        "speedUnit": "surface"
+      }
+    },
+    {
+      "code": "G97",
+      "description": "S is a speed in revolutions per minute from here on. The block needs an S word.",
+      "group": "spindlemode",
+      "label": "Fixed spindle speed",
+      "modal": true,
+      "sets": {
+        "speedUnit": "rpm"
+      }
+    },
+    {
+      "code": "G107",
+      "description": "Taps with the feed tied to the spindle turn, so the feed carries the pitch and may never be scaled.",
+      "group": "cycle",
+      "label": "Synchronized tapping, right-hand",
+      "modal": true,
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      },
+      "verify": true
+    },
+    {
+      "code": "G108",
+      "description": "Taps a left-hand thread with the feed tied to the spindle turn, so the feed carries the pitch and may never be scaled.",
+      "group": "cycle",
+      "label": "Synchronized tapping, left-hand",
+      "modal": true,
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      },
+      "verify": true
+    },
+    {
+      "code": "G110",
+      "description": "On a machine with two turrets, the constant cutting speed of G96 is kept for the tool of turret A; G110 brings it back there after G111.",
+      "group": "spindlemode",
+      "label": "Constant cutting speed follows turret A"
+    },
+    {
+      "code": "G111",
+      "description": "On a machine with two turrets, the constant cutting speed of G96 is kept for the tool of turret B instead of turret A, until G110.",
+      "group": "spindlemode",
+      "label": "Constant cutting speed follows turret B"
+    },
+    {
+      "code": "G112",
+      "description": "Cuts a thread along a clockwise arc, for example in the shape of a LAP thread. F is the lead, never a feed rate.",
+      "group": "motion",
+      "label": "Thread along an arc, clockwise",
+      "modal": true,
+      "pitchFeed": true,
+      "verify": true
+    },
+    {
+      "code": "G113",
+      "description": "Cuts a thread along a counter-clockwise arc, for example in the shape of a LAP thread. F is the lead, never a feed rate.",
+      "group": "motion",
+      "label": "Thread along an arc, counter-clockwise",
+      "modal": true,
+      "pitchFeed": true,
+      "verify": true
+    },
+    {
+      "code": "G140",
+      "group": "spindle",
+      "label": "Machining with the main spindle",
+      "verify": true
+    },
+    {
+      "code": "G141",
+      "description": "The blocks that follow machine a part held in the sub spindle, so a spindle speed there may not be the main spindle's.",
+      "group": "spindle",
+      "label": "Machining with the sub spindle",
+      "verify": true
+    },
+    {
+      "code": "G142",
+      "description": "The blocks that follow machine a part held in the pick-off spindle, so a spindle speed there may not be the main spindle's.",
+      "group": "spindle",
+      "label": "Machining with the pick-off spindle",
+      "verify": true
+    },
+    {
+      "code": "G143",
+      "group": "spindle",
+      "label": "Machining with the pick-off spindle and the third turret",
+      "verify": true
+    },
+    {
+      "code": "G178",
+      "description": "Taps with the driven tool, its turn tied to the feed, until G180 cancels it. The feed carries the pitch, so it may never be scaled.",
+      "group": "cycle",
+      "label": "Driven-tool synchronized tapping, forward",
+      "modal": true,
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "G179",
+      "description": "Taps a left-hand thread with the driven tool, its turn tied to the feed, until G180 cancels it. The feed carries the pitch, so it may never be scaled.",
+      "group": "cycle",
+      "label": "Driven-tool synchronized tapping, reverse",
+      "modal": true,
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "G180",
+      "description": "Ends the driven-tool cycle that is active. It stands in a block of its own, and the block after it has to move both X and Z.",
+      "group": "cycle",
+      "label": "Cancel the driven-tool cycle",
+      "modal": true,
+      "sets": {
+        "cycle": "cancel"
+      }
+    },
+    {
+      "code": "G181",
+      "description": "Drills with the driven tool at the position of this block and of every following block that names a new position, until G180. The feed is per minute (G94), and Q drills that many holes spaced evenly around C.",
+      "group": "cycle",
+      "label": "Driven-tool drilling",
+      "modal": true,
+      "params": [
+        {
+          "address": "X",
+          "label": "Hole position or depth across the turning axis, as a diameter"
+        },
+        {
+          "address": "Z",
+          "label": "Hole depth or position along Z"
+        },
+        {
+          "address": "C",
+          "label": "C-axis angle of the hole"
+        },
+        {
+          "address": "R",
+          "label": "Infeed from the cutting start, instead of the depth"
+        },
+        {
+          "address": "I",
+          "label": "Rapid approach for a hole across the turning axis"
+        },
+        {
+          "address": "K",
+          "label": "Rapid approach for a hole in the face"
+        },
+        {
+          "address": "F",
+          "label": "Drilling feed per minute",
+          "min": 0
+        },
+        {
+          "address": "Q",
+          "label": "Number of holes spaced evenly around C",
+          "min": 1,
+          "unit": "count"
+        },
+        {
+          "address": "E",
+          "label": "Dwell at the bottom",
+          "min": 0,
+          "unit": "dwell"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "G182",
+      "description": "Bores with the driven tool at the position of this block and of every following block that names a new position, until G180. The feed is per minute (G94).",
+      "group": "cycle",
+      "label": "Driven-tool boring",
+      "modal": true,
+      "params": [
+        {
+          "address": "X",
+          "label": "Hole position or depth across the turning axis, as a diameter"
+        },
+        {
+          "address": "Z",
+          "label": "Hole depth or position along Z"
+        },
+        {
+          "address": "C",
+          "label": "C-axis angle of the hole"
+        },
+        {
+          "address": "R",
+          "label": "Infeed from the cutting start, instead of the depth"
+        },
+        {
+          "address": "I",
+          "label": "Rapid approach for a hole across the turning axis"
+        },
+        {
+          "address": "K",
+          "label": "Rapid approach for a hole in the face"
+        },
+        {
+          "address": "F",
+          "label": "Boring feed per minute",
+          "min": 0
+        },
+        {
+          "address": "Q",
+          "label": "Number of holes spaced evenly around C",
+          "min": 1,
+          "unit": "count"
+        },
+        {
+          "address": "E",
+          "label": "Dwell at the bottom",
+          "min": 0,
+          "unit": "dwell"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "G183",
+      "description": "Drills with the driven tool in pecks of D, relieving by L between them, at every following position until G180. The feed is per minute (G94).",
+      "group": "cycle",
+      "label": "Driven-tool deep-hole drilling",
+      "modal": true,
+      "params": [
+        {
+          "address": "X",
+          "label": "Hole position or depth across the turning axis, as a diameter"
+        },
+        {
+          "address": "Z",
+          "label": "Hole depth or position along Z"
+        },
+        {
+          "address": "C",
+          "label": "C-axis angle of the hole"
+        },
+        {
+          "address": "R",
+          "label": "Infeed from the cutting start, instead of the depth"
+        },
+        {
+          "address": "I",
+          "label": "Rapid approach for a hole across the turning axis"
+        },
+        {
+          "address": "K",
+          "label": "Rapid approach for a hole in the face"
+        },
+        {
+          "address": "D",
+          "label": "Peck depth",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "L",
+          "label": "Relief between the pecks",
+          "min": 0,
+          "unit": "length"
+        },
+        {
+          "address": "F",
+          "label": "Drilling feed per minute",
+          "min": 0
+        },
+        {
+          "address": "Q",
+          "label": "Number of holes spaced evenly around C",
+          "min": 1,
+          "unit": "count"
+        },
+        {
+          "address": "E",
+          "label": "Dwell at the bottom",
+          "min": 0,
+          "unit": "dwell"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "G184",
+      "description": "Taps with the driven tool at every following position until G180. The feed is the pitch times the driven-tool speed, so it may never be scaled on its own.",
+      "group": "cycle",
+      "label": "Driven-tool tapping",
+      "modal": true,
+      "params": [
+        {
+          "address": "X",
+          "label": "Hole position or depth across the turning axis, as a diameter"
+        },
+        {
+          "address": "Z",
+          "label": "Hole depth or position along Z"
+        },
+        {
+          "address": "C",
+          "label": "C-axis angle of the hole"
+        },
+        {
+          "address": "R",
+          "label": "Infeed from the cutting start, instead of the depth"
+        },
+        {
+          "address": "I",
+          "label": "Rapid approach for a hole across the turning axis"
+        },
+        {
+          "address": "K",
+          "label": "Rapid approach for a hole in the face"
+        },
+        {
+          "address": "F",
+          "label": "Tapping feed, tied to the pitch",
+          "min": 0,
+          "required": true
+        },
+        {
+          "address": "Q",
+          "label": "Number of holes spaced evenly around C",
+          "min": 1,
+          "unit": "count"
+        },
+        {
+          "address": "E",
+          "label": "Dwell at the bottom",
+          "min": 0,
+          "unit": "dwell"
+        }
+      ],
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "G185",
+      "description": "Cuts a thread with the driven tool while the C axis turns at SA=; F is the lead per turn of the C axis, never a feed rate.",
+      "group": "cycle",
+      "label": "Driven-tool thread along Z",
+      "modal": true,
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "G186",
+      "description": "Cuts a face thread with the driven tool while the C axis turns at SA=; F is the lead per turn of the C axis, never a feed rate.",
+      "group": "cycle",
+      "label": "Driven-tool thread on the face",
+      "modal": true,
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "G187",
+      "description": "Cuts a straight thread with the driven tool while the C axis turns at SA=; F is the lead, never a feed rate.",
+      "group": "cycle",
+      "label": "Driven-tool straight thread along Z",
+      "modal": true,
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "G188",
+      "description": "Cuts a straight face thread with the driven tool while the C axis turns at SA=; F is the lead, never a feed rate.",
+      "group": "cycle",
+      "label": "Driven-tool straight thread on the face",
+      "modal": true,
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "G189",
+      "description": "Reams or bores with the driven tool at every following position until G180. The feed is per minute (G94).",
+      "group": "cycle",
+      "label": "Driven-tool reaming",
+      "modal": true,
+      "params": [
+        {
+          "address": "X",
+          "label": "Hole position or depth across the turning axis, as a diameter"
+        },
+        {
+          "address": "Z",
+          "label": "Hole depth or position along Z"
+        },
+        {
+          "address": "C",
+          "label": "C-axis angle of the hole"
+        },
+        {
+          "address": "R",
+          "label": "Infeed from the cutting start, instead of the depth"
+        },
+        {
+          "address": "I",
+          "label": "Rapid approach for a hole across the turning axis"
+        },
+        {
+          "address": "K",
+          "label": "Rapid approach for a hole in the face"
+        },
+        {
+          "address": "F",
+          "label": "Reaming feed per minute",
+          "min": 0
+        },
+        {
+          "address": "Q",
+          "label": "Number of holes spaced evenly around C",
+          "min": 1,
+          "unit": "count"
+        },
+        {
+          "address": "E",
+          "label": "Dwell at the bottom",
+          "min": 0,
+          "unit": "dwell"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "G190",
+      "group": "cycle",
+      "label": "Driven-tool keyway cutting",
+      "modal": true,
+      "sets": {
+        "cycle": "start"
+      },
+      "verify": true
+    },
+    {
+      "code": "G191",
+      "group": "cycle",
+      "label": "Driven-tool keyway cutting along Z",
+      "modal": true,
+      "sets": {
+        "cycle": "start"
+      },
+      "verify": true
+    },
+    {
+      "code": "M0",
+      "description": "Stops the program until the operator starts it again.",
+      "group": "program",
+      "label": "Program stop"
+    },
+    {
+      "code": "M1",
+      "description": "Stops the program only while the operator has switched optional stop on.",
+      "group": "program",
+      "label": "Optional stop"
+    },
+    {
+      "code": "M2",
+      "description": "Ends the main program and resets the control.",
+      "group": "program",
+      "label": "End of program"
+    },
+    {
+      "code": "M30",
+      "description": "Ends the main program and resets the control.",
+      "group": "program",
+      "label": "End of program"
+    },
+    {
+      "code": "M3",
+      "group": "spindle",
+      "label": "Spindle on, forward",
+      "modal": true
+    },
+    {
+      "code": "M4",
+      "group": "spindle",
+      "label": "Spindle on, reverse",
+      "modal": true
+    },
+    {
+      "code": "M5",
+      "group": "spindle",
+      "label": "Spindle stop",
+      "modal": true
+    },
+    {
+      "code": "M6",
+      "description": "Changes the tool on a machine with a tool changer. A turret indexes on the T word alone and needs no M6.",
+      "group": "tool",
+      "label": "Tool change"
+    },
+    {
+      "code": "M8",
+      "group": "coolant",
+      "label": "Coolant on",
+      "modal": true
+    },
+    {
+      "code": "M9",
+      "group": "coolant",
+      "label": "Coolant off",
+      "modal": true
+    },
+    {
+      "code": "M12",
+      "group": "spindle",
+      "label": "Driven-tool spindle stop"
+    },
+    {
+      "code": "M13",
+      "description": "Starts the driven-tool spindle at the speed in SB=, which is written in the same block or before it. The main spindle is not affected.",
+      "group": "spindle",
+      "label": "Driven-tool spindle on, forward"
+    },
+    {
+      "code": "M14",
+      "description": "Starts the driven-tool spindle the other way round, at the speed in SB=. The main spindle is not affected.",
+      "group": "spindle",
+      "label": "Driven-tool spindle on, reverse"
+    },
+    {
+      "code": "M15",
+      "group": "spindle",
+      "label": "C axis positions in the positive direction"
+    },
+    {
+      "code": "M16",
+      "group": "spindle",
+      "label": "C axis positions in the negative direction"
+    },
+    {
+      "code": "M17",
+      "description": "Hands the result of a gauge that measures after machining on over the serial line. It does not end a subprogram as on some other controls.",
+      "label": "Send the gauging data",
+      "verify": true
+    },
+    {
+      "code": "M19",
+      "group": "spindle",
+      "label": "Spindle orientation"
+    },
+    {
+      "code": "M22",
+      "label": "Thread chamfer off"
+    },
+    {
+      "code": "M23",
+      "description": "The thread cycles pull out with a chamfer at the end of the thread, as long as the L of the cycle.",
+      "label": "Thread chamfer on"
+    },
+    {
+      "code": "M24",
+      "label": "Chuck barrier off"
+    },
+    {
+      "code": "M25",
+      "label": "Chuck barrier on"
+    },
+    {
+      "code": "M26",
+      "description": "A variable-lead thread (G34, G35) takes its lead along Z; that is what the control assumes without M26 or M27.",
+      "label": "Thread lead along Z"
+    },
+    {
+      "code": "M27",
+      "description": "A variable-lead thread (G34, G35) takes its lead along X, for a thread on the face.",
+      "label": "Thread lead along X"
+    },
+    {
+      "code": "M32",
+      "label": "Thread infeed along one flank"
+    },
+    {
+      "code": "M33",
+      "label": "Thread infeed alternating between the flanks"
+    },
+    {
+      "code": "M34",
+      "label": "Thread infeed along the other flank"
+    },
+    {
+      "code": "M40",
+      "group": "spindle",
+      "label": "Gear range neutral"
+    },
+    {
+      "code": "M41",
+      "group": "spindle",
+      "label": "Gear range 1"
+    },
+    {
+      "code": "M42",
+      "group": "spindle",
+      "label": "Gear range 2"
+    },
+    {
+      "code": "M43",
+      "group": "spindle",
+      "label": "Gear range 3"
+    },
+    {
+      "code": "M44",
+      "group": "spindle",
+      "label": "Gear range 4"
+    },
+    {
+      "code": "M48",
+      "group": "spindle",
+      "label": "Spindle speed override active again"
+    },
+    {
+      "code": "M49",
+      "group": "spindle",
+      "label": "Spindle speed override ignored"
+    },
+    {
+      "code": "M55",
+      "label": "Tailstock quill back"
+    },
+    {
+      "code": "M56",
+      "label": "Tailstock quill forward"
+    },
+    {
+      "code": "M60",
+      "description": "Cancels M61: under constant cutting speed the next move waits until the spindle has reached the speed it needs.",
+      "group": "spindle",
+      "label": "Wait for the cutting speed"
+    },
+    {
+      "code": "M61",
+      "description": "Under constant cutting speed the next move starts without waiting for the spindle to reach its speed.",
+      "group": "spindle",
+      "label": "Do not wait for the cutting speed"
+    },
+    {
+      "code": "M73",
+      "label": "Thread infeed pattern 1"
+    },
+    {
+      "code": "M74",
+      "label": "Thread infeed pattern 2"
+    },
+    {
+      "code": "M75",
+      "label": "Thread infeed pattern 3"
+    },
+    {
+      "code": "M83",
+      "label": "Chuck clamp"
+    },
+    {
+      "code": "M84",
+      "label": "Chuck unclamp"
+    },
+    {
+      "code": "M88",
+      "label": "Air blow off"
+    },
+    {
+      "code": "M89",
+      "label": "Air blow on"
+    },
+    {
+      "code": "M98",
+      "description": "The tailstock quill presses with its lower force. It is not a subprogram call as on other controls; that is CALL here.",
+      "label": "Tailstock quill, low pushing force"
+    },
+    {
+      "code": "M99",
+      "description": "The tailstock quill presses with its higher force. It does not end a subprogram as on other controls; that is RTS here.",
+      "label": "Tailstock quill, high pushing force"
+    },
+    {
+      "code": "M109",
+      "description": "Returns the spindle from C-axis positioning to turning.",
+      "group": "spindle",
+      "label": "C-axis mode off"
+    },
+    {
+      "code": "M110",
+      "description": "Couples the C axis to the spindle so it can be positioned for driven tools. It has to stand alone in its block.",
+      "group": "spindle",
+      "label": "C-axis mode on"
+    },
+    {
+      "code": "M146",
+      "group": "spindle",
+      "label": "C-axis unclamp"
+    },
+    {
+      "code": "M147",
+      "group": "spindle",
+      "label": "C-axis clamp"
+    },
+    {
+      "code": "CALL",
+      "description": "Runs the named program and comes back. Q repeats the call, and names written with an equals sign hand values over to the subprogram; RTS clears them again.",
+      "group": "subprogram",
+      "label": "Call a subprogram",
+      "params": [
+        {
+          "address": "Q",
+          "label": "How often the call repeats",
+          "max": 9999,
+          "min": 1,
+          "unit": "count"
+        }
+      ]
+    },
+    {
+      "code": "RTS",
+      "description": "Ends a subprogram and goes on after the block that called it.",
+      "group": "subprogram",
+      "label": "End of subprogram"
+    },
+    {
+      "code": "MODIN",
+      "description": "Runs the named program after every following move block, until MODOUT ends it.",
+      "group": "subprogram",
+      "label": "Modal subprogram call",
+      "params": [
+        {
+          "address": "Q",
+          "label": "How often each call repeats",
+          "max": 9999,
+          "min": 1,
+          "unit": "count"
+        }
+      ]
+    },
+    {
+      "code": "MODOUT",
+      "description": "Ends a MODIN call. It has to stand in the same program as the MODIN.",
+      "group": "subprogram",
+      "label": "End the modal subprogram call"
+    },
+    {
+      "code": "GOTO",
+      "description": "Continues at the block with that sequence name, in the same program.",
+      "group": "program",
+      "label": "Jump to a block"
+    },
+    {
+      "code": "IF",
+      "description": "Jumps to the named block when the condition in brackets holds. GOTO in front of the name may be left out.",
+      "group": "program",
+      "label": "Conditional jump"
+    },
+    {
+      "code": "END",
+      "group": "program",
+      "label": "End of a schedule program",
+      "verify": true
+    },
+    {
+      "code": "PSELECT",
+      "description": "Names the program a schedule program runs next.",
+      "group": "program",
+      "label": "Select a program",
+      "verify": true
+    },
+    {
+      "code": "GET",
+      "group": "program",
+      "label": "Take a machine resource",
+      "verify": true
+    },
+    {
+      "code": "PUT",
+      "group": "program",
+      "label": "Give a machine resource back",
+      "verify": true
+    },
+    {
+      "code": "READ",
+      "group": "program",
+      "label": "Read data into a variable",
+      "verify": true
+    },
+    {
+      "code": "WRITE",
+      "group": "program",
+      "label": "Write data out of a variable",
+      "verify": true
+    },
+    {
+      "code": "EQ",
+      "description": "Comparison inside IF brackets. It needs a space on each side.",
+      "group": "macro",
+      "label": "Equal to"
+    },
+    {
+      "code": "NE",
+      "description": "Comparison inside IF brackets. It needs a space on each side.",
+      "group": "macro",
+      "label": "Not equal to"
+    },
+    {
+      "code": "GT",
+      "description": "Comparison inside IF brackets. It needs a space on each side.",
+      "group": "macro",
+      "label": "Greater than"
+    },
+    {
+      "code": "GE",
+      "description": "Comparison inside IF brackets. It needs a space on each side.",
+      "group": "macro",
+      "label": "Greater than or equal to"
+    },
+    {
+      "code": "LT",
+      "description": "Comparison inside IF brackets. It needs a space on each side.",
+      "group": "macro",
+      "label": "Less than"
+    },
+    {
+      "code": "LE",
+      "description": "Comparison inside IF brackets. It needs a space on each side.",
+      "group": "macro",
+      "label": "Less than or equal to"
+    },
+    {
+      "code": "AND",
+      "description": "Joins two conditions or combines two values bit by bit. It needs a space on each side.",
+      "group": "macro",
+      "label": "Logical and"
+    },
+    {
+      "code": "OR",
+      "description": "Joins two conditions or combines two values bit by bit. It needs a space on each side.",
+      "group": "macro",
+      "label": "Logical or"
+    },
+    {
+      "code": "EOR",
+      "description": "Combines two conditions or two values bit by bit. It needs a space on each side.",
+      "group": "macro",
+      "label": "Logical exclusive or"
+    },
+    {
+      "code": "NOT",
+      "description": "Inverts a condition or a value bit by bit. It needs a space on each side.",
+      "group": "macro",
+      "label": "Logical not"
+    }
+  ],
+  "dialect": "okuma",
+  "version": 1
+}

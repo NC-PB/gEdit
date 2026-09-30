@@ -1,0 +1,87 @@
+{
+  "about": "An Okuma turning program with no machine chosen: the control powers on in G95 and G90 (the profile's documented reset state, assumed), G50 S is the clamp, and a T word inside a G74 cycle block only switches the offset of the tool already in the turret.",
+  "input": "../../nc/okuma/o01-flange.MIN",
+  "states": [
+    {
+      "line": 1,
+      "about": "The file header is no block. Nothing is written yet, so everything in force is the power-on state of the profile, and every such value says it is assumed (AD-19 rule 8). The diameter mode is the profile's default for a lathe.",
+      "after": {
+        "groups": { "feedmode": "=G95", "distance": "=G90" },
+        "feedUnit": "per-rev",
+        "distance": "absolute",
+        "speedUnit": "unknown",
+        "units": "=mm",
+        "diameter": "=on",
+        "tool": null,
+        "feed": null
+      }
+    },
+    {
+      "line": 6,
+      "about": "AD-19 rule 4 on this dialect's own clamp code: the S of G50 is the highest spindle speed, not a speed.",
+      "after": { "speedLimit": "2500", "speed": null, "block": { "speedLimit": true } }
+    },
+    {
+      "line": 8,
+      "about": "A six-digit T word: nose-radius set 01, station 01, offset 01.",
+      "after": { "tool": "01", "block": { "toolChange": true } }
+    },
+    {
+      "line": 9,
+      "after": {
+        "groups": { "spindlemode": "G96" },
+        "speedUnit": "surface",
+        "speed": "180",
+        "speedLimit": "2500",
+        "block": { "speedLimit": false }
+      }
+    },
+    {
+      "line": 11,
+      "about": "The program now states the feed mode itself, so it is no longer assumed.",
+      "after": { "groups": { "feedmode": "G95", "motion": "G1" }, "feedUnit": "per-rev", "feed": "0.25" }
+    },
+    {
+      "line": 19,
+      "after": { "tool": "03", "block": { "toolChange": true } }
+    },
+    {
+      "line": 28,
+      "after": { "groups": { "spindlemode": "G97" }, "speedUnit": "rpm", "speed": "1500" }
+    },
+    {
+      "line": 29,
+      "about": "A four-digit T word: station 02, offset 02.",
+      "after": { "tool": "02", "block": { "toolChange": true } }
+    },
+    {
+      "line": 31,
+      "about": "T0203 in a G74 block switches the offset for the cycle's end point and is not a tool change (the profile's toolCall.ignore). G74 is a cycle of its own block only.",
+      "after": {
+        "tool": "02",
+        "feed": "0.12",
+        "activeCycle": null,
+        "block": { "toolChange": false, "cycle": "G74", "pitchFeed": false }
+      }
+    },
+    {
+      "line": 36,
+      "after": { "tool": "07", "block": { "toolChange": true } }
+    },
+    {
+      "line": 38,
+      "after": { "tool": "07", "feed": "0.05", "block": { "toolChange": false, "cycle": "G74" } }
+    },
+    {
+      "line": 42,
+      "after": {
+        "groups": { "feedmode": "G95", "distance": "=G90", "spindlemode": "G97" },
+        "tool": "07",
+        "speed": "600",
+        "speedLimit": "2500",
+        "activeCycle": null,
+        "diameter": "=on"
+      }
+    }
+  ]
+}

@@ -65,7 +65,7 @@ describe('a profile that is not a profile', () => {
 describe('required fields', () => {
   it('are each reported with their path', () => {
     expect(pathsOf((p) => delete p.id)).toEqual(['id']);
-    expect(pathsOf((p) => (p.grammar = 'sinumerik'))).toEqual(['grammar']);
+    expect(pathsOf((p) => (p.grammar = 'conversational'))).toEqual(['grammar']);
     expect(pathsOf((p) => (p.version = 1.5))).toEqual(['version']);
     expect(pathsOf((p) => (p.id = 'Fanuc GCode'))).toEqual(['id']);
     expect(pathsOf((p) => delete p.files)).toEqual(['files']);
@@ -150,6 +150,47 @@ describe('the syntax section', () => {
   });
 });
 
+// G8 M8 review: two ways a user profile (M12) could pass validation and still break the
+// tokenizers. The built-in profiles pass both checks (`the built-in profiles validate`).
+describe('the turning syntax fields', () => {
+  const syntaxOf = (p: Record<string, unknown>): Record<string, unknown> => p.syntax as Record<string, unknown>;
+
+  it('want the named group `name` in a label pattern, because both tokenizers read it', () => {
+    expect(errorsOf((p) => (syntaxOf(p).labels = '^([A-Z_]+):'))).toEqual([
+      'syntax.labels: has to carry the named group (?<name>…)',
+    ]);
+    expect(errorsOf((p) => (syntaxOf(p).labels = '^\\s*(?<name>[A-Z_][A-Z0-9_]*):(?!=)'))).toEqual([]);
+  });
+
+  // M8 (§7.16 #27): Okuma's `$` lines. A marker that could match further into a line would
+  // make a `$` in the middle of a block the start of a continuation.
+  it('want the leading continuation marker anchored at the start of the line', () => {
+    expect(errorsOf((p) => (syntaxOf(p).continuationStart = '\\$(?=[ \\t]|$)'))).toEqual([
+      'syntax.continuationStart: has to be anchored at the start of the line (^)',
+    ]);
+    expect(errorsOf((p) => (syntaxOf(p).continuationStart = '^[ \\t]*\\$(?=[ \\t]|$)'))).toEqual([]);
+    // A pattern that needs no marker would make the whole program one block.
+    const plain = 'syntax.continuationStart: matches a line without a marker, so every line would join the block above';
+    expect(errorsOf((p) => (syntaxOf(p).continuationStart = '^'))).toEqual([plain]);
+    expect(errorsOf((p) => (syntaxOf(p).continuationStart = '^\\s*'))).toEqual([plain]);
+    expect(errorsOf((p) => (syntaxOf(p).continuationStart = '^[ \\t]*\\$?'))).toEqual([plain]);
+  });
+
+  // An empty match used to leave both tokenizers where they were, forever: a script hung,
+  // and so did the editor on the first line it tokenized.
+  it('refuse a variable pattern that can match an empty string', () => {
+    const empty = 'can match an empty string, and a variable has to take at least one character';
+    expect(errorsOf((p) => (syntaxOf(p).systemVariables = '\\$?[A-Z_]*'))).toEqual([`syntax.systemVariables: ${empty}`]);
+    expect(errorsOf((p) => (syntaxOf(p).variables = 'R?\\d*'))).toEqual([`syntax.variables: ${empty}`]);
+    // One that matches nothing only in some places is found there: behind a word boundary.
+    expect(pathsOf((p) => (syntaxOf(p).variables = '\\b\\d*'))).toEqual(['syntax.variables']);
+    // A pattern that does not compile is reported once, for that.
+    expect(errorsOf((p) => (syntaxOf(p).variables = '(')).map((error) => error.includes(empty))).toEqual([false]);
+    expect(pathsOf((p) => (syntaxOf(p).variables = '#\\d+'))).toEqual([]);
+    expect(pathsOf((p) => (syntaxOf(p).systemVariables = 'V[A-Z][A-Z0-9]{3}'))).toEqual([]);
+  });
+});
+
 describe('the tool call', () => {
   it('has to name the tool group, because the program map reads it', () => {
     expect(errorsOf((p) => ((p.toolCall as Record<string, unknown>).tool = 'T(\\d+)'))).toEqual([
@@ -217,7 +258,7 @@ describe('patterns', () => {
 
 /** Where a profile keeps a pattern, by JSON path (`syntax.comments[0].start` is not one). */
 const PATTERN_PATH =
-  /(\.pattern|\.trigger|\.continuation|\.sectionHeading|\.variables|\.commentFilter)$|^program\.(start|end)\[\d+\]$|^toolCall\.tool$/;
+  /(\.pattern|\.trigger|\.continuation|\.continuationStart|\.sectionHeading|\.variables|\.commentFilter)$|^program\.(start|end)\[\d+\]$|^toolCall\.tool$/;
 
 /** Every pattern in a raw profile, with its JSON path. */
 function collectPatterns(value: unknown, path = ''): { path: string; pattern: string }[] {

@@ -1,0 +1,10 @@
+{
+  "message": "No feed rate was changed; 1 left as a thread pitch. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 3,
+      "severity": "warning",
+      "message": "F500 is a thread pitch (G63), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    }
+  ]
+}

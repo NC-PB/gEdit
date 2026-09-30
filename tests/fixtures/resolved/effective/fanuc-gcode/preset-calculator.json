@@ -99,7 +99,6 @@
         "cnc": 2,
         "eia": 2,
         "iso": 2,
-        "min": 2,
         "nc": 3,
         "tap": 3
       },
@@ -119,7 +118,6 @@
         "cnc",
         "eia",
         "iso",
-        "min",
         "ncc",
         "ptp",
         "txt"

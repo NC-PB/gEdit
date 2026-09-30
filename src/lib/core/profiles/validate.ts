@@ -13,7 +13,10 @@
 //     (`outline[2].pattern`), because the fix is in the file, not in the app.
 //   - Every pattern compiles **and** stays inside the AD-11 subset, so `gedit_nc.py`
 //     (§7.10) can compile the same profile with Python's `re` after the mechanical
-//     `(?<name>` → `(?P<name>` rename.
+//     rewrite of `to_py_regex`: `(?<name>` → `(?P<name>`, and `\s`, `\S` and `.` spelled
+//     out as the characters ECMAScript means by them (G8 M8).
+//   - A label pattern carries the group `name`, and a variable pattern cannot match the
+//     empty string (G8 M8): the tokenizers read the one and would stand still on the other.
 //
 // It collects every problem instead of stopping at the first one, so the settings UI can
 // show a profile's full error list in one go.
@@ -327,6 +330,66 @@ function optPattern(value: unknown, path: string, p: Problems): void {
   if (value !== undefined) pattern(value, path, p);
 }
 
+/**
+ * Lines of every kind of character a program holds, to find out whether a pattern can
+ * match the empty string somewhere: in front of a letter, a digit, a blank, a sigil, a
+ * bracket, at the end of a line.
+ */
+const EMPTY_MATCH_PROBES: readonly string[] = [
+  ...['', 'X', 'x', '1', '_', ' ', '$', '#', '.', '=', '(', '[', ';'],
+  'N10 G1 X-2.5 $A_B=(R1)',
+];
+
+/**
+ * True when `source` matches the empty string at some position of a probe line.
+ *
+ * The tokenizers read a variable where the pattern matches, and a match of no characters
+ * is no variable at all: it used to leave both of them where they were, so a script or the
+ * editor hung on the first line (G8 M8). Both skip an empty match now, but a pattern that
+ * allows one is still a mistake — `R?\d*` also reads every bare number as a variable. The
+ * probes are a sample, not a proof; the tokenizers' own check covers what they miss.
+ */
+function matchesEmpty(source: string, caseSensitive: boolean): boolean {
+  let re: RegExp;
+  try {
+    re = new RegExp(source, caseSensitive ? 'y' : 'iy');
+  } catch {
+    return false; // `pattern()` reports why it does not compile.
+  }
+  for (const probe of EMPTY_MATCH_PROBES) {
+    for (let at = 0; at <= probe.length; at++) {
+      re.lastIndex = at;
+      const match = re.exec(probe);
+      if (match !== null && match[0] === '') return true;
+    }
+  }
+  return false;
+}
+
+/** Lines that carry no continuation marker in any dialect: empty, blank, a plain block. */
+const PLAIN_BLOCKS: readonly string[] = ['', ' ', '\t', 'G1 X10', 'N10 G1 X10 F100', 'X10'];
+
+/** True when the leading-marker pattern `source` matches a line that has no marker. */
+function matchesPlainBlock(source: string, caseSensitive: boolean): boolean {
+  let re: RegExp;
+  try {
+    re = new RegExp(source, caseSensitive ? '' : 'i');
+  } catch {
+    return false; // `pattern()` reports why it does not compile.
+  }
+  return PLAIN_BLOCKS.some((line) => re.test(line));
+}
+
+/** A variable pattern: compiles, stays in the AD-11 subset, and always takes a character. */
+function optVariablePattern(value: unknown, path: string, caseSensitive: boolean, p: Problems): void {
+  if (value === undefined) return;
+  const before = p.list.length;
+  pattern(value, path, p);
+  if (p.list.length === before && typeof value === 'string' && matchesEmpty(value, caseSensitive)) {
+    p.add(path, 'can match an empty string, and a variable has to take at least one character');
+  }
+}
+
 function patternList(value: unknown, path: string, p: Problems): void {
   const list = arr(value, path, p);
   if (!list) return;
@@ -399,7 +462,19 @@ function checkSyntax(value: unknown, p: Problems): void {
   optPattern(syntax.sectionHeading, 'syntax.sectionHeading', p);
   optPattern(syntax.continuation, 'syntax.continuation', p);
   optStr(syntax.continuationMark, 'syntax.continuationMark', p);
-  optPattern(syntax.variables, 'syntax.variables', p);
+  const caseSensitive = syntax.caseSensitive === true;
+  // M8 (§7.16 #27): the marker stands at the start of the line it continues, so a pattern
+  // that could match further in would make a `$` in the middle of a block a new block's
+  // continuation, and one that needs no marker at all (`^`, `^\s*`) would make the whole
+  // program one block, with the first thread cycle's lead protecting every feed after it.
+  const marker = syntax.continuationStart;
+  optPattern(marker, 'syntax.continuationStart', p);
+  if (typeof marker === 'string' && !marker.startsWith('^')) {
+    p.add('syntax.continuationStart', 'has to be anchored at the start of the line (^)');
+  } else if (typeof marker === 'string' && matchesPlainBlock(marker, caseSensitive)) {
+    p.add('syntax.continuationStart', 'matches a line without a marker, so every line would join the block above');
+  }
+  optVariablePattern(syntax.variables, 'syntax.variables', caseSensitive, p);
 
   const blockSkip = optObj(syntax.blockSkip, 'syntax.blockSkip', p);
   if (blockSkip) {
@@ -416,6 +491,22 @@ function checkSyntax(value: unknown, p: Problems): void {
     optStrArr(blockNumber.altPrefixes, 'syntax.blockNumber.altPrefixes', p, { allow: ADDRESS });
     bool(blockNumber.mandatory, 'syntax.blockNumber.mandatory', p);
   }
+
+  // P8. The four patterns and the two flags the turning dialects add (§7.1). They are
+  // optional everywhere: a profile that leaves them out tokenizes exactly as it did in P1.
+  optBool(syntax.sequenceNames, 'syntax.sequenceNames', p);
+  optPattern(syntax.assignment, 'syntax.assignment', p);
+  optPattern(syntax.labels, 'syntax.labels', p);
+  // Both tokenizers read the label's name out of this group (§7.1), and without it they
+  // find no label at all, while the grammar still paints one (G8 M8).
+  if (typeof syntax.labels === 'string' && !syntax.labels.includes('(?<name>')) {
+    p.add('syntax.labels', 'has to carry the named group (?<name>…)');
+  }
+  optBool(syntax.calls, 'syntax.calls', p);
+  optVariablePattern(syntax.systemVariables, 'syntax.systemVariables', caseSensitive, p);
+  optPattern(syntax.header, 'syntax.header', p);
+  // M8 integration (§7.16): the names a program gives itself, one token each.
+  optPattern(syntax.names, 'syntax.names', p);
 
   enumOf(syntax.decimalSeparator, 'syntax.decimalSeparator', p, ['.', ','] as const);
   bool(syntax.decimalPointSignificant, 'syntax.decimalPointSignificant', p);
@@ -452,6 +543,10 @@ function checkAddresses(value: unknown, p: Problems): void {
   }
   optStrArr(addresses.diameter, 'addresses.diameter', p, { allow: ADDRESS });
   optStrArr(addresses.angular, 'addresses.angular', p, { allow: ADDRESS });
+
+  // P8. `LIMS` is an address, not a code: it has to look like one so that a script can
+  // find it and leave it alone.
+  optStrArr(addresses.speedLimitWords, 'addresses.speedLimitWords', p, { allow: ADDRESS });
 
   const feedUnitWords = optObj(addresses.feedUnitWords, 'addresses.feedUnitWords', p);
   if (feedUnitWords) {
@@ -834,7 +929,7 @@ export function validateProfile(raw: unknown, o: ProfileValidationOptions = {}):
   str(root.name, 'name', p);
   str(root.shortName, 'shortName', p);
   num(root.version, 'version', p, { int: true, min: 1 });
-  enumOf(root.grammar, 'grammar', p, ['iso', 'klartext'] as const);
+  enumOf(root.grammar, 'grammar', p, ['iso', 'klartext', 'okuma', 'sinumerik'] as const);
   str(root.codes, 'codes', p, PROFILE_ID);
   optStr(root.extends, 'extends', p, PROFILE_ID);
   optEnum(root.machineType, 'machineType', p, ['mill', 'lathe'] as const);

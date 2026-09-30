@@ -1,0 +1,15 @@
+{
+  "profile": "okuma-osp",
+  "items": [
+    {"kind":"comment","line":2,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST SUBPROGRAMS, NOT FOR A MACHINE"},
+    {"kind":"program","line":3,"text":"O1234","endLine":13},
+    {"kind":"comment","line":4,"text":"SHOULDER PASSES - CALLED WITH DIA1 AND ZL1"},
+    {"kind":"label","line":6,"text":"NLOOP"},
+    {"kind":"subprogram-call","line":12,"text":"CALL O2345"},
+    {"kind":"end","line":13,"text":"RTS"},
+    {"kind":"program","line":14,"text":"O2345","endLine":26},
+    {"kind":"comment","line":15,"text":"LAP ROUGHING ALONG THE SHAPE NLAP1"},
+    {"kind":"label","line":17,"text":"NLAP1"},
+    {"kind":"end","line":25,"text":"NEND RTS"}
+  ]
+}

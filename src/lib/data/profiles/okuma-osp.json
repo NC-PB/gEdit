@@ -1,0 +1,185 @@
+{
+  "id": "okuma-osp",
+  "name": "Okuma OSP lathe",
+  "shortName": "Okuma",
+  "version": 1,
+  "machineType": "lathe",
+  "grammar": "okuma",
+  "codes": "okuma",
+  "files": {
+    "extensions": ["min", "sub", "ssb"],
+    "defaultExtension": "min",
+    "filterName": "Okuma OSP",
+    "encoding": "keep",
+    "lineEnding": "keep",
+    "newFileLineEnding": "crlf"
+  },
+  "detect": {
+    "extensions": { "min": 5000, "sub": 5000, "ssb": 5000 },
+    "content": [
+      { "pattern": "^\\$[\\w-]+\\.(?:MIN|SUB|SSB|SDF)%", "weight": 5000 },
+      { "pattern": "^[^(]*(?<![A-Z])(?:CALL|MODIN)\\s+O[A-Z0-9]{1,4}(?![A-Z0-9_])", "weight": 100 },
+      { "pattern": "^\\s*(?:N\\w+\\s+)?(?:RTS|MODOUT)(?![A-Z0-9])", "weight": 100 },
+      { "pattern": "^[^(]*(?<![A-Z])G0*18\\d(?![\\d.])", "weight": 100 },
+      { "pattern": "^[^(]*(?<![A-Z])G0*8[5-8][ \\t]*N[A-Z0-9]{1,4}(?![A-Z0-9])", "weight": 100 },
+      { "pattern": "^(?=[^(]*(?<![A-Z])H[-+]?[.\\d])(?=[^(]*(?<![A-Z])D[-+]?[.\\d])(?![^(]*(?<![A-Z])P[-+]?[.\\d])[^(]*(?<![A-Z])G0*7[12](?![\\d.])", "weight": 100 },
+      { "pattern": "^(?=[^(]*(?<![A-Z])K[-+]?[.\\d])[^(]*(?<![A-Z])G0*7[78](?![\\d.])", "weight": 100 },
+      { "pattern": "^\\$[ \\t]+[A-Z]", "weight": 100 },
+      { "pattern": "^[^(]*(?<![A-Z])SB\\s*=", "weight": 20 },
+      { "pattern": "^[^(]*(?<![A-Z])IF\\s*\\[[^\\]\\[]*\\]\\s*(?:GOTO\\s*)?N[A-Z0-9]{1,4}(?![A-Z0-9])", "weight": 20 },
+      { "pattern": "^[^(]*(?<![A-Z])T\\d{6}(?!\\d)", "weight": 8 },
+      { "pattern": "^[^(]*(?<![A-Z])V\\d+\\s*=", "weight": 8 },
+      { "pattern": "^\\s*(?:/\\s*)?N[A-Z][A-Z0-9]{0,3}(?=[ \\t]|$)", "weight": 8 },
+      { "pattern": "^\\s*%\\s*$", "weight": 5 },
+      { "pattern": "^\\s*O[A-Z0-9]{1,4}\\s*$", "weight": 5 },
+      { "pattern": "(?<![A-Z])G0*50\\s*S\\d", "weight": 4 },
+      { "pattern": "(?<![A-Z])G0*9[67](?![\\d.])", "weight": 4 },
+      { "pattern": "(?<![A-Z])T\\d{4}(?!\\d)", "weight": 3 },
+      { "pattern": "^\\s*(N\\d+\\s*)?[GM]\\d{1,3}(\\.\\d)?(?![\\d.])", "weight": 1 }
+    ],
+    "priority": 0
+  },
+  "syntax": {
+    "comments": [{ "start": "(", "end": ")" }],
+    "blockSkip": { "chars": "/", "position": "either", "levels": false },
+    "blockNumber": { "mode": "prefix", "prefix": "N", "altPrefixes": [], "mandatory": false },
+    "sequenceNames": true,
+    "decimalSeparator": ".",
+    "decimalPointSignificant": false,
+    "wordSeparatorRequired": false,
+    "variables": "V\\d+",
+    "systemVariables": "V[A-Z][A-Z0-9]{3}",
+    "assignment": "[A-Z][A-Z0-9]{0,3}(?=\\s*=(?!=))",
+    "header": "^\\$[^%]*%",
+    "continuationStart": "^[ \\t]*\\$(?=[ \\t]|$)",
+    "names": "[A-Z]{2}[A-Z0-9]*",
+    "keywords": [
+      "GOTO",
+      "IF",
+      "CALL",
+      "RTS",
+      "MODIN",
+      "MODOUT",
+      "GET",
+      "PUT",
+      "READ",
+      "WRITE",
+      "PSELECT",
+      "END",
+      "EQ",
+      "NE",
+      "GT",
+      "GE",
+      "LT",
+      "LE",
+      "AND",
+      "OR",
+      "EOR",
+      "NOT"
+    ],
+    "maxLineLength": 158
+  },
+  "addresses": {
+    "tool": "T",
+    "feed": "F",
+    "spindle": "S",
+    "axes": ["X", "Z", "C", "Y"],
+    "arcCenter": ["I", "K"],
+    "arcCenterMode": "incremental",
+    "diameter": ["X"],
+    "angular": ["C"]
+  },
+  "toolCall": {
+    "trigger": "(?<![A-Z])T\\d{4}(?:\\d{2})?(?!\\d)",
+    "ignore": "(?<![A-Z])(?:G0*(?:7[1-8]|18\\d)(?![\\d.])|T(?:\\d{2})?00\\d{2}(?!\\d))",
+    "tool": "(?<![A-Z])T(?:\\d{2}(?=\\d{4}(?!\\d)))?(?<tool>\\d{2})(?=\\d{2}(?!\\d))",
+    "toolFrom": "same-line"
+  },
+  "program": {
+    "start": ["^\\s*O(?<name>[A-Z0-9]{1,4})\\s*$"],
+    "end": ["(?<![A-Z])M0*(?:2|30)(?!\\d)", "(?<![A-Z])RTS(?![A-Z0-9])"]
+  },
+  "outline": [
+    { "kind": "program", "pattern": "^\\s*O(?<name>[A-Z0-9]{1,4})\\s*$" },
+    { "kind": "comment", "pattern": "^\\s*(?:N[A-Z0-9]{1,4}[ \\t]+)?\\((?<text>[^)]*)\\)\\s*$" },
+    { "kind": "end", "pattern": "^\\s*(?:/\\s*)?(?<text>N[A-Z][A-Z0-9]{0,3}[ \\t].*?(?<![A-Z])(?:M0*(?:2|30)(?!\\d)|RTS(?![A-Z0-9])))" },
+    { "kind": "label", "pattern": "^\\s*(?:/\\s*)?(?<text>N(?<name>[A-Z][A-Z0-9]{0,3}))(?=[ \\t]|$)" },
+    { "kind": "subprogram-call", "pattern": "(?<![A-Z])(?<text>(?:CALL|MODIN)[ \\t]+O[A-Z0-9]{1,4}|G0*(?:16[1-9]|17[01]|20[5-9]|21[0-4])(?![\\d.]))" },
+    { "kind": "stop", "pattern": "(?<![A-Z])M0*[01](?!\\d)" },
+    { "kind": "end", "pattern": "(?<![A-Z])(?:M0*(?:2|30)(?!\\d)|RTS(?![A-Z0-9]))" }
+  ],
+  "numbering": {
+    "mode": "free",
+    "start": 10,
+    "step": 10,
+    "digits": 0,
+    "max": 9999,
+    "onOverflow": "stop",
+    "spacesAfter": 1,
+    "skipStartingWith": ["$", "%", "O", "("],
+    "skipEmpty": true,
+    "restartAtProgramStart": true,
+    "references": [
+      { "trigger": "(?<![A-Z])GOTO(?![A-Z0-9])", "addresses": ["N"] },
+      { "trigger": "(?<![A-Z])IF(?![A-Z0-9])", "addresses": ["N"] },
+      { "trigger": "(?<![A-Z])G0*8[5-8](?![\\d.])", "addresses": ["N"] }
+    ]
+  },
+  "modal": { "initial": { "feedmode": "G95", "distance": "G90" } },
+  "machineParams": {
+    "numberInput": {
+      "default": "okuma-1mm",
+      "presets": [
+        {
+          "id": "okuma-1mm",
+          "label": "Unit 1 mm: every number as written, point or not: X50 and X50. are both 50 mm, F0.25 is 0.25 mm/rev, G04 F2 waits 2 s",
+          "source": "syntax-okuma.md §3.3",
+          "verify": true,
+          "value": {
+            "mode": "calculator",
+            "incrementMm": "1",
+            "incrementInch": "1",
+            "incrementDeg": "1",
+            "incrementSec": "1"
+          }
+        },
+        {
+          "id": "okuma-1um",
+          "label": "Unit 1 µm: every number scaled, point or not: X50 and X50. are both 0.05 mm, X50000 is 50 mm, F250 is 0.25 mm/rev, G04 F200 waits 2 s",
+          "source": "syntax-okuma.md §3.3",
+          "value": {
+            "mode": "scale",
+            "incrementMm": "0.001",
+            "incrementInch": "0.0001",
+            "incrementDeg": "0.001",
+            "incrementSec": "0.01",
+            "classes": {
+              "feedPerRev": { "increment": "0.001", "incrementInch": "0.0001" },
+              "feedPerMin": { "increment": "0.1", "incrementInch": "0.01" }
+            }
+          }
+        },
+        {
+          "id": "okuma-10um",
+          "label": "Unit 10 µm, metric only: every number scaled, point or not: X50 and X50. are both 0.5 mm, X0.1 is 0.001 mm, F25 is 0.25 mm/rev, G04 F20 waits 2 s",
+          "source": "syntax-okuma.md §3.3",
+          "verify": true,
+          "value": {
+            "mode": "scale",
+            "incrementMm": "0.01",
+            "incrementDeg": "0.01",
+            "incrementSec": "0.1",
+            "classes": {
+              "feedPerRev": { "increment": "0.01" },
+              "feedPerMin": { "increment": "1" }
+            }
+          }
+        }
+      ]
+    },
+    "units": "mm",
+    "diameter": "on",
+    "modalGroups": ["feedmode", "distance", "spindlemode"]
+  },
+  "toolList": { "description": "auto", "commentFilter": "^[-*=_\\s]*$", "dropLeadingZeros": true }
+}

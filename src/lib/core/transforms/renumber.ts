@@ -18,7 +18,10 @@
 //    exactly as it is — a jump target written wrongly is worse than one left behind,
 //    because the program still runs and lands in the wrong place. The scan is over the
 //    whole document (`references.ts`), not over the selection: a jump *above* the
-//    selection points into it just as well.
+//    selection points into it just as well. On a control whose sequence numbers are
+//    names (Okuma) a reference names the block written exactly like it, and it is
+//    rewritten with exactly the text that block receives (`references.ts`, "Numbers or
+//    names").
 //  - wrap past the maximum in silence: wrapping writes a second `N10` into the program,
 //    and duplicate block numbers are a defect, not a formatting choice. `stop` warned
 //    from the start; `wrap` warns now too (G8 M4). And it rewrites **no** reference whose
@@ -84,7 +87,7 @@ import type { Located, Msg } from '$lib/app/types';
 import type { FieldSpec } from '$lib/core/forms/types';
 import type { LineState, NcToken } from '$lib/core/nc/types';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
-import type { ProgramScan, ReferenceWord } from './references';
+import type { BlockKey, ProgramScan, ReferenceWord } from './references';
 import type { TransformContext, TransformDef, TransformResult } from './types';
 
 /** Rows the results panel gets at most; the summary still counts every skipped line. */
@@ -415,6 +418,10 @@ function isTrouble(outcome: Outcome): boolean {
  * with four digits because the post writes four, so it becomes `P0020` and not `P20`. A
  * value that was not padded stays unpadded, and one that outgrows its padding is written
  * in full rather than truncated.
+ *
+ * This is the rule of a control that reads block numbers as **numbers**. Where they are
+ * names (`ProgramScan.byText`, Okuma) the padding belongs to the name, and a reference is
+ * written with exactly the text its block receives instead (see `decideReferences`).
  */
 function writtenAs(oldText: string, oldValue: number, newValue: number): string {
   const digits = String(newValue);
@@ -422,32 +429,39 @@ function writtenAs(oldText: string, oldValue: number, newValue: number): string 
   return padded && digits.length < oldText.length ? digits.padStart(oldText.length, '0') : digits;
 }
 
+/** The key a block number written as `text` has in this scan (`references.ts`, `BlockKey`). */
+function keyOfWritten(scan: ProgramScan, text: string): BlockKey {
+  return scan.byText ? text : Number(text);
+}
+
 /**
- * How often each block number occurs in a program **after** the run.
+ * How often each block occurs in a program **after** the run.
  *
- * `newNumberOf` is the run's answer for a line of its scope; every other row keeps the
- * number the scan read. The result is per program segment, because that is the scope a
- * block-number reference is resolved in.
+ * `newTextOf` is the run's answer for a line of its scope — the digits it wrote; every
+ * other row keeps the block number the scan read. The result is per program segment,
+ * because that is the scope a block-number reference is resolved in, and it counts
+ * [`BlockKey`]s, so on a dialect whose sequence numbers are names `N20` and `N0020` are
+ * two blocks and not one twice.
  *
  * Without this, a run that wraps rewrote every reference with a number the program now
  * carries ten times over (G8 M6): the duplicate test only ever looked at the numbering
  * the run **replaced**, found each target unique there, and wrote a value a control
  * resolves to the first of many matching blocks.
  */
-function numbersAfter(
+function keysAfter(
   scan: ProgramScan,
   base: number,
   lineCount: number,
-  newNumberOf: (index: number) => number | null,
-): Map<number, number>[] {
+  newTextOf: (index: number) => string | null,
+): Map<BlockKey, number>[] {
   const end = base + lineCount;
-  const after: Map<number, number>[] = scan.segments.map(() => new Map());
-  for (let row = 0; row < scan.numbers.length; row++) {
-    const written = row >= base && row < end ? newNumberOf(row - base) : null;
-    const number = written ?? (scan.numbers[row] >= 0 ? scan.numbers[row] : null);
-    if (number === null) continue;
+  const after: Map<BlockKey, number>[] = scan.segments.map(() => new Map());
+  for (let row = 0; row < scan.keys.length; row++) {
+    const written = row >= base && row < end ? newTextOf(row - base) : null;
+    const key = written === null ? scan.keys[row] : keyOfWritten(scan, written);
+    if (key === null) continue;
     const counts = after[scan.segmentOf[row]];
-    counts.set(number, (counts.get(number) ?? 0) + 1);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return after;
 }
@@ -455,30 +469,36 @@ function numbersAfter(
 /**
  * What the run can do with every reference in the program.
  *
- * `newNumberOf` answers, for a line of the run's scope, the block number it carries
- * afterwards, or null when that line keeps the number it had. The preflight passes null
- * for the whole function: it only has to know *whether* a reference can be rewritten, and
- * that question is answered by the program's own numbers, so the preflight and the run
- * always agree on what will be reported — with one exception, a run that wraps: only the
- * run knows the numbering it wrote, and the preflight bounds that question for itself
- * (`mayWrap`).
+ * `newTextOf` answers, for a line of the run's scope, the digits of the block number it
+ * carries afterwards (`'20'`, or `'0020'` with four digits), or null when that line keeps
+ * the number it had. The preflight passes null for the whole function: it only has to know
+ * *whether* a reference can be rewritten, and that question is answered by the program's
+ * own numbers, so the preflight and the run always agree on what will be reported — with
+ * one exception, a run that wraps: only the run knows the numbering it wrote, and the
+ * preflight bounds that question for itself (`mayWrap`).
+ *
+ * A reference is resolved by its [`BlockKey`]. Where sequence numbers are names
+ * (`scan.byText`, Okuma) it names the block written exactly like it, so `N0020` is missing
+ * in a program that only has an `N20`, and a rewritten reference takes exactly the text its
+ * block receives — including when only the padding changed and the number stayed the same
+ * (`N0020` renumbered to `N20` moves its jumps along, G10 M8).
  */
 function decideReferences(
   scan: ProgramScan,
   firstLine: number,
   lineCount: number,
-  newNumberOf: ((index: number) => number | null) | null,
+  newTextOf: ((index: number) => string | null) | null,
 ): Decision[] {
   const base = Math.max(0, Math.trunc(firstLine) - scan.firstLine);
   const end = base + lineCount;
   const decisions: Decision[] = [];
   // Only the run knows the numbering it wrote; the preflight asks about wrapping in its
   // own way (`mayWrap`), because it cannot know how many blocks will really be numbered.
-  const after = newNumberOf === null ? null : numbersAfter(scan, base, lineCount, newNumberOf);
+  const after = newTextOf === null ? null : keysAfter(scan, base, lineCount, newTextOf);
 
   for (const { row, word } of scan.found) {
     const line = scan.firstLine + row;
-    const site = word.target === null ? undefined : scan.segments[scan.segmentOf[row]].get(word.target);
+    const site = word.key === null ? undefined : scan.segments[scan.segmentOf[row]].get(word.key);
 
     if (row < base || row >= end) {
       // A reference this run does not rewrite only matters when it points **into** the
@@ -509,15 +529,18 @@ function decideReferences(
     else if (site.count > 1) decide('duplicate');
     else if (site.row < base || site.row >= end) decide('outside');
     else {
-      const value = newNumberOf === null ? null : newNumberOf(site.row - base);
-      // The number this reference would name afterwards, whether the run rewrites the
+      const written = newTextOf === null ? null : newTextOf(site.row - base);
+      // The block this reference would name afterwards, whether the run rewrites the
       // value or leaves it standing. A run that wrapped hands the same number out several
       // times, and a control takes the first match, so an answer that is no longer unique
       // is not an answer (G8 M6).
-      const named = value ?? word.target;
-      if (after !== null && (after[scan.segmentOf[row]].get(named) ?? 0) > 1) decide('duplicate');
-      else if (value === null || value === word.target) decide('unchanged');
-      else decide('rewritten', writtenAs(word.text, word.target, value));
+      const named = written === null ? word.key : keyOfWritten(scan, written);
+      if (after !== null && named !== null && (after[scan.segmentOf[row]].get(named) ?? 0) > 1) decide('duplicate');
+      else if (written === null || named === word.key) {
+        // Where blocks are names, the same key is the same text: nothing to write.
+        decide('unchanged');
+      } else if (scan.byText) decide('rewritten', written);
+      else decide('rewritten', writtenAs(word.text, word.target, Number(written)));
     }
   }
   return decisions;
@@ -785,8 +808,12 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
   const lineMap = new Int32Array(lines.length);
   const skipped: Located[] = [];
   const warnings: Msg[] = [];
-  /** Scope index → the block number that line carries after the run. */
-  const newNumberOf = new Map<number, number>();
+  /**
+   * Scope index → the digits of the block number that line carries after the run, as they
+   * are written (`'20'`, `'0020'`): a dialect whose sequence numbers are names tells blocks
+   * apart by exactly that text.
+   */
+  const newTextOf = new Map<number, string>();
   let skippedCount = 0;
   let numbered = 0;
   let value = settings.start;
@@ -870,9 +897,9 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
       note(i, reason.wrapped, 'warning');
     }
 
-    const digits = String(value);
-    out[i] = rebuild(line, head, prefixOut + (settings.digits > 0 ? digits.padStart(settings.digits, '0') : digits), settings.spacesAfter);
-    newNumberOf.set(i, value);
+    const digits = settings.digits > 0 ? String(value).padStart(settings.digits, '0') : String(value);
+    out[i] = rebuild(line, head, prefixOut + digits, settings.spacesAfter);
+    newTextOf.set(i, digits);
     numbered++;
     value += settings.step;
   }
@@ -890,7 +917,7 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
     scanFor(lines, ctx, cp),
     ctx.firstLine,
     lines.length,
-    (index) => newNumberOf.get(index) ?? null,
+    (index) => newTextOf.get(index) ?? null,
   );
   applyReferences(out, lines, decisions);
 

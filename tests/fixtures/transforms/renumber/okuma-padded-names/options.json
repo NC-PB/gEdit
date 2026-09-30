@@ -1,0 +1,18 @@
+{
+  "note": "G10 M8, the reviewer's own program. Okuma compares sequence numbers as names, so N0020 and N20 are two blocks. Renumbering writes N20 where N0020 stood, and the jumps IF [...] N0020 and GOTO N0010 have to take the new text although the number did not change: left alone they name blocks that no longer exist. The names NLAP1, NEND and NAT01 are labels and stay, the header and O1001 are no blocks, and a block skipped with / gets its number behind the mark.",
+  "profile": "okuma-osp",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      { "line": 1, "severity": "info" },
+      { "line": 2, "severity": "info" },
+      { "line": 3, "severity": "info" },
+      { "line": 7, "severity": "info" },
+      { "line": 14, "severity": "info" },
+      { "line": 15, "severity": "info" }
+    ],
+    "warnings": ["ncNumbering.renumber.referencesRewritten"],
+    "preflight": null
+  }
+}

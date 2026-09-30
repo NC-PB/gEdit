@@ -207,7 +207,14 @@ scenario('m6-lathe-detect', { timeout: 420 }, async (h) => {
   const grouped = (/** @type {string} */ name) => `${head} · ${name.slice(head.length).trim()}`
   const millEntry = entries.find((entry) => entry.label === grouped(millName))
   const latheEntry = entries.find((entry) => entry.label === grouped(latheName))
-  h.check('the dialect picker offers all three profiles', entries.length === ctx.profiles.list().length && entries.length === 3, entries.map((e) => e.label))
+  // M8 added the Okuma and the Sinumerik turning profiles (plan §5 M8, an intentional
+  // change), so the picker offers five: the three of M6 and those two, asked for by name so
+  // that a registry which lost one of them fails here and not somewhere downstream.
+  h.check(
+    'the dialect picker offers every profile the registry has: the three of M6 and, since M8, Okuma and Sinumerik',
+    entries.length === ctx.profiles.list().length && entries.length === 5 && ['okuma-osp', 'sinumerik'].every((id) => entries.some((e) => e.label === ctx.profiles.profile(id).name)),
+    entries.map((e) => e.label),
+  )
   h.check('the mill and the lathe are listed as one family, under the part of the name they share', millEntry !== undefined && latheEntry !== undefined && head !== '' && head !== millName, {
     labels: entries.map((e) => e.label),
     head,

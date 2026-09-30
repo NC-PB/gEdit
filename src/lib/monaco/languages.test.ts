@@ -111,8 +111,10 @@ describe('registerAll', () => {
       'fanuc-gcode',
       'fanuc-lathe',
       'heidenhain-klartext',
+      'okuma-osp',
+      'sinumerik',
     ]);
-    expect(log.grammars).toHaveLength(3);
+    expect(log.grammars).toHaveLength(5);
     expect(log.themes).toHaveLength(2);
   });
 });

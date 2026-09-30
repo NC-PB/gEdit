@@ -103,6 +103,42 @@ describe('generateLarge: Klartext', () => {
   });
 });
 
+describe('generateLarge: the turning dialects (M8)', () => {
+  // The two seeds live in the generator itself until WP8.3 and WP8.5 have their fixtures
+  // in (P8). What is checked here is what the harness needs of them: the line count, the
+  // same bytes every time, and a tool section per copy that the profile's own outline
+  // finds — detection is not among them, because the profiles score no content until the
+  // content work packages write their rules.
+  it.each([
+    ['okuma' as const, 'okuma-osp', '(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)', '%'],
+    ['sinumerik' as const, 'sinumerik', '; WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE', 'M30'],
+  ])('%s: keeps the marker and the program end, and repeats its tool sections', (dialect, profileId, marker, end) => {
+    const text = generateLarge({ lines: 9000, dialect });
+    const lines = rows(text);
+    expect(lines).toHaveLength(9000);
+    expect(lines[0]).toBe(marker);
+    expect(lines.at(-1)).toBe(end);
+    expect(generateLarge({ lines: 9000, dialect })).toBe(text);
+    // Five turret indexes: the three of the seed and the first two of the next copy.
+    expect(toolItems(text, profileId).length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('gives every copy of a turning segment its own turret station', () => {
+    const okuma = rows(generateLarge({ lines: 9000, dialect: 'okuma' }));
+    expect(okuma).toContain('T0404');
+    const sinumerik = rows(generateLarge({ lines: 9000, dialect: 'sinumerik' }));
+    expect(sinumerik).toContain('T4 D1');
+  });
+
+  it('writes turning moves, with a feed per revolution and no Y axis', () => {
+    for (const dialect of ['okuma', 'sinumerik'] as const) {
+      const moves = rows(generateLarge({ lines: 3000, dialect })).filter((line) => /^X-?\d/.test(line));
+      expect(moves.length).toBeGreaterThan(100);
+      expect(moves.every((line) => /^X-?[\d.]+ Z-?[\d.]+( F0\.\d+)?$/.test(line)), moves[0]).toBe(true);
+    }
+  });
+});
+
 describe('generateLarge: size and line endings', () => {
   it('reaches --mb within the requested lines by writing longer moves', () => {
     const text = generateLarge({ lines: 20000, dialect: 'fanuc', mb: 0.6 });
@@ -140,7 +176,7 @@ describe('gen-large command line', () => {
   });
 
   it('rejects bad arguments with usage help', () => {
-    for (const args of [['--lines', '0', '--dialect', 'fanuc'], ['--lines', '10', '--dialect', 'okuma']]) {
+    for (const args of [['--lines', '0', '--dialect', 'fanuc'], ['--lines', '10', '--dialect', 'klartext']]) {
       const run = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
       expect(run.status).toBe(2);
       expect(run.stderr).toContain('usage:');

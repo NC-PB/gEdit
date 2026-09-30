@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 1 feed rate to 80 %; 2 feeds under addresses of their own left as written (FA=, FB=). No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 2,
+      "severity": "info",
+      "message": "FA=0.2 is a feed under an address of its own, not the F word, so it is left as it is. Change it by hand if it should follow the other feeds."
+    },
+    {
+      "line": 2,
+      "severity": "info",
+      "message": "FB=0.15 is a feed under an address of its own, not the F word, so it is left as it is. Change it by hand if it should follow the other feeds."
+    }
+  ]
+}

@@ -153,6 +153,8 @@ describe('resolveProfiles', () => {
       ['fanuc-gcode'],
       ['fanuc-lathe', 'fanuc-gcode'],
       ['heidenhain-klartext'],
+      ['okuma-osp'],
+      ['sinumerik'],
     ]);
   });
 

@@ -42,7 +42,7 @@
       label: assumed ? t('machines.itemNone') : t('machines.item', { name: eff.name ?? '' }),
       // The dialect's own power-on state as well: without a machine it is every one of
       // those values, and it is the assumption that decides how an `F` is read (G8 M6).
-      tooltip: machineTooltip(eff, profile.machineParams, profile.modal?.initial),
+      tooltip: machineTooltip(eff, profile.machineParams, profile.modal?.initial, profile.addresses?.diameter),
     };
   });
 </script>

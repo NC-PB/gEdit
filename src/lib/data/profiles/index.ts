@@ -20,12 +20,16 @@ import type { ProfileSource } from '$lib/core/profiles/types';
 import fanucGcode from './fanuc-gcode.json';
 import fanucLathe from './fanuc-lathe.json';
 import heidenhainKlartext from './heidenhain-klartext.json';
+import okumaOsp from './okuma-osp.json';
+import sinumerik from './sinumerik.json';
 
 /** The shipped profiles as they are written, parents unmerged. Resolve before use. */
 export const BUILTIN_PROFILE_SOURCES: readonly ProfileSource[] = [
   { raw: fanucGcode, origin: 'builtin' },
   { raw: fanucLathe, origin: 'builtin' },
   { raw: heidenhainKlartext, origin: 'builtin' },
+  { raw: okumaOsp, origin: 'builtin' },
+  { raw: sinumerik, origin: 'builtin' },
 ];
 
 /**

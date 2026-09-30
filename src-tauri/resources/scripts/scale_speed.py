@@ -76,7 +76,14 @@
 # id = "speedLimits"
 # type = "bool"
 # label = "Also scale spindle speed limits"
-# help = "The S of a speed-clamp block (G50 in G-code system A, G92 in system B) is the top speed the spindle may reach under constant surface speed, not a cutting speed."
+# help = "The S of a speed-limit block (G50 in G-code system A, G92 in system B, G25 and G26 on a Sinumerik) and a clamp written as a word of its own (LIMS=) are limits the spindle may not pass, not cutting speeds."
+# default = false
+#
+# [[params]]
+# id = "otherSpindles"
+# type = "bool"
+# label = "Also scale other spindles"
+# help = "A speed written for a spindle by its number or letter (S3=, SB=), and a plain S while the program has made another spindle the master (SETMS(3) on a Sinumerik). Off: they are reported and left as written."
 # default = false
 # ///
 """Scale spindle speeds (plan section 5, WP4.7; `nc-transformations.md`, "Scale spindle speeds").
@@ -105,18 +112,47 @@ Speed limits
     out of the code database (`sets.speedLimit`, `gedit_nc.speed_limit_of`), not out of a
     list in this file: on a lathe in system A `G92` is the single-pass threading cycle and
     its `S` — if it had one — would not be a clamp at all (plan AD-19 rule 4, F24).
-    `tool_list.py` asks the same question the same way.
+    `tool_list.py` asks the same question the same way. A lower limit is a limit too (a
+    Sinumerik `G25 S50`). A dialect may also write the clamp as a word of its own
+    (`LIMS=3000` beside `G96 S200`, and `LIMS[2]=1800` for spindle 2); the profile lists
+    those in `addresses.speedLimitWords`, and they are treated exactly like the `S` of a
+    clamp block. In a limit block every speed word is a limit, the ones that name another
+    spindle (`G26 S3000 S2=2000`) included.
+Another spindle's word
+    only the plain `S` word of the master spindle is a speed this run scales by default.
+    The spindle's address extended by a number or by one letter and written with `=` is a
+    word of its own: a spindle named by its number (`S3=2400`, `S[3]=2400`), whose spindle
+    this run cannot tell from the main one, or a driven tool's speed (`SB=2000`). The same
+    goes for a plain `S` while the program has made another spindle the master: a call of a
+    code of the database's ``spindle`` group with a spindle number (`SETMS(3)`) makes the
+    plain `S` that spindle's word until the same code stands without one (`SETMS`). Such a
+    word is reported and left, unless the run is asked to scale other spindles too; changing
+    it is a decision for the programmer, not a side effect of scaling the program's speeds.
+    A number of zero in the address (`S0=`) names the master spindle itself. An extended
+    address the profile lists as an angle (`addresses.angular`: a thread's start angle,
+    `SF=0`) is no speed at all and is not mentioned.
+Dwell blocks
+    in a dwell block (the database's ``fNotFeed``) a speed word counts spindle revolutions
+    (`G4 S2` waits two turns, `G4 S2=10` ten turns of spindle 2): it is a time, not a
+    speed, and it is left as written.
+Cycle arguments
+    a cycle written as a call carries its speeds as arguments (`CYCLE84(…)` its tapping
+    speed, a parting cycle its reduced speed). They are listed and left unchanged; which
+    argument is which comes from the order of the database's ``params``.
 Variables and expressions
-    `S#500`, `SQ5`, or an `S` with no value: there is no number to scale.
+    `S#500`, `SQ5`, `S=R5`, or an `S` with no value: there is no number to scale.
 Tapping and threading
     the speed **is** scaled, and the block is reported as a warning: in tapping the feed
     follows from the speed and the thread pitch, and `scale_feed.py` will not touch that
     feed, so the pair has to be looked at by hand. Which codes carry a pitch comes from
-    the code database's `pitchFeed` flag, not from a table in this file. The speed of a
+    the code database's `pitchFeed` flag, not from a table in this file, and the warning
+    names the block's own code before a modal thread code still in force. The speed of a
     tapping block is usually set **before** it (`M29 S500` then `G84 … F625.`), so a
     thread block that starts while a scaled speed is in force is reported as well — the
     warning has to reach the block whose thread would come out wrong, not only the line
-    that happens to carry the `S`.
+    that happens to carry the `S`. A speed written for another spindle after it (a driven
+    tool's `SB=500` before its tapping cycle) ends that: the thread may be cut on that
+    spindle, and a warning naming the main spindle's speed would be a guess.
 Klartext
     the speed sits in the `TOOL CALL` line (`TOOL CALL 5 Z S5000`), which is an ordinary
     `S` word to the tokenizer and is scaled like any other.
@@ -163,6 +199,7 @@ bundled script is one file, so the two share `gedit_nc` and nothing else.
 
 from __future__ import annotations
 
+import re
 import sys
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -172,6 +209,14 @@ import gedit_nc
 #: At most this many findings; the rest are counted in the message. A 100k-line program
 #: under G96 would otherwise hand the results panel tens of thousands of rows.
 MAX_FINDINGS = 200
+
+#: A cycle parameter whose code-database label names it a speed. The label is display text
+#: out of the database we ship, and it only decides what is **listed**: a cycle argument is
+#: never scaled, because it is not a speed word.
+CALL_SPEED_LABEL = re.compile(r"\bspeed\b", re.IGNORECASE)
+
+#: `[3]`, the spindle index of `S[3]=` or `LIMS[3]=`.
+INDEX = re.compile(r"^\[\s*([^\]]*?)\s*\]$")
 
 #: How far the written value may sit from the exact scaled one before the run says so, as
 #: a fraction of the exact value. The same rule, and the same reason, as `scale_feed.py`:
@@ -303,6 +348,11 @@ class Params:
         addresses = as_dict(profile.get("addresses"))
         spindle = addresses.get("spindle")
         self.spindle_address = spindle if isinstance(spindle, str) and spindle != "" else "S"
+        #: Words that are a spindle-speed clamp on their own (`LIMS=`, plan §7.1).
+        limits = addresses.get("speedLimitWords")
+        self.speed_limit_words = frozenset(
+            word.upper() for word in (limits if isinstance(limits, list) else []) if isinstance(word, str)
+        )
 
         # Constant surface speed is how a turning program cuts nearly everything and the
         # exception on a milling one, so "automatically" follows the profile's `machineType`
@@ -314,6 +364,12 @@ class Params:
             self.lathe if self.surface_speed_choice == "auto" else self.surface_speed_choice == "yes"
         )
         self.speed_limits = values.get("speedLimits") is True
+        self.other_spindles = values.get("otherSpindles") is True
+        #: Addresses whose value is an angle (`SF=`, a thread's start angle): never a speed.
+        angular = addresses.get("angular")
+        self.angular = frozenset(
+            word.upper() for word in (angular if isinstance(angular, list) else []) if isinstance(word, str)
+        )
 
     def format_for(self, token: gedit_nc.Token) -> Tuple[Dict[str, Any], bool]:
         """The number format for this value, and whether it had to be kept whole.
@@ -377,6 +433,15 @@ class Counts:
         #: The value was already zero or negative: a limit bounds a speed, it does not
         #: invent one, so neither the scaling nor the limits touch such a block.
         self.nonpositive = 0
+        #: Words for another spindle (`S3=`, `SB=`, a plain `S` after `SETMS(3)`): not the
+        #: master spindle's `S`, so they are not spindle speeds of this run and are not
+        #: counted in `total` unless the run scales other spindles too.
+        self.other = 0
+        self.other_addresses: List[str] = []
+        #: Speeds among the arguments of a cycle written as a call, listed and left.
+        self.cycle = 0
+        #: Speed words of a dwell block (`fNotFeed`, `G4 S2`): revolutions, not a speed.
+        self.dwell = 0
         self.skipped: Dict[str, int] = {}
 
     def skip(self, reason: str) -> None:
@@ -395,7 +460,9 @@ def apply_edits(line: str, edits: Sequence[Tuple[int, int, str]]) -> str:
     return "".join(out)
 
 
-def power_on_state(tracker: gedit_nc.FeedModeTracker, cp: gedit_nc.CompiledProfile) -> None:
+def power_on_state(
+    tracker: gedit_nc.FeedModeTracker, cp: gedit_nc.CompiledProfile
+) -> List[Dict[str, Any]]:
     """Puts the tracker into the state the control powers on in (plan AD-19 rule 8, AD-31).
 
     `FeedModeTracker` is Phase 1's API: it is built from a code database alone, so it starts
@@ -407,19 +474,313 @@ def power_on_state(tracker: gedit_nc.FeedModeTracker, cp: gedit_nc.CompiledProfi
     The **effective** profile carries that state in `modal.initial`, so the run walks those
     codes through the tracker as the block before the first one. A feed-mode or spindle-mode
     code in the program then overrides it exactly as it overrides a code on an earlier line,
-    and a dialect that declares no power-on state (Klartext) is untouched.
+    and a dialect that declares no power-on state (Klartext) is untouched. Answers the
+    database entries of those codes, so a finding can name the one in force.
     """
     initial = as_dict(as_dict(cp.profile.get("modal")).get("initial"))
     codes = [value for value in initial.values() if isinstance(value, str) and value != ""]
     if not codes:
-        return
+        return []
     tokens, _ = gedit_nc.tokenize_line(" ".join(codes), cp, None)
     tracker.update(tokens)
+    return block_entries(tokens, tracker)
 
 
-def speed_word(token: gedit_nc.Token, params: Params) -> bool:
-    """True when this token is a spindle speed word of the active dialect."""
-    return token.kind == "word" and token.address == params.spindle_address
+def assignment_word(token: gedit_nc.Token) -> bool:
+    """True for an address written with `=` (plan §7.5): `S3=2400`, `SB=2000`, `LIMS=3000`.
+
+    The address is exactly what stands in front of the `=`, so `S3` is not `S`.
+    """
+    if token.kind != "word" or not token.address:
+        return False
+    head, sep, _ = token.text.partition("=")
+    return sep == "=" and head.strip().upper() == token.address.upper()
+
+
+def block_entries(
+    tokens: Sequence[gedit_nc.Token], tracker: gedit_nc.FeedModeTracker
+) -> List[Dict[str, Any]]:
+    """The code-database entries of the codes this block writes, in written order.
+
+    The same reading as the modal interpreter's: an address word is a code unless it is
+    written with `=` (`M3=3` is not `M33`), a call is the code of its identifier
+    (`CYCLE84(…)`), and a keyword is a code by its name.
+    """
+    out: List[Dict[str, Any]] = []
+    for token in tokens:
+        if token.kind == "word":
+            written = (token.address or "") + (token.value_text or "") if token.address and not assignment_word(token) else ""
+        elif token.kind in ("call", "keyword"):
+            written = token.address or token.text or ""
+        else:
+            continue
+        entry = tracker.entry(written) if written else None
+        if entry is not None:
+            out.append(entry)
+    return out
+
+
+def code_with(entries: Sequence[Dict[str, Any]], test: Any) -> Optional[str]:
+    """The code of the first entry that passes ``test``, or ``None``."""
+    for entry in entries:
+        code = entry.get("code")
+        if test(entry) and isinstance(code, str) and code != "":
+            return code
+    return None
+
+
+def sets_of(entry: Dict[str, Any]) -> Dict[str, Any]:
+    sets = entry.get("sets")
+    return sets if isinstance(sets, dict) else {}
+
+
+class SpeedWord:
+    """One word this script has to decide about, and what it is.
+
+    ``kind`` is ``'speed'`` (the plain spindle word), ``'limit'`` (a clamp written as a word
+    of its own, `LIMS=`) or ``'other'`` (a word for another spindle). ``name`` is the word as
+    a finding names it, ``value`` the token whose value span is edited — the word itself, or
+    the number behind the `=` of an indexed form (`S[2]=300`, `LIMS[2]=1800`), which the
+    tokenizer hands over as a word without an address. ``spindle`` is the spindle the word
+    names, when it names one (`3` for `S3=`, `B` for `SB=`).
+    """
+
+    __slots__ = ("kind", "name", "value", "spindle", "address")
+
+    def __init__(self, kind: str, name: str, value: gedit_nc.Token, spindle: Optional[str], address: str) -> None:
+        self.kind = kind
+        self.name = name
+        self.value = value
+        self.spindle = spindle
+        self.address = address
+
+
+def speed_words(tokens: Sequence[gedit_nc.Token], params: Params) -> List[SpeedWord]:
+    """Every word of the block that is a spindle speed, a clamp or another spindle's speed.
+
+    The plain spindle word is a speed; `S0=` names the master spindle and is one too. The
+    spindle's address extended by a number or by one letter and written with `=` (`S3=`,
+    `SB=`), or indexed (`S[3]=`), is another spindle's word; an extension the profile lists
+    as an angle (`addresses.angular`: `SF=`, a thread's start angle) is no speed at all. A
+    clamp word of the profile (`LIMS=`, `LIMS[2]=`) is a limit. A longer name is a word of
+    its own and none of this script's business (`SPOS=`, a variable called `SPEED`).
+    """
+    spindle = params.spindle_address.upper()
+    out: List[SpeedWord] = []
+    count = len(tokens)
+
+    def after(i: int) -> int:
+        j = i + 1
+        while j < count and tokens[j].kind == "whitespace":
+            j += 1
+        return j
+
+    def indexed_value(i: int) -> Optional[int]:
+        """The index of the number of `…[n]=value`, where token ``i`` is the `[n]` part."""
+        j = after(i)
+        if j >= count or tokens[j].kind != "operator" or tokens[j].text.strip() != "=":
+            return None
+        k = after(j)
+        if k < count and tokens[k].kind == "word" and not tokens[k].address and tokens[k].value is not None:
+            return k
+        return None
+
+    i = 0
+    while i < count:
+        token = tokens[i]
+        text = (token.text or "").strip()
+        address = (token.address or "").upper()
+        if token.kind == "unknown" and text.upper() in params.speed_limit_words:
+            # `LIMS[2]=1800`: the tokenizer reads the name, the index, `=` and the number.
+            j = after(i)
+            if j < count and tokens[j].kind == "expression" and INDEX.match(tokens[j].text.strip()):
+                k = indexed_value(j)
+                if k is not None:
+                    name = "".join(t.text for t in tokens[i : k + 1]).strip()
+                    index = INDEX.match(tokens[j].text.strip())
+                    out.append(SpeedWord("limit", name, tokens[k], index.group(1) if index else None, text.upper()))
+                    i = k + 1
+                    continue
+        if token.kind != "word" or address == "":
+            i += 1
+            continue
+        base, bracket, rest_of = address.partition("[")
+        if bracket:
+            # The same indexed forms, as one word (`LIMS[2]=1800`, `S[2]=300`).
+            index = rest_of.rstrip("]").strip()
+            if base in params.speed_limit_words:
+                out.append(SpeedWord("limit", text, token, index, base))
+            elif base == spindle:
+                out.append(SpeedWord("other", text, token, index, base + "[]"))
+            i += 1
+            continue
+        if address == spindle:
+            index = INDEX.match((token.value_text or "").strip())
+            if index is not None:
+                # `S[2]=300`: the tokenizer reads `S[2]` as the S word with a bracket for a
+                # value, then `=` and the number.
+                k = indexed_value(i)
+                if k is not None:
+                    name = "".join(t.text for t in tokens[i : k + 1]).strip()
+                    out.append(SpeedWord("other", name, tokens[k], index.group(1), spindle + "[]"))
+                    i = k + 1
+                    continue
+            out.append(SpeedWord("speed", text, token, None, address))
+            i += 1
+            continue
+        if address in params.speed_limit_words:
+            out.append(SpeedWord("limit", text, token, None, address))
+            i += 1
+            continue
+        rest = address[len(spindle) :] if address.startswith(spindle) else ""
+        if assignment_word(token) and address not in params.angular and rest != "":
+            if rest.isdigit() and int(rest) == 0:
+                # `S0=` addresses the master spindle, which is what the plain S does.
+                out.append(SpeedWord("speed", text, token, None, address))
+            elif rest.isdigit() or (len(rest) == 1 and rest.isalpha()):
+                out.append(SpeedWord("other", text, token, rest, address))
+        i += 1
+    return out
+
+
+def spindle_choice(tokens: Sequence[gedit_nc.Token], tracker: gedit_nc.FeedModeTracker) -> Optional[Tuple[Optional[str], str]]:
+    """``(spindle, as written)`` when this block chooses the master spindle, else ``None``.
+
+    A code of the database's ``spindle`` group that switches no state of its own (not
+    ``modal``) and is written as a call names the spindle in its argument (`SETMS(3)`);
+    written without one (`SETMS`, `SETMS()`), it goes back to the master spindle the machine
+    is set up with, and ``spindle`` is ``None``. The database says which code that is, not
+    this file.
+    """
+    for token in tokens:
+        if token.kind == "call" and token.address:
+            name = token.address
+        elif token.kind in ("unknown", "keyword") and token.text:
+            name = token.text.strip()
+        else:
+            continue
+        entry = tracker.entry(name)
+        if entry is None or entry.get("group") != "spindle" or entry.get("modal") is True:
+            continue
+        argument = (token.value_text or "").strip() if token.kind == "call" else ""
+        return (argument if argument != "" else None, token.text.strip())
+    return None
+
+
+def report_other(
+    word: SpeedWord,
+    master: Optional[Tuple[str, int, str]],
+    line: int,
+    findings: Findings,
+    counts: Counts,
+) -> None:
+    """A word for another spindle: reported, and left unless the run scales other spindles."""
+    counts.other += 1
+    if master is not None:
+        label = "%s after %s" % (word.address, master[2])
+    elif word.address.endswith("[]"):
+        label = word.address[:-2] + "[n]="
+    else:
+        label = word.address + "="
+    if label not in counts.other_addresses:
+        counts.other_addresses.append(label)
+    advice = ' Switch on "Also scale other spindles" to scale it with the others.'
+    if master is not None:
+        message = (
+            "%s drives spindle %s, which %s on line %d made the master spindle; this run "
+            "cannot tell whether that is the machine's main spindle, so it is left as it is."
+            % (word.name, master[0], master[2], master[1])
+        )
+    elif word.spindle is not None and word.spindle.isdigit():
+        message = (
+            "%s is the speed of spindle %s, named by its number; this run scales only the "
+            "plain S word of the master spindle, so it is left as it is." % (word.name, word.spindle)
+        )
+    elif word.spindle is not None and word.address.endswith("[]"):
+        message = (
+            "%s is the speed of the spindle its index names; this run scales only the plain "
+            "S word of the master spindle, so it is left as it is." % word.name
+        )
+    else:
+        message = (
+            "%s is the speed of a spindle with an address of its own, not the plain S word "
+            "of the master spindle, so it is left as it is." % word.name
+        )
+    findings.add(line, "info", message + advice)
+
+
+def list_call_speeds(
+    entry: Dict[str, Any],
+    token: gedit_nc.Token,
+    line: int,
+    findings: Findings,
+    counts: Counts,
+) -> None:
+    """Lists the speeds among the arguments of a cycle written as a call. Never scaled."""
+    parameters = entry.get("params")
+    if not isinstance(parameters, list) or not parameters:
+        return
+    code = entry.get("code") or token.address
+    for position, (param, argument) in enumerate(zip(parameters, call_arguments(token.value_text)), 1):
+        if not isinstance(param, dict) or argument == "":
+            continue
+        label = param.get("label")
+        if not isinstance(label, str) or CALL_SPEED_LABEL.search(label) is None:
+            continue
+        counts.cycle += 1
+        findings.add(
+            line,
+            "info",
+            "Argument %d of %s (%s, %s) is %s and is left unchanged: this run does not "
+            "scale the arguments of a cycle." % (position, code, param.get("address"), lower_first(label), argument),
+        )
+
+
+def call_arguments(text: Optional[str]) -> List[str]:
+    """The arguments of a call as written, split at the commas between them.
+
+    An empty argument keeps its place, because a cycle reads its arguments by position; a
+    comma inside a string, a bracket or a nested call does not split.
+    """
+    if text is None:
+        return []
+    out: List[str] = []
+    current: List[str] = []
+    depth = 0
+    quoted = False
+    for char in text:
+        if quoted:
+            quoted = char != '"'
+        elif char == '"':
+            quoted = True
+        elif char in "([":
+            depth += 1
+        elif char in ")]":
+            depth -= 1
+        elif char == "," and depth == 0:
+            out.append("".join(current).strip())
+            current = []
+            continue
+        current.append(char)
+    out.append("".join(current).strip())
+    return out
+
+
+def lower_first(label: str) -> str:
+    """``Spindle speed while tapping`` → ``spindle speed while tapping``."""
+    return label[:1].lower() + label[1:] if label[1:2].islower() else label
+
+
+class Block:
+    """What a finding needs to know about the block a word stands in."""
+
+    __slots__ = ("pitch_code", "css_code")
+
+    def __init__(self, pitch_code: Optional[str], css_code: str) -> None:
+        #: The code that makes this block cut a thread: the block's own before a modal one.
+        self.pitch_code = pitch_code
+        #: The code that put the constant surface speed in force (`G96`, `G961`).
+        self.css_code = css_code
 
 
 def scale_token(
@@ -430,9 +791,18 @@ def scale_token(
     line: int,
     findings: Findings,
     counts: Counts,
+    name: Optional[str] = None,
+    spindle: Optional[str] = None,
+    block: Optional[Block] = None,
 ) -> Optional[Tuple[int, int, str]]:
-    """The edit this spindle word needs, or ``None`` — with a finding when it is left alone."""
-    word = token.text.strip()
+    """The edit this spindle word needs, or ``None`` — with a finding when it is left alone.
+
+    ``token`` carries the value that is edited; ``name`` is the word as the finding names
+    it, when that is more than the token (`LIMS[2]=1800`), and ``spindle`` the spindle a
+    limit is for, when the word names one.
+    """
+    word = name or token.text.strip()
+    block = block or Block(tracker.active_cycle, "G96")
 
     if token.value is None or token.value_text is None:
         counts.skip("value")
@@ -441,16 +811,20 @@ def scale_token(
 
     if limit_code is not None and not params.speed_limits:
         counts.skip("limit")
+        # `limit_code` is the clamp code of the block (`G50`), or empty for a clamp written as
+        # a word of its own (`LIMS=3000`), which names itself.
+        whose = "the speed limit of spindle %s" % spindle if spindle else "a spindle speed limit"
         findings.add(
             line,
             "info",
-            "%s is a spindle speed limit (%s), so it is not scaled." % (word, limit_code),
+            "%s is %s%s, so it is not scaled."
+            % (word, whose, " (%s)" % limit_code if limit_code else ""),
         )
         return None
 
     if limit_code is None and tracker.css and not params.surface_speed:
         counts.skip("css")
-        findings.add(line, "info", "%s is a surface speed (G96), so it is not scaled." % word)
+        findings.add(line, "info", "%s is a surface speed (%s), so it is not scaled." % (word, block.css_code))
         return None
 
     value = Decimal(token.value.raw)
@@ -581,7 +955,7 @@ def scale_token(
             line,
             "warning",
             "%s was scaled in a thread block (%s): the feed follows from the speed and the "
-            "pitch, so check this block by hand." % (word, tracker.active_cycle),
+            "pitch, so check this block by hand." % (word, block.pitch_code),
         )
     elif tracker.pitch_feed_ambiguous:
         # The block's code is a threading cycle on another kind of machine, or in another
@@ -654,16 +1028,23 @@ def write(value: str, token: gedit_nc.Token, params: Params) -> Tuple[str, bool]
     return gedit_nc.format_number(value, token.value, fmt, params.decimal_point_significant), whole
 
 
-def inherited_text(tracker: gedit_nc.FeedModeTracker) -> Optional[str]:
+def inherited_text(
+    tracker: gedit_nc.FeedModeTracker,
+    css_code: str = "G96",
+    master: Optional[Tuple[str, int, str]] = None,
+) -> Optional[str]:
     """What a primed run starts with, or ``None`` when that is the top-of-program state.
 
     Only the parts that change what this script does are named: constant surface speed
-    decides whether an ``S`` is scaled at all, and a thread cycle decides whether the block
-    has to be looked at by hand.
+    decides whether an ``S`` is scaled at all, a thread cycle decides whether the block has
+    to be looked at by hand, and another master spindle decides whose speed a plain ``S``
+    is.
     """
     parts: List[str] = []
     if tracker.css:
-        parts.append("constant surface speed (G96)")
+        parts.append("constant surface speed (%s)" % css_code)
+    if master is not None:
+        parts.append("spindle %s as the master spindle (%s)" % (master[0], master[2]))
     if tracker.pitch_feed and tracker.active_cycle is not None:
         parts.append("the thread-pitch cycle %s" % tracker.active_cycle)
     elif tracker.pitch_feed_ambiguous and tracker.ambiguous_code is not None:
@@ -673,7 +1054,7 @@ def inherited_text(tracker: gedit_nc.FeedModeTracker) -> Optional[str]:
         )
     if not parts:
         return None
-    return parts[0] if len(parts) == 1 else "%s and %s" % (parts[0], parts[1])
+    return parts[0] if len(parts) == 1 else "%s and %s" % (", ".join(parts[:-1]), parts[-1])
 
 
 def run(
@@ -698,15 +1079,29 @@ def run(
     down is cut at (G8 M4 finding 6), and says so at its first line.
     """
     tracker = gedit_nc.FeedModeTracker(codes)
-    power_on_state(tracker, cp)
+    #: The code that put the constant surface speed in force, for the finding that names
+    #: it (`G96`, a Sinumerik `G961`); `G96` is what a database without `sets` means.
+    css_code = code_with(power_on_state(tracker, cp), lambda e: sets_of(e).get("speedUnit") == "surface") or "G96"
     findings = Findings()
     counts = Counts()
     out: List[str] = []
     state: Optional[gedit_nc.LineState] = None
+    #: `(spindle, line, as written)` while the program has made another spindle the master
+    #: (`SETMS(3)`), else `None`: the master spindle the machine is set up with.
+    master: Optional[Tuple[str, int, str]] = None
 
     primed = fragment and bool(preceding)
     if primed:
-        state = gedit_nc.prime_tracker(tracker, preceding or (), cp)
+        state = gedit_nc.prime_tracker(tracker, preceding or (), cp, lines[0] if lines else None)
+        # `prime_tracker` answers about the modes and cycles; which code put the surface
+        # speed in force and which spindle is the master are read off the lines once more.
+        above_state: Optional[gedit_nc.LineState] = None
+        for offset, above in enumerate(preceding or ()):
+            above_tokens, above_state = gedit_nc.tokenize_line(above, cp, above_state)
+            css_code = code_with(block_entries(above_tokens, tracker), lambda e: sets_of(e).get("speedUnit") == "surface") or css_code
+            choice = spindle_choice(above_tokens, tracker)
+            if choice is not None:
+                master = None if choice[0] is None else (choice[0], offset + 1, choice[1])
 
     if not codes:
         findings.add(
@@ -716,7 +1111,7 @@ def run(
             "could not be recognised: check their speeds by hand.",
         )
     if primed:
-        inherited = inherited_text(tracker)
+        inherited = inherited_text(tracker, css_code, master)
         if inherited is not None:
             findings.add(
                 base_line,
@@ -742,11 +1137,15 @@ def run(
 
     for index, line in enumerate(lines):
         tokens, state = gedit_nc.tokenize_line(line, cp, state)
-        tracker.update(tokens)
+        # An Okuma `$` line belongs to the block above it, thread cycle and all.
+        tracker.update(tokens, continued=gedit_nc.continues_block(line, cp))
         number = base_line + index
+        entries = block_entries(tokens, tracker)
+        css_code = code_with(entries, lambda e: sets_of(e).get("speedUnit") == "surface") or css_code
+        block = Block(code_with(entries, lambda e: e.get("pitchFeed") is True) or tracker.active_cycle, css_code)
         # Which code makes this block's `S` a clamp is the database's answer, not this
-        # file's: `G50` in Fanuc's G-code system A, `G92` in system B, `G26` on a Sinumerik
-        # (plan AD-19 rule 4, F24).
+        # file's: `G50` in Fanuc's G-code system A, `G92` in system B, `G25` and `G26` on a
+        # Sinumerik (plan AD-19 rule 4, F24).
         limit_code = gedit_nc.speed_limit_of(codes, tokens)
 
         # A thread block that starts while a changed speed is in force: the speed that
@@ -760,7 +1159,7 @@ def run(
                     "warning",
                     "This thread block (%s) runs at %s, which was scaled on line %d: the "
                     "feed follows from the speed and the pitch, so check this block by "
-                    "hand." % (tracker.active_cycle, last_speed[1], last_speed[0]),
+                    "hand." % (block.pitch_code, last_speed[1], last_speed[0]),
                 )
             else:
                 findings.add(
@@ -776,14 +1175,62 @@ def run(
         thread_block = thread_now
 
         edits: List[Tuple[int, int, str]] = []
-        for token in tokens:
-            if not speed_word(token, params):
+        for word in speed_words(tokens, params):
+            # A plain S while another spindle is the master drives that spindle.
+            elsewhere = word.kind == "other" or (word.kind == "speed" and master is not None)
+            spindle = word.spindle if word.kind != "speed" else (master[0] if master is not None else None)
+            if tracker.f_not_feed and word.kind != "limit":
+                # A dwell block (`fNotFeed`): an S counts spindle revolutions (`G4 S2`, and
+                # `G4 S2=10` for spindle 2). It is a time, not a speed, so it is neither
+                # scaled nor counted as one.
+                counts.dwell += 1
+                continue
+            if word.kind == "limit":
+                # A clamp word (`LIMS=`, `LIMS[2]=`) is a limit wherever it stands; it names
+                # itself.
+                counts.total += 1
+                edit = scale_token(word.value, tracker, "", params, number, findings, counts, word.name, word.spindle, block)
+                if edit is not None:
+                    edits.append(edit)
+                continue
+            if elsewhere and limit_code is not None:
+                # In a limit block every speed word is a limit, another spindle's too
+                # (`G26 S3000 S2=2000`): the limit option decides, not the spindle.
+                counts.total += 1
+                edit = scale_token(word.value, tracker, limit_code, params, number, findings, counts, word.name, spindle, block)
+                if edit is not None:
+                    edits.append(edit)
+                continue
+            if elsewhere and not params.other_spindles:
+                report_other(word, master if word.kind == "speed" else None, number, findings, counts)
+                # Another spindle has a speed of its own now (a driven tool's `SB=`, a
+                # spindle named by its number): a thread cut next may run on it, so which
+                # speed that thread runs at is no longer the S this run changed.
+                last_speed = None
                 continue
             counts.total += 1
-            edit = scale_token(token, tracker, limit_code, params, number, findings, counts)
+            edit = scale_token(
+                word.value, tracker, limit_code if word.kind == "speed" else None, params, number,
+                findings, counts, word.name, spindle if limit_code is not None else None, block,
+            )
             if edit is not None:
                 edits.append(edit)
-                last_speed = (number, token.text.strip())
+                if limit_code is None:
+                    last_speed = (number, word.name)
+
+        # A block that chooses the master spindle stands alone, so it changes the words of
+        # the blocks after it.
+        choice = spindle_choice(tokens, tracker)
+        if choice is not None:
+            master = None if choice[0] is None else (choice[0], number, choice[1])
+
+        # A cycle written as a call: its speeds are arguments, listed and never scaled.
+        for token in tokens:
+            if token.kind != "call" or not token.address:
+                continue
+            entry = tracker.entry(token.address)
+            if entry is not None:
+                list_call_speeds(entry, token, number, findings, counts)
 
         out.append(apply_edits(line, edits) if edits else line)
 
@@ -840,6 +1287,18 @@ def summary(counts: Counts, findings: Findings, params: Params) -> str:
         parts.append("%s kept whole" % "{:,}".format(counts.whole))
     if counts.thread:
         parts.append("%s to check by hand" % count_text(counts.thread, "thread block"))
+    if counts.other:
+        parts.append(
+            "%s left as written (%s)"
+            % (
+                count_text(counts.other, "word for another spindle", "words for other spindles"),
+                ", ".join(counts.other_addresses),
+            )
+        )
+    if counts.cycle:
+        parts.append("%s left unchanged" % count_text(counts.cycle, "cycle speed"))
+    if counts.dwell:
+        parts.append("%s left as written" % count_text(counts.dwell, "dwell in spindle revolutions", "dwells in spindle revolutions"))
 
     message = base + ("; " + ", ".join(parts) if parts else "") + "."
     if findings.dropped:

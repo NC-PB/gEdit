@@ -48,7 +48,7 @@ exports[`generateGrammar > fanuc-gcode: is stable 1`] = `
         "keyword",
       ],
       [
-        "[A-Za-z]{2,}(?=\\s*\\[)",
+        "[A-Za-z]{2,8}(?=\\s*\\[)",
         "keyword",
       ],
       [
@@ -64,31 +64,31 @@ exports[`generateGrammar > fanuc-gcode: is stable 1`] = `
         "mcode",
       ],
       [
-        "T(?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*[+-]?\\s*(?=[#\\[]))",
+        "T(?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*(?:[+-]\\s*)?(?=[#\\[]))",
         "tool",
       ],
       [
-        ",[A-Za-z](?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*[+-]?\\s*(?=[#\\[]))",
+        ",[A-Za-z](?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*(?:[+-]\\s*)?(?=[#\\[]))",
         "number",
       ],
       [
-        "[XYZABCUVW](?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*[+-]?\\s*(?=[#\\[]))",
+        "[XYZABCUVW](?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*(?:[+-]\\s*)?(?=[#\\[]))",
         "axis",
       ],
       [
-        "[IJK](?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*[+-]?\\s*(?=[#\\[]))",
+        "[IJK](?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*(?:[+-]\\s*)?(?=[#\\[]))",
         "arcCenter",
       ],
       [
-        "F(?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*[+-]?\\s*(?=[#\\[]))",
+        "F(?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*(?:[+-]\\s*)?(?=[#\\[]))",
         "feed",
       ],
       [
-        "S(?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*[+-]?\\s*(?=[#\\[]))",
+        "S(?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*(?:[+-]\\s*)?(?=[#\\[]))",
         "spindle",
       ],
       [
-        "[DHLOPQR](?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*[+-]?\\s*(?=[#\\[]))",
+        "[DHLOPQR](?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*(?:[+-]\\s*)?(?=[#\\[]))",
         "number",
       ],
       [
@@ -164,7 +164,7 @@ exports[`generateGrammar > fanuc-lathe: is stable 1`] = `
         "keyword",
       ],
       [
-        "[A-Za-z]{2,}(?=\\s*\\[)",
+        "[A-Za-z]{2,8}(?=\\s*\\[)",
         "keyword",
       ],
       [
@@ -180,31 +180,31 @@ exports[`generateGrammar > fanuc-lathe: is stable 1`] = `
         "mcode",
       ],
       [
-        "T(?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*[+-]?\\s*(?=[#\\[]))",
+        "T(?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*(?:[+-]\\s*)?(?=[#\\[]))",
         "tool",
       ],
       [
-        ",[A-Za-z](?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*[+-]?\\s*(?=[#\\[]))",
+        ",[A-Za-z](?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*(?:[+-]\\s*)?(?=[#\\[]))",
         "number",
       ],
       [
-        "[XZCYUW](?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*[+-]?\\s*(?=[#\\[]))",
+        "[XZCYUW](?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*(?:[+-]\\s*)?(?=[#\\[]))",
         "axis",
       ],
       [
-        "[IK](?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*[+-]?\\s*(?=[#\\[]))",
+        "[IK](?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*(?:[+-]\\s*)?(?=[#\\[]))",
         "arcCenter",
       ],
       [
-        "F(?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*[+-]?\\s*(?=[#\\[]))",
+        "F(?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*(?:[+-]\\s*)?(?=[#\\[]))",
         "feed",
       ],
       [
-        "S(?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*[+-]?\\s*(?=[#\\[]))",
+        "S(?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*(?:[+-]\\s*)?(?=[#\\[]))",
         "spindle",
       ],
       [
-        "[ABDEHJLOPQRV](?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*[+-]?\\s*(?=[#\\[]))",
+        "[ABDEHJLOPQRV](?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)|\\s*(?:[+-]\\s*)?(?=[#\\[]))",
         "number",
       ],
       [
@@ -318,6 +318,339 @@ exports[`generateGrammar > heidenhain-klartext: is stable 1`] = `
       [
         "[A-Za-z][A-Za-z0-9+\\-.:\\\\/_]*",
         "",
+      ],
+      [
+        "\\s+",
+        "",
+      ],
+    ],
+  },
+}
+`;
+
+exports[`generateGrammar > okuma-osp: is stable 1`] = `
+{
+  "defaultToken": "",
+  "ignoreCase": true,
+  "tokenizer": {
+    "root": [
+      [
+        "^\\$[^%]*%",
+        "programMarker",
+      ],
+      [
+        "^\\s*%.*$",
+        "programMarker",
+      ],
+      [
+        "\\([^)]*\\)",
+        "comment",
+      ],
+      [
+        "\\([^)]*$",
+        "comment",
+      ],
+      [
+        "^\\s*[/]",
+        "skip",
+      ],
+      [
+        "^(\\s*)(N\\s*\\d{1,4}(?![0-9A-Za-z]))(\\s*)([/])",
+        [
+          "",
+          "blockNumber",
+          "",
+          "skip",
+        ],
+      ],
+      [
+        "^(\\s*)(N[A-Za-z][A-Za-z0-9]{0,3}(?![0-9A-Za-z]))(\\s*)([/])",
+        [
+          "",
+          "section",
+          "",
+          "skip",
+        ],
+      ],
+      [
+        "^\\s*O(?<name>[A-Z0-9]{1,4})\\s*$",
+        "programMarker",
+      ],
+      [
+        "((?:CALL|MODIN))(\\s+)(O[A-Za-z0-9]{1,4})(?![0-9A-Za-z])",
+        [
+          "keyword",
+          "",
+          "programMarker",
+        ],
+      ],
+      [
+        "(?:PSELECT|MODOUT|MODIN|WRITE|CALL|GOTO|READ|AND|END|EOR|GET|NOT|PUT|RTS|EQ|GE|GT|IF|LE|LT|NE|OR)(?![A-Za-z])",
+        "keyword",
+      ],
+      [
+        "N\\s*\\d{1,4}(?![0-9A-Za-z])",
+        "blockNumber",
+      ],
+      [
+        "N[A-Za-z][A-Za-z0-9]{0,3}(?![0-9A-Za-z])",
+        "section",
+      ],
+      [
+        "(?:V[A-Z][A-Z0-9]{3})",
+        "variable",
+      ],
+      [
+        "(?:V\\d+)",
+        "variable",
+      ],
+      [
+        "[A-Za-z]{2,8}(?=\\s*\\[)",
+        "keyword",
+      ],
+      [
+        "(?:[ADFIKLRSTUWXZ][AB]|BC|BR|QA)(?=\\s*=(?!=))",
+        "keyword",
+      ],
+      [
+        "T(?=\\s*=(?!=))",
+        "tool",
+      ],
+      [
+        "[XZCY](?=\\s*=(?!=))",
+        "axis",
+      ],
+      [
+        "[IK](?=\\s*=(?!=))",
+        "arcCenter",
+      ],
+      [
+        "F(?=\\s*=(?!=))",
+        "feed",
+      ],
+      [
+        "S(?=\\s*=(?!=))",
+        "spindle",
+      ],
+      [
+        "G\\s*\\d{1,3}(?![\\d.])",
+        "gcode",
+      ],
+      [
+        "M\\s*\\d{1,3}(?![\\d.])",
+        "mcode",
+      ],
+      [
+        "T\\s*(?:\\d{6}|\\d{4})(?!\\d)",
+        "tool",
+      ],
+      [
+        "T\\s*\\d+",
+        "",
+      ],
+      [
+        "[XZCY]\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)",
+        "axis",
+      ],
+      [
+        "[IK]\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)",
+        "arcCenter",
+      ],
+      [
+        "F\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)",
+        "feed",
+      ],
+      [
+        "S\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)",
+        "spindle",
+      ],
+      [
+        "(?:DA|SA|SB|A|B|D|E|H|J|L|O|P|Q|R|U|W)\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+)",
+        "number",
+      ],
+      [
+        "[A-Za-z]{2}[A-Za-z0-9]{0,2}(?![0-9A-Za-z])",
+        "variable",
+      ],
+      [
+        "(?:\\d+\\.?\\d*|\\.\\d+)",
+        "number",
+      ],
+      [
+        "[=+\\-*/\\^%:<>|&,!\\[\\]]",
+        "operator",
+      ],
+      [
+        "\\s+",
+        "",
+      ],
+    ],
+  },
+}
+`;
+
+exports[`generateGrammar > sinumerik: is stable 1`] = `
+{
+  "defaultToken": "",
+  "ignoreCase": true,
+  "tokenizer": {
+    "root": [
+      [
+        "^%_N_\\w+_(?:MPF|SPF)",
+        "programMarker",
+      ],
+      [
+        ""[^"]*"",
+        "string",
+      ],
+      [
+        ""[^"]*$",
+        "string",
+      ],
+      [
+        ";.*$",
+        "comment",
+      ],
+      [
+        "^(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*)(N\\d+)([ \\t]+)([A-Za-z_]\\w*:(?!=))",
+        [
+          "",
+          "skip",
+          "",
+          "blockNumber",
+          "",
+          "section",
+        ],
+      ],
+      [
+        "^(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*)([A-Za-z_]\\w*:(?!=))",
+        [
+          "",
+          "skip",
+          "",
+          "section",
+        ],
+      ],
+      [
+        "^(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*)(:\\s*\\d+)",
+        [
+          "",
+          "skip",
+          "",
+          "blockNumber",
+        ],
+      ],
+      [
+        "^\\s*[/][0-9]?",
+        "skip",
+      ],
+      [
+        "N\\s*\\d+",
+        "blockNumber",
+      ],
+      [
+        "(?:\\$[A-Z_][A-Z0-9_]*)",
+        "variable",
+      ],
+      [
+        "(?:R\\d+)(?![\\w\\.])",
+        "variable",
+      ],
+      [
+        "R\\s*(?=\\[)",
+        "variable",
+      ],
+      [
+        "G\\s*\\d{1,3}(?![\\d\\.])",
+        "gcode",
+      ],
+      [
+        "M\\s*\\d+(?![\\d\\.])",
+        "mcode",
+      ],
+      [
+        "L\\s*\\d+(?![\\d\\.])",
+        "keyword",
+      ],
+      [
+        "T(?=\\s*=(?!=))",
+        "tool",
+      ],
+      [
+        "[XZCY](?=\\s*=(?!=))",
+        "axis",
+      ],
+      [
+        "[IJK](?=\\s*=(?!=))",
+        "arcCenter",
+      ],
+      [
+        "F(?=\\s*=(?!=))",
+        "feed",
+      ],
+      [
+        "S(?=\\s*=(?!=))",
+        "spindle",
+      ],
+      [
+        "(?:LIMS|AR|CR|SF|D|P)(?=\\s*=(?!=))",
+        "number",
+      ],
+      [
+        "(?=[A-Za-z_][A-Za-z0-9_]{0,63}\\s*=(?!=))(?:[A-Z_][A-Z0-9_]*(?=\\s*=(?!=)))",
+        "keyword",
+      ],
+      [
+        "T(?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+))",
+        "tool",
+      ],
+      [
+        "[XZCY](?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+))",
+        "axis",
+      ],
+      [
+        "[IJK](?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+))",
+        "arcCenter",
+      ],
+      [
+        "F(?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+))",
+        "feed",
+      ],
+      [
+        "S(?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+))",
+        "spindle",
+      ],
+      [
+        "(?:LIMS|AR|CR|SF|D|P)(?:\\s*[+-]?(?:\\d+\\.?\\d*|\\.\\d+))",
+        "number",
+      ],
+      [
+        "(?:[A-Za-z_]\\w*(?=\\()|(?:[A-Z_]{2}[A-Z0-9_]*)(?![A-Za-z0-9_])(?=\\s+\\())",
+        "keyword",
+      ],
+      [
+        "(?:COMPCURV|ENDWHILE|TRANSMIT|AMIRROR|COMPCAD|DEFAULT|ENDLOOP|EXTCALL|ORIAXES|ORIVECT|REPEATB|TRAFOOF|ASCALE|ATRANS|COMPOF|COMPON|CUT3DC|DIAM90|DIAMOF|DIAMON|ENDFOR|EXTERN|MIRROR|ORIMKS|ORIWKS|REPEAT|STOPRE|STRING|TRAANG|TRACYL|TRAORI|BLOCK|BRISK|B_AND|B_NOT|B_XOR|CFTCP|CUT2D|ENDIF|FFWOF|FFWON|FRAME|GOTOB|GOTOC|GOTOF|MCALL|PCALL|SCALE|TRANS|UNTIL|WHILE|AROT|AXIS|BOOL|B_OR|CALL|CASE|CFIN|CHAR|ELSE|GOTO|LOOP|PROC|REAL|SOFT|SUPA|ACN|ACP|AND|CFC|CIP|DEF|DIV|FOR|INT|MOD|NOT|RET|ROT|RPL|XOR|AC|CT|DC|IC|IF|OF|OR|TO)(?![A-Za-z0-9_])",
+        "keyword",
+      ],
+      [
+        "[A-Za-z_]\\w*",
+        "",
+      ],
+      [
+        "'[HB][0-9A-F \\t]*'",
+        "number",
+      ],
+      [
+        "(?:\\d+\\.?\\d*|\\.\\d+)(?:EX[+-]?\\d+)?",
+        "number",
+      ],
+      [
+        "(?:==|<>|<=|>=|<<)",
+        "operator",
+      ],
+      [
+        "[=+\\-*/\\^%:<>|&,()!\\[\\]]",
+        "operator",
       ],
       [
         "\\s+",

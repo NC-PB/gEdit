@@ -68,6 +68,23 @@ G-code system A, `l05` and `l07` system B; the expected system per file is in
 | `O2001` | A turning program in a file without an extension. |
 | `detect-lathe.txt` | A complete turning program in a `.txt` file, so only the content decides the dialect. |
 
+## `nc/sinumerik/`: Siemens Sinumerik 840D turning programs (M8)
+
+Written from `docs/planning/syntax/syntax-sinumerik.md` §2-§8. Diameter programming is on
+at the top of each of them, because that is the profile's documented default (§8.5, owner
+decision D35); `s02` and `s05` switch it. The `.MPF` and `.SPF` extensions are written in
+upper case and still count as `mpf` and `spf`.
+
+| File | Contents |
+|---|---|
+| `s01-shaft.MPF` | A three-tool shaft: the transfer header `%_N_SHAFT_MPF` and `;$PATH=`, a header tool list between separator lines, `G18 G90 G95 G40 G500 DIAMON`, `MSG("…")` in front of each operation, `T="ROUGH" D1` with `G96 S200 LIMS=3000 M4` and the stock-removal call `CYCLE95("…",…)`, which is recognized and not described, `T3 D1` for a `G42` finishing pass with a `G3 … CR=2` corner, `T="THREAD_M40"` cutting three straight `G33 Z… K1.5 SF=0` passes, `MSG()` and `M30`. |
+| `s02-drill.MPF` | A flange: a centre hole on the turning axis with `G17` and `CYCLE83(…)`, then driven tools on the face — `SPOS=0`, `DIAMOF`, `TRANSMIT`, `G17 G94`, the tool spindle as `S3=2400 M3=3`, `MCALL CYCLE83(…)` over three positions and the cancelling `MCALL`, `M3=5`, `SETMS(3)` for three `CYCLE84(…)` tapping calls, `SETMS(1)`, `TRAFOOF`, `DIAMON` and `G18 G95`. |
+| `s03-sub.SPF` | A subprogram: `%_N_GROOVE_SPF`, `PROC GROOVE(REAL XBOT, REAL ZPOS, INT PECKS)`, `DEF REAL` and `DEF INT`, the `R` parameter `R10`, the labels `NEXT_PECK:` and `LAST_CUT:` with `IF … GOTOF` and `GOTOB`, values written `X=XNOW`, the dwell `G4 F0.3`, `MSG("…")` and `MSG()`, the calls `L20`, `L30 P2`, `CALL "…"`, `EXTCALL "…"` and `PROBE_DIA(1,,3)`, and `M17`. |
+| `s04-packed.MPF` | No transfer header, packed words (`N10G18G90G95`, `T1D1`, `G0X90Z2`), the block skips `/` and `/1`, a lower-case block, and every form of the `T` word: `T1`, `T12`, the offset cancel `T0 D0` that is **not** a tool change, `MSG("T1 ROUGH")`, which names a tool inside a string and is not one either, and the spindle forms `T1=5` (tool 5) and `T2="PARTOFF"` next to `M1=4`, `M1=5`, `M2=4` and `M2=5`, which switch spindles and are neither a stop nor the program end. |
+| `s05-diameter.MPF` | Diameter programming assumed on at the top, then switched three ways — `DIAMOF`, `DIAM90` with a `G91` step, `DIAMON` — plus the clamp `G26 S3000`, `G710`, the dwells `G4 F1.5` and `G4 S2` (two spindle revolutions, not a speed) and the optional stop `M1`. |
+| `SHAFT_OP20` | A part-off program in a file without an extension, so only the content decides the dialect. |
+| `detect-sinumerik.txt` | A finishing pass and a centre hole in a `.txt` file, so only the content decides the dialect. |
+
 ## `nc/heidenhain/`: Heidenhain Klartext programs
 
 | File | Contents |
@@ -77,6 +94,26 @@ G-code system A, `l05` and `l07` system B; the expected system per file is in
 | `h03-speed-only.h` | `TOOL CALL Z S5000` and `TOOL CALL S6000 F900`, which change the speed but not the tool. |
 | `h04-cycle-feeds.h` | Cycle 200 with a numeric `Q206` and with `Q206=FAUTO`, cycle 207 with the pitch `Q239`, and the feeds `FAUTO`, `FZ`, `FU`, `FQ50` and `F` with a `Q50 =` assignment. |
 | `detect-heidenhain.txt` | A complete program in a `.txt` file. |
+
+## `nc/okuma/`: Okuma OSP turning programs (M8)
+
+Written from `docs/planning/syntax/syntax-okuma.md` §2-§8. A unit system changes what a
+number is worth, never how the program looks, so the files read the same under each of the
+profile's three unit systems; the numbers themselves are chosen for a 1 mm machine, the
+profile's assumed default. `o01`-`o03` and `o05` are main programs with the `$NAME.MIN%`
+transfer header, `o04` is a subprogram file. The expected profile per file is in
+`expected/detect/okuma.json`; the same programs under other extensions, and the G10
+reviewer's own Okuma programs, are in `expected/detect/_improvements.json`.
+
+| File | Contents |
+|---|---|
+| `o01-flange.MIN` | A four-tool turning program: `$O01-FLANGE.MIN%`, `O1001`, `N1 (…)` operation comments, the clamp `G50 S2500` before `G96 S180 M03 M42`, the six-digit `T010101` and `T030303` next to the four-digit `T0202` and `T0707` on purpose, a `G42`/`G40` finishing pass, and two `G74` cycles - a centre hole and a face groove - whose `T0203` and `T0708` change only the offset of the end point and are **not** tool changes, `M02`, `%`. Its header decides the dialect under any extension (G10 M8), and its six-digit `T` words carry it even without the header. |
+| `o02-thread.MIN` | Threading under `G97`: the multi-pass cycle `G71 … B60 D0.7 U0.1 H2.45 L2 F2 M23 M32 M73` (a thread cycle on this control, not a roughing cycle), a `G33 … F2` pass followed by passes that change only `X`, and the dwell `G04 F1`. |
+| `o03-live-tool.MIN` | Driven tools on the face: `M110` alone in its block, `M146`, `G94`, `SB=2000 M13`, a modal `G181` drilling cycle repeated at five more `C` positions, `G180`, a `G184` tapping cycle with `Q6`, `M12`, `M147`, `M109`. |
+| `o04-sub.SUB` | Two subprograms in one file: `O1234` with the sequence name `NLOOP`, `V1` counters, `X=DIA1+2` expressions, `IF [V1 LT 3] GOTO NLOOP` and `CALL O2345 Q2 DIA1=40 ZL1=-20`; `O2345` with the LAP call `G85 NLAP1 …`, its shape `NLAP1 G81` … `G80`, the short jump `IF […] N100`, `GOTO NEND` and `NEND RTS`. |
+| `o05-lap-tap.MIN` | LAP roughing and finishing (`N0100 G85 NAT01 …`, `N0200 G87 NAT01`) along the shape `NAT01 G81` … `G80`, which stands before the calls; the change of cutting conditions on two lines that start with `$` (`$ G84 XA=60 DA=2 FA=0.25`, `$ XB=40 DB=1 FB=0.2`); a `G71` thread cycle whose `H`, `L` and `F` go on over a `$` line; and a `G77` tap with its approach `K`. The lines the continuation and tapping detection rules of G10 M8 need. |
+| `SHAFT-OP2` | A turning and cross-drilling program in a file **without an extension and without the `$…%` header**, which is how a program copied off the control can arrive: only the content decides the dialect. |
+| `detect-okuma.txt` | A complete program in a `.txt` file, with the header and the modal call `MODIN O3000` … `MODOUT`, so only the content decides the dialect. |
 
 ## `nc/ambiguous/`: content that barely decides, or does not decide at all
 
@@ -113,10 +150,12 @@ walks `nc/` only, so these files are checked by the tests that read them.
 
 | File | Read by | Contents |
 |---|---|---|
-| `expected/detect/fixtures.json` | `src/lib/core/profiles/detect.test.ts` | The expected profile for every file under `nc/` (`fallback` and `refused` are answers too), plus `improvements`: the hand-written cases whose answer AD-11 detection changed against M0. The test asserts the key list equals the `nc/` listing, so a new fixture without an entry fails. |
+| `expected/detect/<folder>.json` | `src/lib/core/profiles/detect.test.ts` | The expected profile for every file under `nc/` (`fallback` and `refused` are answers too), plus `improvements`: the hand-written cases whose answer AD-11 detection changed against M0. The test asserts the key list equals the `nc/` listing, so a new fixture without an entry fails. |
 | `tokens/fanuc-gcode.json` | `src/lib/core/nc/tokenizer.test.ts` | 68 golden lines, 184 tokens. Each entry is `{ line, tokens }` plus an optional `prev` (the incoming `LineState`, default not-a-continuation) and an optional `state` (the expected outgoing one). An entry is compared on the fields it lists; whitespace tokens are left out. |
 | `tokens/fanuc-lathe.json` | same | 72 golden lines, same format, written for turning: every `T` spelling, `U`/`W` words, the two-block cycles, `G4U2`, `C90000` and `E1.5`. |
 | `tokens/heidenhain-klartext.json` | same | 67 golden lines, 323 tokens, same format. |
+| `tokens/okuma-osp.json` | `tests/python/test_gedit_nc.py`, and `src/lib/core/nc/tokenizer.test.ts` from WP8.1 on | 111 golden lines, 256 tokens, same format. The M8 prelude wrote the first 75 from the lines the P1 tokenizer already reads the same way it will after AD-24 — comments, block skips, sequence numbers, `T` words in both lengths, the cycles and the macro keywords. WP8.1 adds the lines that AD-24 changes (`SB=`, `NLAP1`, the `$…%` header, `X=V1+V2`); the fixes after the M8 review add a line with a no-break space before `=`. |
+| `tokens/sinumerik.json` | same | 125 golden lines, 255 tokens, same format, written for turning: `;` comments, the skip levels, packed words, `T`/`D` pairs and the bare command keywords. WP8.1 adds strings, calls, labels, `R1=R2*2` and `$AA_IM[X]`; the fixes after the M8 review add calls with blanks before the bracket (`CYCLE840 (…)`) and a no-break space before `=`. |
 | `numberformat.cases.json` | `src/lib/core/nc/numberFormat.test.ts` | 57 `formatNumber` cases: the decimal string, the written literal `original` (or `null`, parsed through `parseNumber`), the `NumberFormatOptions`, the expected text, and an optional `note`. |
 
 ## Transform and script cases (M4)
@@ -235,12 +274,16 @@ never drift apart between them.
 
 ## Generated at run time
 
-`tests/gen/gen-large.mjs` writes large programs to `.perf/` (gitignored), built from
-`f01-mill-3tools.nc` and `h01-3tools.h`:
+`tests/gen/gen-large.mjs` writes large programs to `.perf/` (gitignored). The mill
+dialects are built from `f01-mill-3tools.nc` and `h01-3tools.h`; the two turning dialects
+are built from a seed program in the generator itself, until the M8 content work packages
+have their fixtures in:
 
 ```sh
 node tests/gen/gen-large.mjs --lines 300000 --dialect fanuc --mb 10 --out .perf/fanuc-300k.nc
 node tests/gen/gen-large.mjs --lines 1000 --dialect heidenhain --mb 50 --out .perf/klartext-50mb.h
+node tests/gen/gen-large.mjs --lines 300000 --dialect okuma --mb 10 --out .perf/okuma-300k.min
+node tests/gen/gen-large.mjs --lines 300000 --dialect sinumerik --mb 10 --out .perf/sinumerik-300k.mpf
 ```
 
 `--lines` is the minimum line count. `--mb` is the minimum size in MiB. With both, the

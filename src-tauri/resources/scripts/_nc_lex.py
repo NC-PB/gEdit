@@ -51,8 +51,27 @@ class Token:
 
     ``kind`` is one of ``blockNumber``, ``skip``, ``word``, ``keyword``, ``comment``,
     ``string``, ``variable``, ``expression``, ``operator``, ``continuation``,
-    ``programMarker``, ``whitespace``, ``unknown``. ``start`` and ``end`` are offsets
-    into the line, ``start`` inclusive and ``end`` exclusive.
+    ``programMarker``, ``label``, ``call``, ``whitespace``, ``unknown``. ``start`` and
+    ``end`` are offsets into the line, ``start`` inclusive and ``end`` exclusive.
+
+    The two kinds M8 added (plan §7.5):
+
+    ``label``
+        a jump target the program names instead of numbering it: an Okuma sequence name
+        (``NLAP1``, ``address`` ``'LAP1'``) or a Sinumerik label definition (``LOOP_A:``,
+        ``address`` ``'LOOP_A'``). It is never a ``blockNumber``, so a renumber leaves it
+        alone.
+    ``call``
+        an identifier written in front of ``(`` (a name of ``syntax.names`` also with
+        blanks between the two), together with everything up to the matching ``)``:
+        ``CYCLE83(50,0,2,-25,,-5)``, ``MSG ("A;B")``, ``L10(1)``. ``address`` is the
+        identifier and ``value_text`` the argument text; the arguments are not tokenized.
+
+    An address that takes ``=`` and an expression (``SB=1200``, ``S3=2500``, ``F=R10``)
+    stays a ``word``: ``address`` is what stands in front of the ``=``, ``value_text``
+    the right-hand side, and ``value`` is ``None`` unless that is one plain number — so
+    nothing that computes with NC numbers can scale ``F=R10``. A name the program gives
+    itself (``XNOW``, ``LAST_CUT``, ``DIA1``) is one ``unknown`` token with no address.
     """
 
     kind: str
@@ -80,15 +99,19 @@ _TAB = 0x09
 _SPACE = 0x20
 _QUOTE = 0x22
 _PERCENT = 0x25
+_PAREN_OPEN = 0x28
+_PAREN_CLOSE = 0x29
 _PLUS = 0x2B
 _COMMA = 0x2C
 _MINUS = 0x2D
 _ZERO = 0x30
 _NINE = 0x39
 _COLON = 0x3A
+_EQUALS = 0x3D
 _STAR = 0x2A
 _BRACKET_OPEN = 0x5B
 _BRACKET_CLOSE = 0x5D
+_UNDERSCORE = 0x5F
 _NO_CHAR = -1
 
 #: Operators, minus whatever the profile uses to delimit a comment.
@@ -169,6 +192,20 @@ class _LexSpec:
     tape_marker: bool
     #: ``:1234`` as a program number, the punched-tape form of ``O1234``.
     colon_program: bool
+    #: P8 ``syntax.sequenceNames``: the block-number prefix also names blocks (``NLAP1``).
+    sequence_names: bool
+    #: P8 ``syntax.labels``: a label definition at the head of a block, group ``name``.
+    labels: Optional[Any]
+    #: P8 ``syntax.header``: a file header at the head of a line.
+    header: Optional[Any]
+    #: P8 ``syntax.systemVariables``, tried at a position like ``variables``.
+    system_variables: Optional[Any]
+    #: P8 ``syntax.assignment``: the address in front of an ``=``.
+    assignment: Optional[Any]
+    #: P8 ``syntax.calls``: an identifier in front of ``(`` is one token (``_argument_list_at``).
+    calls: bool
+    #: M8 integration ``syntax.names``: a name the program gives itself is one token.
+    names: Optional[Any]
 
 
 @dataclass
@@ -183,20 +220,27 @@ class CompiledProfile:
 
     ``patterns`` in full:
 
-    ===================  ======================================================
-    ``detect_content``   ``[(regex, weight), …]``
-    ``section_heading``  regex or ``None``
-    ``continuation``     regex or ``None``
-    ``variables``        regex or ``None``
-    ``tool_trigger``     regex
-    ``tool_ignore``      regex or ``None``: a trigger line that also matches is no tool call
-    ``tool``             regex, with the named group ``tool``
-    ``program_start``    ``[regex, …]``
-    ``program_end``      ``[regex, …]``
-    ``outline``          ``[(kind, regex), …]``, in order; the first match wins
-    ``references``       ``[(trigger_regex, [address, …]), …]``
-    ``comment_filter``   regex or ``None``
-    ===================  ======================================================
+    ========================  =====================================================
+    ``detect_content``        ``[(regex, weight), …]``
+    ``section_heading``       regex or ``None``
+    ``continuation``          regex or ``None``
+    ``continuation_start``    regex or ``None`` (M8): the leading marker of a line that
+                              belongs to the block above it (Okuma ``$``)
+    ``variables``             regex or ``None``
+    ``assignment``            regex or ``None`` (P8): the address in front of an ``=``
+    ``labels``                regex or ``None`` (P8), with the named group ``name``
+    ``system_variables``      regex or ``None`` (P8)
+    ``header``                regex or ``None`` (P8): a file header at the head of a line
+    ``names``                 regex or ``None`` (M8): a name the program gives itself
+    ``tool_trigger``          regex
+    ``tool_ignore``           regex or ``None``: a trigger line that also matches is no tool call
+    ``tool``                  regex, with the named group ``tool``
+    ``program_start``         ``[regex, …]``
+    ``program_end``           ``[regex, …]``
+    ``outline``               ``[(kind, regex), …]``, in order; the first match wins
+    ``references``            ``[(trigger_regex, [address, …]), …]``
+    ``comment_filter``        regex or ``None``
+    ========================  =====================================================
 
     ``spec`` is the scanner's derived view, built on first use and cached here.
     """
@@ -215,41 +259,129 @@ class CompiledProfile:
 #: ``(?<`` that is not a lookbehind, i.e. the ECMAScript named group.
 _NAMED_GROUP = "(?<"
 
+#: What ECMAScript's ``\s`` matches, as the body of a Python character class: its white
+#: space and line terminators, the no-break space and the Unicode spaces included. Under
+#: ``re.ASCII`` Python's own ``\s`` knows only the first six of them.
+_JS_SPACE = "\\t\\n\\x0b\\x0c\\r \\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff"
+
+#: What ECMAScript's ``.`` matches: anything but a line terminator.
+_JS_DOT = "[^\\n\\r\\u2028\\u2029]"
+
+
+def _class_end(pattern: str, start: int) -> int:
+    """Index of the ``]`` that closes the character class opening at ``start``, or -1.
+
+    As in ECMAScript, the first ``]`` that is not escaped closes it.
+    """
+    i = start + 1
+    while i < len(pattern):
+        if pattern[i] == "\\":
+            i += 2
+            continue
+        if pattern[i] == "]":
+            return i
+        i += 1
+    return -1
+
+
+def _py_class(body: str) -> str:
+    """The ECMAScript character class ``[body]`` as Python ``re`` source.
+
+    Only ``\\s`` and ``\\S`` need a rewrite in there. ``\\s`` becomes the characters it
+    stands for. For ``\\S`` a class body has no way to say "none of those" beside other
+    members, so a class that holds it becomes an alternative: ``[\\S,]`` is "not a space,
+    or a comma", ``[^\\S,]`` "a space that is not a comma". A ``-`` beside either escape
+    is a character of its own in ECMAScript, because a class escape cannot end a range, so
+    it is escaped here and Python reads no range into it either.
+    """
+    negated = body.startswith("^")
+    if negated:
+        body = body[1:]
+    items: List[str] = []
+    i = 0
+    while i < len(body):
+        step = 2 if body[i] == "\\" else 1
+        items.append(body[i : i + step])
+        i += step
+    spaces = ("\\s", "\\S")
+    if not any(item in spaces for item in items):
+        return "[%s%s]" % ("^" if negated else "", body)
+    rest: List[str] = []
+    for k, item in enumerate(items):
+        if item == "\\s":
+            rest.append(_JS_SPACE)
+        elif item == "\\S":
+            continue
+        elif item == "-" and (
+            (k > 0 and items[k - 1] in spaces) or (k + 1 < len(items) and items[k + 1] in spaces)
+        ):
+            rest.append("\\-")
+        else:
+            rest.append(item)
+    others = "".join(rest)
+    if "\\S" not in items:
+        return "[%s%s]" % ("^" if negated else "", others)
+    if others.startswith("^"):
+        others = "\\" + others
+    if negated:
+        return "(?:(?![%s])[%s])" % (others, _JS_SPACE) if others else "[%s]" % _JS_SPACE
+    return "(?:[^%s]|[%s])" % (_JS_SPACE, others) if others else "[^%s]" % _JS_SPACE
+
 
 def to_py_regex(pattern: str) -> str:
     """A profile pattern as Python ``re`` source.
 
     Profile patterns live in the common subset of ECMAScript and Python ``re``
-    (plan AD-11), so the only rewrite left is the named group: ``(?<name>`` becomes
-    ``(?P<name>``. A lookbehind (``(?<=``) and a negative lookbehind (``(?<!``) are
-    **not** named groups and must survive untouched, and neither is a ``(?<`` that stands
-    inside a character class or behind a backslash.
+    (plan AD-11). What is left to rewrite are the spellings the two read differently:
+
+    - the named group: ``(?<name>`` becomes ``(?P<name>``. A lookbehind (``(?<=``) and a
+      negative lookbehind (``(?<!``) are **not** named groups and survive untouched, and
+      neither is a ``(?<`` inside a character class or behind a backslash.
+    - ``\\s`` and ``\\S``, inside a character class and outside one. ECMAScript's ``\\s``
+      also matches the no-break space and the other Unicode spaces (U+1680,
+      U+2000–U+200A, U+202F, U+205F, U+3000, U+FEFF) and the line terminators U+2028 and
+      U+2029; under ``re.ASCII`` Python's matches none of them. They become the class of
+      exactly the characters ECMAScript means.
+    - ``.``, which in ECMAScript stops at ``\\r``, U+2028 and U+2029 as well as at
+      ``\\n``.
+
+    Those two used to be left alone as harmless, but they are not: with an assignment
+    rule, ``S3<NBSP>=2500`` was another spindle's speed to the editor and the main
+    spindle's ``S3`` to a script, which then scaled the spindle number. Every other
+    escape reads the same on both sides once ``re.ASCII`` is set.
 
     Compile the result with ``re.ASCII`` — ``\\d`` must not match Eastern Arabic digits
     in a comment — and add ``re.IGNORECASE`` unless the profile sets
     ``syntax.caseSensitive``. :func:`compile_profile` does both.
     """
-    if not isinstance(pattern, str) or _NAMED_GROUP not in pattern:
+    if not isinstance(pattern, str):
         return pattern
     out: List[str] = []
     i = 0
     length = len(pattern)
-    in_class = False
     while i < length:
         char = pattern[i]
         if char == "\\":
-            out.append(pattern[i : i + 2])
+            pair = pattern[i : i + 2]
+            if pair == "\\s":
+                out.append("[%s]" % _JS_SPACE)
+            elif pair == "\\S":
+                out.append("[^%s]" % _JS_SPACE)
+            else:
+                out.append(pair)
             i += 2
             continue
-        if in_class:
-            if char == "]":
-                in_class = False
-            out.append(char)
-            i += 1
-            continue
         if char == "[":
-            in_class = True
-            out.append(char)
+            end = _class_end(pattern, i)
+            if end < 0:
+                # Unclosed: not a pattern either language compiles, so nothing to translate.
+                out.append(pattern[i:])
+                break
+            out.append(_py_class(pattern[i + 1 : end]))
+            i = end + 1
+            continue
+        if char == ".":
+            out.append(_JS_DOT)
             i += 1
             continue
         if pattern.startswith(_NAMED_GROUP, i) and pattern[i + 3 : i + 4] not in ("=", "!"):
@@ -335,7 +467,17 @@ def compile_profile(profile: Dict[str, Any]) -> CompiledProfile:
         "detect_content": detect_content,
         "section_heading": _compile_optional(syntax.get("sectionHeading"), "syntax.sectionHeading", flags),
         "continuation": _compile_optional(syntax.get("continuation"), "syntax.continuation", flags),
+        "continuation_start": _compile_optional(
+            syntax.get("continuationStart"), "syntax.continuationStart", flags
+        ),
         "variables": _compile_optional(syntax.get("variables"), "syntax.variables", flags),
+        # P8 (AD-24) and the M8 integration: the patterns of the turning dialects, compiled
+        # here once like every other one, under the names the TypeScript side uses.
+        "assignment": _compile_optional(syntax.get("assignment"), "syntax.assignment", flags),
+        "labels": _compile_optional(syntax.get("labels"), "syntax.labels", flags),
+        "system_variables": _compile_optional(syntax.get("systemVariables"), "syntax.systemVariables", flags),
+        "header": _compile_optional(syntax.get("header"), "syntax.header", flags),
+        "names": _compile_optional(syntax.get("names"), "syntax.names", flags),
         "tool_trigger": _compile_pattern(tool_call.get("trigger"), "toolCall.trigger", flags),
         "tool_ignore": _compile_optional(tool_call.get("ignore"), "toolCall.ignore", flags),
         "tool": _compile_pattern(tool_call.get("tool"), "toolCall.tool", flags),
@@ -451,6 +593,13 @@ def _build_spec(cp: CompiledProfile) -> _LexSpec:
         operators=frozenset(operators),
         tape_marker=_PERCENT not in comment_leads and _PERCENT not in skip_codes,
         colon_program=block_number.get("mode") != "leading-integer" and _COLON not in comment_leads,
+        sequence_names=syntax.get("sequenceNames") is True,
+        labels=cp.patterns.get("labels"),
+        header=cp.patterns.get("header"),
+        system_variables=cp.patterns.get("system_variables"),
+        assignment=cp.patterns.get("assignment"),
+        calls=syntax.get("calls") is True,
+        names=cp.patterns.get("names"),
     )
 
 
@@ -518,6 +667,89 @@ def _string_end_at(line: str, p: int, limit: int) -> int:
     return limit
 
 
+def _is_identifier_start(code: int) -> bool:
+    """True for the first character of an identifier: a letter or ``_``."""
+    return _is_letter(code) or code == _UNDERSCORE
+
+
+def _identifier_end_at(line: str, p: int, limit: int) -> int:
+    """End of the identifier at ``p`` (``CYCLE81``, ``LOOP_A``), or ``p`` when there is none."""
+    if p >= limit or not _is_identifier_start(ord(line[p])):
+        return p
+    i = p + 1
+    while i < limit:
+        code = ord(line[i])
+        if not _is_letter(code) and not _is_digit(code) and code != _UNDERSCORE:
+            break
+        i += 1
+    return i
+
+
+def _skip_space(line: str, p: int, limit: int) -> int:
+    """The first position at or behind ``p`` that is not whitespace, ``limit`` at the latest."""
+    i = p
+    while i < limit and _is_space(ord(line[i])):
+        i += 1
+    return i
+
+
+def _name_end_at(line: str, p: int, limit: int, spec: _LexSpec) -> int:
+    """End of the name at ``p`` (``syntax.names``: ``XBOT``, ``LOOP_A``, ``DIA1``), or ``p``.
+
+    ``p`` comes back when the profile declares no names or none starts there.
+    """
+    if spec.names is None or p >= limit:
+        return p
+    match = spec.names.match(line, p)
+    if match is None or match.end() == p:
+        return p
+    return min(match.end(), limit)
+
+
+def _argument_list_at(line: str, p: int, identifier_end: int, after_blanks: int, limit: int, spec: _LexSpec) -> int:
+    """Where the argument list of the identifier ``line[p:identifier_end]`` opens, or -1.
+
+    The ``(`` stands right behind the identifier (``CYCLE81(…)``, ``L10(1)``), or behind
+    blanks when the identifier is a name the profile declares (``syntax.names``):
+    ``MSG ("TEXT")``, ``CYCLE840 (…)``. A word of one letter and a number keeps its bracket
+    touching it to be a call, so ``M30 (END)`` in a program written for another control
+    stays the ``M30`` it says. ``after_blanks`` is the first position behind the identifier
+    that is not whitespace.
+    """
+    if after_blanks >= limit or ord(line[after_blanks]) != _PAREN_OPEN:
+        return -1
+    if after_blanks == identifier_end:
+        return after_blanks
+    return after_blanks if _name_end_at(line, p, limit, spec) == identifier_end else -1
+
+
+def _arguments_end_at(line: str, p: int, limit: int, spec: _LexSpec) -> int:
+    """Where the argument list that starts at the ``(`` at ``p`` ends (exclusive).
+
+    Parentheses nest, and a ``)`` inside a string does not close the list, which is what
+    holds ``MSG("A;B")`` together. A comment marker outside a string ends the list where
+    it stands, so an unclosed ``(`` can never swallow a comment: the tokenizer and
+    :func:`mask_comments` have to agree on where a comment begins, whatever the line says.
+    """
+    depth = 0
+    i = p
+    while i < limit:
+        code = ord(line[i])
+        if spec.strings and code == _QUOTE:
+            i = _string_end_at(line, i, limit)
+            continue
+        if i > p and spec.comments and _comment_at(line, i, spec) is not None:
+            return i
+        if code == _PAREN_OPEN:
+            depth += 1
+        elif code == _PAREN_CLOSE:
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return limit
+
+
 def _expression_end_at(line: str, p: int, limit: int) -> int:
     """Where the bracket expression that starts at ``p`` ends (exclusive); brackets may nest."""
     depth = 0
@@ -576,7 +808,8 @@ def _read_value(line: str, p: int, limit: int, spec: _LexSpec, allow_lone_sign: 
 
     if spec.variables is not None and start < limit:
         match = spec.variables.match(line, start)
-        if match is not None and start + len(match.group(0)) <= limit:
+        # An empty match is no variable: `R?\d*` matches nothing in front of every letter.
+        if match is not None and match.end() > start and match.end() <= limit:
             end = start + len(match.group(0))
             return _ValueRead(end=end, text=line[p:end], value=None)
 
@@ -600,6 +833,31 @@ def _chunk_end_at(line: str, p: int, limit: int, spec: _LexSpec) -> int:
             break
         i += 1
     return i
+
+
+def _assigned_value_end_at(line: str, r: int, limit: int, spec: _LexSpec) -> int:
+    """End of the value behind an ``=`` (exclusive), or ``r`` when the address takes none.
+
+    A string, a bracket expression and a call are taken whole, because none of them may
+    be cut at a space; anything else runs to the end of the word, so ``X=V1+V2`` keeps its
+    expression together while ``SB=1200 M13`` stops in front of ``M13``. A comment behind
+    the ``=`` ends the value, so ``X= (SET LATER)`` is an address without one. A call is
+    read here as everywhere else, blanks in front of its bracket included (``X=AC (10)``).
+    """
+    if r >= limit:
+        return r
+    code = ord(line[r])
+    if spec.strings and code == _QUOTE:
+        return _string_end_at(line, r, limit)
+    if code == _BRACKET_OPEN:
+        return _expression_end_at(line, r, limit)
+    if spec.calls:
+        name_end = _identifier_end_at(line, r, limit)
+        if name_end > r:
+            open_at = _argument_list_at(line, r, name_end, _skip_space(line, name_end, limit), limit, spec)
+            if open_at >= 0:
+                return _arguments_end_at(line, open_at, limit, spec)
+    return _chunk_end_at(line, r, limit, spec)
 
 
 @dataclass
@@ -640,6 +898,70 @@ def _scan_block_number(line: str, p: int, limit: int, spec: _LexSpec) -> Optiona
     return None
 
 
+@dataclass
+class _SequenceNameScan:
+    start: int
+    end: int
+    name_start: int
+
+
+def _scan_sequence_name(line: str, p: int, limit: int, spec: _LexSpec) -> Optional[_SequenceNameScan]:
+    """The sequence *name* at ``p`` (``NLAP1``), where the block-number prefix also names blocks.
+
+    Only on a profile with ``syntax.sequenceNames``. A name is the prefix, a letter, up to
+    three more letters or digits, and a separator or the end of the block behind it. The
+    separator is what the control insists on, and it is what keeps this rule off ordinary
+    code: ``N100G0`` stays a numbered block and ``NLAP1G85`` is not a name at all. A name
+    is never a block number, so renumbering never rewrites one.
+    """
+    if not spec.sequence_names:
+        return None
+    for prefix in spec.block_number_prefixes:
+        if not _match_literal(line, p, prefix, spec.case_sensitive):
+            continue
+        name_start = p + len(prefix)
+        if name_start >= limit or not _is_letter(ord(line[name_start])):
+            continue
+        i = name_start + 1
+        while i < limit and i - name_start < 4:
+            code = ord(line[i])
+            if not _is_letter(code) and not _is_digit(code):
+                break
+            i += 1
+        if i < limit and not _is_space(ord(line[i])):
+            continue
+        return _SequenceNameScan(start=p, end=i, name_start=name_start)
+    return None
+
+
+@dataclass
+class _LabelSpan:
+    start: int
+    end: int
+    name: str
+
+
+def _label_span_of(line: str, spec: _LexSpec) -> Optional[_LabelSpan]:
+    """The label definition of the line (``LOOP_A:``), or ``None``.
+
+    ``start`` is where the ``name`` group starts and ``end`` where the whole match ends.
+    The pattern is anchored at the start of the line and carries the block skip and the
+    block number in front of the name, because a label may itself start with the
+    block-number prefix (``NEXT_PART:``) and has to be recognised before it. One match per
+    line answers both places a label may stand: in front of a block number and behind one.
+    """
+    regex = spec.labels
+    if regex is None or "name" not in regex.groupindex:
+        return None
+    match = regex.match(line)
+    if match is None:
+        return None
+    name = match.group("name")
+    if not isinstance(name, str) or name == "":
+        return None
+    return _LabelSpan(start=match.start("name"), end=match.end(), name=name)
+
+
 def _scan_skip(line: str, p: int, limit: int, spec: _LexSpec) -> int:
     """End of the block-skip mark at ``p``, or ``p`` when there is none."""
     skip = spec.skip
@@ -647,8 +969,10 @@ def _scan_skip(line: str, p: int, limit: int, spec: _LexSpec) -> int:
         return p
     end = p + 1
     if skip.levels and end < limit:
+        # `/0` is a level too (Sinumerik writes it for the level `/` means), so the block
+        # number behind it is still read as one.
         level = ord(line[end])
-        if _ZERO < level <= _NINE:
+        if _ZERO <= level <= _NINE:
             end += 1
     return end
 
@@ -717,14 +1041,23 @@ def _match_program_marker(line: str, p: int, limit: int, spec: _LexSpec) -> int:
     return p
 
 
-def _ends_operand(tokens: List[Token]) -> bool:
+def _ends_operand(tokens: List[Token], spec: _LexSpec) -> bool:
     """True when a ``+`` or ``-`` behind these tokens joins two operands instead of signing one."""
     i = len(tokens) - 1
     while i >= 0 and tokens[i].kind == "whitespace":
         i -= 1
     if i < 0:
         return False
-    return tokens[i].kind in ("word", "variable", "expression", "string", "blockNumber")
+    token = tokens[i]
+    # A call gives a value back, so `SETVAL(1)-2` subtracts instead of starting a negative
+    # number. A label does not, and it is not in this list.
+    if token.kind in ("word", "variable", "expression", "string", "blockNumber", "call"):
+        return True
+    # A name (`syntax.names`) is a value like a variable, so `XNOW-2` subtracts. Any other
+    # unknown token is not an operand; a name is the one that starts like a name.
+    if token.kind == "unknown":
+        return spec.names is not None and _name_end_at(token.text, 0, len(token.text), spec) > 0
+    return False
 
 
 def _push(tokens: List[Token], kind: str, line: str, start: int, end: int) -> Token:
@@ -789,9 +1122,42 @@ def tokenize_line(
     **Every transform and every script works on these tokens, never on a raw-line
     regex.** That is what keeps a `G` inside a comment, a tool name inside a string and
     an address inside an expression from being rewritten.
+
+    The turning dialects switch on seven more ``syntax`` fields (plan AD-24 and §7.16),
+    each of them off unless the profile sets it, so a profile that names none of them
+    tokenizes exactly as before:
+
+    ``header``
+        a file header at the head of a line (``$PART.MIN%``, ``%_N_PART_MPF``): one
+        ``programMarker`` with no address
+    ``sequenceNames``
+        ``NLAP1`` is a ``label``, never a block number, at the head of a block and behind
+        a jump (``GOTO NLAP1``)
+    ``labels``
+        ``LOOP_A:`` at the head of a block, in front of the block number or behind it
+    ``systemVariables``
+        tried before ``variables``, so ``VZOFZ`` is not ``V`` with a value
+    ``assignment``
+        ``SB=1200``: a word whose address is the identifier in front of the ``=``, all of
+        it; a variable keeps its own rule, so ``R1=R2*2`` reads as Fanuc ``#1=#2-5`` does
+    ``calls``
+        an identifier in front of ``(`` (a name also with blanks between the two) is one
+        ``call`` token, arguments included
+    ``names``
+        a name the program gives itself (``XNOW``, ``LAST_CUT``) is one ``unknown`` token;
+        a keyword is one only where the name at its position is no longer than it
+
+    A block-skip level is one digit, ``0`` included: ``/0`` is the level ``/`` means.
     """
     spec = _lex_spec(cp)
     tokens: List[Token] = []
+    # The opt-in fields, read once per line: most profiles set none of them, and a local
+    # costs less than an attribute on every token of a long program.
+    names = spec.names
+    calls = spec.calls
+    system_variables = spec.system_variables
+    assignment = spec.assignment
+    sequence_names = spec.sequence_names
 
     # The continuation marker is found first: it is the line's tail, and a comment in
     # front of it must not swallow it.
@@ -817,27 +1183,74 @@ def tokenize_line(
             cached_chunk_end[0] = _chunk_end_at(line, frm, limit, spec)
         return cached_chunk_end[0]
 
+    # The same holds for a run of letters, digits and underscores in a packed dialect. `p`
+    # stops at every letter of `G1X1G1X1…`, and the `calls` and `assignment` rules both ask
+    # where the identifier at `p` ends and what stands behind it: asked afresh at every
+    # letter, a script needed nine seconds for one Sinumerik line of 16k such characters.
+    # Every letter of a run has the same end and the same character behind the blanks that
+    # follow it, so one scan per run answers them all: `run[0]` is where the identifier
+    # ends, `run[1]` the first position behind it that is not whitespace. Only ask at a
+    # letter or `_`: a digit inside a run starts no identifier.
+    run = [-1, -1]
+
+    def identifier_from(frm: int) -> int:
+        if frm >= run[0]:
+            run[0] = _identifier_end_at(line, frm, limit)
+            run[1] = _skip_space(line, run[0], limit)
+        return run[0]
+
+    def push_label(start: int, end: int, name: str) -> int:
+        """Pushes a label and the whitespace behind it, and returns the new position."""
+        token = _push(tokens, "label", line, start, end)
+        token.address = name if spec.case_sensitive else name.upper()
+        return _push_space(tokens, line, end, limit)
+
+    # A file header is not an NC block: `$PART.MIN%` and `%_N_PART_MPF` are one marker, so
+    # the `$` in front of it is not a hexadecimal constant and the `%` not a tape marker.
+    if at_head and spec.header is not None and p == 0:
+        match = spec.header.match(line)
+        if match is not None and match.end() > 0:
+            end = min(match.end(), limit)
+            if end > 0:
+                _push(tokens, "programMarker", line, 0, end)
+                p = _push_space(tokens, line, end, limit)
+                at_head = False
+
     if at_head:
         if spec.skip is not None and spec.skip.before:
             end = _scan_skip(line, p, limit, spec)
             if end > p:
                 _push(tokens, "skip", line, p, end)
                 p = _push_space(tokens, line, end, limit)
-        block = _scan_block_number(line, p, limit, spec)
-        if block is not None:
-            token = _push(tokens, "blockNumber", line, block.start, block.end)
-            digits = line[block.digits_start : block.end]
-            if block.prefix != "":
-                token.address = block.prefix if spec.case_sensitive else block.prefix.upper()
-            token.value_text = digits
-            token.value = parse_number(digits)
+        # A label may start with the block-number prefix (`NEXT_PART:`), so it is read
+        # before the block number, and once more behind one, because a block may carry both.
+        label = _label_span_of(line, spec) if spec.labels is not None else None
+        if label is not None and label.start == p:
+            p = push_label(label.start, label.end, label.name)
             at_head = False
-            p = _push_space(tokens, line, block.end, limit)
-            if spec.skip is not None and spec.skip.after:
-                end = _scan_skip(line, p, limit, spec)
-                if end > p:
-                    _push(tokens, "skip", line, p, end)
-                    p = _push_space(tokens, line, end, limit)
+        else:
+            named = _scan_sequence_name(line, p, limit, spec) if sequence_names else None
+            block = None if named is not None else _scan_block_number(line, p, limit, spec)
+            if named is not None:
+                p = push_label(named.start, named.end, line[named.name_start : named.end])
+                at_head = False
+            elif block is not None:
+                token = _push(tokens, "blockNumber", line, block.start, block.end)
+                digits = line[block.digits_start : block.end]
+                if block.prefix != "":
+                    token.address = block.prefix if spec.case_sensitive else block.prefix.upper()
+                token.value_text = digits
+                token.value = parse_number(digits)
+                at_head = False
+                p = _push_space(tokens, line, block.end, limit)
+            if named is not None or block is not None:
+                if spec.skip is not None and spec.skip.after:
+                    end = _scan_skip(line, p, limit, spec)
+                    if end > p:
+                        _push(tokens, "skip", line, p, end)
+                        p = _push_space(tokens, line, end, limit)
+                if label is not None and label.start == p:
+                    p = push_label(label.start, label.end, label.name)
 
     # A structure block (`12 * - ROUGHING`) is a heading; its text is read as a comment.
     if spec.section_heading is not None and p < limit and ord(line[p]) == _STAR and spec.section_heading.search(line):
@@ -868,7 +1281,12 @@ def tokenize_line(
             p = end
             continue
 
+        # Where the profile declares names, a keyword is only one when the name that starts
+        # here is no longer than it: `LOOP_A` and `GOTO100` are names, `LOOP` and `GOTOF`
+        # keywords, `IF[` still a conditional.
         keyword = _match_keyword(line, p, limit, spec)
+        if keyword is not None and names is not None and _name_end_at(line, p, limit, spec) > keyword[0]:
+            keyword = None
         if keyword is not None:
             end, entry = keyword
             value: Optional[_ValueRead] = None
@@ -893,6 +1311,29 @@ def tokenize_line(
             p = end
             continue
 
+        # An identifier written in front of `(` is one token, together with everything up
+        # to the matching `)`. What the arguments mean is the cycle's business, and taking
+        # them in one piece is what keeps the `;` of `MSG("A;B")` out of the comment rule.
+        # A declared keyword matched above, so `IF(…)` is still a conditional and only an
+        # identifier the profile does not know is a call. Blanks may stand between a name
+        # and its bracket (`CYCLE840 (…)`, `MSG ("…")`): the control reads both spellings
+        # as the same call, and read as a name and loose values, a tapping cycle would be
+        # one the scripts never see (`_argument_list_at`).
+        if calls and _is_identifier_start(code):
+            name_end = identifier_from(p)
+            open_at = _argument_list_at(line, p, name_end, run[1], limit, spec)
+            if open_at >= 0:
+                end = _arguments_end_at(line, open_at, limit, spec)
+                token = _push(tokens, "call", line, p, end)
+                name = line[p:name_end]
+                token.address = name if spec.case_sensitive else name.upper()
+                closed = end > open_at + 1 and ord(line[end - 1]) == _PAREN_CLOSE
+                args = line[open_at + 1 : end - 1 if closed else end]
+                if args != "":
+                    token.value_text = args
+                p = end
+                continue
+
         if head:
             end = _match_program_marker(line, p, limit, spec)
             if end > p:
@@ -909,21 +1350,84 @@ def tokenize_line(
                 p = end
                 continue
 
+        # System variables come first, so Okuma's `VZOFZ` is not the common variable `V`
+        # with a value behind it and Sinumerik's `$AA_IM` not a stray `$`. An empty match
+        # is no match: a token of no characters would leave `p` where it is, forever.
+        if system_variables is not None:
+            match = system_variables.match(line, p)
+            if match is not None and p < match.end() <= limit:
+                p = _push(tokens, "variable", line, p, match.end()).end
+                continue
+
         if spec.variables is not None:
             match = spec.variables.match(line, p)
-            if match is not None and p + len(match.group(0)) <= limit:
-                p = _push(tokens, "variable", line, p, p + len(match.group(0))).end
+            if match is not None and p < match.end() <= limit:
+                p = _push(tokens, "variable", line, p, match.end()).end
                 continue
         # The indirect form `#[#1+1]`: the lead character on its own, then the expression.
         if code == spec.variable_lead and p + 1 < limit and ord(line[p + 1]) == _BRACKET_OPEN:
             p = _push(tokens, "variable", line, p, p + 1).end
             continue
 
+        # An address that takes `=` and an expression (`SB=1200`, `CR=15`, `X=V1+V2`). The
+        # token stays a word: the address is what stands in front of the `=`, and the value
+        # is the text behind it, a literal only when the whole right-hand side is one, so
+        # nothing that computes with NC numbers can ever scale `F=R1`.
+        #
+        # The address is the identifier at `p`, all of it, and the pattern is only asked
+        # where that identifier has an `=` behind it (not the `==` of a comparison). The
+        # `=` is found with the tokenizer's own whitespace rule, not the pattern's lookahead.
+        if assignment is not None and _is_identifier_start(code):
+            name_end = identifier_from(p)
+            q = run[1]
+            if q < limit and ord(line[q]) == _EQUALS and _code_at(line, q + 1) != _EQUALS:
+                match = assignment.match(line, p)
+                if match is not None and match.end() == name_end:
+                    r = _skip_space(line, q + 1, limit)
+                    value_end = _assigned_value_end_at(line, r, limit, spec)
+                    token = _push(tokens, "word", line, p, value_end if value_end > r else q + 1)
+                    address = match.group(0)
+                    token.address = address if spec.case_sensitive else address.upper()
+                    if value_end > r:
+                        token.value_text = line[r:value_end]
+                        token.value = parse_number(token.value_text)
+                    p = token.end
+                    continue
+
         if code == _BRACKET_OPEN:
             end = _expression_end_at(line, p, limit)
             _push(tokens, "expression", line, p, end)
             p = end
             continue
+
+        # A sequence name is one token wherever it stands. At the head of a block it names
+        # the block; behind a jump it names the block jumped to (`GOTO NLAP1`), and there it
+        # has to stay in one piece, because letter by letter a name such as `NFED1` would
+        # turn into a feed word that a script would then scale. A numbered target
+        # (`GOTO N200`) stays an `N` word: that one a renumber does have to rewrite.
+        #
+        # Away from the head the name needs whitespace in front of it as well as behind it.
+        # Packed words are read letter by letter, and without that rule the `NG` of a word
+        # such as `NTOOLING` would become a name in the middle of another one.
+        if sequence_names and (p == 0 or _is_space(ord(line[p - 1]))):
+            named = _scan_sequence_name(line, p, limit, spec)
+            if named is not None:
+                token = _push(tokens, "label", line, named.start, named.end)
+                name = line[named.name_start : named.end]
+                token.address = name if spec.case_sensitive else name.upper()
+                p = named.end
+                continue
+
+        # A name the program gives itself (`syntax.names`): a variable, a jump target, a
+        # subprogram called by its name. One token, so `XBOT` is no X word and `PASS2` no
+        # S word of 2. Every rule above has had its turn, so `XNOW=62` is still an
+        # assignment, `NAME(…)` a call and `NLAP1` a label.
+        if names is not None:
+            end = _name_end_at(line, p, limit, spec)
+            if end > p:
+                _push(tokens, "unknown", line, p, end)
+                p = end
+                continue
 
         if spec.packed:
             # One letter is the address; `,R` and `,C` take the comma with them.
@@ -984,7 +1488,7 @@ def tokenize_line(
         if (
             _is_digit(code)
             or code == spec.decimal_point
-            or ((code == _PLUS or code == _MINUS) and not _ends_operand(tokens))
+            or ((code == _PLUS or code == _MINUS) and not _ends_operand(tokens, spec))
         ):
             stop = limit if spec.packed else chunk_from(p)
             value = _read_value(line, p, stop, spec, False)
@@ -1010,6 +1514,23 @@ def tokenize_line(
         _push_space(tokens, line, end, len(line))
 
     return tokens, LineState(continuation=continuation_start >= 0)
+
+
+def continues_block(line: str, cp: CompiledProfile) -> bool:
+    """True when ``line`` belongs to the block **above** it by a marker at its start.
+
+    That is ``syntax.continuationStart`` of the profile (M8, plan section 7.16 #27): Okuma
+    writes the rest of a long block on lines that start with ``$`` (``N001 G71 X27.55 Z-30
+    B60 D0.7 U0.1``, then ``$ H2.45 L2 F2 M23 M32 M73``), and the ``F2`` there is the lead
+    of the ``G71`` thread cycle above it. The line tokenizes as any other; this is what a
+    reader that works in blocks asks, and :meth:`ModalInterpreter.update` and
+    :meth:`FeedModeTracker.update` take the answer as ``continued``. A trailing marker
+    (Klartext ``~``) is the other kind and is carried by :class:`LineState` instead. A
+    profile without the field has no such lines.
+    """
+    patterns = getattr(cp, "patterns", None) or {}
+    pattern = patterns.get("continuation_start")
+    return pattern is not None and pattern.search(line) is not None
 
 
 def block_number_of(line: str, cp: CompiledProfile) -> Optional[Dict[str, Any]]:
@@ -1049,6 +1570,11 @@ def mask_comments(line: str, cp: CompiledProfile) -> str:
     The mask keeps the line's length and its offsets, so a match position on the masked
     line is a position in the real line. Strings stay as they are, because tool names are
     strings — and because a comment marker inside a string does not start a comment.
+
+    Two spans are stepped over whole, so that nothing inside them opens a comment — the
+    same two the tokenizer reads in one piece: a string (``MSG("A;B")`` is one Sinumerik
+    call, and its ``;`` is text) and the file header of ``syntax.header``
+    (``$PART.MIN%``), which detection reads off the masked line.
     """
     spec = _lex_spec(cp)
 
@@ -1068,6 +1594,11 @@ def mask_comments(line: str, cp: CompiledProfile) -> str:
             masked = line[:star] + " " * max(0, limit - star)
             copied = limit
             p = limit
+
+    if spec.header is not None and p == 0:
+        match = spec.header.match(line)
+        if match is not None and match.end() > 0:
+            p = min(match.end(), limit)
 
     while p < limit:
         code = ord(line[p])

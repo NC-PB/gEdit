@@ -1,0 +1,25 @@
+{
+  "message": "Scaled 1 of 4 spindle speeds to 80 %; 3 left as a speed limit, 1 word for another spindle left as written (S[n]=).",
+  "findings": [
+    {
+      "line": 1,
+      "severity": "info",
+      "message": "LIMS=2800 is a spindle speed limit, so it is not scaled."
+    },
+    {
+      "line": 1,
+      "severity": "info",
+      "message": "LIMS[2]=1800 is the speed limit of spindle 2, so it is not scaled."
+    },
+    {
+      "line": 2,
+      "severity": "info",
+      "message": "LIMS[1]=2500 is the speed limit of spindle 1, so it is not scaled."
+    },
+    {
+      "line": 3,
+      "severity": "info",
+      "message": "S[2]=300 is the speed of spindle 2, named by its number; this run scales only the plain S word of the master spindle, so it is left as it is. Switch on \"Also scale other spindles\" to scale it with the others."
+    }
+  ]
+}

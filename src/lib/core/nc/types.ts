@@ -28,7 +28,19 @@ import type { FeedUnit } from '$lib/core/profiles/types';
  * - `keyword`: a word from `syntax.keywords`, e.g. `GOTO`, `TOOL CALL`, `CYCL DEF`.
  * - `expression`: a bracket expression, e.g. `[#2+1]`.
  * - `continuation`: the trailing marker that joins the line to the next (Klartext `~`).
- * - `programMarker`: `%`, and the `O1234` / `:1234` program number.
+ * - `programMarker`: `%`, the `O1234` / `:1234` program number, and the first-line header
+ *   of a file (`syntax.header`: Okuma `$PART.MIN%`, Sinumerik `%_N_PART_MPF`).
+ * - `label` (P8): a jump target the program names rather than numbers — an Okuma sequence
+ *   name (`NLAP1`) or a Sinumerik label definition (`LOOP_A:`). `address` is the name in
+ *   upper case, so a jump and its target compare without the punctuation around them.
+ *   A `label` is never a `blockNumber`: renumbering leaves it alone.
+ * - `call` (P8): an identifier written directly in front of `(`, together with everything
+ *   up to the matching `)` — `CYCLE81(10,0,2,-12)`, `MSG("TEXT")`, `L10(1)`. A name of
+ *   `syntax.names` is the same call with blanks before its bracket (`CYCLE840 (…)`,
+ *   `MSG ("TEXT")`); a letter with a number needs its bracket touching it (`L10 (1)` is an
+ *   `L` word). `address` is the identifier and `valueText` the argument text; the
+ *   arguments are **not** tokenized, because what they mean is the cycle's business and
+ *   not the tokenizer's.
  * - `unknown`: anything the profile does not describe. It is never `invalid`; marking
  *   errors is the linter's job (M4+).
  */
@@ -44,6 +56,8 @@ export type TokenKind =
   | 'operator'
   | 'continuation'
   | 'programMarker'
+  | 'label'
+  | 'call'
   | 'whitespace'
   | 'unknown';
 

@@ -1,0 +1,27 @@
+{
+  "about": "A turning program with a thread: the lead of G33 is in K, so the F in force is not touched by the thread, and G33 is the cycle in force until the rapid that follows. SF= is the start angle, not a speed.",
+  "input": "../../nc/sinumerik/s01-shaft.MPF",
+  "states": [
+    { "line": 13, "after": { "tool": "\"ROUGH\"", "block": { "toolChange": true } } },
+    {
+      "line": 14,
+      "about": "G96 is a feed type on this control: a cutting speed, and a feed per revolution.",
+      "after": { "groups": { "feedmode": "G96" }, "feedUnit": "per-rev", "speed": "200", "speedLimit": "3000", "speedUnit": "surface" }
+    },
+    {
+      "line": 16,
+      "about": "A turning cycle written as a call: its own block only.",
+      "after": { "activeCycle": null, "block": { "cycle": "CYCLE95", "pitchFeed": false } }
+    },
+    { "line": 19, "after": { "tool": "3", "block": { "toolChange": true } } },
+    { "line": 20, "after": { "speedLimit": "3500", "speed": "260" } },
+    { "line": 22, "after": { "feed": "0.2", "groups": { "compensation": "G42", "motion": "G1" } } },
+    { "line": 34, "after": { "groups": { "feedmode": "G97" }, "feedUnit": "per-rev", "speedUnit": "rpm", "speed": "800", "speedLimit": "3500" } },
+    {
+      "line": 36,
+      "after": { "groups": { "motion": "G33" }, "activeCycle": "G33", "feed": "0.2", "speed": "800", "block": { "cycle": "G33", "pitchFeed": true } }
+    },
+    { "line": 37, "after": { "activeCycle": null, "block": { "pitchFeed": false } } },
+    { "line": 40, "after": { "activeCycle": "G33", "block": { "pitchFeed": true } } }
+  ]
+}

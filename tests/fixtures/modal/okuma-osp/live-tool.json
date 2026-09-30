@@ -1,0 +1,55 @@
+{
+  "about": "Driven tools on an Okuma lathe: SB= is the speed of the driven-tool spindle and never the speed of the main spindle, M13 starts that spindle without touching the main one, G181 drills until G180 cancels it, and G184 taps with a feed tied to the pitch.",
+  "input": "../../nc/okuma/o03-live-tool.MIN",
+  "states": [
+    {
+      "line": 6,
+      "after": { "groups": { "spindle": "M5" }, "speed": null }
+    },
+    {
+      "line": 11,
+      "about": "Nose-radius set 00, station 11, offset 11.",
+      "after": { "tool": "11", "block": { "toolChange": true } }
+    },
+    {
+      "line": 12,
+      "after": { "groups": { "feedmode": "G94" }, "feedUnit": "per-minute" }
+    },
+    {
+      "line": 13,
+      "about": "SB=2000 is an address of its own: the main spindle has no speed yet, and M13 is not the main spindle's code, so its state is still the M05 of line 6.",
+      "after": { "speed": null, "groups": { "spindle": "M5" } }
+    },
+    {
+      "line": 15,
+      "about": "G181 is a modal cycle start (AD-19 rule 2): it stays in force over the next hole positions.",
+      "after": { "activeCycle": "G181", "feed": "120", "block": { "cycle": "G181", "pitchFeed": false } }
+    },
+    {
+      "line": 18,
+      "after": { "activeCycle": "G181", "block": { "cycle": null } }
+    },
+    {
+      "line": 21,
+      "about": "G180 cancels the driven-tool cycle.",
+      "after": { "activeCycle": null }
+    },
+    {
+      "line": 26,
+      "after": { "speed": null, "tool": "12" }
+    },
+    {
+      "line": 28,
+      "about": "G184 taps: its F is tied to the pitch (pitchFeed), and the cycle stays in force until G180.",
+      "after": { "activeCycle": "G184", "feed": "750", "block": { "cycle": "G184", "pitchFeed": true } }
+    },
+    {
+      "line": 29,
+      "after": { "activeCycle": null, "block": { "pitchFeed": false } }
+    },
+    {
+      "line": 34,
+      "after": { "groups": { "feedmode": "G95" }, "feedUnit": "per-rev", "speed": null }
+    }
+  ]
+}

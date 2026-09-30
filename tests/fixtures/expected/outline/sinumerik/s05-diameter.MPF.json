@@ -1,0 +1,12 @@
+{
+  "profile": "sinumerik",
+  "items": [
+    {"kind":"program","line":1,"text":"%_N_DIAMODE_MPF","endLine":28},
+    {"kind":"comment","line":2,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":3,"text":"DIAMETER PROGRAMMING: ASSUMED ON AT THE TOP, THEN SWITCHED THREE WAYS"},
+    {"kind":"comment","line":7,"text":"OD ROUGH"},
+    {"kind":"tool","line":8,"text":"ROUGH — OD ROUGH","tool":"\"ROUGH\"","endLine":28},
+      {"kind":"stop","line":25,"text":"M1"},
+      {"kind":"end","line":27,"text":"M30"}
+  ]
+}

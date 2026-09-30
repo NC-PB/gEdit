@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 2 of 4 feed rates to 80 %; 2 left as a thread pitch. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 10,
+      "severity": "warning",
+      "message": "F2 is a thread pitch (G112), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    },
+    {
+      "line": 18,
+      "severity": "warning",
+      "message": "F1.5 is a thread pitch (G36), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    }
+  ]
+}

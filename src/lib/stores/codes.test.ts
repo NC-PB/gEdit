@@ -29,7 +29,7 @@ describe('the built-in code database service', () => {
   });
 
   it('answers with an empty database for a profile it does not know', () => {
-    const db = service.forProfile('okuma-osp');
+    const db = service.forProfile('no-such-profile');
     expect(db.codes).toEqual([]);
     expect(db.addresses).toEqual({});
   });
@@ -38,13 +38,13 @@ describe('the built-in code database service', () => {
     expect(service.lookupWord('fanuc-gcode', word('G', '83'))?.entry?.label).toBe(
       'Peck drilling cycle',
     );
-    expect(service.lookupWord('okuma-osp', word('G', '83'))).toEqual({ entry: null, unknown: true });
+    expect(service.lookupWord('no-such-profile', word('G', '83'))).toEqual({ entry: null, unknown: true });
   });
 
   it('completes through the profile', () => {
     expect(service.completions('fanuc-gcode', 'G8', false)).toHaveLength(10);
     expect(service.completions('heidenhain-klartext', 'CYCL DEF 2', true).length).toBeGreaterThan(0);
-    expect(service.completions('okuma-osp', 'G', true)).toEqual([]);
+    expect(service.completions('no-such-profile', 'G', true)).toEqual([]);
   });
 
   it('hands the flat list to the script context', () => {

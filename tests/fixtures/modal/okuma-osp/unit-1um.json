@@ -1,0 +1,66 @@
+{
+  "about": "The same program on a machine set to the 1 µm unit system, where every number is a count of the unit, with a decimal point or without (syntax-okuma.md §3.3). The modal state records what the program wrote and does not convert it: F0.25 stays 0.25 here, and what it is worth (0.00025 mm/rev on this machine) is the number rules' answer, not the modal state's. The unit system sets nothing of the power-on state, so every assumed value still comes from the profile.",
+  "machine": {
+    "numberInput": {
+      "classes": {
+        "feedPerMin": {
+          "increment": "0.1",
+          "incrementInch": "0.01"
+        },
+        "feedPerRev": {
+          "increment": "0.001",
+          "incrementInch": "0.0001"
+        }
+      },
+      "incrementDeg": "0.001",
+      "incrementInch": "0.0001",
+      "incrementMm": "0.001",
+      "incrementSec": "0.01",
+      "mode": "scale"
+    }
+  },
+  "input": "../../nc/okuma/o01-flange.MIN",
+  "states": [
+    {
+      "line": 1,
+      "after": {
+        "groups": {
+          "feedmode": "=G95",
+          "distance": "=G90"
+        },
+        "feedUnit": "per-rev",
+        "units": "=mm",
+        "diameter": "=on"
+      }
+    },
+    {
+      "line": 6,
+      "after": {
+        "speedLimit": "2500",
+        "block": {
+          "speedLimit": true
+        }
+      }
+    },
+    {
+      "line": 11,
+      "after": {
+        "groups": {
+          "feedmode": "G95"
+        },
+        "feed": "0.25"
+      }
+    },
+    {
+      "line": 31,
+      "after": {
+        "tool": "02",
+        "feed": "0.12",
+        "block": {
+          "toolChange": false,
+          "cycle": "G74"
+        }
+      }
+    }
+  ]
+}

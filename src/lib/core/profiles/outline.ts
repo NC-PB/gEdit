@@ -230,10 +230,21 @@ function classify(line: string, cp: CompiledProfile, spec: OutlineSpec): LineMar
   return { kind, text, isTool, tool, description };
 }
 
-/** The tool as it identifies a station: quotes gone, a lathe offset pair collapsed. */
+/** True for a tool written as a name in quotation marks (`T="ROUGH_80"`, `T="007"`). */
+function quoted(tool: string): boolean {
+  return tool.length >= 2 && tool.startsWith('"') && tool.endsWith('"');
+}
+
+/**
+ * The tool as it identifies a station: quotes gone, a lathe offset pair collapsed.
+ *
+ * A name in quotation marks is a name, whatever characters it holds: it is never collapsed
+ * like an offset pair, because on a control with tool management `T="007"` names a tool and
+ * `T7` a place in the magazine (G10 M8). `tool_list.py` reads tools the same way.
+ */
 function bareTool(tool: string, spec: OutlineSpec): string {
+  if (quoted(tool)) return tool.slice(1, -1);
   let value = tool;
-  if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) value = value.slice(1, -1);
   if (spec.collapseOffsetDigits && /^\d+$/.test(value) && value.length >= 4 && value.length % 2 === 0) {
     value = value.slice(0, value.length / 2);
   }
@@ -242,9 +253,15 @@ function bareTool(tool: string, spec: OutlineSpec): string {
 
 const LEADING_ZEROS = /^0+(?=\d)/;
 
-/** `T01` → `T1`, `T0101` → `T1` on a lathe profile, `"MILL_D10"` → `MILL_D10`. */
+/**
+ * `T01` → `T1`, `T0101` → `T1` on a lathe profile, `"MILL_D10"` → `MILL_D10`.
+ *
+ * A name keeps every character it was written with, and one made of digits only keeps its
+ * quotation marks too (`"007"`), so the map never shows it as the number it is not.
+ */
 function toolLabel(tool: string, spec: OutlineSpec): string {
   let value = bareTool(tool, spec);
+  if (quoted(tool)) return /^\d+$/.test(value) || value === '' ? tool : value;
   if (!/^\d/.test(value)) return value;
   if (spec.dropLeadingZeros) value = value.replace(LEADING_ZEROS, '');
   return `T${value}`;
@@ -254,9 +271,11 @@ function toolLabel(tool: string, spec: OutlineSpec): string {
  * The tool's number for comparing, or null for a name or a `QS` parameter.
  *
  * Always without leading zeros, whatever the profile does for display: `T01` and `T1` are
- * the same station, and the header tool list may write either.
+ * the same station, and the header tool list may write either. A name in quotation marks
+ * has no number, digits or not.
  */
 function toolNumberOf(tool: string, spec: OutlineSpec): string | null {
+  if (quoted(tool)) return null;
   const value = bareTool(tool, spec);
   return /^\d+$/.test(value) ? value.replace(LEADING_ZEROS, '') : null;
 }

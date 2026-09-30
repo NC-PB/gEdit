@@ -1,0 +1,14 @@
+{
+  "profile": "okuma-osp",
+  "items": [
+    {"kind":"comment","line":2,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"program","line":3,"text":"O1005","endLine":24},
+    {"kind":"comment","line":4,"text":"BUSH D50 - A COMPLETE PROGRAM IN A TXT FILE"},
+    {"kind":"comment","line":5,"text":"OD ROUGH"},
+    {"kind":"tool","line":8,"text":"T1 — OD ROUGH","tool":"01","endLine":13},
+      {"kind":"comment","line":13,"text":"TWO GROOVES WITH A MODAL CALL"},
+    {"kind":"tool","line":14,"text":"T3 — TWO GROOVES WITH A MODAL CALL","tool":"03","endLine":24},
+      {"kind":"subprogram-call","line":16,"text":"MODIN O3000"},
+      {"kind":"end","line":22,"text":"M02"}
+  ]
+}

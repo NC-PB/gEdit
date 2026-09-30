@@ -14,6 +14,13 @@ Two kinds of test, and the split is the one the goldens' README asks for:
 
 Every inline database here is **written for the test**. It is not a claim about any
 control: what a control does belongs in ``src/lib/data`` and is reviewed by G10.
+
+M8 (WP8.7) adds the goldens of the two turning dialects — ``okuma-osp`` with and without a
+machine, under the 1 µm and 10 µm unit systems too, and ``sinumerik`` with its diameter mode
+assumed on and a machine that starts it off — and the unit tests of what a code and a
+speed are in the token forms of AD-24: a call is the code of its identifier, a word written
+with ``=`` is never a code, and a dwell's speed word is not a speed. Those run the shipped
+profiles, so they need the Python tokenizer of WP8.6.
 """
 
 from __future__ import annotations
@@ -225,6 +232,23 @@ class TestGoldens(ModalTestCase):
         for profile_id in ("fanuc-gcode", "heidenhain-klartext"):
             with self.subTest(profile=profile_id):
                 self.assertGreaterEqual(counts.get(profile_id, 0), 30)
+
+    def test_the_turning_dialects_of_m8_are_covered_with_and_without_a_machine(self) -> None:
+        # Plan WP8.7: goldens for both dialects, among them a machine that changes what the
+        # control powers on in (the Sinumerik diameter mode) and the Okuma unit systems.
+        counts: Dict[str, int] = {}
+        machines: Dict[str, List[Any]] = {}
+        for path in golden_files():
+            golden = json.loads(path.read_text(encoding="utf-8"))
+            counts[path.parent.name] = counts.get(path.parent.name, 0) + len(golden["states"])
+            if "machine" in golden:
+                machines.setdefault(path.parent.name, []).append(golden["machine"])
+        for profile_id in ("okuma-osp", "sinumerik"):
+            with self.subTest(profile=profile_id):
+                self.assertGreaterEqual(counts.get(profile_id, 0), 30)
+        self.assertIn({"diameter": "off"}, machines.get("sinumerik", []))
+        modes = [m.get("numberInput", {}).get("mode") for m in machines.get("okuma-osp", [])]
+        self.assertEqual(modes.count("scale"), 2, "the 1 µm and the 10 µm unit system")
 
 
 # ---------------------------------------------------------------------------
@@ -543,6 +567,119 @@ class TestGeneralRules(ModalTestCase):
         state["block"]["cycle"] = "G71"
         self.assertIn("feedmode", interp.state["groups"])
         self.assertIsNone(interp.state["block"]["cycle"])
+
+
+# ---------------------------------------------------------------------------
+# The turning dialects (M8, WP8.7), over inline code lists
+# ---------------------------------------------------------------------------
+
+#: Entries that behave like the ones the M8 databases ship, **written for these tests**.
+#: `M33` is here only so that `M3=3` could be misread as it; it claims nothing about a control.
+TURNING_CODES: List[Dict[str, Any]] = [
+    {"code": "G0", "group": "motion", "modal": True, "label": "rapid"},
+    {"code": "G1", "group": "motion", "modal": True, "label": "feed"},
+    {"code": "G4", "group": "nonmodal", "label": "dwell", "fNotFeed": True},
+    {"code": "G96", "group": "spindlemode", "modal": True, "label": "surface speed",
+     "sets": {"speedUnit": "surface"}},
+    {"code": "G97", "group": "spindlemode", "modal": True, "label": "rpm", "sets": {"speedUnit": "rpm"}},
+    {"code": "M3", "group": "spindle", "modal": True, "label": "spindle on"},
+    {"code": "M5", "group": "spindle", "modal": True, "label": "spindle stop"},
+    {"code": "M33", "group": "spindle", "modal": True, "label": "a code M3=3 must not become"},
+    {"code": "CYCLE81", "group": "cycle", "label": "drilling", "sets": {"cycle": "start"}},
+    {"code": "CYCLE84", "group": "cycle", "label": "tapping", "pitchFeed": True,
+     "sets": {"cycle": "start"}},
+]
+
+
+class TestTurningDialects(ModalTestCase):
+    """What a code is, and what a speed is, in the token forms of AD-24 (plan §7.5).
+
+    The profiles are the shipped ones, so their tokenizer rules apply (calls, assignments,
+    names); the code lists are the ones above, so each rule is shown on exactly one entry.
+    """
+
+    def run_lines(self, profile_id: str, lines: Sequence[str]) -> List[Dict[str, Any]]:
+        return self.walk(helpers.effective_context(profile_id)["profile"], TURNING_CODES, lines)
+
+    def test_a_call_is_the_code_of_its_identifier(self) -> None:
+        states = self.run_lines("sinumerik", ["CYCLE81(5,0,2,-10)", "CYCLE84(5,0,2,-15,,0.5,3,,1.5)", "G0 X10"])
+        self.assertEqual([state["block"]["cycle"] for state in states], ["CYCLE81", "CYCLE84", None])
+        self.assertEqual([state["block"]["pitchFeed"] for state in states], [False, True, False])
+        self.assertEqual([cycle_of(state) for state in states], [None, None, None])
+
+    def test_an_assignment_word_is_never_a_code(self) -> None:
+        # `M3=3` switches spindle 3. It is not the code M33, and not the M3 of the spindle
+        # this state follows either.
+        states = self.run_lines("sinumerik", ["M5", "M3=3", "M3"])
+        self.assertEqual([state["groups"]["spindle"]["code"] for state in states], ["M5", "M5", "M3"])
+
+    def test_a_numbered_spindle_speed_is_not_the_speed_in_force(self) -> None:
+        states = self.run_lines("sinumerik", ["S500 M3", "S3=2400", "S1=900 M1=3"])
+        self.assertEqual([state["speed"]["valueText"] for state in states], ["500", "500", "500"])
+
+    def test_the_speed_word_of_a_dwell_block_is_not_a_speed(self) -> None:
+        states = self.run_lines("sinumerik", ["G97 S500 M3", "G4 S2", "G4 F1.5", "G1 X10 F0.2"])
+        self.assertEqual([state["speed"]["valueText"] for state in states], ["500"] * 4)
+        self.assertEqual([state["feed"] and state["feed"]["valueText"] for state in states],
+                         [None, None, None, "0.2"])
+        self.assertEqual([state["block"]["fNotFeed"] for state in states], [False, True, True, False])
+        self.assertEqual([state["speedLimit"] for state in states], [None] * 4)
+
+    def test_a_clamp_word_is_a_clamp_wherever_it_stands(self) -> None:
+        (state,) = self.run_lines("sinumerik", ["G96 S200 LIMS=3000 M4"])
+        self.assertEqual((state["speed"]["valueText"], state["speedLimit"]["valueText"]), ("200", "3000"))
+        # The block's own S is the cutting speed: the flag of rule 4 is a code's, not a word's.
+        self.assertFalse(state["block"]["speedLimit"])
+
+    def test_a_driven_tool_speed_is_not_the_main_spindle_speed(self) -> None:
+        states = self.run_lines("okuma-osp", ["G97 S1500 M03", "SB=2000 M13"])
+        self.assertEqual([state["speed"]["valueText"] for state in states], ["1500", "1500"])
+
+    def test_a_feed_written_as_a_variable_has_no_value(self) -> None:
+        for profile_id, line, text in (("okuma-osp", "G01 Z-30 F=V1", "V1"), ("sinumerik", "G1 X70 F=R1", "R1")):
+            with self.subTest(profile=profile_id):
+                (state,) = self.run_lines(profile_id, [line])
+                self.assertEqual(state["feed"], {"valueText": text, "line": 1, "variable": True})
+
+    def test_an_okuma_dollar_line_belongs_to_the_block_above_it(self) -> None:
+        # G10 M8 NC finding 9: a line that starts with `$` continues the block above it, so
+        # the one-shot G71 thread cycle and its lead cover it; the next line is a new block.
+        # The interpreter reads the marker off its own profile (`syntax.continuationStart`).
+        context = helpers.effective_context("okuma-osp")
+        lines = ["G97 S800 M03", "N001 G71 X27.55 Z-30 B60 D0.7 U0.1", "$ H2.45 L2 F2 M23 M32 M73", "G00 X600 Z400"]
+        states = self.walk(context["profile"], context["codes"], lines)
+        self.assertEqual([state["block"]["pitchFeed"] for state in states], [False, True, True, False])
+        self.assertEqual([state["block"]["cycle"] for state in states], [None, "G71", "G71", None])
+
+    def test_the_shipped_sinumerik_database_reads_the_feed_type_as_one_group(self) -> None:
+        # The M8 NC review: on this control G94, G95, G96 and G97 are one group. G96 makes
+        # the feed a feed per revolution, and G95 ends the constant cutting speed.
+        context = helpers.effective_context("sinumerik")
+        lines = ["N10 G18 G90 G94 DIAMON", "N70 G96 S200 LIMS=3000 M4", "N140 G95 G1 X60 Z2 F0.12", "N150 S1800", "N160 G961 S180", "N170 G971"]
+        states = self.walk(context["profile"], context["codes"], lines)
+        self.assertEqual(
+            [(state["groups"]["feedmode"]["code"], state["feedUnit"], state["speedUnit"]) for state in states],
+            [
+                ("G94", "per-minute", "rpm"),
+                ("G96", "per-rev", "surface"),
+                ("G95", "per-rev", "rpm"),
+                ("G95", "per-rev", "rpm"),
+                ("G961", "per-minute", "surface"),
+                ("G971", "per-minute", "rpm"),
+            ],
+        )
+        self.assertNotIn("spindlemode", states[-1]["groups"])
+
+    def test_the_tracker_names_a_dwell_block(self) -> None:
+        cp = gedit_nc.compile_profile(helpers.effective_context("okuma-osp")["profile"])
+        tracker = gedit_nc.FeedModeTracker(TURNING_CODES)
+        seen = []
+        state = None
+        for line in ("G04 F1", "G01 Z-10 F0.2"):
+            tokens, state = gedit_nc.tokenize_line(line, cp, state)
+            tracker.update(tokens)
+            seen.append((tracker.f_not_feed, tracker.f_not_feed_code))
+        self.assertEqual(seen, [(True, "G4"), (False, None)])
 
 
 class TestSpeedLimitOf(unittest.TestCase):

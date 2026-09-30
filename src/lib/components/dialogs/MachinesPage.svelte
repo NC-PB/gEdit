@@ -208,7 +208,8 @@
       ];
     }
     const { params } = machineFromValues(decl, draft.values, current);
-    return machineFields(decl, codeDbFor(draft.profileId, params, deps), current);
+    const words = deps.profiles.profile(draft.profileId).addresses?.diameter;
+    return machineFields(decl, codeDbFor(draft.profileId, params, deps), current, words);
   }
 
   /** Every name in use, lower-cased, except the record itself. */

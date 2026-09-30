@@ -1,0 +1,11 @@
+{
+  "note": "G10 M8: the same program with four digits. N7 becomes N0020, so the jump IF [...] N7 becomes N0020 too; the padding comes from the block the jump names, never from the way the jump was written before.",
+  "profile": "okuma-osp",
+  "options": { "digits": 4 },
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [{ "line": 1, "severity": "info" }],
+    "warnings": ["ncNumbering.renumber.referencesRewritten"],
+    "preflight": null
+  }
+}

@@ -124,8 +124,16 @@ export interface Profile {
    * no machine item in the status bar.
    */
   machineParams?: MachineParamsDecl;
-  /** Which grammar generator builds the Monarch rules (WP3.4). */
-  grammar: 'iso' | 'klartext';
+  /**
+   * Which grammar generator builds the Monarch rules (WP3.4).
+   *
+   * P8 widens the P1 union. `okuma` and `sinumerik` are word-address dialects too, but
+   * each breaks the ISO shape in a way a flag cannot express: Okuma reads `( … )` as a
+   * comment and `[ … ]` as expression brackets, names its blocks (`NLAP1`) and writes
+   * two-letter addresses with `=`; Sinumerik comments with `;`, keeps `( … )` for call
+   * arguments and strings, and labels a block with `NAME:`.
+   */
+  grammar: 'iso' | 'klartext' | 'okuma' | 'sinumerik';
   /** Id of the code database this profile reads (`data/codes/<codes>.json`). */
   codes: string;
   files: {
@@ -166,6 +174,15 @@ export interface Profile {
      * snippet of the assistant). `continuation` can only recognise it.
      */
     continuationMark?: string;
+    /**
+     * M8 (§7.16 #27). A line whose start matches this belongs to the block **above** it: the
+     * leading marker of Okuma's `$` lines (`N001 G71 X27.55 Z-30 B60 D0.7 U0.1`, then
+     * `$ H2.45 L2 F2 M23 M32 M73`). Anchored with `^`. The line tokenizes as it did — the
+     * marker is not a token kind of its own — but every reader that works in blocks
+     * (the modal interpreters, the scripts, the program checks) reads it as part of the
+     * block above, so the lead on it is still the lead of that block's thread cycle.
+     */
+    continuationStart?: Pattern;
     blockSkip?: { chars: string; position: 'before-number' | 'after-number' | 'either'; levels?: boolean };
     blockNumber: { mode: 'prefix' | 'leading-integer'; prefix?: string; altPrefixes?: string[]; mandatory: boolean };
     decimalSeparator: '.' | ',';
@@ -181,6 +198,66 @@ export interface Profile {
     keywords?: string[];
     /** Longest block the control accepts; used by the lint rules and the rulers. */
     maxLineLength?: number;
+    /**
+     * P8. The block-number prefix also carries **names**: `N` followed by a letter-led
+     * name (Okuma `NLAP1`) is a `label` token, never a block number, so renumbering never
+     * touches it and go-to-block never offers it. M8 integration: the separator behind the
+     * field belongs to it, behind a number as much as behind a name, so `removeSpaces`
+     * never joins a block number to its block on such a profile (syntax-okuma §3.1).
+     */
+    sequenceNames?: boolean;
+    /**
+     * P8. An address that matches this at the start of a word takes `=` and an expression
+     * (Okuma `SB=1200`, Sinumerik `CR=15`, `S3=2500`, `R1=R2*2`).
+     *
+     * The token stays a `word`: `address` is the letters (`'SB'`), `valueText` the
+     * right-hand side, and `value` is null unless the right-hand side is a plain number.
+     * The address is the whole identifier (letters, digits, `_`) in front of the `=`: the
+     * pattern is tried only at the start of an identifier with an `=` (not `==`) behind it,
+     * and its match has to be that identifier (§7.16 #18).
+     */
+    assignment?: Pattern;
+    /**
+     * P8. A label definition at the start of a block (Sinumerik `LOOP_A:`), with the named
+     * group `name`. The rule has to run **before** the block-number rule, because a label
+     * may start with the block-number prefix (`NEXT_PART:`).
+     */
+    labels?: Pattern;
+    /**
+     * P8. An identifier written directly in front of `(` is one `call` token up to the
+     * matching `)` (`CYCLE81(10,0,2,-12)`, `MSG("TEXT")`, `L10(1)`). Nothing inside the
+     * brackets is tokenized: the arguments are the call's `valueText`.
+     * A name of [`names`] is the same call with blanks between it and its bracket
+     * (`MSG ("TEXT")`, `CYCLE840 (…)`); a letter with a number is a call only with its
+     * bracket touching it (`L10(1)`, while `L10 (1)` is an `L` word) (§7.16 #17).
+     */
+    calls?: boolean;
+    /**
+     * P8. System variables, which are read but never written by a program: Sinumerik
+     * `\$[A-Z_][A-Z0-9_]*`, Okuma `V[A-Z][A-Z0-9]{3}`. Tried before [`variables`], so
+     * Okuma's `VZOFZ` does not read as the common variable `V` with a value.
+     */
+    systemVariables?: Pattern;
+    /**
+     * P8. A header on the **first line** of the file, read as one `programMarker`: Okuma
+     * `^\$[^%]*%`, Sinumerik `^%_N_\w+_(MPF|SPF)`. It is not an NC block, and the `$` of
+     * the Okuma form is not the hexadecimal constant of an expression.
+     */
+    header?: Pattern;
+    /**
+     * M8 integration (§7.16). A name the program gives itself — a variable, a jump target,
+     * a subprogram called by its name — where a word could stand: Sinumerik
+     * `[A-Z_]{2}[A-Z0-9_]*` (a name starts with two letters or underscores), Okuma
+     * `[A-Z]{2}[A-Z0-9]*` (a local variable, or a function in front of `[`).
+     *
+     * The whole match is one `unknown` token, never a run of one-letter words, so `XBOT`
+     * is not an X word, `PASS2` carries no S word of 2 and `LOOP_N2` no block number. A
+     * keyword is only a keyword where the name at its position is no longer than it
+     * (`LOOP_A` is a name, `LOOP` a keyword). Tried after every other rule except the
+     * packed one-letter words, so an assignment (`XNOW=62`), a call and a label keep
+     * their own tokens.
+     */
+    names?: Pattern;
   };
   addresses: {
     tool?: string;
@@ -202,6 +279,15 @@ export interface Profile {
      * FZ: 'per-tooth' }`); a plain feed word returns to the unit the modal group gives.
      */
     feedUnitWords?: Record<string, Exclude<FeedUnit, 'unknown'>>;
+    /**
+     * P8. Assignment words whose value clamps the spindle speed instead of setting it
+     * (Sinumerik `LIMS=3000` under `G96`).
+     *
+     * A script that scales speeds has to know the difference: raising the clamp with the
+     * speed is at best pointless and at worst removes the guard the programmer put there,
+     * so the word is reported and left alone (WP8.7).
+     */
+    speedLimitWords?: string[];
   };
   toolCall: {
     /** A line that changes the tool (`M6`, `TOOL CALL …`). */
@@ -323,7 +409,16 @@ export interface CompiledProfile {
     detectContent: { re: RegExp; weight: number }[];
     sectionHeading?: RegExp;
     continuation?: RegExp;
+    /** M8: `syntax.continuationStart`, the leading marker of a line that continues a block. */
+    continuationStart?: RegExp;
     variables?: RegExp;
+    /** P8: `syntax.assignment`, `syntax.labels`, `syntax.systemVariables`, `syntax.header`. */
+    assignment?: RegExp;
+    labels?: RegExp;
+    systemVariables?: RegExp;
+    header?: RegExp;
+    /** M8 integration: `syntax.names`. */
+    names?: RegExp;
     toolTrigger: RegExp;
     /** P6: `toolCall.ignore`. A trigger line that also matches this is not a tool change. */
     toolIgnore?: RegExp;

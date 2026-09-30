@@ -18,6 +18,8 @@ import type { CompiledProfile, Profile } from './types';
 const FANUC = 'fanuc-gcode';
 const KLARTEXT = 'heidenhain-klartext';
 const LATHE = 'fanuc-lathe';
+const OKUMA = 'okuma-osp';
+const SINUMERIK = 'sinumerik';
 
 /** The built-ins, through the same gate the registry uses. */
 const BUILTINS: CompiledProfile[] = BUILTIN_PROFILE_JSON.map((raw) => {
@@ -78,8 +80,10 @@ describe('the extension weight', () => {
   it('decides on its own when the file says nothing', () => {
     expect(detectBoth('/work/a.h', '')).toEqual([KLARTEXT, KLARTEXT]);
     expect(detectBoth('/work/a.nc', '')).toEqual([FANUC, FANUC]);
-    // .min stays with Fanuc until an Okuma profile exists.
-    expect(detectBoth('/work/a.min', '')).toEqual([FANUC, FANUC]);
+    // M8: `.min` is the Okuma main-program extension, and the Fanuc mill gave it up (F22).
+    // On content the Okuma profile still scores nothing until WP8.3 writes its rules.
+    expect(detectBoth('/work/a.min', '')).toEqual([OKUMA, OKUMA]);
+    expect(detectBoth('/work/a.mpf', '')).toEqual([SINUMERIK, SINUMERIK]);
   });
 
   it('reads the extension off the file name only, in any case', () => {

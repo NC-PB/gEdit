@@ -70,12 +70,23 @@ export function languageConfiguration(p: Profile): LanguageConfiguration {
   // A comment is worth auto-closing even where its delimiters are not brackets: `(` is how
   // a Fanuc comment starts, and typing one should not leave it open.
   if (block) pairs.push({ open: block.start, close: block.end as string });
-  if (p.grammar === 'klartext') pairs.push({ open: '"', close: '"' });
+  // A dialect with strings closes them: Klartext tool and label names, and the `T="…"`,
+  // `MSG("…")` and `EXTCALL "…"` of a Sinumerik program (P8).
+  if (p.syntax?.strings === true) pairs.push({ open: '"', close: '"' });
 
-  const sigil = sigilOf(p);
+  const sigil = sigilOf(p.syntax?.variables);
+  const systemSigil = sigilOf(p.syntax?.systemVariables);
   const point = (p.syntax?.decimalSeparator ?? '.').replace(/[\\^$.|?*+()[\]{}]/g, '\\$&');
+  // Order is the whole of it: Monaco takes the first branch that matches where the cursor
+  // is. The longer, more specific forms come first, so `$AA_IM` is not read as the
+  // identifier `AA_IM` next to an operator and `SB=` is not read as the address `SB`
+  // (P8: `T010101`, `SB=`, `NLAP1`, `CYCLE81`, `$AA_IM` and `R10` each stay one word).
   const branches = [
+    ...(systemSigil === '' ? [] : [`${systemSigil}[A-Za-z_][A-Za-z0-9_]*`]),
     ...(sigil === '' ? [] : [`${sigil}\\d+`]),
+    ...(typeof p.syntax?.assignment === 'string' && p.syntax.assignment !== ''
+      ? [`[A-Za-z_][A-Za-z0-9_]*=`]
+      : []),
     `[A-Za-z_]+\\d*(?:${point}\\d*)?`,
     `\\d+(?:${point}\\d*)?`,
   ];
@@ -94,15 +105,24 @@ export function languageConfiguration(p: Profile): LanguageConfiguration {
 }
 
 /**
- * The literal first character of `syntax.variables`, escaped for a regular expression, or
+ * The literal first character of a variable pattern, escaped for a regular expression, or
  * an empty alternative when the dialect has no sigil. Mirrors `variableLead` in
  * `core/nc/tokenizer.ts`, so the word Monaco hands the assistant is the word the tokenizer
  * would have produced.
+ *
+ * A pattern that begins with an escape (`\$` of the Sinumerik system variables) leads with
+ * that character, and one that begins with a letter (Okuma's `V[A-Z]…`) has no sigil at
+ * all — its names are ordinary identifiers, which the identifier branch already keeps in
+ * one piece.
  */
-function sigilOf(p: Profile): string {
-  const source = p.syntax?.variables;
-  if (typeof source !== 'string' || source === '' || !/^[^\\^$.|?*+()[\]{}A-Za-z0-9]/.test(source)) return '';
-  return source[0].replace(/[\\^$.|?*+()[\]{}]/g, '\\$&');
+function sigilOf(source: string | undefined): string {
+  if (typeof source !== 'string' || source === '') return '';
+  // `\$…` states the character; anything else has to be a plain one to be a sigil.
+  const escaped = source.startsWith('\\');
+  const lead = escaped ? source[1] : source[0];
+  if (lead === undefined || /[A-Za-z0-9]/.test(lead)) return '';
+  if (!escaped && /[\\^$.|?*+()[\]{}]/.test(lead)) return '';
+  return lead.replace(/[\\^$.|?*+()[\]{}]/g, '\\$&');
 }
 
 /**

@@ -1,0 +1,15 @@
+{
+  "profile": "okuma-osp",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":2,"text":"SHAFT D40 - OP2 - SAVED WITHOUT AN EXTENSION AND WITHOUT A HEADER"},
+    {"kind":"program","line":3,"text":"O2002","endLine":37},
+    {"kind":"comment","line":4,"text":"FACE"},
+    {"kind":"tool","line":7,"text":"T1 — FACE","tool":"01","endLine":12},
+      {"kind":"comment","line":12,"text":"OD FINISH"},
+    {"kind":"tool","line":13,"text":"T2 — OD FINISH","tool":"02","endLine":22},
+      {"kind":"comment","line":22,"text":"CROSS HOLE D6"},
+    {"kind":"tool","line":23,"text":"T12 — CROSS HOLE D6","tool":"12","endLine":37},
+      {"kind":"end","line":35,"text":"M02"}
+  ]
+}

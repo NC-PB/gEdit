@@ -20,7 +20,9 @@ import type { CodeDb } from '$lib/core/codes/types';
 import type { Profile } from '$lib/core/profiles/types';
 import { isoRules } from './iso';
 import { klartextRules } from './klartext';
-import type { MonarchGrammar } from './shared';
+import { okumaRules } from './okuma';
+import { sinumerikRules } from './sinumerik';
+import type { GrammarRule, MonarchGrammar } from './shared';
 
 export {
   ROLES,
@@ -35,15 +37,32 @@ export { generateThemes, profileOverrides, type GeneratedTheme, type ThemeRule }
 export type { GrammarAction, GrammarRule, MonarchGrammar } from './shared';
 
 /**
+ * The rule builder one profile asks for (P8).
+ *
+ * An unknown `grammar` falls back to `iso`, the word-address shape every ISO-style dialect
+ * shares, rather than leaving a profile with no highlighting at all — which is also why a
+ * user profile may name a grammar this version does not have yet.
+ */
+function rulesFor(p: Profile, db: CodeDb): GrammarRule[] {
+  switch (p?.grammar) {
+    case 'klartext':
+      return klartextRules(p, db);
+    case 'okuma':
+      return okumaRules(p, db);
+    case 'sinumerik':
+      return sinumerikRules(p, db);
+    default:
+      return isoRules(p, db);
+  }
+}
+
+/**
  * Builds the Monarch grammar for `p`. The return value is an `IMonarchLanguage`; it is
  * typed loosely here so that `core/` keeps its Monaco-free rule (AD-1) and the generator
  * stays unit-testable in node.
- *
- * An unknown `grammar` falls back to `iso`, the word-address shape every ISO-style dialect
- * shares, rather than leaving a profile with no highlighting at all.
  */
 export function generateGrammar(p: Profile, db: CodeDb): Record<string, unknown> {
-  const rules = p?.grammar === 'klartext' ? klartextRules(p, db) : isoRules(p, db);
+  const rules = rulesFor(p, db);
   const grammar: MonarchGrammar = {
     defaultToken: '',
     ignoreCase: p?.syntax?.caseSensitive !== true,

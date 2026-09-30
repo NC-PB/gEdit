@@ -14,6 +14,9 @@
 //     the cycles, because the prefix may reach back over the words before the cursor;
 //   - nothing is suggested inside a comment or a string, and that is decided by the
 //     tokenizer, not by counting brackets;
+//   - nothing is suggested inside the argument list of a call either (`CYCLE83(50,0,|`,
+//     `X=AC(|`): the arguments are the call's positional values, and a code from the
+//     database written there would be a code in a cycle parameter (G8 M8);
 //   - a code with required parameters inserts as a snippet with one tab stop per
 //     parameter.
 //
@@ -220,6 +223,60 @@ const PROBE = 'A';
 /** Kinds that are prose rather than code: no suggestion belongs inside them. */
 const PROSE = new Set<NcToken['kind']>(['comment', 'string']);
 
+/** Kinds that take a string whole instead of leaving it a `string` token of its own. */
+const HOLDS_STRINGS = new Set<NcToken['kind']>(['call', 'word']);
+
+/** The string delimiter of every dialect that has strings (`syntax.strings`). */
+const QUOTE = 34;
+
+/** The brackets of an argument list (`syntax.calls`). */
+const PAREN_OPEN = 40;
+const PAREN_CLOSE = 41;
+
+/**
+ * True when `token` ends in the middle of a string it holds.
+ *
+ * A call takes its whole argument list (`MSG("OD ROUGH")`, `CYCLE95("SHAFT",2)`) and an
+ * assignment its whole value (`T="DRILL_D8"`), because neither may be cut at a `;` or a
+ * space inside the quotes — so the text of a message is never a `string` token of its
+ * own. The tokenizer reads a string in there by the same rule as everywhere else: it runs
+ * to the next `"`, with no escape. An odd number of quotes in the head of such a token is
+ * therefore the tokenizer's own answer that the cursor sits inside the text, which is
+ * prose like any other string (M8 integration).
+ */
+function endsInHeldString(token: NcToken, cp: CompiledProfile): boolean {
+  if (cp.profile.syntax.strings !== true || !HOLDS_STRINGS.has(token.kind)) return false;
+  let open = false;
+  for (let i = 0; i < token.text.length; i++) if (token.text.charCodeAt(i) === QUOTE) open = !open;
+  return open;
+}
+
+/**
+ * True when `token` ends inside an argument list it has not closed yet (G8 M8).
+ *
+ * The same two token kinds take an argument list whole: a call its own
+ * (`CYCLE83(50,0,`, `CYCLE840 (5,`) and an assignment word the call behind its `=`
+ * (`X=AC(`). A bracket still open at the end of such a token is the tokenizer's answer
+ * that the cursor stands between the brackets, where the values of the call go. Those are
+ * positional, so no code of the database belongs there: accepting a `G` or `M` code would
+ * write it into a cycle parameter. A bracket inside a string does not count, and the
+ * brackets nest, so `CYCLE95(SIN(30),` is still open.
+ */
+function endsInOpenArguments(token: NcToken, cp: CompiledProfile): boolean {
+  if (cp.profile.syntax.calls !== true || !HOLDS_STRINGS.has(token.kind)) return false;
+  const strings = cp.profile.syntax.strings === true;
+  let depth = 0;
+  let inString = false;
+  for (let i = 0; i < token.text.length; i++) {
+    const code = token.text.charCodeAt(i);
+    if (strings && code === QUOTE) inString = !inString;
+    else if (inString) continue;
+    else if (code === PAREN_OPEN) depth++;
+    else if (code === PAREN_CLOSE && depth > 0) depth--;
+  }
+  return depth > 0;
+}
+
 /**
  * True when a word typed at the end of `head` would land inside a comment or a string.
  *
@@ -231,12 +288,13 @@ const PROSE = new Set<NcToken['kind']>(['comment', 'string']);
  * closed `( … )` comment too, after which code may legitimately follow.
  *
  * The probe only runs when the head really ends in whitespace behind prose, so the common
- * case still tokenizes the line once.
+ * case still tokenizes the line once. A string held inside a call or an assignment needs
+ * no probe: an open one runs to the end of the head, whitespace and all.
  */
 function inProse(head: string, tokens: NcToken[], cp: CompiledProfile, prev?: LineState): boolean {
   const last = lastOf(tokens);
   if (last === null) return false;
-  if (PROSE.has(last.kind)) return true;
+  if (PROSE.has(last.kind) || endsInHeldString(last, cp)) return true;
   if (last.kind !== 'whitespace') return false;
   const before = tokens[tokens.length - 2];
   if (before === undefined || !PROSE.has(before.kind)) return false;
@@ -252,7 +310,8 @@ function isBareWord(token: NcToken): boolean {
 
 /**
  * What a completion at `offset` replaces and filters by, or null inside a comment or a
- * string, where NC code is prose and a suggestion would be noise.
+ * string, where NC code is prose and a suggestion would be noise, and inside the argument
+ * list of a call, where only the call's own values go.
  *
  * Only the head of the line is tokenized, so an unclosed `(` is seen for what it is and
  * the word under the cursor always ends at the cursor.
@@ -268,6 +327,10 @@ export function completionContext(
   const { tokens } = tokenizeLine(head, cp, prev);
 
   if (inProse(head, tokens, cp, prev)) return null;
+  // An open argument list runs to the end of the head, whitespace and all, so the last
+  // token is the one to ask.
+  const last = lastOf(tokens);
+  if (last !== null && endsInOpenArguments(last, cp)) return null;
 
   const content = tokens.filter((token) => token.kind !== 'whitespace');
   const current = content[content.length - 1];
@@ -295,8 +358,9 @@ export function completionContext(
 /**
  * The suggestions for a position in a line: the whole path from the text to the specs.
  *
- * Null means "no suggestions here at all" (a comment or a string); an empty `items` means
- * "nothing in the database matches", which is a different answer for the provider.
+ * Null means "no suggestions here at all" (a comment, a string, the arguments of a call);
+ * an empty `items` means "nothing in the database matches", which is a different answer
+ * for the provider.
  */
 export function completionsAt(
   line: string,

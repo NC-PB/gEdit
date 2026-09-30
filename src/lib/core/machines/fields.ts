@@ -112,6 +112,26 @@ export function presetIdOf(decl: MachineParamsDecl | undefined, current?: Machin
   return presets.some((preset) => preset?.id === declared.default) ? declared.default : (presets[0]?.id ?? '');
 }
 
+/**
+ * The message that names the diameter words: `{words}` and a plural `count`, so it can
+ * say "is" for one of them. Built at runtime and checked with `hasKey`, as keys.test.ts
+ * asks of such a key.
+ */
+export const DIAMETER_WORDS_KEY = 'machines.param.diameterWords';
+
+/**
+ * The label of the diameter parameter, naming the words the profile reads as diameters
+ * (`addresses.diameter`): `X and U` on a Fanuc lathe, `X` alone on Okuma and Sinumerik,
+ * where `U` is no diameter at all — on Okuma it is a finish allowance (G8 M8). Without
+ * words, or while the message that names them is not there, it is the plain message.
+ */
+export function diameterLabel(words?: readonly string[]): string {
+  const list = (words ?? []).filter((word): word is string => typeof word === 'string' && word !== '');
+  if (list.length === 0 || !hasKey(DIAMETER_WORDS_KEY)) return t('machines.param.diameter');
+  const joined = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(list);
+  return t(DIAMETER_WORDS_KEY, { words: joined, count: list.length });
+}
+
 /** The label of a modal group: a word we have for it, else the group's own name. */
 export function groupLabel(group: string): string {
   const key = `machines.groups.${group}`;
@@ -136,11 +156,13 @@ function codeChoice(entry: CodeEntry): FieldChoice {
  * `G94`/`G95` and reads `G98`/`G99` as cycle-return codes).
  *
  * `current` is the machine being edited; without it the fields are a new machine's.
+ * `diameterWords` is the profile's `addresses.diameter`, which the diameter field names.
  */
 export function machineFields(
   decl: MachineParamsDecl,
   codes: CodeDb,
   current?: MachineConfig,
+  diameterWords?: readonly string[],
 ): FieldSpec[] {
   const fields: FieldSpec[] = [
     {
@@ -189,7 +211,7 @@ export function machineFields(
     fields.push({
       id: FIELD_DIAMETER,
       type: 'bool',
-      label: t('machines.param.diameter'),
+      label: diameterLabel(diameterWords),
       help: t('machines.param.diameterHelp'),
       default: (current?.params?.diameter ?? decl.diameter) === 'on',
     });
@@ -349,11 +371,14 @@ function line(label: string, value: string, source: ParamSource): string {
  * at all about the assumed `G99` that decides whether every `F` of the program is read per
  * revolution or per minute (G8 M6). A group the machine sets shadows the dialect's, and
  * the source column tells the two apart.
+ *
+ * `diameterWords` is the profile's `addresses.diameter`, which the diameter line names.
  */
 export function machineSummaryLines(
   eff: EffectiveMachine,
   decl: MachineParamsDecl | undefined,
   initial?: Readonly<Record<string, string>>,
+  diameterWords?: readonly string[],
 ): string[] {
   const lines: string[] = [];
   const params = eff.params;
@@ -378,7 +403,7 @@ export function machineSummaryLines(
   if (params.diameter !== null) {
     lines.push(
       line(
-        t('machines.param.diameter'),
+        diameterLabel(diameterWords),
         params.diameter === 'on' ? t('machines.value.on') : t('machines.value.off'),
         eff.source.diameter,
       ),
@@ -406,8 +431,9 @@ export function machineTooltip(
   eff: EffectiveMachine,
   decl: MachineParamsDecl | undefined,
   initial?: Readonly<Record<string, string>>,
+  diameterWords?: readonly string[],
 ): string {
   const head =
     eff.name === null ? t('machines.tooltip.none') : t('machines.tooltip.machine', { name: eff.name });
-  return [head, ...machineSummaryLines(eff, decl, initial), t('machines.tooltip.hint')].join('\n');
+  return [head, ...machineSummaryLines(eff, decl, initial, diameterWords), t('machines.tooltip.hint')].join('\n');
 }

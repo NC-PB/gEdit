@@ -6,6 +6,8 @@
 import { describe, expect, it } from 'vitest';
 import fanucJson from '$lib/data/codes/fanuc.json';
 import heidenhainJson from '$lib/data/codes/heidenhain.json';
+import okumaJson from '$lib/data/codes/okuma.json';
+import sinumerikJson from '$lib/data/codes/sinumerik.json';
 import { BUILTIN_CODE_DB_JSON } from '$lib/data/codes';
 import { BUILTIN_PROFILE_JSON } from '$lib/data/profiles';
 import { compileProfile } from '$lib/core/profiles/compile';
@@ -31,6 +33,8 @@ function load(raw: unknown): { db: CodeDb; problems: CodeDbProblem[] } {
 
 const fanuc = load(fanucJson);
 const heidenhain = load(heidenhainJson);
+const okuma = load(okumaJson);
+const sinumerik = load(sinumerikJson);
 
 describe('built-in code databases', () => {
   it('ships one database per dialect, keyed by profile.codes', () => {
@@ -41,6 +45,8 @@ describe('built-in code databases', () => {
       'fanuc-lathe',
       'fanuc-lathe-b',
       'heidenhain',
+      'okuma',
+      'sinumerik',
     ]);
     expect(fanuc.db.dialect).toBe('fanuc');
     expect(heidenhain.db.dialect).toBe('heidenhain');
@@ -483,7 +489,9 @@ describe('the database against the rest of the app', () => {
   });
 
   it('has a group name for every group the databases use', () => {
-    for (const { db } of [fanuc, heidenhain]) {
+    // M8 integration: the turning databases too. Their `turret` and `lap` entries are
+    // still `verify`, but the name is shown the day one of them is confirmed.
+    for (const { db } of [fanuc, heidenhain, okuma, sinumerik]) {
       for (const entry of db.codes) {
         if (entry.group === undefined) continue;
         const key = `assistant.group.${entry.group}`;

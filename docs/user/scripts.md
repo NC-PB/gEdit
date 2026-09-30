@@ -122,8 +122,26 @@ Multiplies `F` values by a percentage.
 
 It leaves alone, and reports, the feeds it must not touch: **thread leads** (in a tapping
 or threading cycle the `F` carries a lead rather than a feed rate — the finding names the
-code, so you can see which cycle it was), feeds on rapid moves, and feeds written as a
-variable: the control works out those values, gEdit cannot.
+code of the block, so you can see which cycle it was), feeds on rapid moves, and feeds
+written as a variable (`F#101`, `F=R1`, `F=V1`): the control works out those values, gEdit
+cannot. A feed written under an address of its own — a chamfer feed `FRC=`, the `FA=` of a
+change of cutting conditions — is not the `F` word either; it is reported and left. An
+Okuma line that starts with `$` belongs to the block above it, so the lead a `G71` thread
+cycle carries on its `$` line is a thread lead like any other.
+
+**A dwell is not a feed.** In a dwell block the `F` word is a time — Okuma `G04 F2`,
+Sinumerik `G4 F2` — so it is never scaled and not counted as a feed rate; the summary says
+how many dwells it left as written.
+
+**Cycles written as calls.** A Sinumerik cycle such as `CYCLE85(…)` or `CYCLE95(…)` carries
+its feeds as arguments. They are listed and left as they are. A tapping cycle written that
+way stands in a block of its own and has no `F` of its own; the one that can take its lead
+from the feed in force (`CYCLE840`, tapping with a compensating chuck and no spindle
+encoder, where the feed is the speed times the pitch) leaves that feed exactly as written,
+wherever it stands, and says so — and while `MCALL` repeats such a call after every move,
+every feed written in between is left too. If your call takes the lead from its own
+arguments, scale that feed by hand. A cycle that always takes its lead from its arguments
+(`CYCLE84`, `CYCLE99`) changes nothing about the feeds around it.
 
 Feed *mode* is tracked as it goes, out of the dialect's own code database rather than out
 of a table in the script: on a mill that is `G93`/`G94`/`G95`, on a lathe `G98`/`G99` in
@@ -161,9 +179,24 @@ minute, not revolutions per minute, so scaling it is a different decision from s
 rpm — and one you should make deliberately.
 
 **A speed limit is not a speed.** The `S` of the block that clamps the top speed for
-constant surface speed — `G50 S` in G-code system A, `G92 S` in system B — is left alone by
-default and reported. Which code that is comes from the dialect's code database, so the
-script is right on both systems without knowing either of them.
+constant surface speed — `G50 S` in G-code system A, `G92 S` in system B, `G26 S` on a
+Sinumerik, and the lower limit `G25 S` — is left alone by default and reported, and so is a
+clamp written as a word of its own (`LIMS=3000`, `LIMS[2]=1800`). In such a block every
+speed word is a limit, the ones for other spindles included (`G26 S3000 S2=2000`). Which
+code or word that is comes from the dialect's code database and profile, so the script is
+right on every dialect without knowing any of them.
+
+**Other spindles are left alone unless you ask.** Only the master spindle's plain `S` is
+scaled by default. A speed written with an address of its own — `SB=2000` for a driven tool,
+`S3=2400` for spindle 3, `S[SPI]=2400` for the spindle whose number is in `SPI` — is
+reported and left, and so is a plain `S` while the program has made another spindle the
+master (`SETMS(3)` on a Sinumerik), because the script cannot tell which spindle is your
+main one. **Also scale other spindles** scales them with the rest. The `S` of a dwell is
+never a speed (`G4 S2` waits two spindle revolutions), and neither is a word the dialect
+lists as an angle (the start angle `SF=` of a thread).
+
+**Cycles written as calls** carry their speeds as arguments (the tapping speed of
+`CYCLE84(…)`); they are listed and left as they are.
 
 Defaults to whole numbers, which is what nearly every control wants. A selection is primed
 from the lines above it in exactly the same way, and warns in exactly the same case.
@@ -177,7 +210,17 @@ each tool is used with. Click a row to jump to the call.
 On a turning program it lists the **turret stations**, and an extra column shows the
 offsets each station was called with (`01, 11`) — so a station used with two different
 offsets is one row and tells you both. `T0100`, which cancels the offset rather than
-changing the tool, is not a call.
+changing the tool, is not a call. A six-digit Okuma `T010203` is nose-radius set 01,
+station 02 and offset 03, and a `T` inside a cycle block only switches the offset.
+
+A speed or feed written **before** the turret indexes (`G97 S1500 M03`, then `T0202`)
+belongs to the new tool: a value counts for the tool that moves next. A dwell is in no range,
+and neither is a driven tool's `SB=` or a numbered spindle's `S3=`: the speed column is the
+plain `S` of the spindle the tool runs on.
+
+A tool named in quotation marks is a name, whatever it is made of: `T="007"` and tool
+number 7 are two rows, and a name keeps its zeros and, when it is all digits, its quotation
+marks.
 
 Where the description comes from is a parameter (the dialect's own rule, or the comment
 above, below or at the end of the call line), as is whether `T01` and `T1` are written the
@@ -369,7 +412,7 @@ how the bundled scale scripts report the feeds they refused to touch.
 | `mask_comments(line, cp)` | the line with comments blanked out, same offsets |
 | `parse_number`, `format_number`, `scale_decimal` | NC numbers as decimal strings, never as floats |
 | `ModalInterpreter(cp, codes)` | everything that is in force after a block: the code per modal group, the feed and speed units, distance, diameter, units, plane, the last tool, feed, speed and speed clamp, and the active cycle |
-| `FeedModeTracker(codes)` | the older, smaller view of the same thing: feed mode, `G96`/`G97`, the active cycle, and whether its `F` is a thread pitch |
+| `FeedModeTracker(codes)` | the older, smaller view of the same thing: feed mode, `G96`/`G97`, the active cycle, whether its `F` is a thread pitch, and whether the block is a dwell (`f_not_feed`) |
 | `speed_limit_of(codes, tokens)` | the code in this block that makes its `S` a clamp rather than a speed, or `None` |
 | `machine_type_of`, `incremental_axes`, `diameter_axes` | `'mill'` or `'lathe'`, the `U`→`X` pairs, and the words written as a diameter |
 | `machine_params(context)` | the document's [machine](machines.md), with the source of each parameter |

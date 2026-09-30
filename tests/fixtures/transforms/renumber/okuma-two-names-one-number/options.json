@@ -1,0 +1,11 @@
+{
+  "note": "G10 M8: N0020 and N20 in one program are two blocks with two names, not one number used twice, so neither jump is a duplicate. Each follows its own block: N0020 becomes N10, N20 keeps its name.",
+  "profile": "okuma-osp",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [{ "line": 1, "severity": "info" }],
+    "warnings": ["ncNumbering.renumber.referencesRewritten"],
+    "preflight": null
+  }
+}

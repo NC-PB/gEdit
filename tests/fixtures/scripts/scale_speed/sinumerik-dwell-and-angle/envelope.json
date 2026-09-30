@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 1 spindle speed to 80 %; 1 thread block to check by hand, 1 word for another spindle left as written (S3=), 1 dwell in spindle revolutions left as written.",
+  "findings": [
+    {
+      "line": 3,
+      "severity": "warning",
+      "message": "This thread block (G33) runs at S800, which was scaled on line 1: the feed follows from the speed and the pitch, so check this block by hand."
+    },
+    {
+      "line": 6,
+      "severity": "info",
+      "message": "S3=1200 is the speed of spindle 3, named by its number; this run scales only the plain S word of the master spindle, so it is left as it is. Switch on \"Also scale other spindles\" to scale it with the others."
+    }
+  ]
+}

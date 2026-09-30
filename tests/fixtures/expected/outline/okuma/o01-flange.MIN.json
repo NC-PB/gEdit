@@ -1,0 +1,17 @@
+{
+  "profile": "okuma-osp",
+  "items": [
+    {"kind":"comment","line":2,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"program","line":3,"text":"O1001","endLine":44},
+    {"kind":"comment","line":4,"text":"FLANGE D72 - OP1 - SIX AND FOUR DIGIT T WORDS ON PURPOSE"},
+    {"kind":"comment","line":5,"text":"FACE AND OD ROUGH"},
+    {"kind":"tool","line":8,"text":"T1 — FACE AND OD ROUGH","tool":"01","endLine":18},
+      {"kind":"comment","line":18,"text":"OD FINISH"},
+    {"kind":"tool","line":19,"text":"T3 — OD FINISH","tool":"03","endLine":28},
+      {"kind":"comment","line":27,"text":"CENTRE DRILL"},
+    {"kind":"tool","line":29,"text":"T2 — CENTRE DRILL","tool":"02","endLine":35},
+      {"kind":"comment","line":34,"text":"FACE GROOVE"},
+    {"kind":"tool","line":36,"text":"T7 — FACE GROOVE","tool":"07","endLine":44},
+      {"kind":"end","line":42,"text":"M02"}
+  ]
+}

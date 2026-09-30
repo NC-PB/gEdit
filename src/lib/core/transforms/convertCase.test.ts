@@ -16,6 +16,7 @@ import { noMachine } from '$lib/core/machines/effective';
 import type { CodeDb } from '$lib/core/codes/types';
 import fanucJson from '$lib/data/profiles/fanuc-gcode.json';
 import heidenhainJson from '$lib/data/profiles/heidenhain-klartext.json';
+import sinumerikJson from '$lib/data/profiles/sinumerik.json';
 import { compileProfile } from '$lib/core/profiles/compile';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
 import { convertCase } from './convertCase';
@@ -23,6 +24,7 @@ import type { TransformContext } from './types';
 
 const fanuc = compileProfile(fanucJson as unknown as Profile);
 const klartext = compileProfile(heidenhainJson as unknown as Profile);
+const sinumerik = compileProfile(sinumerikJson as unknown as Profile);
 const NO_CODES: CodeDb = { dialect: 'test', version: 1, addresses: {}, codes: [] };
 
 const CASES = fileURLToPath(new URL('../../../../tests/fixtures/transforms/convert-case/', import.meta.url));
@@ -135,6 +137,36 @@ describe('convertCase rules', () => {
     expect(run(line, { case: 'upper' }, klartext)).toBe(line);
     expect(run(line, { case: 'upper', excludeComments: false }, klartext)).toBe(line);
     expect(run(line, { case: 'lower' }, klartext)).toBe('2 tool call "mill_d10" z s5000');
+  });
+
+  // M8 integration: on Sinumerik a string also stands inside a word or a call, and the
+  // tool it names is matched literally against the tool table just like a Klartext one.
+  it('keeps a string inside an assignment or a call exactly as written', () => {
+    expect(run('n40 t="drill_d8" d1', { case: 'upper' }, sinumerik)).toBe('N40 T="drill_d8" D1');
+    expect(run('N30 MSG("Rough pass")', { case: 'lower' }, sinumerik)).toBe('n30 msg("Rough pass")');
+    expect(run('n70 cycle95("shaft_contour",2,0.2)', { case: 'upper' }, sinumerik)).toBe('N70 CYCLE95("shaft_contour",2,0.2)');
+    expect(run('N180 CALL "probe_cycle"', { case: 'lower' }, sinumerik)).toBe('n180 call "probe_cycle"');
+  });
+
+  // G8 M8 review: the rule above keeps a string inside a word or a call, and it had been
+  // applied to comments as well. In a comment a quote is only a character — an inch mark,
+  // or quotes around a name the operator reads — so a comment the user asked to convert
+  // stopped converting at the first quote and never started again after an odd one.
+  it('converts a comment whole, quotes and all, when comments are included', () => {
+    const upper = { case: 'upper', excludeComments: false };
+    expect(run('5 ; mill "d10" roughing', upper, klartext)).toBe('5 ; MILL "D10" ROUGHING');
+    expect(run('6 ; bore 2" deep then face', upper, klartext)).toBe('6 ; BORE 2" DEEP THEN FACE');
+    // A structure block is a heading that reads as a comment, and follows the same rule.
+    expect(run('7 * - "shaft" roughing', upper, klartext)).toBe('7 * - "SHAFT" ROUGHING');
+    expect(run('N10 G0 X10 ; mill "d10" roughing', upper, sinumerik)).toBe('N10 G0 X10 ; MILL "D10" ROUGHING');
+    expect(run('N20 ; bore 2" deep then face', upper, sinumerik)).toBe('N20 ; BORE 2" DEEP THEN FACE');
+    expect(run('N30 ; MILL "D10" ROUGHING', { case: 'lower', excludeComments: false }, sinumerik)).toBe(
+      'n30 ; mill "d10" roughing',
+    );
+    // The string of a call in front of the comment still keeps its own spelling.
+    expect(run('n40 msg("Rough") ; say "done"', upper, sinumerik)).toBe('N40 MSG("Rough") ; SAY "DONE"');
+    // And with comments excluded, which is the default, none of it is touched.
+    expect(run('5 ; mill "d10" roughing', { case: 'upper' }, klartext)).toBe('5 ; mill "d10" roughing');
   });
 
   it('leaves a token whose conversion would change its length', () => {

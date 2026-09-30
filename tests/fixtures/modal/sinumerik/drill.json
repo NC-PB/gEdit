@@ -1,0 +1,36 @@
+{
+  "about": "Cycles written as calls are codes of their own block: CYCLE83 drills, CYCLE84 taps with the lead and the speed among its own arguments (so its block carries no pitch feed), and MCALL makes the call modal, which the interpreter tracks for the calling block only. A word written with = is a value and never a code: S3=2400 is spindle 3's speed and M3=3 switches spindle 3, so neither is the plain S or the M3 of the spindle this state follows.",
+  "input": "../../nc/sinumerik/s02-drill.MPF",
+  "states": [
+    { "line": 5, "after": { "groups": { "diametermode": "DIAMON" }, "diameter": "on", "plane": "ZX" } },
+    { "line": 8, "after": { "tool": "\"DRILL_D10\"", "block": { "toolChange": true } } },
+    {
+      "line": 9,
+      "about": "On this control G97 belongs to the feed type: a fixed speed and a feed per revolution.",
+      "after": { "groups": { "feedmode": "G97", "spindle": "M3" }, "speedUnit": "rpm", "feedUnit": "per-rev", "speed": "1600" }
+    },
+    { "line": 11, "after": { "feed": "0.12", "feedUnit": "per-rev" } },
+    { "line": 12, "after": { "activeCycle": null, "block": { "cycle": "CYCLE83", "pitchFeed": false } } },
+    { "line": 13, "after": { "block": { "cycle": null } } },
+    { "line": 16, "after": { "groups": { "spindle": "M5" } } },
+    { "line": 18, "after": { "diameter": "off" } },
+    { "line": 20, "after": { "groups": { "feedmode": "G94", "plane": "G17" }, "feedUnit": "per-minute", "plane": "XY" } },
+    {
+      "line": 21,
+      "about": "S3=2400 and M3=3 address spindle 3.",
+      "after": { "speed": "1600", "groups": { "spindle": "M5" } }
+    },
+    { "line": 23, "after": { "feed": "120" } },
+    { "line": 24, "after": { "block": { "cycle": "CYCLE83" }, "activeCycle": null } },
+    { "line": 25, "after": { "block": { "cycle": null } } },
+    { "line": 34, "after": { "speed": "500", "groups": { "spindle": "M3" } } },
+    {
+      "line": 36,
+      "about": "Rigid tapping: the lead is an argument of the call, not the feed in force.",
+      "after": { "activeCycle": null, "block": { "cycle": "CYCLE84", "pitchFeed": false } }
+    },
+    { "line": 37, "after": { "block": { "cycle": null, "pitchFeed": false } } },
+    { "line": 45, "after": { "diameter": "on" } },
+    { "line": 46, "after": { "groups": { "feedmode": "G95", "plane": "G18" }, "feedUnit": "per-rev", "plane": "ZX" } }
+  ]
+}

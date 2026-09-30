@@ -1,0 +1,2141 @@
+{
+  "addresses": {
+    "AR": {
+      "description": "Angle an arc sweeps, written instead of the end point or the centre. It is always written with an equals sign.",
+      "label": "Opening angle"
+    },
+    "C": {
+      "description": "Angle of the spindle, used to place holes and flats for driven tools.",
+      "label": "C axis"
+    },
+    "CR": {
+      "description": "Radius of an arc, written instead of the centre. A negative radius picks the arc longer than half a circle. It is always written with an equals sign.",
+      "label": "Arc radius"
+    },
+    "D": {
+      "description": "Offset set of the active tool. D0 switches the length and radius offsets off.",
+      "label": "Cutting edge"
+    },
+    "F": {
+      "description": "Feed rate. Its unit follows the feed type in force: a distance per minute with G94, G961 and G971, per spindle revolution with G95, G96, G97 and G973. With G4 it is a dwell in seconds, and with G34 or G35 the change of the thread lead per revolution.",
+      "label": "Feed, or dwell time"
+    },
+    "G": {
+      "description": "Selects how the control reads the rest of the block: the kind of movement, the plane, the feed mode and the measuring modes.",
+      "label": "Preparatory function"
+    },
+    "I": {
+      "description": "Distance from the start point to the arc centre across the turning axis. In a thread block it is the lead instead, for G34 and G35 the lead at the start of the thread.",
+      "label": "Arc centre on X, or a thread lead"
+    },
+    "J": {
+      "description": "Distance from the start point to the arc centre along Y. In a thread block it is the lead instead, for G34 and G35 the lead at the start of the thread.",
+      "label": "Arc centre on Y, or a thread lead"
+    },
+    "K": {
+      "description": "Distance from the start point to the arc centre along the turning axis. In a thread block it is the lead instead, for G34 and G35 the lead at the start of the thread.",
+      "label": "Arc centre on Z, or a thread lead"
+    },
+    "L": {
+      "description": "Calls the subprogram of that number. The digits are the program's name, leading zeros included, so L12 and L012 call two different programs.",
+      "label": "Subprogram call"
+    },
+    "LIMS": {
+      "description": "Highest speed the control may run while the constant cutting speed is on. It is a limit, not a speed: changing it changes the guard the programmer set.",
+      "label": "Spindle speed limit"
+    },
+    "M": {
+      "description": "Switches a machine function such as the spindle, the coolant or the program end. Numbers above 30 are set up by the machine builder and are not errors.",
+      "label": "Machine function"
+    },
+    "N": {
+      "description": "Number of the block. It is optional, and the control does not require the numbers to be in order.",
+      "label": "Block number"
+    },
+    "P": {
+      "description": "How often the subprogram called in the same block runs.",
+      "label": "Repeat count"
+    },
+    "S": {
+      "description": "Spindle speed in revolutions per minute, or the cutting speed while G96, G961 or G962 is active. With G4 it is a dwell in spindle revolutions, and with G25 or G26 a speed limit. A number in the address, as in S3=, names the spindle it is for; a plain S is meant for the master spindle, which SETMS can change.",
+      "label": "Spindle speed"
+    },
+    "SF": {
+      "description": "Angle at which a thread starts, used for multi-start threads.",
+      "label": "Thread start angle"
+    },
+    "T": {
+      "description": "Tool number, or the tool name in quotation marks where the machine manages tools by name. T0 deselects the tool.",
+      "label": "Tool"
+    },
+    "X": {
+      "description": "Position across the turning axis. It is a diameter while diameter programming is on, which is how this profile starts.",
+      "label": "X axis, a diameter"
+    },
+    "Y": {
+      "description": "Position across the turning axis on machines that have a Y axis.",
+      "label": "Y axis"
+    },
+    "Z": {
+      "description": "Position along the turning axis.",
+      "label": "Z axis"
+    }
+  },
+  "codes": [
+    {
+      "code": "G0",
+      "description": "Moves to the position at rapid speed.",
+      "group": "motion",
+      "label": "Rapid",
+      "modal": true
+    },
+    {
+      "code": "G1",
+      "description": "Moves to the position on a straight line at the feed in F.",
+      "group": "motion",
+      "label": "Linear feed move",
+      "modal": true
+    },
+    {
+      "code": "G2",
+      "description": "Cuts an arc clockwise to the end point in the axis words. I, J and K give the centre.",
+      "group": "motion",
+      "label": "Arc, clockwise",
+      "modal": true
+    },
+    {
+      "code": "G3",
+      "description": "Cuts an arc counter-clockwise, described the same way as G2.",
+      "group": "motion",
+      "label": "Arc, counter-clockwise",
+      "modal": true
+    },
+    {
+      "code": "CIP",
+      "description": "Cuts an arc through an intermediate point given with I1=, J1= and K1=.",
+      "group": "motion",
+      "label": "Arc through a point",
+      "modal": true
+    },
+    {
+      "code": "CT",
+      "description": "Cuts an arc that joins the path before it without a corner. Only the end point is given.",
+      "group": "motion",
+      "label": "Arc, tangential",
+      "modal": true
+    },
+    {
+      "code": "G4",
+      "description": "Holds the position for the time in F, in seconds, or for the number of spindle revolutions in S; S2= and the like count the revolutions of another spindle. It stands in a block of its own. That F is not a feed and that S is not a speed, so nothing that scales feeds or speeds may touch them.",
+      "fNotFeed": true,
+      "group": "nonmodal",
+      "label": "Dwell"
+    },
+    {
+      "code": "G63",
+      "description": "Taps to the position in the block with the spindle not under position control; the chuck takes up the difference. F has to be the spindle speed times the thread pitch, so the two may only be changed together. The move type in force before it applies again in the next block.",
+      "group": "nonmodal",
+      "label": "Tapping with a compensating chuck, one block",
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "G9",
+      "description": "Brings the axes to a stop inside the position window at the end of this block, without changing the path mode that follows.",
+      "group": "nonmodal",
+      "label": "Exact stop, this block only"
+    },
+    {
+      "code": "G60",
+      "description": "Stops at the end of every block until another path mode replaces it, so each corner is cut sharp.",
+      "group": "pathmode",
+      "label": "Exact stop mode",
+      "modal": true
+    },
+    {
+      "code": "G64",
+      "description": "Keeps the axes moving from one block into the next instead of stopping at every block end; the control slows down at a corner as far as it has to.",
+      "group": "pathmode",
+      "label": "Continuous path mode",
+      "modal": true
+    },
+    {
+      "code": "G641",
+      "description": "Rounds a corner within the distance given by ADIS.",
+      "group": "pathmode",
+      "label": "Continuous path, rounded by distance",
+      "modal": true
+    },
+    {
+      "code": "G642",
+      "description": "Rounds a corner within the tolerance each axis is allowed. Programs written by CAM often carry it.",
+      "group": "pathmode",
+      "label": "Continuous path, rounded by axis tolerance",
+      "modal": true
+    },
+    {
+      "code": "G645",
+      "group": "pathmode",
+      "label": "Continuous path, rounded on tangential corners too",
+      "modal": true
+    },
+    {
+      "code": "G17",
+      "group": "plane",
+      "label": "Working plane XY",
+      "modal": true,
+      "sets": {
+        "plane": "XY"
+      }
+    },
+    {
+      "code": "G18",
+      "description": "The plane a turning program works in.",
+      "group": "plane",
+      "label": "Working plane ZX",
+      "modal": true,
+      "sets": {
+        "plane": "ZX"
+      }
+    },
+    {
+      "code": "G19",
+      "group": "plane",
+      "label": "Working plane YZ",
+      "modal": true,
+      "sets": {
+        "plane": "YZ"
+      }
+    },
+    {
+      "code": "G33",
+      "description": "Cuts a thread with a constant lead, given in I, J or K. The lead is not a feed and may never be scaled like one.",
+      "group": "motion",
+      "label": "Thread cutting",
+      "modal": true,
+      "pitchFeed": true
+    },
+    {
+      "code": "G331",
+      "description": "Drives the tap with the spindle under position control; the lead is in I, J or K and is not a feed. S is read in revolutions per minute here, whatever the feed type says.",
+      "group": "motion",
+      "label": "Rigid tapping, into the hole",
+      "modal": true,
+      "pitchFeed": true
+    },
+    {
+      "code": "G332",
+      "description": "The retract of a rigid tapping pass, with the same lead as the block that cut it.",
+      "group": "motion",
+      "label": "Rigid tapping, back out",
+      "modal": true,
+      "pitchFeed": true
+    },
+    {
+      "code": "G34",
+      "description": "Cuts a thread whose lead grows along the thread: I, J or K give the lead at the start, and F the change of the lead per revolution. Neither is a feed, and nothing may scale them.",
+      "group": "motion",
+      "label": "Thread cutting, lead growing",
+      "modal": true,
+      "pitchFeed": true
+    },
+    {
+      "code": "G35",
+      "description": "Cuts a thread whose lead shrinks along the thread: I, J or K give the lead at the start, and F the change of the lead per revolution. Neither is a feed, and nothing may scale them.",
+      "group": "motion",
+      "label": "Thread cutting, lead shrinking",
+      "modal": true,
+      "pitchFeed": true
+    },
+    {
+      "code": "G335",
+      "description": "Cuts a thread whose path is a clockwise arc instead of a straight line. The lead is in I, J or K as with G33, so the arc centre is written as IR=, JR= and KR=.",
+      "group": "motion",
+      "label": "Thread along an arc, clockwise",
+      "modal": true,
+      "pitchFeed": true
+    },
+    {
+      "code": "G336",
+      "description": "Cuts a thread whose path is a counter-clockwise arc instead of a straight line. The lead is in I, J or K as with G33, so the arc centre is written as IR=, JR= and KR=.",
+      "group": "motion",
+      "label": "Thread along an arc, counter-clockwise",
+      "modal": true,
+      "pitchFeed": true
+    },
+    {
+      "code": "G40",
+      "group": "compensation",
+      "label": "Radius compensation off",
+      "modal": true
+    },
+    {
+      "code": "G41",
+      "description": "Offsets the path by the radius of the edge that D selects, seen along the direction of travel.",
+      "group": "compensation",
+      "label": "Radius compensation, tool left",
+      "modal": true
+    },
+    {
+      "code": "G42",
+      "group": "compensation",
+      "label": "Radius compensation, tool right",
+      "modal": true
+    },
+    {
+      "code": "G53",
+      "description": "Runs this block without the work offsets.",
+      "group": "nonmodal",
+      "label": "Suppress the offsets for this block"
+    },
+    {
+      "code": "G153",
+      "description": "Leaves out more of the offsets than G53 does, for this block only. Programs use it to move to a machine position, as before a tool change.",
+      "group": "nonmodal",
+      "label": "Suppress the offsets for this block, more of them than G53"
+    },
+    {
+      "code": "G500",
+      "description": "Cancels the settable work offset. Programs often write it in the header.",
+      "group": "offset",
+      "label": "Settable work offset off",
+      "modal": true
+    },
+    {
+      "code": "G54",
+      "group": "offset",
+      "label": "Settable work offset 1",
+      "modal": true
+    },
+    {
+      "code": "G55",
+      "group": "offset",
+      "label": "Settable work offset 2",
+      "modal": true
+    },
+    {
+      "code": "G56",
+      "group": "offset",
+      "label": "Settable work offset 3",
+      "modal": true
+    },
+    {
+      "code": "G57",
+      "group": "offset",
+      "label": "Settable work offset 4",
+      "modal": true
+    },
+    {
+      "code": "G70",
+      "description": "Reads the positions as inches. It is a unit switch on this control and not a finishing cycle.",
+      "group": "units",
+      "label": "Inch for the geometry",
+      "modal": true,
+      "sets": {
+        "units": "inch"
+      }
+    },
+    {
+      "code": "G71",
+      "description": "Reads the positions as millimetres. It is a unit switch on this control and not a roughing cycle.",
+      "group": "units",
+      "label": "Millimetres for the geometry",
+      "modal": true,
+      "sets": {
+        "units": "mm"
+      }
+    },
+    {
+      "code": "G700",
+      "group": "units",
+      "label": "Inch for the geometry and the feed",
+      "modal": true,
+      "sets": {
+        "units": "inch"
+      }
+    },
+    {
+      "code": "G710",
+      "group": "units",
+      "label": "Millimetres for the geometry and the feed",
+      "modal": true,
+      "sets": {
+        "units": "mm"
+      }
+    },
+    {
+      "code": "G90",
+      "description": "Reads every position as a distance from the zero point.",
+      "group": "distance",
+      "label": "Absolute positions",
+      "modal": true,
+      "sets": {
+        "distance": "absolute"
+      }
+    },
+    {
+      "code": "G91",
+      "description": "Reads every position as a distance from the point before.",
+      "group": "distance",
+      "label": "Incremental positions",
+      "modal": true,
+      "sets": {
+        "distance": "incremental"
+      }
+    },
+    {
+      "code": "G93",
+      "description": "F is the reciprocal of the time the block takes, not a distance. It also ends a constant cutting speed, so S is in revolutions per minute.",
+      "group": "feedmode",
+      "label": "Inverse-time feed",
+      "modal": true,
+      "sets": {
+        "feedUnit": "inverse-time",
+        "speedUnit": "rpm"
+      }
+    },
+    {
+      "code": "G94",
+      "description": "F is a distance per minute from here on, and S a speed in revolutions per minute: it also ends a constant cutting speed.",
+      "group": "feedmode",
+      "label": "Feed per minute",
+      "modal": true,
+      "sets": {
+        "feedUnit": "per-minute",
+        "speedUnit": "rpm"
+      }
+    },
+    {
+      "code": "G95",
+      "description": "F is a distance per spindle revolution from here on, which is how turning programs cut, and S a speed in revolutions per minute: it also ends a constant cutting speed.",
+      "group": "feedmode",
+      "label": "Feed per revolution",
+      "modal": true,
+      "sets": {
+        "feedUnit": "per-rev",
+        "speedUnit": "rpm"
+      }
+    },
+    {
+      "code": "G96",
+      "description": "S is a cutting speed from here on, and the control changes the spindle speed with the diameter. It also makes F a distance per revolution. A speed limit belongs with it, written as LIMS=.",
+      "group": "feedmode",
+      "label": "Constant cutting speed, feed per revolution",
+      "modal": true,
+      "sets": {
+        "feedUnit": "per-rev",
+        "speedUnit": "surface"
+      }
+    },
+    {
+      "code": "G97",
+      "description": "S is a speed in revolutions per minute again, and F a distance per revolution. Without a new S the spindle keeps the speed it was turning at.",
+      "group": "feedmode",
+      "label": "Fixed spindle speed, feed per revolution",
+      "modal": true,
+      "sets": {
+        "feedUnit": "per-rev",
+        "speedUnit": "rpm"
+      }
+    },
+    {
+      "code": "G961",
+      "description": "As G96, but F is a distance per minute.",
+      "group": "feedmode",
+      "label": "Constant cutting speed, feed per minute",
+      "modal": true,
+      "sets": {
+        "feedUnit": "per-minute",
+        "speedUnit": "surface"
+      }
+    },
+    {
+      "code": "G962",
+      "description": "As G96, but F keeps the unit it had: per minute or per revolution.",
+      "group": "feedmode",
+      "label": "Constant cutting speed, feed type kept",
+      "modal": true,
+      "sets": {
+        "speedUnit": "surface"
+      }
+    },
+    {
+      "code": "G971",
+      "description": "As G97, but F is a distance per minute. A LIMS= limit does not act under it.",
+      "group": "feedmode",
+      "label": "Fixed spindle speed, feed per minute",
+      "modal": true,
+      "sets": {
+        "feedUnit": "per-minute",
+        "speedUnit": "rpm"
+      }
+    },
+    {
+      "code": "G972",
+      "description": "As G97, but F keeps the unit it had: per minute or per revolution.",
+      "group": "feedmode",
+      "label": "Fixed spindle speed, feed type kept",
+      "modal": true,
+      "sets": {
+        "speedUnit": "rpm"
+      }
+    },
+    {
+      "code": "G973",
+      "description": "As G97, but no LIMS= limit is switched on with it.",
+      "group": "feedmode",
+      "label": "Fixed spindle speed without a speed limit",
+      "modal": true,
+      "sets": {
+        "feedUnit": "per-rev",
+        "speedUnit": "rpm"
+      }
+    },
+    {
+      "code": "G942",
+      "description": "F is a distance per minute, and the spindle keeps the speed it is turning at, whether a cutting speed or an S set it.",
+      "group": "feedmode",
+      "label": "Feed per minute, spindle speed frozen",
+      "modal": true,
+      "sets": {
+        "feedUnit": "per-minute",
+        "speedUnit": "rpm"
+      },
+      "verify": true
+    },
+    {
+      "code": "G952",
+      "description": "F is a distance per revolution, and the spindle keeps the speed it is turning at, whether a cutting speed or an S set it.",
+      "group": "feedmode",
+      "label": "Feed per revolution, spindle speed frozen",
+      "modal": true,
+      "sets": {
+        "feedUnit": "per-rev",
+        "speedUnit": "rpm"
+      },
+      "verify": true
+    },
+    {
+      "code": "G25",
+      "description": "With S the lowest speed the master spindle may run at, and S2=, S3= set it for the spindle of that number; with axis words the lower end of the working area. Either way it is a limit, not a speed or a position to move to. The control stores it in its settings, so it can still be in force after the program ends.",
+      "group": "nonmodal",
+      "label": "Lower limit: spindle speed with S, working area with axis words",
+      "sets": {
+        "speedLimit": true
+      }
+    },
+    {
+      "code": "G26",
+      "description": "With S the highest speed the master spindle may run at, and S2=, S3= set it for the spindle of that number; with axis words the upper end of the working area. Either way it is a limit, not a speed or a position to move to. The control stores it in its settings, so it can still be in force after the program ends.",
+      "group": "nonmodal",
+      "label": "Upper limit: spindle speed with S, working area with axis words",
+      "sets": {
+        "speedLimit": true
+      }
+    },
+    {
+      "code": "DIAMON",
+      "description": "Reads the cross axis as a diameter from here on. gEdit also assumes it at the start of a program, unless the machine configuration says the control starts without it.",
+      "group": "diametermode",
+      "label": "Diameter programming on",
+      "modal": true,
+      "sets": {
+        "diameter": "on"
+      }
+    },
+    {
+      "code": "DIAMOF",
+      "description": "Reads the cross axis as a radius from here on.",
+      "group": "diametermode",
+      "label": "Diameter programming off",
+      "modal": true,
+      "sets": {
+        "diameter": "off"
+      }
+    },
+    {
+      "code": "DIAM90",
+      "description": "Reads absolute positions on the cross axis as diameters and incremental ones as radii.",
+      "group": "diametermode",
+      "label": "Diameter for absolute values only",
+      "modal": true,
+      "sets": {
+        "diameter": "absolute-only"
+      }
+    },
+    {
+      "code": "CYCLE81",
+      "description": "Drills to depth in one pass and retracts. The plane, the depth and the safety distance come in the order below.",
+      "group": "cycle",
+      "label": "Drilling or centring cycle",
+      "params": [
+        {
+          "address": "RTP",
+          "label": "Retraction plane, as an absolute position"
+        },
+        {
+          "address": "RFP",
+          "label": "Reference plane: the top of the hole, as an absolute position"
+        },
+        {
+          "address": "SDIS",
+          "label": "Safety distance above the reference plane, written without a sign"
+        },
+        {
+          "address": "DP",
+          "label": "Final depth, as an absolute position"
+        },
+        {
+          "address": "DPR",
+          "label": "Final depth, measured from the reference plane"
+        },
+        {
+          "address": "DTB",
+          "label": "Dwell at the bottom of the hole: seconds when positive, spindle revolutions when negative",
+          "unit": "dwell"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCLE82",
+      "description": "Drills to depth, waits there and retracts, which is what a counterbore needs.",
+      "group": "cycle",
+      "label": "Drilling cycle with a dwell",
+      "params": [
+        {
+          "address": "RTP",
+          "label": "Retraction plane, as an absolute position"
+        },
+        {
+          "address": "RFP",
+          "label": "Reference plane: the top of the hole, as an absolute position"
+        },
+        {
+          "address": "SDIS",
+          "label": "Safety distance above the reference plane, written without a sign"
+        },
+        {
+          "address": "DP",
+          "label": "Final depth, as an absolute position"
+        },
+        {
+          "address": "DPR",
+          "label": "Final depth, measured from the reference plane"
+        },
+        {
+          "address": "DTB",
+          "label": "Dwell at the bottom of the hole: seconds when positive, spindle revolutions when negative",
+          "unit": "dwell"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCLE83",
+      "description": "Drills in pecks, so the chips break or leave the hole. VARI decides between breaking the chip and pulling the drill out.",
+      "group": "cycle",
+      "label": "Deep-hole drilling cycle",
+      "params": [
+        {
+          "address": "RTP",
+          "label": "Retraction plane, as an absolute position"
+        },
+        {
+          "address": "RFP",
+          "label": "Reference plane: the top of the hole, as an absolute position"
+        },
+        {
+          "address": "SDIS",
+          "label": "Safety distance above the reference plane, written without a sign"
+        },
+        {
+          "address": "DP",
+          "label": "Final depth, as an absolute position"
+        },
+        {
+          "address": "DPR",
+          "label": "Final depth, measured from the reference plane"
+        },
+        {
+          "address": "FDEP",
+          "label": "Depth of the first peck, as an absolute position"
+        },
+        {
+          "address": "FDPR",
+          "label": "Depth of the first peck, measured from the reference plane"
+        },
+        {
+          "address": "_DAM",
+          "label": "How much each further peck is reduced"
+        },
+        {
+          "address": "DTB",
+          "label": "Dwell at the bottom of the hole: seconds when positive, spindle revolutions when negative",
+          "unit": "dwell"
+        },
+        {
+          "address": "DTS",
+          "label": "Dwell at the start point: seconds when positive, spindle revolutions when negative",
+          "unit": "dwell"
+        },
+        {
+          "address": "FRF",
+          "label": "Feed factor for the first peck"
+        },
+        {
+          "address": "VARI",
+          "label": "Chip breaking or full retract",
+          "unit": "count"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCLE84",
+      "description": "Cuts the thread with the spindle under position control, so no compensating chuck is needed. The lead (MPIT or PIT) and the tapping speed (SST) are its own arguments: it does not take its lead from the feed in force.",
+      "group": "cycle",
+      "label": "Rigid tapping cycle",
+      "params": [
+        {
+          "address": "RTP",
+          "label": "Retraction plane, as an absolute position"
+        },
+        {
+          "address": "RFP",
+          "label": "Reference plane: the top of the hole, as an absolute position"
+        },
+        {
+          "address": "SDIS",
+          "label": "Safety distance above the reference plane, written without a sign"
+        },
+        {
+          "address": "DP",
+          "label": "Final depth, as an absolute position"
+        },
+        {
+          "address": "DPR",
+          "label": "Final depth, measured from the reference plane"
+        },
+        {
+          "address": "DTB",
+          "label": "Dwell at the bottom of the hole, in seconds",
+          "unit": "dwell"
+        },
+        {
+          "address": "SDAC",
+          "label": "Direction of rotation after the cycle",
+          "unit": "count"
+        },
+        {
+          "address": "MPIT",
+          "label": "Thread size, as a metric nominal diameter"
+        },
+        {
+          "address": "PIT",
+          "label": "Thread pitch, as a length"
+        },
+        {
+          "address": "POSS",
+          "label": "Angle the spindle stops at"
+        },
+        {
+          "address": "SST",
+          "label": "Spindle speed while tapping"
+        },
+        {
+          "address": "SST1",
+          "label": "Spindle speed while retracting"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCLE840",
+      "description": "Taps with a chuck that takes up the difference between feed and pitch. ENC, the ninth argument, says where the lead comes from: with 1 (no spindle encoder) it is the feed in force, which then has to be the speed times the pitch and must not be scaled; with 0, 11 or 20 the cycle takes it from MPIT or PIT.",
+      "group": "cycle",
+      "label": "Tapping cycle with a compensating chuck",
+      "params": [
+        {
+          "address": "RTP",
+          "label": "Retraction plane, as an absolute position"
+        },
+        {
+          "address": "RFP",
+          "label": "Reference plane: the top of the hole, as an absolute position"
+        },
+        {
+          "address": "SDIS",
+          "label": "Safety distance above the reference plane, written without a sign"
+        },
+        {
+          "address": "DP",
+          "label": "Final depth, as an absolute position"
+        },
+        {
+          "address": "DPR",
+          "label": "Final depth, measured from the reference plane"
+        },
+        {
+          "address": "DTB",
+          "label": "Dwell at the bottom of the hole, in seconds",
+          "unit": "dwell"
+        },
+        {
+          "address": "SDR",
+          "label": "Direction of rotation for the retract",
+          "unit": "count"
+        },
+        {
+          "address": "SDAC",
+          "label": "Direction of rotation after the cycle",
+          "unit": "count"
+        },
+        {
+          "address": "ENC",
+          "label": "Whether the spindle is read by an encoder",
+          "unit": "count"
+        },
+        {
+          "address": "MPIT",
+          "label": "Thread size, as a metric nominal diameter"
+        },
+        {
+          "address": "PIT",
+          "label": "Thread pitch, as a length"
+        }
+      ],
+      "pitchFeed": true,
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCLE85",
+      "description": "Feeds in and feeds back out, so the bore keeps its finish. The two feeds are given separately.",
+      "group": "cycle",
+      "label": "Reaming cycle, feed in and feed out",
+      "params": [
+        {
+          "address": "RTP",
+          "label": "Retraction plane, as an absolute position"
+        },
+        {
+          "address": "RFP",
+          "label": "Reference plane: the top of the hole, as an absolute position"
+        },
+        {
+          "address": "SDIS",
+          "label": "Safety distance above the reference plane, written without a sign"
+        },
+        {
+          "address": "DP",
+          "label": "Final depth, as an absolute position"
+        },
+        {
+          "address": "DPR",
+          "label": "Final depth, measured from the reference plane"
+        },
+        {
+          "address": "DTB",
+          "label": "Dwell at the bottom of the hole: seconds when positive, spindle revolutions when negative",
+          "unit": "dwell"
+        },
+        {
+          "address": "FFR",
+          "label": "Feed on the way in"
+        },
+        {
+          "address": "RFF",
+          "label": "Feed on the way out"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCLE86",
+      "description": "Stops the spindle at an angle at depth, lifts the tool off the wall and pulls it out at rapid.",
+      "group": "cycle",
+      "label": "Boring cycle with an oriented stop",
+      "params": [
+        {
+          "address": "RTP",
+          "label": "Retraction plane, as an absolute position"
+        },
+        {
+          "address": "RFP",
+          "label": "Reference plane: the top of the hole, as an absolute position"
+        },
+        {
+          "address": "SDIS",
+          "label": "Safety distance above the reference plane, written without a sign"
+        },
+        {
+          "address": "DP",
+          "label": "Final depth, as an absolute position"
+        },
+        {
+          "address": "DPR",
+          "label": "Final depth, measured from the reference plane"
+        },
+        {
+          "address": "DTB",
+          "label": "Dwell at the bottom of the hole: seconds when positive, spindle revolutions when negative",
+          "unit": "dwell"
+        },
+        {
+          "address": "SDIR",
+          "label": "Direction of rotation for the cycle",
+          "unit": "count"
+        },
+        {
+          "address": "RPA",
+          "label": "Lift-off in the first axis of the plane"
+        },
+        {
+          "address": "RPO",
+          "label": "Lift-off in the second axis of the plane"
+        },
+        {
+          "address": "RPAP",
+          "label": "Lift-off along the tool axis"
+        },
+        {
+          "address": "POSS",
+          "label": "Angle the spindle stops at"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCLE87",
+      "description": "Stops the spindle and the program at depth; the operator retracts the tool.",
+      "group": "cycle",
+      "label": "Boring cycle with a stop at depth",
+      "params": [
+        {
+          "address": "RTP",
+          "label": "Retraction plane, as an absolute position"
+        },
+        {
+          "address": "RFP",
+          "label": "Reference plane: the top of the hole, as an absolute position"
+        },
+        {
+          "address": "SDIS",
+          "label": "Safety distance above the reference plane, written without a sign"
+        },
+        {
+          "address": "DP",
+          "label": "Final depth, as an absolute position"
+        },
+        {
+          "address": "DPR",
+          "label": "Final depth, measured from the reference plane"
+        },
+        {
+          "address": "SDIR",
+          "label": "Direction of rotation for the cycle",
+          "unit": "count"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      },
+      "verify": true
+    },
+    {
+      "code": "CYCLE88",
+      "description": "Waits at depth, then stops the spindle and the program there.",
+      "group": "cycle",
+      "label": "Boring cycle with a dwell and a stop at depth",
+      "params": [
+        {
+          "address": "RTP",
+          "label": "Retraction plane, as an absolute position"
+        },
+        {
+          "address": "RFP",
+          "label": "Reference plane: the top of the hole, as an absolute position"
+        },
+        {
+          "address": "SDIS",
+          "label": "Safety distance above the reference plane, written without a sign"
+        },
+        {
+          "address": "DP",
+          "label": "Final depth, as an absolute position"
+        },
+        {
+          "address": "DPR",
+          "label": "Final depth, measured from the reference plane"
+        },
+        {
+          "address": "DTB",
+          "label": "Dwell at the bottom of the hole, in seconds",
+          "unit": "dwell"
+        },
+        {
+          "address": "SDIR",
+          "label": "Direction of rotation for the cycle",
+          "unit": "count"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      },
+      "verify": true
+    },
+    {
+      "code": "CYCLE89",
+      "description": "Waits at depth and feeds back out at the cutting feed.",
+      "group": "cycle",
+      "label": "Boring cycle with a dwell, feed out",
+      "params": [
+        {
+          "address": "RTP",
+          "label": "Retraction plane, as an absolute position"
+        },
+        {
+          "address": "RFP",
+          "label": "Reference plane: the top of the hole, as an absolute position"
+        },
+        {
+          "address": "SDIS",
+          "label": "Safety distance above the reference plane, written without a sign"
+        },
+        {
+          "address": "DP",
+          "label": "Final depth, as an absolute position"
+        },
+        {
+          "address": "DPR",
+          "label": "Final depth, measured from the reference plane"
+        },
+        {
+          "address": "DTB",
+          "label": "Dwell at the bottom of the hole, in seconds",
+          "unit": "dwell"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      },
+      "verify": true
+    },
+    {
+      "code": "CYCLE93",
+      "description": "Cuts a groove on the outside, the inside or the face. The name is recognised; the parameters are not described yet.",
+      "group": "cycle",
+      "label": "Grooving cycle",
+      "sets": {
+        "cycle": "start"
+      },
+      "verify": true
+    },
+    {
+      "code": "CYCLE95",
+      "description": "Roughs and finishes along a contour that a subprogram describes. Its three feeds, for roughing, for plunging into undercuts and for finishing, are arguments.",
+      "group": "cycle",
+      "label": "Stock removal cycle",
+      "params": [
+        {
+          "address": "NPP",
+          "label": "Name of the contour subprogram"
+        },
+        {
+          "address": "MID",
+          "label": "Largest depth of cut when roughing"
+        },
+        {
+          "address": "FALZ",
+          "label": "Finishing allowance in Z"
+        },
+        {
+          "address": "FALX",
+          "label": "Finishing allowance in X"
+        },
+        {
+          "address": "FAL",
+          "label": "Finishing allowance along the contour"
+        },
+        {
+          "address": "FF1",
+          "label": "Feed for roughing"
+        },
+        {
+          "address": "FF2",
+          "label": "Feed for plunging into undercuts"
+        },
+        {
+          "address": "FF3",
+          "label": "Feed for finishing"
+        },
+        {
+          "address": "VARI",
+          "label": "Kind of machining: roughing, finishing or both, along or across, outside or inside",
+          "unit": "count"
+        },
+        {
+          "address": "DT",
+          "label": "Dwell at each chip-breaking stop",
+          "unit": "dwell"
+        },
+        {
+          "address": "DAM",
+          "label": "Path between two chip-breaking stops"
+        },
+        {
+          "address": "_VRT",
+          "label": "Lift-off from the contour"
+        },
+        {
+          "address": "_GMODE",
+          "label": "Whether the depth of cut follows the diameter mode",
+          "unit": "count"
+        },
+        {
+          "address": "_DMODE",
+          "label": "Plane and display mode",
+          "unit": "count"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCLE97",
+      "description": "Cuts a thread in several passes. The lead is one of its arguments, not the feed in force. The parameters are not described yet.",
+      "group": "cycle",
+      "label": "Thread cutting cycle",
+      "sets": {
+        "cycle": "start"
+      },
+      "verify": true
+    },
+    {
+      "code": "CYCLE99",
+      "description": "Cuts a thread in several passes, along Z, across X or on a taper. The pitch is its own argument (PIT), not the feed in force.",
+      "group": "cycle",
+      "label": "Thread turning cycle",
+      "params": [
+        {
+          "address": "_SPL",
+          "label": "Reference point in Z"
+        },
+        {
+          "address": "_SPD",
+          "label": "Reference point in X, as a diameter"
+        },
+        {
+          "address": "_FPL",
+          "label": "End point in Z"
+        },
+        {
+          "address": "_FPD",
+          "label": "End point in X"
+        },
+        {
+          "address": "_APP",
+          "label": "Run-in path"
+        },
+        {
+          "address": "_ROP",
+          "label": "Run-out path"
+        },
+        {
+          "address": "_TDEP",
+          "label": "Depth of the thread"
+        },
+        {
+          "address": "_FAL",
+          "label": "Finishing allowance"
+        },
+        {
+          "address": "_IANG",
+          "label": "Infeed slope, as a distance or an angle"
+        },
+        {
+          "address": "_NSP",
+          "label": "Offset of the start angle"
+        },
+        {
+          "address": "_NRC",
+          "label": "Number of roughing cuts",
+          "unit": "count"
+        },
+        {
+          "address": "_NID",
+          "label": "Number of idle passes",
+          "unit": "count"
+        },
+        {
+          "address": "_PIT",
+          "label": "Thread pitch"
+        },
+        {
+          "address": "_VARI",
+          "label": "Kind of machining",
+          "unit": "count"
+        },
+        {
+          "address": "_NUMTH",
+          "label": "Number of thread starts",
+          "unit": "count"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCLE92",
+      "description": "Parts the workpiece off and lowers speed and feed for the last part of the cut. Its speeds and feeds are arguments.",
+      "group": "cycle",
+      "label": "Parting-off cycle",
+      "params": [
+        {
+          "address": "_SPD",
+          "label": "Reference point in X, as a diameter"
+        },
+        {
+          "address": "_SPL",
+          "label": "Reference point in Z"
+        },
+        {
+          "address": "_DIAG1",
+          "label": "Depth from which the spindle turns slower"
+        },
+        {
+          "address": "_DIAG2",
+          "label": "Final depth"
+        },
+        {
+          "address": "_RC",
+          "label": "Radius or chamfer at the edge"
+        },
+        {
+          "address": "_SDIS",
+          "label": "Safety distance"
+        },
+        {
+          "address": "_SV1",
+          "label": "Spindle speed, or cutting speed"
+        },
+        {
+          "address": "_SV2",
+          "label": "Highest spindle speed while the cutting speed is constant"
+        },
+        {
+          "address": "_SDAC",
+          "label": "Direction of rotation",
+          "unit": "count"
+        },
+        {
+          "address": "_FF1",
+          "label": "Feed down to the depth where the spindle turns slower"
+        },
+        {
+          "address": "_FF2",
+          "label": "Lowered feed down to the final depth"
+        },
+        {
+          "address": "_SS2",
+          "label": "Lowered spindle speed down to the final depth"
+        },
+        {
+          "address": "_DIAGM",
+          "label": "Depth where the part catcher comes out"
+        },
+        {
+          "address": "_VARI",
+          "label": "Retract and part catcher",
+          "unit": "count"
+        },
+        {
+          "address": "_DN",
+          "label": "Cutting edge of the second edge",
+          "unit": "count"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCLE930",
+      "description": "Cuts one groove or a row of grooves, with slopes, radii or chamfers at its edges. Its feed is argument 21.",
+      "group": "cycle",
+      "label": "Grooving cycle",
+      "params": [
+        {
+          "address": "_SPD",
+          "label": "Reference point in X, as a diameter"
+        },
+        {
+          "address": "_SPL",
+          "label": "Reference point in Z"
+        },
+        {
+          "address": "_WIDG",
+          "label": "Groove width at the bottom"
+        },
+        {
+          "address": "_WIDG2",
+          "label": "Groove width at the top"
+        },
+        {
+          "address": "_DIAG",
+          "label": "Groove depth at the reference point"
+        },
+        {
+          "address": "_DIAG2",
+          "label": "Groove depth opposite the reference point"
+        },
+        {
+          "address": "_STA",
+          "label": "Angle of the slope"
+        },
+        {
+          "address": "_ANG1",
+          "label": "Flank angle on the side of the reference point"
+        },
+        {
+          "address": "_ANG2",
+          "label": "Flank angle on the far side"
+        },
+        {
+          "address": "_RCO1",
+          "label": "Radius or chamfer 1, outside at the reference point"
+        },
+        {
+          "address": "_RCI1",
+          "label": "Radius or chamfer 2, inside at the reference point"
+        },
+        {
+          "address": "_RCI2",
+          "label": "Radius or chamfer 3, inside on the far side"
+        },
+        {
+          "address": "_RCO2",
+          "label": "Radius or chamfer 4, outside on the far side"
+        },
+        {
+          "address": "_FAL",
+          "label": "Finishing allowance"
+        },
+        {
+          "address": "_IDEP1",
+          "label": "Largest depth of each plunge"
+        },
+        {
+          "address": "_SDIS",
+          "label": "Safety distance"
+        },
+        {
+          "address": "_VARI",
+          "label": "Kind of machining",
+          "unit": "count"
+        },
+        {
+          "address": "_DN",
+          "label": "Cutting edge of the second edge",
+          "unit": "count"
+        },
+        {
+          "address": "_NUM",
+          "label": "Number of grooves",
+          "unit": "count"
+        },
+        {
+          "address": "_DBH",
+          "label": "Distance between the grooves"
+        },
+        {
+          "address": "_FF1",
+          "label": "Feed"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCLE940",
+      "description": "Cuts a relief groove of form E or F, or an undercut for a thread. The parameters are not described yet.",
+      "group": "cycle",
+      "label": "Undercut cycle",
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCLE951",
+      "description": "Removes stock at a corner given by points in its arguments, with radii or chamfers. Its feed is argument 16.",
+      "group": "cycle",
+      "label": "Stock removal cycle for a corner",
+      "params": [
+        {
+          "address": "_SPD",
+          "label": "Reference point in X, as a diameter"
+        },
+        {
+          "address": "_SPL",
+          "label": "Reference point in Z"
+        },
+        {
+          "address": "_EPD",
+          "label": "End point in X"
+        },
+        {
+          "address": "_EPL",
+          "label": "End point in Z"
+        },
+        {
+          "address": "_ZPD",
+          "label": "Intermediate point in X, or an angle"
+        },
+        {
+          "address": "_ZPL",
+          "label": "Intermediate point in Z, or an angle"
+        },
+        {
+          "address": "_LAGE",
+          "label": "Where the corner lies: outside or inside, back or front",
+          "unit": "count"
+        },
+        {
+          "address": "_MID",
+          "label": "Largest depth of cut"
+        },
+        {
+          "address": "_FALX",
+          "label": "Finishing allowance in X"
+        },
+        {
+          "address": "_FALZ",
+          "label": "Finishing allowance in Z"
+        },
+        {
+          "address": "_VARI",
+          "label": "Kind of machining",
+          "unit": "count"
+        },
+        {
+          "address": "_RF1",
+          "label": "Radius or chamfer 1"
+        },
+        {
+          "address": "_RF2",
+          "label": "Radius or chamfer 2"
+        },
+        {
+          "address": "_RF3",
+          "label": "Radius or chamfer 3"
+        },
+        {
+          "address": "_SDIS",
+          "label": "Safety distance"
+        },
+        {
+          "address": "_FF1",
+          "label": "Feed for roughing or finishing"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCLE952",
+      "description": "Turns, grooves or plunge-turns along a contour, rest material included. Its feeds are arguments 5 and 6 (one per axis when it plunge-turns), and 34 for the finishing cut when one call roughs and finishes.",
+      "group": "cycle",
+      "label": "Contour turning and grooving cycle",
+      "params": [
+        {
+          "address": "_PRG",
+          "label": "Name of the program the cuts are written to"
+        },
+        {
+          "address": "_CON",
+          "label": "Name of the program the blank contour is read from"
+        },
+        {
+          "address": "_CONR",
+          "label": "Name of the program the new blank contour is written to"
+        },
+        {
+          "address": "_VARI",
+          "label": "Kind of machining",
+          "unit": "count"
+        },
+        {
+          "address": "_F",
+          "label": "Feed for roughing or finishing"
+        },
+        {
+          "address": "_FR",
+          "label": "Feed for plunging into undercuts"
+        },
+        {
+          "address": "_RP",
+          "label": "Retraction plane for inside machining, as a diameter"
+        },
+        {
+          "address": "_D",
+          "label": "Depth of cut when roughing"
+        },
+        {
+          "address": "_DX",
+          "label": "Depth of cut in X"
+        },
+        {
+          "address": "_DZ",
+          "label": "Depth of cut in Z"
+        },
+        {
+          "address": "_UX",
+          "label": "Finishing allowance in X"
+        },
+        {
+          "address": "_UZ",
+          "label": "Finishing allowance in Z"
+        },
+        {
+          "address": "_U",
+          "label": "Finishing allowance along the contour"
+        },
+        {
+          "address": "_U1",
+          "label": "Extra allowance for a second finishing cut"
+        },
+        {
+          "address": "_BL",
+          "label": "How the blank is described",
+          "unit": "count"
+        },
+        {
+          "address": "_XD",
+          "label": "Blank dimension in X"
+        },
+        {
+          "address": "_ZD",
+          "label": "Blank dimension in Z"
+        },
+        {
+          "address": "_XA",
+          "label": "First limit in X, as a diameter"
+        },
+        {
+          "address": "_ZA",
+          "label": "First limit in Z"
+        },
+        {
+          "address": "_XB",
+          "label": "Second limit in X"
+        },
+        {
+          "address": "_ZB",
+          "label": "Second limit in Z"
+        },
+        {
+          "address": "_XDA",
+          "label": "First plunge limit for a groove on the face, as a diameter"
+        },
+        {
+          "address": "_XDB",
+          "label": "Second plunge limit for a groove on the face, as a diameter"
+        },
+        {
+          "address": "_N",
+          "label": "Number of grooves",
+          "unit": "count"
+        },
+        {
+          "address": "_DP",
+          "label": "Distance between the grooves"
+        },
+        {
+          "address": "_DI",
+          "label": "Path between two chip-breaking stops, 0 for none"
+        },
+        {
+          "address": "_SC",
+          "label": "Safety distance for going round obstacles"
+        },
+        {
+          "address": "_DN",
+          "label": "Cutting edge of the second edge",
+          "unit": "count"
+        },
+        {
+          "address": "_GMODE",
+          "label": "Geometry mode",
+          "unit": "count"
+        },
+        {
+          "address": "_DMODE",
+          "label": "Plane and display mode",
+          "unit": "count"
+        },
+        {
+          "address": "_AMODE",
+          "label": "Alternative mode",
+          "unit": "count"
+        },
+        {
+          "address": "_PK",
+          "label": "Number of the partner channel",
+          "unit": "count"
+        },
+        {
+          "address": "_DCH",
+          "label": "Channel offset"
+        },
+        {
+          "address": "_FS",
+          "label": "Feed for the finishing cut when one call roughs and finishes"
+        }
+      ],
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCLE98",
+      "description": "Cuts several thread sections one after the other. The lead is one of its arguments. The parameters are not described yet.",
+      "group": "cycle",
+      "label": "Thread chain cycle",
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "CYCLE62",
+      "description": "Names the contour the turning cycle after it works on. It cuts nothing itself.",
+      "group": "cycle",
+      "label": "Contour call",
+      "sets": {
+        "cycle": "start"
+      }
+    },
+    {
+      "code": "M0",
+      "description": "Stops the program until the operator starts it again.",
+      "group": "program",
+      "label": "Program stop"
+    },
+    {
+      "code": "M1",
+      "description": "Stops the program when the operator has switched optional stop on.",
+      "group": "program",
+      "label": "Optional stop"
+    },
+    {
+      "code": "M2",
+      "group": "program",
+      "label": "End of program"
+    },
+    {
+      "code": "M30",
+      "group": "program",
+      "label": "End of program"
+    },
+    {
+      "code": "M17",
+      "description": "Ends a subprogram and goes on after the block that called it.",
+      "group": "subprogram",
+      "label": "End of subprogram"
+    },
+    {
+      "code": "M3",
+      "description": "Starts the master spindle clockwise. M3=3 does the same for spindle 3.",
+      "group": "spindle",
+      "label": "Spindle on, clockwise",
+      "modal": true
+    },
+    {
+      "code": "M4",
+      "description": "Starts the master spindle counter-clockwise. M3=4 does the same for spindle 3.",
+      "group": "spindle",
+      "label": "Spindle on, counter-clockwise",
+      "modal": true
+    },
+    {
+      "code": "M5",
+      "description": "Stops the master spindle. M3=5 stops spindle 3.",
+      "group": "spindle",
+      "label": "Spindle stop",
+      "modal": true
+    },
+    {
+      "code": "M6",
+      "description": "Carries out the change on a machine with a magazine. Whether a turret changes on the T word alone or needs this code is set up on the machine.",
+      "group": "tool",
+      "label": "Tool change",
+      "verify": true
+    },
+    {
+      "code": "M8",
+      "group": "coolant",
+      "label": "Coolant on",
+      "modal": true
+    },
+    {
+      "code": "M9",
+      "group": "coolant",
+      "label": "Coolant off",
+      "modal": true
+    },
+    {
+      "code": "M19",
+      "description": "Turns the spindle to the angle kept in the control's setting data and holds it there until the next M3, M4 or M5. M2=19 does the same for spindle 2.",
+      "group": "spindle",
+      "label": "Spindle orientation",
+      "verify": true
+    },
+    {
+      "code": "SETMS",
+      "description": "SETMS(3) makes spindle 3 the master spindle, so the S, M3, M4 and M5 that follow without a spindle number are meant for it. SETMS on its own goes back to the master spindle the machine is set up with. It stands in a block of its own.",
+      "group": "spindle",
+      "label": "Choose the master spindle"
+    },
+    {
+      "code": "MSG",
+      "description": "Shows the text in the brackets on the control. MSG() with nothing inside clears it.",
+      "group": "program",
+      "label": "Operator message"
+    },
+    {
+      "code": "MCALL",
+      "description": "Makes the cycle or subprogram written after it run after every following block that moves, until MCALL stands on its own.",
+      "group": "cycle",
+      "label": "Modal cycle call"
+    },
+    {
+      "code": "STOPRE",
+      "description": "Makes the control finish the blocks it has already read before it goes on.",
+      "group": "nonmodal",
+      "label": "Stop the look-ahead"
+    },
+    {
+      "code": "SUPA",
+      "description": "The widest of G53, G153 and SUPA: this block runs in machine coordinates.",
+      "group": "nonmodal",
+      "label": "Suppress the offsets for this block, all of them"
+    },
+    {
+      "code": "SOFT",
+      "label": "Jerk-limited acceleration"
+    },
+    {
+      "code": "BRISK",
+      "label": "Step acceleration"
+    },
+    {
+      "code": "TRANSMIT",
+      "description": "Turns on the transformation that lets a driven tool work on the face with X and Y.",
+      "label": "Face transformation on"
+    },
+    {
+      "code": "TRACYL",
+      "label": "Cylinder surface transformation on"
+    },
+    {
+      "code": "TRAFOOF",
+      "description": "Ends the transformation that is running.",
+      "label": "Transformation off"
+    },
+    {
+      "code": "TRAORI",
+      "label": "Five-axis transformation on"
+    },
+    {
+      "code": "TRAANG",
+      "label": "Inclined-axis transformation on"
+    },
+    {
+      "code": "TRANS",
+      "description": "Shifts the zero point by the values in the block. Written on its own it clears the programmable frame.",
+      "group": "frame",
+      "label": "Programmable offset"
+    },
+    {
+      "code": "ATRANS",
+      "group": "frame",
+      "label": "Additive programmable offset"
+    },
+    {
+      "code": "ROT",
+      "group": "frame",
+      "label": "Programmable rotation"
+    },
+    {
+      "code": "AROT",
+      "group": "frame",
+      "label": "Additive programmable rotation"
+    },
+    {
+      "code": "RPL",
+      "group": "frame",
+      "label": "Rotation in the plane"
+    },
+    {
+      "code": "SCALE",
+      "group": "frame",
+      "label": "Programmable scaling"
+    },
+    {
+      "code": "ASCALE",
+      "group": "frame",
+      "label": "Additive programmable scaling"
+    },
+    {
+      "code": "MIRROR",
+      "group": "frame",
+      "label": "Programmable mirroring"
+    },
+    {
+      "code": "AMIRROR",
+      "group": "frame",
+      "label": "Additive programmable mirroring"
+    },
+    {
+      "code": "FFWON",
+      "label": "Feed-forward control on"
+    },
+    {
+      "code": "FFWOF",
+      "label": "Feed-forward control off"
+    },
+    {
+      "code": "COMPON",
+      "description": "Joins short straight blocks into a smoother path.",
+      "label": "Compressor on"
+    },
+    {
+      "code": "COMPCURV",
+      "label": "Compressor on, curvature-continuous"
+    },
+    {
+      "code": "COMPCAD",
+      "label": "Compressor on, for surface programs"
+    },
+    {
+      "code": "COMPOF",
+      "label": "Compressor off"
+    },
+    {
+      "code": "CUT2D",
+      "label": "Two-dimensional radius compensation"
+    },
+    {
+      "code": "CUT3DC",
+      "label": "Three-dimensional radius compensation, circumference"
+    },
+    {
+      "code": "CFC",
+      "label": "Feed on the contour"
+    },
+    {
+      "code": "CFTCP",
+      "label": "Feed at the tool centre"
+    },
+    {
+      "code": "CFIN",
+      "label": "Feed on an inside radius"
+    },
+    {
+      "code": "ORIWKS",
+      "label": "Orientation in workpiece coordinates"
+    },
+    {
+      "code": "ORIMKS",
+      "label": "Orientation in machine coordinates"
+    },
+    {
+      "code": "ORIAXES",
+      "label": "Interpolate the orientation axis by axis"
+    },
+    {
+      "code": "ORIVECT",
+      "label": "Interpolate the orientation as a vector"
+    },
+    {
+      "code": "AC",
+      "description": "Reads the one value in brackets as an absolute position, whatever the distance mode says.",
+      "label": "This value is absolute"
+    },
+    {
+      "code": "IC",
+      "label": "This value is incremental"
+    },
+    {
+      "code": "DC",
+      "label": "Rotary axis, shortest way"
+    },
+    {
+      "code": "ACP",
+      "label": "Rotary axis, positive direction"
+    },
+    {
+      "code": "ACN",
+      "label": "Rotary axis, negative direction"
+    },
+    {
+      "code": "GOTOF",
+      "description": "Continues at the label, searching towards the end of the program.",
+      "group": "program",
+      "label": "Jump forward"
+    },
+    {
+      "code": "GOTOB",
+      "description": "Continues at the label, searching towards the start of the program.",
+      "group": "program",
+      "label": "Jump backward"
+    },
+    {
+      "code": "GOTO",
+      "description": "Continues at the label or the block number, searching forwards first and then backwards.",
+      "group": "program",
+      "label": "Jump"
+    },
+    {
+      "code": "GOTOC",
+      "description": "Like GOTO, but the control does not stop when the target is missing.",
+      "group": "program",
+      "label": "Jump without an alarm"
+    },
+    {
+      "code": "IF",
+      "description": "Runs what follows when the condition holds.",
+      "group": "program",
+      "label": "Conditional"
+    },
+    {
+      "code": "ELSE",
+      "group": "program",
+      "label": "Otherwise"
+    },
+    {
+      "code": "ENDIF",
+      "group": "program",
+      "label": "End of the conditional"
+    },
+    {
+      "code": "WHILE",
+      "group": "program",
+      "label": "Loop while the condition holds"
+    },
+    {
+      "code": "ENDWHILE",
+      "group": "program",
+      "label": "End of the while loop"
+    },
+    {
+      "code": "FOR",
+      "group": "program",
+      "label": "Counting loop"
+    },
+    {
+      "code": "TO",
+      "group": "program",
+      "label": "Upper bound of a counting loop"
+    },
+    {
+      "code": "ENDFOR",
+      "group": "program",
+      "label": "End of the counting loop"
+    },
+    {
+      "code": "REPEAT",
+      "group": "program",
+      "label": "Repeat loop, or a section between two labels"
+    },
+    {
+      "code": "REPEATB",
+      "group": "program",
+      "label": "Repeat one block"
+    },
+    {
+      "code": "UNTIL",
+      "group": "program",
+      "label": "Repeat until the condition holds"
+    },
+    {
+      "code": "LOOP",
+      "group": "program",
+      "label": "Endless loop"
+    },
+    {
+      "code": "ENDLOOP",
+      "group": "program",
+      "label": "End of the endless loop"
+    },
+    {
+      "code": "CASE",
+      "group": "program",
+      "label": "Branch on a value"
+    },
+    {
+      "code": "OF",
+      "group": "program",
+      "label": "Branch value of CASE"
+    },
+    {
+      "code": "DEFAULT",
+      "group": "program",
+      "label": "Branch of CASE for every other value"
+    },
+    {
+      "code": "RET",
+      "description": "Returns from a subprogram to the block after the call, as M17 does. It stands in a block of its own.",
+      "group": "subprogram",
+      "label": "Return from a subprogram"
+    },
+    {
+      "code": "PROC",
+      "description": "Names a subprogram and the values it takes. It is the first statement of the program.",
+      "group": "subprogram",
+      "label": "Subprogram head"
+    },
+    {
+      "code": "EXTERN",
+      "description": "Tells the calling program the name and the values of a subprogram that is not in the cycle folders.",
+      "group": "subprogram",
+      "label": "Declare a subprogram"
+    },
+    {
+      "code": "DEF",
+      "description": "Declares a variable of the program. The declarations stand at the top of the program, one DEF per block.",
+      "group": "macro",
+      "label": "Declare a variable"
+    },
+    {
+      "code": "CALL",
+      "description": "Calls a program whose name stands in quotation marks or in a variable.",
+      "group": "subprogram",
+      "label": "Indirect call"
+    },
+    {
+      "code": "PCALL",
+      "description": "Calls a subprogram by its full path, with arguments: PCALL/path/NAME(…).",
+      "group": "subprogram",
+      "label": "Call with a path"
+    },
+    {
+      "code": "EXTCALL",
+      "description": "Runs a program from a drive outside the control's program memory, such as a local, network or USB drive, named in quotation marks in brackets: EXTCALL(\"…\").",
+      "group": "subprogram",
+      "label": "Call from external storage"
+    },
+    {
+      "code": "BLOCK",
+      "description": "CALL … BLOCK start TO end runs the part of a program between two labels.",
+      "group": "subprogram",
+      "label": "Section of a program"
+    },
+    {
+      "code": "AND",
+      "group": "macro",
+      "label": "Logical and"
+    },
+    {
+      "code": "OR",
+      "group": "macro",
+      "label": "Logical or"
+    },
+    {
+      "code": "NOT",
+      "group": "macro",
+      "label": "Logical not"
+    },
+    {
+      "code": "XOR",
+      "group": "macro",
+      "label": "Logical exclusive or"
+    },
+    {
+      "code": "DIV",
+      "group": "macro",
+      "label": "Integer division"
+    },
+    {
+      "code": "MOD",
+      "group": "macro",
+      "label": "Remainder of a division"
+    },
+    {
+      "code": "B_AND",
+      "group": "macro",
+      "label": "Bitwise and"
+    },
+    {
+      "code": "B_OR",
+      "group": "macro",
+      "label": "Bitwise or"
+    },
+    {
+      "code": "B_XOR",
+      "group": "macro",
+      "label": "Bitwise exclusive or"
+    },
+    {
+      "code": "B_NOT",
+      "group": "macro",
+      "label": "Bitwise not"
+    },
+    {
+      "code": "INT",
+      "group": "macro",
+      "label": "Whole-number variable"
+    },
+    {
+      "code": "REAL",
+      "group": "macro",
+      "label": "Decimal variable"
+    },
+    {
+      "code": "BOOL",
+      "group": "macro",
+      "label": "True or false variable"
+    },
+    {
+      "code": "CHAR",
+      "group": "macro",
+      "label": "Single-character variable"
+    },
+    {
+      "code": "STRING",
+      "group": "macro",
+      "label": "Text variable"
+    },
+    {
+      "code": "AXIS",
+      "group": "macro",
+      "label": "Axis-name variable"
+    },
+    {
+      "code": "FRAME",
+      "group": "macro",
+      "label": "Coordinate-transformation variable"
+    }
+  ],
+  "dialect": "sinumerik",
+  "version": 1
+}

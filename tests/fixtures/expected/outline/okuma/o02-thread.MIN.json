@@ -1,0 +1,13 @@
+{
+  "profile": "okuma-osp",
+  "items": [
+    {"kind":"comment","line":2,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"program","line":3,"text":"O1002","endLine":30},
+    {"kind":"comment","line":4,"text":"M30X2 OD THREAD - OP2"},
+    {"kind":"comment","line":5,"text":"THREAD CYCLE G71"},
+    {"kind":"tool","line":8,"text":"T7 — THREAD CYCLE G71","tool":"07","endLine":13},
+      {"kind":"comment","line":13,"text":"THREAD PASSES G33"},
+    {"kind":"tool","line":14,"text":"T9 — THREAD PASSES G33","tool":"09","endLine":30},
+      {"kind":"end","line":28,"text":"M02"}
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "about": "The same program on a machine whose control starts without diameter programming (a machine parameter, plan §8.8): the power-on value now comes from the machine, and the program's own DIAMOF, DIAM90 and DIAMON switch it as before.",
+  "machine": { "diameter": "off" },
+  "input": "../../nc/sinumerik/s05-diameter.MPF",
+  "states": [
+    { "line": 3, "after": { "diameter": "=off@machine", "groups": { "plane": "=G18", "feedmode": "=G95" } } },
+    { "line": 12, "after": { "diameter": "=off@machine" } },
+    { "line": 13, "after": { "diameter": "off" } },
+    { "line": 17, "after": { "diameter": "absolute-only" } },
+    { "line": 21, "after": { "diameter": "on" } }
+  ]
+}

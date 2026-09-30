@@ -83,7 +83,17 @@ export function compileProfile(p: Profile): CompiledProfile {
       })),
       sectionHeading: compileOptional(syntax.sectionHeading, 'syntax.sectionHeading', flags),
       continuation: compileOptional(syntax.continuation, 'syntax.continuation', flags),
+      continuationStart: compileOptional(syntax.continuationStart, 'syntax.continuationStart', flags),
       variables: compileOptional(syntax.variables, 'syntax.variables', flags),
+      // P8. The four patterns the turning dialects add, compiled here like every other
+      // one: a tokenizer that built them per line would build them per line of a 10 MB
+      // program.
+      assignment: compileOptional(syntax.assignment, 'syntax.assignment', flags),
+      labels: compileOptional(syntax.labels, 'syntax.labels', flags),
+      systemVariables: compileOptional(syntax.systemVariables, 'syntax.systemVariables', flags),
+      header: compileOptional(syntax.header, 'syntax.header', flags),
+      // M8 integration (§7.16): a name the program gives itself is one token.
+      names: compileOptional(syntax.names, 'syntax.names', flags),
       toolTrigger: compilePattern(toolCall.trigger, 'toolCall.trigger', flags),
       toolIgnore: compileOptional(toolCall.ignore, 'toolCall.ignore', flags),
       tool: compilePattern(toolCall.tool, 'toolCall.tool', flags),

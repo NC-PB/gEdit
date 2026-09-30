@@ -124,7 +124,18 @@ scenario('m6-machines-manage-1', { timeout: 420, vars: { HOME: HOME_1 } }, async
     step: h.q('machine-form')?.dataset.step,
   })
   const dialects = [...(machineField(h, 'profile')?.querySelectorAll('option') ?? [])].map((o) => o.textContent?.trim())
-  h.check('only the dialects that declare machine parameters are offered — Klartext is not one', dialects.length === 2 && dialects.some((d) => d === ctx.profiles.get('fanuc-lathe')?.name) && !dialects.includes(ctx.profiles.get('heidenhain-klartext')?.name), dialects)
+  // M8: the Okuma and Sinumerik turning profiles declare machine parameters as well (an
+  // intentional change of plan §5 M8), so four are offered — exactly the ones whose
+  // registry entry says so, and still not Klartext.
+  const withParams = ctx.profiles.list().filter((info) => info.hasMachineParams).map((info) => info.name)
+  h.check(
+    'only the dialects that declare machine parameters are offered — Klartext is not one',
+    dialects.length === 4 &&
+      JSON.stringify([...dialects].sort()) === JSON.stringify([...withParams].sort()) &&
+      ['fanuc-gcode', 'fanuc-lathe', 'okuma-osp', 'sinumerik'].every((id) => dialects.includes(ctx.profiles.get(id)?.name)) &&
+      !dialects.includes(ctx.profiles.get('heidenhain-klartext')?.name),
+    { offered: dialects, declaring: withParams },
+  )
 
   setField(h, 'profile', /** @type {string} */ (ctx.profiles.get('fanuc-lathe')?.name))
   await h.frame()

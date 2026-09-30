@@ -1,0 +1,26 @@
+{
+  "note": [
+    "Expected profile detection for tests/fixtures/nc/sinumerik (plan M8 §8.5). Owner: WP8.5.",
+    "One file per folder under tests/fixtures/nc, read by src/lib/core/profiles/detect.test.ts; the",
+    "margin over the best profile of another dialect is asserted and printed by",
+    "src/lib/data/profiles/fanucLathe.test.ts, which globs this folder too, and again by",
+    "src/lib/data/profiles/sinumerik.test.ts, which also scores long programs built from these files.",
+    "A value is a profile id, or 'fallback' when the content is inconclusive and the current",
+    "profile stays, or 'refused' when decodeFile does not open the file at all.",
+    "Klartext writes ';' comments as well, which is why §8.5 names it; on a turning program the",
+    "runner-up is the Fanuc lathe, because block numbers, G codes and G96/G97 score there. The profile",
+    "scores those lines the same way, so what decides is what only one of the two dialects writes.",
+    "SHAFT_OP20 and detect-sinumerik.txt carry no extension weight at all: they say whether the",
+    "content rules alone carry the dialect. The .MPF and .SPF files are written in upper case, the",
+    "way the control names them, and still count as mpf and spf."
+  ],
+  "fixtures": {
+    "nc/sinumerik/SHAFT_OP20": "sinumerik",
+    "nc/sinumerik/detect-sinumerik.txt": "sinumerik",
+    "nc/sinumerik/s01-shaft.MPF": "sinumerik",
+    "nc/sinumerik/s02-drill.MPF": "sinumerik",
+    "nc/sinumerik/s03-sub.SPF": "sinumerik",
+    "nc/sinumerik/s04-packed.MPF": "sinumerik",
+    "nc/sinumerik/s05-diameter.MPF": "sinumerik"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "message": "No feed rates found; 5 cycle feeds left unchanged.",
+  "findings": [
+    {
+      "line": 1,
+      "severity": "info",
+      "message": "Argument 6 of CYCLE95 (FF1, feed for roughing) is 0.3 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 1,
+      "severity": "info",
+      "message": "Argument 7 of CYCLE95 (FF2, feed for plunging into undercuts) is 0.15 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 1,
+      "severity": "info",
+      "message": "Argument 8 of CYCLE95 (FF3, feed for finishing) is 0.1 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 2,
+      "severity": "info",
+      "message": "Argument 5 of CYCLE952 (_F, feed for roughing or finishing) is 0.25 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 2,
+      "severity": "info",
+      "message": "Argument 6 of CYCLE952 (_FR, feed for plunging into undercuts) is 0.12 and is left unchanged: this run does not scale the arguments of a cycle."
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "about": "The 10 µm unit system: the same claims as under 1 µm. The unit multiplies what is written; the modal state keeps what is written.",
+  "machine": {
+    "numberInput": {
+      "classes": {
+        "feedPerMin": {
+          "increment": "1"
+        },
+        "feedPerRev": {
+          "increment": "0.01"
+        }
+      },
+      "incrementDeg": "0.01",
+      "incrementMm": "0.01",
+      "incrementSec": "0.1",
+      "mode": "scale"
+    }
+  },
+  "input": "../../nc/okuma/o02-thread.MIN",
+  "states": [
+    {
+      "line": 1,
+      "after": {
+        "groups": {
+          "feedmode": "=G95",
+          "distance": "=G90"
+        },
+        "units": "=mm",
+        "diameter": "=on"
+      }
+    },
+    {
+      "line": 11,
+      "after": {
+        "feed": "2",
+        "block": {
+          "cycle": "G71",
+          "pitchFeed": true
+        }
+      }
+    },
+    {
+      "line": 25,
+      "after": {
+        "feed": "2",
+        "block": {
+          "fNotFeed": true
+        }
+      }
+    }
+  ]
+}

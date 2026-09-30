@@ -251,7 +251,8 @@ Plan §7.10 is the contract; the docstrings in the file are the detail.
 | `machine_type_of(profile)`, `incremental_axes(profile)`, `diameter_axes(profile)` | `'mill'` or `'lathe'`, the `{'U': 'X', 'W': 'Z'}` pairs, and the words written as a diameter |
 | `machine_params(context)` | the document's machine: `params` (how numbers are read, units, diameter, variants, power-on codes) and `source` for each of them — `"machine"`, `"detected"` or `"profile"`. A context from before M6, or a document with no machine, answers the profile's own defaults with every source `"profile"` |
 | `number_class_of`, `value_of`, `write_back`, `readings_of`, `resolve_value` | what a word's number **is** on this machine, and how to write a value back into it |
-| `preceding_lines(context)`, `prime_tracker(tracker, lines, cp)` | the lines above a selection, and the modal state they leave behind (§6) |
+| `preceding_lines(context)`, `prime_tracker(tracker, lines, cp, first=None)` | the lines above a selection, and the modal state they leave behind (§6); `first` is the first selected line |
+| `continues_block(line, cp)` | whether the line belongs to the block above it by a marker at its start (Okuma `$`) |
 | `report(...)`, `envelope(...)` | the two JSON result shapes |
 
 `tokenize_line`, `parse_number` and `format_number` are ports of
@@ -297,6 +298,43 @@ unchanged. Whether a diameter word is a diameter **or a radius** in the block yo
 looking at is `interp.diameter_reading('X')` — the diameter mode alone does not answer it,
 because a `DIAM90`-style mode is a diameter while the program is absolute and a radius while
 it is incremental.
+
+The turning dialects write three things an ISO mill never does, and the state reads them
+from the tokens, not from a dialect name:
+
+* a **call** (`CYCLE840(…)`) is the code of its identifier, so its cycle start and its
+  pitch feed reach the block like those of a `G84`. A call stands in a block of its own, so
+  its pitch feed protects no `F` of that block: on a call, ``pitchFeed`` means the cycle may
+  take its lead from the feed **in force**, and `scale_feed.py` leaves that feed — and every
+  feed written while such a call repeats behind `MCALL` — as written. A cycle whose lead is
+  its own argument (`CYCLE84`, `CYCLE99`) does not carry the flag;
+* a word written with **`=`** (`SB=2000`, `S3=2400`, `M3=3`, `LIMS=3000`, `F=R1`) is a
+  value and never a code: `M3=3` switches spindle 3 and is neither `M33` nor the `M3` of
+  the spindle the state follows, and only the plain `S` is the speed in force. A word the
+  profile lists in `addresses.speedLimitWords` (`LIMS=`) is a clamp wherever it stands. The
+  state does not follow which spindle is the master (`SETMS(3)`); `scale_speed.py` reads
+  that itself, from a call of a non-modal code of the database's ``spindle`` group;
+* a **dwell** block (the database's `fNotFeed`: `G04 F2`, `G4 F2`, `G4 S2`) is a dwell as
+  a whole: its `F` is a time and its `S` counts revolutions, so neither changes the feed or
+  the speed in force. `FeedModeTracker` says so with `f_not_feed` and names the code in
+  `f_not_feed_code`; a script that scales feeds or speeds leaves both words alone.
+
+Okuma continues a block on lines that **start** with `$` (the profile's
+`syntax.continuationStart`), and the lead of a `G71` thread cycle often stands on one:
+`N001 G71 X27.55 Z-30 B60 D0.7 U0.1`, then `$ H2.45 L2 F2 M23 M32 M73`. Such a line tokenizes
+like any other; `gedit_nc.continues_block(line, cp)` says whether it belongs to the block
+above. `ModalInterpreter(cp, codes)` asks its own profile. `FeedModeTracker` is built from
+the database alone and cannot, so tell it — without the argument it reads every line as a
+block of its own, as it always did:
+
+```python
+tokens, state = gedit_nc.tokenize_line(line, cp, state)
+tracker.update(tokens, continued=gedit_nc.continues_block(line, cp))
+```
+
+For a selection, pass the first selected line to `prime_tracker` as well
+(`prime_tracker(tracker, above, cp, lines[0])`): a selection that starts on a `$` line
+starts inside the block above it, thread cycle and all.
 
 ### Why your script needs the number rules
 

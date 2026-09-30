@@ -13,12 +13,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   CUSTOM_PRESET,
+  DIAMETER_WORDS_KEY,
   FIELD_DIAMETER,
   FIELD_NAME,
   FIELD_NOTES,
   FIELD_NUMBER_INPUT,
   FIELD_UNITS,
   PROFILE_DEFAULT,
+  diameterLabel,
   groupCodes,
   machineFields,
   machineFromValues,
@@ -37,6 +39,7 @@ import { codes } from '$lib/stores/codes';
 import { profiles } from '$lib/stores/profiles';
 import { initialValues } from '$lib/core/forms/values';
 import { validateFields } from '$lib/core/forms/validate';
+import { hasKey, t } from '$lib/i18n';
 import type { FieldSpec } from '$lib/core/forms/types';
 import type { MachineConfig, NumberInput } from './types';
 import type { MachineParamsDecl } from '$lib/core/profiles/types';
@@ -193,6 +196,59 @@ describe('the lathe, whose form is the one M6 ships for', () => {
     expect(byId(fields, variantFieldId('gcodeSystem'))?.default).toBe('A');
     // `G99` is no feed mode of system B's database, so the form does not claim it is set.
     expect(byId(fields, modalFieldId('feedmode'))?.default).toBe(PROFILE_DEFAULT);
+  });
+});
+
+// M8 integration: the two turning dialects M8 adds, as the machine form offers them. The
+// unit system of an Okuma machine and the diameter mode of a Sinumerik one are machine
+// parameters (owner decisions D34, D35), so the form is where the owner corrects them.
+describe('the turning dialects of M8', () => {
+  it('offers the three Okuma unit systems, with 1 mm as the assumed default', () => {
+    const field = byId(machineFields(declOf('okuma-osp'), dbOf('okuma-osp')), FIELD_NUMBER_INPUT);
+    expect(field?.choices?.map((choice) => choice.value)).toEqual(['okuma-1mm', 'okuma-1um', 'okuma-10um']);
+    expect(field?.default).toBe('okuma-1mm');
+  });
+
+  it('starts a Sinumerik machine with diameter programming on, and keeps a machine that has it off', () => {
+    const decl = declOf('sinumerik');
+    expect(byId(machineFields(decl, dbOf('sinumerik')), FIELD_DIAMETER)?.default).toBe(true);
+    const off = machine({ profile: 'sinumerik', params: { diameter: 'off' } });
+    expect(byId(machineFields(decl, dbOf('sinumerik'), off), FIELD_DIAMETER)?.default).toBe(false);
+  });
+
+  // G8 M8 review: the label said "X and U are diameters" on the two turning dialects that
+  // read only X as one, and on Okuma U is a finish allowance. The label names the words of
+  // the profile's own `addresses.diameter` now, and hands their count to the message, which
+  // decides how to say it for one word and for two. Until that message is there, the plain
+  // one stands, so nothing reads `{words}`.
+  it('names the words the profile reads as diameters, and only those', () => {
+    const wordsOf = (id: string): string[] => profiles.profile(id).addresses.diameter ?? [];
+    expect(wordsOf('okuma-osp')).toEqual(['X']);
+    expect(wordsOf('sinumerik')).toEqual(['X']);
+    expect(wordsOf('fanuc-lathe')).toEqual(['X', 'U']);
+    const named = hasKey(DIAMETER_WORDS_KEY);
+    const joined: Record<string, string> = { 'okuma-osp': 'X', sinumerik: 'X', 'fanuc-lathe': 'X and U' };
+    for (const [id, words] of Object.entries(joined)) {
+      const list = wordsOf(id);
+      const want = named ? t(DIAMETER_WORDS_KEY, { words, count: list.length }) : t('machines.param.diameter');
+      expect(want, id).not.toContain('{');
+      if (named) expect(want, id).toContain(words);
+      expect(diameterLabel(list), id).toBe(want);
+      expect(byId(machineFields(declOf(id), dbOf(id), undefined, list), FIELD_DIAMETER)?.label, id).toBe(want);
+      const summary = machineSummaryLines(noMachine(profiles.profile(id)), declOf(id), undefined, list);
+      expect(summary.some((entry) => entry.startsWith(`${want}: `)), id).toBe(true);
+      expect(machineTooltip(noMachine(profiles.profile(id)), declOf(id), undefined, list), id).toContain(`${want}: `);
+    }
+    // A caller that has no words gets the message as it is written.
+    expect(diameterLabel()).toBe(t('machines.param.diameter'));
+    expect(diameterLabel([])).toBe(t('machines.param.diameter'));
+  });
+
+  it('offers the power-on groups each turning database has codes for', () => {
+    const okuma = machineFields(declOf('okuma-osp'), dbOf('okuma-osp')).map((field) => field.id);
+    expect(okuma).toContain(modalFieldId('feedmode'));
+    const sinumerik = machineFields(declOf('sinumerik'), dbOf('sinumerik')).map((field) => field.id);
+    expect(sinumerik).toContain(modalFieldId('plane'));
   });
 });
 

@@ -25,8 +25,8 @@ The rules this module lives by:
 * **The profile decides, not Fanuc.** Comment syntax, addresses, keywords and numbering
   all come out of the context's ``profile``. Nothing here hardcodes a dialect.
 * **Patterns are shared.** ``profile`` patterns are written in the common subset of
-  ECMAScript and Python ``re`` (plan AD-11); :func:`to_py_regex` bridges the one
-  difference that is left, the named-group syntax.
+  ECMAScript and Python ``re`` (plan AD-11); :func:`to_py_regex` bridges the spellings
+  the two read differently: the named group, ``\\s``, ``\\S`` and ``.``.
 
 Output
 ------
@@ -105,10 +105,13 @@ documented defaults — which is exactly the behaviour such a script already had
 Beyond section 7.10
 -------------------
 :func:`mask_comments`, :func:`block_number_of`, :func:`normalize_code`,
-:func:`number_format_of`, :func:`preceding_lines` and :func:`prime_tracker` are not in the
-section 7.10 list. The first four are ports of code the TypeScript side has as well; the
-last two are the M5 carry-over above. They are public, documented and covered by the
-tests, but the contract that may not move is the section 7.10 one.
+:func:`number_format_of`, :func:`preceding_lines`, :func:`prime_tracker` and
+:func:`continues_block` are not in the section 7.10 list. The first four are ports of code
+the TypeScript side has as well; the next two are the M5 carry-over above, and the last
+one answers whether a line belongs to the block above it by a leading marker (M8: Okuma
+``$`` lines), which :meth:`FeedModeTracker.update` takes as ``continued``. They are public,
+documented and covered by the tests, but the contract that may not move is the section
+7.10 one.
 """
 
 from __future__ import annotations
@@ -128,6 +131,7 @@ from _nc_lex import (
     Token,
     block_number_of,
     compile_profile,
+    continues_block,
     format_number,
     mask_comments,
     normalize_code,
@@ -194,6 +198,7 @@ __all__ = [
     # Beyond section 7.10, see the module docstring.
     "mask_comments",
     "block_number_of",
+    "continues_block",
     "normalize_code",
     "number_format_of",
     "CONTEXT_ENV",

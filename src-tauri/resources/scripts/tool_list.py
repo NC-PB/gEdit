@@ -96,6 +96,13 @@ Two rules keep the answer honest:
   `G50` or `G92` clamp is not a cutting speed in any unit; which code clamps comes from the
   database (`sets.speedLimit`, `gedit_nc.speed_limit_of`), not from a list in this file
   (F24), because in G-code system A that same `G92` cuts a thread.
+* A value belongs to the tool that cuts with it. A post may write the speed of the next
+  operation before it indexes the turret (`G97 S1500 M03`, then `T0202`: the order the
+  Okuma notes show), so a feed or speed written since the last block that moved an axis
+  goes to the next tool when a tool change comes before the next move.
+* Only the plain feed and spindle words are read (M8): the `F` and `S` of a dwell block
+  (`fNotFeed`: `G04 F2`, `G4 S2`) are times, and a clamp word (`LIMS=`), a spindle named by
+  its number (`S3=`) or a driven tool's speed (`SB=`) is not the main spindle's `S`.
 
 A run over a **selection** is primed from `input.precedingLines` when the context carries
 them (`gedit_nc.prime_tracker`), so a `G95` or a `G96` that starts above the selection is
@@ -110,7 +117,7 @@ from __future__ import annotations
 import re
 import sys
 from decimal import Decimal, InvalidOperation
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import gedit_nc
 
@@ -205,6 +212,14 @@ class Spec:
         self.feed_address = addresses.get("feed") if isinstance(addresses.get("feed"), str) else "F"
         self.spindle_address = addresses.get("spindle") if isinstance(addresses.get("spindle"), str) else "S"
         self.feed_speed = params.get("feedSpeed") is not False
+        #: The addresses that move the machine: a block with one of them is where a tool cuts
+        #: with the feed and speed in force (:class:`Pending`).
+        axes = addresses.get("axes")
+        twins = addresses.get("incremental")
+        self.axes = frozenset(
+            [str(axis).upper() for axis in (axes if isinstance(axes, list) else []) if isinstance(axis, str)]
+            + [str(twin).upper() for twin in (twins if isinstance(twins, dict) else {}) if isinstance(twin, str)]
+        )
         #: The units the ranges are in unless a tool has no value in them; filled from the
         #: profile's power-on state in :func:`build`, where the tracker knows it.
         self.feed_unit = "per-minute"
@@ -294,6 +309,44 @@ class Row:
             self.skipped[reason] = [line, 1]
         else:
             entry[1] += 1
+
+
+class Pending:
+    """The feeds and speeds written since the last block that moved an axis.
+
+    A value belongs to the tool that cuts with it, and that is not always the tool in the
+    turret when the value is written: a post may set the speed of the next operation before
+    it indexes the turret (`G97 S1500 M03` then `T0202`, the order the Okuma notes show).
+    So a value waits here until an axis moves, and goes to the tool in use then — or, when a
+    tool change comes first, to the new tool.
+    """
+
+    def __init__(self) -> None:
+        self.calls: List[Tuple[Any, ...]] = []
+
+    def add(self, kind: str, key: str, value: Tuple[Decimal, str], line: int) -> None:
+        self.calls.append(("add", kind, key, value, line))
+
+    def skip(self, reason: str, line: int) -> None:
+        self.calls.append(("skip", reason, line))
+
+    def hand_to(self, row: Optional["Row"]) -> None:
+        """Gives every waiting value to ``row``; with no tool in use, they are dropped."""
+        if row is not None:
+            for call in self.calls:
+                if call[0] == "add":
+                    row.add(call[1], call[2], call[3], call[4])
+                else:
+                    row.skip(call[1], call[2])
+        self.calls = []
+
+
+def moves_an_axis(tokens: Sequence[gedit_nc.Token], spec: "Spec") -> bool:
+    """True when the block writes a position: an axis word, or its incremental twin, with a value."""
+    for token in tokens:
+        if token.kind == "word" and token.value_text is not None and (token.address or "").upper() in spec.axes:
+            return True
+    return False
 
 
 def group_of(match: Any, name: str) -> Optional[str]:
@@ -410,9 +463,12 @@ def offset_of(match: Any, subject: str) -> Optional[str]:
 
     `T0101` is station 1 with offset 01, `T0111` the same station with offset 11, `T1` a
     station with no offset. What counts as the station is the pattern's ``tool`` group, so
-    this is the rest of the match — the profile decides, not a rule about four digits
-    (plan §7.1). A profile whose pattern has no ``tool`` group names the whole match, and
-    then there is nothing left over.
+    the offset is the run of digits the word carries straight after it — the profile
+    decides, not a rule about four digits (plan §7.1). A pattern may take those digits into
+    its match (the Fanuc lathe's `T0111`) or only look at them (a six-digit `T010203`, where
+    the station `02` stands between the nose-radius set `01` and the offset `03`); either
+    way they are the same digits of the same word. A profile whose pattern has no ``tool``
+    group names the whole match, and then there is nothing left over.
     """
     if "tool" not in (match.re.groupindex or {}):
         return None
@@ -422,23 +478,41 @@ def offset_of(match: Any, subject: str) -> Optional[str]:
         return None
     if end < 0:
         return None
-    rest = subject[end : match.end()].strip()
-    return rest if rest != "" and rest.isdigit() else None
+    stop = end
+    while stop < len(subject) and subject[stop].isdigit():
+        stop += 1
+    return subject[end:stop] if stop > end else None
+
+
+def quoted(tool: str) -> bool:
+    """True for a tool written as a name in quotation marks (`T="ROUGH_80"`, `T="007"`)."""
+    return len(tool) >= 2 and tool.startswith('"') and tool.endswith('"')
 
 
 def bare_tool(tool: str, spec: Spec) -> str:
-    """The tool as it identifies a station: quotes gone, a lathe offset pair collapsed."""
+    """The tool as it identifies a station: quotes gone, a lathe offset pair collapsed.
+
+    A name in quotation marks is a name, whatever characters it holds: it is never collapsed
+    like an offset pair, because on a control with tool management `T="007"` names a tool
+    and `T7` a place in the magazine, and the name is compared exactly as written.
+    """
+    if quoted(tool):
+        return tool[1:-1]
     value = tool
-    if len(value) >= 2 and value.startswith('"') and value.endswith('"'):
-        value = value[1:-1]
     if spec.collapse_offset_digits and ALL_DIGITS.match(value) and len(value) >= 4 and len(value) % 2 == 0:
         value = value[: len(value) // 2]
     return value
 
 
 def tool_label(tool: str, spec: Spec) -> str:
-    """``T01`` → ``T1``, ``T0101`` → ``T1`` on a lathe profile, ``"MILL_D10"`` → ``MILL_D10``."""
+    """``T01`` → ``T1``, ``T0101`` → ``T1`` on a lathe profile, ``"MILL_D10"`` → ``MILL_D10``.
+
+    A name keeps every character it was written with. One made of digits only keeps its
+    quotation marks too (``"007"``), so the list never shows it as the number it is not.
+    """
     value = bare_tool(tool, spec)
+    if quoted(tool):
+        return tool if ALL_DIGITS.match(value) or value == "" else value
     if value == "" or not value[0].isdigit():
         return value
     if spec.drop_leading_zeros:
@@ -450,8 +524,11 @@ def tool_number_of(tool: str, spec: Spec) -> Optional[str]:
     """The tool's number for comparing, or ``None`` for a name or a ``QS`` parameter.
 
     Always without leading zeros, whatever the profile does for display: ``T01`` and ``T1``
-    are the same station, and the header tool list may write either.
+    are the same station, and the header tool list may write either. A name in quotation
+    marks has no number, digits or not.
     """
+    if quoted(tool):
+        return None
     value = bare_tool(tool, spec)
     return LEADING_ZEROS.sub("", value) if ALL_DIGITS.match(value) else None
 
@@ -601,11 +678,14 @@ def build(
     spec.speed_unit = "surface" if tracker.css else "rpm"
     state: Optional[gedit_nc.LineState] = None
     if preceding:
-        state = gedit_nc.prime_tracker(tracker, preceding, cp)
+        state = gedit_nc.prime_tracker(tracker, preceding, cp, lines[0] if lines else None)
+    #: Values written since the last move; they go to the tool that moves next.
+    pending = Pending()
 
     for i, line in enumerate(lines):
         tokens, state = gedit_nc.tokenize_line(line, cp, state)
-        tracker.update(tokens)
+        # An Okuma `$` line belongs to the block above it.
+        tracker.update(tokens, continued=gedit_nc.continues_block(line, cp))
         mark = marks[i]
         number_line = base_line + i
 
@@ -636,6 +716,7 @@ def build(
                     )
                     unnamed += 1
                     current = None
+                    pending.hand_to(None)
                 else:
                     number = tool_number_of(tool, spec)
                     key = number if number is not None else "name:" + bare_tool(tool, spec)
@@ -648,10 +729,15 @@ def build(
                     row.add_offset(mark.offset)
                     if row.description is None:
                         row.description = describe_tool(marks, i + 1, number, from_list, spec)
+                    # What was written since the last move was written for this tool.
+                    pending.hand_to(row)
                     current = row
 
-        if current is not None and spec.feed_speed:
-            collect(current, tokens, tracker, spec, codes, number_line)
+        if spec.feed_speed:
+            collect(pending, tokens, tracker, spec, codes, number_line)
+            if moves_an_axis(tokens, spec):
+                pending.hand_to(current)
+    pending.hand_to(current)
 
     # Nothing described the tool at its call, but the header tool list did.
     for row in rows:
@@ -726,7 +812,7 @@ def unit_of(mode: str, spec: Spec) -> str:
 
 
 def collect(
-    row: Row,
+    row: Union[Row, Pending],
     tokens: Sequence[gedit_nc.Token],
     tracker: gedit_nc.FeedModeTracker,
     spec: Spec,
@@ -750,9 +836,18 @@ def collect(
       system A, `G92` in system B) is the top speed the spindle may reach, not a cutting
       speed. The database says which code that is, not this file (F24).
 
-    A feed or speed written as a variable or an expression (``F#101``, ``FQ50``) carries no
-    number at all, so it is in neither the range nor the findings.
+    A feed or speed written as a variable or an expression (``F#101``, ``FQ50``, ``F=R1``)
+    carries no number at all, so it is in neither the range nor the findings. Neither is a
+    dwell (``fNotFeed``), nor a word under an address of its own: a clamp word (`LIMS=`), a
+    spindle named by its number (`S3=`) or a driven tool's speed (`SB=`) is not the main
+    spindle's `S`, and only that word is read as the speed a tool runs at.
     """
+    # A dwell block (`fNotFeed`: Okuma `G04 F2`, Sinumerik `G4 F2` and `G4 S2`) holds a time,
+    # not a feed and not a speed. It belongs to no range and needs no finding: nobody reads
+    # a dwell as the feed a tool cuts with.
+    if tracker.f_not_feed:
+        return
+
     pitch_reason: Optional[str] = None
     if tracker.pitch_feed:
         pitch_reason = "pitch"

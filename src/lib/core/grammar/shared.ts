@@ -28,6 +28,17 @@ export interface MonarchGrammar {
   tokenizer: { root: GrammarRule[] };
 }
 
+/**
+ * A function name in front of its argument bracket: `SIN[30]`, `SQRT[…]`, `DROUND[…]`.
+ *
+ * The longest function of either dialect has six letters, and the bound is not a detail:
+ * Monarch tries a rule at every position no earlier rule took, and nothing takes a long
+ * run of letters whole. Unbounded, this rule read to the end of the run at every letter
+ * of it and gave up only there, so a line of 16k letters took over a second to paint
+ * (G8 M8). Bounded, a run too long to be a function costs eight characters a position.
+ */
+export const FUNCTION_NAME = '[A-Za-z]{2,8}(?=\\s*\\[)';
+
 /** Escapes `text` so it matches itself inside a regular expression. */
 export function escapeLiteral(text: string): string {
   return text.replace(/[\\^$.|?*+()[\]{}]/g, '\\$&');

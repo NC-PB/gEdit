@@ -233,7 +233,13 @@ describe('the resolved fixtures', () => {
 
   it('resolves every built-in without a problem', () => {
     expect(problems).toEqual([]);
-    expect([...PROFILES.keys()]).toEqual(['fanuc-gcode', 'fanuc-lathe', 'heidenhain-klartext']);
+    expect([...PROFILES.keys()]).toEqual([
+      'fanuc-gcode',
+      'fanuc-lathe',
+      'heidenhain-klartext',
+      'okuma-osp',
+      'sinumerik',
+    ]);
   });
 
   if (UPDATE) {

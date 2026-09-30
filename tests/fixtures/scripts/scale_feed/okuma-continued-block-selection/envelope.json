@@ -1,0 +1,25 @@
+{
+  "message": "Scaled 1 of 2 feed rates to 80 %; 1 left as a thread pitch, 2 feeds under addresses of their own left as written (FA=, FB=). No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 9,
+      "severity": "info",
+      "message": "This run saw only the selection, from line 9, but the 8 lines above it were read for the modal state: a feed per revolution (G95) and the thread-pitch cycle G71 is in force here."
+    },
+    {
+      "line": 9,
+      "severity": "warning",
+      "message": "F2 is a thread pitch (G71), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    },
+    {
+      "line": 16,
+      "severity": "info",
+      "message": "FA=0.2 is a feed under an address of its own, not the F word, so it is left as it is. Change it by hand if it should follow the other feeds."
+    },
+    {
+      "line": 17,
+      "severity": "info",
+      "message": "FB=0.15 is a feed under an address of its own, not the F word, so it is left as it is. Change it by hand if it should follow the other feeds."
+    }
+  ]
+}

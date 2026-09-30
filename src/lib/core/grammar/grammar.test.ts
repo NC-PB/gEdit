@@ -350,6 +350,9 @@ describe('over the NC fixtures', () => {
   const dialects: [string, string][] = [
     ['fanuc-gcode', 'nc/fanuc'],
     ['heidenhain-klartext', 'nc/heidenhain'],
+    // M8: the turning dialects, over the fixtures WP8.3 and WP8.5 wrote for them.
+    ['okuma-osp', 'nc/okuma'],
+    ['sinumerik', 'nc/sinumerik'],
   ];
 
   it.each(dialects)('%s: every line tokenizes, with nothing marked invalid', (id, dir) => {
@@ -376,7 +379,7 @@ describe('over the NC fixtures', () => {
     // The roles a CAM program is read by have to be there, or the colours say nothing.
     // Klartext has no G codes; its motion is a keyword.
     const wanted = ['blockNumber', 'mcode', 'axis', 'feed', 'spindle', 'comment'];
-    for (const role of [...wanted, id === 'fanuc-gcode' ? 'gcode' : 'keyword']) {
+    for (const role of [...wanted, id === 'heidenhain-klartext' ? 'keyword' : 'gcode']) {
       expect(seen, `${id} never emitted ${role}`).toContain(role);
     }
   });
@@ -393,6 +396,69 @@ describe('over the NC fixtures', () => {
     expect(rolesOf(fanuc, 'nc/fanuc/f01-mill-3tools.nc')).toContain('programMarker');
     expect(rolesOf(klartext, 'nc/heidenhain/h01-3tools.h')).toContain('section');
     expect(rolesOf(klartext, 'nc/heidenhain/h01-3tools.h')).toContain('keyword');
+  });
+});
+
+// G8 M8 review: Monarch tries every rule at every position no earlier rule took, and the
+// editor paints every line it shows. A rule that reads to the end of a run before it gives
+// up therefore costs the whole run at each of its positions, and two blank runs with only
+// an optional mark between them can share one line of blanks in every possible way: a
+// padded or packed line of 16k characters took up to two seconds to paint. Each line below
+// grows eight times, from 4k to 32k characters. A linear grammar then takes about eight
+// times as long and stays far below the budget; a quadratic one takes sixty-four times as
+// long, and the smallest of them took over a second.
+describe('long lines', () => {
+  const SHAPES: [string, (n: number) => string][] = [
+    ['leading blanks', (n) => `${' '.repeat(n)}x`],
+    ['leading blanks and a skip', (n) => `${' '.repeat(n)}/x`],
+    ['leading tabs and a block number', (n) => `${'\t'.repeat(n)}N1x`],
+    ['a block number and blanks', (n) => `N1${' '.repeat(n)}x`],
+    ['letters', (n) => 'A'.repeat(n)],
+    ['letters and blanks', (n) => `${'A'.repeat(n / 2)}${' '.repeat(n / 2)}x`],
+    ['an address and blanks', (n) => `X${' '.repeat(n)}x`],
+    ['an address, blanks, a sign and blanks', (n) => `X${' '.repeat(n / 2)}+${' '.repeat(n / 2)}x`],
+    ['packed words', (n) => 'G1X1'.repeat(n / 4)],
+    ['letters and digits', (n) => 'A1'.repeat(n / 2)],
+  ];
+
+  /**
+   * Monarch's loop without the checks of `tokenize` above, so that the time is the
+   * grammar's own: the best of three runs, in milliseconds.
+   */
+  function cost(grammar: Built['grammar'], line: string): number {
+    const rules = grammar.tokenizer.root.map((rule) => compileRule(rule, grammar.ignoreCase));
+    let best = Infinity;
+    for (let run = 0; run < 3; run++) {
+      const started = performance.now();
+      let pos = 0;
+      while (pos < line.length) {
+        const rest = line.slice(pos);
+        let taken = 1;
+        for (const rule of rules) {
+          if (rule.lineStart && pos !== 0) continue;
+          const match = rule.re.exec(rest);
+          if (match) {
+            taken = Math.max(1, match[0].length);
+            break;
+          }
+        }
+        pos += taken;
+      }
+      best = Math.min(best, performance.now() - started);
+    }
+    return best;
+  }
+
+  it.each(BUILT.map((entry) => entry.profile.id))('%s: paints a long line in time proportional to its length', (id) => {
+    const { grammar } = byId(id);
+    for (const [name, make] of SHAPES) {
+      const short = cost(grammar, make(4000));
+      const long = cost(grammar, make(32000));
+      // Under 250 ms, or at most three times the growth a linear grammar shows.
+      expect(long, `${name}: ${short.toFixed(1)} ms for 4k, ${long.toFixed(1)} ms for 32k`).toBeLessThan(
+        Math.max(250, 24 * short),
+      );
+    }
   });
 });
 

@@ -36,6 +36,10 @@ API_NAMES = [
 #: scripts at once, so it is pinned next to the §7.10 names rather than inside them.
 CARRY_OVER_NAMES = ["preceding_lines", "prime_tracker"]
 
+#: M8: whether a line belongs to the block above it by a leading marker (Okuma `$`), which
+#: the three bundled scripts pass to `FeedModeTracker.update` (plan §7.16 #27).
+M8_NAMES = ["continues_block"]
+
 #: The parameter names of the functions whose call sites are spread over several scripts.
 API_SIGNATURES = {
     "to_py_regex": ["pattern"],
@@ -47,7 +51,10 @@ API_SIGNATURES = {
     "report": ["title", "columns", "rows", "message", "findings"],
     "envelope": ["text", "message", "findings"],
     "preceding_lines": ["context"],
-    "prime_tracker": ["tracker", "lines", "cp"],
+    # `first` (M8) is optional: the first selected line, so a selection that starts on an
+    # Okuma `$` line starts inside the block above it.
+    "prime_tracker": ["tracker", "lines", "cp", "first"],
+    "continues_block": ["line", "cp"],
 }
 
 
@@ -86,6 +93,11 @@ class TestGeditNcApi(unittest.TestCase):
         self.assertEqual(
             sorted(set(self.gedit_nc.__all__) & set(CARRY_OVER_NAMES)), sorted(CARRY_OVER_NAMES)
         )
+
+    def test_the_m8_names_are_exported_too(self) -> None:
+        missing = [name for name in M8_NAMES if not hasattr(self.gedit_nc, name)]
+        self.assertEqual(missing, [])
+        self.assertEqual(sorted(set(self.gedit_nc.__all__) & set(M8_NAMES)), sorted(M8_NAMES))
 
     def test_feed_mode_tracker_exposes_the_four_modal_attributes(self) -> None:
         tracker = self.gedit_nc.FeedModeTracker

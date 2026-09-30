@@ -1,0 +1,34 @@
+# M8: the Okuma OSP and Sinumerik 840D turning profiles — detection, the two grammars,
+# navigation, hover and completion, the bundled scripts on their goldens, and the machine
+# parameters that decide what a number of these programs means.
+# Run with: tests/runtime/suite.sh tests/runtime/suites/m0.txt tests/runtime/suites/m1.txt tests/runtime/suites/m2.txt tests/runtime/suites/m3.txt tests/runtime/suites/m4.txt tests/runtime/suites/m5.txt tests/runtime/suites/m6.txt tests/runtime/suites/m7.txt tests/runtime/suites/m8.txt
+#
+# Every scenario opens its programs under the extension the control writes and checks the
+# dialect it got before anything else, because a golden run under the wrong dialect proves
+# nothing: an Okuma G71 read as the Fanuc roughing cycle has its thread lead scaled.
+
+# An Okuma program end to end: detection by extension and by content, the paint with no
+# `invalid` token, F7 over the turret indexes (not the offset changes inside a cycle), the
+# hover of the codes that mean something else than on a Fanuc lathe, the tool list, scale
+# feed with the G04 dwell untouched and the saved bytes, and the three unit systems the
+# machine item offers. Run it first: it is the milestone's Okuma half.
+m8-okuma
+
+# The Okuma unit system as a machine parameter: with no machine no number of an Okuma
+# program has a value, with a 1 µm machine made on the page the feed limits apply and give
+# the golden bytes, and each of the three presets reads the words of its own label.
+m8-okuma-units
+
+# A Sinumerik turning program end to end: detection, the paint (CYCLE81(…) a keyword),
+# F7 over every form of the tool call, the hover of M3=3 and S3=, CYCLE8x completion behind
+# MCALL, and the tool list, scale feed and scale speed on their goldens.
+m8-sinumerik
+
+# Diameter programming: DIAMON assumed from the profile with no machine (owner decision
+# D35), off on a machine made on the page, and the modal goldens held against the running
+# app's own context, line by line.
+m8-sinumerik-diamon
+
+# G7: a generated 10 MB Okuma and Sinumerik program each open within 2 s, and typing in
+# them reaches the screen with a p95 under 50 ms. Slow; keep it last.
+m8-perf

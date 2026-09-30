@@ -136,11 +136,31 @@ Feed modes
     no** and auto follows the profile's `machineType`: yes on a lathe, no on a mill. What is
     not scaled is listed, with the code that put the mode in force.
 Variables and expressions
-    `F#101`, `FQ50`, `F[#1+2.]`, or an `F` with no value at all: there is no number to
-    scale. They are skipped and reported, never rewritten.
+    `F#101`, `FQ50`, `F[#1+2.]`, `F=R1`, `F=V1`, or an `F` with no value at all: there is
+    no number to scale. They are skipped and reported, never rewritten.
+Dwell times
+    in a dwell block the `F` word is a time, not a feed (the database's ``fNotFeed``: Okuma
+    `G04 F2`, Sinumerik `G4 F2`). It is never scaled, and it is not a feed rate either, so it
+    is not counted as one; the summary says how many were left as written.
 Cycle parameters
-    a Klartext cycle definition carries its feeds as `Q` parameters (`Q206`). They are
-    listed and left unchanged (plan section 5).
+    a Klartext cycle definition carries its feeds as `Q` parameters (`Q206`), and a cycle
+    written as a call (`CYCLE85(…)`, `CYCLE95(…)`) carries them as arguments. Both are
+    listed and left unchanged (plan section 5); which argument is which comes from the
+    order of the database's ``params``.
+A tapping cycle written as a call
+    stands in a block of its own, so it has no `F` word of its own either. A call whose
+    database entry carries ``pitchFeed`` is one that may take its thread lead from the
+    feed **in force** (a tapping cycle without a spindle encoder, where the feed has to be
+    the speed times the pitch): that `F` is left exactly as written and reported, whatever
+    line it stands on. A call written behind a keyword of the database's ``cycle`` group
+    (`MCALL CYCLE840(…)`) repeats after every following move until that keyword stands on
+    its own again, so every `F` written in between is left too. A cycle whose lead is one
+    of its own arguments (a rigid tapping cycle, a thread-turning cycle) carries no
+    ``pitchFeed`` and changes nothing here.
+Feeds of their own
+    a feed written under an address that extends the feed address and takes `=` (a
+    chamfer or corner feed `FRC=`, `FRCM=`, the feeds `FA=` / `FB=` of a contour
+    continuation) is not the `F` word. It is reported and left as written.
 
 Numbers
 -------
@@ -235,6 +255,12 @@ UNIT_OF_MODE = {"G93": "inverse-time", "G94": "per-minute", "G95": "per-rev"}
 #: out of the database we ship, and this only decides what is **listed**: a cycle
 #: parameter is left unchanged either way, because it is not a feed word.
 FEED_PARAM_LABEL = re.compile(r"\bfeed", re.IGNORECASE)
+
+#: The same question for the arguments of a cycle written as a call (`CYCLE85(…)`), where a
+#: database also names factors of the feed (`FRF`, "feed factor for the first peck"). A
+#: factor follows the feed it multiplies, so listing it as a feed left alone would invite a
+#: hand edit that doubles the change; it is not listed.
+CALL_FEED_LABEL = re.compile(r"\bfeed\b(?!\s+factor)", re.IGNORECASE)
 
 #: At most this many findings; the rest are counted in the message. A 100k-line program
 #: with a G95 section would otherwise hand the results panel tens of thousands of rows.
@@ -450,6 +476,12 @@ class Reading:
         #: (literal text, written with a point, class, units) -> (value, readings). A
         #: 100,000-line program writes the same few feeds over and over.
         self._cache: Dict[Any, Tuple[Optional[str], List[Dict[str, Any]]]] = {}
+        #: The code whose ``sets.feedUnit`` is in force, and that unit: the power-on code
+        #: until the program writes one. A finding names it, because on a control where
+        #: several codes switch to one unit (`G95`, `G96`, `G97` all mean per revolution on
+        #: a Sinumerik) the unit alone does not say which code put the feed in force.
+        self.feed_code: Optional[str] = None
+        self.feed_code_unit: Optional[str] = None
 
     def note(self) -> str:
         """What the summary says about the machine this run read the program with."""
@@ -465,6 +497,15 @@ class Reading:
             if units in ("mm", "inch"):
                 self.units = units
 
+    def sets_feed_code(self, entries: Sequence[Dict[str, Any]]) -> None:
+        """Remembers the code of this block that switches the feed unit, if it has one."""
+        for entry in entries:
+            sets = entry.get("sets")
+            unit = sets.get("feedUnit") if isinstance(sets, dict) else None
+            code = entry.get("code")
+            if isinstance(unit, str) and isinstance(code, str) and code != "":
+                self.feed_code, self.feed_code_unit = code, unit
+
     def unit_of(self, mode: str) -> str:
         """The §7.1 feed unit a `FeedModeTracker` mode name stands for."""
         if mode in self.words:
@@ -476,14 +517,19 @@ class Reading:
 
         The ISO modes name the code that is in force, which the database decides: a turning
         program in G-code system A reads "a feed per revolution (G99)" although
-        `FeedModeTracker` calls that mode `G95` (plan §7.10, F24).
+        `FeedModeTracker` calls that mode `G95` (plan §7.10, F24). The code the program
+        actually wrote wins, because a unit may have several codes: a Sinumerik `G96` puts
+        the feed per revolution in force as much as `G95` does.
         """
         text = MODE_TEXT.get(mode)
         if text is None:
             return "in the feed mode " + mode
         if mode not in CODE_IN_TEXT:
             return text
-        return "%s (%s)" % (text, self.by_unit.get(self.unit_of(mode), mode))
+        unit = self.unit_of(mode)
+        if self.feed_code is not None and self.feed_code_unit == unit:
+            return "%s (%s)" % (text, self.feed_code)
+        return "%s (%s)" % (text, self.by_unit.get(unit, mode))
 
     def number_class(
         self,
@@ -527,8 +573,13 @@ class Reading:
         )
 
 
-def power_on_state(tracker: gedit_nc.FeedModeTracker, cp: gedit_nc.CompiledProfile) -> None:
+def power_on_state(
+    tracker: gedit_nc.FeedModeTracker, cp: gedit_nc.CompiledProfile
+) -> List[Dict[str, Any]]:
     """Puts the tracker into the state the control powers on in (plan AD-19 rule 8, AD-31).
+
+    Answers the database entries of the power-on codes, so a finding can name the one that
+    put the feed unit in force.
 
     `FeedModeTracker` is Phase 1's API: it is built from a code database alone, so it starts
     every run in feed per minute and in rpm — which is what a milling control powers on in,
@@ -544,9 +595,10 @@ def power_on_state(tracker: gedit_nc.FeedModeTracker, cp: gedit_nc.CompiledProfi
     initial = as_dict(as_dict(cp.profile.get("modal")).get("initial"))
     codes = [value for value in initial.values() if isinstance(value, str) and value != ""]
     if not codes:
-        return
+        return []
     tokens, _ = gedit_nc.tokenize_line(" ".join(codes), cp, None)
     tracker.update(tokens)
+    return block_entries(tokens, tracker)
 
 
 def block_entries(
@@ -565,8 +617,16 @@ def block_entries(
     count = len(tokens)
     for i, token in enumerate(tokens):
         if token.kind == "word":
+            # An address written with `=` is a value and never a code (`M3=3` is not M33).
             address = token.address or ""
-            written = address + (token.value_text or "") if address != "" else ""
+            written = (
+                address + (token.value_text or "")
+                if address != "" and not assignment_word(token)
+                else ""
+            )
+        elif token.kind == "call":
+            # A cycle written as a call is the code of its identifier (`CYCLE84(…)`).
+            written = token.address or ""
         elif token.kind == "keyword":
             name = token.address or token.text
             number = token.value_text
@@ -587,6 +647,18 @@ def block_entries(
         if entry is not None:
             out.append(entry)
     return out
+
+
+def assignment_word(token: gedit_nc.Token) -> bool:
+    """True for an address written with `=` (plan §7.5): `F=R1`, `SB=1200`, `M3=3`.
+
+    The address is exactly what stands in front of the `=`, so such a word is a value and
+    never a code; `F=R1` is the feed word with a value that is not a number.
+    """
+    if token.kind != "word" or not token.address:
+        return False
+    head, sep, _ = token.text.partition("=")
+    return sep == "=" and head.strip().upper() == token.address.upper()
 
 
 def feed_unit_words(profile: Dict[str, Any]) -> Dict[str, str]:
@@ -647,8 +719,18 @@ class Counts:
         #: Left out by "only above" / "only below".
         self.filtered = 0
         self.clamped = 0
-        #: Cycle parameters that are feeds, listed and left unchanged.
+        #: Cycle parameters that are feeds, listed and left unchanged: a Klartext `Q206`, or
+        #: an argument of a cycle written as a call (`CYCLE85(…)`).
         self.cycle = 0
+        #: Feeds in force when a tapping cycle written as a call runs, which may be its
+        #: lead: left as written (:func:`lead_carriers`). Counted in ``total``.
+        self.carried = 0
+        #: Words under an address of their own that extends the feed address (`FRC=`):
+        #: reported and left, not counted in ``total``.
+        self.other = 0
+        self.other_addresses: List[str] = []
+        #: `F` words of a dwell block (`fNotFeed`): times, never feed rates, never scaled.
+        self.dwell = 0
         #: Written further from the exact scaled value than ROUNDING_NOTICE allows.
         self.rounded = 0
         #: Rounded whole because the dialect's decimal point is significant.
@@ -755,6 +837,242 @@ def list_cycle_feeds(
         )
 
 
+def call_arguments(text: Optional[str]) -> List[str]:
+    """The arguments of a call as written, split at the commas between them.
+
+    `5,0,2,-30,,-8` is `['5', '0', '2', '-30', '', '-8']`: an empty argument keeps its place,
+    because a cycle reads its arguments by position. A comma inside a string, a bracket or a
+    nested call (`AC(10)`) does not split.
+    """
+    if text is None:
+        return []
+    out: List[str] = []
+    current: List[str] = []
+    depth = 0
+    quoted = False
+    for char in text:
+        if quoted:
+            quoted = char != '"'
+        elif char == '"':
+            quoted = True
+        elif char in "([":
+            depth += 1
+        elif char in ")]":
+            depth -= 1
+        elif char == "," and depth == 0:
+            out.append("".join(current).strip())
+            current = []
+            continue
+        current.append(char)
+    out.append("".join(current).strip())
+    return out
+
+
+def lower_first(label: str) -> str:
+    """``Feed on the way in`` → ``feed on the way in``, for the middle of a sentence."""
+    return label[:1].lower() + label[1:] if label[1:2].islower() else label
+
+
+def list_call_feeds(
+    entry: Dict[str, Any],
+    token: gedit_nc.Token,
+    line: int,
+    findings: Findings,
+    counts: Counts,
+) -> None:
+    """Lists the feeds among the arguments of a cycle written as a call. Never scaled.
+
+    A cycle written as a call (`CYCLE85(…)`) carries its technology as arguments, and the
+    tokenizer keeps them in one piece (plan §7.5): none of them is a feed word, so nothing
+    here could scale one by mistake. The database's ``params`` say which position is which;
+    a feed among them is listed so that a run which changed every feed of the program does
+    not leave the user believing this one changed too.
+    """
+    params = entry.get("params")
+    if not isinstance(params, list) or not params:
+        return
+    code = entry.get("code") or token.address
+    for position, (param, argument) in enumerate(zip(params, call_arguments(token.value_text)), 1):
+        if not isinstance(param, dict) or argument == "":
+            continue
+        label = param.get("label")
+        if not isinstance(label, str) or CALL_FEED_LABEL.search(label) is None:
+            continue
+        counts.cycle += 1
+        findings.add(
+            line,
+            "info",
+            "Argument %d of %s (%s, %s) is %s and is left unchanged: this run does not "
+            "scale the arguments of a cycle." % (position, code, param.get("address"), lower_first(label), argument),
+        )
+
+
+#: `(line index, token start)` of a feed word -> `(code, line of the call, how)`, where
+#: `how` is ``'in-force'`` for the feed a call runs with and ``'repeat'`` for a feed written
+#: while a modal call repeats (:func:`lead_carriers`).
+Carriers = Dict[Tuple[int, int], Tuple[str, int, str]]
+
+
+def cycle_keyword(token: gedit_nc.Token, lookup: gedit_nc.FeedModeTracker) -> Optional[str]:
+    """The name of a keyword that makes the call behind it modal, or ``None``.
+
+    That is a keyword of the database's ``cycle`` group which switches nothing itself (no
+    ``sets``): `MCALL CYCLE840(…)` repeats the call after every following move, and `MCALL`
+    on its own ends that. The database says which keyword it is, not this file.
+    """
+    if token.kind != "keyword":
+        return None
+    name = (token.address or token.text or "").upper()
+    entry = lookup.entry(name)
+    if entry is None or entry.get("group") != "cycle" or entry.get("sets") is not None:
+        return None
+    return name
+
+
+def lead_carriers(
+    lines: Sequence[str],
+    cp: gedit_nc.CompiledProfile,
+    codes: Sequence[Dict[str, Any]],
+    params: Params,
+    state: Optional[gedit_nc.LineState],
+    base_line: int,
+) -> Carriers:
+    """The feed words a tapping cycle written as a call may take as its thread lead.
+
+    A cycle written as a call stands in a block of its own (`CYCLE840(…)`), so it has no
+    feed word of its own: a tapping cycle without a spindle encoder cuts with the feed **in
+    force**, which then has to be the spindle speed times the pitch. Which calls may do that
+    is the database's ``pitchFeed`` on the call's entry; which of them actually does depends
+    on an argument whose meaning the database does not carry, so every such call protects
+    the feed it runs with. Refusing a feed that turns out to be a plain feed costs one edit
+    by hand; scaling a lead breaks the tap.
+
+    Two kinds of feed word are answered:
+
+    * the numeric feed word in force when such a call runs, wherever it was written — the
+      line above, or ten lines above;
+    * every numeric feed word written while such a call repeats as a modal call (written
+      behind a keyword of :func:`cycle_keyword`, until that keyword stands on its own or
+      another modal call replaces it), because each following move runs the cycle again
+      with the feed in force then.
+
+    A dwell block's `F` is a time and is never the feed in force. The walk only runs on a
+    profile whose tokenizer writes calls at all (``syntax.calls``), so every other dialect
+    pays nothing for it, and only on a program whose text names such a call somewhere: a
+    call is written with its name, so a program without the name cannot have one, and a
+    long program without a tapping call is not tokenized twice.
+    """
+    carriers: Carriers = {}
+    if as_dict(cp.profile.get("syntax")).get("calls") is not True or not codes:
+        return carriers
+    names = {code.upper() for code in (entry.get("code") for entry in codes if entry.get("pitchFeed") is True) if isinstance(code, str) and code}
+    text = "\n".join(lines).upper()
+    if not any(name in text for name in names):
+        return carriers
+    lookup = gedit_nc.FeedModeTracker(codes)
+    #: The feed word in force, `(index, start)`, or `None` when it is not a number.
+    in_force: Optional[Tuple[int, int]] = None
+    #: `(keyword, code, line)` while a modal call that may take its lead from F repeats.
+    modal: Optional[Tuple[str, str, int]] = None
+    for index, line in enumerate(lines):
+        tokens, state = gedit_nc.tokenize_line(line, cp, state)
+        entries = block_entries(tokens, lookup)
+        if not any(entry.get("fNotFeed") is True for entry in entries):
+            for token in tokens:
+                if not feed_word(token, params):
+                    continue
+                in_force = (index, token.start) if token.value is not None else None
+                if modal is not None and in_force is not None:
+                    carriers.setdefault(in_force, (modal[1], modal[2], "repeat"))
+        keywords = {name for name in (cycle_keyword(token, lookup) for token in tokens) if name}
+        calls = [token for token in tokens if token.kind == "call" and token.address]
+        for call in calls:
+            entry = lookup.entry(call.address or "")
+            pitch = entry is not None and entry.get("pitchFeed") is True
+            code = (entry.get("code") if entry is not None else None) or call.address or ""
+            if keywords:
+                # A new modal call replaces the one before it, whether it taps or not.
+                modal = (sorted(keywords)[0], code, base_line + index) if pitch else None
+            if pitch and in_force is not None:
+                carriers.setdefault(in_force, (code, base_line + index, "in-force"))
+        if not calls and modal is not None and modal[0] in keywords:
+            modal = None
+    return carriers
+
+
+def report_carried(
+    token: gedit_nc.Token,
+    carried: Tuple[str, int, str],
+    line: int,
+    findings: Findings,
+    counts: Counts,
+) -> None:
+    """A feed a tapping cycle written as a call may take as its lead: left and reported."""
+    code, call_line, how = carried
+    word = token.text.strip()
+    counts.carried += 1
+    if how == "repeat":
+        where = "%s is written while %s (line %d) repeats after every move" % (word, code, call_line)
+    elif call_line == line:
+        where = "%s is the feed in force when %s runs in this block" % (word, code)
+    else:
+        where = "%s is the feed in force when %s runs on line %d" % (word, code, call_line)
+    findings.add(
+        line,
+        "warning",
+        "%s. A tapping cycle written as a call can take its thread lead from that feed (the "
+        "feed is then the spindle speed times the pitch), so it is left as written: scaled, "
+        "it would cut a different thread. Scale it by hand if the cycle takes its lead from "
+        "its own arguments." % where,
+    )
+
+
+def other_feed_word(token: gedit_nc.Token, params: Params) -> bool:
+    """True for a feed written under an address of its own: `FRC=0.1`, `FRCM=`, `FA=`.
+
+    The feed address extended by letters and written with `=` is a feed, but not the feed
+    word this run scales — a chamfer or corner feed, or the feed of a contour continuation.
+    A number in the extension would be something else again, so only letters count.
+    """
+    if not assignment_word(token):
+        return False
+    address = (token.address or "").upper()
+    feed = params.feed_address.upper()
+    rest = address[len(feed) :] if address.startswith(feed) else ""
+    return rest != "" and rest.isalpha() and address not in PER_REVOLUTION_ADDRESSES
+
+
+def report_other_feed(
+    token: gedit_nc.Token, line: int, findings: Findings, counts: Counts
+) -> None:
+    """A feed under an address of its own: reported, never scaled."""
+    address = (token.address or "").upper()
+    counts.other += 1
+    if address not in counts.other_addresses:
+        counts.other_addresses.append(address)
+    findings.add(
+        line,
+        "info",
+        "%s is a feed under an address of its own, not the F word, so it is left as it is. "
+        "Change it by hand if it should follow the other feeds." % token.text.strip(),
+    )
+
+
+def pitch_code_of(entries: Sequence[Dict[str, Any]], tracker: gedit_nc.FeedModeTracker) -> Optional[str]:
+    """The code that makes this block's feed a thread lead: the block's own first.
+
+    A one-block thread cycle (`G71` on a control where it threads) written while a modal
+    thread pass is still in force (`G32`) carries its own lead, and a finding that named the
+    modal code would send the reader to the wrong line.
+    """
+    for entry in entries:
+        if entry.get("pitchFeed") is True:
+            code = entry.get("code")
+            if isinstance(code, str) and code != "":
+                return code
+    return tracker.active_cycle
+
+
 def readings_text(readings: Sequence[Dict[str, Any]]) -> str:
     """``0.050 mm (increments of 0.001 mm) or 50 mm (as written)``, for a finding.
 
@@ -796,7 +1114,7 @@ def scale_token(
             line,
             "warning",
             "%s is a thread pitch (%s), not a feed rate, so it is not scaled: scaling it "
-            "would cut a different thread." % (word, tracker.active_cycle),
+            "would cut a different thread." % (word, pitch_code_of(entries, tracker)),
         )
         return None
 
@@ -1135,7 +1453,7 @@ def run(
     loudly, at its first line.
     """
     tracker = gedit_nc.FeedModeTracker(codes)
-    power_on_state(tracker, cp)
+    reading.sets_feed_code(power_on_state(tracker, cp))
     findings = Findings()
     counts = Counts()
     out: List[str] = []
@@ -1144,17 +1462,18 @@ def run(
 
     primed = fragment and bool(preceding)
     if primed:
-        state = gedit_nc.prime_tracker(tracker, preceding or (), cp)
+        state = gedit_nc.prime_tracker(tracker, preceding or (), cp, lines[0] if lines else None)
         # `prime_tracker` walks the lines above the selection for the modal state, but it
-        # answers about feeds and cycles, not about millimetres and inches. A run that has
-        # to know what a value is **worth** reads them once more for their `sets.units`, so
-        # a `G20` above the selection is in force inside it as well. A run without a limit
-        # never needs a value and never pays for this pass.
-        if params.has_limits:
-            units_state: Optional[gedit_nc.LineState] = None
-            for above in preceding or ():
-                above_tokens, units_state = gedit_nc.tokenize_line(above, cp, units_state)
-                reading.sets_units(block_entries(above_tokens, tracker))
+        # answers about feeds and cycles, not about millimetres and inches, nor about which
+        # code put the feed unit in force. The run reads them once more for their
+        # `sets.units` and `sets.feedUnit`, so a `G20` or a `G96` above the selection is in
+        # force inside it as well.
+        above_state: Optional[gedit_nc.LineState] = None
+        for above in preceding or ():
+            above_tokens, above_state = gedit_nc.tokenize_line(above, cp, above_state)
+            above_entries = block_entries(above_tokens, tracker)
+            reading.sets_units(above_entries)
+            reading.sets_feed_code(above_entries)
         # A selection that starts inside the parameter block of a Klartext cycle: the
         # `CYCL DEF` keyword stands above it, so `cycle_definition` below never sees it
         # and the cycle's Q feeds would go unlisted. The tracker knows which cycle is
@@ -1192,18 +1511,26 @@ def run(
             % base_line,
         )
 
+    # The feeds a tapping cycle written as a call may take as its lead. They can stand many
+    # lines above the call, so they are found before the first word is scaled.
+    carriers = lead_carriers(lines, cp, codes, params, state, base_line)
+
     for index, line in enumerate(lines):
-        continued = state.continuation if state is not None else False
+        # A line continues the block above when that one ended in a marker (Klartext `~`)
+        # or when it starts with one itself (Okuma `$`): the lead on the `$` line of a `G71`
+        # block is still the lead of that thread cycle (G10 M8 NC finding 9).
+        head = gedit_nc.continues_block(line, cp)
+        continued = (state.continuation if state is not None else False) or head
         tokens, state = gedit_nc.tokenize_line(line, cp, state)
-        tracker.update(tokens)
+        tracker.update(tokens, continued=head)
         number = base_line + index
 
-        # The block's codes, for the number rules of §7.15 (a cycle parameter's declared
-        # unit, an `fNotFeed` block) and for `G20` / `G21`. Only a run that compares values
-        # needs them.
-        entries: List[Dict[str, Any]] = []
+        # The block's codes: the one that makes a feed a thread lead is named by the
+        # finding, and a run that compares values needs them for the number rules of §7.15
+        # (a cycle parameter's declared unit, an `fNotFeed` block) and for `G20` / `G21`.
+        entries = block_entries(tokens, tracker)
+        reading.sets_feed_code(entries)
         if params.has_limits:
-            entries = block_entries(tokens, tracker)
             reading.sets_units(entries)
 
         # A cycle definition runs from its keyword to the end of its continuation lines.
@@ -1214,12 +1541,34 @@ def run(
 
         edits: List[Tuple[int, int, str]] = []
         for token in tokens:
+            if other_feed_word(token, params):
+                report_other_feed(token, number, findings, counts)
+                continue
             if not feed_word(token, params):
                 continue
+            if tracker.f_not_feed:
+                # A dwell block (`fNotFeed`: Okuma `G04 F2`, Sinumerik `G4 F2`): its F is a
+                # time. It is not a feed rate, so it is not scaled and not counted as one,
+                # and it leaves the feed in force as it was (AD-19 rule 6).
+                counts.dwell += 1
+                continue
             counts.total += 1
+            carried = carriers.get((index, token.start))
+            if carried is not None:
+                report_carried(token, carried, number, findings, counts)
+                continue
             edit = scale_token(token, tracker, params, reading, entries, number, findings, counts)
             if edit is not None:
                 edits.append(edit)
+
+        # A cycle written as a call: its feeds are arguments, listed and never scaled.
+        for token in tokens:
+            if token.kind != "call" or not token.address:
+                continue
+            entry = tracker.entry(token.address)
+            if entry is None:
+                continue
+            list_call_feeds(entry, token, number, findings, counts)
 
         out.append(apply_edits(line, edits) if edits else line)
 
@@ -1277,6 +1626,20 @@ def summary(counts: Counts, findings: Findings, params: Params, reading: Reading
         parts.append("%s kept whole" % "{:,}".format(counts.whole))
     if counts.cycle:
         parts.append("%s left unchanged" % count_text(counts.cycle, "cycle feed"))
+    if counts.carried:
+        parts.append(
+            "%s left as the possible lead of a tapping cycle" % "{:,}".format(counts.carried)
+        )
+    if counts.other:
+        parts.append(
+            "%s left as written (%s)"
+            % (
+                count_text(counts.other, "feed under an address of its own", "feeds under addresses of their own"),
+                ", ".join(address + "=" for address in counts.other_addresses),
+            )
+        )
+    if counts.dwell:
+        parts.append("%s left as written" % count_text(counts.dwell, "dwell time"))
     if counts.unresolved:
         parts.append(
             "%s scaled without a limit check" % "{:,}".format(counts.unresolved)

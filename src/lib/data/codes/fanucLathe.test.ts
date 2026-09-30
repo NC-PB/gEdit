@@ -101,7 +101,14 @@ function tableUnit(dialect: string, code: string, address: string): Unit | undef
 describe('the shipped Fanuc databases', () => {
   it('resolve without a problem, and hold the three Fanuc dialects', () => {
     expect(problems).toEqual([]);
-    expect(Object.keys(FILES).sort()).toEqual(['fanuc', 'fanuc-lathe', 'fanuc-lathe-b', 'heidenhain']);
+    expect(Object.keys(FILES).sort()).toEqual([
+      'fanuc',
+      'fanuc-lathe',
+      'fanuc-lathe-b',
+      'heidenhain',
+      'okuma',
+      'sinumerik',
+    ]);
   });
 
   it.each(FANUC_DIALECTS)('%s has no duplicate code and no duplicate alias after resolution', (dialect) => {

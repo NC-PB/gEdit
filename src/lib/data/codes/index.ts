@@ -18,6 +18,8 @@ import fanuc from './fanuc.json';
 import fanucLathe from './fanuc-lathe.json';
 import fanucLatheB from './fanuc-lathe-b.json';
 import heidenhain from './heidenhain.json';
+import okuma from './okuma.json';
+import sinumerik from './sinumerik.json';
 
 /** Dialect id → the database as it is stored on disk. Resolve and load before use. */
 export const BUILTIN_CODE_DB_JSON: Readonly<Record<string, unknown>> = {
@@ -25,4 +27,6 @@ export const BUILTIN_CODE_DB_JSON: Readonly<Record<string, unknown>> = {
   'fanuc-lathe': fanucLathe,
   'fanuc-lathe-b': fanucLatheB,
   heidenhain,
+  okuma,
+  sinumerik,
 };

@@ -3,12 +3,14 @@
 import { describe, expect, it } from 'vitest';
 import fanucJson from '$lib/data/codes/fanuc.json';
 import heidenhainJson from '$lib/data/codes/heidenhain.json';
+import sinumerikJson from '$lib/data/codes/sinumerik.json';
 import { loadCodeDb } from './load';
-import { completionsFor, lookupCode, lookupWord, normalizeCode } from './lookup';
+import { completionsFor, isAssignmentWord, lookupCode, lookupWord, normalizeCode } from './lookup';
 import type { NcToken } from '$lib/core/nc/types';
 
 const fanuc = loadCodeDb(fanucJson);
 const heidenhain = loadCodeDb(heidenhainJson);
+const sinumerik = loadCodeDb(sinumerikJson);
 
 /** A word token as the tokenizer hands it over; the offsets do not matter here. */
 function word(address: string, valueText: string): NcToken {
@@ -128,6 +130,33 @@ describe('lookupWord', () => {
     for (const kind of ['comment', 'string', 'variable', 'whitespace', 'blockNumber'] as const) {
       expect(lookupWord(fanuc, { kind, start: 0, end: 1, text: 'x' })).toBeNull();
     }
+  });
+
+  // M8 integration: the two token shapes AD-24 adds.
+  it('reads a call by its name', () => {
+    const call: NcToken = { kind: 'call', start: 0, end: 10, text: 'MSG("TEXT")', address: 'MSG', valueText: '"TEXT"' };
+    expect(lookupWord(sinumerik, call)?.entry?.code).toBe('MSG');
+    expect(lookupWord(sinumerik, { ...call, text: 'PROBE(1)', address: 'PROBE', valueText: '1' })).toEqual({ entry: null, unknown: true });
+  });
+
+  it('reads an address extension in front of `=` as the spindle, not as part of the code', () => {
+    const assigned = (address: string, valueText: string): NcToken => ({
+      kind: 'word',
+      start: 0,
+      end: 0,
+      text: `${address}=${valueText}`,
+      address,
+      valueText,
+    });
+    expect(isAssignmentWord(assigned('M3', '3'))).toBe(true);
+    expect(isAssignmentWord(word('M', '3'))).toBe(false);
+    expect(isAssignmentWord({ ...assigned('SB', '1200'), text: 'SB = 1200' })).toBe(true);
+    expect(lookupWord(sinumerik, assigned('M3', '3'))?.entry?.code).toBe('M3');
+    expect(lookupWord(sinumerik, assigned('M2', '5'))?.entry?.code).toBe('M5');
+    expect(lookupWord(sinumerik, assigned('S3', '2400'))).toMatchObject({ entry: null, address: { letter: 'S' } });
+    expect(lookupWord(sinumerik, assigned('CR', '15'))).toMatchObject({ entry: null, address: { letter: 'CR' } });
+    // Without the `=` nothing changes: `M30` is still the code M30.
+    expect(lookupWord(sinumerik, word('M', '30'))?.entry?.code).toBe('M30');
   });
 });
 

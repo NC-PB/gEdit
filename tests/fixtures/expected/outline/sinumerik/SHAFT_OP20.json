@@ -1,0 +1,10 @@
+{
+  "profile": "sinumerik",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":2,"text":"A FILE WITHOUT AN EXTENSION: ONLY THE CONTENT DECIDES THE DIALECT"},
+    {"kind":"comment","line":5,"text":"PART OFF"},
+    {"kind":"tool","line":6,"text":"PARTOFF_3 — PART OFF","tool":"\"PARTOFF_3\"","endLine":15},
+      {"kind":"end","line":14,"text":"M30"}
+  ]
+}

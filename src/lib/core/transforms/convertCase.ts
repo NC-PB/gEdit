@@ -10,6 +10,14 @@
 // reading of "convert case" under which renaming the tools of a program is what the user
 // asked for (hand-off note, WP4.3). The option covers the comments.
 //
+// M8 integration: a string can also stand *inside* a token. A Sinumerik tool name is the
+// value of an assignment word (`T="drill_d8"`) and a message or a contour name an argument
+// of a call (`MSG("Rough")`, `CYCLE95("shaft_contour", …)`). The code around the quotes is
+// converted, what stands between them is kept exactly as written — the same rule as a
+// string token, for the same reason. Only those two kinds hold a string: in a comment a
+// quote is just a character (`; bore 2" deep`), so a comment the user asked to convert is
+// converted whole, quotes or not.
+//
 // Three more rules that keep this from being a `line.toUpperCase()`:
 //
 //  - A dialect that reads `X` and `x` as different things (`syntax.caseSensitive`) is
@@ -69,6 +77,36 @@ function forcesUppercase(cp: CompiledProfile): boolean {
   return (editing as Record<string, unknown>).forceUppercase === true;
 }
 
+/**
+ * The token kinds that can hold a string of the dialect: a call takes its argument list
+ * whole and an assignment word its value (the tokenizer, M8). `HOLDS_STRINGS` in
+ * `core/codes/completionItems.ts` names the same two.
+ */
+const HOLDS_STRINGS = new Set<NcToken['kind']>(['call', 'word']);
+
+function convertText(text: string, toLower: boolean): string {
+  return toLower ? text.toLowerCase() : text.toUpperCase();
+}
+
+/**
+ * The token text in the new case, with every `"…"` inside it left as written (M8
+ * integration). A dialect without strings has no quotes to keep, so its text converts
+ * whole, as it always did.
+ */
+function convertCode(text: string, toLower: boolean, strings: boolean): string {
+  const convert = (part: string): string => convertText(part, toLower);
+  if (!strings || !text.includes('"')) return convert(text);
+  let out = '';
+  let at = 0;
+  for (let open = text.indexOf('"'); open >= 0; open = text.indexOf('"', at)) {
+    const close = text.indexOf('"', open + 1);
+    const end = close < 0 ? text.length : close + 1;
+    out += convert(text.slice(at, open)) + text.slice(open, end);
+    at = end;
+  }
+  return out + convert(text.slice(at));
+}
+
 /** True when the two token lists agree on kind and span, which is all case may leave alone. */
 function sameShape(a: NcToken[], b: NcToken[]): boolean {
   if (a.length !== b.length) return false;
@@ -118,6 +156,7 @@ export const convertCase: TransformDef = {
     const toLower = ctx.options.case === 'lower';
     const excludeComments = ctx.options.excludeComments !== false;
     const unconverted = t('ncCleanup.convertCase.lengthChanged');
+    const strings = ctx.cp.profile.syntax?.strings === true;
     const out: string[] = new Array<string>(lines.length);
     const skipped: Located[] = [];
     // The state `lines[0]` begins in: a selection that starts inside a Klartext `~`
@@ -137,7 +176,12 @@ export const convertCase: TransformDef = {
       for (const token of tokens) {
         if (token.kind === 'whitespace' || token.kind === 'string') continue;
         if (token.kind === 'comment' && excludeComments) continue;
-        const text = toLower ? token.text.toLowerCase() : token.text.toUpperCase();
+        // A quote keeps its text only where the token can hold a string. A comment (and a
+        // Klartext structure block, which reads as one) is prose: its quotes are marks of
+        // inches or of emphasis, and the text around them converts with the rest.
+        const text = HOLDS_STRINGS.has(token.kind)
+          ? convertCode(token.text, toLower, strings)
+          : convertText(token.text, toLower);
         if (text === token.text) continue;
         // `ß` → `SS` is two characters where there was one. The block would still read
         // back correctly, but every offset behind it moves and a control counts them, so

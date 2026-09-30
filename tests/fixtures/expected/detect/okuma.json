@@ -1,0 +1,27 @@
+{
+  "note": [
+    "Expected profile detection for tests/fixtures/nc/okuma (plan M8 §8.4). Owner: WP8.3, G10 fix M8.",
+    "One file per folder under tests/fixtures/nc, read by src/lib/core/profiles/detect.test.ts; the margin",
+    "over the runner-up is asserted and printed by src/lib/data/profiles/fanucLathe.test.ts, which globs",
+    "this folder too, and again with the content score alone by src/lib/data/profiles/okuma.test.ts.",
+    "A value is a profile id, or 'fallback' when the content is inconclusive and the current profile",
+    "stays, or 'refused' when decodeFile does not open the file at all.",
+    "The .MIN, .SUB and .SSB extensions belong to this control alone and decide on their own: line by",
+    "line an Okuma turning program reads like Fanuc lathe code, so no content outvotes them. Under any",
+    "other extension the $NAME.MIN% header decides just as firmly, and without a header the syntax only",
+    "this control writes does (CALL O, RTS, the driven-tool cycles G180-G189, a LAP call, a G71 thread",
+    "cycle with H and D, a G77 tap with K, a line continued with $). SHAFT-OP2 (no extension, no header)",
+    "and detect-okuma.txt carry no extension weight at all, so they are the files that say whether the",
+    "content rules alone carry the dialect; o05-lap-tap.MIN holds the lines the newer rules need.",
+    "Programs under a foreign extension, the reviewer's among them, are in _improvements.json."
+  ],
+  "fixtures": {
+    "nc/okuma/SHAFT-OP2": "okuma-osp",
+    "nc/okuma/detect-okuma.txt": "okuma-osp",
+    "nc/okuma/o01-flange.MIN": "okuma-osp",
+    "nc/okuma/o02-thread.MIN": "okuma-osp",
+    "nc/okuma/o03-live-tool.MIN": "okuma-osp",
+    "nc/okuma/o04-sub.SUB": "okuma-osp",
+    "nc/okuma/o05-lap-tap.MIN": "okuma-osp"
+  }
+}

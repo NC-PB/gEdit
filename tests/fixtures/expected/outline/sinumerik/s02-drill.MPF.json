@@ -1,0 +1,21 @@
+{
+  "profile": "sinumerik",
+  "items": [
+    {"kind":"program","line":1,"text":"%_N_FLANGE_MPF","endLine":49},
+    {"kind":"comment","line":2,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":3,"text":"$PATH=/_N_WKS_DIR/_N_FLANGE_WPD"},
+    {"kind":"comment","line":4,"text":"FLANGE - CENTRE HOLE, THEN FACE HOLES AND THREADS WITH DRIVEN TOOLS"},
+    {"kind":"comment","line":7,"text":"CENTRE HOLE D10"},
+    {"kind":"tool","line":8,"text":"DRILL_D10 — CENTRE HOLE D10","tool":"\"DRILL_D10\"","endLine":14},
+      {"kind":"subprogram-call","line":12,"text":"CYCLE83"},
+      {"kind":"comment","line":14,"text":"FACE HOLES D8"},
+    {"kind":"tool","line":15,"text":"DRILL_D8 — FACE HOLES D8","tool":"\"DRILL_D8\"","endLine":31},
+      {"kind":"subprogram-call","line":24,"text":"CYCLE83"},
+      {"kind":"comment","line":31,"text":"THREAD M10"},
+    {"kind":"tool","line":32,"text":"TAP_M10 — THREAD M10","tool":"\"TAP_M10\"","endLine":49},
+      {"kind":"subprogram-call","line":36,"text":"CYCLE84"},
+      {"kind":"subprogram-call","line":38,"text":"CYCLE84"},
+      {"kind":"subprogram-call","line":40,"text":"CYCLE84"},
+      {"kind":"end","line":48,"text":"M30"}
+  ]
+}

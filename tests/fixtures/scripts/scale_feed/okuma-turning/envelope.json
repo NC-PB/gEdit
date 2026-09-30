@@ -1,0 +1,25 @@
+{
+  "message": "Scaled 3 of 7 feed rates to 80 %; 3 left as a thread pitch, 1 left as a variable or an expression, 1 dwell time left as written. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 21,
+      "severity": "warning",
+      "message": "F2 is a thread pitch (G71), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    },
+    {
+      "line": 22,
+      "severity": "warning",
+      "message": "F2 is a thread pitch (G33), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    },
+    {
+      "line": 30,
+      "severity": "warning",
+      "message": "F=V1 is not a plain number, so it is not scaled."
+    },
+    {
+      "line": 43,
+      "severity": "warning",
+      "message": "F750 is a thread pitch (G184), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    }
+  ]
+}

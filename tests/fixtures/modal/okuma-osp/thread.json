@@ -1,0 +1,39 @@
+{
+  "about": "Okuma threading: G71 is a multi-pass thread cycle of its own block (not the Fanuc roughing cycle), G33 cuts one pass per block and stays in force over the pass blocks, and the F of G04 is a dwell time, which is neither a feed nor a lead.",
+  "input": "../../nc/okuma/o02-thread.MIN",
+  "states": [
+    {
+      "line": 11,
+      "about": "G71 starts a cycle for its own block only (a non-modal cycle start, AD-19 rule 2), and its F is the 2 mm lead.",
+      "after": { "activeCycle": null, "feed": "2", "block": { "cycle": "G71", "pitchFeed": true } }
+    },
+    {
+      "line": 12,
+      "after": { "activeCycle": null, "block": { "cycle": null, "pitchFeed": false } }
+    },
+    {
+      "line": 17,
+      "about": "A threading pass is a move whose feed is a lead: it becomes the cycle in force (AD-19 rule 3).",
+      "after": { "groups": { "motion": "G33" }, "activeCycle": "G33", "feed": "2", "block": { "cycle": "G33", "pitchFeed": true } }
+    },
+    {
+      "line": 20,
+      "about": "A pass block that writes only X is still a pass of that thread.",
+      "after": { "groups": { "motion": "G33" }, "activeCycle": "G33", "block": { "cycle": null } }
+    },
+    {
+      "line": 24,
+      "about": "A rapid ends it.",
+      "after": { "groups": { "motion": "G0" }, "activeCycle": null }
+    },
+    {
+      "line": 25,
+      "about": "AD-19 rule 6: the F of G04 is the time the tool waits, so the feed in force is still the one the program set before.",
+      "after": { "feed": "2", "activeCycle": null, "block": { "fNotFeed": true, "pitchFeed": false } }
+    },
+    {
+      "line": 26,
+      "after": { "block": { "fNotFeed": false } }
+    }
+  ]
+}

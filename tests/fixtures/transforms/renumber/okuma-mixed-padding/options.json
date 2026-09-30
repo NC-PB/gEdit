@@ -1,0 +1,11 @@
+{
+  "note": "G10 M8, the reviewer's second program: padded and unpadded names in one program. Each jump follows the block written exactly like it, and is written with exactly the text that block receives: GOTO N0025 becomes GOTO N30 because N0025 became N30, not GOTO N0030, which would name a block the program does not have.",
+  "profile": "okuma-osp",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [{ "line": 1, "severity": "info" }],
+    "warnings": ["ncNumbering.renumber.referencesRewritten"],
+    "preflight": null
+  }
+}

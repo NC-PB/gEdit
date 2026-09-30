@@ -22,6 +22,24 @@ not what the column says it is:
   `fanuc-selection-primed`
 * the `F` of a block whose code is a threading cycle somewhere else stays out
   of the feed range (`fanuc-lathe-ambiguous`)
+
+And the turning dialects of M8 (WP8.7):
+
+* `okuma-turret` — four- and six-digit `T` words (the station is the middle pair of
+  `T010101`), a `T` inside a `G74` block that only switches the offset, an offset change
+  of the same station, the speed a post writes **before** it indexes the turret (it belongs
+  to the new tool), a dwell and a thread lead kept out of the feed range, and a driven tool
+  whose `SB=` speed is not the main spindle's
+* `sinumerik-tools` — `T1`, `T0` (no tool), `T="NAME"`, `T1=5` (the tool of spindle 1),
+  a message that names the tool, dwells kept out of the ranges and `LIMS=` / `S1=` kept out
+  of the speed range
+
+And the M8 NC review (G10), each with the program the review ran:
+
+* `sinumerik-tool-names` — `T="007"` is a tool name and `T2=7` tool number 7: two rows,
+  and the name keeps its zeros and its quotation marks
+* `sinumerik-feed-type` — `G96` makes the feed a feed per revolution on this control, and
+  after `G95` an `S` is revolutions per minute again
 """
 
 from __future__ import annotations
@@ -56,6 +74,12 @@ REQUIRED_CASES = [
     "lathe-offsets",
     "lathe-system-b",
     "lathe-turning",
+    # M8 (WP8.7): the turning dialects.
+    "okuma-turret",
+    "sinumerik-tools",
+    # The M8 NC review.
+    "sinumerik-feed-type",
+    "sinumerik-tool-names",
 ]
 
 
@@ -532,3 +556,97 @@ class TestLathe(unittest.TestCase):
         self.assertEqual(rows[0]["feed"], "0.3 /rev")
         # `G78` is the threading cycle of system B: its F is the lead, so T4 has no range.
         self.assertEqual(rows[1]["feed"], "")
+
+
+class TestTurningDialects(unittest.TestCase):
+    """Okuma OSP and Sinumerik turning (M8, WP8.7): stations, offsets and whose speed it is.
+
+    The stations and offsets come from the profile's tool rule; the feeds and speeds are the
+    same words scale-feed and scale-speed read, with the same exclusions: a dwell is no feed
+    and no speed, a clamp word and another spindle's speed are not the main spindle's `S`.
+    """
+
+    def case(self, name):
+        return next(case for case in helpers.script_cases("tool_list") if case.name == name)
+
+    def report(self, name):
+        case = self.case(name)
+        result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context_of(case))
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload, case.expected_json())
+        return payload
+
+    def rows(self, name):
+        return {row["tool"]: row for row in self.report(name)["rows"]}
+
+    def test_the_station_of_a_six_digit_t_word_is_its_middle_pair(self):
+        # `T010101` is nose-radius set 01, station 01, offset 01; `T001111` station 11.
+        rows = self.rows("okuma-turret")
+        self.assertEqual(list(rows), ["T1", "T2", "T7", "T11", "T12"])
+        self.assertEqual(rows["T11"]["offsets"], "11")
+
+    def test_a_t_word_inside_a_cycle_block_is_no_second_call(self):
+        # `G74 … T0203` switches the offset for the cycle's end point (`toolCall.ignore`).
+        self.assertEqual(self.rows("okuma-turret")["T2"]["calls"], 1)
+
+    def test_an_offset_change_of_the_same_station_is_one_row_with_both_offsets(self):
+        row = self.rows("okuma-turret")["T7"]
+        self.assertEqual((row["calls"], row["offsets"]), (2, "07, 08"))
+
+    def test_a_speed_written_before_the_turret_indexes_belongs_to_the_new_tool(self):
+        # `G97 S1500 M03` then `T0202`, the order the Okuma notes show: no axis moves in
+        # between, so the speed is the drill's, not the roughing tool's.
+        rows = self.rows("okuma-turret")
+        self.assertEqual(rows["T1"]["speed"], "180 surface")
+        self.assertEqual(rows["T2"]["speed"], "1500")
+
+    def test_the_same_holds_on_a_fanuc_lathe(self):
+        context = helpers.effective_context("fanuc-lathe")
+        program = (
+            "T0101\nG96 S200 M03\nG00 X50. Z2.\nG01 Z-20. F0.25\nG00 X100. Z100.\n"
+            "G97 S1200 M03\nT0303\nG00 X0. Z2.\nG01 Z-10. F0.1\nM30\n"
+        )
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        rows = {row["tool"]: row for row in result.json()["rows"]}
+        self.assertEqual((rows["T1"]["speed"], rows["T3"]["speed"]), ("200 surface", "1200"))
+
+    def test_a_dwell_is_in_no_range(self):
+        # Okuma `G04 F1` after the drill's feed; Sinumerik `G4 F1.5` and `G4 S2` after the
+        # roughing tool's.
+        self.assertEqual(self.rows("okuma-turret")["T2"]["feed"], "0.12 /rev")
+        row = self.rows("sinumerik-tools")["T1"]
+        self.assertEqual((row["feed"], row["speed"]), ("0.3 /rev", "180 surface"))
+
+    def test_driven_tool_and_numbered_spindle_speeds_are_not_the_main_spindle_speed(self):
+        self.assertEqual(self.rows("okuma-turret")["T11"]["speed"], "")
+        self.assertEqual(self.rows("sinumerik-tools")["T5"]["speed"], "")
+
+    def test_every_sinumerik_tool_form_is_read(self):
+        # `T0 D0` deselects, `T="…"` names, `T1=5` is tool 5 of spindle 1; a message that
+        # names a tool describes it.
+        rows = self.report("sinumerik-tools")["rows"]
+        self.assertEqual([row["tool"] for row in rows], ["T1", "FINISH_35", "T5", "PARTOFF"])
+        self.assertEqual(rows[0]["description"], "ROUGH")
+        self.assertNotIn("offsets", [column["key"] for column in self.report("sinumerik-tools")["columns"]])
+
+    def test_a_tool_name_made_of_digits_is_not_a_tool_number(self):
+        # With tool management `T="007"` names a tool and `T2=7` is tool 7: a name is never
+        # stripped of its zeros or merged with a number, and it keeps its quotation marks
+        # where it would otherwise read as the number it is not.
+        rows = self.report("sinumerik-tool-names")["rows"]
+        self.assertEqual([(row["tool"], row["calls"], row["line"]) for row in rows], [("T7", 1, 1), ('"007"', 1, 3)])
+        helpers.import_gedit_nc()
+        import tool_list
+
+        spec = tool_list.Spec(helpers.import_gedit_nc().compile_profile(helpers.load_profile("sinumerik")), {})
+        self.assertIsNone(tool_list.tool_number_of('"007"', spec))
+        self.assertEqual(tool_list.tool_label('"Rough_80"', spec), "Rough_80")
+        self.assertEqual(tool_list.tool_label('"007"', spec), '"007"')
+
+    def test_the_feed_type_decides_the_unit_of_a_range(self):
+        rows = self.rows("sinumerik-feed-type")
+        self.assertEqual(rows["ROUGH_80"]["feed"], "0.25-0.3 /rev")
+        self.assertEqual(rows["FINISH"]["speed"], "1800")
+        self.assertEqual(rows["DRILL_D8"]["feed"], "120")

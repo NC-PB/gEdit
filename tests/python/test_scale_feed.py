@@ -89,6 +89,38 @@ way the program and the profile are paired, because the flag sits on the **code*
   machine, where `G92` sets the coordinate system. Its `G92 X… Z… F1.5` is still a thread
 * `lathe-mill-tapping` — a milling program opened with the lathe profile, where `G74` pecks
   a face instead of cutting a left-hand thread. Its `F1.25` is still a pitch
+
+And the turning dialects of M8 (WP8.7):
+
+* `okuma-turning` — the `F` of `G04` is a dwell time, never scaled and not counted as a
+  feed; `G71` is a thread cycle here (not a roughing cycle), `G33` passes and the `G184` tap
+  keep their leads, and `F=V1` is a variable
+* `okuma-feed-limit-1um` / `-10um` / `-no-machine` — the Okuma unit systems scale every
+  number, with or without a point, so `F250` and `F234.56` are 0.25 and 0.23456 mm/rev
+  under 1 µm (`F25` and `F23.456` under 10 µm), and the largest feed compares those values;
+  with no machine chosen no Okuma feed has a value, and every limit is left out and said so
+* `sinumerik-turning` — `G4 F` is a dwell, `F=R1` a parameter, the `G33` lead is in `K`
+  and untouched, the feeds of `CYCLE85(…)` are arguments that are listed and left, and the
+  feed in force when `CYCLE840(…)` runs is left as written, because without a spindle
+  encoder that cycle taps with it (the M8 review corrected this golden: it had locked in
+  `F750` scaled to `F600`, a tap cut with the wrong lead)
+
+And the M8 NC review (G10), each with the program the review ran:
+
+* `sinumerik-variable-lead` / `-under-g33` — the `F` of `G34` and `G35` is the change of
+  the lead, never a feed, and the finding names the block's code even while `G33` is modal
+* `sinumerik-g63` — the `F` of a `G63` tap is the speed times the pitch
+* `sinumerik-cycle840-per-rev` — the same `CYCLE840` in `G95` with two decimals: `F1` stays
+* `sinumerik-mcall-tapping` — `MCALL CYCLE840(…)` repeats the tap after every move, so the
+  feed written between it and the `MCALL` that ends it stays too; `MCALL CYCLE81(…)` does
+  not tap and its feeds are scaled
+* `sinumerik-feed-type` — `G96` switches to feed per revolution on this control, and the
+  finding names the code in force
+* `sinumerik-cycle-feeds` / `-only` — the feeds of `CYCLE95` and `CYCLE952` are listed, and
+  the chamfer feeds `FRC=` and `FRCM=` are reported
+* `okuma-thread-after-g32` — the finding names `G71`, the block's own thread cycle, and not
+  the `G32` still in force
+* `okuma-feeds-of-their-own` — `FA=` and `FB=` are feeds under addresses of their own
 """
 
 from __future__ import annotations
@@ -143,6 +175,23 @@ REQUIRED_CASES = [
     "lathe-a-thread-as-b",
     "lathe-b-thread-no-clamp",
     "lathe-mill-tapping",
+    # M8 (WP8.7): the turning dialects, each a word a naive script would have scaled.
+    "okuma-turning",
+    "okuma-feed-limit-1um",
+    "okuma-feed-limit-10um",
+    "okuma-feed-limit-no-machine",
+    "sinumerik-turning",
+    # The M8 NC review: each the program the review ran, with its own input.
+    "okuma-feeds-of-their-own",
+    "okuma-thread-after-g32",
+    "sinumerik-cycle-feeds",
+    "sinumerik-cycle-feeds-only",
+    "sinumerik-cycle840-per-rev",
+    "sinumerik-feed-type",
+    "sinumerik-g63",
+    "sinumerik-mcall-tapping",
+    "sinumerik-variable-lead",
+    "sinumerik-variable-lead-under-g33",
 ]
 
 #: The addresses this script is allowed to rewrite. Everything else has to come back
@@ -1279,3 +1328,242 @@ class TestLathe(unittest.TestCase):
                 result = helpers.run_script(SCRIPT, stdin=program, context=context)
                 self.assertTrue(result.ok, result.stderr)
                 self.assertIn(expected, result.json()["text"].split("\n"))
+
+
+class TestTurningDialects(unittest.TestCase):
+    """Okuma OSP and Sinumerik turning (M8, WP8.7): the words a naive script would scale.
+
+    Each dialect has its own ways of writing a number that is not a feed rate — a dwell in
+    `F`, a thread lead in `F` on one control and in `K` on the other, a feed that is a
+    parameter, a cycle that carries its feeds as arguments — and a unit system that decides
+    what a written feed is worth. Every rule below is the database's or the profile's, never
+    a dialect name in the script; the cases say what that data makes of real-looking code.
+    """
+
+    def case(self, name):
+        return next(case for case in helpers.script_cases("scale_feed") if case.name == name)
+
+    def output(self, name):
+        """The golden of a case, re-checked against a live run."""
+        case = self.case(name)
+        result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context_of(case))
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], case.expected_text())
+        return payload
+
+    def line(self, name, number):
+        return self.output(name)["text"].split("\n")[number - 1]
+
+    def findings_on(self, name, number):
+        return [f for f in self.output(name)["findings"] if f["line"] == number]
+
+    def test_a_dwell_time_is_never_scaled_and_is_not_counted_as_a_feed(self):
+        # `fNotFeed`: the F of Okuma `G04` and of Sinumerik `G4` is the time the tool waits.
+        for name, number, text in (("okuma-turning", 15, "G04 F1"), ("sinumerik-turning", 10, "N70 G4 F1.5")):
+            with self.subTest(case=name):
+                self.assertEqual(self.line(name, number), text)
+                self.assertEqual(self.findings_on(name, number), [])
+                self.assertIn("1 dwell time left as written", self.output(name)["message"])
+        # Seven feed words on the Okuma program, not eight: the dwell is none of them.
+        self.assertIn("Scaled 3 of 7 feed rates", self.output("okuma-turning")["message"])
+
+    def test_okuma_g71_is_a_thread_cycle_and_its_lead_is_left(self):
+        # On a Fanuc lathe G71 is a roughing cycle whose F is an ordinary feed; here it cuts
+        # a thread and F2 is the lead (`pitchFeed` on the Okuma database).
+        self.assertEqual(
+            self.line("okuma-turning", 21), "G71 X27.55 Z-30 B60 D0.7 U0.1 H2.45 L2 F2 M23 M32 M73"
+        )
+        (finding,) = self.findings_on("okuma-turning", 21)
+        self.assertIn("thread pitch (G71)", finding["message"])
+        # A pass block that writes only X is still a pass of the G33 thread above it.
+        self.assertEqual(self.line("okuma-turning", 23), "X28.9")
+        self.assertIn("thread pitch (G184)", self.findings_on("okuma-turning", 43)[0]["message"])
+
+    def test_a_feed_written_as_a_variable_or_a_parameter_is_left(self):
+        for name, number, word in (("okuma-turning", 30, "F=V1"), ("sinumerik-turning", 13, "F=R1")):
+            with self.subTest(case=name):
+                self.assertIn(word, self.line(name, number))
+                (finding,) = self.findings_on(name, number)
+                self.assertEqual(finding["message"], "%s is not a plain number, so it is not scaled." % word)
+
+    def test_the_lead_of_a_sinumerik_thread_is_not_an_f_word(self):
+        # G33 writes its lead in K. Nothing in that block is a feed word, so nothing moves.
+        self.assertEqual(self.line("sinumerik-turning", 18), "N150 G33 Z-24 K1.5 SF=0")
+        self.assertEqual(self.findings_on("sinumerik-turning", 18), [])
+
+    def test_the_unit_system_decides_what_a_limit_compares(self):
+        """Every number is a count of the unit, point or not (syntax-okuma.md §3.3).
+
+        Under 1 µm `F250` and `F234.56` are 0.25 and 0.23456 mm/rev; under 10 µm `F25` and
+        `F23.456` are the same two feeds. A largest feed of 0.2 mm/rev clamps both, and the
+        clamp is written back in each word's own form, a point-less word point-less.
+        """
+        one = self.output("okuma-feed-limit-1um")["text"].split("\n")
+        self.assertEqual((one[10], one[13], one[14]), ("G95 G01 Z200 F200", "G01 X50000 Z-30000 F200.00", "X52000 F165"))
+        ten = self.output("okuma-feed-limit-10um")["text"].split("\n")
+        self.assertEqual((ten[10], ten[13], ten[14]), ("G95 G01 Z20 F20", "G01 X5000 Z-3000 F20.000", "X5200 F17"))
+        for name, machine in (("okuma-feed-limit-1um", "Lathe 3"), ("okuma-feed-limit-10um", "Lathe 4")):
+            with self.subTest(case=name):
+                message = self.output(name)["message"]
+                self.assertIn("2 clamped to a limit", message)
+                self.assertIn("Machine '%s'." % machine, message)
+                # G04 F200 waits 2 s under 1 µm, G04 F20 2 s under 10 µm; neither is a feed.
+                self.assertIn("1 dwell time left as written", message)
+
+    def test_with_no_machine_no_okuma_feed_has_a_value_and_no_limit_applies(self):
+        payload = self.output("okuma-feed-limit-no-machine")
+        lines = payload["text"].split("\n")
+        self.assertEqual((lines[10], lines[13], lines[14]), ("G95 G01 Z200 F275", "G01 X50000 Z-30000 F258.02", "X52000 F165"))
+        self.assertEqual([f["line"] for f in payload["findings"]], [11, 14, 15])
+        for finding in payload["findings"]:
+            self.assertEqual(finding["severity"], "warning")
+            self.assertIn("depends on the machine", finding["message"])
+        self.assertIn("3 scaled without a limit check", payload["message"])
+        self.assertIn("No machine: profile defaults assumed.", payload["message"])
+
+    def test_the_feeds_of_a_cycle_written_as_a_call_are_listed_and_left(self):
+        self.assertEqual(self.line("sinumerik-turning", 23), "N200 CYCLE85(5,0,2,-20,,0.5,80,200)")
+        messages = [f["message"] for f in self.findings_on("sinumerik-turning", 23)]
+        self.assertEqual(len(messages), 2)
+        self.assertIn("Argument 7 of CYCLE85 (FFR, feed on the way in) is 80", messages[0])
+        self.assertIn("Argument 8 of CYCLE85 (RFF, feed on the way out) is 200", messages[1])
+        self.assertIn("2 cycle feeds left unchanged", self.output("sinumerik-turning")["message"])
+
+    def test_the_feed_a_tapping_call_runs_with_is_left_as_written(self):
+        # CYCLE840 without a spindle encoder (ENC = 1) taps with the programmed F, which is
+        # the speed times the pitch: 500 rpm x 1.5 = F750. A call stands in a block of its
+        # own, so that F is on another line, and it is the one that must not move.
+        self.assertEqual(self.line("sinumerik-turning", 26), "N230 F750")
+        (finding,) = self.findings_on("sinumerik-turning", 26)
+        self.assertEqual(finding["severity"], "warning")
+        self.assertIn("F750 is the feed in force when CYCLE840 runs on line 27", finding["message"])
+        self.assertEqual(self.findings_on("sinumerik-turning", 27), [])
+        self.assertIn("1 left as the possible lead of a tapping cycle", self.output("sinumerik-turning")["message"])
+        # The same in feed per revolution, written with two decimals: `F1` is a 1 mm pitch.
+        payload = self.output("sinumerik-cycle840-per-rev")
+        self.assertEqual(payload["text"].split("\n")[1], "N390 F1")
+        self.assertEqual([f["line"] for f in payload["findings"]], [2])
+
+    def test_a_modal_tapping_call_protects_every_feed_until_it_ends(self):
+        payload = self.output("sinumerik-mcall-tapping")
+        lines = payload["text"].split("\n")
+        self.assertEqual((lines[4], lines[7]), ("N50 F500", "N80 X40 Y0 F520"))
+        self.assertIn("F520 is written while CYCLE840 (line 6) repeats after every move", payload["findings"][1]["message"])
+        # After `MCALL` on its own, and under a modal drilling cycle, feeds are feeds.
+        self.assertEqual((lines[9], lines[13], lines[16]), ("N100 G1 X60 F400", "N140 F96", "N170 X40 Y20 F80"))
+        self.assertEqual([f["line"] for f in payload["findings"]], [5, 8])
+
+    def test_a_call_whose_lead_is_its_own_argument_leaves_the_feed_in_force_alone(self):
+        # CYCLE84 (rigid tapping) and CYCLE99 (thread turning) take the lead from their own
+        # arguments: the feed before them is an ordinary feed and is scaled.
+        context = helpers.effective_context("sinumerik", params={"percent": 50})
+        program = (
+            "N10 G95 F0.2\nN20 CYCLE84(5,0,2,-15,,0.5,3,,1.5,,500,500)\n"
+            "N30 F0.4\nN40 CYCLE99(0,40,-30,40,2,1,0.92,0.05,30,0,5,1,1.5,1300101,1)\n"
+        )
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], "N10 G95 F0.1\nN20 CYCLE84(5,0,2,-15,,0.5,3,,1.5,,500,500)\nN30 F0.2\nN40 CYCLE99(0,40,-30,40,2,1,0.92,0.05,30,0,5,1,1.5,1300101,1)\n")
+        self.assertEqual(payload["findings"], [])
+
+    def test_the_lead_carriers_are_found_before_the_first_word_is_scaled(self):
+        helpers.import_gedit_nc()
+        import gedit_nc
+        import scale_feed
+
+        profile = helpers.load_profile("sinumerik")
+        cp = gedit_nc.compile_profile(profile)
+        codes = helpers.load_codes(profile)
+        params = scale_feed.Params({"percent": 80}, profile)
+        lines = ["F100", "G4 F2", "CYCLE840(5,0,2,-15,,0,3,3,1,,1)", "F=R1", "CYCLE840(5,0,2,-15,,0,3,3,1,,1)"]
+        carriers = scale_feed.lead_carriers(lines, cp, codes, params, None, 1)
+        # The dwell's F is a time and never the feed in force; `F=R1` is no number to keep.
+        self.assertEqual(carriers, {(0, 0): ("CYCLE840", 3, "in-force")})
+        # The walk is skipped only when no such call is named anywhere, and the name is
+        # compared as the control reads it, whatever its case.
+        lower = ["f100", "cycle840(5,0,2,-15,,0,3,3,1,,1)"]
+        self.assertEqual(scale_feed.lead_carriers(lower, cp, codes, params, None, 1), {(0, 0): ("CYCLE840", 2, "in-force")})
+        rigid = ["F100", "CYCLE84(5,0,2,-15,,0.5,3,,1.5,,500,500)"]
+        self.assertEqual(scale_feed.lead_carriers(rigid, cp, codes, params, None, 1), {})
+        # A profile whose tokenizer writes no calls pays nothing.
+        fanuc = helpers.load_profile("fanuc-gcode")
+        self.assertEqual(
+            scale_feed.lead_carriers(["F100", "G84 Z-10"], gedit_nc.compile_profile(fanuc), helpers.load_codes(fanuc), scale_feed.Params({}, fanuc), None, 1),
+            {},
+        )
+
+    def test_the_lead_change_of_a_variable_lead_thread_is_never_scaled(self):
+        payload = self.output("sinumerik-variable-lead")
+        self.assertEqual(payload["text"], self.case("sinumerik-variable-lead").input_text())
+        self.assertEqual(
+            [f["message"][:40] for f in payload["findings"]],
+            ["F0.05 is a thread pitch (G34), not a fee", "F0.04 is a thread pitch (G35), not a fee"],
+        )
+        # With G33 still modal the finding names the block's own code.
+        messages = [f["message"] for f in self.output("sinumerik-variable-lead-under-g33")["findings"]]
+        self.assertIn("(G34)", messages[0])
+        self.assertIn("(G35)", messages[1])
+
+    def test_the_feed_of_a_g63_tap_is_left(self):
+        payload = self.output("sinumerik-g63")
+        self.assertEqual(payload["text"].split("\n")[2], "N190 G63 Z-20 F500 S400 M3")
+        self.assertIn("F500 is a thread pitch (G63)", payload["findings"][0]["message"])
+
+    def test_a_finding_names_the_block_code_before_the_modal_one(self):
+        (first, second) = self.output("okuma-thread-after-g32")["findings"]
+        self.assertIn("(G32)", first["message"])
+        self.assertIn("(G71)", second["message"])
+
+    def test_on_this_control_g96_is_a_feed_per_revolution(self):
+        payload = self.output("sinumerik-feed-type")
+        self.assertEqual(payload["text"].split("\n")[3], "N40 G1 Z-20 F96")
+        self.assertEqual(
+            [f["message"] for f in payload["findings"]][:2],
+            ["F0.25 is a feed per revolution (G96), so it is not scaled.", "F0.3 is a feed per revolution (G96), so it is not scaled."],
+        )
+
+    def test_the_turning_cycles_list_their_feeds(self):
+        payload = self.output("sinumerik-cycle-feeds-only")
+        self.assertEqual(payload["message"], "No feed rates found; 5 cycle feeds left unchanged.")
+        self.assertEqual([f["line"] for f in payload["findings"]], [1, 1, 1, 2, 2])
+
+    def test_the_finishing_feed_at_the_end_of_a_contour_call_is_listed_too(self):
+        # CYCLE952 written out in full: argument 34 is the feed of the finishing cut when
+        # one call roughs and finishes. It is a cycle feed like arguments 5 and 6.
+        context = helpers.effective_context("sinumerik", params={"percent": 80})
+        call = (
+            'N30 CYCLE952("CONT_3","","",2101311,0.3,0.15,0,2,1,1,0.2,0.1,0.2,0,1,1,0,0,0,'
+            "0,0,0,0,1,0,0,1,0,100,200,1,0,0,0.12)"
+        )
+        program = "N10 G95\nN20 CYCLE62(\"KONTUR\",1,,)\n%s\n" % call
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], program)
+        messages = [f["message"] for f in payload["findings"] if f["line"] == 3]
+        self.assertEqual([m.split(" (")[0] for m in messages], ["Argument 5 of CYCLE952", "Argument 6 of CYCLE952", "Argument 34 of CYCLE952"])
+        self.assertIn("(_FS, feed for the finishing cut when one call roughs and finishes) is 0.12", messages[2])
+        self.assertIn("3 cycle feeds left unchanged", payload["message"])
+
+    def test_a_feed_under_an_address_of_its_own_is_reported(self):
+        payload = self.output("sinumerik-cycle-feeds")
+        self.assertIn("2 feeds under addresses of their own left as written (FRC=, FRCM=)", payload["message"])
+        self.assertTrue(payload["findings"][-1]["message"].startswith("FRCM=0.08 is a feed under an address of its own"))
+        okuma = self.output("okuma-feeds-of-their-own")
+        self.assertEqual(okuma["text"].split("\n")[:2], ["G85 NAT01 D4 F0.24", "$ G84 XA=60 DA=2 FA=0.2 FB=0.15"])
+        self.assertIn("(FA=, FB=)", okuma["message"])
+
+    def test_a_factor_of_the_feed_is_not_listed_as_a_feed(self):
+        # FRF multiplies the feed for the first peck; it follows the feed it multiplies.
+        helpers.import_gedit_nc()
+        import scale_feed  # the bundled folder is on sys.path now
+
+        self.assertIsNone(scale_feed.CALL_FEED_LABEL.search("Feed factor for the first peck"))
+        self.assertIsNotNone(scale_feed.CALL_FEED_LABEL.search("Feed on the way in"))
+        self.assertEqual(
+            scale_feed.call_arguments('5,0,2,-30,,-8,"A,B",AC(1,2),[R1,2]'),
+            ["5", "0", "2", "-30", "", "-8", '"A,B"', "AC(1,2)", "[R1,2]"],
+        )
+        self.assertEqual(scale_feed.call_arguments(None), [])

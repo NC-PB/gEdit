@@ -8,12 +8,16 @@ not ask to change.
 Built with Tauri, SvelteKit and Monaco. It works offline — the editor is bundled with the
 app and nothing is loaded from the network.
 
-Three dialects:
+Five dialects:
 
-- **Fanuc (ISO) mill** — `.nc`, `.tap`, `.cnc`, `.eia`, `.iso`, `.min`, `.ncc`, `.ptp`, `.txt`
+- **Fanuc (ISO) mill** — `.nc`, `.tap`, `.cnc`, `.eia`, `.iso`, `.ncc`, `.ptp`, `.txt`
 - **Fanuc (ISO) turning** — the same extensions; turret tool changes, the lathe meanings of
   the cycle and threading codes, `U`/`W` incremental and `X` as a diameter
 - **Heidenhain Klartext** — `.h`
+- **Okuma OSP turning** — `.min`, `.sub`, `.ssb`; sequence names, four- and six-digit turret
+  tool words, `CALL`/`RTS`, and the machine's unit system, which scales every number
+- **Sinumerik 840D turning** — `.mpf`, `.spf`; `;` comments and strings, labels, cycle
+  calls, tools by number or by name, and diameter programming on from the start
 
 Next to the dialect sits the **machine configuration**: how one particular control reads
 what the dialect describes — whether a number without a decimal point means millimetres or
@@ -105,8 +109,9 @@ mailed you. The full picture is in
 ### What gEdit does not do
 
 No backplot, simulation or 3D display. No DNC or machine communication. No program
-management. Fanuc mill, Fanuc turning and Klartext — Okuma OSP and Sinumerik are planned,
-and so is multi-channel support for twin-turret machines. Python
+management. Fanuc mill, Fanuc turning, Klartext, and Okuma OSP and Sinumerik for turning —
+milling on those two controls is not covered yet, and multi-channel support for
+twin-turret machines is planned. Python
 is needed **only** for the script features; everything else works without it. The
 [user guide](docs/user/README.md) lists the limits in full.
 

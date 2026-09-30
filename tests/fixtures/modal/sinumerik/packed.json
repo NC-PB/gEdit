@@ -1,0 +1,21 @@
+{
+  "about": "Packed words, lower case and every form of the tool word: T0 deselects and is no tool change, T1=5 and T2=\"PARTOFF\" are the tools of numbered spindles, and S1= and S2= are those spindles' speeds, not the plain S.",
+  "input": "../../nc/sinumerik/s04-packed.MPF",
+  "states": [
+    {
+      "line": 3,
+      "after": { "groups": { "plane": "G18", "distance": "G90", "feedmode": "G95", "diametermode": "DIAMON" }, "diameter": "on" }
+    },
+    { "line": 6, "after": { "tool": "1", "block": { "toolChange": true } } },
+    { "line": 7, "after": { "speedUnit": "surface", "speed": "180", "speedLimit": "2500" } },
+    { "line": 10, "after": { "feed": "0.3" } },
+    { "line": 12, "after": { "tool": "1", "block": { "toolChange": false } } },
+    { "line": 14, "after": { "tool": "12", "block": { "toolChange": true } } },
+    { "line": 15, "about": "Lower case reads the same.", "after": { "speed": "240", "speedLimit": "3000", "speedUnit": "surface" } },
+    { "line": 21, "after": { "tool": "5", "block": { "toolChange": true } } },
+    { "line": 22, "after": { "speed": "240" } },
+    { "line": 27, "after": { "tool": "\"PARTOFF\"", "block": { "toolChange": true } } },
+    { "line": 28, "after": { "speed": "240", "feed": "0.1" } },
+    { "line": 33, "after": { "groups": { "spindle": "M5" } } }
+  ]
+}

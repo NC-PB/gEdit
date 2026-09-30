@@ -144,7 +144,14 @@ describe('resolveCodeDbs', () => {
       problems.push(`${dialect}: ${problem.path}: ${problem.message}`),
     );
     expect(problems).toEqual([]);
-    expect(Object.keys(dbs).sort()).toEqual(['fanuc', 'fanuc-lathe', 'fanuc-lathe-b', 'heidenhain']);
+    expect(Object.keys(dbs).sort()).toEqual([
+      'fanuc',
+      'fanuc-lathe',
+      'fanuc-lathe-b',
+      'heidenhain',
+      'okuma',
+      'sinumerik',
+    ]);
   });
 
   it('gives the lathe databases the mill entries their files do not repeat', () => {
@@ -218,7 +225,7 @@ describe('modalGroupsOf', () => {
     expect(groups).not.toContain(undefined);
     // A non-modal entry's group is not a modal group, and neither is a missing dialect.
     expect(groups).not.toContain('nonmodal');
-    expect(modalGroupsOf(BUILTIN_CODE_DB_JSON as Record<string, unknown>, 'okuma')).toEqual([]);
+    expect(modalGroupsOf(BUILTIN_CODE_DB_JSON as Record<string, unknown>, 'no-such-dialect')).toEqual([]);
   });
 
   it('stops at a cycle instead of looping', () => {

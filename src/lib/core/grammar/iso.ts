@@ -22,6 +22,7 @@ import type { CodeDb } from '$lib/core/codes/types';
 import type { Profile } from '$lib/core/profiles/types';
 import type { Role } from './roles';
 import {
+  FUNCTION_NAME,
   addressNames,
   alternation,
   blockSkipPattern,
@@ -99,9 +100,12 @@ export function isoRules(p: Profile, db: CodeDb): GrammarRule[] {
   const gap = packed ? '\\s*' : '';
 
   // The value of a word: a number, or the sign in front of a variable or an expression,
-  // so `X#101` and `Z-[#1+2]` keep the role of their address (§3.8 rule 19).
+  // so `X#101` and `Z-[#1+2]` keep the role of their address (§3.8 rule 19). The blanks
+  // behind the sign belong to the sign: written as two blank runs around an optional sign,
+  // a word followed by a long run of blanks could split them in every possible way before
+  // giving up, and the line took over half a second to paint (G8 M8).
   const valueLead = `[${escapeClass(`${sigil ?? ''}[`)}]`;
-  const value = `(?:${gap}${number}|${gap}[+-]?${gap}(?=${valueLead}))`;
+  const value = `(?:${gap}${number}|${gap}(?:[+-]${gap})?(?=${valueLead}))`;
 
   const address = (names: readonly string[], role: Role): void => {
     const pattern = namesPattern(names);
@@ -134,10 +138,11 @@ export function isoRules(p: Profile, db: CodeDb): GrammarRule[] {
   }
   if (hasColonProgram(p)) rules.push([lineStart('\\s*:\\s*\\d+'), 'programMarker']);
 
-  // 7 keywords, before every single-letter address. 8 a function call before a bracket.
+  // 7 keywords, before every single-letter address. 8 a function call before a bracket,
+  // bounded in length so a long run of letters stays linear (`FUNCTION_NAME`).
   const keywords = alternation(orderedKeywords(p).map(keywordPattern));
   if (keywords !== null) rules.push([`${keywords}(?![A-Za-z])`, 'keyword']);
-  rules.push(['[A-Za-z]{2,}(?=\\s*\\[)', 'keyword']);
+  rules.push([FUNCTION_NAME, 'keyword']);
 
   // 9 block number, 10 and 11 the code letters
   if (blockNumber !== null) rules.push([blockNumber, 'blockNumber']);

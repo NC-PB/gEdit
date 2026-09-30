@@ -1,0 +1,13 @@
+{
+  "profile": "sinumerik",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":2,"text":"A PLAIN TEXT FILE: ONLY THE CONTENT DECIDES THE DIALECT"},
+    {"kind":"comment","line":5,"text":"OD FINISH"},
+    {"kind":"tool","line":6,"text":"FINISH_35 — OD FINISH","tool":"\"FINISH_35\"","endLine":12},
+      {"kind":"comment","line":12,"text":"CENTRE HOLE D10"},
+    {"kind":"tool","line":13,"text":"DRILL_D10 — CENTRE HOLE D10","tool":"\"DRILL_D10\"","endLine":21},
+      {"kind":"subprogram-call","line":17,"text":"CYCLE83"},
+      {"kind":"end","line":20,"text":"M30"}
+  ]
+}

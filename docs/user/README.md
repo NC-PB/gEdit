@@ -12,7 +12,7 @@ the machine, not for the person who builds the editor — the build and design n
 | Page | What is in it |
 |---|---|
 | This page | The window, files, never losing work, navigation, code help, comparing, settings, and the limits |
-| [dialects.md](dialects.md) | Dialect profiles: what they decide, which three ship, how the dialect is picked |
+| [dialects.md](dialects.md) | Dialect profiles: what they decide, which five ship, how the dialect is picked |
 | [machines.md](machines.md) | Machine configurations: what `X50` is worth on **your** control, and how to tell gEdit |
 | [transformations.md](transformations.md) | The NC tab: renumbering and the five cleanups |
 | [scripts.md](scripts.md) | Running Python scripts, and how to write one |
@@ -438,9 +438,11 @@ Being clear about this saves disappointment on the shop floor.
   know where the tool is.
 - **No machine communication.** No DNC, no serial, no FTP, no drip feed.
 - **No program management.** No library, no job list, no PDM or ERP link.
-- **Three dialects: Fanuc mill, Fanuc lathe and Heidenhain Klartext.** Sinumerik and Okuma
-  are planned but not here yet; their programs open with the profile that fits best, which
-  gets the codes wrong — see [dialects.md](dialects.md).
+- **Five dialects: Fanuc mill, Fanuc lathe, Heidenhain Klartext, and Okuma OSP and
+  Sinumerik 840D for turning.** Milling on an Okuma or a Siemens control is not covered: such
+  a program opens with the turning profile, which gets its tool changes and some of its
+  codes wrong — see [dialects.md](dialects.md#milling-on-okuma-and-sinumerik). A program
+  for any other control opens with the profile that fits best.
 - **gEdit does not know your machine unless you tell it.** Whether `X50` is 50 mm or
   0.050 mm, which G-code system a lathe uses, what is modal at power-on: all of that is a
   machine setting, and with no machine configured gEdit says "assumed" and refuses to

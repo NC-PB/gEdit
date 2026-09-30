@@ -28,6 +28,31 @@ And the three WP5.4 added:
   and left standing here
 * a block whose code is a threading cycle somewhere else is named when the
   speed it runs at was changed (`fanuc-lathe-threading`)
+
+And the turning dialects of M8 (WP8.7), each a word a naive script would have scaled:
+
+* `okuma-live-tool` — `SB=` is the driven tool's speed and never the main spindle's: it
+  is reported and left, next to a `G50 S` clamp and a speed from a variable
+* `sinumerik-spindles` — `LIMS=` is a clamp wherever it stands (the profile's
+  `addresses.speedLimitWords`), `G26 S` is one by its code and so is the `S3=` of a `G26`
+  block, `S3=` elsewhere names spindle 3 by its number, the `S` of `G4 S2` counts
+  revolutions of a dwell, and the start angle `SF=` of a thread is no speed at all; only
+  the plain `S` words move
+* `sinumerik-speed-limits-all` — with the option set, both kinds of clamp are scaled
+
+And the M8 NC review (G10), each a program the review ran:
+
+* `sinumerik-g63` — tapping with a compensating chuck: the `S` of a `G63` block is scaled
+  and the block is named for a check by hand, because its `F` is the speed times the pitch
+* `sinumerik-feed-type` — on this control `G94`, `G95`, `G96` and `G97` are one group: after
+  `G95` the `S1800` is revolutions again, and a surface speed names the code in force
+* `sinumerik-limits` — `G25 S` is a lower limit, and in a `G26` block every speed word is a
+  limit, the ones for spindles 2 and 3 included; `G26 X… Z…` limits the working area
+* `sinumerik-master-spindle` / `-all` — after `SETMS(3)` a plain `S` drives spindle 3:
+  reported and left, or scaled when the run is asked to scale other spindles
+* `sinumerik-dwell-and-angle` — `G4 S2=10` waits ten turns of spindle 2, and `SF=0` is
+  a start angle, so neither is a speed
+* `sinumerik-indexed-words` / `-all` — `LIMS[2]=` and `S[2]=` name a spindle by an index
 """
 
 from __future__ import annotations
@@ -69,6 +94,19 @@ REQUIRED_CASES = [
     # be raised by 50 % with no finding at all, which is what lets a spindle run away as
     # the diameter falls under G96.
     "lathe-a-clamp-as-b",
+    # M8 (WP8.7): the turning dialects.
+    "okuma-live-tool",
+    "sinumerik-spindles",
+    "sinumerik-speed-limits-all",
+    # The M8 NC review: each the program the review ran, with its own input.
+    "sinumerik-dwell-and-angle",
+    "sinumerik-feed-type",
+    "sinumerik-g63",
+    "sinumerik-indexed-words",
+    "sinumerik-indexed-words-all",
+    "sinumerik-limits",
+    "sinumerik-master-spindle",
+    "sinumerik-master-spindle-all",
 ]
 
 #: The address this script is allowed to rewrite; everything else comes back token for
@@ -127,25 +165,47 @@ def shape_of(lines, cp):
     Two programs with the same shape differ **only** inside the values of spindle words:
     same line count, same tokens in the same order, same kinds and addresses, and every
     comment, string, block number, skip mark and space identical character for character.
+    A clamp written as a word of its own (the profile's `addresses.speedLimitWords`, M8) is
+    a spindle value the script may scale when it is asked to scale the limits.
     """
     gedit_nc = helpers.import_gedit_nc()
+    limits = (cp.profile.get("addresses") or {}).get("speedLimitWords") or []
+    scaled = set(SCALED_ADDRESSES) | {word.upper() for word in limits if isinstance(word, str)}
     out = []
     state = None
     for line in lines:
         tokens, state = gedit_nc.tokenize_line(line, cp, state)
-        out.append(
-            [
+        row = []
+        for i, token in enumerate(tokens):
+            row.append(
                 (
                     token.kind,
                     token.address,
-                    "<value>"
-                    if token.kind == "word" and token.address in SCALED_ADDRESSES
-                    else token.text,
+                    "<value>" if token.kind == "word" and scalable(tokens, i, scaled) else token.text,
                 )
-                for token in tokens
-            ]
-        )
+            )
+        out.append(row)
     return out
+
+
+def scalable(tokens, i, scaled):
+    """Whether the word at ``i`` is one the script may rewrite when every option is on.
+
+    The spindle word, a clamp word, another spindle's word (`S3=`, `SB=`) and the number of
+    an indexed one (`S[2]=300`, `LIMS[2]=1800`), which the tokenizer hands over as a word
+    without an address straight after the `=`.
+    """
+    token = tokens[i]
+    address = (token.address or "").upper()
+    if address in scaled:
+        return True
+    if address.startswith("S") and "=" in token.text and len(address) >= 2:
+        rest = address[1:]
+        return rest.isdigit() or (len(rest) == 1 and rest.isalpha())
+    if address == "":
+        before = [t for t in tokens[:i] if t.kind != "whitespace"]
+        return len(before) >= 2 and before[-1].text.strip() == "=" and "[" in before[-2].text
+    return False
 
 
 class TestGoldenCases(unittest.TestCase):
@@ -401,6 +461,7 @@ class TestHeader(unittest.TestCase):
         "onlyBelow",
         "surfaceSpeed",
         "speedLimits",
+        "otherSpindles",
     ]
 
     def header_source(self):
@@ -889,3 +950,196 @@ class TestLathe(unittest.TestCase):
                 result = helpers.run_script(SCRIPT, stdin=program, context=context)
                 self.assertTrue(result.ok, result.stderr)
                 self.assertEqual(result.json()["text"], expected + "\n")
+
+
+class TestTurningDialects(unittest.TestCase):
+    """Okuma OSP and Sinumerik turning (M8, WP8.7): which S-like words are not the speed.
+
+    Only the plain `S` word is the main spindle's speed. A clamp may be a word of its own
+    (`LIMS=`, the profile's `addresses.speedLimitWords`), another spindle is named by its
+    number (`S3=`) or by an address of its own (`SB=`), and a dwell may count revolutions in
+    `S` (`G4 S2`). None of these is scaled as a speed; the clamp follows the limit option.
+    """
+
+    def case(self, name):
+        return next(case for case in helpers.script_cases("scale_speed") if case.name == name)
+
+    def output(self, name):
+        case = self.case(name)
+        result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context_of(case))
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], case.expected_text())
+        return payload
+
+    def line(self, name, number):
+        return self.output(name)["text"].split("\n")[number - 1]
+
+    def findings_on(self, name, number):
+        return [f for f in self.output(name)["findings"] if f["line"] == number]
+
+    def test_a_driven_tool_speed_is_reported_and_left(self):
+        self.assertEqual(self.line("okuma-live-tool", 25), "SB=2000 M13")
+        (finding,) = self.findings_on("okuma-live-tool", 25)
+        self.assertIn("SB=2000 is the speed of a spindle with an address of its own", finding["message"])
+        self.assertIn("Also scale other spindles", finding["message"])
+        self.assertIn("(SB=)", self.output("okuma-live-tool")["message"])
+        # The main spindle's speeds of the same program are scaled.
+        self.assertEqual(self.line("okuma-live-tool", 15), "G97 S1650 M03")
+
+    def test_a_spindle_named_by_its_number_is_reported_and_left(self):
+        self.assertEqual(self.line("sinumerik-spindles", 20), "N170 S3=2400 M3=3")
+        (finding,) = self.findings_on("sinumerik-spindles", 20)
+        self.assertIn("S3=2400 is the speed of spindle 3, named by its number", finding["message"])
+
+    def test_in_a_limit_block_another_spindle_word_is_a_limit_of_that_spindle(self):
+        # `G26 S3=2500` is the top speed of spindle 3, not a speed to change by hand.
+        self.assertEqual(self.line("sinumerik-spindles", 25), "N220 G26 S3=2500")
+        (finding,) = self.findings_on("sinumerik-spindles", 25)
+        self.assertEqual(finding["message"], "S3=2500 is the speed limit of spindle 3 (G26), so it is not scaled.")
+        lines = self.output("sinumerik-limits")["text"].split("\n")
+        self.assertEqual(lines[:3], ["N20 G25 S50", "N30 G26 S3000 S2=2000 S3=4000", "N120 G26 X300 Z200"])
+        messages = [f["message"] for f in self.output("sinumerik-limits")["findings"]]
+        self.assertEqual(
+            messages,
+            [
+                "S50 is a spindle speed limit (G25), so it is not scaled.",
+                "S3000 is a spindle speed limit (G26), so it is not scaled.",
+                "S2=2000 is the speed limit of spindle 2 (G26), so it is not scaled.",
+                "S3=4000 is the speed limit of spindle 3 (G26), so it is not scaled.",
+            ],
+        )
+        self.assertEqual(self.output("sinumerik-limits")["message"], "No spindle speed was changed; 4 left as a speed limit.")
+
+    def test_the_lower_limit_is_scaled_with_the_limit_option_only(self):
+        context = helpers.effective_context("sinumerik", params={"percent": 80, "speedLimits": True})
+        result = helpers.run_script(SCRIPT, stdin="N20 G25 S50\nN30 G26 S3000 S2=2000\n", context=context)
+        self.assertTrue(result.ok, result.stderr)
+        self.assertEqual(result.json()["text"], "N20 G25 S40\nN30 G26 S2400 S2=1600\n")
+
+    def test_a_start_angle_and_a_dwell_of_another_spindle_are_no_speed(self):
+        payload = self.output("sinumerik-dwell-and-angle")
+        lines = payload["text"].split("\n")
+        self.assertEqual((lines[2], lines[4]), ("N120 G33 Z-24 K1.5 SF=0", "N230 G4 S2=10"))
+        self.assertEqual([f["line"] for f in payload["findings"]], [3, 6])
+        self.assertNotIn("SF", json.dumps([payload["message"], payload["findings"]]))
+        self.assertIn("1 dwell in spindle revolutions left as written", payload["message"])
+
+    def test_after_setms_a_plain_s_drives_the_spindle_it_chose(self):
+        payload = self.output("sinumerik-master-spindle")
+        lines = payload["text"].split("\n")
+        # `SETMS(3)` on line 33: the tap's S500 is spindle 3's, so it is left and named.
+        self.assertEqual(lines[33], "N300 S500 M3")
+        (finding,) = [f for f in payload["findings"] if f["line"] == 34]
+        self.assertIn("S500 drives spindle 3, which SETMS(3) on line 33 made the master spindle", finding["message"])
+        self.assertIn("S after SETMS(3)", payload["message"])
+        # The main spindle's S1600 before it is scaled.
+        self.assertEqual(lines[8], "N50 G97 S1280 M3")
+        # Asked to scale other spindles, the run scales it and `S3=2400` too.
+        lines = self.output("sinumerik-master-spindle-all")["text"].split("\n")
+        self.assertEqual((lines[20], lines[33]), ("N170 S3=1920 M3=3", "N300 S400 M3"))
+
+    def test_setms_on_its_own_goes_back_to_the_configured_master_spindle(self):
+        context = helpers.effective_context("sinumerik", params={"percent": 50})
+        program = "N10 SETMS(2)\nN20 S400 M3\nN30 SETMS\nN40 S1000 M3\nN50 SETMS(4)\nN60 SETMS()\nN70 S600 M3\nN80 S0=800\n"
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(
+            payload["text"],
+            "N10 SETMS(2)\nN20 S400 M3\nN30 SETMS\nN40 S500 M3\nN50 SETMS(4)\nN60 SETMS()\nN70 S300 M3\nN80 S0=400\n",
+        )
+        self.assertEqual([f["line"] for f in payload["findings"]], [2])
+
+    def test_a_selection_below_setms_inherits_the_master_spindle(self):
+        context = helpers.effective_context(
+            "sinumerik",
+            params={"percent": 50},
+            input={"scope": "selection", "startLine": 3, "endLine": 3, "precedingLines": ["N10 SETMS(3)", "N20 G0 X10"]},
+        )
+        result = helpers.run_script(SCRIPT, stdin="N30 S800 M3\n", context=context)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], "N30 S800 M3\n")
+        self.assertIn("spindle 3 as the master spindle (SETMS(3))", payload["findings"][0]["message"])
+
+    def test_a_spindle_index_names_the_spindle_of_a_limit_or_a_speed(self):
+        messages = [f["message"] for f in self.output("sinumerik-indexed-words")["findings"]]
+        self.assertIn("LIMS[2]=1800 is the speed limit of spindle 2, so it is not scaled.", messages)
+        self.assertIn("LIMS[1]=2500 is the speed limit of spindle 1, so it is not scaled.", messages)
+        self.assertTrue(any(m.startswith("S[2]=300 is the speed of spindle 2") for m in messages))
+        lines = self.output("sinumerik-indexed-words-all")["text"].split("\n")
+        self.assertEqual(lines[:3], ["N40 LIMS=2240 LIMS[2]=1440", "N100 G96 S144 LIMS[1]=2000", "N110 S[2]=240 M[2]=3"])
+
+    def test_the_speed_of_a_g63_tap_is_scaled_and_the_block_named(self):
+        payload = self.output("sinumerik-g63")
+        self.assertEqual(payload["text"].split("\n")[2], "N190 G63 Z-20 F500 S320 M3")
+        (finding,) = payload["findings"]
+        self.assertEqual(finding["severity"], "warning")
+        self.assertIn("thread block (G63)", finding["message"])
+
+    def test_on_this_control_the_feed_type_decides_whether_s_is_a_cutting_speed(self):
+        # G96 and G97 belong to the feed type: after `G95` the S1800 is revolutions again,
+        # which is what a run that leaves surface speeds alone has to see.
+        payload = self.output("sinumerik-feed-type")
+        lines = payload["text"].split("\n")
+        self.assertEqual((lines[2], lines[11]), ("N30 S1600 M3", "N150 S1440"))
+        self.assertEqual(
+            [f["message"] for f in payload["findings"] if "surface" in f["message"]],
+            ["S200 is a surface speed (G96), so it is not scaled.", "S250 is a surface speed (G96), so it is not scaled."],
+        )
+        context = helpers.effective_context("sinumerik", params={"percent": 50, "surfaceSpeed": "no"})
+        result = helpers.run_script(SCRIPT, stdin="N10 G961 S200 M4\nN20 G971 S1200\n", context=context)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], "N10 G961 S200 M4\nN20 G971 S600\n")
+        self.assertEqual(payload["findings"][0]["message"], "S200 is a surface speed (G961), so it is not scaled.")
+
+    def test_the_speeds_of_a_cycle_written_as_a_call_are_listed_and_left(self):
+        payload = self.output("sinumerik-master-spindle")
+        rows = [f["message"] for f in payload["findings"] if f["line"] == 36]
+        self.assertEqual(len(rows), 2)
+        self.assertIn("Argument 11 of CYCLE84 (SST, spindle speed while tapping) is 500", rows[0])
+        self.assertIn("6 cycle speeds left unchanged", payload["message"])
+
+    def test_lims_is_a_clamp_that_only_the_limit_option_scales(self):
+        self.assertEqual(self.line("sinumerik-spindles", 7), "N40 G96 S220 LIMS=2800 M4")
+        messages = [f["message"] for f in self.findings_on("sinumerik-spindles", 7)]
+        self.assertEqual(messages, ["LIMS=2800 is a spindle speed limit, so it is not scaled."])
+        self.assertEqual(self.line("sinumerik-speed-limits-all", 7), "N40 G96 S220 LIMS=3080 M4")
+        self.assertEqual(self.line("sinumerik-speed-limits-all", 5), "N20 G26 S3300")
+
+    def test_the_s_of_a_dwell_counts_revolutions_and_is_left(self):
+        self.assertEqual(self.line("sinumerik-spindles", 10), "N70 G4 S2")
+        self.assertEqual(self.findings_on("sinumerik-spindles", 10), [])
+        self.assertIn(
+            "1 dwell in spindle revolutions left as written", self.output("sinumerik-spindles")["message"]
+        )
+
+    def test_a_longer_name_that_starts_like_the_spindle_is_none_of_its_business(self):
+        # `SPOS=` positions the spindle and `SPEED` could be a variable: neither is the
+        # spindle's address extended by a number or a letter, so neither is reported.
+        context = helpers.effective_context("sinumerik", params={"percent": 110})
+        program = "N10 SPOS=0\nN20 SPEED=1200\nN30 S1000 M3\n"
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], "N10 SPOS=0\nN20 SPEED=1200\nN30 S1100 M3\n")
+        self.assertEqual(payload["findings"], [])
+
+    def test_a_thread_after_another_spindle_speed_is_not_blamed_on_the_main_spindle(self):
+        # The driven tool taps at its own speed (`SB=500` with `M13`); the main spindle's
+        # scaled S1500 is not the speed that thread is cut at, so no warning says it is.
+        context = helpers.effective_context("okuma-osp", params={"percent": 110})
+        program = "G97 S1500 M03\nG00 X50 Z5\nM05\nM110\nSB=500 M13\nG184 X50 Z-10 C0 K3 F750 Q6\nG180\n"
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertIn("G97 S1650 M03", payload["text"])
+        self.assertEqual([f["line"] for f in payload["findings"]], [5])
+        self.assertNotIn("thread block", payload["message"])
+        # The same tap straight after the scaled main-spindle speed is reported.
+        program = "G97 S1500 M03\nG00 X50 Z5\nG184 X50 Z-10 C0 K3 F750 Q6\nG180\n"
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        self.assertIn("1 thread block to check by hand", result.json()["message"])

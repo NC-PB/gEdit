@@ -1,0 +1,10 @@
+{
+  "message": "No feed rate was changed; 1 left as the possible lead of a tapping cycle. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 2,
+      "severity": "warning",
+      "message": "F1 is the feed in force when CYCLE840 runs on line 3. A tapping cycle written as a call can take its thread lead from that feed (the feed is then the spindle speed times the pitch), so it is left as written: scaled, it would cut a different thread. Scale it by hand if the cycle takes its lead from its own arguments."
+    }
+  ]
+}

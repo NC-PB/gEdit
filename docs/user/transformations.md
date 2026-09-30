@@ -57,7 +57,10 @@ remember what you used last time:
 #### Jumps and cycles that point at a block number
 
 `GOTO 100`, `M98 Q100`, `M99 P100` and, on a lathe, the `P`/`Q` of `G70`–`G73` all name a
-block by its number. **Renumbering rewrites the ones it can prove and reports the rest.**
+block by its number, and so do `GOTO N100`, `IF […] N100` and a LAP call on Okuma and
+`GOTOF N100` or `GOTOB N100` on Sinumerik. **Renumbering rewrites the ones it can prove and
+reports the rest.** A jump to a name — an Okuma sequence name such as `NLOOP`, a Sinumerik
+label such as `LAST_CUT` — needs nothing, because names are never renumbered.
 
 A reference is rewritten when all four of these hold:
 
@@ -82,6 +85,13 @@ in the wrong place.
 The rules do not care in which order a block writes its words, and they allow a space
 between an address and its value: `G71 P 100 Q 200` and `N50 P2000 M98 Q50` are read
 exactly like the forms without the space.
+
+**Numbers or names.** A Fanuc or Sinumerik control reads a block number as a number:
+`N0100` and `N100` are the same block, and a rewritten `GOTO 0100` keeps the four digits it
+was written with. An Okuma control reads its sequence numbers as names: `N0100` and `N100`
+are two blocks. There a jump follows only the block written exactly like it, is rewritten
+with exactly the text that block gets — also when only the zeros change — and a jump whose
+zeros match no block is reported as a missing target.
 
 The references it **can** follow are not worth a dialog, so it does not raise one for them.
 If there are any it cannot follow, you are asked before it starts, and afterwards the
@@ -109,7 +119,7 @@ they kept their number.
 ### Remove Block Numbers
 
 Takes the numbers off. Available only where the dialect does not insist on them, so it is
-offered on Fanuc and refused on Klartext with the reason.
+offered on Fanuc, Okuma and Sinumerik and refused on Klartext with the reason.
 
 | Option | What it does |
 |---|---|
@@ -155,6 +165,14 @@ A space is removed only when joining the two sides gives back exactly the same w
 they had; a keyword keeps its own. Leading indentation and trailing blanks go — making the
 program compact is the point.
 
+Two dialects need a word of their own. On **Okuma** the space after a sequence number or
+name stays, because the control requires one (`N100 G00X50`, never `N100G00X50`); whether it
+accepts packed words anywhere else is not confirmed. On **Sinumerik** the project's notes
+do not settle whether the control reads a packed block the way gEdit does, and a name of the
+program's own right behind a block number (`N30XNOW=62`) may be read as one longer name.
+Do not remove the spaces from a Sinumerik program that goes to a machine until that is
+confirmed — see [dialects.md](dialects.md#the-sinumerik-840d-turning-profile).
+
 ### Remove Empty Lines
 
 Removes every line that holds nothing but whitespace. A line with only a block number is
@@ -182,13 +200,17 @@ labels, the line goes and the run warns that the program needs renumbering. A Kl
 continuation `~` behind a comment survives: `12 ; SETUP ~` becomes `12 ~`, and the block
 stays one block.
 
+On Sinumerik a `;$PATH=…` line is a comment like any other and goes with the rest; keep it
+with **Keep comments in the first lines** if your programs travel in the control's
+transfer format, which uses it.
+
 Every comment that was kept is listed in Results with the reason.
 
 ### Convert Case…
 
 Converts the program to upper or lower case. Text in comments can be left alone (and text
-in quotes always is). Not available on a dialect where upper and lower case mean different
-things.
+in quotes always is — a tool name in `T="drill_d8"` or the text of a `MSG("…")` keeps its
+case). Not available on a dialect where upper and lower case mean different things.
 
 Lower case on a control that only reads upper case is a program that may be refused when
 it is loaded, so that direction asks first. A line whose converted form would not read

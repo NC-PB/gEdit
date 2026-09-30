@@ -1,0 +1,14 @@
+{
+  "profile": "okuma-osp",
+  "items": [
+    {"kind":"comment","line":2,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"program","line":3,"text":"O1003","endLine":37},
+    {"kind":"comment","line":4,"text":"SIX HOLES D8 AND SIX M10 THREADS ON THE FACE - DRIVEN TOOLS"},
+    {"kind":"comment","line":5,"text":"C AXIS ON"},
+    {"kind":"comment","line":10,"text":"DRILL D8"},
+    {"kind":"tool","line":11,"text":"T11 — DRILL D8","tool":"11","endLine":24},
+      {"kind":"comment","line":24,"text":"TAP M10X1.5"},
+    {"kind":"tool","line":25,"text":"T12 — TAP M10X1.5","tool":"12","endLine":37},
+      {"kind":"end","line":35,"text":"M02"}
+  ]
+}

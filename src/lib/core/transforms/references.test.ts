@@ -15,6 +15,8 @@ import { tokenizeLine } from '$lib/core/nc/tokenizer';
 import { validateProfile } from '$lib/core/profiles/validate';
 import {
   MAX_TARGET_DIGITS,
+  blockKeyOf,
+  comparesByText,
   maskedOf,
   referenceAddresses,
   referencePreflight,
@@ -190,6 +192,55 @@ describe('referencesOn', () => {
     // A local call — a `M98` with no program number — is still rewritten: that Q really
     // does name a block of this program.
     expect(on(mill, 'N20 M98 Q50').map((r) => [r.address, r.rewrite])).toEqual([['Q', true]]);
+  });
+});
+
+describe('sequence numbers that are names (G10 M8)', () => {
+  // Okuma compares its sequence numbers as the text they are written in: `N0020` and `N20`
+  // are two blocks (syntax-okuma.md §3.1), so a reference is a name to look up, not a
+  // number. Fanuc reads the same digits as one number. Both are pinned here, side by side.
+  const okuma = compiled('okuma-osp');
+  const fanuc = compiled(FANUC);
+
+  it('knows which dialects compare by text', () => {
+    expect(comparesByText(okuma)).toBe(true);
+    for (const cp of BUILTINS.filter((other) => other.profile.id !== 'okuma-osp')) {
+      expect(comparesByText(cp), cp.profile.id).toBe(false);
+    }
+  });
+
+  it('keys a value by its text on a name dialect and by its number elsewhere', () => {
+    expect(blockKeyOf('0020', true)).toBe('0020');
+    expect(blockKeyOf('20', true)).toBe('20');
+    expect(blockKeyOf('0020', false)).toBe(20);
+    expect(blockKeyOf('#1', true)).toBeNull();
+    expect(blockKeyOf('', false)).toBeNull();
+  });
+
+  it('reads the jump targets of an Okuma block with the digits they are written in', () => {
+    expect(on(okuma, 'N0050 IF [V1 EQ 5] N0020').map((w) => [w.address, w.text, w.target, w.key])).toEqual([
+      ['N', '0020', 20, '0020'],
+    ]);
+    expect(on(okuma, 'N0060 IF [V1 EQ 6] GOTO N0010').map((w) => [w.text, w.key])).toEqual([['0010', '0010']]);
+    expect(on(okuma, 'N0030 G85 N0100 D2 F0.3').map((w) => [w.text, w.key])).toEqual([['0100', '0100']]);
+    // A jump to a name is a label, not a number: nothing for a renumber to follow.
+    expect(on(okuma, 'N0070 GOTO NEND')).toEqual([]);
+    // The same digits on Fanuc are the number they spell.
+    expect(on(fanuc, 'N10 M98 Q0100').map((w) => [w.text, w.key])).toEqual([['0100', 100]]);
+  });
+
+  it('indexes N0020 and N20 of one Okuma program as two blocks, and as one on Fanuc', () => {
+    const okumaScan = scanProgram(['O1001', 'N0020 G50 S2500', 'N20 G96 S180 M03', 'N30 GOTO N0020'], context(okuma));
+    expect(okumaScan.byText).toBe(true);
+    expect(okumaScan.keys).toEqual([null, '0020', '20', '30']);
+    expect(okumaScan.segments[0].get('0020')).toEqual({ count: 1, row: 1, lastRow: 1 });
+    expect(okumaScan.segments[0].get('20')).toEqual({ count: 1, row: 2, lastRow: 2 });
+    expect(okumaScan.found.map((f) => f.word.key)).toEqual(['0020']);
+
+    const fanucScan = scanProgram(['O1001', 'N0020 G0 X0', 'N20 G1 X1.', 'N30 GOTO 20'], context(fanuc));
+    expect(fanucScan.byText).toBe(false);
+    expect(fanucScan.keys).toEqual([null, 20, 20, 30]);
+    expect(fanucScan.segments[0].get(20)).toEqual({ count: 2, row: 1, lastRow: 2 });
   });
 });
 

@@ -1,0 +1,65 @@
+{
+  "about": "A machine that powers on in feed per minute and without diameter programming (a machine parameter, plan §8.8). Each assumed value then names the machine as its source, until the program writes its own.",
+  "machine": {
+    "modalInitial": {
+      "feedmode": "G94"
+    },
+    "diameter": "off"
+  },
+  "input": "../../nc/okuma/SHAFT-OP2",
+  "states": [
+    {
+      "line": 3,
+      "after": {
+        "groups": {
+          "feedmode": "=G94@machine",
+          "distance": "=G90"
+        },
+        "feedUnit": "per-minute",
+        "diameter": "=off@machine",
+        "units": "=mm"
+      }
+    },
+    {
+      "line": 10,
+      "about": "No feed mode written yet: F0.2 is read in the machine's power-on unit.",
+      "after": {
+        "feedUnit": "per-minute",
+        "feed": "0.2"
+      }
+    },
+    {
+      "line": 24,
+      "after": {
+        "groups": {
+          "feedmode": "G94"
+        },
+        "feedUnit": "per-minute"
+      }
+    },
+    {
+      "line": 25,
+      "after": {
+        "speed": "240"
+      },
+      "about": "SB=1500 is the driven tool's speed: the main spindle's speed in force is still the S240 of line 14."
+    },
+    {
+      "line": 27,
+      "after": {
+        "activeCycle": "G181",
+        "feed": "80"
+      }
+    },
+    {
+      "line": 34,
+      "after": {
+        "groups": {
+          "feedmode": "G95"
+        },
+        "feedUnit": "per-rev",
+        "diameter": "=off@machine"
+      }
+    }
+  ]
+}

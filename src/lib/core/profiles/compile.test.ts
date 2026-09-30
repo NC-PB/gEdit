@@ -27,11 +27,13 @@ describe('built-in profiles', () => {
   it('ships the P1 dialects and the M6 lathe, resolved, the default first', () => {
     // M6: the list holds the **resolved** built-ins (AD-16), so a child profile is in it
     // exactly as the app uses it — `fanuc-lathe` with `fanuc-gcode` merged in.
-    expect(BUILTIN_PROFILE_JSON).toHaveLength(3);
+    expect(BUILTIN_PROFILE_JSON).toHaveLength(5);
     expect((BUILTIN_PROFILE_JSON as Profile[]).map((p) => p.id)).toEqual([
       'fanuc-gcode',
       'fanuc-lathe',
       'heidenhain-klartext',
+      'okuma-osp',
+      'sinumerik',
     ]);
     expect(FALLBACK_PROFILE_ID).toBe('fanuc-gcode');
   });
@@ -56,9 +58,11 @@ describe('built-in profiles', () => {
     }
   });
 
-  it('keeps .min with Fanuc until an Okuma profile exists', () => {
-    expect(fanuc.files.extensions).toContain('min');
-    expect(fanuc.detect.extensions.min).toBe(2);
+  it('hands .min over to the Okuma profile (M8, F22)', () => {
+    // `.MIN` is the Okuma main-program extension. While the mill claimed it, every Okuma
+    // main program opened as Fanuc; from M8 the mill neither offers it nor scores it.
+    expect(fanuc.files.extensions).not.toContain('min');
+    expect(fanuc.detect.extensions.min).toBeUndefined();
     expect(heidenhain.detect.extensions).toEqual({ h: 10 });
   });
 });
@@ -244,7 +248,7 @@ describe('the dialect the built-in profiles describe', () => {
   });
 
   it('offers the extensions the syntax notes list', () => {
-    for (const extension of ['nc', 'tap', 'cnc', 'eia', 'iso', 'min', 'ncc', 'ptp']) {
+    for (const extension of ['nc', 'tap', 'cnc', 'eia', 'iso', 'ncc', 'ptp']) {
       expect(fanuc.files.extensions, extension).toContain(extension);
     }
   });

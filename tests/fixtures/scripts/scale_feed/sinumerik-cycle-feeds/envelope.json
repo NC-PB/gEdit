@@ -1,0 +1,40 @@
+{
+  "message": "Scaled 1 feed rate to 80 %; 5 cycle feeds left unchanged, 2 feeds under addresses of their own left as written (FRC=, FRCM=). No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 5,
+      "severity": "info",
+      "message": "Argument 6 of CYCLE95 (FF1, feed for roughing) is 0.3 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 5,
+      "severity": "info",
+      "message": "Argument 7 of CYCLE95 (FF2, feed for plunging into undercuts) is 0.15 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 5,
+      "severity": "info",
+      "message": "Argument 8 of CYCLE95 (FF3, feed for finishing) is 0.1 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 6,
+      "severity": "info",
+      "message": "Argument 5 of CYCLE952 (_F, feed for roughing or finishing) is 0.25 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 6,
+      "severity": "info",
+      "message": "Argument 6 of CYCLE952 (_FR, feed for plunging into undercuts) is 0.12 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 7,
+      "severity": "info",
+      "message": "FRC=0.1 is a feed under an address of its own, not the F word, so it is left as it is. Change it by hand if it should follow the other feeds."
+    },
+    {
+      "line": 8,
+      "severity": "info",
+      "message": "FRCM=0.08 is a feed under an address of its own, not the F word, so it is left as it is. Change it by hand if it should follow the other feeds."
+    }
+  ]
+}

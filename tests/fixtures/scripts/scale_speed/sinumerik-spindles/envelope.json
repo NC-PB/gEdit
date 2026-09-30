@@ -1,0 +1,35 @@
+{
+  "message": "Scaled 2 of 6 spindle speeds to 110 %; 1 left as a variable or an expression, 3 left as a speed limit, 1 thread block to check by hand, 1 word for another spindle left as written (S3=), 1 dwell in spindle revolutions left as written.",
+  "findings": [
+    {
+      "line": 5,
+      "severity": "info",
+      "message": "S3000 is a spindle speed limit (G26), so it is not scaled."
+    },
+    {
+      "line": 7,
+      "severity": "info",
+      "message": "LIMS=2800 is a spindle speed limit, so it is not scaled."
+    },
+    {
+      "line": 15,
+      "severity": "warning",
+      "message": "This thread block (G33) runs at S800, which was scaled on line 13: the feed follows from the speed and the pitch, so check this block by hand."
+    },
+    {
+      "line": 20,
+      "severity": "info",
+      "message": "S3=2400 is the speed of spindle 3, named by its number; this run scales only the plain S word of the master spindle, so it is left as it is. Switch on \"Also scale other spindles\" to scale it with the others."
+    },
+    {
+      "line": 25,
+      "severity": "info",
+      "message": "S3=2500 is the speed limit of spindle 3 (G26), so it is not scaled."
+    },
+    {
+      "line": 28,
+      "severity": "warning",
+      "message": "S=R2 is not a plain number, so it is not scaled."
+    }
+  ]
+}

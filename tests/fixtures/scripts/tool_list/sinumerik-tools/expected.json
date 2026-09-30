@@ -1,0 +1,65 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [
+    {
+      "tool": "T1",
+      "description": "ROUGH",
+      "line": 6,
+      "calls": 1,
+      "feed": "0.3 /rev",
+      "speed": "180 surface"
+    },
+    {
+      "tool": "FINISH_35",
+      "description": "FINISH, 35 DEG INSERT",
+      "line": 15,
+      "calls": 1,
+      "feed": "0.12 /rev",
+      "speed": "240 surface"
+    },
+    {
+      "tool": "T5",
+      "description": "DRILL D8 ON SPINDLE 1",
+      "line": 21,
+      "calls": 1,
+      "feed": "0.1 /rev",
+      "speed": ""
+    },
+    {
+      "tool": "PARTOFF",
+      "description": "PART OFF",
+      "line": 28,
+      "calls": 1,
+      "feed": "0.05 /rev",
+      "speed": "600"
+    }
+  ],
+  "message": "4 tools",
+  "findings": []
+}

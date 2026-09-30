@@ -7,8 +7,12 @@
 import { describe, expect, it } from 'vitest';
 import fanucProfileJson from '$lib/data/profiles/fanuc-gcode.json';
 import heidenhainProfileJson from '$lib/data/profiles/heidenhain-klartext.json';
+import okumaProfileJson from '$lib/data/profiles/okuma-osp.json';
+import sinumerikProfileJson from '$lib/data/profiles/sinumerik.json';
 import fanucCodesJson from '$lib/data/codes/fanuc.json';
 import heidenhainCodesJson from '$lib/data/codes/heidenhain.json';
+import okumaCodesJson from '$lib/data/codes/okuma.json';
+import sinumerikCodesJson from '$lib/data/codes/sinumerik.json';
 import { compileProfile } from '$lib/core/profiles/compile';
 import { t } from '$lib/i18n';
 import { loadCodeDb } from './load';
@@ -31,6 +35,13 @@ function hover(cp: CompiledProfile, db: CodeDb, line: string, at: string): strin
 
 const fanucHover = (line: string, at: string): string | null => hover(fanucProfile, fanuc, line, at);
 const klartextHover = (line: string, at: string): string | null => hover(klartextProfile, heidenhain, line, at);
+
+const okumaProfile = compileProfile(okumaProfileJson as unknown as Profile);
+const sinumerikProfile = compileProfile(sinumerikProfileJson as unknown as Profile);
+const okuma = loadCodeDb(okumaCodesJson);
+const sinumerik = loadCodeDb(sinumerikCodesJson);
+const okumaHover = (line: string, at: string): string | null => hover(okumaProfile, okuma, line, at);
+const siemensHover = (line: string, at: string): string | null => hover(sinumerikProfile, sinumerik, line, at);
 
 describe('hoverText: codes', () => {
   it('explains G83 with its label, description, group and required words', () => {
@@ -201,6 +212,52 @@ describe('hoverText: what the database does not describe', () => {
   it('answers null past the end of the line', () => {
     expect(hoverAt('N10 G0', 6, fanucProfile, fanuc, t)).toBeNull();
     expect(hoverAt('', 0, fanucProfile, fanuc, t)).toBeNull();
+  });
+});
+
+// M8 integration: the tokens the turning dialects add (§7.5). A hover that explained
+// `M3=3` as a code `M33`, or the letters of `XBOT` as an X axis and a tool, would be a
+// wrong meaning, which is worse than none.
+describe('hoverText: the turning dialects', () => {
+  it('reads a spindle-addressed M word as the M code, for the spindle its address names', () => {
+    const text = siemensHover('N170 S3=2400 M3=3', 'M3=3') as string;
+    expect(text.startsWith('**M3=3** — Spindle on, clockwise')).toBe(true);
+    expect(text).toContain('M3=3 does the same for spindle 3');
+    expect(siemensHover('N300 M2=5', 'M2=5')).toContain('**M2=5** — Spindle stop');
+    // `M1=3` is spindle 1 clockwise, not the optional stop M1.
+    expect(siemensHover('N200 M1=3', 'M1=3')).toContain('Spindle on, clockwise');
+  });
+
+  it('reads a spindle-addressed S or T word as its address, never as a code spelled together', () => {
+    expect(siemensHover('N170 S3=2400 M3=3', 'S3=2400')).toContain('**S** — Spindle speed');
+    expect(siemensHover('N190 T1=5 D1', 'T1=5')).toContain('**T** — Tool');
+    expect(siemensHover('N40 T="ROUGH" D1', 'T=')).toContain('**T** — Tool');
+    expect(siemensHover('N50 G96 S200 LIMS=3000 M4', 'LIMS')).toContain('**LIMS** — Spindle speed limit');
+    expect(okumaHover('N40 SB=1200 M13', 'SB=')).toContain('**SB** — Driven\\-tool speed');
+  });
+
+  it('explains a call the database describes by its name', () => {
+    expect(siemensHover('N30 MSG("OD ROUGH")', 'MSG')).toContain('**MSG** — Operator message');
+    expect(siemensHover('N290 SETMS(3)', 'SETMS')).toContain('**SETMS** — Choose the master spindle');
+    // The manual confirms CYCLE83, so its hover says what it does; CYCLE97, which the 4.92
+    // cycle list does not describe, still carries `verify: true` and stays out of hover.
+    const cycle = siemensHover('N80 CYCLE83(5,0,2,-30,,-8,,2,0,0.5,1,0)', 'CYCLE83') as string;
+    expect(cycle).toContain('**CYCLE83** — Deep\\-hole drilling cycle');
+    const old = siemensHover('N90 CYCLE97(1.5,,0,-20,40,40,3,2,0.92,0.1,0,0,5,1,3,1)', 'CYCLE97') as string;
+    expect(old).toContain('**CYCLE97**');
+    expect(old).toContain('does not describe this word yet');
+    expect(hoverAt('N80 CYCLE83(5,0,2,-30)', 10, sinumerikProfile, sinumerik, t)).toMatchObject({ start: 4, end: 22 });
+  });
+
+  it('stays silent on a subprogram, a name and a label the program gives itself', () => {
+    expect(siemensHover('N200 PROBE_DIA(1,,3)', 'PROBE_DIA')).toBeNull();
+    const line = 'N70 IF XNOW<=XBOT GOTOF LAST_CUT';
+    expect(siemensHover(line, 'XNOW')).toBeNull();
+    expect(siemensHover(line, 'XBOT')).toBeNull();
+    expect(siemensHover(line, 'LAST_CUT')).toBeNull();
+    expect(siemensHover('GOTOF PASS2', 'PASS2')).toBeNull();
+    expect(okumaHover('V1=DIA1*2', 'DIA1')).toBeNull();
+    expect(okumaHover('NLAP1 G81 X50', 'NLAP1')).toBeNull();
   });
 });
 

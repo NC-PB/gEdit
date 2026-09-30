@@ -5,8 +5,12 @@
 import { describe, expect, it } from 'vitest';
 import fanucProfileJson from '$lib/data/profiles/fanuc-gcode.json';
 import heidenhainProfileJson from '$lib/data/profiles/heidenhain-klartext.json';
+import okumaProfileJson from '$lib/data/profiles/okuma-osp.json';
+import sinumerikProfileJson from '$lib/data/profiles/sinumerik.json';
 import fanucCodesJson from '$lib/data/codes/fanuc.json';
 import heidenhainCodesJson from '$lib/data/codes/heidenhain.json';
+import okumaCodesJson from '$lib/data/codes/okuma.json';
+import sinumerikCodesJson from '$lib/data/codes/sinumerik.json';
 import { compileProfile } from '$lib/core/profiles/compile';
 import { t } from '$lib/i18n';
 import { loadCodeDb } from './load';
@@ -18,6 +22,10 @@ const fanucProfile = compileProfile(fanucProfileJson as unknown as Profile);
 const klartextProfile = compileProfile(heidenhainProfileJson as unknown as Profile);
 const fanuc = loadCodeDb(fanucCodesJson);
 const heidenhain = loadCodeDb(heidenhainCodesJson);
+const okumaProfile = compileProfile(okumaProfileJson as unknown as Profile);
+const sinumerikProfile = compileProfile(sinumerikProfileJson as unknown as Profile);
+const okuma = loadCodeDb(okumaCodesJson);
+const sinumerik = loadCodeDb(sinumerikCodesJson);
 
 /**
  * The suggestions at the cursor. The cursor is written as `|` in the line, which keeps
@@ -116,6 +124,27 @@ describe('completion: what is offered', () => {
     expect(result).not.toBeNull();
     expect(result?.items).toEqual([]);
   });
+
+  // M8 integration: a half-typed cycle name is one name token (`syntax.names`), so the
+  // prefix is the whole of it wherever it stands — at the head of a block, behind `MCALL`
+  // or behind other words — and not the `E8` its last two letters would make.
+  it('offers the Sinumerik cycles for a half-typed name anywhere in the block', () => {
+    // In the database's order, by number: CYCLE840 comes after CYCLE89.
+    const cycles = ['CYCLE81', 'CYCLE82', 'CYCLE83', 'CYCLE84', 'CYCLE85', 'CYCLE86', 'CYCLE87', 'CYCLE88', 'CYCLE89', 'CYCLE840'];
+    expect(labels('N80 CYCLE8|', sinumerikProfile, sinumerik)).toEqual(cycles);
+    expect(labels('N200 MCALL CYCLE8|', sinumerikProfile, sinumerik)).toEqual(cycles);
+    expect(labels('N10 G0 X10 CYCLE8|', sinumerikProfile, sinumerik)).toEqual(cycles);
+    const result = at(sinumerikProfile, sinumerik, 'N200 MCALL CYCLE8|');
+    expect(result?.start).toBe(11);
+    // The parameters of a Siemens cycle are positional, inside the brackets: nothing is
+    // offered as an address word, so the bare name is what goes in.
+    expect(result?.items[0]).toMatchObject({ label: 'CYCLE81', insertText: 'CYCLE81', snippet: false });
+  });
+
+  it('offers the Okuma thread cycles with their address words', () => {
+    expect(labels('N20 G7|', okumaProfile, okuma)).toEqual(['G71', 'G72', 'G73', 'G74', 'G75', 'G76', 'G77', 'G78']);
+    expect(at(okumaProfile, okuma, 'N20 G71|')?.items[0]).toMatchObject({ label: 'G71', snippet: true });
+  });
 });
 
 describe('completion: where nothing is offered', () => {
@@ -127,6 +156,57 @@ describe('completion: where nothing is offered', () => {
 
   it('offers nothing inside a string', () => {
     expect(klartextAt('12 TOOL CALL "D10|" Z S5000')).toBeNull();
+  });
+
+  // M8 integration: a Sinumerik call takes its argument list whole and an assignment its
+  // value, so the text of a message or a tool name is part of a `call` or `word` token and
+  // never a `string` token of its own. Before, Ctrl+Space in the middle of a message
+  // offered the whole mid-block part of the database.
+  it('offers nothing inside a string held by a call or an assignment', () => {
+    const sinumerikAt = (marked: string) => at(sinumerikProfile, sinumerik, marked);
+    expect(sinumerikAt('N230 MSG("OD |ROUGH")')).toBeNull();
+    expect(sinumerikAt('N230 MSG("OD ROUGH|')).toBeNull();
+    expect(sinumerikAt('N230 MSG("OD |')).toBeNull();
+    expect(sinumerikAt('N230 MSG("A;B |")')).toBeNull();
+    expect(sinumerikAt('N70 CYCLE95("SHAFT_|",2)')).toBeNull();
+    expect(sinumerikAt('N40 T="ROU|" D1')).toBeNull();
+    expect(sinumerikAt('N40 T= "ROU|" D1')).toBeNull();
+  });
+
+  it('offers again once the held string is closed', () => {
+    const sinumerikAt = (marked: string) => at(sinumerikProfile, sinumerik, marked);
+    expect(sinumerikAt('N230 MSG("OD ROUGH") |')?.items.length).toBeGreaterThan(0);
+    expect(sinumerikAt('N40 T="ROUGH" D1 |')?.items.length).toBeGreaterThan(0);
+    expect(labels('N40 T="ROUGH" D1 M|', sinumerikProfile, sinumerik).length).toBeGreaterThan(0);
+  });
+
+  // G8 M8 review: the arguments of a call are positional values, so no code of the
+  // database belongs between its brackets. Ctrl+Space in there used to offer the mid-block
+  // part of the database, and accepting a G or M code wrote it into a cycle parameter.
+  it('offers nothing inside the argument list of a call', () => {
+    const sinumerikAt = (marked: string) => at(sinumerikProfile, sinumerik, marked);
+    expect(sinumerikAt('CYCLE95("SHAFT",2,|')).toBeNull();
+    expect(sinumerikAt('N60 CYCLE83(50,0,|')).toBeNull();
+    expect(sinumerikAt('N60 CYCLE83(50, |')).toBeNull();
+    expect(sinumerikAt('N60 CYCLE83(50,0,M|')).toBeNull();
+    expect(sinumerikAt('N60 X=AC(|')).toBeNull();
+    // A name may stand apart from its bracket, and the brackets nest.
+    expect(sinumerikAt('N60 CYCLE840 (5,0,|')).toBeNull();
+    expect(sinumerikAt('N60 CYCLE95(SIN(30),|')).toBeNull();
+  });
+
+  it('offers again behind the closed argument list', () => {
+    const sinumerikAt = (marked: string) => at(sinumerikProfile, sinumerik, marked);
+    expect(sinumerikAt('CYCLE95(1,2) |')?.items.length).toBeGreaterThan(0);
+    expect(labels('N60 X=AC(10) M|', sinumerikProfile, sinumerik).length).toBeGreaterThan(0);
+    // A bracket inside a string of the arguments neither opens nor closes the list.
+    expect(sinumerikAt('N230 MSG("A(B") |')?.items.length).toBeGreaterThan(0);
+    expect(sinumerikAt('N230 MSG("A)B",|')).toBeNull();
+  });
+
+  // Where the profile has no strings a quote is only a character, and nothing changes.
+  it('reads a quote as a character where the dialect has no strings', () => {
+    expect(fanucAt('N10 G0 X10 "M|')).not.toBeNull();
   });
 
   // A comment that runs to the end of the line gives its trailing whitespace back, so

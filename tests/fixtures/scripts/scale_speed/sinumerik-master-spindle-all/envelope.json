@@ -1,0 +1,35 @@
+{
+  "message": "Scaled 3 spindle speeds to 80 %; 6 cycle speeds left unchanged.",
+  "findings": [
+    {
+      "line": 36,
+      "severity": "info",
+      "message": "Argument 11 of CYCLE84 (SST, spindle speed while tapping) is 500 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 36,
+      "severity": "info",
+      "message": "Argument 12 of CYCLE84 (SST1, spindle speed while retracting) is 500 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 38,
+      "severity": "info",
+      "message": "Argument 11 of CYCLE84 (SST, spindle speed while tapping) is 500 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 38,
+      "severity": "info",
+      "message": "Argument 12 of CYCLE84 (SST1, spindle speed while retracting) is 500 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 40,
+      "severity": "info",
+      "message": "Argument 11 of CYCLE84 (SST, spindle speed while tapping) is 500 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 40,
+      "severity": "info",
+      "message": "Argument 12 of CYCLE84 (SST1, spindle speed while retracting) is 500 and is left unchanged: this run does not scale the arguments of a cycle."
+    }
+  ]
+}

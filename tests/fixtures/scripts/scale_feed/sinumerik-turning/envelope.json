@@ -1,0 +1,25 @@
+{
+  "message": "Scaled 3 of 5 feed rates to 80 %; 1 left as a variable or an expression, 2 cycle feeds left unchanged, 1 left as the possible lead of a tapping cycle, 1 dwell time left as written. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 13,
+      "severity": "warning",
+      "message": "F=R1 is not a plain number, so it is not scaled."
+    },
+    {
+      "line": 23,
+      "severity": "info",
+      "message": "Argument 7 of CYCLE85 (FFR, feed on the way in) is 80 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 23,
+      "severity": "info",
+      "message": "Argument 8 of CYCLE85 (RFF, feed on the way out) is 200 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 26,
+      "severity": "warning",
+      "message": "F750 is the feed in force when CYCLE840 runs on line 27. A tapping cycle written as a call can take its thread lead from that feed (the feed is then the spindle speed times the pitch), so it is left as written: scaled, it would cut a different thread. Scale it by hand if the cycle takes its lead from its own arguments."
+    }
+  ]
+}

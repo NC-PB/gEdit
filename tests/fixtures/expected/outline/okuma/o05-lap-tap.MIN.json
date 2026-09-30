@@ -1,0 +1,18 @@
+{
+  "profile": "okuma-osp",
+  "items": [
+    {"kind":"comment","line":2,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"program","line":3,"text":"O1006","endLine":44},
+    {"kind":"comment","line":4,"text":"LAP WITH NEW CONDITIONS, A CONTINUED THREAD BLOCK AND A TAP"},
+    {"kind":"label","line":5,"text":"NAT01"},
+    {"kind":"comment","line":12,"text":"LAP ROUGH"},
+    {"kind":"tool","line":15,"text":"T1 — LAP ROUGH","tool":"01","endLine":22},
+      {"kind":"comment","line":22,"text":"LAP FINISH"},
+    {"kind":"tool","line":23,"text":"T3 — LAP FINISH","tool":"03","endLine":28},
+      {"kind":"comment","line":28,"text":"THREAD M30X2"},
+    {"kind":"tool","line":29,"text":"T7 — THREAD M30X2","tool":"07","endLine":35},
+      {"kind":"comment","line":35,"text":"TAP M10X1.25"},
+    {"kind":"tool","line":36,"text":"T9 — TAP M10X1.25","tool":"09","endLine":44},
+      {"kind":"end","line":42,"text":"M02"}
+  ]
+}

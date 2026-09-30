@@ -22,6 +22,12 @@
 //
 // Leading indentation and trailing blanks are removed as well. Neither separates two
 // words, and "make the code compact" is the whole point of the command.
+//
+// M8 integration: on a profile whose block-number field also carries names
+// (`syntax.sequenceNames`, Okuma), the separator behind the block number is part of the
+// field. The control requires it behind a number as much as behind a name (syntax-okuma
+// §3.1, §3.7), so `N100 G00` never becomes `N100G00`. A name behind the prefix needs no
+// such rule: joined, it would read as another token, and the guard keeps it anyway.
 
 import type { Located, Msg } from '$lib/app/types';
 import { tokenizeLine } from '$lib/core/nc/tokenizer';
@@ -85,6 +91,8 @@ export const removeSpaces: TransformDef = {
     // block must not read the block's tail as a block of its own (`fragment.ts`).
     let state: LineState | undefined = stateBefore(ctx);
     let changed = 0;
+    // The block number keeps its separator where the field also carries names (see the header).
+    const keepAfterNumber = ctx.cp.profile.syntax?.sequenceNames === true;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -102,7 +110,11 @@ export const removeSpaces: TransformDef = {
         // Indentation and trailing blanks stand between a token and the line edge, so they
         // separate nothing and always go. Everything else needs a safe kind on both sides.
         const joinable =
-          before === null || after === null ? true : CAN_JOIN_LEFT.has(before.kind) && CAN_JOIN_RIGHT.has(after.kind);
+          before === null || after === null
+            ? true
+            : CAN_JOIN_LEFT.has(before.kind) &&
+              CAN_JOIN_RIGHT.has(after.kind) &&
+              !(keepAfterNumber && before.kind === 'blockNumber');
         if (joinable) cuts.push({ start: token.start, end: token.end });
       }
       if (cuts.length === 0) {

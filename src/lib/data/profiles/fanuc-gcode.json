@@ -7,7 +7,7 @@
   "grammar": "iso",
   "codes": "fanuc",
   "files": {
-    "extensions": ["nc", "tap", "cnc", "eia", "iso", "min", "ncc", "ptp", "txt"],
+    "extensions": ["nc", "tap", "cnc", "eia", "iso", "ncc", "ptp", "txt"],
     "defaultExtension": "nc",
     "filterName": "Fanuc G-Code",
     "encoding": "keep",
@@ -15,7 +15,7 @@
     "newFileLineEnding": "crlf"
   },
   "detect": {
-    "extensions": { "nc": 3, "tap": 3, "cnc": 2, "eia": 2, "iso": 2, "min": 2 },
+    "extensions": { "nc": 3, "tap": 3, "cnc": 2, "eia": 2, "iso": 2 },
     "content": [
       { "pattern": "^\\s*%\\s*$", "weight": 5 },
       { "pattern": "^\\s*[O:]\\d{1,8}(?!\\d)", "weight": 5 },

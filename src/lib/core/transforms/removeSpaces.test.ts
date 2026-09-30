@@ -17,6 +17,8 @@ import { noMachine } from '$lib/core/machines/effective';
 import type { CodeDb } from '$lib/core/codes/types';
 import fanucJson from '$lib/data/profiles/fanuc-gcode.json';
 import heidenhainJson from '$lib/data/profiles/heidenhain-klartext.json';
+import okumaJson from '$lib/data/profiles/okuma-osp.json';
+import sinumerikJson from '$lib/data/profiles/sinumerik.json';
 import { compileProfile } from '$lib/core/profiles/compile';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
 import { removeSpaces } from './removeSpaces';
@@ -24,6 +26,8 @@ import type { TransformContext } from './types';
 
 const fanuc = compileProfile(fanucJson as unknown as Profile);
 const klartext = compileProfile(heidenhainJson as unknown as Profile);
+const okuma = compileProfile(okumaJson as unknown as Profile);
+const sinumerik = compileProfile(sinumerikJson as unknown as Profile);
 const NO_CODES: CodeDb = { dialect: 'test', version: 1, addresses: {}, codes: [] };
 
 const CASES = fileURLToPath(new URL('../../../../tests/fixtures/transforms/remove-spaces/', import.meta.url));
@@ -126,6 +130,26 @@ describe('removeSpaces rules', () => {
   it('reports nothing to do on a line that is already compact', () => {
     const result = removeSpaces.run(['N10G0X0'], context(fanuc));
     expect(result.summary).toEqual({ key: 'ncCleanup.removeSpaces.summaryNone' });
+  });
+
+  // M8 integration: the Okuma control needs the separator behind its sequence number as
+  // much as behind a sequence name, so it survives on a profile with `sequenceNames`.
+  it('keeps the separator behind a sequence number where the field also carries names', () => {
+    expect(run('N100 G00 X80 Z5', okuma)).toBe('N100 G00X80Z5');
+    expect(run('N1 (FACE)', okuma)).toBe('N1 (FACE)');
+    expect(run('NLAP1 G81', okuma)).toBe('NLAP1 G81');
+    // Everywhere else the rule is what it was.
+    expect(run('N100 G00 X80 Z5')).toBe('N100G00X80Z5');
+    expect(run('N100 G0 X80 Z5', sinumerik)).toBe('N100G0X80Z5');
+  });
+
+  // A name is one token (`syntax.names`), so nothing is joined to it: the letters of
+  // `XNOW` stay a name and `GOTOF LAST_CUT` keeps its space.
+  it('leaves the spaces around a name the program gives itself', () => {
+    expect(run('N70 IF XNOW<=XBOT GOTOF LAST_CUT', sinumerik)).toBe('N70 IF XNOW<=XBOT GOTOF LAST_CUT');
+    // The value of an assignment runs to the end of its word, so `X=XNOWF0.2` would be a
+    // different value: the guard keeps the whole line as written.
+    expect(run('N60 G0 X=XNOW F0.2', sinumerik)).toBe('N60 G0 X=XNOW F0.2');
   });
 });
 

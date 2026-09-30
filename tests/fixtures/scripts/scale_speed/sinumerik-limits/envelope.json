@@ -1,0 +1,25 @@
+{
+  "message": "No spindle speed was changed; 4 left as a speed limit.",
+  "findings": [
+    {
+      "line": 1,
+      "severity": "info",
+      "message": "S50 is a spindle speed limit (G25), so it is not scaled."
+    },
+    {
+      "line": 2,
+      "severity": "info",
+      "message": "S3000 is a spindle speed limit (G26), so it is not scaled."
+    },
+    {
+      "line": 2,
+      "severity": "info",
+      "message": "S2=2000 is the speed limit of spindle 2 (G26), so it is not scaled."
+    },
+    {
+      "line": 2,
+      "severity": "info",
+      "message": "S3=4000 is the speed limit of spindle 3 (G26), so it is not scaled."
+    }
+  ]
+}

@@ -16,6 +16,11 @@
 //   - an address letter: its label and description (`X10.` → `X`, `X axis`);
 //   - a variable (`#100`, `Q200`): its kind only. The value is unknown without
 //     simulation, and the hover says so instead of guessing;
+//   - a call (P8, `CYCLE83(…)`, `MSG("…")`): the cycle or function the database
+//     describes, by its name. A subprogram the program calls by its own name is not a
+//     code, and stays silent;
+//   - an assignment word (P8, `M3=3`, `S3=2400`): shown as written, and read as the code
+//     or the address it is — `M3=3` is `M3` for spindle 3, never a code `M33`;
 //   - a word the database does not describe: shown as such, never guessed. An entry that
 //     still carries `verify: true` counts as "not described" — its label and description
 //     stay out of hover until someone has confirmed them (content rule, §5 WP3.3).
@@ -26,7 +31,7 @@
 // (`BEGIN PGM TEST`).
 
 import { tokenizeLine } from '$lib/core/nc/tokenizer';
-import { lookupCode, lookupWord, normalizeCode } from './lookup';
+import { isAssignmentWord, lookupCode, lookupWord, normalizeCode } from './lookup';
 import type { CompiledProfile } from '$lib/core/profiles/types';
 import type { LineState, NcToken } from '$lib/core/nc/types';
 import type { Translate } from '$lib/app/types';
@@ -274,9 +279,14 @@ function variableHover(token: NcToken, lookup: CodeLookup | null, t: Translate):
   ]);
 }
 
-/** The code as the database spells it: the canonical address plus the value as written. */
+/**
+ * The code as the database spells it: the canonical address plus the value as written.
+ * An assignment keeps its `=` (`M3=3`, `S3=2400`), because without it the address and
+ * the value would read as one code that does not exist.
+ */
 function wordDisplay(token: NcToken): string {
-  return `${token.address ?? ''}${token.valueText ?? ''}`;
+  const gap = isAssignmentWord(token) ? '=' : '';
+  return `${token.address ?? ''}${gap}${token.valueText ?? ''}`;
 }
 
 /** True for a value that could be the number of a code: `83`, not `+5` and not `#101`. */
@@ -312,6 +322,14 @@ export function hoverText(
     case 'keyword': {
       const display = token.address ?? token.text;
       return described ? codeHover(display, described, t) : unknownHover(display, t);
+    }
+
+    case 'call': {
+      // A cycle or a function the database has an entry for; a subprogram the program
+      // calls by its own name (`PROBE_DIA(1,,3)`) is not a code of the dialect.
+      const display = token.address ?? token.text;
+      if (described) return codeHover(display, described, t);
+      return entry ? unknownHover(display, t) : null;
     }
 
     case 'word': {

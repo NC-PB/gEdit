@@ -1,0 +1,45 @@
+{
+  "message": "Scaled 1 spindle speed to 80 %; 2 words for other spindles left as written (S3=, S after SETMS(3)), 6 cycle speeds left unchanged.",
+  "findings": [
+    {
+      "line": 21,
+      "severity": "info",
+      "message": "S3=2400 is the speed of spindle 3, named by its number; this run scales only the plain S word of the master spindle, so it is left as it is. Switch on \"Also scale other spindles\" to scale it with the others."
+    },
+    {
+      "line": 34,
+      "severity": "info",
+      "message": "S500 drives spindle 3, which SETMS(3) on line 33 made the master spindle; this run cannot tell whether that is the machine's main spindle, so it is left as it is. Switch on \"Also scale other spindles\" to scale it with the others."
+    },
+    {
+      "line": 36,
+      "severity": "info",
+      "message": "Argument 11 of CYCLE84 (SST, spindle speed while tapping) is 500 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 36,
+      "severity": "info",
+      "message": "Argument 12 of CYCLE84 (SST1, spindle speed while retracting) is 500 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 38,
+      "severity": "info",
+      "message": "Argument 11 of CYCLE84 (SST, spindle speed while tapping) is 500 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 38,
+      "severity": "info",
+      "message": "Argument 12 of CYCLE84 (SST1, spindle speed while retracting) is 500 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 40,
+      "severity": "info",
+      "message": "Argument 11 of CYCLE84 (SST, spindle speed while tapping) is 500 and is left unchanged: this run does not scale the arguments of a cycle."
+    },
+    {
+      "line": 40,
+      "severity": "info",
+      "message": "Argument 12 of CYCLE84 (SST1, spindle speed while retracting) is 500 and is left unchanged: this run does not scale the arguments of a cycle."
+    }
+  ]
+}

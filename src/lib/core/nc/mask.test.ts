@@ -7,6 +7,8 @@
 import { describe, expect, it } from 'vitest';
 import fanucJson from '$lib/data/profiles/fanuc-gcode.json';
 import heidenhainJson from '$lib/data/profiles/heidenhain-klartext.json';
+import okumaJson from '$lib/data/profiles/okuma-osp.json';
+import sinumerikJson from '$lib/data/profiles/sinumerik.json';
 import { compileProfile } from '$lib/core/profiles/compile';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
 import { maskComments } from './mask';
@@ -14,6 +16,8 @@ import { tokenizeLine } from './tokenizer';
 
 const fanuc = compileProfile(fanucJson as unknown as Profile);
 const klartext = compileProfile(heidenhainJson as unknown as Profile);
+const okuma = compileProfile(okumaJson as unknown as Profile);
+const sinumerik = compileProfile(sinumerikJson as unknown as Profile);
 
 describe('maskComments with a block comment', () => {
   it('blanks the comment and keeps every other character where it was', () => {
@@ -78,6 +82,48 @@ describe('maskComments with a line comment', () => {
   });
 });
 
+// P8, AD-24. A dialect that ends its comment at the line end and has strings has to read
+// the string first, or a message stops being a message: on the Sinumerik line
+// `MSG("ROUGH;FINISH")` the `;` is text the operator sees on the screen, and a mask that
+// started a comment there would hide the rest of the block from every code pattern.
+describe('maskComments where a string may hold the comment marker', () => {
+  it('does not start a comment inside a string', () => {
+    const line = 'MSG("ROUGH;FINISH") G1 X10';
+    expect(maskComments(line, sinumerik)).toBe(line);
+  });
+
+  it('still blanks the comment that follows the string', () => {
+    expect(maskComments('MSG("A;B") ;NOTE', sinumerik)).toBe('MSG("A;B")      ');
+    expect(maskComments('T="DRILL_D8" ;TOOL 8', sinumerik)).toBe('T="DRILL_D8"        ');
+  });
+
+  it('leaves a quote inside a comment alone, because the comment came first', () => {
+    expect(maskComments('G1 X10 ;SAY "HI"', sinumerik)).toBe('G1 X10          ');
+  });
+
+  it('keeps a tool name out of a comment and a commented-out tool out of the code', () => {
+    const named = maskComments('T="DRILL_D8" D1 ;WAS T="MILL_D10"', sinumerik);
+    expect(named).toBe('T="DRILL_D8" D1                  ');
+    expect(sinumerik.re.toolTrigger.test(named)).toBe(true);
+    expect(sinumerik.re.toolTrigger.test(maskComments(';T="MILL_D10"', sinumerik))).toBe(false);
+  });
+
+  it('reads the Okuma comment brackets and never a quote', () => {
+    expect(maskComments('N100 G00 X200 (ROUGH)', okuma)).toBe('N100 G00 X200        ');
+    expect(maskComments('G00 X="A" (ROUGH)', okuma)).toBe('G00 X="A"        ');
+  });
+
+  // The file header is one program marker, not a block, and detection reads it off the
+  // masked line: a comment marker inside the file name may not blank half of it.
+  it('steps over a file header instead of reading inside it', () => {
+    expect(maskComments('$FLANGE.MIN%', okuma)).toBe('$FLANGE.MIN%');
+    expect(maskComments('$FLANGE(2).MIN%', okuma)).toBe('$FLANGE(2).MIN%');
+    expect(maskComments('%_N_PART_MPF', sinumerik)).toBe('%_N_PART_MPF');
+    // Only at the head of the line: further along, the comment rule applies as always.
+    expect(maskComments('G00 X10 (ROUGH) $A.MIN%', okuma)).toBe('G00 X10         $A.MIN%');
+  });
+});
+
 describe('maskComments and the tokenizer', () => {
   const lines: [CompiledProfile, string][] = [
     [fanuc, '%'],
@@ -92,6 +138,18 @@ describe('maskComments and the tokenizer', () => {
     [klartext, '7 * - ROUGHING'],
     [klartext, '8 L X+10 Y+20 R0 FMAX M3'],
     [klartext, '9 LBL "A;B"'],
+    [okuma, '$FLANGE.MIN%'],
+    [okuma, 'NLAP1 G85 (BAR TURNING)'],
+    [okuma, 'G00 X=V1 (MOVE) Z=V2'],
+    [okuma, 'X= (SET LATER)'],
+    [okuma, 'SB=1200 M13 (LIVE TOOL'],
+    [sinumerik, '%_N_PART_MPF'],
+    [sinumerik, ';$PATH=/_N_WKS_DIR/_N_PART_WPD'],
+    [sinumerik, 'N10 LOOP_A: G1 X10 ;FEED IN'],
+    [sinumerik, 'MSG("ROUGH;FINISH") ;OPERATOR NOTE'],
+    [sinumerik, 'T="DRILL_D8" D1'],
+    [sinumerik, 'MSG("A;B'],
+    [sinumerik, 'CYCLE83(50,0,2,-25,,-5)'],
   ];
 
   it.each(lines)('blanks exactly what the tokenizer calls a comment: %#', (cp, line) => {
