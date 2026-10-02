@@ -170,9 +170,12 @@ def effective_context(
     """
     if golden is not None:
         index = _resolved("effective", "index")
-        key = str(golden).replace("\\", "/")
-        if key.startswith(str(FIXTURES_DIR)):
-            key = str(Path(key).relative_to(FIXTURES_DIR)).replace("\\", "/")
+        # Compared as paths, not strings: on Windows FIXTURES_DIR is spelled with
+        # backslashes, so a string prefix test against a "/" key never matched.
+        try:
+            key = Path(golden).relative_to(FIXTURES_DIR).as_posix()
+        except ValueError:
+            key = str(golden).replace("\\", "/")
         name = index.get(key)
         if not isinstance(name, str):
             raise AssertionError("no effective profile for golden %s; %s" % (key, UPDATE_RESOLVED))
