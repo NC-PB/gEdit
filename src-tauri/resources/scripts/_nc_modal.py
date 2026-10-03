@@ -30,6 +30,13 @@ any dialect:
   its speed word, where a control writes one (Sinumerik ``G4 S2``, two revolutions), is not
   a spindle speed either, so neither changes the feed or the speed in force.
 
+**The defined cycle (M9, WP9.5b; plan §7.4, AD-19).** Klartext **defines** a cycle
+(``CYCL DEF 200``) and runs it later, as often as it is called (``CYCL CALL``, ``M99``, and
+after every positioning block while ``M89`` is in force); only the next definition replaces
+it. The interpreter carries that as ``definedCycle`` and ``modalCall`` beside Fanuc's
+``activeCycle``, driven by the database's ``sets.cycle`` values ``'define'``, ``'call'`` and
+``'call-modal'`` and by no dialect name; a database without them reads exactly as before.
+
 **Taps, modes and data (2026-09).** :class:`FeedModeTracker` also answers whether a block
 taps (``CodeEntry.tapping``), whether a modal **mode** outside the cycle and motion groups
 makes the feed a lead (a ``pitchFeed`` entry such as Fanuc ``G63``, read off the groups of
@@ -58,7 +65,15 @@ _FEED_ADDRESS = "F"
 
 #: A feed unit -> the Phase 1 name for it. :class:`FeedModeTracker` answers in P1 names;
 #: the interpreter thinks in units (plan §7.1 ``FeedUnit``).
-_MODE_OF_UNIT = {"inverse-time": "G93", "per-minute": "G94", "per-rev": "G95", "per-tooth": "FZ"}
+#: ``'travel-time'`` (M9 review F8) is Sinumerik ``G931``: its F is the time a move takes.
+#: Its Phase 1 name is the code, a mode no script scales, so a script leaves such an F alone.
+_MODE_OF_UNIT = {
+    "inverse-time": "G93",
+    "per-minute": "G94",
+    "per-rev": "G95",
+    "per-tooth": "FZ",
+    "travel-time": "G931",
+}
 
 #: What a group value, a unit or a mode reads as while nothing has said anything.
 UNKNOWN = "unknown"
@@ -136,6 +151,52 @@ def speed_limit_of(
     return None
 
 
+# -- P9 (roadmap R3, TODO "Ahead"; plan section 7.2): how one entry's flags read -----------
+#
+# The TypeScript twins are `axisWordsOf`, `frameOf` and `speedLimitBoundOf` in
+# `src/lib/core/codes/lookup.ts`; both are held to the same cases. A context's `codes` come
+# from the app's loader, which has already dropped every value it does not know, so these
+# only have to say what an absent member means.
+
+
+def axis_words_of(entry: Optional[Dict[str, Any]]) -> Optional[str]:
+    """What the axis words of a block with this code are: ``'data'``, ``'machine'`` or ``None``.
+
+    ``None`` is the ordinary case, positions in the program's own frame. ``'data'``: values,
+    not a position (a coordinate set, a local shift, a rotation centre, a frame origin).
+    ``'machine'``: a position outside the program's frame (machine coordinates, a reference
+    point). ``wordsAreData`` makes every word of the block data, its axis words included, so
+    it answers ``'data'`` whatever ``axisWords`` says.
+    """
+    if not isinstance(entry, dict):
+        return None
+    if entry.get("wordsAreData") is True:
+        return "data"
+    value = entry.get("axisWords")
+    return value if value in ("data", "machine") else None
+
+
+def frame_of(entry: Optional[Dict[str, Any]]) -> Optional[str]:
+    """``'open'`` or ``'close'`` for a code that opens or closes a coordinate frame, else ``None``."""
+    if not isinstance(entry, dict):
+        return None
+    value = entry.get("frame")
+    return value if value in ("open", "close") else None
+
+
+def speed_limit_bound_of(entry: Optional[Dict[str, Any]]) -> Optional[str]:
+    """Which side of the speed range this code's ``S`` bounds: ``'upper'``, ``'lower'`` or ``None``.
+
+    ``None`` when the code sets no speed limit at all. A limit without a bound is the clamp
+    every entry meant before M9, ``'upper'``; Sinumerik ``G25`` is a ``'lower'`` one, a
+    minimum that is neither a speed nor a clamp.
+    """
+    sets = _sets_of(entry)
+    if sets.get("speedLimit") is not True:
+        return None
+    return "lower" if sets.get("speedLimitBound") == "lower" else "upper"
+
+
 def _next_code_token(tokens: Sequence[Token], start: int, count: int) -> Optional[Token]:
     """The next token that is not whitespace, or ``None``."""
     for i in range(start, count):
@@ -152,9 +213,17 @@ def _is_assignment(token: Token) -> bool:
     a code; its address is exactly what stands in front of the ``=``, so ``S3`` is not
     ``S`` while ``F=R1`` is the feed word with a value that is not a number. A profile
     without ``syntax.assignment`` has no such token, so nothing changes for it.
+
+    An **indexed** assignment (``syntax.assignmentIndex``: ``S[2]=500``, ``M[2]=3``,
+    ``LIMS[2]=1800``, ``FA[X]=100``) is one too: its text in front of the ``=`` is the
+    address plus the bracket, and the word carries the bracket text in ``index``. It names
+    the spindle or axis in the index, like ``S2=`` names one in its address, so it is
+    neither the main spindle's ``S`` nor a code ``M3`` (M9 review F1).
     """
     if token.kind != "word" or not token.address:
         return False
+    if token.index is not None:
+        return True
     head, sep, _ = token.text.partition("=")
     return sep == "=" and head.strip().upper() == token.address.upper()
 
@@ -198,12 +267,33 @@ def _written_codes(tokens: Sequence[Token], index: Dict[str, Dict[str, Any]]) ->
                 nxt = _next_code_token(tokens, i + 1, count)
                 if nxt is not None and nxt.address is None and nxt.value_text is not None:
                     number = nxt.value_text
-            joined = "%s %s" % (name, number) if number is not None else None
-            if joined is not None and normalize_code(joined) in index:
-                out.append((joined, "keyword"))
-            else:
-                out.append((name, "keyword"))
+            joined = _joined_code(name, number, index)
+            out.append((joined if joined is not None else name, "keyword"))
     return out
+
+
+def _joined_code(name: str, number: Optional[str], index: Dict[str, Dict[str, Any]]) -> Optional[str]:
+    """A keyword and the number behind it as one code, when the database knows the pair.
+
+    ``CYCL DEF 200`` is the entry of that cycle. A **sub-block** of one of the older cycles,
+    written with a decimal part (``CYCL DEF 19.1``, ``CYCL DEF 7.0``), is the cycle it belongs
+    to (``CYCL DEF 19``) when the database has no entry for the sub-block itself (M9, I9 and
+    WP9.5b; the TypeScript twin is the hover's join in ``core/codes/hoverText.ts``). Without
+    it the sub-blocks of the coordinate cycles fell through to the generic ``CYCL DEF``,
+    and their flags (``axisWords``, ``frame``) were reached by no program line. ``None`` when
+    neither form is known, so ``LBL 1`` stays ``LBL`` and the generic entry applies.
+    """
+    if number is None:
+        return None
+    joined = "%s %s" % (name, number)
+    if normalize_code(joined) in index:
+        return joined
+    whole, dot, part = number.partition(".")
+    if dot == "." and whole.isdigit() and part.isdigit():
+        joined = "%s %s" % (name, whole)
+        if normalize_code(joined) in index:
+            return joined
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +355,26 @@ class ModalInterpreter:
     9. an unknown code changes nothing;
     10. whether a word of ``addresses.diameter`` is a diameter or a radius follows the
         diameter mode **and** the distance mode (:meth:`diameter_reading`); a consumer asks
-        for that answer, never for the mode alone.
+        for that answer, never for the mode alone;
+    11. **the defined cycle** (M9, WP9.5b; plan §7.4 rules 1–6). A ``'define'`` entry
+        (Klartext ``CYCL DEF 200``) stores its cycle as ``definedCycle`` and replaces the
+        one before it; it runs nothing. A ``'call'`` entry (``CYCL CALL``, ``M99``) runs the
+        defined cycle once (``block.cycle``) and ends a modal call. A ``'call-modal'``
+        entry (``M89``) runs it in its own block and switches ``modalCall`` on; from then on
+        every **positioning block** (an axis word of ``addresses.axes`` with a value, in a
+        block whose codes do not make the axis words data) runs it as well, and
+        ``activeCycle`` is the defined cycle, until a ``'call'`` or the next ``'define'``.
+        Nothing else ends a definition — no call, no tool change. A cycle that takes effect
+        where it is defined carries none of the three values and touches none of this;
+    12. a speed limit whose ``sets.speedLimitBound`` is ``'lower'`` (Sinumerik ``G25``)
+        marks the block's speed word as no speed (``block.speedLimit``) but is not the
+        clamp: ``speedLimit`` is the **upper** limit in force (plan §7.4).
+
+    A defined cycle never makes a block's feed word a lead (``block.pitchFeed``,
+    :attr:`pitch_feed`): it takes its values from its own parameters (``Q206``, ``Q239``),
+    never from the ``F`` of the block that calls it, which is that block's positioning feed.
+    Its ``pitchFeed`` flag is in ``definedCycle`` for whoever needs to know that it cuts a
+    thread.
 
     It never reads a machine configuration: everything machine-specific arrives in the
     **effective** profile it is given (AD-31), which is why a golden pins a behaviour by
@@ -308,6 +417,13 @@ class ModalInterpreter:
             else frozenset()
         )
         self._diameter_words = diameter_axes(self._profile)
+        axes = addresses.get("axes")
+        #: Rule 11: the words that make a block a positioning block.
+        self._axes = (
+            frozenset(str(a).upper() for a in axes if isinstance(a, str) and a != "")
+            if isinstance(axes, list)
+            else frozenset()
+        )
 
         tool_call = self._profile.get("toolCall")
         tool_call = tool_call if isinstance(tool_call, dict) else {}
@@ -343,6 +459,12 @@ class ModalInterpreter:
         self._speed: Optional[Dict[str, Any]] = None
         self._speed_limit: Optional[Dict[str, Any]] = None
         self._active_cycle: Optional[Dict[str, Any]] = None
+        # Rule 11 (plan section 7.4, the Klartext "defined cycle"): the cycle the last
+        # `sets.cycle: 'define'` entry stored, and the modal call (`'call-modal'`, M89) in
+        # force. A database without these values never sets either, so every ISO reading
+        # is unchanged.
+        self._defined_cycle: Optional[Dict[str, Any]] = None
+        self._modal_call: Optional[Dict[str, Any]] = None
         self._modal_ambiguous: Optional[str] = None
         # Before the power-on codes below, which are applied through `_apply_sets` and may
         # touch the block's flags.
@@ -432,6 +554,7 @@ class ModalInterpreter:
         # word is read (rules 4 and 6 both depend on it).
         for code in _codes_in(tokens, self._entries):
             self._apply_code(code, line)
+        self._apply_modal_call(tokens)
         self._apply_words(tokens, line)
         if masked:
             self._apply_tool(masked, line)
@@ -442,6 +565,14 @@ class ModalInterpreter:
         self._block_ambiguous: Optional[str] = None
         #: The code that made this block a dwell (rule 6), for a finding that names it.
         self._block_dwell: Optional[str] = None
+        #: Rule 11: the defined cycle this block runs (a call, or a positioning block under a
+        #: modal call), and the cycle this block defined. Kept apart from ``_block``, whose
+        #: flags are the ones :class:`FeedModeTracker` publishes in Phase 1's terms.
+        self._block_run: Optional[Dict[str, Any]] = None
+        self._block_defined: Optional[Dict[str, Any]] = None
+        #: Rule 12: the block's speed limits, by bound.
+        self._block_upper_limit = False
+        self._block_lower_limit = False
 
     def _apply_code(self, code: str, line: int) -> None:
         entry = self._entries.get(normalize_code(code))
@@ -468,6 +599,9 @@ class ModalInterpreter:
             self._block_dwell = self._block_dwell or canonical
 
         cycle = sets.get("cycle")
+        if cycle in ("define", "call", "call-modal"):
+            self._apply_defined(cycle, canonical, line, pitch)
+            return
         if cycle == "cancel":
             # Rule 2: the cycle is off, and with it the ambiguity it was carrying.
             self._active_cycle = None
@@ -507,6 +641,54 @@ class ModalInterpreter:
             # block alone.
             self._block_ambiguous = canonical
 
+    def _apply_defined(self, cycle: str, code: str, line: int, pitch: bool) -> None:
+        """Rule 11: a cycle defined once and run where it is called (plan §7.4 rules 1–4)."""
+        if cycle == "define":
+            # Rule 1: it replaces any earlier definition and runs nothing; a modal call of
+            # the old definition is over (rule 4).
+            self._defined_cycle = {"code": code, "line": line, "pitchFeed": pitch}
+            self._block_defined = dict(self._defined_cycle)
+            self._modal_call = None
+            return
+        if cycle == "call":
+            # Rule 3: runs the definition once, and ends a modal call. With nothing defined
+            # it runs nothing.
+            self._modal_call = None
+        else:
+            # Rule 4. The manual's own words: the **first** call of a modal call is written
+            # with M89, so its block runs the cycle like an M99 would, and every positioning
+            # block after it does too.
+            self._modal_call = {"code": code, "line": line}
+        if self._defined_cycle is not None:
+            self._block_run = dict(self._defined_cycle)
+
+    def _apply_modal_call(self, tokens: "Sequence[Token]") -> None:
+        """Rule 11: a positioning block under a modal call runs the defined cycle."""
+        if self._modal_call is None or self._defined_cycle is None or self._block_run is not None:
+            return
+        if not self._positions(tokens):
+            return
+        self._block_run = dict(self._defined_cycle)
+
+    def _positions(self, tokens: "Sequence[Token]") -> bool:
+        """Whether the line moves to a position: an axis word with a value, and no code of
+        the block that makes its axis words data (a datum shift, ``CYCL DEF 7.1 X+5``)."""
+        axes = self._axes
+        if not axes:
+            return False
+        found = False
+        for token in tokens:
+            if token.kind == "word" and (token.address or "").upper() in axes and (token.value_text or "") != "":
+                if not _is_assignment(token):
+                    found = True
+                    break
+        if not found:
+            return False
+        for code in _codes_in(tokens, self._entries):
+            if axis_words_of(self._entries.get(normalize_code(code))) == "data":
+                return False
+        return True
+
     def _apply_sets(self, sets: Dict[str, Any], line: int, assumed: bool) -> None:
         """What a code switches on (§7.2): the derived units of the state."""
         if not sets:
@@ -534,6 +716,11 @@ class ModalInterpreter:
         if sets.get("speedLimit") is True:
             # Rule 4: of this block, whatever order the words are written in.
             self._block["speedLimit"] = True
+            # Rule 12: which side of the range it bounds.
+            if sets.get("speedLimitBound") == "lower":
+                self._block_lower_limit = True
+            else:
+                self._block_upper_limit = True
 
     def _apply_words(self, tokens: "Sequence[Token]", line: int) -> None:
         """The address words of the block: the feed, the speed and the clamp."""
@@ -542,6 +729,11 @@ class ModalInterpreter:
                 continue
             address = (token.address or "").upper()
             if address == "":
+                continue
+            if token.index is not None:
+                # `S[2]=500`, `LIMS[2]=1800`: the spindle (or axis) is the index's, the way
+                # `S2=` and `SB=` name theirs in the address, so this is neither the speed
+                # in force nor the main clamp (M9 review F1).
                 continue
             if address in self._feed_unit_words:
                 # Rule 5: the word says which unit its own value is in.
@@ -563,7 +755,10 @@ class ModalInterpreter:
                     # speed in force nor a clamp.
                     continue
                 if self._block["speedLimit"]:
-                    self._speed_limit = _word_seen(token, line)
+                    # Rule 12: a lower limit alone is neither the speed nor the clamp. A
+                    # block that also writes an upper one keeps the reading it had.
+                    if self._block_upper_limit or not self._block_lower_limit:
+                        self._speed_limit = _word_seen(token, line)
                 else:
                     self._speed = _word_seen(token, line)
 
@@ -624,14 +819,31 @@ class ModalInterpreter:
             "feed": dict(self._feed) if self._feed is not None else None,
             "speed": dict(self._speed) if self._speed is not None else None,
             "speedLimit": dict(self._speed_limit) if self._speed_limit is not None else None,
-            "activeCycle": dict(self._active_cycle) if self._active_cycle is not None else None,
+            "activeCycle": self._active_cycle_state(),
+            "definedCycle": dict(self._defined_cycle) if self._defined_cycle is not None else None,
+            "modalCall": dict(self._modal_call) if self._modal_call is not None else None,
             "pitchFeedAmbiguous": self.pitch_feed_ambiguous,
-            "block": dict(self._block),
+            "block": self._block_state(),
         }
+
+    def _active_cycle_state(self) -> Optional[Dict[str, Any]]:
+        """§7.4 ``activeCycle``: the modal cycle, or the defined cycle while a modal call is on."""
+        if self._active_cycle is not None:
+            return dict(self._active_cycle)
+        if self._modal_call is not None and self._defined_cycle is not None:
+            return dict(self._defined_cycle)
+        return None
+
+    def _block_state(self) -> Dict[str, Any]:
+        """§7.4 ``block``: ``cycle`` is the cycle that runs here, the defined one included."""
+        block = dict(self._block)
+        if block["cycle"] is None and self._block_run is not None:
+            block["cycle"] = self._block_run["code"]
+        return block
 
     @property
     def feed_unit(self) -> str:
-        """``'per-minute'``, ``'per-rev'``, ``'per-tooth'``, ``'inverse-time'`` or unknown.
+        """``'per-minute'``, ``'per-rev'``, ``'per-tooth'``, ``'inverse-time'``, ``'travel-time'`` (Sinumerik ``G931``) or unknown.
 
         A word (Klartext ``FU`` / ``FZ``) wins over the modal group while it is in force
         (rule 5).
@@ -652,12 +864,24 @@ class ModalInterpreter:
 
     @property
     def active_cycle(self) -> Optional[str]:
-        """The modally active cycle's code, or ``None``.
+        """The modally active cycle's code, or ``None`` (``state['activeCycle']``).
 
         A one-shot cycle (rule 2) is **not** here: it is in ``block['cycle']``, because it
-        is over when its block is.
+        is over when its block is. A defined cycle is here while a modal call runs it after
+        every positioning block (rule 11).
         """
-        return self._active_cycle["code"] if self._active_cycle is not None else None
+        cycle = self._active_cycle_state()
+        return cycle["code"] if cycle is not None else None
+
+    @property
+    def defined_cycle(self) -> Optional[str]:
+        """The code of the cycle the last ``'define'`` entry stored, or ``None`` (rule 11)."""
+        return self._defined_cycle["code"] if self._defined_cycle is not None else None
+
+    @property
+    def modal_call(self) -> Optional[str]:
+        """The code that switched the modal call on (``M89``), or ``None`` (rule 11)."""
+        return self._modal_call["code"] if self._modal_call is not None else None
 
     @property
     def pitch_feed(self) -> bool:
@@ -1018,10 +1242,24 @@ class FeedModeTracker:
         # P1's `active_cycle` covers a one-shot cycle for the length of its own block; the
         # interpreter keeps the two apart (rule 2), so they are put back together here.
         # `_old_cycle` is only ever set by a database entry without a `sets` member.
-        self.active_cycle = interp.active_cycle or interp._block["cycle"] or self._old_cycle
+        #
+        # M9 (rule 11): a definition (`CYCL DEF 207`) is what P1 read as a one-shot cycle of
+        # its own block, and that is what this wrapper still says; a call (`CYCL CALL`,
+        # `M99`, `M89`) is what P1 read as no cycle at all. The scripts written against
+        # these attributes keep their reading; the defined-cycle state is in
+        # `ModalInterpreter.state` for whoever reads it.
+        iso_cycle = interp._active_cycle
+        defined = interp._block_defined
+        self.active_cycle = (
+            (iso_cycle["code"] if iso_cycle is not None else None)
+            or interp._block["cycle"]
+            or (defined["code"] if defined is not None else None)
+            or self._old_cycle
+        )
         self.pitch_mode = self._mode_with("pitchFeed")
         self.pitch_feed = (
             interp.pitch_feed
+            or (defined is not None and bool(defined["pitchFeed"]))
             or (self._old_cycle is not None and self._old_pitch)
             or self.pitch_mode is not None
         )

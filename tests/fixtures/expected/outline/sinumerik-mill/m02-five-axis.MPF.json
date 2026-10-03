@@ -1,0 +1,20 @@
+{
+  "profile": "sinumerik-mill",
+  "items": [
+    {"kind":"program","line":1,"text":"%_N_FIVE_AXIS_MPF","endLine":42},
+    {"kind":"comment","line":2,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":3,"text":"$PATH=/_N_WKS_DIR/_N_FIVE_AXIS_WPD"},
+    {"kind":"comment","line":4,"text":"3+2 AND FIVE-AXIS WORDS; TOOL AND M6 IN ONE BLOCK; FIXED-POINT RETRACTS"},
+    {"kind":"subprogram-call","line":7,"text":"CYCLE800"},
+    {"kind":"tool","line":10,"text":"T5","tool":"5","endLine":42},
+      {"kind":"comment","line":13,"text":"3+2 ROUGHING"},
+      {"kind":"subprogram-call","line":14,"text":"CYCLE800"},
+      {"kind":"subprogram-call","line":16,"text":"CYCLE832"},
+      {"kind":"subprogram-call","line":22,"text":"CYCLE832"},
+      {"kind":"subprogram-call","line":23,"text":"CYCLE800"},
+      {"kind":"comment","line":24,"text":"FIVE-AXIS FINISHING"},
+      {"kind":"subprogram-call","line":29,"text":"CYCLE832"},
+      {"kind":"subprogram-call","line":35,"text":"CYCLE832"},
+      {"kind":"end","line":41,"text":"M30"}
+  ]
+}

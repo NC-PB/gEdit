@@ -4,7 +4,7 @@
     {
       "line": 1,
       "severity": "info",
-      "message": "S50 is a spindle speed limit (G25), so it is not scaled."
+      "message": "S50 is the lowest speed the spindle may run at (G25), a lower limit and not a clamp, so it is not scaled."
     },
     {
       "line": 2,

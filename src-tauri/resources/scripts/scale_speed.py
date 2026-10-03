@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// gedit
 # name = "Scale spindle speeds"
-# description = "Multiplies S values by a percentage. Tapping speeds, surface speeds, speed limits and speeds written as variables are left alone and reported."
+# description = "Multiplies S values by a percentage, constant surface speeds included on a turning profile (a choice below). Tapping speeds, speed limits and speeds written as variables are left alone and reported."
 # input = "selection-or-document"
 # output = "replace"
 # envelope = true
@@ -76,7 +76,7 @@
 # id = "speedLimits"
 # type = "bool"
 # label = "Also scale spindle speed limits"
-# help = "The S of a speed-limit block (G50 in G-code system A, G92 in system B, G25 and G26 on a Sinumerik) and a clamp written as a word of its own (LIMS=) are limits the spindle may not pass, not cutting speeds."
+# help = "The S of a clamp block (G50 in G-code system A, G92 in system B, G26 on a Sinumerik) and a clamp written as a word of its own (LIMS=) are the highest speeds the spindle may reach, not cutting speeds. A lowest speed (G25 on a Sinumerik) is a lower limit and no clamp: it is never scaled, with this option or without it."
 # default = false
 #
 # [[params]]
@@ -117,7 +117,10 @@ Speed limits
     list in this file: on a lathe in system A `G92` is the single-pass threading cycle and
     its `S` — if it had one — would not be a clamp at all (plan AD-19 rule 4, F24).
     `tool_list.py` asks the same question the same way. A lower limit is a limit too (a
-    Sinumerik `G25 S50`). A dialect may also write the clamp as a word of its own
+    Sinumerik `G25 S50`), but it is **no clamp** (M9, `sets.speedLimitBound: 'lower'`,
+    `gedit_nc.speed_limit_bound_of`): the option that scales the clamps never offers it,
+    and it is always left as written and named as the lowest speed it is. A dialect may
+    also write the clamp as a word of its own
     (`LIMS=3000` beside `G96 S200`, and `LIMS[2]=1800` for spindle 2); the profile lists
     those in `addresses.speedLimitWords`, and they are treated exactly like the `S` of a
     clamp block. In a limit block every speed word is a limit, the ones that name another
@@ -695,6 +698,18 @@ def speed_words(tokens: Sequence[gedit_nc.Token], params: Params) -> List[SpeedW
         if token.kind != "word" or address == "":
             i += 1
             continue
+        if token.index is not None:
+            # `syntax.assignmentIndex` (M9): one word, `address` the name, `index` the bracket text.
+            if address in params.speed_limit_words:
+                out.append(SpeedWord("limit", text, token, token.index, address))
+            elif address == spindle:
+                kind = "main" if params.is_main(token.index) else "other"
+                out.append(SpeedWord(kind, text, token, token.index, spindle + "[]"))
+            elif address in params.surface_words:
+                kind = "main" if params.is_main(token.index) else "other"
+                out.append(SpeedWord(kind, text, token, token.index, address + "[]", address))
+            i += 1
+            continue
         base, bracket, rest_of = address.partition("[")
         if bracket:
             # The same indexed forms, as one word (`LIMS[2]=1800`, `S[2]=300`).
@@ -964,7 +979,10 @@ def tap_speeds(
         for entry, kind in written_codes:
             code = entry.get("code") if isinstance(entry.get("code"), str) else ""
             cycle = sets_of(entry).get("cycle")
-            if cycle == "start":
+            # M9 (WP9.5b): a keyword that defines a cycle for a later call (Klartext
+            # `CYCL DEF 207`) is `sets.cycle: 'define'` now (plan section 7.4); it arms
+            # the tap exactly as its old `'start'` did.
+            if cycle in ("start", "define"):
                 defined = kind == "keyword" and entry.get("modal") is not True and entry.get("tapping") is True
                 armed = (code, number) if defined else None
             elif entry.get("group") == "cycle":
@@ -1170,6 +1188,7 @@ def scale_token(
     block: Optional[Block] = None,
     surface: Optional[str] = None,
     idle_tap: bool = False,
+    lower: bool = False,
 ) -> Optional[Tuple[int, int, str]]:
     """The edit this spindle word needs, or ``None`` — with a finding when it is left alone.
 
@@ -1185,6 +1204,19 @@ def scale_token(
     if token.value is None or token.value_text is None:
         counts.skip("value")
         findings.add(line, "warning", "%s is not a plain number, so it is not scaled." % word)
+        return None
+
+    if limit_code is not None and lower:
+        # M9 (`sets.speedLimitBound: 'lower'`): the lowest speed the spindle may run at is
+        # no clamp. Scaling it with the clamps would move the bottom of the speed range
+        # with the cutting speeds, which the option never says it does.
+        counts.skip("limit")
+        whose = "the lowest speed spindle %s may run at" % spindle if spindle else "the lowest speed the spindle may run at"
+        findings.add(
+            line,
+            "info",
+            "%s is %s (%s), a lower limit and not a clamp, so it is not scaled." % (word, whose, limit_code),
+        )
         return None
 
     if limit_code is not None and not params.speed_limits:
@@ -1558,6 +1590,8 @@ def run(
         # file's: `G50` in Fanuc's G-code system A, `G92` in system B, `G25` and `G26` on a
         # Sinumerik (plan AD-19 rule 4, F24).
         limit_code = gedit_nc.speed_limit_of(codes, tokens)
+        # M9: which side of the speed range the limit bounds; a lower one is no clamp.
+        lower = limit_code is not None and gedit_nc.speed_limit_bound_of(tracker.entry(limit_code)) == "lower"
 
         # A thread block that starts while a changed speed is in force: the speed that
         # cuts the thread was set further up, so the warning has to point here.
@@ -1623,7 +1657,10 @@ def run(
                 # In a limit block every speed word is a limit, another spindle's too
                 # (`G26 S3000 S2=2000`): the limit option decides, not the spindle.
                 counts.total += 1
-                edit = scale_token(word.value, tracker, limit_code, params, number, findings, counts, word.name, spindle, block)
+                edit = scale_token(
+                    word.value, tracker, limit_code, params, number, findings, counts, word.name, spindle, block,
+                    lower=lower,
+                )
                 if edit is not None:
                     edits.append(edit)
                 continue
@@ -1648,7 +1685,7 @@ def run(
             edit = scale_token(
                 word.value, tracker, limit_code if word.kind in ("speed", "main") else None, params, number,
                 findings, counts, word.name, spindle if limit_code is not None else None, block, word.surface,
-                idle_tap,
+                idle_tap, lower=lower and word.kind in ("speed", "main"),
             )
             if edit is not None:
                 edits.append(edit)

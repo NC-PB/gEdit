@@ -132,8 +132,12 @@ describe('completion: what is offered', () => {
   // prefix is the whole of it wherever it stands — at the head of a block, behind `MCALL`
   // or behind other words — and not the `E8` its last two letters would make.
   it('offers the Sinumerik cycles for a half-typed name anywhere in the block', () => {
-    // In the database's order, by number: CYCLE840 comes after CYCLE89.
-    const cycles = ['CYCLE81', 'CYCLE82', 'CYCLE83', 'CYCLE84', 'CYCLE85', 'CYCLE86', 'CYCLE87', 'CYCLE88', 'CYCLE89', 'CYCLE840'];
+    // In the database's order, by number: CYCLE840 comes after CYCLE89, and the milling
+    // entries of M9 (WP9.1), CYCLE800 and CYCLE832, between them.
+    const cycles = [
+      'CYCLE81', 'CYCLE82', 'CYCLE83', 'CYCLE84', 'CYCLE85', 'CYCLE86', 'CYCLE87', 'CYCLE88', 'CYCLE89',
+      'CYCLE800', 'CYCLE832', 'CYCLE840',
+    ];
     expect(labels('N80 CYCLE8|', sinumerikProfile, sinumerik)).toEqual(cycles);
     expect(labels('N200 MCALL CYCLE8|', sinumerikProfile, sinumerik)).toEqual(cycles);
     expect(labels('N10 G0 X10 CYCLE8|', sinumerikProfile, sinumerik)).toEqual(cycles);

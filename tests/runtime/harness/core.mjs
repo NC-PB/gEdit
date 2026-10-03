@@ -335,7 +335,10 @@ export async function runScenario(rh, name, known, opts = {}) {
   }
 
   const timeout = Number(opts.timeout ?? o.timeout ?? 90)
-  const cfg = { scenario: name, run, home, python, appVersion: appVersion(rh), robust: robustEnabled() }
+  // `ci` is for the few wall-clock budgets that need a hosted runner's slowdown (same rule as
+  // tests/unit/helpers/budget.ts: `CI` set to anything but empty, 0 or false).
+  const ci = !['', '0', 'false'].includes((process.env.CI ?? '').toLowerCase())
+  const cfg = { scenario: name, run, home, python, appVersion: appVersion(rh), robust: robustEnabled(), ci }
   result.screenLocked = screenLocked()
   if (result.screenLocked) result.notes.push('the screen was locked when the run started')
   const bundlePath = path.join(run, 'bundle.js')

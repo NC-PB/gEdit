@@ -25,10 +25,22 @@
 //    go to labels and a bare number is not a block the control accepts, so the line goes
 //    and the run warns that the program needs renumbering.
 //  - A block number plus the continuation marker is code, and stays.
+//
+// **A comment the control reads is no comment (M9, WP9.5b).** Sinumerik's transfer header
+// has a second line written as a comment, `;$PATH=/_N_WKS_DIR/_N_PART_WPD`: the control
+// reads it on import and files the program in that folder, so a program without it lands
+// in the wrong place. Such a line is kept whatever the options say. Which lines these are
+// is the profile's data, not a name in this file: a comment that makes up a whole line and
+// matches one of the profile's **decisive** detection patterns (`DECISIVE_WEIGHT`, the
+// lines only that dialect's file header has) is a header line of the file. Deleting it
+// would also take away the evidence the dialect is detected by the next time the file is
+// opened. No other built-in has a decisive pattern that matches a comment, so nothing else
+// changes.
 
 import type { Located, Msg } from '$lib/app/types';
 import type { FieldSpec } from '$lib/core/forms/types';
 import { tokenizeLine } from '$lib/core/nc/tokenizer';
+import { DECISIVE_WEIGHT } from '$lib/core/profiles/detect';
 import type { LineState, NcToken } from '$lib/core/nc/types';
 import type { CompiledProfile } from '$lib/core/profiles/types';
 import { t } from '$lib/i18n';
@@ -65,6 +77,21 @@ const KEEP_MESSAGE: Readonly<Record<Exclude<KeepReason, null>, string>> = {
 function isSectionHeading(line: string, token: NcToken, cp: CompiledProfile): boolean {
   const re = cp.re.sectionHeading;
   return re !== undefined && token.text.startsWith('*') && re.test(line);
+}
+
+/**
+ * True when this comment is a line of the file's own header that the control reads
+ * (Sinumerik `;$PATH=`): the comment is the whole line, and the line is one of the
+ * profile's decisive detection patterns (see the module header). The pattern sees the line
+ * trimmed, as detection does.
+ */
+function isHeaderComment(line: string, token: NcToken, head: NcToken | null, cp: CompiledProfile): boolean {
+  if (head !== token) return false;
+  const trimmed = line.trim();
+  for (const rule of cp.re.detectContent) {
+    if (rule.weight >= DECISIVE_WEIGHT && rule.re.test(trimmed)) return true;
+  }
+  return false;
 }
 
 /** The first token that is not whitespace, or null on a blank line. */
@@ -163,7 +190,7 @@ export const removeComments: TransformDef = {
         seenComment = true;
 
         let keep: KeepReason = null;
-        if (docLine <= keepFirstLines) keep = 'header';
+        if (docLine <= keepFirstLines || isHeaderComment(line, token, head, ctx.cp)) keep = 'header';
         else if (keepSections && isSectionHeading(line, token, ctx.cp)) keep = 'section';
         else if (keepProgramName && isFirstComment && head?.kind === 'programMarker') keep = 'programName';
         if (keep !== null) {

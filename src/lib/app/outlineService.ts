@@ -271,6 +271,7 @@ const EMPTY_PROFILE: CompiledProfile = {
   flags: 'i',
   re: {
     detectContent: [],
+    detectVetoes: [],
     toolTrigger: /(?!)/,
     tool: /(?!)/,
     programStart: [],

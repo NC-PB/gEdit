@@ -12,7 +12,7 @@ the machine, not for the person who builds the editor — the build and design n
 | Page | What is in it |
 |---|---|
 | This page | The window, files, never losing work, navigation, code help, comparing, settings, and the limits |
-| [Dialects](dialects.md) | Dialect profiles: what they decide, which five ship, how the dialect is picked |
+| [Dialects](dialects.md) | Dialect profiles: what they decide, which six ship, how the dialect is picked |
 | [Machines](machines.md) | Machine configurations: what `X50` is worth on **your** control, and how to tell gEdit |
 | [Transformations](transformations.md) | The NC tab: renumbering, removing block numbers and the five cleanups |
 | [Scripts](scripts.md) | Running Python scripts, and how to write one |
@@ -95,6 +95,10 @@ trailer. They are kept out of the text, counted, and written back unchanged. NUL
 middle are removed, and the status bar says how many — save the file to write that change.
 A file whose NUL bytes *inside* the program — between the leader and the trailer — are more
 than 10 % of those bytes is data, not a program, and is refused. So is a file above 50 MB.
+
+**Save As** to a file you may not write goes back to the dialog before anything is copied or
+written. Saved under another extension, a file that had a name has its dialect detected
+again (see [Dialects](dialects.md#which-dialect-a-file-gets)).
 
 **Saving** writes the same encoding, the same line ending and the same leader and trailer
 back. A program you open and save without editing is byte-for-byte the file you started
@@ -473,7 +477,11 @@ their descriptions. Both are switched in `Settings ▸ Assistance`, and completi
 set to appear automatically, only when you ask for it, or not at all.
 
 The descriptions are written by the project, in its own words, for the subset of code that
-CAM systems emit. A code the database does not describe says so rather than guessing. An
+CAM systems emit. That includes what five-axis and high-speed milling posts write: tool
+centre point control, tilted working planes, mirror, scaling, polar and cylindrical
+interpolation, the Klartext datum, plane and tilt cycles and the `PLANE` functions, and
+the Fanuc macro functions. Hovering a Klartext sub-block such as `CYCL DEF 19.1` shows its
+cycle. A code the database does not describe says so rather than guessing. An
 entry the project has written but not yet checked against a control's documentation is
 **not shown in the hover at all** — the hover says the database does not describe the word,
 which is the honest answer while nobody has confirmed it; the completion list shows it with
@@ -491,6 +499,18 @@ is read-only. Files
 above 50 MB are refused. **Ignore whitespace** (off by default) leaves out differences in
 the blanks at the start and the end of a line — not the spaces between words, so after
 Remove Spaces every line whose inner spaces went still shows as changed.
+
+## Checking gEdit against your own programs
+
+gEdit is tested against programs written for it and against a few the owner published. If you
+build it yourself you can also check it against your own, which never leave your disk: put
+them in `tests/real/` (or the folder `GEDIT_REAL_FIXTURES` names) with a `manifest.json`, and
+run `npm test -- realFixtures`. For each program it checks that the dialect is detected as
+you said, that no unknown mark is left outside comments (except the ones you list with a
+reason), that the program map and the tool list name the tools you expect, that the file
+survives a byte-exact round trip, that Scale Feed and Scale Speed at 100 % give back every
+byte, and that nothing crashes. It prints counts only, never a file name or program text.
+The manifest and the report are described in [tests/real/README.md](../../tests/real/README.md).
 
 ## Settings
 
@@ -523,13 +543,11 @@ Being clear about this saves disappointment on the shop floor.
   know where the tool is.
 - **No machine communication.** No DNC, no serial, no FTP, no drip feed.
 - **No program management.** No library, no job list, no PDM or ERP link.
-- **Five dialects: Fanuc mill, Fanuc lathe, Heidenhain Klartext, and Okuma OSP and
-  Sinumerik 840D for turning.** Milling on an Okuma or a Siemens control is not covered. An
-  Okuma milling program opens with the turning profile, which reads its tool changes and
-  some of its codes wrongly; a Siemens one usually opens as Fanuc (ISO) mill, which also
-  reads its `;` comments and quoted tool names as code — see
-  [Dialects](dialects.md#milling-on-okuma-and-sinumerik). A program for any other control
-  opens with the profile that fits best.
+- **Six dialects: Fanuc mill, Fanuc lathe, Heidenhain Klartext, Okuma OSP for turning, and
+  Sinumerik 840D for turning and for milling.** Milling on an Okuma control is not covered:
+  an Okuma milling program opens with the turning profile, which reads some of its codes
+  wrongly — see [Dialects](dialects.md#milling-on-okuma-and-sinumerik). A program for any
+  other control opens with the profile that fits best.
 - **gEdit does not know your machine unless you tell it.** Whether `X50` is 50 mm or
   0.050 mm, which G-code system a lathe uses, what is modal at power-on: all of that is a
   machine setting, and with no machine configured gEdit says "assumed" and refuses to

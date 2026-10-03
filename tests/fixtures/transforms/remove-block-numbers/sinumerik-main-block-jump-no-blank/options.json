@@ -1,0 +1,10 @@
+{
+  "note": "M9 NC review F2: 'GOTOB:20' written without the blank names the main block ':20' as 'GOTOB :20' does, so the block keeps its number. Before, the jump was read as a label and a word, and the run removed its target.",
+  "profile": "sinumerik",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.removeBlockNumbers.summary",
+    "skipped": [{ "line": 2, "severity": "info" }],
+    "warnings": ["ncNumbering.removeBlockNumbers.keptReferenced"]
+  }
+}

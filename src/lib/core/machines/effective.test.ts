@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { BUILTIN_PROFILE_JSON } from '$lib/data/profiles';
+import { mergeProfile } from '$lib/core/profiles/resolve';
 import { validateProfile } from '$lib/core/profiles/validate';
 import { applyMachine, compatible, defaultParams, effectiveKey, effectiveMachine, noMachine } from './effective';
 import type { Profile } from '$lib/core/profiles/types';
@@ -36,7 +37,7 @@ describe('defaultParams', () => {
     expect(params.numberInput?.mode).toBe('calculator');
     expect(params.units).toBe('mm');
     expect(params.diameter).toBe('on');
-    expect(params.variants).toEqual({ gcodeSystem: 'A' });
+    expect(params.variants).toEqual({ gcodeSystem: 'A', incrementalAddresses: 'uw', toolWord: 'offset2' });
     expect(defaultParams(MILL).numberInput?.mode).toBe('increment');
     expect(defaultParams(MILL).diameter).toBeNull();
   });
@@ -95,7 +96,7 @@ describe('effectiveMachine', () => {
       params: { variants: { gcodeSystem: 'Z', nosuch: 'x' }, modalInitial: { feedmode: 'G95', coolant: 'M8' } },
     });
     const eff = effectiveMachine(LATHE, odd, 'document', {});
-    expect(eff.params.variants).toEqual({ gcodeSystem: 'A' });
+    expect(eff.params.variants).toEqual({ gcodeSystem: 'A', incrementalAddresses: 'uw', toolWord: 'offset2' });
     expect(eff.params.modalInitial).toEqual({ feedmode: 'G95' });
   });
 
@@ -142,7 +143,14 @@ describe('applyMachine', () => {
       const applied = applyMachine(p, noMachine(p));
       const { modal: appliedModal, ...appliedRest } = applied.profile as Record<string, unknown>;
       const { modal: ownModal, ...ownRest } = p as unknown as Record<string, unknown>;
-      expect(appliedRest, p.id).toEqual(ownRest);
+      // M9 (R6): a variant's default choice is always applied (AD-31), so the expected
+      // profile is the resolved one with exactly those overlays merged in, and nothing else.
+      let expected: Record<string, unknown> = ownRest;
+      for (const variant of p.machineParams?.variants ?? []) {
+        const choice = variant.choices.find((c) => c.value === variant.default);
+        if (choice?.overlay) expected = mergeProfile(expected, choice.overlay as Record<string, unknown>);
+      }
+      expect(appliedRest, p.id).toEqual(expected);
       expect((appliedModal as { initial?: unknown })?.initial, p.id).toEqual(
         (ownModal as { initial?: unknown })?.initial,
       );

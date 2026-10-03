@@ -1,0 +1,14 @@
+{
+  "note": "M9 NC review F2: written without the blank, 'GOTOF:70' tokenizes as a jump label 'GOTOF:' and a word of no address. A label named like a jump cannot be a label, so its colon is the main prefix and the jump names the main block ':70', which it follows to ':160', as 'GOTOB:20' behind an IF follows ':20' to ':110'. Before, ':70' was renumbered and 'GOTOF:70' was neither rewritten nor reported.",
+  "profile": "sinumerik",
+  "options": { "start": 100, "step": 10 },
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      { "line": 1, "severity": "info" },
+      { "line": 2, "severity": "info" }
+    ],
+    "warnings": ["ncNumbering.renumber.referencesRewritten"],
+    "preflight": null
+  }
+}

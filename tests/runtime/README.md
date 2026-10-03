@@ -7,8 +7,10 @@ through `data-testid` attributes and the `window.__gedit` test hook (phase 1 pla
 never through visible text.
 
 It is the only test layer that runs the whole app, so it is what proves the behaviour
-of the window, the file operations and the backend. It is **not** part of CI: it needs
-a real macOS desktop.
+of the window, the file operations and the backend. It needs a real macOS desktop, which
+a GitHub-hosted macOS runner has: `.github/workflows/harness.yml` runs the cumulative suite
+there on every push to `main` and on demand (see [On a hosted runner](#on-a-hosted-runner)).
+It is not part of `ci.yml`, which runs on every pull request.
 
 ## Prerequisites
 
@@ -77,13 +79,33 @@ tests/runtime/suite.sh tests/runtime/suites/m0.txt   # run a suite and print the
   shown, and stays hidden.
 - The repository is never modified. The patched copy is.
 
+## On a hosted runner
+
+`harness.yml` runs `sync.sh` and then `suite.sh tests/runtime/suites/m{0..9}.txt` on `macos-14`
+(30 minute limit), always uploads `$GEDIT_RH_DIR/out`, the app logs and the sync logs, and
+caches the build directory. What differs from the owner's Mac, and how the scenarios deal with it:
+
+- The runner has a live, unlocked session with Accessibility already granted, so no setup
+  step is needed. The harness is unchanged.
+- The login shell is bash and the runner is macOS 14. The workflow sets `SHELL=/bin/zsh`; the
+  Python lookup scenarios (`m0-py3-default`, `m0-py3-zdotdir`) write zsh profiles and pin
+  `SHELL` to `/bin/zsh` themselves, so they mean the same on both machines.
+- Button order read back from an alert is the OS's business: `m0-encoding` checks the set of
+  buttons. `m0-py3-stub` compares the interpreter by real path, since Homebrew's layout differs.
+- A wall-clock check measured on the owner's Mac is scaled when `CI` is set (`h.cfg.ci`), by the
+  same factor as the unit tests (`tests/unit/helpers/budget.ts`): the "switching away from the
+  10 MB document is cheap" check of `m1-perf-open` and `m5-perf-open`. The G7 budgets stay
+  as they are.
+- The cached-interpreter check of `m0-py3-default` counts how often the login shell read the
+  profile instead of comparing two run times.
+
 ## Suites
 
-One file per milestone, `suites/m0.txt` … `suites/m8.txt`: one scenario name per line, `#`
+One file per milestone, `suites/m0.txt` … `suites/m9.txt`: one scenario name per line, `#`
 starts a comment. A cumulative run is all of them in order:
 
 ```sh
-tests/runtime/suite.sh tests/runtime/suites/m{0,1,2,3,4,5,6,7,8}.txt
+tests/runtime/suite.sh tests/runtime/suites/m{0,1,2,3,4,5,6,7,8,9}.txt
 ```
 
 ## PASS, FLAKY, FAIL, BLOCKED

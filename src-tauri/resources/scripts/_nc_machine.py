@@ -171,20 +171,33 @@ def machine_params(ctx: Dict[str, Any]) -> Dict[str, Any]:
 # The class order of `number_class_of` is fixed by AD-31 and the first match wins:
 #   1. the `unit` of a `CodeParam` of a code in this block (`increment`, `count`, or a
 #      class named outright) — the table in §8.2 is the one place these are written down;
+#      then (M9) the same of a code **in force** (`in_force`: the modal cycle, the motion
+#      code, a mode such as `G63`). A thread lead is declared this way (`F` with `unit:
+#      'feedPerRev'`), and so is the per-minute feed of Okuma `G101`-`G103`;
 #   2. the feed word of an `fNotFeed` block -> `dwell`;
-#   3. the feed word in a block that carries a pitch feed, or under an active pitch cycle
-#      -> `feedPerRev`: a thread lead is always per revolution, whatever the modal feed
-#      mode says;
+#   3. the feed word of a `pitchFeedAmbiguous` block -> no class; under a pitch the caller
+#      could not name (`pitch_feed` with no `pitchFeed` code in the block or in
+#      `in_force`) -> `feedPerRev` in feed per revolution, where a lead and a tap's feed
+#      are the same kind of number, and no class otherwise;
 #   4. `addresses.angular` -> `angle`;
-#   5. the feed word -> `feedPerMin` / `feedPerRev` from the modal feed unit;
+#   5. the feed word -> `feedPerMin` / `feedPerRev` from the modal feed unit, and (M9)
+#      `feedPerTooth` / `inverseTime`, two classes no machine declares a reading for;
 #   6. axes, incremental twins, arc centres, `R` and cycle depths -> `length`;
 #   7. nothing else has a class: `S`, `T`, `D`, `H`, `N`, `O`, `G`, `M` and every
 #      `unit: 'count'` word are never converted.
 #
+# A pitch is a lead only where the database says so (M9, WP9.5a). Until M9 rule 3 made
+# every feed under a `pitchFeed` code a feed per revolution, but a tap is not a thread: the
+# `F` of a Fanuc mill `G84`, of Okuma `G184` or of a `G63` mode is the tap's feed in the
+# unit in force (per minute under `G94`), and read per revolution it was 100x off on an
+# Okuma 1 um machine. Such a code keeps `pitchFeed` — nothing may scale its feed — and its
+# `F` follows rule 5.
+#
 # `None` is also the answer where the class cannot be told — a feed while the feed unit is
-# unknown, or the feed of a block whose code is a threading cycle somewhere else
-# (`pitchFeedAmbiguous`). A word without a class gets no value, and every consumer leaves
-# it alone and reports it, which is the whole point.
+# unknown, the feed of a block whose code is a threading cycle somewhere else
+# (`pitchFeedAmbiguous`), or a feed per minute under a pitch nobody named. A word without a
+# class gets no value, and every consumer leaves it alone and reports it, which is the
+# whole point.
 # ---------------------------------------------------------------------------
 
 #: Why :func:`write_back` refused. The TypeScript twin answers the same three cases with
@@ -204,6 +217,11 @@ _EXTRA_LENGTH_ADDRESSES = ("R",)
 #: The classes whose unit follows the program's mm/inch state. Angles and dwell do not:
 #: an IS-B control reads ``C90000`` as 90 degrees in a metric and in an inch program.
 _UNIT_CLASSES = ("length", "feedPerMin", "feedPerRev")
+
+#: M9 (WP9.5a): the feed classes no machine declares a reading for — a feed per tooth and
+#: an inverse-time feed. As written on a profile that declares no number input, no value on
+#: one that does (``UndeclaredFeedClass`` in ``types.ts``).
+_UNDECLARED_CLASSES = ("feedPerTooth", "inverseTime")
 
 #: Decimals the division in :func:`write_back` is carried to before the format rounds it.
 _DIVISION_SCALE = 24
@@ -320,16 +338,34 @@ def _feed_words(addresses: Dict[str, Any], unit_words: Dict[str, str]) -> set:
 
 
 def _feed_class_of(unit: Any) -> Optional[str]:
-    """The feed class of a feed unit, or ``None`` while the unit says nothing about it.
+    """The feed class of a feed unit, or ``None`` while the unit is unknown.
 
-    ``per-tooth`` has no class of its own, ``inverse-time`` is not a length per time at
-    all, and ``unknown`` is the honest answer of a tracker that has not seen a feed mode
-    yet. All three get no value rather than the wrong one.
+    M9 (WP9.5a): a feed per tooth and an inverse-time feed have a class of their own, so a
+    consumer can say what such a word is; no machine declares a reading for either
+    (:data:`_UNDECLARED_CLASSES`). ``unknown`` is the honest answer of a tracker that has
+    not seen a feed mode yet, and it still has no class.
     """
     if unit == "per-minute":
         return "feedPerMin"
     if unit == "per-rev":
         return "feedPerRev"
+    if unit == "per-tooth":
+        return "feedPerTooth"
+    if unit == "inverse-time":
+        return "inverseTime"
+    return None
+
+
+def _declared_unit(codes: "Sequence[Dict[str, Any]]", word: str) -> Optional[str]:
+    """The ``unit`` one of ``codes`` declares for ``word`` among its parameters, or ``None``."""
+    for entry in codes:
+        params = entry.get("params")
+        for param in params if isinstance(params, list) else []:
+            if not isinstance(param, dict):
+                continue
+            param_address = param.get("address")
+            if isinstance(param_address, str) and param_address.upper() == word and param.get("unit") is not None:
+                return param["unit"]
     return None
 
 
@@ -343,6 +379,7 @@ def number_class_of(
     feed_unit: str,
     block_codes: "Sequence[Dict[str, Any]]",
     pitch_feed: bool = False,
+    in_force: "Optional[Sequence[Dict[str, Any]]]" = None,
 ) -> Optional[str]:
     """The number class of one address in one block, or ``None`` when it has none.
 
@@ -350,7 +387,10 @@ def number_class_of(
     ``feed_unit`` what the modal state says is in force (``'per-minute'``, ``'per-rev'``,
     ``'per-tooth'``, ``'inverse-time'`` or ``'unknown'``), ``block_codes`` the database
     entries of the codes in this block, and ``pitch_feed`` whether this block or the cycle
-    that is active cuts a thread.
+    that is active carries a pitch feed. ``in_force`` (M9) are the entries of the codes in
+    force that the block does not write — the modal cycle, the motion code, a mode such as
+    ``G63``; a caller without them passes nothing, and a pitch it flags is then one it
+    could not name (rule 3).
 
     The answer is a class, ``'increment'`` or ``'count'`` (both from ``CodeParam.unit``),
     or ``None``. The order is the one in the header of this section, and the first match
@@ -360,16 +400,15 @@ def number_class_of(
     if word == "":
         return None
     codes = [entry for entry in (block_codes or []) if isinstance(entry, dict)]
+    active = [entry for entry in (in_force or []) if isinstance(entry, dict)]
 
-    # 1. what the code database says about this parameter of this code
-    for entry in codes:
-        params = entry.get("params")
-        for param in params if isinstance(params, list) else []:
-            if not isinstance(param, dict):
-                continue
-            param_address = param.get("address")
-            if isinstance(param_address, str) and param_address.upper() == word and param.get("unit") is not None:
-                return param["unit"]
+    # 1. what the code database says about this parameter of this code, then of the code
+    #    in force: a lead is declared here (`F` with `unit: 'feedPerRev'`), never inferred
+    declared = _declared_unit(codes, word)
+    if declared is None:
+        declared = _declared_unit(active, word)
+    if declared is not None:
+        return declared
 
     addresses = _dict(_dict(profile).get("addresses"))
     unit_words = _feed_unit_words(addresses)
@@ -379,16 +418,24 @@ def number_class_of(
         # 2. a block where the feed word is a time
         if any(entry.get("fNotFeed") is True for entry in codes):
             return "dwell"
-        # 3. a thread lead, whatever the modal feed mode says
-        if pitch_feed is True or any(entry.get("pitchFeed") is True for entry in codes):
-            return "feedPerRev"
-        # …and a code that may be a threading cycle somewhere else tells us nothing
+        # 3. a code that may be a threading cycle somewhere else tells us nothing…
         if any(entry.get("pitchFeedAmbiguous") is True for entry in codes):
             return None
+        # …and neither does a pitch nobody named: a lead and a tap's feed are only the
+        # same kind of number in feed per revolution.
+        named = any(entry.get("pitchFeed") is True for entry in codes + active)
+        if pitch_feed is True and not named:
+            unit = _first_present(unit_words.get(word), feed_unit)
+            return "feedPerRev" if unit == "per-rev" else None
 
-    # 4. rotary axes
+    # 4. rotary axes, and an incremental twin of one: `H90.` is 90 degrees of C, never
+    #    90 mm (M9 review F9)
     if _has_upper(addresses.get("angular"), word):
         return "angle"
+    for twin, axis in _dict(addresses.get("incremental")).items():
+        if isinstance(twin, str) and twin.upper() == word and isinstance(axis, str):
+            if _has_upper(addresses.get("angular"), axis.upper()):
+                return "angle"
 
     # 5. the feed word, by the unit in force
     if word in feed_words:
@@ -430,17 +477,28 @@ def _number_input_of(machine: Any) -> Optional[Dict[str, Any]]:
     return number_input if isinstance(number_input, dict) else None
 
 
-def _unit_of(number_class: str, number_input: Dict[str, Any], units: str) -> Any:
-    """The increment (``increment``) or the value of a written "1" (``scale``)."""
+def _unit_of(number_class: str, number_input: Dict[str, Any], units: str, mode: Any) -> Any:
+    """The increment (``increment``) or the value of a written "1" (``scale``).
+
+    An inch unit that is not declared is a tenth of the metric one only where the class is
+    read in increments (or as written, where the unit is never used): the increment
+    systems' own rule. A **scaled** reading is a unit system, which declares its inch unit
+    or has none — the Okuma 10 um system has no inch counterpart, and inventing 0.001 in
+    for it (M9, WP9.5a) gave an inch program a value no control reads.
+    """
     entry = _dict(_dict(number_input.get("classes")).get(number_class))
     if number_class in _UNIT_CLASSES:
+        invent = mode != "scale"
         increment = entry.get("increment")
         if isinstance(increment, str):
             if units == "inch":
-                return _first_present(entry.get("incrementInch"), _tenth_of(increment))
+                return _first_present(entry.get("incrementInch"), _tenth_of(increment) if invent else None)
             return increment
         if units == "inch":
-            return _first_present(number_input.get("incrementInch"), _tenth_of(number_input.get("incrementMm")))
+            return _first_present(
+                number_input.get("incrementInch"),
+                _tenth_of(number_input.get("incrementMm")) if invent else None,
+            )
         return number_input.get("incrementMm")
     if number_class == "angle":
         return _first_present(entry.get("increment"), number_input.get("incrementDeg"), number_input.get("incrementMm"))
@@ -470,16 +528,21 @@ def _reading_for(
     # No declaration: the profile's own JSON decides, and it says what it says — as written.
     if not isinstance(number_input, dict):
         return ("calculator", "1")
+    # A feed per tooth or an inverse-time feed: no machine declares how it reads one (M9),
+    # so on a profile that declares number input at all, it has no reading.
+    if number_class in _UNDECLARED_CLASSES:
+        return None
 
     key = "length" if number_class == "increment" else number_class
     entry = _dict(_dict(number_input.get("classes")).get(key))
     mode = _first_present(entry.get("mode"), number_input.get("mode"))
-    unit = _unit_of(key, number_input, units)
+    reading = ("scale" if mode == "scale" else "increment") if number_class == "increment" else mode
+    unit = _unit_of(key, number_input, units, reading)
     if not isinstance(unit, str):
         return None
 
     if number_class == "increment":
-        return ("scale" if mode == "scale" else "increment", unit)
+        return (reading, unit)
     if mode not in ("increment", "calculator", "scale"):
         return None
     return (mode, unit)

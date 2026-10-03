@@ -1,0 +1,23 @@
+{
+  "about": "M9 review F5/F11 (plan 7.4 rule 11): under M89 a positioning block runs the defined cycle. CC only sets the circle centre (the pole) and moves nothing, so it is no positioning block: its X and Y are data (axisWords: data), like those of BLK FORM.",
+  "input": "pole.h",
+  "states": [
+    { "line": 5,
+      "about": "The stock form's corners are values, not positions.",
+      "after": { "definedCycle": null, "modalCall": null, "block": { "cycle": null } } },
+    { "line": 18,
+      "about": "Rule 4: M89 runs the cycle in its own block and starts the modal call.",
+      "after": { "modalCall": "M89", "definedCycle": "CYCL DEF 200", "block": { "cycle": "CYCL DEF 200" } } },
+    { "line": 19,
+      "about": "CC X+50 Y+50 sets the pole: no move, so no cycle, and the modal call stays.",
+      "after": { "modalCall": "M89", "definedCycle": "CYCL DEF 200", "block": { "cycle": null } } },
+    { "line": 20,
+      "after": { "modalCall": "M89", "block": { "cycle": "CYCL DEF 200" } } },
+    { "line": 21,
+      "about": "A pole at the origin is no position either.",
+      "after": { "modalCall": "M89", "block": { "cycle": null } } },
+    { "line": 22,
+      "about": "M99 on the last position runs the cycle once and ends the modal call.",
+      "after": { "modalCall": null, "definedCycle": "CYCL DEF 200", "block": { "cycle": "CYCL DEF 200" } } }
+  ]
+}

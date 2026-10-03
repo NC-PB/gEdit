@@ -234,7 +234,9 @@ scenario('m8-sinumerik', { timeout: 540, files: REPO_FILE }, async (h) => {
   const alone = await suggestAt(h, scratch, 2, endOf(2))
   const aloneLabels = alone.db.map((row) => row.label)
   h.check('CYCLE8 offers the CYCLE8x cycles of the database, and nothing else', alone.showing && aloneLabels.length === cycles.length && cycles.every((code) => aloneLabels.includes(code)), { got: aloneLabels, want: cycles })
-  h.check('in the order of their numbers: CYCLE840 after CYCLE89', aloneLabels.indexOf('CYCLE840') === aloneLabels.length - 1 && aloneLabels.indexOf('CYCLE89') === aloneLabels.length - 2, aloneLabels)
+  // M9 (WP9.1) added CYCLE800 and CYCLE832 to the database; by number they come after
+  // CYCLE89 and before CYCLE840.
+  h.check('in the order of their numbers: CYCLE89, then CYCLE800, CYCLE832 and CYCLE840', JSON.stringify(aloneLabels.slice(-4)) === JSON.stringify(['CYCLE89', 'CYCLE800', 'CYCLE832', 'CYCLE840']), aloneLabels)
   const behindMcall = await suggestAt(h, scratch, 3, endOf(3))
   h.check('behind MCALL, the same cycles', JSON.stringify(behindMcall.db.map((row) => row.label)) === JSON.stringify(aloneLabels), behindMcall.db.map((row) => row.label))
   const behindMove = await suggestAt(h, scratch, 4, endOf(4))

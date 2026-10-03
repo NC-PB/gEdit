@@ -1,0 +1,10 @@
+{
+  "message": "Scaled 1 of 2 feed rates to 90 %; 1 left in a thread block whose lead is written elsewhere. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 8,
+      "severity": "warning",
+      "message": "F0.3 is not scaled: G33 takes its lead from I, J or K, not from F, and does not cut with this F, which stays the feed in force for the blocks after the thread. Check those feeds by hand."
+    }
+  ]
+}

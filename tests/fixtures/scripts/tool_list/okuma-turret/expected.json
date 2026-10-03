@@ -38,7 +38,7 @@
       "line": 8,
       "calls": 1,
       "feed": "0.3 /rev",
-      "speed": "180 surface"
+      "speed": "180 m/min (G96)"
     },
     {
       "tool": "T2",
@@ -87,7 +87,7 @@
     {
       "line": 28,
       "severity": "info",
-      "message": "T7: the S of 1 block is a surface speed (G96), not a spindle speed, so it is not in the range."
+      "message": "T7: the S of 1 block is a surface speed in m/min (G96), not a spindle speed, so it is not in the range."
     },
     {
       "line": 43,

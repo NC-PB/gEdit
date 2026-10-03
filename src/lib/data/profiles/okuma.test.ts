@@ -113,6 +113,8 @@ function scores(path: string | null, text: string): Map<string, number> {
         }
       }
     }
+    // A veto (`detect.vetoes`, rule 5 of detect.ts) takes the profile out of the file.
+    if (cp.re.detectVetoes.some((veto) => lines.some((line) => veto.test(line)))) score = 0;
     out.set(cp.profile.id, score);
   }
   return out;
@@ -712,7 +714,8 @@ describe('the machine parameters', () => {
     expect(decl?.units).toBe('mm');
     expect(decl?.diameter).toBe('on');
     expect(decl?.modalGroups).toEqual(['feedmode', 'distance', 'spindlemode']);
-    expect(decl?.variants).toBeUndefined();
+    // M9 (R6): the one variant is the tool word's offset digits (r6Variants.test.ts).
+    expect(decl?.variants?.map((v) => v.id)).toEqual(['toolWord']);
     expect(okuma.profile.modal?.initial).toEqual({ feedmode: 'G95', distance: 'G90' });
     expect(okuma.profile.machineType).toBe('lathe');
     // No built-in ships a channel preset in Phase 2 (§8.9, D58).

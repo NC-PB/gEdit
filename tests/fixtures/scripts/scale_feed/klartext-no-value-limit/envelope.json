@@ -1,5 +1,5 @@
 {
-  "message": "Scaled 3 feed rates to 120 %; 1 clamped to a limit, 1 scaled without a limit check. No machine: profile defaults assumed.",
+  "message": "Scaled 3 feed rates to 120 %; 1 clamped to a limit, 2 scaled without the limits, which are for feeds per minute. No machine: profile defaults assumed.",
   "findings": [
     {
       "line": 5,
@@ -9,7 +9,12 @@
     {
       "line": 6,
       "severity": "warning",
-      "message": "FZ0.05 is scaled, but the feed limits were not applied to it: gEdit cannot say what this feed is worth here."
+      "message": "FZ0.05 is scaled, but the feed limits were not applied to it: it is a feed per tooth, and the limits are for feeds per minute."
+    },
+    {
+      "line": 7,
+      "severity": "warning",
+      "message": "FU0.12 is scaled, but the feed limits were not applied to it: it is a feed per revolution, and the limits are for feeds per minute."
     }
   ]
 }

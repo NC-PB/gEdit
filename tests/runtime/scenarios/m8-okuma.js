@@ -354,7 +354,23 @@ scenario('m8-okuma', { timeout: 540, files: REPO_FILE }, async (h) => {
   h.check('with the 1 mm system picked, the documented default', numberInput.selected === defaultPreset?.label, numberInput.selected)
   h.check('each label says that the unit scales every number, a decimal point included', presets.slice(1).every((preset) => /every number scaled, point or not/.test(preset.label)), presets.map((preset) => preset.label))
   h.check('and X is a diameter unless the machine says otherwise', ticked(h, 'diameter') === true, ticked(h, 'diameter'))
-  h.check('an Okuma machine has no G-code system to choose', fields.includes('numberInput') && !fields.some((field) => field?.startsWith('variant.')), fields)
+  // M9 (WP9.4, R6): the one variant of an Okuma machine is how the `T` word splits. There is
+  // still no G-code system to choose.
+  const toolWordDecl = profile.machineParams?.variants?.find((variant) => variant.id === 'toolWord')
+  const toolWord = choiceOf(h, 'variant.toolWord')
+  h.check(
+    'an Okuma machine has no G-code system to choose; its only variant is the tool word',
+    fields.includes('numberInput') && JSON.stringify(fields.filter((field) => field?.startsWith('variant.'))) === JSON.stringify(['variant.toolWord']),
+    fields,
+  )
+  h.check(
+    'the tool word offers the two readings the profile declares, in its order, with the documented default picked',
+    toolWordDecl !== undefined &&
+      JSON.stringify(toolWord.labels) === JSON.stringify(toolWordDecl.choices.map((choice) => choice.label)) &&
+      toolWord.labels.length === 2 &&
+      toolWord.selected === toolWordDecl.choices.find((choice) => choice.value === toolWordDecl.default)?.label,
+    { offered: toolWord.labels, selected: toolWord.selected },
+  )
 
   await clickMachineAction(h, 'cancel')
   await closeSettingsDialog(h)

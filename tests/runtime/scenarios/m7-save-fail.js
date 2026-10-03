@@ -5,21 +5,24 @@
 // gEdit writes **in place** (P1 AD-7: identity and ACLs on a share), and an in-place
 // write truncates before the first byte lands. So a write that fails can leave the file
 // shorter than it was — which is why the copy is taken immediately before it, and why
-// the failure names the copy instead of apologising. Two failures, each with both
+// the failure names the copy instead of apologising. Three failures, each with both
 // answers:
 //
-//   1. **the write fails** — the copy was made, the message says where it is, Cancel
-//      leaves the tab exactly as it was, and Save As gets the work onto another file.
-//      Reached by **Save As onto a file this user may not write**, and it has to be:
-//      plain Save never gets there any more. The file is made unwritable with `chflags
-//      uchg`, and since the G8 M7 fix `files_stat` answers "may **this user** write
-//      it" rather than "may nobody write it" — so AD-23 catches the immutable flag the
-//      same way it catches mode 444, and Save goes to Save As before a copy is made or
-//      a byte is truncated. (Part A checks that too, on the way past.) A target the
-//      user has just picked and confirmed in the native dialog is deliberately not
-//      pre-checked (§7.2: the guard asks about the file the document *owns*), so that
-//      is the one path left to `open(2)`'s refusal — and it is the real one: Save As
-//      onto a released program that is locked.
+//   1. **the write would fail** — a file this user may not write. Since M9 (WP9.5b) the
+//      app finds that out **before** anything happens to it, in both ways to reach it:
+//      plain Save goes to Save As (AD-23, `files_stat` answers "may **this user** write
+//      it", so the immutable flag set with `chflags uchg` counts like mode 444), and a
+//      Save As **onto** such a file (the path a user picks and confirms in the native
+//      dialog) is checked too and goes back to the dialog, with no copy made and no byte
+//      truncated. Cancel at the dialog leaves the tab exactly as it was, and choosing
+//      another file gets the work onto it.
+//   1b. **the write fails once it has begun** — the branch the copy exists for. A file
+//      this user may write, on a volume with no room (a 1 MB disk image, filled): the
+//      stat lets the save through, the copy is made, the open truncates the file and the
+//      first bytes of the new text meet `ENOSPC`. The message says where the copy is,
+//      Cancel leaves the tab exactly as it was, and Save As gets the work onto another
+//      file. Nothing else in the harness can fail a write after a stat that said yes, and
+//      before this part M9 had left that branch to two unit tests.
 //   2. **the copy fails** — the question is asked before anything is written, and
 //      **Cancel writes nothing at all**: the file on disk is still the last good
 //      version and the buffer still holds the new one. That sentence is what makes
@@ -35,7 +38,7 @@
 // left the first kilobyte in place would pass a `includes()` and fail this.
 
 import { scenario } from '../lib/index.js'
-import { context, copyFile, historyOf, openPath, osOp, ready, whileImmutable } from './m7-common.js'
+import { context, copyFile, historyOf, openPath, osOp, ready, whileImmutable, withSmallVolume } from './m7-common.js'
 
 const version = (/** @type {string} */ mark) => `%\nO0200 (VERSION ${mark})\nG0 X1.\nM30\n%\n`
 
@@ -70,45 +73,75 @@ scenario('m7-save-fail', { timeout: 300 }, async (h) => {
     )
 
     // --- Cancel -------------------------------------------------------------------
-    // Save As **onto** that same file: the one path left to a write that fails. The
-    // alert is answered before anything else is asked of the app: listing a folder
-    // goes through the script backend (`m2-common.js`), and running a script while a
-    // native modal owns the main thread is a race this scenario does not need to take.
+    // Save As **onto** that same file: the target is found read-only before anything
+    // happens to it (M9, WP9.5b), so the dialog comes back; cancelling it ends the save.
     await h.dialogs.queue('save', prog)
-    const saving = ctx.files.saveAs(id)
-    const alert = await h.alert.wait({ timeout: 20000 })
-    h.check('it offers to put the work somewhere else', (alert?.buttons ?? []).includes('Save As…'), alert?.buttons)
-
-    await h.alert.click('Cancel')
-    h.check('the save reports that it did not happen', (await saving) === false)
+    await h.dialogs.queue('save', null)
+    const saved = await ctx.files.saveAs(id)
+    h.check('the save reports that it did not happen', saved === false)
     await h.idle()
 
     const copies = await historyOf(h, prog)
-    h.check('the copy was made before the write was attempted', copies.length === 1 && copies[0].hex === onDisk, { entries: copies.map((e) => e.name) })
-    h.check(
-      'and the failure said where that copy is, in the message itself',
-      copies.length === 1 && (alert?.texts ?? []).some((/** @type {string} */ text) => text.includes(copies[0].path)),
-      { path: copies[0]?.path, texts: alert?.texts },
-    )
-
+    h.check('no copy was made of a file the work was never going to replace', copies.length === 0, { entries: copies.map((e) => e.name) })
     h.check('the file on disk is untouched — the same bytes, not a shorter file', (await h.disk.hex(prog)) === onDisk, { now: (await h.disk.hex(prog)).length, before: onDisk.length })
     h.check('the tab still holds the work, still unsaved', ctx.editor.getText(id) === typed && ctx.docs.get(id)?.dirty === true, { dirty: ctx.docs.get(id)?.dirty })
 
     // --- Save As ------------------------------------------------------------------
-    // The same failure, taken up on its offer: the buffer is the only full copy of the
-    // new version, and this is the way out the message points at.
+    // The same pick, answered the second time with another file: the buffer is the only
+    // full copy of the new version, and this is the way out.
     const elsewhere = `${h.cfg.run}/work/rescued.nc`
-    // Two answers: the locked file again for the Save As that fails, and the rescue
-    // path for the Save As the failure itself offers.
     await h.dialogs.queue('save', prog)
     await h.dialogs.queue('save', elsewhere)
-    const retry = ctx.files.saveAs(id)
-    await h.alert.wait({ timeout: 20000 })
-    await h.alert.click('Save As…')
-    h.check('Save As from the failure saves', (await retry) === true)
+    h.check('Save As from the locked file’s pick saves to the file chosen next', (await ctx.files.saveAs(id)) === true)
     await h.idle()
     h.check('the work is on the other file', (await h.disk.read(elsewhere)).includes('(VERSION UNWRITTEN)'), (await h.disk.read(elsewhere)).slice(0, 40))
     h.check('and the file that could not be written is still its old self', (await h.disk.hex(prog)) === onDisk)
+  })
+
+  // ============================================== A2. the write fails once it has begun
+  const mount = `${h.cfg.run}/work/full`
+  await withSmallVolume(h, mount, async () => {
+    const target = `${mount}/full.nc`
+    await copyFile(h, source, target)
+    const full = await openPath(h, target)
+    const before = await h.disk.hex(target)
+    // The volume is full from here on; the file on it is one this user may write.
+    await osOp(h, 'fill', mount)
+    const text = `%\nO0300 (VERSION NO ROOM)\n${'G1 X1.\n'.repeat(30000)}M30\n%\n`
+    ctx.editor.replaceAll(full.id, text)
+    await h.waitFor(() => !!h.q('doc-tab', { docId: full.id, dirty: '1' }), { timeout: 20000 })
+    const work = ctx.editor.getText(full.id)
+
+    const saving = ctx.files.save(full.id)
+    const alert = await h.alert.wait({ timeout: 30000 })
+    h.check('a write that begins and fails is a question: the work can go somewhere else', (alert?.buttons ?? []).includes('Save As…') && (alert?.buttons ?? []).includes('Cancel'), alert?.buttons)
+    await h.alert.click('Cancel')
+    h.check('cancelling it reports that the save did not happen', (await saving) === false)
+    await h.idle()
+
+    const copies = await historyOf(h, target)
+    h.check('the copy was made before the write was attempted: the previous version, byte for byte', copies.length === 1 && copies[0].hex === before, { entries: copies.map((e) => e.name) })
+    h.check(
+      'and the failure said where that copy is, in the message itself',
+      copies.length === 1 && (alert?.texts ?? []).some((/** @type {string} */ line) => line.includes(copies[0].path)),
+      { path: copies[0]?.path, texts: alert?.texts },
+    )
+    h.check('the tab still holds the work, still unsaved', ctx.editor.getText(full.id) === work && ctx.docs.get(full.id)?.dirty === true, { dirty: ctx.docs.get(full.id)?.dirty })
+
+    // Save As, which is what the alert offered: the buffer is the only full copy of the
+    // new version now that the file on the volume has been truncated.
+    const rescued = `${h.cfg.run}/work/rescued-full.nc`
+    await h.dialogs.queue('save', rescued)
+    h.check('Save As gets the work onto another file', (await ctx.files.saveAs(full.id)) === true)
+    await h.idle()
+    // The source fixture is CRLF and a save keeps the document's line ending, so the file
+    // holds the work with CRLF: compared whole with the endings normalized, and CRLF kept.
+    const onOther = await h.disk.read(rescued)
+    h.check(
+      'the work is on the other file, whole, in the file\'s own line ending',
+      onOther.replace(/\r\n/g, '\n') === work.replace(/\r\n/g, '\n') && onOther.includes('\r\n') && !/[^\r]\n/.test(onOther),
+      { length: onOther.length, workLength: work.length, tail: JSON.stringify(onOther.slice(-12)) },
+    )
   })
 
   // The document now belongs to the rescued file. Open the original again for part B.
@@ -147,11 +180,8 @@ scenario('m7-save-fail', { timeout: 300 }, async (h) => {
   h.check('the file on disk is the new version', (await h.disk.read(prog)).includes('(VERSION AFTER THE QUESTION)'), (await h.disk.read(prog)).slice(0, 40))
   h.check('the tab is clean again', ctx.docs.get(second.id)?.dirty === false)
   h.check('and the copy really was skipped — the folder in the way is still a folder', (await osOp(h, 'stat', `${prog}.bak`)).isDir === true)
-  // Nothing was added to the history folder here: this file backs up as a sibling now.
-  // What is in it is part A's two attempts — each one copied the file before it tried to
-  // write it, which is the rule, and both copies are of the same good version because
-  // neither write ever landed.
+  // Nothing was added to the history folder here: this file backs up as a sibling now, and
+  // part A never reached a copy (a locked target is refused before one is made).
   const kept = await historyOf(h, prog)
-  h.check('the history folder holds one copy per attempted write, and no more', kept.length === 2, kept.map((e) => e.name))
-  h.check('and every one of them is the good version', kept.every((e) => e.hex === onDisk), kept.map((e) => e.name))
+  h.check('the history folder holds no copy: nothing was copied for a write that could not happen', kept.length === 0, kept.map((e) => e.name))
 })

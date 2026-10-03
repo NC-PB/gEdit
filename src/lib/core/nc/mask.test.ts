@@ -120,6 +120,9 @@ describe('maskComments where a string may hold the comment marker', () => {
     expect(maskComments('$FLANGE.MIN%', okuma)).toBe('$FLANGE.MIN%');
     expect(maskComments('$FLANGE(2).MIN%', okuma)).toBe('$FLANGE(2).MIN%');
     expect(maskComments('%_N_PART_MPF', sinumerik)).toBe('%_N_PART_MPF');
+    // M9: the short transfer header is a header as well, and a comment behind it is blanked.
+    expect(maskComments('%MYPROG_MPF', sinumerik)).toBe('%MYPROG_MPF');
+    expect(maskComments('%MYPROG_MPF ;NOTE', sinumerik)).toBe('%MYPROG_MPF      ');
     // Only at the head of the line: further along, the comment rule applies as always.
     expect(maskComments('G00 X10 (ROUGH) $A.MIN%', okuma)).toBe('G00 X10         $A.MIN%');
   });

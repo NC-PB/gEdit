@@ -111,6 +111,7 @@ class GoldenCases(unittest.TestCase):
                         case["feedUnit"],
                         case["codes"],
                         case.get("pitchFeed", False),
+                        case.get("inForce"),
                     ),
                     case["expected"],
                 )
@@ -214,7 +215,11 @@ class MachineParams(unittest.TestCase):
         wanted = next(p for p in presets if p["id"] == profile["machineParams"]["numberInput"]["default"])
         self.assertEqual(machine["params"]["numberInput"], wanted["value"])
         self.assertEqual(machine["params"]["diameter"], "on")
-        self.assertEqual(machine["params"]["variants"], {"gcodeSystem": "A"})
+        # M9 (R6): the two tool/U-W variants join the G-code system, each at its default.
+        self.assertEqual(
+            machine["params"]["variants"],
+            {"gcodeSystem": "A", "incrementalAddresses": "uw", "toolWord": "offset2"},
+        )
 
     def test_a_profile_that_declares_nothing_reads_its_numbers_as_written(self):
         profile = helpers.load_profile("heidenhain-klartext")

@@ -38,7 +38,7 @@ export type OutlineKind = 'tool' | 'program' | 'section' | 'comment' | 'label' |
 export type MachineType = 'mill' | 'lathe';
 
 /** The unit a feed word is in, once the modal state is known (AD-19). */
-export type FeedUnit = 'per-minute' | 'per-rev' | 'per-tooth' | 'inverse-time' | 'unknown';
+export type FeedUnit = 'per-minute' | 'per-rev' | 'per-tooth' | 'inverse-time' | 'travel-time' | 'unknown';
 
 /** `profile.numbering`, read by renumbering, auto-numbering and go-to-block (WP4.2). */
 export interface NumberingOptions {
@@ -155,6 +155,14 @@ export interface Profile {
     folders?: string[];
     /** Tie-break; higher wins. */
     priority?: number;
+    /**
+     * Evidence that a file is **not** this profile's (M9 NC review F3): when one of these
+     * patterns matches any scanned line, the profile scores nothing for that file,
+     * whatever its content rules add up to. Presence, not weight: the Siemens milling
+     * profile lists the turning words, because one `DIAMON` or `LIMS=` makes a program a
+     * turning (or mill-turn) program however many milling operations it has (R2).
+     */
+    vetoes?: Pattern[];
   };
   syntax: {
     /** Default false: patterns and codes are matched case-insensitively. */
@@ -184,7 +192,26 @@ export interface Profile {
      */
     continuationStart?: Pattern;
     blockSkip?: { chars: string; position: 'before-number' | 'after-number' | 'either'; levels?: boolean };
-    blockNumber: { mode: 'prefix' | 'leading-integer'; prefix?: string; altPrefixes?: string[]; mandatory: boolean };
+    blockNumber: {
+      mode: 'prefix' | 'leading-integer';
+      prefix?: string;
+      altPrefixes?: string[];
+      mandatory: boolean;
+      /**
+       * P9 (§7.1, §7.16, R4). The prefix of a **main** block number, the second kind of
+       * block number a control may have (Sinumerik `:123`, syntax-sinumerik §3.1): a
+       * block number and a jump target like `N123`, which marks the block that starts a
+       * machining section. One character that is not a letter, a digit or a blank.
+       *
+       * At the head of a block it reads as one `blockNumber` token whose `address` is
+       * this character, never as the `:1234` tape marker beside `O1234`; renumbering
+       * numbers it in sequence with the others and keeps its prefix, so a main block stays
+       * one. Unlike `altPrefixes`, which a renumber rewrites to `prefix`. Absent: no main
+       * blocks, and `:` keeps its P1 reading. WP9.3 reads it (tokenizers, grammar), WP9.5
+       * (renumber).
+       */
+      mainPrefix?: string;
+    };
     decimalSeparator: '.' | ',';
     /** True when `X10` and `X10.` mean different values (Fanuc increment system). */
     decimalPointSignificant: boolean;
@@ -280,6 +307,36 @@ export interface Profile {
      * finds it — and the map shows the name as written, read off the real line.
      */
     programNames?: Pattern;
+    /**
+     * P9 (§7.1, §7.16, R4). An assignment word may carry **one bracket index** between its
+     * identifier and the `=`: Sinumerik `LIMS[2]=1800`, `S[2]=500`, `M[SPI]=3`,
+     * `T[1]=5` (syntax-sinumerik §3.2, "indexed address"). The whole is one `word` whose
+     * `address` is the identifier (`LIMS`, `S`), `index` the text inside the brackets
+     * (`'2'`, `'SPI'`) and `valueText` the right-hand side — never a word, an `expression`
+     * and an `operator` with the address lost. Default false: `[` keeps its P1 reading.
+     */
+    assignmentIndex?: boolean;
+    /**
+     * P9 (§7.1, §7.16, R4). Which identifiers of `assignment` are the **control's own**
+     * multi-letter addresses (Okuma `SB=`, `QA=`, `TL=`, `CP=`; syntax-okuma §3.2), as one
+     * pattern the whole identifier has to match. Every other identifier an assignment
+     * reads is a name the program gives a local variable (`DIA1=50` in a `CALL` block).
+     *
+     * The tokenizers read both the same way, one `word` with its `address`, so no token
+     * changes; the grammar paints an address as one and a variable as one, and hover
+     * explains the address and calls the rest a local variable. Absent: the grammar's
+     * reading of P8 (every assignment identifier is looked up as an address).
+     */
+    extendedAddresses?: Pattern;
+    /**
+     * P9 (§7.1, §7.16, R4). The letters that introduce an exponent inside a number:
+     * Sinumerik `EX` (`X=-.1EX-3`, `1.5EX3`; syntax-sinumerik §3.3). With it, `1.5EX3` is
+     * one value of the word in front of it, never a value and an `unknown` token. The
+     * token's `valueText` is the whole text and its `value` is `null`: no reading in
+     * `numbers.ts` computes with an exponent yet, so nothing scales or compares it, and a
+     * script reports it as a value it cannot read. Absent: no exponents (P1 reading).
+     */
+    exponentMarker?: string;
   };
   addresses: {
     tool?: string;
@@ -437,6 +494,8 @@ export interface CompiledProfile {
   flags: 'i' | '';
   re: {
     detectContent: { re: RegExp; weight: number }[];
+    /** `detect.vetoes`, compiled; empty when the profile has none. */
+    detectVetoes: RegExp[];
     sectionHeading?: RegExp;
     continuation?: RegExp;
     /** M8: `syntax.continuationStart`, the leading marker of a line that continues a block. */

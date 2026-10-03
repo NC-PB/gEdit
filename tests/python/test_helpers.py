@@ -110,7 +110,7 @@ class TestGeditNcApi(unittest.TestCase):
     def test_the_token_model_mirrors_the_typescript_one(self) -> None:
         self.assertEqual(
             list(self.gedit_nc.Token.__annotations__),
-            ["kind", "start", "end", "text", "address", "value_text", "value", "incremental"],
+            ["kind", "start", "end", "text", "address", "value_text", "value", "incremental", "index"],
         )
         self.assertEqual(
             list(self.gedit_nc.NumericLiteral.__annotations__),

@@ -112,7 +112,7 @@
       "mpf": 8,
       "spf": 8
     },
-    "priority": 0
+    "priority": -1
   },
   "files": {
     "defaultExtension": "mpf",
@@ -190,7 +190,7 @@
   "outline": [
     {
       "kind": "program",
-      "pattern": "^%_N_(?<name>\\w+)_(?:MPF|SPF)"
+      "pattern": "^%(?:_N_)?(?<name>\\w+)_(?:MPF|SPF)"
     },
     {
       "kind": "program",
@@ -214,7 +214,7 @@
     },
     {
       "kind": "subprogram-call",
-      "pattern": "^\\s*(?:/\\d?[ \\t]*)?(?:N\\d+[ \\t]+)?(?:MCALL[ \\t]+)?(?!(?:AC|IC|DC|ACP|ACN|MSG|IF|WHILE|FOR|CASE|UNTIL|REPEATB|REPEAT|LOOP|GOTOF|GOTOB|GOTOC|GOTO|DEF|SETMS|SETM|CLEARM|WAITMC|WAITM|WAITE|TRAORI|TRANSMIT|TRACYL|TRAANG|EXTCALL|CALLPATH)[ \\t]*\\()(?<text>[A-Z_][A-Z0-9_]*(?=\\()|[A-Z_]{2}[A-Z0-9_]*(?=[ \\t]+\\())[ \\t]*\\("
+      "pattern": "^\\s*(?:/\\d?[ \\t]*)?(?:N\\d+[ \\t]+)?(?:MCALL[ \\t]+)?(?!(?:AC|IC|DC|ACP|ACN|MSG|IF|WHILE|FOR|CASE|UNTIL|REPEATB|REPEAT|LOOP|GOTOF|GOTOB|GOTOC|GOTO|DEF|SETMS|SETM|CLEARM|WAITMC|WAITM|WAITE|WAITS|INIT|START|ORIRESET|FGROUP|TRAORI|TRANSMIT|TRACYL|TRAANG|EXTCALL|CALLPATH)[ \\t]*\\()(?<text>[A-Z_][A-Z0-9_]*(?=\\()|[A-Z_]{2}[A-Z0-9_]*(?=[ \\t]+\\())[ \\t]*\\("
     },
     {
       "kind": "subprogram-call",
@@ -222,7 +222,7 @@
     },
     {
       "kind": "subprogram-call",
-      "pattern": "^\\s*(?:/\\d?[ \\t]*)?(?:N\\d+[ \\t]+)?(?=[A-Z_]*[0-9_]|[A-Z_][A-Z0-9_]*[ \\t]+P\\d)(?!(?:CUT3DC|DIAM90|B_AND|B_NOT|B_XOR|CUT2D|B_OR|CUT2DF|CUT3DFS|CUT3DFF|CUT3DF|CDOF2|ORIRPY2|WALCS\\d+)(?![A-Z0-9_]))(?<text>(?:[A-Z]{2}|_[A-Z])[A-Z0-9_]*(?:[ \\t]+P\\d+)?)[ \\t]*$"
+      "pattern": "^\\s*(?:/\\d?[ \\t]*)?(?:N\\d+[ \\t]+)?(?=[A-Z_]*[0-9_]|[A-Z_][A-Z0-9_]*[ \\t]+P\\d)(?!(?:CUT3DCCD|CUT3DCC|CUT3DC|ORIVIRT[12]|DIAM90|B_AND|B_NOT|B_XOR|CUT2D|B_OR|CUT2DF|CUT3DFS|CUT3DFF|CUT3DF|CDOF2|ORIRPY2|WALCS\\d+)(?![A-Z0-9_]))(?<text>(?:[A-Z]{2}|_[A-Z])[A-Z0-9_]*(?:[ \\t]+P\\d+)?)[ \\t]*$"
     },
     {
       "kind": "stop",
@@ -239,15 +239,17 @@
       "(?<![A-Z_])RET(?![A-Z0-9_])"
     ],
     "start": [
-      "^%_N_(?<name>\\w+)_(?:MPF|SPF)",
+      "^%(?:_N_)?(?<name>\\w+)_(?:MPF|SPF)",
       "^\\s*(?:N\\d+[ \\t]+)?PROC[ \\t]+(?<name>[A-Z_][A-Z0-9_]*)"
     ]
   },
   "shortName": "Sinumerik",
   "syntax": {
     "assignment": "[A-Z_][A-Z0-9_]*(?=\\s*=(?!=))",
+    "assignmentIndex": true,
     "blockNumber": {
       "altPrefixes": [],
+      "mainPrefix": ":",
       "mandatory": false,
       "mode": "prefix",
       "prefix": "N"
@@ -266,7 +268,8 @@
     ],
     "decimalPointSignificant": false,
     "decimalSeparator": ".",
-    "header": "^%_N_\\w+_(?:MPF|SPF)",
+    "exponentMarker": "EX",
+    "header": "^%(?:_N_)?\\w+_(?:MPF|SPF)",
     "keywords": [
       "IF",
       "ELSE",

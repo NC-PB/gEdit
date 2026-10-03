@@ -1,0 +1,14 @@
+{
+  "profile": "sinumerik-mill",
+  "ownerReviewed": false,
+  "items": [
+    {"kind":"program","line":1,"text":"%_N_1_MPF","endLine":44631},
+    {"kind":"comment","line":2,"text":"$PATH=/_N_WKS_DIR/_N_5X_Milling_WPD"},
+    {"kind":"subprogram-call","line":4,"text":"CYCLE800"},
+    {"kind":"comment","line":7,"text":"KUGELFRASER D10 L25 SD10"},
+    {"kind":"tool","line":9,"text":"T1 — KUGELFRASER D10 L25 SD10","tool":"1","endLine":44631},
+      {"kind":"comment","line":12,"text":"5 ACHSEN KONSTANT Z  5X"},
+      {"kind":"comment","line":13,"text":"A : 0  ; C : 0"},
+      {"kind":"end","line":44630,"text":"M2"}
+  ]
+}

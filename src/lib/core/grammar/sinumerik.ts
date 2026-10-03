@@ -112,6 +112,14 @@ const ASSIGNED = '(?=\\s*=(?!=))';
  */
 const ASSIGNMENT_GUARD = '(?=[A-Za-z_][A-Za-z0-9_]{0,63}\\s*=(?!=))';
 
+/**
+ * An identifier with the bracket index of an indexed assignment (`LIMS[2]=1800`,
+ * `S[SPI]=300`, `FA[X]=200`), up to the `=` and not including it: the tokenizer's
+ * `syntax.assignmentIndex` shape, one `word` whose address is the identifier. The text of the
+ * index is bounded and holds no closing bracket, so a long line stays linear.
+ */
+const INDEXED_ASSIGNMENT = `[A-Za-z_][A-Za-z0-9_]{0,63}\\[[^\\]]{1,63}\\]${ASSIGNED}`;
+
 /** The operators of more than one character, which have to be tried before the single ones. */
 const LONG_OPERATORS: readonly string[] = ['==', '<>', '<=', '>=', '<<'];
 
@@ -176,9 +184,14 @@ export function sinumerikRules(p: Profile, db: CodeDb): GrammarRule[] {
   const rules: GrammarRule[] = [];
   const point = escapeLiteral(p.syntax?.decimalSeparator ?? '.');
   const gap = p.syntax?.wordSeparatorRequired === true ? '' : '\\s*';
+  // The exponent of a number (§3.3): the profile's `syntax.exponentMarker` (`EX`), a sign
+  // and digits, behind a number wherever the tokenizer reads one — an address value and a
+  // bare number alike (`X1.5EX3`, `R1=2.5EX2`).
+  const marker = p.syntax?.exponentMarker;
+  const exponent = typeof marker === 'string' && marker !== '' ? `(?:${escapeLiteral(marker)}[+-]?\\d+)?` : '';
   // The value of a word: a signed number, and nothing else. Everything else is written
   // with `=` and handled by the assignment rules (§3.2).
-  const value = `(?:${gap}${numberPattern(p)})`;
+  const value = `(?:${gap}${numberPattern(p)}${exponent})`;
   const own = letterAddresses(p);
   const prefixes = blockNumberPrefixes(p);
   const prefix = namesPattern(prefixes);
@@ -247,8 +260,12 @@ export function sinumerikRules(p: Profile, db: CodeDb): GrammarRule[] {
     rules.push(headRule([...lead, [LABEL, 'section']]));
   }
   // The main block `:123` stands where a block number stands (§3.1 rule 2), and a leading
-  // integer is a block number only there — anywhere else it is a value.
-  if (hasColonProgram(p)) rules.push(headRule([...lead, [`:${gap}\\d+`, 'blockNumber']]));
+  // integer is a block number only there — anywhere else it is a value. The prefix is the
+  // profile's `blockNumber.mainPrefix`, the one the tokenizer reads; a profile that sets none
+  // keeps the colon this grammar has always painted.
+  const mainPrefix = p.syntax?.blockNumber?.mainPrefix;
+  const main = typeof mainPrefix === 'string' && mainPrefix !== '' ? mainPrefix : hasColonProgram(p) ? ':' : null;
+  if (main !== null) rules.push(headRule([...lead, [`${escapeLiteral(main)}${gap}\\d+`, 'blockNumber']]));
   if (leadingInteger) rules.push(headRule([...lead, ['\\d+', 'blockNumber']]));
   if (skip?.before) rules.push([lineStart(`\\s*${skip.pattern}`), 'skip']);
   if (skip?.after && blockNumber !== null) {
@@ -298,6 +315,11 @@ export function sinumerikRules(p: Profile, db: CodeDb): GrammarRule[] {
       // Directly in front of the `=`: `X=AC(10)` is the axis, `X3=10` is not.
       if (pattern !== null) rules.push([`${pattern}${ASSIGNED}`, role]);
     }
+    // The indexed form (`syntax.assignmentIndex`): the identifier and its bracket, one word
+    // in the tokenizer, and a keyword here for the same reason as any other assignment word
+    // the dialect has no plain address for — `S[2]=500` drives spindle 2 and must not look
+    // like the speed of the block, `LIMS[2]=1800` is a clamp of spindle 2.
+    if (p.syntax?.assignmentIndex === true) rules.push([INDEXED_ASSIGNMENT, 'keyword']);
     // The built-in pattern already ends in that check; a derived one may not.
     rules.push([`${ASSIGNMENT_GUARD}(?:${assignment})${assignment.endsWith(ASSIGNED) ? '' : ASSIGNED}`, 'keyword']);
   }
@@ -328,10 +350,10 @@ export function sinumerikRules(p: Profile, db: CodeDb): GrammarRule[] {
   rules.push(['[A-Za-z_]\\w*', '']);
 
   // Rule 16: the numbers, a quoted hexadecimal or binary constant and the bare number with
-  // the `EX` exponent of §3.3. The sign is left to the operator rule, as in `iso.ts`: in
-  // `R1=R2-5` the `-` is a subtraction, not part of the 5.
+  // its exponent. The sign is left to the operator rule, as in `iso.ts`: in `R1=R2-5` the
+  // `-` is a subtraction, not part of the 5.
   rules.push([QUOTED_CONSTANT, 'number']);
-  rules.push([`${numberPattern(p, { signed: false })}(?:EX[+-]?\\d+)?`, 'number']);
+  rules.push([`${numberPattern(p, { signed: false })}${exponent}`, 'number']);
 
   // Rules 17 to 19: the operators and brackets, the longer spellings first, and the
   // whitespace.

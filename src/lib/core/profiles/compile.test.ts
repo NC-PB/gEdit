@@ -27,13 +27,14 @@ describe('built-in profiles', () => {
   it('ships the P1 dialects and the M6 lathe, resolved, the default first', () => {
     // M6: the list holds the **resolved** built-ins (AD-16), so a child profile is in it
     // exactly as the app uses it — `fanuc-lathe` with `fanuc-gcode` merged in.
-    expect(BUILTIN_PROFILE_JSON).toHaveLength(5);
+    expect(BUILTIN_PROFILE_JSON).toHaveLength(6);
     expect((BUILTIN_PROFILE_JSON as Profile[]).map((p) => p.id)).toEqual([
       'fanuc-gcode',
       'fanuc-lathe',
       'heidenhain-klartext',
       'okuma-osp',
       'sinumerik',
+      'sinumerik-mill',
     ]);
     expect(FALLBACK_PROFILE_ID).toBe('fanuc-gcode');
   });
@@ -126,7 +127,8 @@ describe('compileProfile', () => {
 
   it('upper-cases the keywords and puts the longest first', () => {
     const cp = compileProfile(heidenhain);
-    expect(cp.keywords[0]).toBe('FUNCTION RESET TCPM');
+    expect(cp.keywords[0]).toBe('REFPNT CENTER-CENTER');
+    expect(cp.keywords).toContain('FUNCTION RESET TCPM');
     expect(cp.keywords).toContain('TOOL CALL');
     // `LBL` has to be tried before `L`, or `LBL 1` tokenizes as a straight-line block.
     expect(cp.keywords.indexOf('LBL')).toBeLessThan(cp.keywords.indexOf('L'));
@@ -136,7 +138,9 @@ describe('compileProfile', () => {
     }
     // Equal lengths stay in alphabetical order, so a generated grammar is reproducible.
     expect(compileProfile(fanuc).keywords).toEqual([
-      'WHILE', 'GOTO', 'THEN', 'AND', 'END', 'MOD', 'XOR', 'DO', 'EQ', 'GE', 'GT', 'IF', 'LE', 'LT', 'NE', 'OR',
+      'AXNUM', 'BPRNT', 'DPRNT', 'PCLOS', 'POPEN', 'ROUND', 'WHILE', 'ACOS', 'ASIN', 'ATAN', 'GOTO', 'SQRT', 'THEN',
+      'ABS', 'ADP', 'AND', 'ATN', 'BCD', 'BIN', 'COS', 'END', 'EXP', 'FIX', 'FUP', 'MOD', 'POW', 'RND', 'SIN', 'SQR',
+      'TAN', 'XOR', 'AX', 'DO', 'EQ', 'GE', 'GT', 'IF', 'LE', 'LN', 'LT', 'NE', 'OR',
     ]);
   });
 

@@ -8,9 +8,16 @@
 //    string, or as an address in the middle of a block
 //  - lose the block-skip mark: `/N100 G0` keeps its `/`, and `N120/` keeps the `/` where
 //    it stood
-//  - renumber an alphanumeric block name (`NLAP1`) — it is a label, not a counter
+//  - renumber an alphanumeric block name (`NLAP1`) — it is a label, not a counter. A jump
+//    label whose own name starts with the prefix letter (Sinumerik `NEXT_PECK:`) is no
+//    block name, and its block is numbered like any other (`N10 NEXT_PECK:`)
 //  - number a program marker: `%`, `O1000` and `:1000` are not blocks, and `N10 :1000`
 //    moves the program number out of the first position of the block
+//  - turn a **main block** into an ordinary one. Where the dialect has main blocks
+//    (`syntax.blockNumber.mainPrefix`, Sinumerik `:20`), `:20` is renumbered as `:30` and
+//    never as `N30`: a main block is where a block search may start the program (it has
+//    to carry everything the machining from there on needs), and a jump names it by its
+//    own prefix (`GOTOF :20`) and not by `N20` (M9, WP9.5b; see "Main blocks" below)
 //  - **guess** at a reference. `GOTO 100`, `M98 Q100` and `G71 P100 Q200` are rewritten
 //    only where the run can prove which block they name: one block with that number, in
 //    the same program, inside the lines this run rewrites, under a rule that allows it
@@ -87,7 +94,7 @@ import type { Located, Msg } from '$lib/app/types';
 import type { FieldSpec } from '$lib/core/forms/types';
 import type { LineState, NcToken } from '$lib/core/nc/types';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
-import type { BlockKey, ProgramScan, ReferenceWord } from './references';
+import type { BlockKey, FoundReference, NumberSite, ProgramScan, ReferenceWord } from './references';
 import type { TransformContext, TransformDef, TransformResult } from './types';
 
 /** Rows the results panel gets at most; the summary still counts every skipped line. */
@@ -277,14 +284,20 @@ function withAltPrefixes(cp: CompiledProfile, altPrefixes: string[]): CompiledPr
 interface Head {
   /** Offset behind the leading whitespace. */
   leadEnd: number;
+  /** The skip marks before the number, as one span when there are several (`/1/2`). */
   skipBefore: NcToken | null;
   number: NcToken | null;
-  /** Only ever set together with `number`: the tokenizer looks for it behind one. */
+  /** Only ever set together with `number`: the tokenizer looks for it behind one. Spans several marks as `skipBefore` does. */
   skipAfter: NcToken | null;
   /** Offset behind the last head token, or `leadEnd` when the head is empty. */
   end: number;
   /** First non-whitespace offset behind `end`, or `line.length` when there is no code. */
   restStart: number;
+}
+
+/** One skip mark from the start of `first` to the end of `last`, the gaps between them included. */
+function spanOf(line: string, first: NcToken, last: NcToken): NcToken {
+  return { ...first, end: last.end, text: line.slice(first.start, last.end) };
 }
 
 /** Splits the head off the token list. Nothing here re-reads the line's syntax. */
@@ -304,9 +317,16 @@ function readHead(line: string, tokens: NcToken[]): Head {
   for (; index < tokens.length; index++) {
     const token = tokens[index];
     if (token.kind === 'whitespace') continue;
-    if (token.kind === 'skip' && skipAfter === null && (number !== null || skipBefore === null)) {
-      if (number === null) skipBefore = token;
-      else skipAfter = token;
+    // Several skip levels on one block (`/1/2 N20`, `/1 /2 N20`) are one mark here: the
+    // number stands behind all of them. Taking only the first one read `/2` as the start
+    // of the code and wrote `/1N110 /2 N20 G1` (M9 NC review F7).
+    if (token.kind === 'skip' && number === null) {
+      skipBefore = skipBefore === null ? token : spanOf(line, skipBefore, token);
+      end = token.end;
+      continue;
+    }
+    if (token.kind === 'skip' && number !== null) {
+      skipAfter = skipAfter === null ? token : spanOf(line, skipAfter, token);
       end = token.end;
       continue;
     }
@@ -364,6 +384,210 @@ function looksLikeBlockName(line: string, at: number, prefixes: string[], caseSe
     if (i < line.length && isLetterCode(line.charCodeAt(i))) return true;
   }
   return false;
+}
+
+/**
+ * The tokenizer's answer to "does this block carry a name?", where it has one.
+ *
+ * A `label` token at the start of the block's text is either a **block name** — the block
+ * prefix written in front of the name (Okuma `NLAP1`: text `NLAP1`, name `LAP1`) — or a
+ * **jump label** whose own name happens to start with the prefix letter (Sinumerik
+ * `NEXT_PECK:`: text `NEXT_PECK:`, name `NEXT_PECK`). Only the first is a block name; the
+ * second is a label like `LAST_CUT:` and its block gets a number in front of it. Without a
+ * label token there (Fanuc reads `NLAP1` as letters), the text decides as before.
+ *
+ * Returns null when the head of the block's text is not a label token.
+ */
+function labelIsBlockName(
+  tokens: NcToken[],
+  at: number,
+  prefixes: string[],
+  caseSensitive: boolean,
+): boolean | null {
+  const label = tokens.find((token) => token.start === at && token.kind !== 'whitespace');
+  if (label === undefined || label.kind !== 'label') return null;
+  const name = label.address;
+  if (name === undefined || name === '') return false;
+  for (const prefix of prefixes) {
+    if (!matchesAt(label.text, 0, prefix, caseSensitive)) continue;
+    let i = prefix.length;
+    while (i < label.text.length && isSpaceCode(label.text.charCodeAt(i))) i++;
+    if (matchesAt(label.text, i, name, caseSensitive)) return true;
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Main blocks (M9, WP9.5b)
+// ---------------------------------------------------------------------------
+//
+// A Sinumerik program has two kinds of block number: `N20` numbers a block, `:20` numbers
+// a **main block** (`syntax.blockNumber.mainPrefix`, §7.1, §7.16 #50). The manuals keep
+// them apart in three places, and so does this run:
+//
+//  - the prefix belongs to the block: renumbering writes `:30`, never `N30`;
+//  - a jump names a main block by its own prefix (`GOTOF :20`) and an ordinary block by
+//    `N` (`GOTOF N20`), so `GOTOF N20` does not name `:20`, and a program that has only a
+//    `:20` has no `N20` for it to find;
+//  - `GOTOF :20` is a reference all the same, and it is rewritten under exactly the rules
+//    every other reference is (the reference rules whose addresses name the ordinary block
+//    prefix, `numbering.references`, read with the main prefix in front).
+//
+// `references.ts` indexes every block by its value, whatever its prefix, and reads `:20`
+// behind a `GOTOF` as two tokens of no address. [`withMainBlocks`] corrects that scan
+// before anything reads it: main blocks get keys of their own (the prefix in front, so a
+// main key is a string that never equals an ordinary one), and the main-block jumps are
+// added as references. A dialect without the field, or a program without the prefix in any
+// line, keeps the scan exactly as it was and pays nothing for this. The three helpers are
+// exported for Remove Block Numbers, which has to keep a main block a jump names (hand-off
+// note of WP9.5b); their home is `references.ts` once that module is someone's again.
+
+/** `syntax.blockNumber.mainPrefix` (Sinumerik `:`), or null where the dialect has no main blocks. */
+export function mainPrefixOf(cp: CompiledProfile): string | null {
+  const blockNumber = cp.profile.syntax.blockNumber;
+  if (blockNumber.mode === 'leading-integer') return null;
+  const main = blockNumber.mainPrefix;
+  return typeof main === 'string' && main !== '' ? main : null;
+}
+
+/** The key of a main block (`':20'`): the prefix in front of the key its number would have. */
+export function mainKeyOf(main: string, digits: string, byText: boolean): BlockKey {
+  return main + (byText ? digits : String(Number(digits)));
+}
+
+/** True for a key [`mainKeyOf`] made. */
+function isMainKey(key: BlockKey | null | undefined, main: string | null): boolean {
+  return main !== null && typeof key === 'string' && key.startsWith(main);
+}
+
+/** True when `text` is a block number this run will name: digits only, as `references.ts` reads them. */
+function isDigits(text: string): boolean {
+  if (text.length === 0 || text.length > 9) return false;
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code < 0x30 || code > 0x39) return false;
+  }
+  return true;
+}
+
+/**
+ * Every `<main prefix><number>` behind the head of the block: `GOTOF :20` gives the `20`.
+ *
+ * Written without the blank, `GOTOB:20` is not an operator and a word: the tokenizer reads
+ * a name and a colon at the start of a block as a jump **label** (`GOTOB:`) and the digits
+ * behind it as a word of no address. A label whose name is a jump (`isJump`, the reference
+ * rules' own triggers) cannot be a label, so its colon is the main prefix and the digits
+ * name a main block, exactly as with the blank (M9 NC review F2: renumbering moved `:20`
+ * and left `GOTOB:20` pointing at nothing, and Remove Block Numbers dropped the `:20`).
+ */
+function mainJumpsOn(tokens: NcToken[], main: string, isJump: (name: string) => boolean): NcToken[] {
+  const out: NcToken[] = [];
+  for (let i = 0; i + 1 < tokens.length; i++) {
+    const mark = tokens[i];
+    if (mark.kind === 'operator') {
+      if (mark.text !== main) continue;
+    } else if (mark.kind === 'label') {
+      const name = mark.address ?? '';
+      if (name === '' || mark.text !== name + main || !isJump(name)) continue;
+    } else continue;
+    const value = tokens[i + 1];
+    if (value.kind !== 'word' || value.address !== undefined || value.valueText === undefined) continue;
+    if (value.start !== mark.end) continue;
+    out.push(value);
+  }
+  return out;
+}
+
+/** The scan with main blocks keyed by their own prefix and their jumps added (see above). */
+export function withMainBlocks(scan: ProgramScan, cp: CompiledProfile): ProgramScan {
+  const main = mainPrefixOf(cp);
+  if (main === null || cp.re.references.length === 0 || scan.scanned.length === 0) return scan;
+  if (!scan.scanned.some((line) => line.includes(main))) return scan;
+
+  // The rules that name ordinary blocks by their prefix (`GOTOF N20`) are the rules that
+  // name main blocks by theirs (`GOTOF :20`).
+  const blockPrefix = cp.profile.syntax.blockNumber.prefix ?? 'N';
+  const rules: { trigger: RegExp; rewrite: boolean }[] = [];
+  cp.re.references.forEach((rule, index) => {
+    if (!rule.addresses.includes(blockPrefix)) return;
+    rules.push({ trigger: rule.trigger, rewrite: cp.profile.numbering?.references?.[index]?.rewrite !== false });
+  });
+
+  // A name one of those rules fires on (`GOTOB`), for the label form `GOTOB:20`.
+  const isJump = (name: string): boolean => rules.some((rule) => rule.trigger.test(name));
+
+  const keys = scan.keys.slice();
+  const added: FoundReference[] = [];
+  let state: LineState | undefined;
+  for (let row = 0; row < scan.scanned.length; row++) {
+    const line = scan.scanned[row];
+    const { tokens, state: next } = tokenizeLine(line, cp, state);
+    state = next;
+    if (!line.includes(main)) continue;
+
+    for (const token of tokens) {
+      if (token.kind !== 'blockNumber') continue;
+      if (token.address === main && keys[row] !== null && token.valueText !== undefined) {
+        keys[row] = mainKeyOf(main, token.valueText, scan.byText);
+      }
+      break;
+    }
+
+    if (rules.length === 0) continue;
+    const jumps = mainJumpsOn(tokens, main, isJump);
+    if (jumps.length === 0) continue;
+    const masked = maskedOf(line, tokens);
+    let fired = false;
+    let rewrite = true;
+    for (const rule of rules) {
+      if (!rule.trigger.test(masked)) continue;
+      fired = true;
+      if (!rule.rewrite) rewrite = false;
+    }
+    if (!fired) continue;
+    for (const value of jumps) {
+      const text = value.valueText ?? '';
+      const named = isDigits(text);
+      added.push({
+        row,
+        word: {
+          address: main,
+          start: value.end - text.length,
+          end: value.end,
+          text,
+          target: named ? Number(text) : null,
+          key: named ? mainKeyOf(main, text, scan.byText) : null,
+          rewrite,
+          // Two of them on one line: which one the rule is about cannot be told (G8 M6).
+          ambiguous: jumps.length > 1,
+        },
+      });
+    }
+  }
+
+  const segments: Map<BlockKey, NumberSite>[] = scan.segments.map(() => new Map());
+  for (let row = 0; row < keys.length; row++) {
+    const key = keys[row];
+    if (key === null) continue;
+    const counts = segments[scan.segmentOf[row]];
+    const site = counts.get(key);
+    if (site === undefined) counts.set(key, { count: 1, row, lastRow: row });
+    else {
+      site.count++;
+      site.lastRow = row;
+    }
+  }
+
+  const found = added.length === 0 ? scan.found : [...scan.found, ...added].sort((a, b) => a.row - b.row || a.word.start - b.word.start);
+  let count = scan.count;
+  let first = scan.first;
+  if (added.length > 0) {
+    // `found` is in row order, so its first row is the first line that carries one.
+    const rows = new Set(found.map((reference) => reference.row));
+    count = rows.size;
+    first = scan.firstLine + found[0].row;
+  }
+  return { ...scan, found, count, first, keys, segments };
 }
 
 // ---------------------------------------------------------------------------
@@ -463,8 +687,12 @@ function writtenAs(oldText: string, oldValue: number, newValue: number): string 
   return padded && digits.length < oldText.length ? digits.padStart(oldText.length, '0') : digits;
 }
 
-/** The key a block number written as `text` has in this scan (`references.ts`, `BlockKey`). */
-function keyOfWritten(scan: ProgramScan, text: string): BlockKey {
+/**
+ * The key a block number written as `text` has in this scan (`references.ts`, `BlockKey`).
+ * `main` is the main prefix when the block is a main block, which keeps its prefix.
+ */
+function keyOfWritten(scan: ProgramScan, text: string, main: string | null = null): BlockKey {
+  if (main !== null) return mainKeyOf(main, text, scan.byText);
   return scan.byText ? text : Number(text);
 }
 
@@ -487,12 +715,15 @@ function keysAfter(
   base: number,
   lineCount: number,
   newTextOf: (index: number) => string | null,
+  main: string | null,
 ): Map<BlockKey, number>[] {
   const end = base + lineCount;
   const after: Map<BlockKey, number>[] = scan.segments.map(() => new Map());
   for (let row = 0; row < scan.keys.length; row++) {
     const written = row >= base && row < end ? newTextOf(row - base) : null;
-    const key = written === null ? scan.keys[row] : keyOfWritten(scan, written);
+    // A main block keeps its prefix, so it keeps its kind of key.
+    const key =
+      written === null ? scan.keys[row] : keyOfWritten(scan, written, isMainKey(scan.keys[row], main) ? main : null);
     if (key === null) continue;
     const counts = after[scan.segmentOf[row]];
     counts.set(key, (counts.get(key) ?? 0) + 1);
@@ -522,13 +753,14 @@ function decideReferences(
   firstLine: number,
   lineCount: number,
   newTextOf: ((index: number) => string | null) | null,
+  main: string | null,
 ): Decision[] {
   const base = Math.max(0, Math.trunc(firstLine) - scan.firstLine);
   const end = base + lineCount;
   const decisions: Decision[] = [];
   // Only the run knows the numbering it wrote; the preflight asks about wrapping in its
   // own way (`mayWrap`), because it cannot know how many blocks will really be numbered.
-  const after = newTextOf === null ? null : keysAfter(scan, base, lineCount, newTextOf);
+  const after = newTextOf === null ? null : keysAfter(scan, base, lineCount, newTextOf, main);
 
   for (const { row, word } of scan.found) {
     const line = scan.firstLine + row;
@@ -568,7 +800,7 @@ function decideReferences(
       // value or leaves it standing. A run that wrapped hands the same number out several
       // times, and a control takes the first match, so an answer that is no longer unique
       // is not an answer (G8 M6).
-      const named = written === null ? word.key : keyOfWritten(scan, written);
+      const named = written === null ? word.key : keyOfWritten(scan, written, isMainKey(word.key, main) ? main : null);
       if (after !== null && named !== null && (after[scan.segmentOf[row]].get(named) ?? 0) > 1) decide('duplicate');
       else if (written === null || named === word.key) {
         // Where blocks are names, the same key is the same text: nothing to write.
@@ -635,7 +867,7 @@ function mergeRows(skipped: Located[], references: Located[], limit: number): Lo
  * the program through the same compiled profile the run writes it with.
  */
 function scanFor(lines: string[], ctx: TransformContext, cp: CompiledProfile): ProgramScan {
-  return scanProgram(lines, cp === ctx.cp ? ctx : { ...ctx, cp });
+  return withMainBlocks(scanProgram(lines, cp === ctx.cp ? ctx : { ...ctx, cp }), cp);
 }
 
 /**
@@ -804,11 +1036,12 @@ function preflightOf(lines: string[], ctx: TransformContext): Msg | null {
   if (continuationRisk(ctx, stateBefore(ctx))) return { key: 'ncNumbering.renumber.fragmentUnknown' };
 
   const settings = settingsFor(ctx.cp, ctx.options);
-  const scan = scanFor(lines, ctx, withAltPrefixes(ctx.cp, settings.altPrefixes));
+  const cp = withAltPrefixes(ctx.cp, settings.altPrefixes);
+  const scan = scanFor(lines, ctx, cp);
   // One line, one question: a `G71 P100 Q200` whose two targets are both gone is one
   // thing to look at, not two.
   const lineNumbers = new Set<number>();
-  for (const decision of decideReferences(scan, ctx.firstLine, lines.length, null)) {
+  for (const decision of decideReferences(scan, ctx.firstLine, lines.length, null, mainPrefixOf(cp))) {
     if (isTrouble(decision.outcome)) lineNumbers.add(decision.line);
   }
   let first = 0;
@@ -837,6 +1070,7 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
   const blockNumber = cp.profile.syntax.blockNumber;
   const prefixOut = blockNumber.mode === 'leading-integer' ? '' : (blockNumber.prefix ?? 'N');
   const namePrefixes = blockNumber.mode === 'leading-integer' ? [] : [prefixOut, ...settings.altPrefixes];
+  const main = mainPrefixOf(cp);
   const marks = settings.skipStartingWith;
 
   // One lookup per run instead of one per skipped line (`Located.message` is display text).
@@ -909,7 +1143,13 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
     }
     // `restStart` is where the block's text starts, which is where a block *name* would
     // stand: behind the leading whitespace, or behind a skip mark and its whitespace.
-    if (head.number === null && looksLikeBlockName(line, head.restStart, namePrefixes, caseSensitive)) {
+    // The tokenizer decides where it read a label there (`NEXT_PECK:` is no block name,
+    // Okuma `NLAP1` is); the text decides where it did not (Fanuc `NLAP1`).
+    const named =
+      head.number === null &&
+      (labelIsBlockName(tokens, head.restStart, namePrefixes, caseSensitive) ??
+        looksLikeBlockName(line, head.restStart, namePrefixes, caseSensitive));
+    if (named) {
       skip(i, reason.name);
       continue;
     }
@@ -943,7 +1183,9 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
     }
 
     const digits = settings.digits > 0 ? String(value).padStart(settings.digits, '0') : String(value);
-    out[i] = rebuild(line, head, prefixOut + digits, settings.spacesAfter);
+    // A main block keeps its own prefix (`:20` becomes `:30`, never `N30`).
+    const prefix = main !== null && head.number !== null && head.number.address === main ? main : prefixOut;
+    out[i] = rebuild(line, head, prefix + digits, settings.spacesAfter);
     newTextOf.set(i, digits);
     numbered++;
     value += settings.step;
@@ -971,6 +1213,7 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
     ctx.firstLine,
     lines.length,
     (index) => newTextOf.get(index) ?? null,
+    main,
   );
   applyReferences(out, lines, decisions);
 

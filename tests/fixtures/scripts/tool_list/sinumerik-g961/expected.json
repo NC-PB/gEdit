@@ -1,0 +1,49 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [
+    {
+      "tool": "FACE_80",
+      "description": "FACE MILL D80",
+      "line": 6,
+      "calls": 1,
+      "feed": "120",
+      "speed": "150 m/min (G961)"
+    },
+    {
+      "tool": "DRILL_D8",
+      "description": "",
+      "line": 11,
+      "calls": 1,
+      "feed": "0.12 /rev",
+      "speed": "1800"
+    }
+  ],
+  "message": "2 tools, 1 without a description",
+  "findings": []
+}

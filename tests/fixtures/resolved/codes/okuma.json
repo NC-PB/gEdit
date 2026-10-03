@@ -219,6 +219,35 @@
       "label": "Turret B"
     },
     {
+      "code": "G15",
+      "description": "Selects program coordinate system Hn for this block and every block after it; n runs from 1 to 10, 50 or 100, depending on the model. After power-on or a reset the last system chosen with G15 is back. Not allowed while G96 or nose-radius compensation is active.",
+      "group": "offset",
+      "label": "Program coordinate system",
+      "modal": true,
+      "params": [
+        {
+          "address": "H",
+          "label": "Number of the program coordinate system",
+          "min": 1,
+          "required": true
+        }
+      ]
+    },
+    {
+      "code": "G16",
+      "description": "Selects program coordinate system Hn for this block only; the next block is back in the system G15 chose. Not allowed while G96 or nose-radius compensation is active.",
+      "group": "offset",
+      "label": "Program coordinate system for one block",
+      "params": [
+        {
+          "address": "H",
+          "label": "Number of the program coordinate system",
+          "min": 1,
+          "required": true
+        }
+      ]
+    },
+    {
       "code": "G17",
       "group": "plane",
       "label": "Compensation plane XY, for driven-tool milling on the face"
@@ -265,7 +294,8 @@
           "address": "F",
           "label": "Thread lead",
           "min": 0,
-          "required": true
+          "required": true,
+          "unit": "feedPerRev"
         },
         {
           "address": "I",
@@ -310,7 +340,8 @@
           "address": "F",
           "label": "Thread lead",
           "min": 0,
-          "required": true
+          "required": true,
+          "unit": "feedPerRev"
         },
         {
           "address": "K",
@@ -355,7 +386,8 @@
           "address": "F",
           "label": "Thread lead",
           "min": 0,
-          "required": true
+          "required": true,
+          "unit": "feedPerRev"
         },
         {
           "address": "I",
@@ -400,7 +432,8 @@
           "address": "F",
           "label": "Lead at the start",
           "min": 0,
-          "required": true
+          "required": true,
+          "unit": "feedPerRev"
         },
         {
           "address": "E",
@@ -436,7 +469,8 @@
           "address": "F",
           "label": "Lead at the start",
           "min": 0,
-          "required": true
+          "required": true,
+          "unit": "feedPerRev"
         },
         {
           "address": "E",
@@ -494,6 +528,7 @@
       "modal": true
     },
     {
+      "axisWords": "data",
       "code": "G50",
       "description": "With S it is the highest speed the spindle may reach, which a program sets before it turns the constant cutting speed on; the limit holds until another one is set. With X or Z it shifts the zero point for the blocks that follow instead, and no T word may stand in that block.",
       "group": "nonmodal",
@@ -591,7 +626,8 @@
           "address": "F",
           "label": "Thread lead",
           "min": 0,
-          "required": true
+          "required": true,
+          "unit": "feedPerRev"
         },
         {
           "address": "J",
@@ -674,7 +710,8 @@
           "address": "F",
           "label": "Thread lead",
           "min": 0,
-          "required": true
+          "required": true,
+          "unit": "feedPerRev"
         },
         {
           "address": "J",
@@ -1170,6 +1207,90 @@
       }
     },
     {
+      "code": "G101",
+      "description": "Driven-tool contouring: moves in a straight line with X and the C axis together, and Z as well when the block writes it, so a line is cut on the face of the part. F is a feed per minute here, whatever feed mode is in force.",
+      "group": "motion",
+      "label": "Contour line with the C axis",
+      "modal": true,
+      "params": [
+        {
+          "address": "X",
+          "label": "End point, as a diameter"
+        },
+        {
+          "address": "Z",
+          "label": "End point along Z"
+        },
+        {
+          "address": "C",
+          "label": "End point, as a C-axis angle"
+        },
+        {
+          "address": "F",
+          "label": "Feed per minute",
+          "unit": "feedPerMin"
+        }
+      ]
+    },
+    {
+      "code": "G102",
+      "description": "Driven-tool contouring: cuts a clockwise arc on the face with X and the C axis together. The arc is given by its radius L and is always the one under 180 degrees, so a longer arc is split into blocks; Z may not move. F is a feed per minute here, whatever feed mode is in force.",
+      "group": "motion",
+      "label": "Contour arc with the C axis, clockwise",
+      "modal": true,
+      "params": [
+        {
+          "address": "X",
+          "label": "End point, as a diameter"
+        },
+        {
+          "address": "C",
+          "label": "End point, as a C-axis angle"
+        },
+        {
+          "address": "L",
+          "label": "Arc radius",
+          "min": 0,
+          "required": true,
+          "unit": "length"
+        },
+        {
+          "address": "F",
+          "label": "Feed per minute",
+          "unit": "feedPerMin"
+        }
+      ]
+    },
+    {
+      "code": "G103",
+      "description": "Driven-tool contouring: cuts a counter-clockwise arc on the face with X and the C axis together. The arc is given by its radius L and is always the one under 180 degrees, so a longer arc is split into blocks; Z may not move. F is a feed per minute here, whatever feed mode is in force.",
+      "group": "motion",
+      "label": "Contour arc with the C axis, counter-clockwise",
+      "modal": true,
+      "params": [
+        {
+          "address": "X",
+          "label": "End point, as a diameter"
+        },
+        {
+          "address": "C",
+          "label": "End point, as a C-axis angle"
+        },
+        {
+          "address": "L",
+          "label": "Arc radius",
+          "min": 0,
+          "required": true,
+          "unit": "length"
+        },
+        {
+          "address": "F",
+          "label": "Feed per minute",
+          "unit": "feedPerMin"
+        }
+      ]
+    },
+    {
       "code": "G107",
       "description": "Taps with the feed tied to the spindle turn, so the feed carries the pitch and may never be scaled.",
       "group": "cycle",
@@ -1213,6 +1334,13 @@
       "group": "motion",
       "label": "Thread along an arc, clockwise",
       "modal": true,
+      "params": [
+        {
+          "address": "F",
+          "label": "Thread lead",
+          "unit": "feedPerRev"
+        }
+      ],
       "pitchFeed": true
     },
     {
@@ -1221,11 +1349,19 @@
       "group": "motion",
       "label": "Thread along an arc, counter-clockwise",
       "modal": true,
+      "params": [
+        {
+          "address": "F",
+          "label": "Thread lead",
+          "unit": "feedPerRev"
+        }
+      ],
       "pitchFeed": true
     },
     {
       "code": "G136",
       "description": "Ends G137 and G138: X is a diameter again. It stands in a block of its own.",
+      "frame": "close",
       "group": "diametermode",
       "label": "Coordinate conversion and Y-axis mode off",
       "modal": true,
@@ -1236,6 +1372,7 @@
     {
       "code": "G137",
       "description": "Machines the face in Cartesian X and Y instead of X and C: the C of the block gives the direction of the new X axis, and from here on X and Y are radius values until G136.",
+      "frame": "open",
       "group": "diametermode",
       "label": "Coordinate conversion on",
       "modal": true,
@@ -1246,6 +1383,7 @@
     {
       "code": "G138",
       "description": "X, Y and Z are programmed as a Cartesian system, X as a radius, until G136. The mode survives a reset, so a post writes G136 or G138 before the first move of a tool.",
+      "frame": "open",
       "group": "diametermode",
       "label": "Y-axis mode on",
       "modal": true,
@@ -1277,6 +1415,156 @@
       "group": "spindle",
       "label": "Machining with the pick-off spindle and the third turret",
       "verify": true
+    },
+    {
+      "code": "G161",
+      "description": "A code the machine's setup ties to a macro program. Like MODIN it runs that program after every following axis move, until G224 ends it. Write it in a block of its own; the words after it set the macro's variables, and Q says how often each call repeats. What the macro does depends on the machine.",
+      "group": "subprogram",
+      "label": "G-code macro, after every move",
+      "params": [
+        {
+          "address": "Q",
+          "label": "How often each call repeats",
+          "max": 9999,
+          "min": 1
+        }
+      ],
+      "wordsAreData": true
+    },
+    {
+      "code": "G162",
+      "description": "A code the machine's setup ties to a macro program. Like MODIN it runs that program after every following axis move, until G224 ends it. Write it in a block of its own; the words after it set the macro's variables, and Q says how often each call repeats. What the macro does depends on the machine.",
+      "group": "subprogram",
+      "label": "G-code macro, after every move",
+      "params": [
+        {
+          "address": "Q",
+          "label": "How often each call repeats",
+          "max": 9999,
+          "min": 1
+        }
+      ],
+      "wordsAreData": true
+    },
+    {
+      "code": "G163",
+      "description": "A code the machine's setup ties to a macro program. Like MODIN it runs that program after every following axis move, until G224 ends it. Write it in a block of its own; the words after it set the macro's variables, and Q says how often each call repeats. What the macro does depends on the machine.",
+      "group": "subprogram",
+      "label": "G-code macro, after every move",
+      "params": [
+        {
+          "address": "Q",
+          "label": "How often each call repeats",
+          "max": 9999,
+          "min": 1
+        }
+      ],
+      "wordsAreData": true
+    },
+    {
+      "code": "G164",
+      "description": "A code the machine's setup ties to a macro program. Like MODIN it runs that program after every following axis move, until G224 ends it. Write it in a block of its own; the words after it set the macro's variables, and Q says how often each call repeats. What the macro does depends on the machine.",
+      "group": "subprogram",
+      "label": "G-code macro, after every move",
+      "params": [
+        {
+          "address": "Q",
+          "label": "How often each call repeats",
+          "max": 9999,
+          "min": 1
+        }
+      ],
+      "wordsAreData": true
+    },
+    {
+      "code": "G165",
+      "description": "A code the machine's setup ties to a macro program. Like MODIN it runs that program after every following axis move, until G224 ends it. Write it in a block of its own; the words after it set the macro's variables, and Q says how often each call repeats. What the macro does depends on the machine.",
+      "group": "subprogram",
+      "label": "G-code macro, after every move",
+      "params": [
+        {
+          "address": "Q",
+          "label": "How often each call repeats",
+          "max": 9999,
+          "min": 1
+        }
+      ],
+      "wordsAreData": true
+    },
+    {
+      "code": "G166",
+      "description": "A code the machine's setup ties to a macro program. Like MODIN it runs that program after every following axis move, until G224 ends it. Write it in a block of its own; the words after it set the macro's variables, and Q says how often each call repeats. What the macro does depends on the machine.",
+      "group": "subprogram",
+      "label": "G-code macro, after every move",
+      "params": [
+        {
+          "address": "Q",
+          "label": "How often each call repeats",
+          "max": 9999,
+          "min": 1
+        }
+      ],
+      "wordsAreData": true
+    },
+    {
+      "code": "G167",
+      "description": "A code the machine's setup ties to a macro program. Like MODIN it runs that program after every following axis move, until G224 ends it. Write it in a block of its own; the words after it set the macro's variables, and Q says how often each call repeats. What the macro does depends on the machine.",
+      "group": "subprogram",
+      "label": "G-code macro, after every move",
+      "params": [
+        {
+          "address": "Q",
+          "label": "How often each call repeats",
+          "max": 9999,
+          "min": 1
+        }
+      ],
+      "wordsAreData": true
+    },
+    {
+      "code": "G168",
+      "description": "A code the machine's setup ties to a macro program. Like MODIN it runs that program after every following axis move, until G224 ends it. Write it in a block of its own; the words after it set the macro's variables, and Q says how often each call repeats. What the macro does depends on the machine.",
+      "group": "subprogram",
+      "label": "G-code macro, after every move",
+      "params": [
+        {
+          "address": "Q",
+          "label": "How often each call repeats",
+          "max": 9999,
+          "min": 1
+        }
+      ],
+      "wordsAreData": true
+    },
+    {
+      "code": "G169",
+      "description": "A code the machine's setup ties to a macro program. Like MODIN it runs that program after every following axis move, until G224 ends it. Write it in a block of its own; the words after it set the macro's variables, and Q says how often each call repeats. What the macro does depends on the machine.",
+      "group": "subprogram",
+      "label": "G-code macro, after every move",
+      "params": [
+        {
+          "address": "Q",
+          "label": "How often each call repeats",
+          "max": 9999,
+          "min": 1
+        }
+      ],
+      "wordsAreData": true
+    },
+    {
+      "code": "G170",
+      "description": "A code the machine's setup ties to a macro program. Like MODIN it runs that program after every following axis move, until G224 ends it. Write it in a block of its own; the words after it set the macro's variables, and Q says how often each call repeats. What the macro does depends on the machine.",
+      "group": "subprogram",
+      "label": "G-code macro, after every move",
+      "params": [
+        {
+          "address": "Q",
+          "label": "How often each call repeats",
+          "max": 9999,
+          "min": 1
+        }
+      ],
+      "wordsAreData": true
     },
     {
       "code": "G178",
@@ -1545,6 +1833,13 @@
       "group": "cycle",
       "label": "Driven-tool thread along Z",
       "modal": true,
+      "params": [
+        {
+          "address": "F",
+          "label": "Lead per turn of the C axis",
+          "unit": "feedPerRev"
+        }
+      ],
       "pitchFeed": true,
       "sets": {
         "cycle": "start"
@@ -1556,6 +1851,13 @@
       "group": "cycle",
       "label": "Driven-tool thread on the face",
       "modal": true,
+      "params": [
+        {
+          "address": "F",
+          "label": "Lead per turn of the C axis",
+          "unit": "feedPerRev"
+        }
+      ],
       "pitchFeed": true,
       "sets": {
         "cycle": "start"
@@ -1567,6 +1869,13 @@
       "group": "cycle",
       "label": "Driven-tool straight thread along Z",
       "modal": true,
+      "params": [
+        {
+          "address": "F",
+          "label": "Thread lead",
+          "unit": "feedPerRev"
+        }
+      ],
       "pitchFeed": true,
       "sets": {
         "cycle": "start"
@@ -1578,6 +1887,13 @@
       "group": "cycle",
       "label": "Driven-tool straight thread on the face",
       "modal": true,
+      "params": [
+        {
+          "address": "F",
+          "label": "Thread lead",
+          "unit": "feedPerRev"
+        }
+      ],
       "pitchFeed": true,
       "sets": {
         "cycle": "start"
@@ -1993,6 +2309,12 @@
       "description": "Sends the buffer that PUT filled to a device on a serial channel.",
       "group": "program",
       "label": "Write data out of a variable"
+    },
+    {
+      "code": "CALRG",
+      "description": "Written in a G02 or G03 block that gives the arc by its radius L: it selects the arc of more than 180 degrees.",
+      "group": "nonmodal",
+      "label": "Take the larger arc"
     },
     {
       "code": "EQ",

@@ -594,6 +594,52 @@ N300 R3=$AA_IM[X]
 N310 M5
 N320 M30`;
 
+// M9 (WP9.3, R4): the main block prefix, the indexed assignment and the exponent letters are
+// the profile's data, and the grammar reads them where the tokenizers do.
+describe('the sinumerik grammar reads the M9 fields', () => {
+  /** The grammar of the built-in profile with `syntax` changed by `edit`. */
+  function variant(edit: (syntax: Record<string, unknown>) => void): Grammar {
+    const copy = structuredClone(profile) as Profile;
+    edit(copy.syntax as unknown as Record<string, unknown>);
+    return generateGrammar(copy, db) as unknown as Grammar;
+  }
+
+  it('paints an indexed assignment word as the keyword it is, not as the speed or the tool of the block', () => {
+    expect(at('N10 LIMS[2]=1800')).toEqual(['blockNumber:N10', 'keyword:LIMS[2]', 'operator:=', 'number:1800']);
+    expect(at('S[2]=500 M[2]=3')).toEqual(['keyword:S[2]', 'operator:=', 'number:500', 'keyword:M[2]', 'operator:=', 'number:3']);
+    expect(at('G1 FA[X]=200')).toEqual(['gcode:G1', 'keyword:FA[X]', 'operator:=', 'number:200']);
+    expect(at('T[1]="DRILL_8"')).toEqual(['keyword:T[1]', 'operator:=', 'string:"DRILL_8"']);
+    // A comparison and a bracket with no `=` behind it are not assignments.
+    expect(at('X[1]==5')).not.toContain('keyword:X[1]');
+  });
+
+  it('paints it only where the profile reads one', () => {
+    const plain = variant((syntax) => delete syntax.assignmentIndex);
+    expect(at('LIMS[2]=1800', plain)).not.toContain('keyword:LIMS[2]');
+  });
+
+  it('reads the main block prefix from the profile', () => {
+    expect(at(':123 G0 X0')).toEqual(['blockNumber::123', 'gcode:G0', 'axis:X0']);
+    expect(at('/1 :124 G1')).toEqual(['skip:/1', 'blockNumber::124', 'gcode:G1']);
+    const other = variant((syntax) => ((syntax.blockNumber as Record<string, unknown>).mainPrefix = '+'));
+    expect(at('+123 G0', other)).toEqual(['blockNumber:+123', 'gcode:G0']);
+  });
+
+  it('keeps painting a colon that a profile without `mainPrefix` has always had', () => {
+    const bare = variant((syntax) => delete (syntax.blockNumber as Record<string, unknown>).mainPrefix);
+    expect(at(':123 G0', bare)).toEqual(['blockNumber::123', 'gcode:G0']);
+  });
+
+  it('reads the exponent letters from the profile', () => {
+    expect(at('X1.5EX3 Y2EX-4')).toEqual(['axis:X1.5EX3', 'axis:Y2EX-4']);
+    expect(at('R1=2.5EX2')).toEqual(['variable:R1', 'operator:=', 'number:2.5EX2']);
+    const letters = variant((syntax) => (syntax.exponentMarker = 'E'));
+    expect(at('R1=2.5E2', letters)).toEqual(['variable:R1', 'operator:=', 'number:2.5E2']);
+    const none = variant((syntax) => delete syntax.exponentMarker);
+    expect(at('R1=2.5EX2', none)).not.toContain('number:2.5EX2');
+  });
+});
+
 describe('over a whole sinumerik program', () => {
   const lines = PROGRAM.split('\n');
 

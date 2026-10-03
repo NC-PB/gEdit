@@ -46,6 +46,7 @@ describe('the profile list', () => {
       'heidenhain-klartext',
       'okuma-osp',
       'sinumerik',
+      'sinumerik-mill',
     ]);
     expect(withFilters.defaultId()).toBe('fanuc-gcode');
     expect(get(withFilters.all)).toEqual(withFilters.list());
@@ -209,6 +210,7 @@ describe('dialog filters', () => {
       { name: 'Fanuc lathe G-Code', extensions: FANUC_EXTENSIONS },
       { name: 'Okuma OSP', extensions: OKUMA_EXTENSIONS },
       { name: 'Sinumerik', extensions: SINUMERIK_EXTENSIONS },
+      { name: 'Sinumerik milling', extensions: SINUMERIK_EXTENSIONS },
       { name: t('profiles.filterAll'), extensions: ['*'] },
     ]);
   });
@@ -220,6 +222,7 @@ describe('dialog filters', () => {
       'Heidenhain Klartext',
       'Okuma OSP',
       'Sinumerik',
+      'Sinumerik milling',
       t('profiles.filterAll'),
     ]);
   });
@@ -345,9 +348,9 @@ describe('variant detection through the registry', () => {
   it('answers what the profile declares, and nothing for a profile that declares none', () => {
     expect(withFilters.detectVariants('fanuc-gcode', 'N10 G0 X0\n')).toEqual({});
     expect(withFilters.detectVariants('siemens', 'N10 G0 X0\n')).toEqual({});
-    // The lathe declares `gcodeSystem`; WP6.2 writes its rules, so until then every
+    // The lathe declares `gcodeSystem` (and, from M9, the two R6 variants with no rules); WP6.2 writes its rules, so until then every
     // program keeps the declared default with a margin of 0.
-    expect(Object.keys(withFilters.detectVariants('fanuc-lathe', 'N10 G0 X0\n'))).toEqual(['gcodeSystem']);
+    expect(Object.keys(withFilters.detectVariants('fanuc-lathe', 'N10 G0 X0\n'))).toEqual(['gcodeSystem', 'incrementalAddresses', 'toolWord']);
   });
 });
 

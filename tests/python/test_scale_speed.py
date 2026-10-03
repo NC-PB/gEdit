@@ -1274,7 +1274,8 @@ class TestTurningDialects(unittest.TestCase):
         self.assertEqual(
             messages,
             [
-                "S50 is a spindle speed limit (G25), so it is not scaled.",
+                # M9 (WP9.5a), changed: G25 is named as the lower limit it is.
+                "S50 is the lowest speed the spindle may run at (G25), a lower limit and not a clamp, so it is not scaled.",
                 "S3000 is a spindle speed limit (G26), so it is not scaled.",
                 "S2=2000 is the speed limit of spindle 2 (G26), so it is not scaled.",
                 "S3=4000 is the speed limit of spindle 3 (G26), so it is not scaled.",
@@ -1282,11 +1283,53 @@ class TestTurningDialects(unittest.TestCase):
         )
         self.assertEqual(self.output("sinumerik-limits")["message"], "No spindle speed was changed; 4 left as a speed limit.")
 
-    def test_the_lower_limit_is_scaled_with_the_limit_option_only(self):
+    def test_the_lower_limit_is_never_scaled_not_even_with_the_limit_option(self):
+        # M9 (WP9.5a, `sets.speedLimitBound: 'lower'`), changed: the option scales the
+        # clamps, the highest speeds. `G25 S50` is the lowest speed and no clamp, so it is
+        # left with the option on as well (it was scaled to S40), and so is the lower limit
+        # of another spindle in the same block.
         context = helpers.effective_context("sinumerik", params={"percent": 80, "speedLimits": True})
-        result = helpers.run_script(SCRIPT, stdin="N20 G25 S50\nN30 G26 S3000 S2=2000\n", context=context)
+        result = helpers.run_script(
+            SCRIPT, stdin="N20 G25 S50 S2=40\nN30 G26 S3000 S2=2000\n", context=context
+        )
         self.assertTrue(result.ok, result.stderr)
-        self.assertEqual(result.json()["text"], "N20 G25 S40\nN30 G26 S2400 S2=1600\n")
+        payload = result.json()
+        self.assertEqual(payload["text"], "N20 G25 S50 S2=40\nN30 G26 S2400 S2=1600\n")
+        self.assertEqual(
+            [f["message"] for f in payload["findings"]],
+            [
+                "S50 is the lowest speed the spindle may run at (G25), a lower limit and not a clamp, so it is not scaled.",
+                "S2=40 is the lowest speed spindle 2 may run at (G25), a lower limit and not a clamp, so it is not scaled.",
+            ],
+        )
+
+    def test_the_lower_limit_is_a_database_answer(self):
+        # The same block with a database whose G25 declares no bound: an upper limit, as
+        # every entry meant before M9, which the option scales.
+        context = helpers.effective_context("sinumerik", params={"percent": 80, "speedLimits": True})
+        for entry in context["codes"]:
+            if entry.get("code") == "G25":
+                entry["sets"] = {"speedLimit": True}
+        result = helpers.run_script(SCRIPT, stdin="N20 G25 S50\n", context=context)
+        self.assertTrue(result.ok, result.stderr)
+        self.assertEqual(result.json()["text"], "N20 G25 S40\n")
+
+    @unittest.skipUnless(sys.version_info >= (3, 11), "tomllib is 3.11 and newer")
+    def test_the_texts_say_what_is_scaled(self):
+        import tomllib
+
+        lines = (helpers.SCRIPTS_DIR / SCRIPT).read_text(encoding="utf-8").split("\n")
+        body = []
+        for line in lines[2:]:
+            if line.strip() == "# ///":
+                break
+            body.append(line[2:] if line.startswith("# ") else line[1:])
+        meta = tomllib.loads("\n".join(body))
+        # The tooltip said surface speeds are left alone; on a turning profile they are scaled.
+        self.assertIn("constant surface speeds included on a turning profile", meta["description"])
+        self.assertNotIn("surface speeds, speed limits", meta["description"])
+        limits = next(param for param in meta["params"] if param["id"] == "speedLimits")
+        self.assertIn("never scaled, with this option or without it", limits["help"])
 
     def test_a_start_angle_and_a_dwell_of_another_spindle_are_no_speed(self):
         payload = self.output("sinumerik-dwell-and-angle")

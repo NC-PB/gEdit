@@ -71,11 +71,15 @@ machine's G-code system rather than on the dialect (plan AD-31). Each case is a 
   at all, the same word is multiplied. Which one happens is the machine's setting
 * `lathe-decimal-is-b` / `-calculator` / `-no-machine` — `F155` becomes `F140` in all three,
   because scaling is unit-free whatever the control makes of a number without a point
-* `lathe-feed-limit-machine` / `-no-machine` — and the limits are not: the same program and
-  the same written result, once against a limit of 0.2 mm/rev on a machine that reads a
-  point-less feed in increments of 0.001, and once against a limit of 200 as written
-* `klartext-no-value-limit` — a feed per tooth has no value at all, so it is scaled and the
-  limits are left out of it, loudly
+* `lathe-feed-limit-machine` / `-no-machine` — and the limits are not: the same program,
+  once against a limit of 0.2 mm/rev on a machine that reads a point-less feed in
+  increments of 0.001, and once with no machine, where (M9) a point-less feed per
+  revolution is 0.01 mm/rev counts on the increment presets and as written on the
+  calculator one, so it has no value and the limit is left out of it
+* `klartext-no-value-limit` — a feed per tooth and a feed per revolution are not in the
+  unit of the limits (per minute on a milling profile), so they are scaled and the limits
+  are left out of them, loudly (M9: by their unit; the per-revolution one used to be
+  compared)
 
 And the three the G8 review of M6 added. Each is a real program paired with the machine a
 shop would have, and each came back from this script with a thread lead multiplied and
@@ -121,6 +125,15 @@ And the M8 NC review (G10), each with the program the review ran:
 * `okuma-thread-after-g32` — the finding names `G71`, the block's own thread cycle, and not
   the `G32` still in force
 * `okuma-feeds-of-their-own` — `FA=` and `FB=` are feeds under addresses of their own
+
+And the M9 NC review (NC-F1): "only feeds above" and "only feeds below" decide **whether** a
+feed is scaled, so a feed they cannot be compared with is left as written and reported,
+where the smallest and largest feed are only left out of it:
+
+* `lathe-filter-other-unit` — "only feeds below 0.3" on a lathe: the `G98` feeds per minute
+  stay, a largest feed of 0.25 clamps a turning feed beside them
+* `lathe-filter-no-value` — "only feeds above 0.1" with no machine: the point-less `F25`
+  has no value and stays
 """
 
 from __future__ import annotations
@@ -197,6 +210,18 @@ REQUIRED_CASES = [
     "fanuc-leads-the-database-knows",
     "sinumerik-mcall-tapping-selection",
     "okuma-lap-shape-feeds",
+    # M9 (WP9.5a): values read right. Each fails against the script of m9/int.
+    "lathe-roughing-no-range",
+    "lathe-roughing-no-range-machine",
+    "lathe-limits-per-unit",
+    "mill-limits-per-revolution",
+    "okuma-contour-feed",
+    "sinumerik-thread-lead-elsewhere",
+    # The M9 review (F8): the F after G931 is a travel time.
+    "sinumerik-g931",
+    # The M9 NC review (NC-F1): a value filter that cannot be compared leaves the feed.
+    "lathe-filter-other-unit",
+    "lathe-filter-no-value",
 ]
 
 #: The addresses this script is allowed to rewrite. Everything else has to come back
@@ -904,6 +929,8 @@ class TestHeader(unittest.TestCase):
         "maxFeed",
         "onlyAbove",
         "onlyBelow",
+        # M9 (WP9.5a): the unit the four limit values are in.
+        "limitUnit",
         "perRevolution",
         "inverseTime",
     ]
@@ -1304,40 +1331,46 @@ class TestLathe(unittest.TestCase):
         )
         self.assertIn("Machine 'Lathe 2'.", payload["message"])
 
-    def test_with_no_machine_the_limits_compare_the_value_as_written(self):
-        """The same program and the same result, for a different reason.
+    def test_with_no_machine_a_point_less_feed_per_revolution_is_not_limited(self):
+        """M9 (WP9.5a), changed: the same program with no machine is scaled without the limit.
 
         With no machine a word keeps a value only where every preset the profile declares
-        reads it alike (AD-31). The three Fanuc presets read a **feed** as written whatever
-        they do to a length, so the limit applies — as 200 mm/rev, the number the user
-        typed. The written answer is `F200` in both cases and means two different things,
-        which is exactly why the summary says which machine the run used.
+        reads it alike (AD-31). Until M9 the three Fanuc presets read every feed as written,
+        so `F250` passed as 250 mm/rev and the limit of 200 clamped it. A control without
+        calculator-type input counts a point-less feed per revolution in 0.01 mm/rev, so the
+        increment presets read `F250` as 2.5 mm/rev and the calculator one as 250: nothing
+        is settled, the word is scaled (`F300`) and the limit is left out of it, loudly.
         """
         payload = self.output("lathe-feed-limit-no-machine")
-        self.assertIn("G01 X38. F200", payload["text"].split("\n"))
-        self.assertEqual(
-            payload["findings"][0]["message"],
-            "F250 would become 300; the largest feed (200) was used instead.",
-        )
+        self.assertIn("G01 X38. F300", payload["text"].split("\n"))
+        unresolved = [f for f in payload["findings"] if f["message"].startswith("F250 is scaled")]
+        self.assertEqual(len(unresolved), 1)
+        self.assertIn("depends on the machine (250 (As written", unresolved[0]["message"])
+        self.assertIn("2.5 (Increments of 0.001 mm (IS-B)", unresolved[0]["message"])
         self.assertIn("No machine: profile defaults assumed.", payload["message"])
 
-    def test_a_feed_with_no_value_is_scaled_but_never_limited(self):
-        """A feed per tooth is not a length per time: it has no class and no value.
+    def test_a_feed_in_another_unit_is_scaled_but_never_limited(self):
+        """A feed per tooth and a feed per revolution are not lengths per minute.
 
-        The word is still scaled — multiplying it is right in every reading — but no limit
-        is applied to it and the run says so. Comparing it with a "largest feed" the user
-        typed in millimetres per minute would be a guess with a number in front of it.
+        The words are still scaled — multiplying them is right in every reading — but the
+        limits, which are per minute on a milling profile, are not applied to them and the
+        run says so. M9 (WP9.5a), changed: until M9 the per-revolution `FU0.12` was
+        compared with a "largest feed" of 900 meant per minute (it passed only because 0.14
+        is smaller), and the per-tooth `FZ0.05` was reported as having no value at all; both
+        are now named by their unit, the limits' own unit beside it.
         """
         payload = self.output("klartext-no-value-limit")
         lines = payload["text"].split("\n")
         self.assertIn("5 L Y+40 FZ0.06", lines)
         self.assertIn("4 L X+0 Y+0 F900", lines)  # clamped to the limit
-        self.assertIn("6 L X-10 FU0.14", lines)  # per revolution: a value, under the limit
-        unresolved = [f for f in payload["findings"] if "FZ0.05" in f["message"]]
-        self.assertEqual(len(unresolved), 1)
-        self.assertEqual(unresolved[0]["severity"], "warning")
-        self.assertIn("the feed limits were not applied to it", unresolved[0]["message"])
-        self.assertIn("1 scaled without a limit check", payload["message"])
+        self.assertIn("6 L X-10 FU0.14", lines)  # per revolution: scaled, never compared
+        for word, unit in (("FZ0.05", "a feed per tooth"), ("FU0.12", "a feed per revolution")):
+            found = [f for f in payload["findings"] if word in f["message"]]
+            self.assertEqual(len(found), 1, word)
+            self.assertEqual(found[0]["severity"], "warning")
+            self.assertIn("the feed limits were not applied to it: it is %s" % unit, found[0]["message"])
+            self.assertIn("the limits are for feeds per minute", found[0]["message"])
+        self.assertIn("2 scaled without the limits, which are for feeds per minute", payload["message"])
 
     def test_a_run_without_a_limit_says_nothing_about_a_value_it_never_needed(self):
         """The same program with no limit: no finding, because nothing was compared."""
@@ -1574,6 +1607,19 @@ class TestTurningDialects(unittest.TestCase):
         self.assertIn("(G34)", messages[0])
         self.assertIn("(G35)", messages[1])
 
+    def test_a_travel_time_after_g931_is_left_and_reported(self):
+        # M9 review F8: G931 stood in no database, so its F words were halved as feeds and
+        # the moves ran twice as fast, with nothing said. No option scales a time, not even
+        # "also scale inverse-time feeds".
+        payload = self.output("sinumerik-g931")
+        lines = payload["text"].split("\n")
+        self.assertEqual(lines[5:8], ["N40 G1 X100 F4", "N50 X200 F2", "N60 G931 G1 X300 F3"])
+        self.assertEqual((lines[3], lines[8]), ("N20 G1 X0 Y0 F500", "N70 G94 F500"))
+        self.assertEqual(
+            [f["message"] for f in payload["findings"]],
+            ["F%s is a travel time, not a feed rate (G931), so it is not scaled." % v for v in ("4", "2", "3")],
+        )
+
     def test_the_feed_of_a_g63_tap_is_left(self):
         payload = self.output("sinumerik-g63")
         self.assertEqual(payload["text"].split("\n")[2], "N190 G63 Z-20 F500 S400 M3")
@@ -1635,6 +1681,21 @@ class TestTurningDialects(unittest.TestCase):
             ["5", "0", "2", "-30", "", "-8", '"A,B"', "AC(1,2)", "[R1,2]"],
         )
         self.assertEqual(scale_feed.call_arguments(None), [])
+
+    def test_an_indexed_assignment_is_a_value_and_never_a_code(self):
+        # M9 review F1: `M[2]=3` read as the code M3 and `FA[X]=100` as the word FA100,
+        # because the text in front of the `=` carries the bracket.
+        gedit_nc = helpers.import_gedit_nc()
+        import scale_feed
+
+        cp = gedit_nc.compile_profile(helpers.effective_context("sinumerik")["profile"])
+        for text in ("M[2]=3", "S[2]=500", "LIMS[2]=1800", "FA[X]=100", "M3=3", "F=R1"):
+            tokens, _ = gedit_nc.tokenize_line(text, cp, None)
+            with self.subTest(text=text):
+                self.assertTrue(scale_feed.assignment_word(tokens[0]))
+        tokens, _ = gedit_nc.tokenize_line("M3", cp, None)
+        self.assertFalse(scale_feed.assignment_word(tokens[0]))
+
 
 class TestLeadsTheDatabaseKnows(unittest.TestCase):
     """2026-09: TODO Next up 8, the first two items of Next up 2, R10 and review §6.
@@ -1736,3 +1797,191 @@ class TestLeadsTheDatabaseKnows(unittest.TestCase):
         result = helpers.run_script(SCRIPT, stdin=program, context=context)
         self.assertTrue(result.ok, result.stderr)
         self.assertEqual(result.json()["text"], program)
+
+
+class TestValuesReadRight(unittest.TestCase):
+    """M9 (WP9.5a): the scale-feed items of "values read right", one claim per case.
+
+    Every case here was wrong on `m9/int` (the regression proof of the hand-off): the
+    roughing lookalike was scaled, the turning limits lowered every per-minute feed of a
+    driven tool to 0.3, the contour feed of an Okuma `G101` was left as a feed per
+    revolution, and a Sinumerik `G33` F was called a thread pitch.
+    """
+
+    def case(self, name):
+        return next(case for case in helpers.script_cases("scale_feed") if case.name == name)
+
+    def output(self, name, params=None):
+        case = self.case(name)
+        context = context_of(case)
+        if params is not None:
+            context["params"] = params
+        result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        if params is None:
+            self.assertEqual(payload["text"], case.expected_text())
+        return payload
+
+    # -- a profile-range cycle without its range --------------------------------
+
+    def test_a_roughing_cycle_without_a_p_is_refused_while_no_machine_confirms_the_dialect(self):
+        payload = self.output("lathe-roughing-no-range")
+        lines = payload["text"].split("\n")
+        # The real roughing cycle carries its range, and its feed is scaled.
+        self.assertIn("G71 P100 Q200 U0.4 W0.1 F0.23", lines)
+        # The lookalikes are an Okuma thread cycle's shape: their F may be a lead.
+        self.assertIn("G71 X18.2 Z-18. F2.0", lines)
+        self.assertIn("G72 X18.2 Z-18. F2.0", lines)
+        refused = [f for f in payload["findings"] if "names no P" in f["message"]]
+        self.assertEqual([f["line"] for f in refused], [21, 22])
+        self.assertTrue(all(f["severity"] == "warning" for f in refused))
+        self.assertIn("Choose a machine for the document", refused[0]["message"])
+        self.assertIn("2 left because a profile-range cycle names no range", payload["message"])
+
+    def test_with_a_machine_of_the_profile_chosen_the_same_blocks_are_scaled(self):
+        payload = self.output("lathe-roughing-no-range-machine")
+        lines = payload["text"].split("\n")
+        self.assertIn("G71 X18.2 Z-18. F1.8", lines)
+        self.assertIn("G72 X18.2 Z-18. F1.8", lines)
+        self.assertEqual(payload["findings"], [])
+        self.assertIn("Machine 'Lathe 1'.", payload["message"])
+
+    def test_the_first_block_of_a_roughing_cycle_has_no_feed_and_is_not_touched(self):
+        lines = self.output("lathe-roughing-no-range")["text"].split("\n")
+        self.assertIn("G71 U2. R0.5", lines)
+
+    def test_the_guard_reads_the_database_and_names_no_code(self):
+        # A code whose entry declares no P/Q range is never refused this way: on the Okuma
+        # profile G71 is the thread cycle, and its F is refused as the lead it is.
+        context = helpers.effective_context("okuma-osp", params={"percent": 90})
+        result = helpers.run_script(SCRIPT, stdin="G71 X18.2 Z-18 F2.0\n", context=context)
+        self.assertTrue(result.ok, result.stderr)
+        messages = [f["message"] for f in result.json()["findings"]]
+        self.assertEqual(len(messages), 1)
+        self.assertNotIn("names no P", messages[0])
+        self.assertIn("thread pitch (G71)", messages[0])
+
+    # -- the limits are in one feed unit ------------------------------------------
+
+    def test_turning_limits_never_touch_a_feed_per_minute(self):
+        payload = self.output("lathe-limits-per-unit")
+        lines = payload["text"].split("\n")
+        # Per revolution: clamped and raised to the limits.
+        self.assertIn("G01 X38. F0.30", lines)
+        self.assertIn("G01 X40. F0.10", lines)
+        # Per minute (G98): scaled, never lowered to 0.3 mm/min.
+        self.assertIn("G01 X20. F240.", lines)
+        self.assertIn("G01 Z-5. F96.", lines)
+        other = [f for f in payload["findings"] if "limits are for feeds per revolution" in f["message"]]
+        self.assertEqual([f["line"] for f in other], [15, 16])
+        self.assertIn("it is a feed per minute", other[0]["message"])
+        self.assertIn("2 scaled without the limits, which are for feeds per revolution", payload["message"])
+
+    def test_the_limit_unit_can_be_chosen_outright(self):
+        payload = self.output("mill-limits-per-revolution")
+        lines = payload["text"].split("\n")
+        self.assertIn("G01 Y50. F0.30", lines)  # clamped, per revolution
+        self.assertIn("G01 Z-2. F330.", lines)  # per minute: no limit
+        self.assertIn("G01 X0. F550.", lines)
+
+    def test_the_same_turning_program_with_the_limits_per_minute(self):
+        case = self.case("lathe-limits-per-unit")
+        params = dict(helpers.load_json(case.directory / "params.json"))
+        params.update({"limitUnit": "per-minute", "minFeed": 100, "maxFeed": 220})
+        payload = self.output("lathe-limits-per-unit", params)
+        lines = payload["text"].split("\n")
+        self.assertIn("G01 X20. F220.", lines)  # 240 lowered to the per-minute limit
+        self.assertIn("G01 Z-5. F100.", lines)  # 96 raised to it
+        self.assertIn("G01 Z-10. F0.30", lines)  # per revolution: scaled, not raised to 100
+        self.assertIn("3 scaled without the limits, which are for feeds per minute", payload["message"])
+
+    def test_a_filter_leaves_a_feed_in_another_unit_as_written(self):
+        """NC-F1: "only feeds below 0.3" (per revolution) must not scale a `G98 F200.`."""
+        payload = self.output("lathe-filter-other-unit")
+        lines = payload["text"].split("\n")
+        self.assertIn("G01 X20. F200.", lines)
+        self.assertIn("G01 Z-5. F80.", lines)
+        self.assertIn("G01 Z-10. F0.25", lines)  # scaled and clamped to the largest feed
+        self.assertIn("G01 X38. F0.35", lines)  # left by the filter
+        left = [f for f in payload["findings"] if "passes the filter cannot be told" in f["message"]]
+        self.assertEqual([f["line"] for f in left], [15, 16])
+        self.assertEqual({f["severity"] for f in left}, {"warning"})
+        self.assertTrue(left[0]["message"].startswith("F200. is not scaled: it is a feed per minute"))
+        self.assertIn("2 left because the value filter cannot be compared with them", payload["message"])
+        self.assertNotIn("scaled without the limits", payload["message"])
+
+    def test_a_filter_leaves_a_feed_with_no_value_as_written(self):
+        """NC-F1: with no machine a point-less feed per revolution has no value to filter."""
+        payload = self.output("lathe-filter-no-value")
+        lines = payload["text"].split("\n")
+        self.assertIn("G01 Z-10. F25", lines)
+        self.assertIn("G01 X38. F0.30", lines)
+        left = [f for f in payload["findings"] if f["message"].startswith("F25 ")]
+        self.assertEqual(len(left), 1)
+        self.assertIn("is not scaled: what it is worth depends on the machine", left[0]["message"])
+        self.assertIn('the "only feeds above" value (0.1) cannot be compared with it', left[0]["message"])
+        self.assertIn("1 left because the value filter cannot be compared with it", payload["message"])
+        self.assertNotIn("without a limit check", payload["message"])
+
+    def test_without_a_filter_the_same_feeds_are_scaled_without_the_limits(self):
+        """The smallest and largest feed only bound a scaled feed; they never hold one back."""
+        payload = self.output("lathe-filter-other-unit", {"percent": 150, "maxFeed": 0.25})
+        lines = payload["text"].split("\n")
+        self.assertIn("G01 X20. F300.", lines)
+        self.assertIn("G01 Z-5. F120.", lines)
+        self.assertIn("2 scaled without the limits, which are for feeds per revolution", payload["message"])
+        payload = self.output("lathe-filter-no-value", {"percent": 150, "maxFeed": 0.25})
+        self.assertIn("G01 Z-10. F38", payload["text"].split("\n"))
+        self.assertIn("1 scaled without a limit check", payload["message"])
+
+    def test_a_run_without_limits_says_nothing_about_their_unit(self):
+        payload = self.output("lathe-limits-per-unit", {"percent": 120})
+        self.assertFalse([f for f in payload["findings"] if "limits" in f["message"]])
+
+    # -- a code that declares its feed unit -----------------------------------------
+
+    def test_an_okuma_contour_move_cuts_at_a_feed_per_minute_whatever_the_feed_mode(self):
+        payload = self.output("okuma-contour-feed")
+        lines = payload["text"].split("\n")
+        self.assertIn("N100 G101 X20. C90. F120", lines)
+        # The next block is still a G101 move, and so is its feed.
+        self.assertIn("N110 X40. C180. F96", lines)
+        self.assertIn("N120 G102 X20. C270. L10. F80", lines)
+        # The turning feeds around it are per revolution, left by the option.
+        self.assertIn("N50 G01 Z-20. F0.2", lines)
+        self.assertIn("N130 G01 X42. F0.1", lines)
+
+    # -- the texts -------------------------------------------------------------------
+
+    def test_a_sinumerik_g33_f_is_not_called_a_pitch(self):
+        payload = self.output("sinumerik-thread-lead-elsewhere")
+        messages = [f["message"] for f in payload["findings"]]
+        self.assertEqual(len(messages), 1)
+        self.assertNotIn("pitch", messages[0])
+        self.assertIn("G33 takes its lead from I, J or K, not from F", messages[0])
+        self.assertIn("stays the feed in force", messages[0])
+        self.assertIn("1 left in a thread block whose lead is written elsewhere", payload["message"])
+        self.assertNotIn("thread pitch", payload["message"])
+
+    def test_a_fanuc_thread_f_is_still_the_lead(self):
+        context = helpers.effective_context("fanuc-lathe", params={"percent": 90})
+        result = helpers.run_script(SCRIPT, stdin="G32 Z-18. F1.5\n", context=context)
+        self.assertTrue(result.ok, result.stderr)
+        self.assertIn("F1.5 is a thread pitch (G32)", result.json()["findings"][0]["message"])
+
+    def test_the_summary_names_the_machine(self):
+        # The owner's wish (TODO "Script texts"): delivered with the machines of M6 and kept.
+        self.assertIn("Machine 'Lathe 1'.", self.output("lathe-roughing-no-range-machine")["message"])
+        self.assertIn("No machine: profile defaults assumed.", self.output("lathe-roughing-no-range")["message"])
+
+    @unittest.skipUnless(HAS_TOMLLIB, "tomllib is 3.11 and newer")
+    def test_the_description_says_what_is_scaled(self):
+        import tomllib
+
+        meta = tomllib.loads(TestHeader().header_source())
+        self.assertIn("an F written in a rapid block included", meta["description"])
+        self.assertNotIn("rapid moves", meta["description"])
+        limit = next(param for param in meta["params"] if param["id"] == "limitUnit")
+        self.assertEqual(limit["default"], "auto")
+        self.assertEqual([choice["value"] for choice in limit["choices"]], ["auto", "per-minute", "per-rev"])

@@ -239,6 +239,7 @@ describe('the resolved fixtures', () => {
       'heidenhain-klartext',
       'okuma-osp',
       'sinumerik',
+      'sinumerik-mill',
     ]);
   });
 

@@ -236,8 +236,19 @@ export type Compatible = (m: MachineConfig, chain: readonly string[]) => boolean
 // The declarations live here so both halves of M6 read one contract.
 // ---------------------------------------------------------------------------
 
+/**
+ * M9 (WP9.5a, §7.16). Two feed classes a machine declares **no** reading for: a feed per
+ * tooth (Klartext `FZ`, `sets.feedUnit: 'per-tooth'`) and an inverse-time feed (`G93`, the
+ * reciprocal of the block's time in minutes). They are named so that a consumer can tell
+ * what such a word is instead of seeing "no class"; they are not `NumberClass` members,
+ * because no preset and no machine reads them differently from the others, and a class a
+ * machine cannot declare is never a guess. Their value: as written where the profile
+ * declares no number input at all, and none wherever it declares one (AD-31).
+ */
+export type UndeclaredFeedClass = 'feedPerTooth' | 'inverseTime';
+
 /** What `numberClassOf` may answer; `null` = no class, or undecidable, so no value. */
-export type ResolvedClass = NumberClass | 'increment' | 'count' | null;
+export type ResolvedClass = NumberClass | UndeclaredFeedClass | 'increment' | 'count' | null;
 
 /** What a consumer asks for one word: a value, or the readings to show instead (AD-31). */
 export interface ResolvedValue {

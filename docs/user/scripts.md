@@ -135,6 +135,7 @@ Multiplies `F` values by a percentage.
 | Decimal places | As written, or 0 to 4 |
 | Smallest feed / Largest feed | A scaled feed outside the range is pulled back to it. Empty means no limit |
 | Only feeds above / Only feeds below | Leaves the others as they are |
+| The limits are in | Which feeds the four values above are compared with: *automatically* (per revolution on a turning dialect, per minute on a milling one), *feed per minute* or *feed per revolution*. A feed in the other unit is scaled **without** the limits, and the run says so, so a largest feed of 0.3 meant per revolution never lowers a feed per minute |
 | Also scale per-revolution feeds | Automatically, yes or no. **Automatically** scales them on a turning dialect and leaves them alone on a milling one, which is what each of them usually wants |
 | Also scale inverse-time feeds | `G93`, where `F` is the reciprocal of the time the block may take. Off by default |
 
@@ -154,6 +155,32 @@ a `G71` thread cycle carries on its `$` line is a thread lead like any other. Kl
 `FMAX` and `FAUTO` are not numbers and are never touched; an `F` on a rapid block (`G0 … F`)
 is scaled like any other. A value written with a Klartext decimal comma (`F1000,5`) is
 scaled like any other and written back with its comma; a limit compares it correctly too.
+
+**A thread lead is a lead only where the database says so.** The `F` of a threading code is
+never scaled. A tapping cycle is different: its `F` follows the feed unit in force, so under
+`G94` it is a feed per minute and is scaled like one (it used to be taken for a feed per
+revolution, which is a hundred times too small on an Okuma set to 1 µm). Its speed is still
+left, as below. A Sinumerik `G33`, `G331`, `G332`, `G335` or `G336` takes its lead from `I`,
+`J` or `K`: the block's `F` does not cut the thread, stays the feed in force, and is left as
+written with a finding that says so. After a Sinumerik `G931` an `F` is a travel time, not a
+feed: it is never scaled, whatever the options, and each one is reported.
+
+**A feed in another unit than the limits is scaled without the smallest and largest feed.**
+A feed per tooth or an inverse-time feed has no unit the limits could be compared in; it is
+scaled and reported. With no machine, a Fanuc feed written without a point and per revolution
+has no value either ([machines.md](machines.md#not-every-word-is-read-the-same-way)); it is
+scaled and not compared. This holds only when the run sets the smallest or largest feed and
+no filter. **With "Only feeds above" or "Only feeds below" set, such a feed is left as
+written** and reported as a warning, and the summary says how many were left because the
+filter cannot be compared with them: a feed in another unit and one with no value are not
+guessed at.
+
+**A Fanuc lathe `G71`, `G72` or `G73` without a `P` is refused while no machine is chosen.**
+On a Fanuc lathe these roughing cycles carry `P` and `Q` (or `U` and `R`), and the `F` is a
+feed. The same `G71 X… Z… F2.` with no `P` is an Okuma thread cycle, whose `F` is the lead,
+and a program whose dialect was only guessed could be either. The `F` is left with a warning
+that says so; choose a machine for the document to have it scaled, or scale the block by
+hand.
 
 **A code that means two things is refused.** Some codes cut a thread on another kind of
 machine, in the other G-code system or on another make of control — `G76` and `G92` on the
@@ -257,11 +284,14 @@ index names.
 
 **A speed limit is not a speed.** The `S` of the block that clamps the top speed for
 constant surface speed — `G50 S` on a Fanuc lathe in G-code system A and on an Okuma,
-`G92 S` in system B, `G26 S` on a Sinumerik, and the lower limit `G25 S` — is left alone
-by default and reported, and so is a clamp written as a word of its own (`LIMS=3000`,
+`G92 S` in system B, `G26 S` on a Sinumerik — is left alone by default and reported, and so is a clamp written as a word of its own (`LIMS=3000`,
 `LIMS[2]=1800`). In such a block every speed word is a limit, the ones for other spindles
 included (`G26 S3000 S2=2000`). Which code or word that is comes from the dialect's code
 database and profile, so the script is right on every dialect without knowing any of them.
+The Sinumerik `G25 S` is the **lowest** speed, not a clamp: it is never scaled, with "Also
+scale the limits" or without it, and it is still counted as a limit left as written. A word
+with an index — `S[2]=500`, `LIMS[2]=1800` — belongs to the spindle the index names: it is
+never the main spindle's speed in force and never the main clamp.
 
 **Other spindles are left alone unless you ask.** On a Sinumerik program, gEdit's main
 spindle is spindle 1: a plain `S` while spindle 1 is the master (the default, `SETMS`, or
@@ -309,6 +339,11 @@ A Klartext `TOOL CALL` of the tool already in the spindle, written with no axis,
 change rather than a second call: only a `TOOL CALL` that names a different tool, or names
 the axis (a possible sister-tool swap on the same number), counts as a change and moves the
 list on.
+
+A range of constant surface speeds shows its unit and the code that set it, `220 m/min (G96)`
+or `150 m/min (G961)` (`ft/min` in an inch program); a range of spindle speeds in rpm carries
+no mark. A feed after a Sinumerik `G931` is a travel time and is left out of the feed range
+with a note.
 
 A speed or feed written **before** the turret indexes (`G97 S1500 M03`, then `T0202`)
 belongs to the new tool: a value counts for the tool that moves next. A dwell is in no range,
@@ -404,8 +439,8 @@ An example. The bundled **Scale feed rates** declares no `profiles`, so it is of
 every dialect.
 
 `profiles` lists dialect ids — `fanuc-gcode`, `fanuc-lathe`, `heidenhain-klartext`,
-`okuma-osp`, `sinumerik` — compared exactly: a script for `fanuc-gcode` is not offered on
-`fanuc-lathe`. An empty list means every dialect, and an id gEdit does not know is not
+`okuma-osp`, `sinumerik`, `sinumerik-mill` — compared exactly: a script for `fanuc-gcode` is
+not offered on `fanuc-lathe`, and one for `sinumerik` is not offered on `sinumerik-mill`. An empty list means every dialect, and an id gEdit does not know is not
 reported.
 
 The block has to come first: only blank lines, a `#!` line (line 1) and a coding line
@@ -564,6 +599,12 @@ the smaller `FeedModeTracker`), reads a word's number the way the machine does, 
 the two JSON result shapes. Every public name, with what it is for, is listed in
 [the library reference](../../src-tauri/resources/scripts/README.md#7-what-gedit_nc-gives-you);
 the docstrings in the file have the detail.
+
+On a dialect that defines a cycle once and calls it later (Klartext), `ModalInterpreter.state`
+also carries `definedCycle` (the last `CYCL DEF`, which no call ends) and `modalCall` (the
+`M89` that runs it after every positioning block); `defined_cycle` and `modal_call` read them.
+`active_cycle` includes the defined cycle while a modal call runs it. `FeedModeTracker` is
+unchanged. On the other dialects both are `None`.
 
 ### Five rules that matter more than any feature
 

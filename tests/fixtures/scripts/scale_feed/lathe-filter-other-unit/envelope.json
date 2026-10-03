@@ -1,0 +1,25 @@
+{
+  "message": "Scaled 2 of 5 feed rates to 150 %; 1 left by the value filter, 2 left because the value filter cannot be compared with them, 1 clamped to a limit. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 9,
+      "severity": "info",
+      "message": "F0.20 would become 0.30; the largest feed (0.25) was used instead."
+    },
+    {
+      "line": 10,
+      "severity": "info",
+      "message": "F0.35 is at or above the \"only feeds below\" value (0.3), so it is left as it is."
+    },
+    {
+      "line": 15,
+      "severity": "warning",
+      "message": "F200. is not scaled: it is a feed per minute, and the \"only feeds below\" value (0.3) is for feeds per revolution, so whether it passes the filter cannot be told. It is left as it is."
+    },
+    {
+      "line": 16,
+      "severity": "warning",
+      "message": "F80. is not scaled: it is a feed per minute, and the \"only feeds below\" value (0.3) is for feeds per revolution, so whether it passes the filter cannot be told. It is left as it is."
+    }
+  ]
+}

@@ -40,6 +40,11 @@ And the M8 NC review (G10), each with the program the review ran:
   and the name keeps its zeros and its quotation marks
 * `sinumerik-feed-type` — `G96` makes the feed a feed per revolution on this control, and
   after `G95` an `S` is revolutions per minute again
+
+And the M9 review:
+
+* `sinumerik-indexed-spindles` — `S[2]=500`, `M[2]=3` and `LIMS[2]=1800` name spindle 2,
+  so none of them is in the main spindle's speed range (F1)
 """
 
 from __future__ import annotations
@@ -83,6 +88,11 @@ REQUIRED_CASES = [
     # The M8 NC review.
     "sinumerik-feed-type",
     "sinumerik-tool-names",
+    # M9 (WP9.5a): the surface-speed tag carries its unit and the code that set it.
+    "sinumerik-g961",
+    "lathe-inch-surface",
+    # The M9 review (F1): indexed spindle words are another spindle's.
+    "sinumerik-indexed-spindles",
 ]
 
 
@@ -584,7 +594,7 @@ class TestLathe(unittest.TestCase):
         # 220 m/min and 220 rpm are not the same number, and a column that showed both as
         # `220` would be read as whichever the reader expected.
         rows = self.rows("lathe-turning")
-        self.assertEqual(rows[0]["speed"], "220 surface")
+        self.assertEqual(rows[0]["speed"], "220 m/min (G96)")
         self.assertEqual(rows[1]["speed"], "1200")
 
     def test_the_clamp_is_not_a_speed_in_either_g_code_system(self):
@@ -645,7 +655,7 @@ class TestTurningDialects(unittest.TestCase):
         # `G97 S1500 M03` then `T0202`, the order the Okuma notes show: no axis moves in
         # between, so the speed is the drill's, not the roughing tool's.
         rows = self.rows("okuma-turret")
-        self.assertEqual(rows["T1"]["speed"], "180 surface")
+        self.assertEqual(rows["T1"]["speed"], "180 m/min (G96)")
         self.assertEqual(rows["T2"]["speed"], "1500")
 
     def test_the_same_holds_on_a_fanuc_lathe(self):
@@ -657,18 +667,34 @@ class TestTurningDialects(unittest.TestCase):
         result = helpers.run_script(SCRIPT, stdin=program, context=context)
         self.assertTrue(result.ok, result.stderr)
         rows = {row["tool"]: row for row in result.json()["rows"]}
-        self.assertEqual((rows["T1"]["speed"], rows["T3"]["speed"]), ("200 surface", "1200"))
+        self.assertEqual((rows["T1"]["speed"], rows["T3"]["speed"]), ("200 m/min (G96)", "1200"))
 
     def test_a_dwell_is_in_no_range(self):
         # Okuma `G04 F1` after the drill's feed; Sinumerik `G4 F1.5` and `G4 S2` after the
         # roughing tool's.
         self.assertEqual(self.rows("okuma-turret")["T2"]["feed"], "0.12 /rev")
         row = self.rows("sinumerik-tools")["T1"]
-        self.assertEqual((row["feed"], row["speed"]), ("0.3 /rev", "180 surface"))
+        self.assertEqual((row["feed"], row["speed"]), ("0.3 /rev", "180 m/min (G96)"))
 
     def test_driven_tool_and_numbered_spindle_speeds_are_not_the_main_spindle_speed(self):
         self.assertEqual(self.rows("okuma-turret")["T11"]["speed"], "")
         self.assertEqual(self.rows("sinumerik-tools")["T5"]["speed"], "")
+
+    def test_an_indexed_spindle_word_is_not_the_main_spindle_speed(self):
+        # M9 review F1: `S[2]=500` was read as the main spindle's `S`, so the roughing tool
+        # showed 200-500 m/min. Like `S2=`, the index names spindle 2.
+        row = self.rows("sinumerik-indexed-spindles")["T1"]
+        self.assertEqual((row["feed"], row["speed"]), ("0.2-0.25 /rev", "200 m/min (G96)"))
+
+    def test_a_travel_time_is_in_no_feed_range(self):
+        # M9 review F8: the F of a G931 block is the time the move takes, not a feed.
+        context = helpers.effective_context("sinumerik-mill")
+        program = "T1 D1\nM6\nG94 S1000 M3\nG1 X10 F100\nG931 G1 X20 F3\nG94 G1 X30 F150\nM30\n"
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["rows"][0]["feed"], "100-150")
+        self.assertIn("in G931", payload["findings"][0]["message"])
 
     def test_every_sinumerik_tool_form_is_read(self):
         # `T0 D0` deselects, `T="…"` names, `T1=5` is tool 5 of spindle 1; a message that
@@ -697,3 +723,47 @@ class TestTurningDialects(unittest.TestCase):
         self.assertEqual(rows["ROUGH_80"]["feed"], "0.25-0.3 /rev")
         self.assertEqual(rows["FINISH"]["speed"], "1800")
         self.assertEqual(rows["DRILL_D8"]["feed"], "120")
+
+
+class TestSurfaceSpeedTag(unittest.TestCase):
+    """M9 (WP9.5a, TODO "Script texts"): a surface-speed range says its unit and its code.
+
+    "surface" named neither, and the finding said "(G96)" of a Sinumerik `G961`. Both now
+    come from the code database (`sets.speedUnit`, `sets.units`) and the document's machine.
+    """
+
+    def report(self, name):
+        case = next(case for case in helpers.script_cases("tool_list") if case.name == name)
+        result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context_of(case))
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload, case.expected_json())
+        return payload
+
+    def test_the_code_that_set_the_surface_speed_is_named(self):
+        rows = {row["tool"]: row for row in self.report("sinumerik-g961")["rows"]}
+        self.assertEqual(rows["FACE_80"]["speed"], "150 m/min (G961)")
+        self.assertEqual(rows["FACE_80"]["feed"], "120")  # G961 is a feed per minute
+        self.assertEqual(rows["DRILL_D8"]["speed"], "1800")
+
+    def test_an_inch_program_reads_its_surface_speeds_in_feet_per_minute(self):
+        rows = self.report("lathe-inch-surface")["rows"]
+        self.assertEqual(rows[0]["speed"], "600 ft/min (G96)")
+
+    def test_a_surface_speed_left_out_of_a_range_is_named_with_its_unit_and_code(self):
+        findings = self.report("fanuc-feed-modes")["findings"]
+        texts = [f["message"] for f in findings if "surface speed" in f["message"]]
+        self.assertEqual(texts, ["T2: the S of 1 block is a surface speed in m/min (G96), not a spindle speed, so it is not in the range."])
+
+    def test_the_machine_units_are_where_the_program_starts(self):
+        case = next(case for case in helpers.script_cases("tool_list") if case.name == "lathe-turning")
+        context = context_of(case)
+        context["machine"] = dict(context["machine"])
+        context["machine"]["params"] = dict(context["machine"]["params"], units="inch")
+        result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context)
+        self.assertTrue(result.ok, result.stderr)
+        # lathe-turning writes G21, so its own code wins over the machine's power-on units.
+        self.assertEqual(result.json()["rows"][0]["speed"], "220 m/min (G96)")
+        program = "\n".join(line for line in case.input_text().split("\n") if not line.startswith("G21"))
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertEqual(result.json()["rows"][0]["speed"], "220 ft/min (G96)")

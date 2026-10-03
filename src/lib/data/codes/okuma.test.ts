@@ -268,8 +268,11 @@ describe('what a code does to the modal state', () => {
   it('keeps the moves and the thread passes in one modal group', () => {
     // A thread pass is a mode: the blocks after `G33 X29.4 Z-30 F2` that only change X cut
     // the next passes (syntax-okuma.md §6.2). `G00` or `G01` ends it. The synchronized feed
-    // G36/G37 and the arc threads G112/G113 are motions of the same kind (G10 M8).
-    expect(codesWith((e) => e.group === 'motion')).toEqual(['G0', 'G1', 'G2', 'G3', ...range(31, 37), 'G112', 'G113']);
+    // G36/G37 and the arc threads G112/G113 are motions of the same kind (G10 M8), and so
+    // are the contour moves G101-G103 of a driven tool (M9, WP9.5a).
+    expect(codesWith((e) => e.group === 'motion')).toEqual([
+      'G0', 'G1', 'G2', 'G3', ...range(31, 37), 'G101', 'G102', 'G103', 'G112', 'G113',
+    ]);
     for (const code of codesWith((e) => e.group === 'motion')) expect(entry(code).modal, code).toBe(true);
   });
 
@@ -414,13 +417,15 @@ const PARAM_UNITS: Record<string, Record<string, Unit>> = {
   G2: { L: 'length' },
   G3: { L: 'length' },
   G4: { F: 'dwell' },
-  G31: { A: 'angle', L: 'length', J: 'count' },
-  G32: { A: 'angle', L: 'length', J: 'count' },
-  G33: { A: 'angle', L: 'length', J: 'count' },
-  G34: { E: 'feedPerRev', J: 'count' },
-  G35: { E: 'feedPerRev', J: 'count' },
-  G71: { A: 'angle', B: 'angle', D: 'length', U: 'length', H: 'length', L: 'length', E: 'feedPerRev', J: 'count', Q: 'count' },
-  G72: { A: 'angle', B: 'angle', D: 'length', W: 'length', H: 'length', L: 'length', E: 'feedPerRev', J: 'count', Q: 'count' },
+  // M9 (WP9.5a): the F of every thread code is its lead, a feed per revolution whatever the
+  // feed mode says; a tap's F (G77, G78, G184) is not, it follows the feed unit in force.
+  G31: { F: 'feedPerRev', A: 'angle', L: 'length', J: 'count' },
+  G32: { F: 'feedPerRev', A: 'angle', L: 'length', J: 'count' },
+  G33: { F: 'feedPerRev', A: 'angle', L: 'length', J: 'count' },
+  G34: { F: 'feedPerRev', E: 'feedPerRev', J: 'count' },
+  G35: { F: 'feedPerRev', E: 'feedPerRev', J: 'count' },
+  G71: { A: 'angle', B: 'angle', D: 'length', U: 'length', H: 'length', L: 'length', E: 'feedPerRev', F: 'feedPerRev', J: 'count', Q: 'count' },
+  G72: { A: 'angle', B: 'angle', D: 'length', W: 'length', H: 'length', L: 'length', E: 'feedPerRev', F: 'feedPerRev', J: 'count', Q: 'count' },
   G73: { D: 'length', L: 'length', DA: 'length', E: 'dwell' },
   G74: { D: 'length', L: 'length', DA: 'length', E: 'dwell' },
   G75: { L: 'length' },
@@ -430,10 +435,21 @@ const PARAM_UNITS: Record<string, Record<string, Unit>> = {
   G86: { D: 'length', U: 'length', W: 'length' },
   G87: { U: 'length', W: 'length' },
   G88: { D: 'length', H: 'length', B: 'angle', U: 'length', W: 'length' },
+  // M9 (WP9.5a): the contour moves of a driven tool cut at a feed per minute whatever the
+  // feed mode is (LG33-019 chapter 9).
+  G101: { F: 'feedPerMin' },
+  G102: { L: 'length', F: 'feedPerMin' },
+  G103: { L: 'length', F: 'feedPerMin' },
+  G112: { F: 'feedPerRev' },
+  G113: { F: 'feedPerRev' },
   G181: DRIVEN_TOOL,
   G182: DRIVEN_TOOL,
   G183: { ...DRIVEN_TOOL, D: 'length', L: 'length' },
   G184: DRIVEN_TOOL,
+  G185: { F: 'feedPerRev' },
+  G186: { F: 'feedPerRev' },
+  G187: { F: 'feedPerRev' },
+  G188: { F: 'feedPerRev' },
   G189: DRIVEN_TOOL,
   CALL: { Q: 'count' },
   MODIN: { Q: 'count' },

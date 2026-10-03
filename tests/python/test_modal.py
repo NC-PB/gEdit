@@ -93,6 +93,8 @@ def render(state: Dict[str, Any]) -> Dict[str, Any]:
         "diameter": marked(diameter["mode"], diameter) if diameter is not None else None,
         "tool": tool["station"] if tool is not None else None,
         "activeCycle": cycle["code"] if cycle is not None else None,
+        "definedCycle": state["definedCycle"]["code"] if state["definedCycle"] is not None else None,
+        "modalCall": state["modalCall"]["code"] if state["modalCall"] is not None else None,
         "pitchFeedAmbiguous": state["pitchFeedAmbiguous"],
         "block": state["block"],
         "feed": state["feed"],
@@ -617,6 +619,17 @@ class TestTurningDialects(ModalTestCase):
         states = self.run_lines("sinumerik", ["S500 M3", "S3=2400", "S1=900 M1=3"])
         self.assertEqual([state["speed"]["valueText"] for state in states], ["500", "500", "500"])
 
+    def test_an_indexed_spindle_word_is_neither_the_speed_nor_the_clamp_nor_a_code(self) -> None:
+        # M9 review F1: `S[2]=500` became the speed in force, `LIMS[2]=1800` the main
+        # clamp, and `M[2]=5` the code M5 of the spindle this state follows. The index names
+        # spindle 2, as the address of `S2=` and `M2=` does.
+        states = self.run_lines(
+            "sinumerik", ["G96 S200 LIMS=3000 M3", "S[2]=500", "LIMS[2]=1800", "M[2]=5", "S2=600 M2=3"]
+        )
+        self.assertEqual([state["speed"]["valueText"] for state in states], ["200"] * 5)
+        self.assertEqual([state["speedLimit"]["valueText"] for state in states], ["3000"] * 5)
+        self.assertEqual([state["groups"]["spindle"]["code"] for state in states], ["M3"] * 5)
+
     def test_the_speed_word_of_a_dwell_block_is_not_a_speed(self) -> None:
         states = self.run_lines("sinumerik", ["G97 S500 M3", "G4 S2", "G4 F1.5", "G1 X10 F0.2"])
         self.assertEqual([state["speed"]["valueText"] for state in states], ["500"] * 4)
@@ -871,6 +884,247 @@ class TestTappingInTheTracker(ModalTestCase):
         tracker = gedit_nc.FeedModeTracker(TAPPING_CODES)
         gedit_nc.prime_tracker(tracker, ["M29 S500"], cp, "G0 X10.")
         self.assertIsNone(tracker.tapping_code)
+
+
+# ---------------------------------------------------------------------------
+# The defined cycle and the lower speed limit (M9, WP9.5b; plan section 7.4)
+# ---------------------------------------------------------------------------
+
+#: A database of the defining kind, as small as a rule needs: the Klartext shape, no names.
+DEFINING_CODES: List[Dict[str, Any]] = [
+    {"code": "CYCL DEF", "group": "cycle", "label": "definition", "sets": {}},
+    {"code": "CYCL DEF 200", "group": "cycle", "label": "drill", "sets": {"cycle": "define"}},
+    {"code": "CYCL DEF 207", "group": "cycle", "label": "tap", "pitchFeed": True, "tapping": True,
+     "sets": {"cycle": "define"}},
+    {"code": "CYCL DEF 7", "group": "offset", "label": "datum shift", "axisWords": "data"},
+    {"code": "CYCL CALL", "group": "cycle", "label": "call", "sets": {"cycle": "call"}},
+    {"code": "M89", "group": "cycle", "label": "modal call", "sets": {"cycle": "call-modal"}},
+    {"code": "M99", "group": "cycle", "label": "call once", "sets": {"cycle": "call"}},
+]
+
+
+class TestDefinedCycle(ModalTestCase):
+    """Plan section 7.4 rules 1-6, rule by rule; the golden is ``defined-cycle.json``."""
+
+    def run_lines(self, lines: Sequence[str], codes: Sequence[Dict[str, Any]] = DEFINING_CODES) -> List[Dict[str, Any]]:
+        return self.walk(helpers.effective_context("heidenhain-klartext")["profile"], codes, lines)
+
+    @staticmethod
+    def summary(state: Dict[str, Any]) -> tuple:
+        defined, modal, active = state["definedCycle"], state["modalCall"], state["activeCycle"]
+        return (
+            defined["code"] if defined else None,
+            modal["code"] if modal else None,
+            active["code"] if active else None,
+            state["block"]["cycle"],
+        )
+
+    def test_a_definition_runs_nothing_and_a_call_runs_it_without_ending_it(self) -> None:
+        states = self.run_lines(["1 CYCL DEF 200 DRILLING", "2 CYCL CALL", "3 L X+10 FMAX M99", "4 CYCL CALL"])
+        self.assertEqual(
+            [self.summary(state) for state in states],
+            [
+                ("CYCL DEF 200", None, None, None),
+                ("CYCL DEF 200", None, None, "CYCL DEF 200"),
+                ("CYCL DEF 200", None, None, "CYCL DEF 200"),
+                ("CYCL DEF 200", None, None, "CYCL DEF 200"),
+            ],
+        )
+        self.assertEqual(states[0]["definedCycle"]["line"], 1)
+
+    def test_a_call_with_nothing_defined_runs_nothing(self) -> None:
+        # Rule 3: the program check of M10 reports it; the state does not invent a cycle.
+        states = self.run_lines(["1 CYCL CALL", "2 L X+10 FMAX M99", "3 L X+20 FMAX M89", "4 L X+30 FMAX"])
+        self.assertEqual([self.summary(state)[3] for state in states], [None, None, None, None])
+        self.assertEqual(states[3]["modalCall"]["code"], "M89")
+
+    def test_the_next_definition_replaces_the_cycle_and_ends_a_modal_call(self) -> None:
+        states = self.run_lines(["1 CYCL DEF 207 TAP", "2 L X+0 FMAX M89", "3 CYCL DEF 200 DRILLING", "4 L X+10 FMAX"])
+        self.assertEqual(
+            [self.summary(state) for state in states],
+            [
+                ("CYCL DEF 207", None, None, None),
+                ("CYCL DEF 207", "M89", "CYCL DEF 207", "CYCL DEF 207"),
+                ("CYCL DEF 200", None, None, None),
+                ("CYCL DEF 200", None, None, None),
+            ],
+        )
+        self.assertTrue(states[0]["definedCycle"]["pitchFeed"])
+        self.assertFalse(states[2]["definedCycle"]["pitchFeed"])
+
+    def test_a_modal_call_runs_in_every_positioning_block_until_a_call(self) -> None:
+        states = self.run_lines(
+            ["1 CYCL DEF 200 DRILLING", "2 L X+0 FMAX M89", "3 L X+10", "4 M8", "5 L X+20 M99", "6 L X+30"]
+        )
+        self.assertEqual(
+            [self.summary(state)[1:] for state in states],
+            [
+                (None, None, None),
+                ("M89", "CYCL DEF 200", "CYCL DEF 200"),
+                ("M89", "CYCL DEF 200", "CYCL DEF 200"),
+                ("M89", "CYCL DEF 200", None),
+                (None, None, "CYCL DEF 200"),
+                (None, None, None),
+            ],
+        )
+
+    def test_a_cycle_that_acts_where_it_is_defined_touches_none_of_it(self) -> None:
+        # Rule 5. The sub-block `7.1` is the entry of cycle 7 (the join), whose X is data, so
+        # under a modal call it is no positioning block either.
+        states = self.run_lines(["1 CYCL DEF 200 DRILLING", "2 L X+0 FMAX M89", "3 CYCL DEF 7.0 DATUM", "4 CYCL DEF 7.1 X+5"])
+        self.assertEqual(
+            [self.summary(state) for state in states[2:]],
+            [("CYCL DEF 200", "M89", "CYCL DEF 200", None), ("CYCL DEF 200", "M89", "CYCL DEF 200", None)],
+        )
+
+    def test_a_tool_change_ends_no_definition(self) -> None:
+        states = self.run_lines(["1 CYCL DEF 200 DRILLING", "2 TOOL CALL 4 Z S1000", "3 L X+0 FMAX M99"])
+        self.assertEqual([self.summary(state)[0] for state in states], ["CYCL DEF 200"] * 3)
+        self.assertEqual(states[2]["block"]["cycle"], "CYCL DEF 200")
+
+    def test_a_defined_cycle_never_makes_a_feed_word_a_lead(self) -> None:
+        # The tap's pitch is its own parameter; the F of the block that calls it is the
+        # positioning feed. The pitch flag stays on the definition.
+        states = self.run_lines(["1 CYCL DEF 207 TAP", "2 L X+0 F500 M89", "3 L X+10 F500", "4 L X+20 F500 M99"])
+        self.assertEqual([state["block"]["pitchFeed"] for state in states], [False, False, False, False])
+        self.assertEqual([state["feed"]["valueText"] for state in states[1:]], ["500", "500", "500"])
+        self.assertTrue(states[2]["activeCycle"]["pitchFeed"])
+
+    def test_a_database_without_defining_entries_never_sets_either(self) -> None:
+        # Rule 6: every ISO golden program, walked to its end, under its own database.
+        for path in golden_files():
+            if path.parent.name == "heidenhain-klartext":
+                continue
+            golden = json.loads(path.read_text(encoding="utf-8"))
+            with self.subTest(golden=relative_to_fixtures(path)):
+                context = TestGoldens.context_of(self, path, golden)
+                lines = helpers.read_lines((path.parent / golden["input"]).resolve())
+                for state in self.walk(context["profile"], context["codes"], lines):
+                    self.assertIsNone(state["definedCycle"])
+                    self.assertIsNone(state["modalCall"])
+
+    def test_the_shipped_klartext_database_carries_the_family(self) -> None:
+        # The data the rules run on (G10): definitions, calls, the modal call, and the
+        # definitions that act where they stand, which carry no cycle value.
+        codes = {entry["code"]: entry for entry in helpers.effective_context("heidenhain-klartext")["codes"]}
+        cycle = {code: (entry.get("sets") or {}).get("cycle") for code, entry in codes.items()}
+        self.assertEqual(
+            sorted(code for code, value in cycle.items() if value == "define"),
+            ["CYCL DEF 200", "CYCL DEF 201", "CYCL DEF 203", "CYCL DEF 205", "CYCL DEF 206", "CYCL DEF 207",
+             "CYCL DEF 209", "CYCL DEF 240"],
+        )
+        self.assertEqual(sorted(code for code, value in cycle.items() if value == "call"),
+                         ["CYCL CALL", "CYCL CALL PAT", "CYCL CALL POS", "M99"])
+        self.assertEqual([code for code, value in cycle.items() if value == "call-modal"], ["M89"])
+        self.assertTrue(codes["M89"].get("verify"), "M89 is a call only where a machine parameter says so")
+        for code in ("CYCL DEF", "CYCL DEF 7", "CYCL DEF 9", "CYCL DEF 19", "CYCL DEF 32", "CYCL DEF 247"):
+            with self.subTest(code=code):
+                self.assertIsNone(cycle[code])
+        self.assertNotIn("start", cycle.values())
+        self.assertNotIn("cancel", cycle.values())
+
+    def test_the_tracker_keeps_its_phase_1_reading(self) -> None:
+        # `FeedModeTracker` is what the bundled scripts read: a definition is the cycle of
+        # its own block there, a call is no cycle at all, as before M9.
+        cp = gedit_nc.compile_profile(helpers.effective_context("heidenhain-klartext")["profile"])
+        tracker = gedit_nc.FeedModeTracker(DEFINING_CODES)
+        seen = []
+        state = None
+        for line in ("1 CYCL DEF 207 TAP", "2 L X+0 F500 M89", "3 L X+10 F500", "4 CYCL CALL"):
+            tokens, state = gedit_nc.tokenize_line(line, cp, state)
+            tracker.update(tokens)
+            seen.append((tracker.active_cycle, tracker.pitch_feed, tracker.tapping_code))
+        self.assertEqual(
+            seen,
+            [("CYCL DEF 207", True, "CYCL DEF 207"), (None, False, None), (None, False, None), (None, False, None)],
+        )
+
+
+class TestSubBlockJoin(unittest.TestCase):
+    """A sub-block of an older Klartext cycle is that cycle (M9; the TS twin is the hover's join)."""
+
+    def written(self, line: str) -> str:
+        """The code the keyword of the line writes (the words behind it are codes of their own)."""
+        from _nc_modal import _written_codes, _entry_index
+
+        context = helpers.effective_context("heidenhain-klartext")
+        cp = gedit_nc.compile_profile(context["profile"])
+        tokens, _ = gedit_nc.tokenize_line(line, cp, None)
+        return [code for code, kind in _written_codes(tokens, _entry_index(context["codes"])) if kind == "keyword"][0]
+
+    def test_a_sub_block_is_the_entry_of_its_cycle(self) -> None:
+        self.assertEqual(self.written("5 CYCL DEF 19.1 A+0 B+45 C+0"), "CYCL DEF 19")
+        self.assertEqual(self.written("6 CYCL DEF 7.0 NULLPUNKT"), "CYCL DEF 7")
+        self.assertEqual(self.written("7 CYCL DEF 32.1 T0.05"), "CYCL DEF 32")
+
+    def test_a_whole_number_and_an_unknown_cycle_read_as_before(self) -> None:
+        self.assertEqual(self.written("8 CYCL DEF 200 BOHREN"), "CYCL DEF 200")
+        self.assertEqual(self.written("9 CYCL DEF 1.0 TIEFBOHREN"), "CYCL DEF")
+        self.assertEqual(self.written("10 LBL 1"), "LBL")
+
+    def test_the_flags_of_a_coordinate_cycle_are_reached(self) -> None:
+        # The reason for the join (WP9.2): the frame flags of cycles 7-26 were reached by no
+        # real program line, because every sub-block fell through to the generic entry.
+        from _nc_modal import _entry_index, axis_words_of, frame_of
+
+        index = _entry_index(helpers.effective_context("heidenhain-klartext")["codes"])
+        code = self.written("5 CYCL DEF 19.1 A+0 B+45 C+0")
+        entry = index[gedit_nc.normalize_code(code)]
+        self.assertEqual((axis_words_of(entry), frame_of(entry)), ("data", "open"))
+
+    def test_an_entry_of_the_sub_block_itself_wins(self) -> None:
+        from _nc_modal import _codes_in, _entry_index
+
+        codes = [{"code": "CYCL DEF", "group": "cycle", "label": "x"}, {"code": "CYCL DEF 19", "group": "tilt", "label": "x"},
+                 {"code": "CYCL DEF 19.1", "group": "tilt", "label": "x"}]
+        cp = gedit_nc.compile_profile(helpers.effective_context("heidenhain-klartext")["profile"])
+        tokens, _ = gedit_nc.tokenize_line("5 CYCL DEF 19.1 A+0", cp, None)
+        self.assertEqual(_codes_in(tokens, _entry_index(codes))[0], "CYCL DEF 19.1")
+
+
+class TestLowerSpeedLimit(ModalTestCase):
+    """Plan section 7.4: `speedLimit` is the upper limit in force; a lower one is no clamp."""
+
+    CODES: List[Dict[str, Any]] = [
+        {"code": "G25", "group": "nonmodal", "label": "lower", "sets": {"speedLimit": True, "speedLimitBound": "lower"}},
+        {"code": "G26", "group": "nonmodal", "label": "upper", "sets": {"speedLimit": True}},
+        {"code": "M3", "group": "spindle", "modal": True, "label": "cw"},
+    ]
+
+    def test_a_lower_limit_is_neither_the_speed_nor_the_clamp(self) -> None:
+        profile = helpers.effective_context("sinumerik")["profile"]
+        states = self.walk(profile, self.CODES, ["N10 G26 S3000", "N20 S800 M3", "N30 G25 S100", "N40 S900"])
+        self.assertEqual(
+            [(state["speed"] or {}).get("valueText") for state in states], [None, "800", "800", "900"]
+        )
+        self.assertEqual([(state["speedLimit"] or {}).get("valueText") for state in states], ["3000"] * 4)
+        self.assertEqual([state["block"]["speedLimit"] for state in states], [True, False, True, False])
+
+    def test_an_upper_limit_without_a_bound_is_the_clamp_as_before(self) -> None:
+        profile = helpers.effective_context("sinumerik")["profile"]
+        codes = [dict(self.CODES[1], code="G25")]
+        (state,) = self.walk(profile, codes, ["N30 G25 S100"])
+        self.assertEqual(state["speedLimit"]["valueText"], "100")
+
+
+class TestSinumerikProgramStart(unittest.TestCase):
+    """M9 (WP9.5b): the short transfer header starts a program in Python as it does in the map."""
+
+    def test_both_header_forms_start_a_program_and_name_it(self) -> None:
+        cp = gedit_nc.compile_profile(helpers.effective_context("sinumerik")["profile"])
+        starts = cp.patterns["program_start"]
+
+        def name(line: str) -> Optional[str]:
+            for pattern in starts:
+                match = pattern.search(line)
+                if match is not None:
+                    return match.groupdict().get("name")
+            return None
+
+        self.assertEqual([name(line) for line in ("%PART_ONE_MPF", "%_N_PART_ONE_MPF", "%GROOVE_SPF")],
+                         ["PART_ONE", "PART_ONE", "GROOVE"])
+        self.assertIsNone(name("%PART_ONE"))
+        self.assertIsNone(name("N10 %PART_MPF"))
 
 
 if __name__ == "__main__":  # pragma: no cover

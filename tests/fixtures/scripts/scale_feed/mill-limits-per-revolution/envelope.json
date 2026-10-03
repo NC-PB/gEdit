@@ -1,0 +1,20 @@
+{
+  "message": "Scaled 4 feed rates to 110 %; 1 clamped to a limit, 2 scaled without the limits, which are for feeds per revolution. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 9,
+      "severity": "warning",
+      "message": "F300. is scaled, but the feed limits were not applied to it: it is a feed per minute, and the limits are for feeds per revolution."
+    },
+    {
+      "line": 12,
+      "severity": "info",
+      "message": "F0.40 would become 0.44; the largest feed (0.3) was used instead."
+    },
+    {
+      "line": 14,
+      "severity": "warning",
+      "message": "F500. is scaled, but the feed limits were not applied to it: it is a feed per minute, and the limits are for feeds per revolution."
+    }
+  ]
+}

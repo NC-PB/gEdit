@@ -46,7 +46,8 @@ const HOME_1 = '{run}/machines-home'
 const HOME_2 = '{run}/../m6-machines-manage-1/machines-home'
 
 /** The three preset labels of the Fanuc number-input parameter, as the profile writes them. */
-const IS_B = 'Increments of 0.001 mm (IS-B): X50 is 0.050 mm, X50. is 50 mm; feeds and speeds as written (F200 is 200)'
+const IS_B =
+  'Increments of 0.001 mm (IS-B): X50 is 0.050 mm, X50. is 50 mm, C90000 is 90\u00b0; a point-less feed per minute in 1 mm/min (F200 is 200), per revolution in 0.01 mm/rev (F25 is 0.25 mm/rev)'
 const AS_WRITTEN = 'As written: X50 and X50. are both 50 mm; G74/G75 P and Q, G76 Q and G83/G87 Q are in microns (Q6000 is 6 mm)'
 
 /** The `is-b` preset's rule set, as a machine stores it (resolved `fanuc-lathe.json`). */
@@ -56,11 +57,23 @@ const IS_B_RULES = {
   incrementInch: '0.0001',
   incrementDeg: '0.001',
   incrementSec: '0.001',
-  classes: { feedPerMin: { mode: 'calculator' }, feedPerRev: { mode: 'calculator' } },
+  // M9 (WP9.5a): a point-less feed counts in 1 mm/min and 0.01 mm/rev (parameters 1404, 1405).
+  classes: {
+    feedPerMin: { mode: 'increment', increment: '1', incrementInch: '0.01' },
+    feedPerRev: { mode: 'increment', increment: '0.01', incrementInch: '0.0001' },
+  },
 }
 
 /** The `calculator` preset's, which is the lathe's own default. */
 const AS_WRITTEN_RULES = { mode: 'calculator', incrementMm: '0.001' }
+
+/**
+ * The variants a Fanuc lathe machine made on the page stores: every variant of the dialect,
+ * each at its default (M9, WP9.4 — the G-code system, which of `U W V H` move incrementally,
+ * and the split of the `T` word). A machine stores all of them, so that a later change of a
+ * default in the dialect's data cannot silently change a machine set up before it.
+ */
+const LATHE_VARIANTS = { gcodeSystem: 'A', incrementalAddresses: 'uw', toolWord: 'offset2' }
 
 /** A machine record, spelled the way the page writes one. */
 const record = (/** @type {string} */ id, /** @type {string} */ name, /** @type {object} */ numberInput, /** @type {object} */ rest = {}) => ({
@@ -68,7 +81,7 @@ const record = (/** @type {string} */ id, /** @type {string} */ name, /** @type 
   name,
   profile: 'fanuc-lathe',
   notes: '',
-  params: { numberInput, units: 'mm', diameter: 'on', variants: { gcodeSystem: 'A' }, ...rest },
+  params: { numberInput, units: 'mm', diameter: 'on', variants: { ...LATHE_VARIANTS }, ...rest },
 })
 
 /** The whole file, as Rust hands it back. */
@@ -125,14 +138,15 @@ scenario('m6-machines-manage-1', { timeout: 420, vars: { HOME: HOME_1 } }, async
   })
   const dialects = [...(machineField(h, 'profile')?.querySelectorAll('option') ?? [])].map((o) => o.textContent?.trim())
   // M8: the Okuma and Sinumerik turning profiles declare machine parameters as well (an
-  // intentional change of plan §5 M8), so four are offered — exactly the ones whose
-  // registry entry says so, and still not Klartext.
+  // intentional change of plan §5 M8), and so does the Sinumerik milling profile of M9 (its
+  // diameter setting), so five are offered — exactly the ones whose registry entry says so,
+  // and still not Klartext.
   const withParams = ctx.profiles.list().filter((info) => info.hasMachineParams).map((info) => info.name)
   h.check(
     'only the dialects that declare machine parameters are offered — Klartext is not one',
-    dialects.length === 4 &&
+    dialects.length === 5 &&
       JSON.stringify([...dialects].sort()) === JSON.stringify([...withParams].sort()) &&
-      ['fanuc-gcode', 'fanuc-lathe', 'okuma-osp', 'sinumerik'].every((id) => dialects.includes(ctx.profiles.get(id)?.name)) &&
+      ['fanuc-gcode', 'fanuc-lathe', 'okuma-osp', 'sinumerik', 'sinumerik-mill'].every((id) => dialects.includes(ctx.profiles.get(id)?.name)) &&
       !dialects.includes(ctx.profiles.get('heidenhain-klartext')?.name),
     { offered: dialects, declaring: withParams },
   )
@@ -146,8 +160,21 @@ scenario('m6-machines-manage-1', { timeout: 420, vars: { HOME: HOME_1 } }, async
   })
   const formFields = h.qa('form-field').map((e) => e.dataset.field)
   h.check(
-    'it offers the name, the number rules, the units, diameter, the G-code system, the three power-on groups and the notes',
-    JSON.stringify(formFields) === JSON.stringify(['name', 'numberInput', 'units', 'diameter', 'variant.gcodeSystem', 'modal.feedmode', 'modal.spindlemode', 'modal.plane', 'notes']),
+    'it offers the name, the number rules, the units, diameter, the three variants (G-code system, which of U W V H are incremental, the tool word), the three power-on groups and the notes',
+    JSON.stringify(formFields) ===
+      JSON.stringify([
+        'name',
+        'numberInput',
+        'units',
+        'diameter',
+        'variant.gcodeSystem',
+        'variant.incrementalAddresses',
+        'variant.toolWord',
+        'modal.feedmode',
+        'modal.spindlemode',
+        'modal.plane',
+        'notes',
+      ]),
     formFields,
   )
   h.check('a machine with no name cannot be saved', /** @type {HTMLButtonElement} */ (machineAction(h, 'save')).disabled === true, machineAction(h, 'save')?.dataset.disabled)

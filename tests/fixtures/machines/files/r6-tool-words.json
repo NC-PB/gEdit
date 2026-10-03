@@ -1,0 +1,72 @@
+{
+  "about": "R6 (M9, WP9.4): what a tool word reads as under each choice of the toolWord variant. Shared by src/lib/data/profiles/r6Variants.test.ts and tests/python/test_r6_variants.py. A string is the tool (the station) the word selects; null is a word that is not a tool change (an offset cancel, a tool of 00, a word the choice has no reading for).",
+  "fanuc-lathe": {
+    "offset2": {
+      "T0101": "01",
+      "T101": "1",
+      "T1": "1",
+      "T12": "12",
+      "T1001": "10",
+      "T12345": "123",
+      "T0100": null,
+      "T100": null,
+      "T1000": null,
+      "T12300": null,
+      "T0": null,
+      "T123456": null
+    },
+    "offset1": {
+      "T11": "1",
+      "T1": "1",
+      "T22": "2",
+      "T101": "10",
+      "T123": "12",
+      "T1234": "123",
+      "T10": null,
+      "T120": null,
+      "T0": null,
+      "T12345": null
+    },
+    "offset3": {
+      "T1001": "1",
+      "T1": "1",
+      "T12": "12",
+      "T100": "100",
+      "T12001": "12",
+      "T123456": "123",
+      "T1000": null,
+      "T12000": null,
+      "T0": null,
+      "T1234567": null
+    }
+  },
+  "okuma-osp": {
+    "offset2": {
+      "T0101": "01",
+      "T010203": "02",
+      "T0200": "02",
+      "T2000": "20",
+      "T0001": null,
+      "T000102": "01",
+      "T010002": null,
+      "T123": null,
+      "T12345": null,
+      "G71 U1. R0.5 T0405": null
+    },
+    "offset3": {
+      "T2000": "2",
+      "T1001": "1",
+      "T100": "1",
+      "T1234": "1",
+      "T12345": "12",
+      "T0102003": "02",
+      "T0001": null,
+      "T0100": null,
+      "T00123": null,
+      "T0000123": null,
+      "T010101": null,
+      "T12": null,
+      "G71 U1. R0.5 T1405": null
+    }
+  }
+}

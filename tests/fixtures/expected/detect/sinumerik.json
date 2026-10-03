@@ -12,7 +12,9 @@
     "scores those lines the same way, so what decides is what only one of the two dialects writes.",
     "SHAFT_OP20 and detect-sinumerik.txt carry no extension weight at all: they say whether the",
     "content rules alone carry the dialect. The .MPF and .SPF files are written in upper case, the",
-    "way the control names them, and still count as mpf and spf."
+    "way the control names them, and still count as mpf and spf.",
+    "M9 (WP9.1): s06-milling.txt, a milling program, moved to nc/sinumerik-mill/ with the milling profile.",
+    "M9 NC review F3: s07-mill-turn.MPF, a turn-mill program with one turning and three milling operations and M6 on every tool, stays with the turning profile: its DIAMON, LIMS= and SETMS veto the milling profile (detect.vetoes)."
   ],
   "fixtures": {
     "nc/sinumerik/SHAFT_OP20": "sinumerik",
@@ -22,6 +24,6 @@
     "nc/sinumerik/s03-sub.SPF": "sinumerik",
     "nc/sinumerik/s04-packed.MPF": "sinumerik",
     "nc/sinumerik/s05-diameter.MPF": "sinumerik",
-    "nc/sinumerik/s06-milling.txt": "sinumerik"
+    "nc/sinumerik/s07-mill-turn.MPF": "sinumerik"
   }
 }

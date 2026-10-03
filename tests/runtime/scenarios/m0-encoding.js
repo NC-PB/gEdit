@@ -29,6 +29,20 @@ function decode(hex, encoding) {
   return new TextDecoder(encoding).decode(bytes).replace(/\r\n?/g, '\n')
 }
 
+/**
+ * Whether an alert offers exactly these buttons, whatever the order of the array read
+ * back: it is the order of AppKit's views, "Cancel", "Save as UTF-8" on macOS 14 (the CI
+ * runner) and the other way round on the owner's newer macOS, so it says nothing about
+ * which button is the default. That is checked where it matters, by pressing Return
+ * (`Return answers`, below).
+ * @param {{ buttons?: string[] } | null | undefined} alert
+ * @param {string[]} expected
+ */
+function offers(alert, expected) {
+  const got = alert?.buttons ?? []
+  return got.length === expected.length && [...got].sort().join('\n') === [...expected].sort().join('\n')
+}
+
 /** Drops the NUL runs at both ends, which the codec keeps out of the editor text. */
 function withoutTape(/** @type {string} */ hex) {
   const bytes = hex.split(' ')
@@ -119,7 +133,7 @@ scenario('m0-encoding', { timeout: 180 }, async (h) => {
   const warning = await h.alert.wait()
   h.check(
     'saving a character Windows-1252 cannot store asks first',
-    JSON.stringify(warning?.buttons) === JSON.stringify(['Save as UTF-8', 'Cancel']) &&
+    offers(warning, ['Save as UTF-8', 'Cancel']) &&
       !!warning?.texts.some((t) => t.includes('"日"') && t.includes('U+65E5') && t.includes('line 1, column 2')),
     warning,
   )
@@ -131,10 +145,15 @@ scenario('m0-encoding', { timeout: 180 }, async (h) => {
     { mtimeBefore: statBefore?.mtimeMs, mtimeAfter: (await h.disk.stat(cp))?.mtimeMs, title: await h.title() },
   )
 
+  // Return answers: on a macOS alert the first button is the default one, so the key a
+  // programmer presses without reading is Save as UTF-8, never Cancel. The order of the
+  // buttons read back differs per OS (`offers`); what Return does does not.
   await save()
   await h.alert.wait()
-  await h.alert.click('Save as UTF-8')
-  await h.waitFor(async () => (await h.title()) === 'cp1252-crlf.nc — gEdit')
+  await h.nativeKeys([{ key: 'Enter' }])
+  await h.waitFor(async () => (await h.alert.visible()) === null, { timeout: 8000 })
+  await h.waitFor(async () => (await h.title()) === 'cp1252-crlf.nc — gEdit', { timeout: 8000 })
+  h.check('Return on that question answers Save as UTF-8, the default button, and not Cancel', encodingLabel() === 'UTF-8', { label: encodingLabel(), title: await h.title() })
   const asUtf8 = await h.disk.hex(cp)
   h.check(
     'Save as UTF-8 rewrites the whole file in UTF-8',
@@ -171,7 +190,7 @@ scenario('m0-encoding', { timeout: 180 }, async (h) => {
   h.check('closing it asks about the unsaved changes', JSON.stringify(prompt?.buttons) === JSON.stringify(['Save', "Don't Save", 'Cancel']), prompt)
   await h.alert.click('Save')
   const second = await h.alert.wait()
-  h.check('saving from the close prompt asks about the encoding', JSON.stringify(second?.buttons) === JSON.stringify(['Save as UTF-8', 'Cancel']), second)
+  h.check('saving from the close prompt asks about the encoding', offers(second, ['Save as UTF-8', 'Cancel']), second)
   await h.alert.click('Cancel')
   await h.sleep(1200)
   h.check(

@@ -32,8 +32,20 @@ export GEDIT_RH_VIA
 exec "{python}" "$@"
 `
 
-/** A login shell profile that puts the stand-in interpreter on PATH. */
-const PROFILE = 'export PATH="{run}/pybin:$PATH"\n'
+/**
+ * A login shell profile that puts the stand-in interpreter on PATH, and counts how often a
+ * shell read it (one line in profile.log per login shell).
+ */
+const PROFILE = 'export PATH="{run}/pybin:$PATH"\necho sourced >> "{run}/profile.log"\n'
+
+/** What the profile is changed to once the first lookup is done: it would pick another interpreter. */
+const CHANGED_PROFILE = 'export PATH="{run}/pybin2:$PATH"\necho sourced >> "{run}/profile.log"\n'
+
+// These scenarios write a **zsh** profile (`.zprofile`, `ZDOTDIR`), so they need zsh as the
+// login shell whatever the machine's own `SHELL` is: the owner's Mac has zsh, a hosted CI
+// runner has bash. The backend runs `$SHELL -l -c ...`, so pinning `SHELL` here is what makes
+// the profile get read. The lookup through an arbitrary `SHELL` is `m0-py3-stub`'s business.
+const ZSH = '/bin/zsh'
 
 /** The same, plus the two things that used to stall the lookup. */
 const NOISY_PROFILE = `export PATH="{run}/pybin:$PATH"
@@ -61,12 +73,25 @@ const WELL_KNOWN = [
 
 const files = (extra = {}) => ({
   'pybin/python3': { text: wrapper('profile'), mode: 0o755 },
+  'pybin2/python3': { text: wrapper('profile-changed'), mode: 0o755 },
   'alt/python3': { text: wrapper('override'), mode: 0o755 },
   ...extra,
 })
 
 /** The id the probe script runs under once it is in the user folder. */
 const PROBE_ID = 'user:pyexe.py'
+
+/** A second probe: the real paths of the running interpreter and of the one the stub scenario expects. */
+const REAL_ID = 'user:pyreal.py'
+/** @param {string} expected */
+const realProbe = (expected) => `# Written for gEdit's runtime harness: real paths of the running and the expected interpreter.
+import json
+import os
+import sys
+
+sys.stdin.read()
+print(json.dumps({"executable": os.path.realpath(sys.executable), "expected": os.path.realpath(${JSON.stringify(expected)})}))
+`
 
 /**
  * Copies `tests/runtime/fixtures/scripts/pyexe.py` into the user scripts folder, which is
@@ -93,11 +118,12 @@ async function installProbe(h) {
 /**
  * Runs pyexe.py and reports what it saw, with how long the call took.
  * @param {import('../lib/api.js').Harness} h
+ * @param {string} [scriptId]
  */
-async function runScript(h) {
+async function runScript(h, scriptId = PROBE_ID) {
   const t0 = performance.now()
   const r = await h.attempt('script_run', {
-    req: { runId: `m0py-${Date.now()}-${Math.random().toString(36).slice(2)}`, scriptId: PROBE_ID, stdin: 'G0 X0\n', context: {}, timeoutSecs: 30 },
+    req: { runId: `m0py-${Date.now()}-${Math.random().toString(36).slice(2)}`, scriptId, stdin: 'G0 X0\n', context: {}, timeoutSecs: 30 },
   })
   const ms = Math.round(performance.now() - t0)
   /** @type {any} */
@@ -117,7 +143,7 @@ async function runScript(h) {
   }
 }
 
-scenario('m0-py3-default', { timeout: 120, env: 'finder', python: '{run}/alt/python3', files: files({ 'home/.zprofile': PROFILE }) }, async (h) => {
+scenario('m0-py3-default', { timeout: 120, env: 'finder', python: '{run}/alt/python3', vars: { SHELL: ZSH }, files: files({ 'home/.zprofile': PROFILE }) }, async (h) => {
   await installProbe(h)
 
   // The app started with the override, so nothing has been resolved yet (see the header).
@@ -129,13 +155,19 @@ scenario('m0-py3-default', { timeout: 120, env: 'finder', python: '{run}/alt/pyt
   h.check('without it, the login shell profile decides which python3 runs a script', first.success && first.data.via === 'profile' && !first.data.geditPython, first)
   h.check('the lookup does not delay the first run', first.ms < 3000, { ms: first.ms })
 
-  // With the profile gone, a second lookup would find another interpreter; it must not happen.
-  await h.disk.write(`${h.cfg.home}/.zprofile`, '# the harness emptied this file\n')
+  // With the profile changed, a second lookup would find another interpreter (`profile-changed`)
+  // and read the profile a second time; neither may happen. This used to compare two run times
+  // (`cached.ms < first.ms`), which a loaded CI runner turns into noise; the number of times a
+  // login shell read the profile says the same thing exactly.
+  const sourced = async () => (await h.disk.read(`${h.cfg.run}/profile.log`).catch(() => '')).split('\n').filter((l) => l.trim() !== '').length
+  h.check('the first lookup asked the login shell once', (await sourced()) === 1, { sourced: await sourced() })
+  await h.disk.write(`${h.cfg.home}/.zprofile`, CHANGED_PROFILE)
   const cached = await runScript(h)
-  h.check('the interpreter is resolved once and then reused', cached.success && cached.data.via === 'profile' && cached.ms < first.ms, {
+  h.check('the interpreter is resolved once and then reused', cached.success && cached.data.via === 'profile' && (await sourced()) === 1, {
     first: first.ms,
     cached: cached.ms,
     via: cached.data.via,
+    sourced: await sourced(),
   })
 
   await h.setenv('GEDIT_PYTHON', `${h.cfg.run}/alt/python3`)
@@ -143,10 +175,10 @@ scenario('m0-py3-default', { timeout: 120, env: 'finder', python: '{run}/alt/pyt
   h.check('setting it again wins over the cached interpreter', again.success && again.data.via === 'override', again)
   await h.setenv('GEDIT_PYTHON', null)
   const back = await runScript(h)
-  h.check('removing it brings the cached interpreter back', back.success && back.data.via === 'profile' && back.ms < first.ms, back)
+  h.check('removing it brings the cached interpreter back', back.success && back.data.via === 'profile' && (await sourced()) === 1, { back, sourced: await sourced() })
 })
 
-scenario('m0-py3-zdotdir', { timeout: 120, env: 'finder', python: '{run}/alt/python3', vars: { ZDOTDIR: '{run}/zdot' }, files: files({ 'zdot/.zprofile': NOISY_PROFILE }) }, async (h) => {
+scenario('m0-py3-zdotdir', { timeout: 120, env: 'finder', python: '{run}/alt/python3', vars: { SHELL: ZSH, ZDOTDIR: '{run}/zdot' }, files: files({ 'zdot/.zprofile': NOISY_PROFILE }) }, async (h) => {
   await installProbe(h)
   await h.setenv('GEDIT_PYTHON', null)
   const first = await runScript(h)
@@ -175,11 +207,18 @@ scenario('m0-py3-stub', { timeout: 120, env: 'finder', python: null, vars: { SHE
       break
     }
   }
+  const userDir = await h.waitFor(() => configPaths(/** @type {any} */ (h.app.ctx)).userScriptsDir, { timeout: 20000 })
+  await h.disk.write(`${userDir}/pyreal.py`, realProbe(expected))
   const run = await runScript(h)
+  // The interpreter is compared by its real path: `expected` is the well-known link
+  // (/opt/homebrew/bin/python3), and `sys.executable` may come back as the resolved target
+  // (/opt/homebrew/opt/python@3.14/bin/python3.14 on a hosted runner, whose Homebrew layout
+  // differs from the owner's). Both are the same file, which is what the claim is about.
+  const real = await runScript(h, REAL_ID)
   h.check(
     'the shell answer is only the macOS stub, so a real install is used instead',
-    run.success && (expected === STUB || run.data.executable === expected),
-    { expected, run },
+    run.success && real.success && (expected === STUB || real.data.executable === real.data.expected),
+    { expected, run, real },
   )
   // The startup probe (`bootstrap.ts` → `python_check`) is the one that asked; the run
   // above used what it cached. One app, one login shell.

@@ -19,6 +19,14 @@
 //   an Okuma sequence name, a Fanuc lathe cycle with `P`/`Q`). It counts in the first
 //   `GUARD_LINES` non-empty lines, and one is enough, because one is enough to be wrecked.
 //
+// - **Which profile of that dialect** (M9, WP9.6): Sinumerik has a turning and a milling
+//   profile on one grammar, so a Siemens contradiction names the milling one when the
+//   lines carry milling evidence (`M6`, `CYCLE800`, `CYCLE832`, a milling cycle) and no
+//   turning evidence (`DIAMON`, `LIMS=`, `G96`/`G97`, `TRANSMIT`/`TRACYL`, a spindle
+//   addressed as `S1=`/`M1=`), and the turning one otherwise — a mill-turn program is a
+//   turning program (R2), and so is one with no evidence either way, as in detection.
+//   It is a presence test, not a score.
+//
 // "Only another dialect writes" is decided by the profile's `grammar`, the syntax family
 // the comment, string and block-number rules come from (plan §7.4): a user profile that
 // extends Sinumerik reads `;` as Sinumerik does, so a Sinumerik program is its own. Where
@@ -27,7 +35,8 @@
 //
 // Cost: the header lines plus at most `GUARD_LINES` non-empty lines, each tried against a
 // fixed list of anchored patterns — the same bound as detection, and it stops at the
-// first hit. Deterministic: the answer depends on the text and the grammar only.
+// first hit; a Siemens contradiction adds one pass over the same lines for the milling or
+// turning choice. Deterministic: the answer depends on the text and the grammar only.
 
 import type { Msg } from '$lib/app/types';
 import type { CompiledProfile, Profile } from './types';
@@ -51,7 +60,10 @@ export type Grammar = Profile['grammar'];
 export interface Contradiction {
   /** The syntax family the evidence belongs to. */
   grammar: Grammar;
-  /** The built-in profile a user most likely wants instead. */
+  /**
+   * The built-in profile a user most likely wants instead. For a Siemens program it is the
+   * milling or the turning profile, by the evidence of the scanned lines (M9).
+   */
   likely: string;
   /** Its short name, as the dialect picker shows it (data, untranslated). */
   dialect: string;
@@ -78,6 +90,8 @@ interface Evidence {
 
 const KLARTEXT = { grammar: 'klartext', likely: 'heidenhain-klartext', dialect: 'Heidenhain' } as const;
 const SINUMERIK = { grammar: 'sinumerik', likely: 'sinumerik', dialect: 'Sinumerik' } as const;
+/** The milling profile of the Sinumerik grammar (M9, R2); see `siemensProfileOf`. */
+const SINUMERIK_MILL = 'sinumerik-mill';
 const OKUMA = { grammar: 'okuma', likely: 'okuma-osp', dialect: 'Okuma' } as const;
 const FANUC = { grammar: 'iso', likely: 'fanuc-gcode', dialect: 'Fanuc' } as const;
 const FANUC_LATHE = { grammar: 'iso', likely: 'fanuc-lathe', dialect: 'Fanuc' } as const;
@@ -98,8 +112,11 @@ const EVIDENCE: readonly Evidence[] = [
   { ...SINUMERIK, kind: 'header', re: /^%_N_\w+_(?:MPF|SPF)(?![A-Z0-9])/i },
   { ...SINUMERIK, kind: 'header', re: /^;\$PATH=/i },
   { ...OKUMA, kind: 'header', re: /^\$[\w-]+\.(?:MIN|SUB|SSB|SDF)%/i },
-  // A Fanuc tape starts with its program number; Okuma writes the same line.
-  { ...FANUC, kind: 'header', re: /^[O:]\d{1,8}(?![\d.])/i, spares: ['okuma'] },
+  // A Fanuc tape starts with its program number; Okuma writes the same line. The older
+  // `:1234` form stands alone on its line (a comment may follow): `:20 G1 X10` is a
+  // Sinumerik main block (M9, `mainPrefix`), not a program number.
+  { ...FANUC, kind: 'header', re: /^O\d{1,8}(?![\d.])/i, spares: ['okuma'] },
+  { ...FANUC, kind: 'header', re: /^:\d{1,8}[ \t]*(?:\(.*)?$/i, spares: ['okuma', 'sinumerik'] },
 
   // Klartext: a block number, a blank and a Klartext statement; no other dialect starts a
   // line with a bare number.
@@ -124,6 +141,14 @@ const EVIDENCE: readonly Evidence[] = [
   { ...OKUMA, kind: 'marker', re: /^[^(;]*(?<![A-Z])(?:CALL|MODIN)[ \t]+O[A-Z0-9]{1,4}(?![A-Z0-9_])/i, spares: ['sinumerik'] },
   { ...OKUMA, kind: 'marker', re: /^[ \t]*(?:N\w+[ \t]+)?(?:RTS|MODOUT)(?![A-Z0-9])/i },
   { ...OKUMA, kind: 'marker', re: /^\$(?:[ \t]+[A-Z]|[A-Z]{1,2}[-+.\d= \t])/i, spares: ['sinumerik'] },
+  // …its work coordinate systems (`G15 H2` modal, `G16 H3` for one block: on a Fanuc
+  // control `G15`/`G16` are polar coordinates and take no `H`), the machining centre's
+  // tool length offset `G56 H` (a Fanuc `G56` is a work offset, and its `H` belongs to a
+  // `G43`/`G44` in the same block), and the live-tool speed `SB=` (Fanuc has no `=` word
+  // but its `#` variables; a Siemens program may name a variable `SB`)…
+  { ...OKUMA, kind: 'marker', re: /^[^(;]*(?<![A-Z])G0*1[56][ \t]*H\d/i },
+  { ...OKUMA, kind: 'marker', re: /^(?![^(;]*(?<![A-Z])G0*4[34](?![\d.]))[^(;]*(?<![A-Z])G0*56[ \t]*H\d/i },
+  { ...OKUMA, kind: 'marker', re: /^[^(;]*(?<![A-Z0-9_$])SB[ \t]*=/i, spares: ['sinumerik'] },
   // …and its G71/G72 thread cycle, which carries a thread height H and a first cut D and
   // no P: a Fanuc G71/G72 is a roughing cycle, and a feed script would take its lead for
   // a feed.
@@ -141,6 +166,57 @@ const EVIDENCE: readonly Evidence[] = [
   },
   { ...FANUC, kind: 'marker', re: /^[^(;]*(?<![A-Z0-9_$])#\d+[ \t]*=/i },
 ];
+
+/**
+ * Siemens turning evidence (any of it makes a program a turning one, mill-turn included):
+ * diameter programming, the speed limit of constant cutting speed, the spindle modes, the
+ * mill-turn transformations and a spindle addressed by number. The milling profile leaves
+ * the same lines out of its detection (`sinumerik-mill.json`, WP9.1).
+ */
+const SIEMENS_TURNING =
+  /(?<![A-Z0-9_$])(?:DIAM(?:ON|OF|90)(?![A-Z0-9_])|LIMS[ \t]*=|G0*9[67](?![\d.])|TRANSMIT(?![A-Z0-9_])|TRACYL(?![A-Z0-9_])|[MS]\d+[ \t]*=)/i;
+
+/**
+ * Siemens milling evidence: the `M6` tool change, the swivel and high-speed cycles and the
+ * milling cycles of the technology table (the milling markers of `sinumerik-mill.json`).
+ */
+const SIEMENS_MILLING =
+  /(?<![A-Z0-9_$])(?:M0*6(?![\d.]|[ \t]*=)|(?:CYCLE(?:800|832|6[0134]|7[026-9]|899)|POCKET[34]|SLOT[12]|LONGHOLE)(?![A-Z0-9_]))/i;
+
+/** A Siemens line without its `;` comment and its strings, which say nothing about the machine. */
+function siemensCode(line: string): string {
+  let out = '';
+  let quoted = false;
+  for (const c of line) {
+    if (c === '"') {
+      quoted = !quoted;
+      continue;
+    }
+    if (quoted) continue;
+    if (c === ';') break;
+    out += c;
+  }
+  return out;
+}
+
+/**
+ * The Sinumerik profile a Siemens program wants: `sinumerik-mill` when the scanned lines
+ * carry milling evidence and no turning evidence, `sinumerik` otherwise (a mill-turn
+ * program, and one with no evidence either way, are turning programs, R2).
+ */
+function siemensProfileOf(lines: readonly string[]): string {
+  let milling = false;
+  let nonEmpty = 0;
+  for (let i = 0; i < lines.length && nonEmpty < GUARD_LINES; i++) {
+    const line = lines[i].trim();
+    if (line === '') continue;
+    nonEmpty++;
+    const code = siemensCode(line);
+    if (SIEMENS_TURNING.test(code)) return SINUMERIK.likely;
+    if (!milling && SIEMENS_MILLING.test(code)) milling = true;
+  }
+  return milling ? SINUMERIK_MILL : SINUMERIK.likely;
+}
 
 /** Whether `evidence` says the text is not written in `grammar`. */
 function contradicts(evidence: Evidence, grammar: Grammar): boolean {
@@ -179,7 +255,7 @@ export function findContradiction(cp: CompiledProfile, lines: readonly string[])
       }
       return {
         grammar: evidence.grammar,
-        likely: evidence.likely,
+        likely: evidence.grammar === SINUMERIK.grammar ? siemensProfileOf(lines) : evidence.likely,
         dialect: evidence.dialect,
         line: i + 1,
         text: quote(line),

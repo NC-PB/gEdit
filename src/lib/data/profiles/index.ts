@@ -22,6 +22,7 @@ import fanucLathe from './fanuc-lathe.json';
 import heidenhainKlartext from './heidenhain-klartext.json';
 import okumaOsp from './okuma-osp.json';
 import sinumerik from './sinumerik.json';
+import sinumerikMill from './sinumerik-mill.json';
 
 /** The shipped profiles as they are written, parents unmerged. Resolve before use. */
 export const BUILTIN_PROFILE_SOURCES: readonly ProfileSource[] = [
@@ -30,6 +31,9 @@ export const BUILTIN_PROFILE_SOURCES: readonly ProfileSource[] = [
   { raw: heidenhainKlartext, origin: 'builtin' },
   { raw: okumaOsp, origin: 'builtin' },
   { raw: sinumerik, origin: 'builtin' },
+  // M9 (P9 skeleton, WP9.1 fills it in): the milling child of the turning profile. Its code
+  // database is the shared `sinumerik` one (plan §6 M9 P9 item 2).
+  { raw: sinumerikMill, origin: 'builtin' },
 ];
 
 /**

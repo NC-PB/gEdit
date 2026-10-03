@@ -1,0 +1,20 @@
+{
+  "message": "Scaled 2 of 5 feed rates to 50 %; 3 left in another feed mode. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 6,
+      "severity": "info",
+      "message": "F4 is a travel time, not a feed rate (G931), so it is not scaled."
+    },
+    {
+      "line": 7,
+      "severity": "info",
+      "message": "F2 is a travel time, not a feed rate (G931), so it is not scaled."
+    },
+    {
+      "line": 8,
+      "severity": "info",
+      "message": "F3 is a travel time, not a feed rate (G931), so it is not scaled."
+    }
+  ]
+}

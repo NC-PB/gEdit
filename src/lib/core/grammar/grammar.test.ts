@@ -276,6 +276,19 @@ describe('the iso grammar', () => {
     expect(at('N 120 G0')).toEqual(['blockNumber:N 120', 'gcode:G0']);
   });
 
+  // M9 (WP9.3, R4): the function and print names of the macro (`syntax-fanuc.md` §3.5) are
+  // `syntax.keywords`, so `FIX[` is no F, I and X, and `POPEN` is not five addresses.
+  it('paints the macro function and print names as keywords', () => {
+    expect(at('#1=FIX[#2]')).toEqual(['variable:#1', 'operator:=', 'keyword:FIX', 'operator:[', 'variable:#2', 'operator:]']);
+    expect(at('POPEN')).toEqual(['keyword:POPEN']);
+    expect(at('DPRNT[X#1[53]]')).toEqual([
+      'keyword:DPRNT', 'operator:[', 'axis:X', 'variable:#1', 'operator:[', 'number:53', 'operator:]', 'operator:]',
+    ]);
+    expect(at('#7=LN[#1]*EXP[#2]')).toContain('keyword:LN');
+    // A word that only starts like one stays an address word.
+    expect(at('G1 X10. F100.')).toEqual(['gcode:G1', 'axis:X10.', 'feed:F100.']);
+  });
+
   // `syntax.programNames` (§7.16): painted letter by letter, the `T12` of a name looked
   // like a tool call and its `F12` like a feed.
   it('paints a program name as one program marker, at the head and behind a call word', () => {
@@ -309,7 +322,9 @@ describe('the klartext grammar', () => {
     ['32 CALL LBL 1 REP 3', ['blockNumber:32', 'keyword:CALL LBL', 'number:1', 'keyword:REP', 'number:3']],
     ['40 L IX+10 IY-5 FMAX', ['blockNumber:40', 'keyword:L', 'axis:IX+10', 'axis:IY-5', 'keyword:FMAX']],
     ['41 L X+Q5 Y+Q6 FQ50', ['blockNumber:41', 'keyword:L', 'axis:X+Q5', 'axis:Y+Q6', 'feed:FQ50']],
-    ['70 M140 MB 50 F500', ['blockNumber:70', 'mcode:M140', 'number:50', 'feed:F500']],
+    // `MB` is a keyword of the profile since M9 (the retract distance of `M140`); it used to
+    // be left uncoloured.
+    ['70 M140 MB 50 F500', ['blockNumber:70', 'mcode:M140', 'keyword:MB', 'number:50', 'feed:F500']],
     ['12 /L X+0', ['blockNumber:12', 'skip:/', 'keyword:L', 'axis:X+0']],
     // One of the owner's posts writes the block skip in front of the number (§7.16 / R4,
     // R1): both orders have to read as a `skip` next to a `blockNumber`.
@@ -367,6 +382,22 @@ describe('the klartext grammar', () => {
     const tokens = tokenize(grammar, '35 CALL PGM TNC:\\PARTS\\SUB1.H');
     expect(tokens.map((token) => token.text)).toEqual(['35', ' ', 'CALL PGM', ' ', 'TNC:\\PARTS\\SUB1.H']);
     expect(tokens[4].role).toBe('');
+  });
+
+  // M9 (WP9.3, R4): the tilted-plane and TCPM words of `syntax-heidenhain.md` §3.2 are
+  // keywords of the profile, one token each, `REFPNT TIP-TIP` and `F TCP` included.
+  it('paints the PLANE, TCPM and tilting words as keywords', () => {
+    expect(at('42 PLANE SPATIAL SPA+0 SPB+30 SPC+0 TURN MB MAX FMAX')).toEqual([
+      'blockNumber:42', 'keyword:PLANE SPATIAL', 'keyword:TURN', 'keyword:MB', 'keyword:MAX', 'keyword:FMAX',
+    ]);
+    expect(at('44 FUNCTION TCPM F TCP AXIS POS PATHCTRL AXIS REFPNT TIP-TIP')).toEqual([
+      'blockNumber:44', 'keyword:FUNCTION TCPM', 'keyword:F TCP', 'keyword:AXIS POS', 'keyword:PATHCTRL AXIS',
+      'keyword:REFPNT TIP-TIP',
+    ]);
+    expect(at('85 PLANE EULER EULPR+0 TABLE ROT SEQ+ F2000')).toContain('keyword:SEQ+');
+    expect(at('86 PLANE RELATIV SPA+10 STAY')).toEqual(['blockNumber:86', 'keyword:PLANE RELATIV', 'keyword:STAY']);
+    // The feed word stays a feed word: only `F` and a name after it is a keyword.
+    expect(at('9 L X+60 RL F800')).toEqual(['blockNumber:9', 'keyword:L', 'axis:X+60', 'keyword:RL', 'feed:F800']);
   });
 
   it('reads the Q parameters of a cycle, and FN as a keyword', () => {

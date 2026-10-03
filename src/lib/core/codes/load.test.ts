@@ -152,7 +152,8 @@ describe('built-in code databases', () => {
 
   // TODO Next up 8: the words of a macro call and of a data-setting block are no feeds.
   it('marks the macro calls and the data-setting block as blocks whose words are data', () => {
-    expect(fanuc.db.codes.filter((e) => e.wordsAreData).map((e) => e.code)).toEqual(['G10', 'G65', 'G66']);
+    // M9 (WP9.2): the modal call that runs after every block, G66.1, is one of them.
+    expect(fanuc.db.codes.filter((e) => e.wordsAreData).map((e) => e.code)).toEqual(['G10', 'G65', 'G66', 'G66.1']);
     // G67 ends the modal call; its block has no arguments.
     expect(fanuc.db.codes.find((e) => e.code === 'G67')?.wordsAreData).toBeUndefined();
     expect(heidenhain.db.codes.some((e) => e.wordsAreData)).toBe(false);

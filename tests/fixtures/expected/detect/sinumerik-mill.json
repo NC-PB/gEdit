@@ -1,0 +1,22 @@
+{
+  "note": [
+    "Expected profile detection for tests/fixtures/nc/sinumerik-mill (plan M9, WP9.1, roadmap R2). Owner: WP9.1.",
+    "One file per folder under tests/fixtures/nc, read by src/lib/core/profiles/detect.test.ts; the margin over",
+    "the best profile of another dialect is asserted and printed by src/lib/data/profiles/fanucLathe.test.ts, and",
+    "the margin over the turning profile sinumerik, its parent, by src/lib/data/profiles/sinumerikMill.test.ts.",
+    "A value is a profile id, or 'fallback' when the content is inconclusive and the current profile stays, or",
+    "'refused' when decodeFile does not open the file at all.",
+    "Both Siemens profiles share every Siemens marker and the decisive headers, so what decides between them",
+    "is what only one kind of machine writes: M6 in a block without a T number, G17/G94, CYCLE800 and the",
+    "milling cycles score for milling; DIAMON, LIMS=, G96/G97, TRANSMIT/TRACYL and the spindle-addressed",
+    "words score for turning only. A program with neither (a subprogram of plain moves) ties, and the tie",
+    "goes to turning (detect.priority -1 here, 0 there). s06-milling.txt moved here from nc/sinumerik/ at M9.",
+    "detect-sinumerik-mill.txt carries no extension weight: the content rules alone carry the dialect."
+  ],
+  "fixtures": {
+    "nc/sinumerik-mill/detect-sinumerik-mill.txt": "sinumerik-mill",
+    "nc/sinumerik-mill/m01-plate.MPF": "sinumerik-mill",
+    "nc/sinumerik-mill/m02-five-axis.MPF": "sinumerik-mill",
+    "nc/sinumerik-mill/s06-milling.txt": "sinumerik-mill"
+  }
+}

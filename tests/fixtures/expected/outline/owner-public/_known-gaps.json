@@ -25,26 +25,6 @@
       "why": "As 2.5D_MILLING.min.",
       "profile": "okuma-osp",
       "tools": [[6, "1"], [73, "2"], [4982, "3"], [5008, "5"], [5027, "4"]]
-    },
-    "nc/owner-public/sinumerik/2.5D_Milling.mpf": {
-      "why": "Opens as Sinumerik, the turning profile until a milling one exists (R2), where every T word is a tool change: the preselected next tool (T2 after T1 D1 and M6) is listed as one too.",
-      "profile": "sinumerik",
-      "tools": [[9, "1"], [227, "2"], [646, "3"], [758, "4"]]
-    },
-    "nc/owner-public/sinumerik/5X_Milling.mpf": {
-      "why": "As 2.5D_Milling.mpf.",
-      "profile": "sinumerik",
-      "tools": [[9, "1"]]
-    },
-    "nc/owner-public/sinumerik/DRILLING.mpf": {
-      "why": "Opens as Sinumerik, whose turning tool rule makes every T word a tool change: each preselected next tool is listed as a change of its own, so the map shows nine tool segments for five tools and each drilling operation sits under the next tool.",
-      "profile": "sinumerik",
-      "tools": [[8, "1"], [746, "2"], [2406, "3"], [2435, "5"], [2457, "4"]]
-    },
-    "nc/owner-public/sinumerik/Demo_1.mpf": {
-      "why": "Opens as Fanuc (ISO) mill (a detection gap), which reads the tool name of T=\"…\" as no tool number.",
-      "profile": "sinumerik",
-      "tools": [[21, "\"TEST_KOM\""]]
     }
   }
 }

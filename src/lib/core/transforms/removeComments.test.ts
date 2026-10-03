@@ -1,8 +1,8 @@
 // Remove comments (plan §5 WP4.3).
 //
 // Goldens in `tests/fixtures/transforms/remove-comments/<case>/` (plan §8.2); a case
-// named `klartext-…` is read with the Heidenhain profile, anything else with the Fanuc
-// one. Every line in them is synthetic, written for gEdit from `docs/planning/syntax/`.
+// named `klartext-…` is read with the Heidenhain profile, `sinumerik-…` with the Sinumerik
+// one (M9), anything else with the Fanuc one. Every line in them is synthetic, written for gEdit from `docs/planning/syntax/`.
 //
 // The cases that carry the risk:
 //  - `klartext-sections` — a comment in front of a trailing `~`. Dropping the marker
@@ -21,6 +21,7 @@ import { noMachine } from '$lib/core/machines/effective';
 import type { CodeDb } from '$lib/core/codes/types';
 import fanucJson from '$lib/data/profiles/fanuc-gcode.json';
 import heidenhainJson from '$lib/data/profiles/heidenhain-klartext.json';
+import sinumerikJson from '$lib/data/profiles/sinumerik.json';
 import { compileProfile } from '$lib/core/profiles/compile';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
 import { removeComments } from './removeComments';
@@ -28,6 +29,7 @@ import type { TransformContext } from './types';
 
 const fanuc = compileProfile(fanucJson as unknown as Profile);
 const klartext = compileProfile(heidenhainJson as unknown as Profile);
+const sinumerik = compileProfile(sinumerikJson as unknown as Profile);
 const NO_CODES: CodeDb = { dialect: 'test', version: 1, addresses: {}, codes: [] };
 
 const CASES = fileURLToPath(new URL('../../../../tests/fixtures/transforms/remove-comments/', import.meta.url));
@@ -47,7 +49,7 @@ function goldens(): Golden[] {
     .sort()
     .map((name) => ({
       name,
-      cp: name.startsWith('klartext') ? klartext : fanuc,
+      cp: name.startsWith('klartext') ? klartext : name.startsWith('sinumerik') ? sinumerik : fanuc,
       input: readFileSync(join(CASES, name, 'input.nc'), 'utf8'),
       options: JSON.parse(readFileSync(join(CASES, name, 'options.json'), 'utf8')) as Record<string, unknown>,
       expected: readFileSync(join(CASES, name, 'expected.nc'), 'utf8'),
@@ -154,6 +156,27 @@ describe('removeComments rules', () => {
     expect(removeComments.run(lines, { ...context(fanuc, { keepFirstLines: 1 }), firstLine: 5 }).lines).toEqual([
       'N10',
       'N20',
+    ]);
+  });
+
+  it('keeps the Sinumerik path line of the transfer header whatever the options say (M9)', () => {
+    // `;$PATH=` is the second line of the transfer header: the control files the program
+    // in that folder on import. It is a decisive detection pattern of the profile, which
+    // is what marks it, so the same text behind code is an ordinary comment.
+    const input = ['%_N_PART_MPF', ';$PATH=/_N_WKS_DIR/_N_PART_WPD', '  ;$PATH=/_N_MPF_DIR', 'G0 X0 ;$PATH=/_N_MPF_DIR', 'M30'];
+    const result = removeComments.run(input, context(sinumerik, { keepProgramName: false, keepFirstLines: 0 }));
+    expect(result.lines).toEqual(['%_N_PART_MPF', ';$PATH=/_N_WKS_DIR/_N_PART_WPD', '  ;$PATH=/_N_MPF_DIR', 'G0 X0', 'M30']);
+    expect(result.skipped.map((row) => [row.line, row.message])).toEqual([
+      [2, 'Comment kept: it is inside the header.'],
+      [3, 'Comment kept: it is inside the header.'],
+    ]);
+    // Any other whole-line comment of the same program goes, and so does the path line
+    // under a profile that does not mark it (Fanuc reads `;` as no comment at all, so the
+    // check runs on Klartext, whose comments also start with `;`).
+    expect(removeComments.run(['; T1 FACE MILL', 'M30'], context(sinumerik)).lines).toEqual(['M30']);
+    expect(removeComments.run(['0 BEGIN PGM A MM', ';$PATH=/_N_MPF_DIR', '1 END PGM A MM'], context(klartext)).lines).toEqual([
+      '0 BEGIN PGM A MM',
+      '1 END PGM A MM',
     ]);
   });
 

@@ -63,8 +63,8 @@ interface Emitted {
 }
 
 /** Monarch's tokenizer loop, for one line and one `root` state. */
-function tokenize(line: string): Emitted[] {
-  const rules = grammar.tokenizer.root.map((rule) => compileRule(rule, grammar.ignoreCase));
+function tokenize(line: string, built: typeof grammar = grammar): Emitted[] {
+  const rules = built.tokenizer.root.map((rule) => compileRule(rule, built.ignoreCase));
   const out: Emitted[] = [];
   let pos = 0;
 
@@ -72,7 +72,7 @@ function tokenize(line: string): Emitted[] {
     const rest = line.slice(pos);
     const hit = rules.find((rule) => (rule.anchored ? pos === 0 : true) && rule.re.test(rest));
     if (!hit) {
-      out.push({ text: line[pos], role: grammar.defaultToken });
+      out.push({ text: line[pos], role: built.defaultToken });
       pos += 1;
       continue;
     }
@@ -96,8 +96,8 @@ function tokenize(line: string): Emitted[] {
 }
 
 /** `role:text` for everything the grammar gives a role to; neutral tokens are dropped. */
-function at(line: string): string[] {
-  return tokenize(line)
+function at(line: string, built: typeof grammar = grammar): string[] {
+  return tokenize(line, built)
     .filter((token) => token.role !== '')
     .map((token) => `${token.role}:${token.text}`);
 }
@@ -420,6 +420,51 @@ G00 X600 Z400 M09
 M05
 M02
 %`;
+
+// M9 (WP9.3, R4): the control's own multi-letter addresses are the profile's data
+// (`syntax.extendedAddresses`), and an option M function has four digits.
+describe('the okuma grammar reads the profile\'s extended addresses and four-digit M codes', () => {
+  /** The grammar of the built-in profile with `syntax` changed by `edit`. */
+  function variant(edit: (syntax: Record<string, unknown>) => void): typeof grammar {
+    const copy = structuredClone(profile) as Profile;
+    edit(copy.syntax as unknown as Record<string, unknown>);
+    return generateGrammar(copy, db) as unknown as typeof grammar;
+  }
+
+  it('paints the option addresses of the data as addresses, whatever their length', () => {
+    expect(at('TL=2 CL=1 CP=3')).toEqual([
+      'keyword:TL', 'operator:=', 'number:2', 'keyword:CL', 'operator:=', 'number:1', 'keyword:CP', 'operator:=', 'number:3',
+    ]);
+    expect(at('AB=45 BC=10 SX=1 QA=5')).toEqual([
+      'keyword:AB', 'operator:=', 'number:45', 'keyword:BC', 'operator:=', 'number:10',
+      'keyword:SX', 'operator:=', 'number:1', 'keyword:QA', 'operator:=', 'number:5',
+    ]);
+  });
+
+  it('leaves every other name in front of `=` a local variable', () => {
+    expect(at('N30 DIA1=50 ZL1=-20 QR=5')).toEqual([
+      'blockNumber:N30', 'variable:DIA1', 'operator:=', 'number:50', 'variable:ZL1', 'operator:=', 'operator:-',
+      'number:20', 'variable:QR', 'operator:=', 'number:5',
+    ]);
+  });
+
+  it('reads the list from the profile: without it nothing is an option address, with a longer one more is', () => {
+    const none = variant((syntax) => delete syntax.extendedAddresses);
+    expect(at('SB=1200 TL=2', none)).toEqual(['variable:SB', 'operator:=', 'number:1200', 'variable:TL', 'operator:=', 'number:2']);
+    const own = variant((syntax) => (syntax.extendedAddresses = `${profile.syntax.extendedAddresses}|ZZ`));
+    expect(at('ZZ=3', own)).toEqual(['keyword:ZZ', 'operator:=', 'number:3']);
+    expect(at('ZZ=3', grammar)).toEqual(['variable:ZZ', 'operator:=', 'number:3']);
+  });
+
+  it('takes an option M function of four digits whole, and a G code of three', () => {
+    expect(at('M1292')).toEqual(['mcode:M1292']);
+    expect(at('G1 X10 M1292 S800')).toEqual(['gcode:G1', 'axis:X10', 'mcode:M1292', 'spindle:S800']);
+    expect(at('M110 M13')).toEqual(['mcode:M110', 'mcode:M13']);
+    // Five digits are no code, and a G stays at three.
+    expect(at('M12345')).not.toContain('mcode:M1234');
+    expect(at('G1800')).not.toContain('gcode:G180');
+  });
+});
 
 describe('over a whole okuma program', () => {
   const lines = PROGRAM.split('\n');

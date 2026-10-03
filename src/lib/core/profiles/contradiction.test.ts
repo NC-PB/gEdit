@@ -63,6 +63,7 @@ const LATHE = compiled('fanuc-lathe');
 const KLARTEXT = compiled('heidenhain-klartext');
 const OKUMA = compiled('okuma-osp');
 const SINUMERIK = compiled('sinumerik');
+const SINUMERIK_MILL = compiled('sinumerik-mill');
 
 function textOf(rel: string): string {
   const opened = openFixture(rel);
@@ -89,7 +90,7 @@ const G183 = readFileSync(join(FIXTURES_DIR, 'expected/detect/programs/l08-g183-
 describe('the evidence', () => {
   it('finds the header of the program the source review saw wrecked, read as Fanuc', () => {
     const cases: [string, string, string][] = [
-      ['nc/owner-public/sinumerik/2.5D_Milling.mpf', 'sinumerik', '%_N_1_MPF'],
+      ['nc/owner-public/sinumerik-mill/2.5D_Milling.mpf', 'sinumerik-mill', '%_N_1_MPF'],
       ['nc/owner-public/heidenhain-klartext/5X_MILLING_VECTOR.H', 'heidenhain-klartext', '0 BEGIN PGM 5X_MILLING MM'],
       ['nc/okuma/o01-flange.MIN', 'okuma-osp', '$O01-FLANGE.MIN%'],
     ];
@@ -103,8 +104,8 @@ describe('the evidence', () => {
   it('finds the Siemens call that Remove Comments would empty, in a program without the header', () => {
     // Demo_1.mpf has no %_N_ line. Under the Fanuc profile `( … )` is a comment, so the
     // arguments of WORKPIECE(…) and CYCLE800(…) would be deleted.
-    const found = guard(FANUC, textOf('nc/owner-public/sinumerik/Demo_1.mpf'));
-    expect(found).toMatchObject({ likely: 'sinumerik', dialect: 'Sinumerik', kind: 'marker', line: 12 });
+    const found = guard(FANUC, textOf('nc/owner-public/sinumerik-mill/Demo_1.mpf'));
+    expect(found).toMatchObject({ likely: 'sinumerik-mill', dialect: 'Sinumerik', kind: 'marker', line: 12 });
     expect(found?.text.startsWith('WORKPIECE(')).toBe(true);
     for (const line of [
       'N220 MCALL CYCLE83 (52,50,2,-4.887,,,2,-1,0,0,1,0,,2,1,0,0)',
@@ -134,6 +135,64 @@ describe('the evidence', () => {
     }
   });
 
+  it('names the Sinumerik milling profile for a Siemens milling program, and turning otherwise (M9)', () => {
+    // Both Siemens profiles share one grammar, so the evidence says "Sinumerik" either way;
+    // which of the two the user wants is read off the lines, as detection reads it.
+    const siemens = Object.keys(EXPECTED).filter((rel) => EXPECTED[rel] === 'sinumerik' || EXPECTED[rel] === 'sinumerik-mill');
+    expect(siemens.filter((rel) => EXPECTED[rel] === 'sinumerik-mill').length).toBeGreaterThanOrEqual(8);
+    expect(siemens.filter((rel) => EXPECTED[rel] === 'sinumerik').length).toBeGreaterThanOrEqual(8);
+    for (const rel of siemens) {
+      for (const cp of [FANUC, LATHE, OKUMA, KLARTEXT]) {
+        const found = guard(cp, textOf(rel));
+        // A Siemens subprogram with no header and no Siemens-only line says nothing at all.
+        if (found === null) continue;
+        expect(found, `${rel} as ${cp.profile.id}`).toMatchObject({ grammar: 'sinumerik', likely: EXPECTED[rel], dialect: 'Sinumerik' });
+      }
+    }
+    // The tool change makes it milling; any turning evidence makes it turning again (a
+    // mill-turn program is a turning program, R2), and so does no evidence at all.
+    expect(guard(FANUC, '%_N_A_MPF\nN10 T="DRILL_D8"\nN20 M6\n')).toMatchObject({ likely: 'sinumerik-mill' });
+    expect(guard(FANUC, '%_N_A_MPF\nN10 CYCLE800()\n')).toMatchObject({ likely: 'sinumerik-mill' });
+    expect(guard(FANUC, '%_N_A_MPF\nN10 T="DRILL_D8"\nN20 M6\nN30 G96 S200 LIMS=3000\n')).toMatchObject({ likely: 'sinumerik' });
+    expect(guard(FANUC, '%_N_A_MPF\nN10 DIAMON\nN20 T1 D1 M6\n')).toMatchObject({ likely: 'sinumerik' });
+    expect(guard(FANUC, '%_N_A_MPF\nN10 G0 X10 Z2\n')).toMatchObject({ likely: 'sinumerik' });
+    // A comment or a string that mentions the tool change is not one.
+    expect(guard(FANUC, '%_N_A_MPF\nN10 G0 X10 ; M6 BY HAND\nN20 MSG("NEXT: M6")\n')).toMatchObject({ likely: 'sinumerik' });
+    expect(guard(FANUC, '%_N_A_MPF\nN10 M61\nN20 M6=3\n')).toMatchObject({ likely: 'sinumerik' });
+    // The guard is about the grammar: either Siemens profile reads the other's program
+    // with the right comment, string and number rules, so neither refuses it.
+    expect(guard(SINUMERIK_MILL, textOf('nc/owner-public/sinumerik/TURN_1.mpf'))).toBeNull();
+    expect(guard(SINUMERIK, textOf('nc/owner-public/sinumerik-mill/DRILLING.mpf'))).toBeNull();
+  });
+
+  it('finds the Okuma work coordinate system, the machining-centre length offset and the live-tool speed', () => {
+    // The certain Okuma syntax of the notes (syntax-okuma §3, §6): `G15 H2`/`G16 H3` select
+    // a work coordinate system (Fanuc's G15/G16 are polar coordinates and take no H), a
+    // machining-centre `G56 H` is a tool length offset (Fanuc's G56 is a work offset, its H
+    // belongs to a G43 or G44), and `SB=` is a two-letter Okuma word.
+    for (const cp of [FANUC, LATHE]) {
+      expect(guard(cp, 'N10 G15 H2\n'), cp.profile.id).toMatchObject({ likely: 'okuma-osp', kind: 'marker', line: 1 });
+      expect(guard(cp, 'N10 G0 X0 Y0\nN20 G16 H3\n'), cp.profile.id).toMatchObject({ likely: 'okuma-osp', line: 2 });
+      expect(guard(cp, 'N10 G56 H1 Z50.\n'), cp.profile.id).toMatchObject({ likely: 'okuma-osp' });
+      expect(guard(cp, 'N10 M110\nN20 SB=1200 M13\n'), cp.profile.id).toMatchObject({ likely: 'okuma-osp', line: 2 });
+    }
+    // A Fanuc work offset with its length offset in the same block, polar coordinates
+    // without H, and the same words inside a comment are not Okuma evidence.
+    expect(guard(FANUC, 'N10 G56 G43 H1 Z50.\nN20 G16 X50. Y30.\nN30 G15\nN40 (G15 H2 SB=500)\n')).toBeNull();
+    // A Siemens program may name a variable SB; the Okuma program itself is never refused.
+    expect(guard(SINUMERIK, 'N10 SB=5\n')).toBeNull();
+    expect(guard(OKUMA, 'N10 G15 H2\nN20 G56 H1\nN30 SB=1200 M13\n')).toBeNull();
+  });
+
+  it('still cannot tell a Fanuc mill program read as Okuma from an Okuma one, except by # variables', () => {
+    // The gap the notes leave (TODO, WP9.6; written into docs/user/dialects.md by WP9.7):
+    // without a manual of the Okuma machining-centre control there is no certain Fanuc mill
+    // syntax against it — `T1 M6`, `G43 H1`, `G54` and the drilling cycles may all be written
+    // by both. Only Fanuc's macro variables and the Fanuc lathe's P/Q cycles are certain.
+    expect(guard(OKUMA, '%\nO1000\nT1 M6\nG54 G90 G0 X0 Y0\nG43 H1 Z50.\nG81 X10. Y10. Z-5. R2. F100.\nM30\n')).toBeNull();
+    expect(guard(OKUMA, '%\nO1000\n#101=5\n')).toMatchObject({ likely: 'fanuc-gcode' });
+  });
+
   it('spares the grammar where the same text is valid too', () => {
     // A Sinumerik line may start with a `$` system variable; `O1234` starts an Okuma
     // program as well as a Fanuc one; `CR=` is a word of Okuma's G303.
@@ -156,6 +215,18 @@ describe('the evidence', () => {
     expect(guard(KLARTEXT, '0 BEGIN PGM A MM\n1 L X+0 R0 FMAX\n2 #100=5\n3 END PGM A MM\n')).toBeNull();
     // `O1234` is written by two dialects, so it states neither and shields nothing.
     expect(guard(FANUC, 'O1234\nNLAP1 G81\n')).toMatchObject({ likely: 'okuma-osp', line: 2 });
+  });
+
+  it('reads a Sinumerik main block as a block, not as a Fanuc program number (M9 integration)', () => {
+    // `:7 G1 X10 F100` opens with the main-block prefix; only a `:1234` alone on its line
+    // is a Fanuc tape start. Renumber and Remove Comments must not refuse the program.
+    expect(guard(SINUMERIK, '%_N_A_MPF\nN5 G0 X0\n:7 G1 X10 F100\nN20 G1 X20\n')).toBeNull();
+    expect(guard(OKUMA, ':7 G1 X10 F100\n')).toBeNull();
+    expect(guard(FANUC, ':7 G1 X10 F100\nN20 G1 X20\n')).toBeNull();
+    // The older `:1234` program number, alone on its line, still states Fanuc.
+    expect(guard(SINUMERIK, ':1234\nN10 G0 X0\n')).toBeNull();
+    expect(guard(KLARTEXT, ':1234 (PART)\nN10 G0 X0\n')).toMatchObject({ likely: 'fanuc-gcode', line: 1, kind: 'header' });
+    expect(guard(KLARTEXT, ':7 G1 X10 F100\n')).toBeNull();
   });
 
   it('looks for a header in the first lines only, and for a marker in the first 400 non-empty ones', () => {
@@ -239,7 +310,7 @@ describe('reading the document', () => {
   });
 
   it('builds the refusal with the action, both dialects, the line and the evidence', () => {
-    const text = textOf('nc/owner-public/sinumerik/2.5D_Milling.mpf').split('\n');
+    const text = textOf('nc/owner-public/sinumerik-mill/2.5D_Milling.mpf').split('\n');
     const msg = contradictionRefusal(FANUC, (a, b) => text.slice(a - 1, b), text.length, 'Remove Comments', 'transforms');
     expect(msg).toEqual({
       key: 'transforms.contradiction',
@@ -261,7 +332,7 @@ describe('reading the document', () => {
   });
 
   it('names a built-in profile of the evidence grammar as the likely dialect', () => {
-    const cases = ['%_N_A_MPF', '0 BEGIN PGM A MM', '$A.MIN%', 'O1234', 'G71 P10 Q20 U0.4 W0.1 F0.2', 'NLAP1 G81'];
+    const cases = ['%_N_A_MPF', '%_N_A_MPF\nT="A" M6', '0 BEGIN PGM A MM', '$A.MIN%', 'O1234', 'G71 P10 Q20 U0.4 W0.1 F0.2', 'NLAP1 G81', 'G15 H2'];
     for (const line of cases) {
       for (const cp of BUILTINS) {
         const found = guard(cp, line);
@@ -316,7 +387,7 @@ function newDoc(profileId: string): NewDocMeta {
   };
 }
 
-const SIEMENS = textOf('nc/owner-public/sinumerik/2.5D_Milling.mpf').split('\n');
+const SIEMENS = textOf('nc/owner-public/sinumerik-mill/2.5D_Milling.mpf').split('\n');
 
 function effectiveOf(docs: ReturnType<typeof createDocumentStore>) {
   return (id: string) => {

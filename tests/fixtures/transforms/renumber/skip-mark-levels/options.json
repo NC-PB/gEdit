@@ -1,0 +1,11 @@
+{
+  "note": "M9 NC review F7: a block with several skip levels ('/1/2 N20', '/1 /2 N30') keeps all of them in front of its number. The head took only the first mark, read '/2' as the start of the code and wrote '/1N110 /2 N20 G1'. Levels behind the number ('N50 /1/2') stay behind it, and the jump to the levelled block follows it.",
+  "profile": "fanuc-gcode",
+  "options": { "start": 100, "step": 10, "skipStartingWith": "", "restartAtProgramStart": false },
+  "expect": {
+    "summary": "ncNumbering.renumber.summary",
+    "skipped": [],
+    "warnings": ["ncNumbering.renumber.referencesRewritten"],
+    "preflight": null
+  }
+}

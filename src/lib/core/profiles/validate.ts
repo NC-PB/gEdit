@@ -63,6 +63,22 @@ const EXTENSION = /^[a-z0-9][a-z0-9_+-]*$/;
 /** An address or keyword-like name: a letter, then letters and digits (`X`, `FMAX`, `GOTO`). */
 const ADDRESS = /^[A-Za-z][A-Za-z0-9]*$/;
 
+/** P9. A main-block prefix: one character that is neither a letter, a digit nor a blank (`:`). */
+const MAIN_PREFIX = /^[^A-Za-z0-9\s]$/;
+
+/**
+ * M9 review F4. Characters some dialect already gives a meaning at the head of a block or
+ * of a word: comments (`(`, `;`), the block skip (`/`), strings (`"`, `'`), the tape mark
+ * and program heads (`%`, `$`, `<`), signs, separators and expressions (`+ - . , = [ ] #
+ * * >`). A main-block prefix that is one of them would turn `(20 NOTE)` into a block
+ * number with code words behind it. The profile's own comment starts, skip characters
+ * and continuation mark are refused as well, whatever they are.
+ */
+const RESERVED_HEAD_CHARS = new Set('();/"\'%$<>+-.,=[]#*'.split(''));
+
+/** P9. An exponent marker: letters only (`EX`). */
+const LETTERS = /^[A-Za-z]+$/;
+
 /** A profile id is also a Monaco language id, so it stays plain. */
 const PROFILE_ID = /^[a-z0-9][a-z0-9._-]*$/;
 
@@ -439,6 +455,24 @@ function checkDetect(value: unknown, p: Problems): void {
 
   optStrArr(detect.folders, 'detect.folders', p);
   optNum(detect.priority, 'detect.priority', p);
+  if (detect.vetoes !== undefined) patternList(detect.vetoes, 'detect.vetoes', p);
+}
+
+/**
+ * Whether `ch` already means something at the head of a block or a word (M9 review F4):
+ * one of [`RESERVED_HEAD_CHARS`], or the first character of one of the profile's comment
+ * starts, block-skip characters or continuation mark.
+ */
+function reservedHead(ch: string, syntax: Record<string, unknown>): boolean {
+  if (RESERVED_HEAD_CHARS.has(ch)) return true;
+  const comments = Array.isArray(syntax.comments) ? syntax.comments : [];
+  for (const entry of comments) {
+    const start = entry && typeof entry === 'object' ? (entry as { start?: unknown }).start : undefined;
+    if (typeof start === 'string' && start.startsWith(ch)) return true;
+  }
+  const skip = syntax.blockSkip && typeof syntax.blockSkip === 'object' ? (syntax.blockSkip as { chars?: unknown }).chars : undefined;
+  if (typeof skip === 'string' && skip.includes(ch)) return true;
+  return typeof syntax.continuationMark === 'string' && syntax.continuationMark.startsWith(ch);
 }
 
 function checkSyntax(value: unknown, p: Problems): void {
@@ -490,6 +524,18 @@ function checkSyntax(value: unknown, p: Problems): void {
     else optStr(blockNumber.prefix, 'syntax.blockNumber.prefix', p, ADDRESS);
     optStrArr(blockNumber.altPrefixes, 'syntax.blockNumber.altPrefixes', p, { allow: ADDRESS });
     bool(blockNumber.mandatory, 'syntax.blockNumber.mandatory', p);
+    // P9 (§7.1, R4): the prefix of a main block number (Sinumerik `:123`). One character
+    // that cannot start a word, so it can never be read as an address as well.
+    optStr(blockNumber.mainPrefix, 'syntax.blockNumber.mainPrefix', p, MAIN_PREFIX);
+    const mainPrefix = blockNumber.mainPrefix;
+    if (typeof mainPrefix === 'string' && mainPrefix === blockNumber.prefix) {
+      p.add('syntax.blockNumber.mainPrefix', 'is the same as syntax.blockNumber.prefix');
+    } else if (typeof mainPrefix === 'string' && MAIN_PREFIX.test(mainPrefix) && reservedHead(mainPrefix, syntax)) {
+      p.add(
+        'syntax.blockNumber.mainPrefix',
+        `"${mainPrefix}" already starts a comment, a block skip, a string, a program mark, a sign or an expression, so it cannot start a main block number too`,
+      );
+    }
   }
 
   // P8. The four patterns and the two flags the turning dialects add (§7.1). They are
@@ -503,6 +549,14 @@ function checkSyntax(value: unknown, p: Problems): void {
     p.add('syntax.labels', 'has to carry the named group (?<name>…)');
   }
   optBool(syntax.calls, 'syntax.calls', p);
+  // P9 (§7.1, R4): an assignment word may carry one bracket index (Sinumerik `LIMS[2]=`),
+  // and the control's own multi-letter addresses among the assignment words (Okuma `SB`,
+  // `TL`), so the rest are the names a program gives its local variables.
+  optBool(syntax.assignmentIndex, 'syntax.assignmentIndex', p);
+  optPattern(syntax.extendedAddresses, 'syntax.extendedAddresses', p);
+  if (typeof syntax.extendedAddresses === 'string' && matchesEmpty(syntax.extendedAddresses, caseSensitive)) {
+    p.add('syntax.extendedAddresses', 'can match an empty string, and an address has to take at least one letter');
+  }
   optVariablePattern(syntax.systemVariables, 'syntax.systemVariables', caseSensitive, p);
   optPattern(syntax.header, 'syntax.header', p);
   // M8 integration (§7.16): the names a program gives itself, one token each.
@@ -521,6 +575,14 @@ function checkSyntax(value: unknown, p: Problems): void {
   optEnum(syntax.decimalSeparatorAlt, 'syntax.decimalSeparatorAlt', p, ['.', ','] as const);
   if (typeof syntax.decimalSeparatorAlt === 'string' && syntax.decimalSeparatorAlt === (syntax.decimalSeparator ?? '.')) {
     p.add('syntax.decimalSeparatorAlt', 'is the same character as syntax.decimalSeparator');
+  }
+  // P9 (§7.1, R4): the letters of an exponent inside a number (Sinumerik `1.5EX3`).
+  optStr(syntax.exponentMarker, 'syntax.exponentMarker', p, LETTERS);
+  // M9 review F4: one letter is an address in every word-address dialect. With `G` as the
+  // marker, `X10G1` would read as one number (10 times ten) instead of `X10` and `G1`, so
+  // the marker takes two letters at least (`EX`).
+  if (typeof syntax.exponentMarker === 'string' && /^[A-Za-z]$/.test(syntax.exponentMarker)) {
+    p.add('syntax.exponentMarker', 'has to be at least two letters: a single letter is an address of its own');
   }
   bool(syntax.decimalPointSignificant, 'syntax.decimalPointSignificant', p);
   bool(syntax.wordSeparatorRequired, 'syntax.wordSeparatorRequired', p);

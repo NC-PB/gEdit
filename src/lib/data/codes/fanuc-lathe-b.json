@@ -23,7 +23,8 @@
           "address": "F",
           "label": "Thread lead per revolution",
           "required": true,
-          "min": 0
+          "min": 0,
+          "unit": "feedPerRev"
         }
       ]
     },
@@ -31,6 +32,8 @@
       "code": "G50",
       "group": "nonmodal",
       "sets": { "speedLimit": true },
+      "axisWords": "data",
+      "frame": "close",
       "label": "Scaling cancel (G-code system B)",
       "description": "In G-code system B this code ends scaling, and G92 sets the coordinate system and the top spindle speed. gEdit still reads an S word in such a block as a speed limit, because a program posted for system A writes its clamp as G50 S and is opened with a system-B machine often enough: raising the clamp of a constant-surface-speed program is what lets the spindle run away as the diameter falls."
     },
@@ -84,7 +87,8 @@
           "address": "F",
           "label": "Thread lead per revolution",
           "required": true,
-          "min": 0
+          "min": 0,
+          "unit": "feedPerRev"
         }
       ]
     },
@@ -135,6 +139,7 @@
       "group": "nonmodal",
       "pitchFeedAmbiguous": true,
       "sets": { "speedLimit": true },
+      "axisWords": "data",
       "label": "Coordinate set, top spindle speed",
       "description": "Sets the coordinate system without moving. With an S word it gives the highest spindle speed the control may use for constant surface speed; write it in a block of its own in front of G96. G-code system A uses G50 for this and reads G92 as the single-pass threading cycle, whose F is the thread lead — so gEdit will not scale the F of such a block here either: a program posted for system A and opened with a system-B machine would otherwise have its thread leads multiplied in silence."
     },

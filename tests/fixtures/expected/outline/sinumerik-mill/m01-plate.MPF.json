@@ -1,0 +1,26 @@
+{
+  "profile": "sinumerik-mill",
+  "items": [
+    {"kind":"program","line":1,"text":"%_N_PLATE_MPF","endLine":58},
+    {"kind":"comment","line":2,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":3,"text":"$PATH=/_N_WKS_DIR/_N_PLATE_WPD"},
+    {"kind":"comment","line":4,"text":"PLATE 120X80 - FACE, DRILL, POCKET; EACH TOOL PRESELECTS THE NEXT ONE"},
+    {"kind":"subprogram-call","line":8,"text":"CYCLE800"},
+    {"kind":"comment","line":9,"text":"FACE MILL D50"},
+    {"kind":"tool","line":11,"text":"FACEMILL_D50 — FACE MILL D50","tool":"\"FACEMILL_D50\"","endLine":23},
+      {"kind":"comment","line":14,"text":"FACE THE TOP"},
+      {"kind":"subprogram-call","line":15,"text":"CYCLE832"},
+      {"kind":"subprogram-call","line":19,"text":"CYCLE61"},
+      {"kind":"subprogram-call","line":21,"text":"CYCLE832"},
+      {"kind":"comment","line":22,"text":"DRILL D8"},
+    {"kind":"tool","line":24,"text":"DRILL_D8 — DRILL D8","tool":"\"DRILL_D8\"","endLine":39},
+      {"kind":"comment","line":26,"text":"DRILL FOUR HOLES"},
+      {"kind":"subprogram-call","line":31,"text":"CYCLE83"},
+      {"kind":"comment","line":38,"text":"END MILL D10"},
+    {"kind":"tool","line":40,"text":"ENDMILL_D10 — END MILL D10","tool":"\"ENDMILL_D10\"","endLine":58},
+      {"kind":"comment","line":42,"text":"POCKET 40X20"},
+      {"kind":"subprogram-call","line":43,"text":"CYCLE832"},
+      {"kind":"subprogram-call","line":53,"text":"CYCLE832"},
+      {"kind":"end","line":57,"text":"M30"}
+  ]
+}

@@ -219,7 +219,7 @@ describe('which machine a document uses (AD-31 order)', () => {
     const h = harness({ docs: [LATHE_DOC], file: FILE });
     h.machines.setForDoc('d1', 'lathe-b');
     expect(eff(h, 'd1')).toMatchObject({ id: 'lathe-b', choice: 'document' });
-    expect(eff(h, 'd1').params.variants).toEqual({ gcodeSystem: 'B' });
+    expect(eff(h, 'd1').params.variants).toMatchObject({ gcodeSystem: 'B' });
     expect(h.machines.effective('d1').codes.dialect).toBe('fanuc-lathe-b');
   });
 
@@ -392,7 +392,7 @@ describe('variant detection', () => {
   it('decides the variant when no machine is chosen, and records the source', () => {
     const h = harness({ docs: [LATHE_DOC] });
     h.detect['fanuc-lathe'] = B_TEXT;
-    expect(eff(h, 'd1').params.variants).toEqual({ gcodeSystem: 'B' });
+    expect(eff(h, 'd1').params.variants).toMatchObject({ gcodeSystem: 'B' });
     expect(eff(h, 'd1').source.variants.gcodeSystem).toBe('detected');
     expect(h.machines.effective('d1').codes.dialect).toBe('fanuc-lathe-b');
   });
@@ -406,19 +406,19 @@ describe('variant detection', () => {
     const h = harness({ docs: [{ ...LATHE_DOC, text: '' }] });
     h.detect['fanuc-lathe'] = B_TEXT;
     // The model has no content yet: the answer is used and not remembered.
-    expect(eff(h, 'd1').params.variants).toEqual({ gcodeSystem: 'B' });
+    expect(eff(h, 'd1').params.variants).toMatchObject({ gcodeSystem: 'B' });
     h.detect['fanuc-lathe'] = {};
     h.setText('d1', 'G50 S2500\nG96 S220 M03\n');
-    expect(eff(h, 'd1').params.variants).toEqual({ gcodeSystem: 'A' });
+    expect(eff(h, 'd1').params.variants).toMatchObject({ gcodeSystem: 'A' });
 
     // Now a real program, and a real replacement of it.
     h.detect['fanuc-lathe'] = B_TEXT;
     h.setText('d1', 'G92 S2500\nG96 S220 M03\n');
-    expect(eff(h, 'd1').params.variants).toEqual({ gcodeSystem: 'B' });
+    expect(eff(h, 'd1').params.variants).toMatchObject({ gcodeSystem: 'B' });
     expect(eff(h, 'd1').source.variants.gcodeSystem).toBe('detected');
     h.detect['fanuc-lathe'] = {};
     h.setText('d1', 'G50 S2500\nG96 S220 M03\n');
-    expect(eff(h, 'd1').params.variants).toEqual({ gcodeSystem: 'A' });
+    expect(eff(h, 'd1').params.variants).toMatchObject({ gcodeSystem: 'A' });
     // A read that changes nothing still costs one detection at most, not one per call.
     expect(h.machines.effective('d1')).toBe(h.machines.effective('d1'));
   });
@@ -429,7 +429,7 @@ describe('variant detection', () => {
     h.machines.setForDoc('d1', 'lathe-a');
 
     const machine = eff(h, 'd1');
-    expect(machine.params.variants).toEqual({ gcodeSystem: 'A' });
+    expect(machine.params.variants).toMatchObject({ gcodeSystem: 'A' });
     expect(machine.source.variants.gcodeSystem).toBe('machine');
     expect(machine.mismatch).toEqual({ variant: 'gcodeSystem', detected: 'B', chosen: 'A' });
     expect(h.machines.effective('d1').codes.dialect).toBe('fanuc-lathe');
@@ -446,7 +446,7 @@ describe('variant detection', () => {
   it('is ignored below the margin of 3, so an unusual program changes nothing', () => {
     const h = harness({ docs: [LATHE_DOC] });
     h.detect['fanuc-lathe'] = { gcodeSystem: { value: 'B', margin: 2 } };
-    expect(eff(h, 'd1').params.variants).toEqual({ gcodeSystem: 'A' });
+    expect(eff(h, 'd1').params.variants).toMatchObject({ gcodeSystem: 'A' });
     expect(eff(h, 'd1').source.variants.gcodeSystem).toBe('profile');
   });
 
@@ -454,7 +454,7 @@ describe('variant detection', () => {
     const h = harness({ docs: [LATHE_DOC] });
     h.detect['fanuc-lathe'] = B_TEXT;
     h.machines.setForDoc('d1', null);
-    expect(eff(h, 'd1').params.variants).toEqual({ gcodeSystem: 'B' });
+    expect(eff(h, 'd1').params.variants).toMatchObject({ gcodeSystem: 'B' });
     expect(eff(h, 'd1').source.variants.gcodeSystem).toBe('detected');
   });
 });

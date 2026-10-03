@@ -157,10 +157,13 @@ from _nc_machine import (
 from _nc_modal import (
     FeedModeTracker,
     ModalInterpreter,
+    axis_words_of,
     diameter_axes,
+    frame_of,
     incremental_axes,
     machine_type_of,
     prime_tracker,
+    speed_limit_bound_of,
     speed_limit_of,
 )
 
@@ -199,6 +202,11 @@ __all__ = [
     "incremental_axes",
     "diameter_axes",
     "speed_limit_of",
+    # Section 7.2, how one code entry's flags read (M9, P9): the axis words of a block
+    # (`wordsAreData`, `axisWords`), a coordinate frame, and the bound of a speed limit.
+    "axis_words_of",
+    "frame_of",
+    "speed_limit_bound_of",
     # Beyond section 7.10, see the module docstring.
     "mask_comments",
     "block_number_of",

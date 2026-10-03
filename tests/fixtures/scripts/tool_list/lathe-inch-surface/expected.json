@@ -1,0 +1,52 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "offsets",
+      "label": "Offsets"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [
+    {
+      "tool": "T1",
+      "offsets": "01",
+      "description": "OD ROUGH",
+      "line": 6,
+      "calls": 1,
+      "feed": "0.008-0.01 /rev",
+      "speed": "600 ft/min (G96)"
+    }
+  ],
+  "message": "1 tool",
+  "findings": [
+    {
+      "line": 7,
+      "severity": "info",
+      "message": "T1: the S of 1 block is a speed limit, not a spindle speed, so it is not in the range."
+    }
+  ]
+}

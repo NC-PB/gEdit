@@ -1,0 +1,14 @@
+{
+  "note": "M9 (WP9.5b, plan 7.1 mainPrefix, 7.16 #50): a Sinumerik main block ':20' keeps its prefix when it is renumbered (':110', never 'N110', which would make it an ordinary block and lose the place a block search may start from). A jump names a main block by its own prefix ('GOTOB :20') and an ordinary block by N ('GOTOB N20'), so the two 20s here are two blocks and both jumps are rewritten, each to its own block.",
+  "profile": "sinumerik",
+  "options": { "start": 100, "step": 10 },
+  "expect": {
+    "summary": "ncNumbering.renumber.summarySkipped",
+    "skipped": [
+      { "line": 1, "severity": "info" },
+      { "line": 2, "severity": "info" }
+    ],
+    "warnings": ["ncNumbering.renumber.referencesRewritten"],
+    "preflight": null
+  }
+}

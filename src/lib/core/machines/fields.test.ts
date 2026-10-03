@@ -315,7 +315,7 @@ describe('machineFromValues', () => {
     });
     expect(built.params.units).toBe('inch');
     expect(built.params.diameter).toBe('off');
-    expect(built.params.variants).toEqual({ gcodeSystem: 'B' });
+    expect(built.params.variants).toMatchObject({ gcodeSystem: 'B' });
   });
 
   it('leaves out a power-on group left at the dialect default, and drops one taken back', () => {
@@ -340,7 +340,7 @@ describe('machineFromValues', () => {
   it('does not alias the record it was given', () => {
     const current = machine({ params: { variants: { gcodeSystem: 'A' } } });
     const built = machineFromValues(decl, { ...base, [variantFieldId('gcodeSystem')]: 'B' }, current);
-    expect(built.params.variants).toEqual({ gcodeSystem: 'B' });
+    expect(built.params.variants).toMatchObject({ gcodeSystem: 'B' });
     expect(current.params.variants).toEqual({ gcodeSystem: 'A' });
   });
 });

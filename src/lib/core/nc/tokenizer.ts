@@ -50,6 +50,24 @@
 //                                  `<SHAFT_T12>`, at the head of a program and behind
 //                                  `M98`/`G65`): one `programMarker`, wherever it stands
 //
+// M9 (P9, §7.1 "The M9 syntax pins") adds four more, opt-in like the rest:
+//
+//   syntax.blockNumber.mainPrefix  a second block-number prefix that marks a main block
+//                                  (Sinumerik `:123`): a `blockNumber` with that address.
+//                                  It is the same shape of number as `N123`, so the
+//                                  punched-tape `:1234` program marker yields to it
+//   syntax.assignmentIndex         an assignment address may carry one bracket index in
+//                                  front of its `=`: `LIMS[2]=1800` is one `word` with
+//                                  `address` `LIMS`, `index` `2` and `valueText` `1800`
+//   syntax.exponentMarker          the letters of an exponent inside a number (Sinumerik
+//                                  `EX`): `1.5EX3` is the one value of its word
+//   syntax.extendedAddresses       read by the grammar and the hover only; no token changes
+//
+// and two rules that need no field. Several skip levels on one block (`/1 /3`) are one
+// `skip` token each, on a profile whose skip mark takes a level. The data rules (the Fanuc
+// function and print names, the Klartext PLANE words, the short Sinumerik header) are
+// `syntax.keywords` and `syntax.header` and live in the profiles.
+//
 // Token shapes that the contract in `types.ts` leaves open, decided here:
 //
 //   - A value without an address (`GOTO 100`'s target, `LBL 1`'s number, `BLK FORM 0.1`'s
@@ -98,6 +116,16 @@
 //     apart with spaces. Such a name also ends an operand, like a variable.
 //   - A block-skip level is one digit, `0` included: Sinumerik writes `/0` for the level
 //     that `/` means (syntax-sinumerik §3.1), and the block number behind it stays one.
+//   - An indexed assignment (`syntax.assignmentIndex`) asks `syntax.assignment` about the
+//     identifier followed by an `=`, the one place that pattern is asked about anywhere,
+//     so a pattern that ends in the `=` lookahead answers for `LIMS[2]=` as it does for
+//     `LIMS=`. The index is the bracket text with the blanks around it taken off, without
+//     the brackets, and it is not part of `address`: `address` stays a name the code
+//     database knows (`S`), the index says which spindle.
+//   - An exponent (`syntax.exponentMarker`) is part of the number only with at least one
+//     digit behind the marker and its optional sign (`1.5EX3`, `2EX-4`); a lone `EX` is
+//     whatever it was before. The value is `null`: nothing computes with an exponent yet,
+//     so no script can scale one wrongly.
 //
 // Two program markers are not in any profile field and are read from the punched-tape
 // convention instead: `%` as the first character of a line, unless the profile uses `%`
@@ -132,6 +160,9 @@ const BRACKET_CLOSE = 0x5d;
 const UNDERSCORE = 0x5f;
 const NO_CHAR = -1;
 
+/** The longest identifier an indexed assignment (`LIMS[2]=`) may have. */
+const MAX_INDEXED_NAME = 64;
+
 /** Characters that may stand between two tokens. */
 function isSpace(code: number): boolean {
   return code === SPACE || code === TAB || code === 0x0b || code === 0x0c || code === 0xa0;
@@ -149,8 +180,12 @@ function toUpper(code: number): number {
   return code >= 0x61 && code <= 0x7a ? code - 32 : code;
 }
 
-/** Operators, minus whatever the profile uses to delimit a comment. */
-const OPERATOR_CHARS = '=+-*/^%:<>|&,()!';
+/**
+ * Operators, minus whatever the profile uses to delimit a comment. `;` is the end-of-block
+ * character of the ISO tape format (syntax-fanuc §2.2), which a post may write at the end of
+ * every block; where `;` starts a comment (Klartext, Sinumerik) it is not an operator.
+ */
+const OPERATOR_CHARS = '=+-*/^%:<>|&,()!;';
 
 interface CommentMarker {
   start: string;
@@ -175,6 +210,8 @@ interface LexSpec {
   strings: boolean;
   blockNumberMode: 'prefix' | 'leading-integer';
   blockNumberPrefixes: string[];
+  /** The prefixes a block number may start with: the above, then `syntax.blockNumber.mainPrefix`. */
+  blockNumberStarts: string[];
   skip: { codes: number[]; before: boolean; after: boolean; levels: boolean } | null;
   keywords: Map<number, KeywordEntry[]>;
   /** `syntax.variables`, sticky, so it can be tried at a position without slicing. */
@@ -206,6 +243,10 @@ interface LexSpec {
   assignment: RegExp | null;
   /** P8 `syntax.calls`: an identifier in front of `(` is one token (`argumentListAt`). */
   calls: boolean;
+  /** P9 `syntax.assignmentIndex`: `LIMS[2]=1800` is one assignment word with an `index`. */
+  assignmentIndex: boolean;
+  /** P9 `syntax.exponentMarker`, upper case, or `''` when the profile has none. */
+  exponent: string;
   /** M8 integration `syntax.names`, sticky: a name the program gives itself is one token. */
   names: RegExp | null;
   /** Phase 2 `syntax.programNames`, sticky: a program name (`<SHAFT_T12>`) is one token. */
@@ -275,6 +316,8 @@ function buildSpec(cp: CompiledProfile): LexSpec {
   const prefixes = [prefix, ...(syntax.blockNumber?.altPrefixes ?? [])].filter(
     (value): value is string => typeof value === 'string' && value !== '',
   );
+  const mainPrefix = syntax.blockNumber?.mainPrefix;
+  const mainStart = typeof mainPrefix === 'string' && mainPrefix !== '' && !prefixes.includes(mainPrefix) ? mainPrefix : null;
 
   // Compiled here rather than in `compile.ts`, which this field has not reached yet; the
   // spec is built once per compiled profile, so it is still compiled once.
@@ -295,6 +338,7 @@ function buildSpec(cp: CompiledProfile): LexSpec {
     strings: syntax.strings === true,
     blockNumberMode: syntax.blockNumber?.mode === 'leading-integer' ? 'leading-integer' : 'prefix',
     blockNumberPrefixes: prefixes,
+    blockNumberStarts: mainStart === null ? prefixes : [...prefixes, mainStart],
     skip,
     keywords,
     variables: cp.re.variables ? new RegExp(cp.re.variables.source, `${cp.flags}y`) : null,
@@ -307,7 +351,9 @@ function buildSpec(cp: CompiledProfile): LexSpec {
     decimalPointAlt: typeof syntax.decimalSeparatorAlt === 'string' && syntax.decimalSeparatorAlt.length === 1 ? syntax.decimalSeparatorAlt.charCodeAt(0) : NO_CHAR,
     operators,
     tapeMarker: !commentLeads.has(PERCENT) && !skipCodes.has(PERCENT),
-    colonProgram: syntax.blockNumber?.mode !== 'leading-integer' && !commentLeads.has(COLON),
+    // A main block number with the prefix `:` (Sinumerik) is read before the program marker
+    // is asked, and `:1234` is that block number there, not the punched-tape marker.
+    colonProgram: syntax.blockNumber?.mode !== 'leading-integer' && !commentLeads.has(COLON) && mainStart !== ':',
     sequenceNames: syntax.sequenceNames === true,
     // `d` gives the offsets of the `name` group, so the label token can start where the
     // name starts although the pattern carries the block skip and the block number in
@@ -317,6 +363,8 @@ function buildSpec(cp: CompiledProfile): LexSpec {
     systemVariables: cp.re.systemVariables ? new RegExp(cp.re.systemVariables.source, `${cp.flags}y`) : null,
     assignment: cp.re.assignment ? new RegExp(cp.re.assignment.source, `${cp.flags}y`) : null,
     calls: syntax.calls === true,
+    assignmentIndex: syntax.assignmentIndex === true,
+    exponent: typeof syntax.exponentMarker === 'string' ? (caseSensitive ? syntax.exponentMarker : syntax.exponentMarker.toUpperCase()) : '',
     names: cp.re.names ? new RegExp(cp.re.names.source, `${cp.flags}y`) : null,
     programNames,
     programNameLead,
@@ -428,7 +476,10 @@ function stringEndAt(line: string, p: number, limit: number): number {
   return limit;
 }
 
-/** True for the first character of an identifier: a letter or `_`. */
+/**
+ * True for the first character of an identifier: a letter or `_`. It is also what a value
+ * must not run into if it is to stay a value (`2.5D_MILLING` is a name, not `2.5` and `D_MILLING`).
+ */
 function isIdentifierStart(code: number): boolean {
   return isLetter(code) || code === UNDERSCORE;
 }
@@ -560,7 +611,22 @@ function numberEndAt(line: string, p: number, limit: number, spec: LexSpec): num
       i = j;
     }
   }
-  return digits ? i : p;
+  if (!digits) return p;
+  return spec.exponent === '' ? i : exponentEndAt(line, i, limit, spec);
+}
+
+/**
+ * Where a number that ends at `i` really ends once its exponent is read (`syntax.exponentMarker`):
+ * the marker, an optional sign and at least one digit. Anything less leaves the number as it is.
+ */
+function exponentEndAt(line: string, i: number, limit: number, spec: LexSpec): number {
+  if (!matchLiteral(line, i, spec.exponent, spec.caseSensitive) || i + spec.exponent.length > limit) return i;
+  let j = i + spec.exponent.length;
+  const sign = j < limit ? line.charCodeAt(j) : NO_CHAR;
+  if (sign === PLUS || sign === MINUS) j++;
+  const digitsFrom = j;
+  while (j < limit && isDigit(line.charCodeAt(j))) j++;
+  return j > digitsFrom ? j : i;
 }
 
 interface ValueRead {
@@ -680,7 +746,7 @@ function scanBlockNumber(line: string, p: number, limit: number, spec: LexSpec):
     return { start: p, end: i, digitsStart: p, prefix: '' };
   }
 
-  for (const prefix of spec.blockNumberPrefixes) {
+  for (const prefix of spec.blockNumberStarts) {
     if (!matchLiteral(line, p, prefix, spec.caseSensitive)) continue;
     let i = p + prefix.length;
     while (i < limit && isSpace(line.charCodeAt(i))) i++;
@@ -753,6 +819,23 @@ function scanSkip(line: string, p: number, limit: number, spec: LexSpec): number
   return end;
 }
 
+/**
+ * Pushes the block-skip marks at `p` and the blanks behind each, and returns the position
+ * behind the last one. One mark is the usual case; a profile whose skip mark takes a level
+ * may stack several (`/1 /3 N10 G1`, a block skipped on either of two levels), and each is a
+ * `skip` token of its own. Without levels a second `/` is no mark, only what it was before.
+ */
+function pushSkips(tokens: NcToken[], line: string, p: number, limit: number, spec: LexSpec): number {
+  let at = p;
+  for (;;) {
+    const end = scanSkip(line, at, limit, spec);
+    if (end === at) return at;
+    push(tokens, 'skip', line, at, end);
+    at = pushSpace(tokens, line, end, limit);
+    if (spec.skip?.levels !== true) return at;
+  }
+}
+
 /** The keyword that starts at `p`, with the position behind it. */
 function matchKeyword(line: string, p: number, limit: number, spec: LexSpec): { end: number; entry: KeywordEntry } | null {
   const group = spec.keywords.get(toUpper(line.charCodeAt(p)));
@@ -815,6 +898,45 @@ function matchProgramMarker(line: string, p: number, limit: number, spec: LexSpe
     }
   }
   return p;
+}
+
+/**
+ * An indexed assignment at `p` (`LIMS[2]=1800`, `S[SPI]=300`): the identifier `[p, nameEnd)`,
+ * a bracket expression touching it, and an `=` (not `==`) behind that. `address` is the
+ * identifier as `syntax.assignment` accepts it, `index` the text between the brackets with
+ * the blanks around it taken off, `equals` the position of the `=`. Null when the line has
+ * no such shape, or the pattern does not take the identifier.
+ *
+ * The pattern is asked about the identifier with its `=` appended, which is the question
+ * it is written to answer (`(?=\s*=(?!=))`) — the real `=` stands behind the bracket here.
+ */
+function indexedAssignmentAt(
+  line: string,
+  p: number,
+  nameEnd: number,
+  limit: number,
+  spec: LexSpec,
+): { address: string; index: string; equals: number } | null {
+  const assignment = spec.assignment;
+  if (!assignment || nameEnd >= limit || line.charCodeAt(nameEnd) !== BRACKET_OPEN) return null;
+  // The scanner stops at every letter of a long packed run, and each stop would slice the
+  // rest of the run and read the bracket behind it: bounded, so a line of 32k characters
+  // costs what its length says. No name a program writes comes near 64 characters.
+  if (nameEnd - p > MAX_INDEXED_NAME) return null;
+  const close = expressionEndAt(line, nameEnd, limit);
+  if (close <= nameEnd + 1 || line.charCodeAt(close - 1) !== BRACKET_CLOSE) return null;
+  const equals = skipSpace(line, close, limit);
+  if (equals >= limit || line.charCodeAt(equals) !== EQUALS || line.charCodeAt(equals + 1) === EQUALS) return null;
+  let from = nameEnd + 1;
+  let to = close - 1;
+  while (from < to && isSpace(line.charCodeAt(from))) from++;
+  while (to > from && isSpace(line.charCodeAt(to - 1))) to--;
+  if (from === to) return null; // `S[]=5` indexes nothing
+  const name = line.slice(p, nameEnd);
+  assignment.lastIndex = 0;
+  const match = assignment.exec(`${name}=`);
+  if (!match || match.index !== 0 || match[0].length !== name.length) return null;
+  return { address: spec.caseSensitive ? name : name.toUpperCase(), index: line.slice(from, to), equals };
 }
 
 /** True when a `+` or `-` behind these tokens joins two operands instead of signing one. */
@@ -960,13 +1082,7 @@ export function tokenizeLine(line: string, cp: CompiledProfile, prev?: LineState
   }
 
   if (atHead) {
-    if (spec.skip?.before === true) {
-      const end = scanSkip(line, p, limit, spec);
-      if (end > p) {
-        push(tokens, 'skip', line, p, end);
-        p = pushSpace(tokens, line, end, limit);
-      }
-    }
+    if (spec.skip?.before === true) p = pushSkips(tokens, line, p, limit, spec);
     // A label may start with the block-number prefix (`NEXT_PART:`), so it is read before
     // the block number — and once more behind one, because a block may carry both.
     const label = labelSpanOf(line, spec);
@@ -989,13 +1105,7 @@ export function tokenizeLine(line: string, cp: CompiledProfile, prev?: LineState
         p = pushSpace(tokens, line, block.end, limit);
       }
       if (named || block) {
-        if (spec.skip?.after === true) {
-          const end = scanSkip(line, p, limit, spec);
-          if (end > p) {
-            push(tokens, 'skip', line, p, end);
-            p = pushSpace(tokens, line, end, limit);
-          }
-        }
+        if (spec.skip?.after === true) p = pushSkips(tokens, line, p, limit, spec);
         if (label && label.start === p) p = pushLabel(label.start, label.end, label.name);
       }
     }
@@ -1153,6 +1263,20 @@ export function tokenizeLine(line: string, cp: CompiledProfile, prev?: LineState
     if (spec.assignment && isIdentifierStart(code)) {
       const nameEnd = identifierFrom(p);
       const q = afterRun;
+      const indexed = spec.assignmentIndex ? indexedAssignmentAt(line, p, nameEnd, limit, spec) : null;
+      if (indexed) {
+        const r = skipSpace(line, indexed.equals + 1, limit);
+        const valueEnd = assignedValueEndAt(line, r, limit, spec);
+        const token = push(tokens, 'word', line, p, valueEnd > r ? valueEnd : indexed.equals + 1);
+        token.address = indexed.address;
+        token.index = indexed.index;
+        if (valueEnd > r) {
+          token.valueText = line.slice(r, valueEnd);
+          token.value = parseNumber(token.valueText);
+        }
+        p = token.end;
+        continue;
+      }
       if (q < limit && line.charCodeAt(q) === EQUALS && line.charCodeAt(q + 1) !== EQUALS) {
         spec.assignment.lastIndex = p;
         const match = spec.assignment.exec(line);
@@ -1277,6 +1401,14 @@ export function tokenizeLine(line: string, cp: CompiledProfile, prev?: LineState
     ) {
       const stop = spec.packed ? limit : chunkFrom(p);
       const value = readValue(line, p, stop, spec, false);
+      // Where words are separated, a number that runs straight into letters is no value but
+      // a name that starts with digits (`BEGIN PGM 2.5D_MILLING MM`): one token, as a name
+      // that starts with a letter already is.
+      if (value && !spec.packed && value.end < stop && isIdentifierStart(line.charCodeAt(value.end))) {
+        pushUnknown(tokens, line, p, stop);
+        p = stop;
+        continue;
+      }
       if (value) {
         const token = push(tokens, 'word', line, p, value.end);
         token.valueText = value.text;
@@ -1317,10 +1449,12 @@ export function blockNumberOf(line: string, cp: CompiledProfile): BlockNumberInf
   let p = 0;
   while (p < limit && isSpace(line.charCodeAt(p))) p++;
   if (spec.skip?.before === true) {
-    const end = scanSkip(line, p, limit, spec);
-    if (end > p) {
+    for (;;) {
+      const end = scanSkip(line, p, limit, spec);
+      if (end === p) break;
       p = end;
       while (p < limit && isSpace(line.charCodeAt(p))) p++;
+      if (spec.skip.levels !== true) break;
     }
   }
 

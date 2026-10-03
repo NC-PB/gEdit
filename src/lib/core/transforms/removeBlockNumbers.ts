@@ -50,6 +50,8 @@ import { tokenizeLine } from '$lib/core/nc/tokenizer';
 import { t } from '$lib/i18n';
 import { continuationRisk, stateBefore } from './fragment';
 import { referenceAddresses, referencePreflight, referencesOn, scanProgram } from './references';
+import { mainKeyOf, mainPrefixOf, withMainBlocks } from './renumber';
+import type { BlockKey } from './references';
 import type { Located, Msg } from '$lib/app/types';
 import type { FieldSpec } from '$lib/core/forms/types';
 import type { LineState } from '$lib/core/nc/types';
@@ -147,7 +149,7 @@ function preflightOf(lines: string[], ctx: TransformContext): Msg | null {
   if (!hasBlockNumber(lines, ctx)) return null;
   if (continuationRisk(ctx, stateBefore(ctx))) return { key: 'ncNumbering.removeBlockNumbers.fragmentUnknown' };
 
-  const scan = scanProgram(lines, ctx);
+  const scan = withMainBlocks(scanProgram(lines, ctx), ctx.cp);
   const keep = keepReferencedOf(ctx.cp, ctx.options);
   const computed = computedOf(scan);
   return referencePreflight(
@@ -174,8 +176,16 @@ function runRemove(lines: string[], ctx: TransformContext): TransformResult {
   // there is one: a `GOTO 100` above the selection needs the `N100` inside it just as
   // much as one below it does.
   const referenced = new Set<number>();
+  // M9 (WP9.5b): a main block (`:20`) is named by its own prefix (`GOTOB :20`), which the
+  // reference scan only sees through `withMainBlocks`; such a jump keeps that block's number.
+  const main = mainPrefixOf(cp);
+  const referencedMain = new Set<BlockKey>();
   if (keep) {
-    for (const { word } of scanProgram(lines, ctx).found) if (word.target !== null) referenced.add(word.target);
+    for (const { word } of withMainBlocks(scanProgram(lines, ctx), cp).found) {
+      if (word.target === null) continue;
+      if (main !== null && word.address === main && word.key !== null) referencedMain.add(word.key);
+      else referenced.add(word.target);
+    }
   }
 
   const out = lines.slice();
@@ -218,7 +228,13 @@ function runRemove(lines: string[], ctx: TransformContext): TransformResult {
     const number = tokens.find((token) => token.kind === 'blockNumber');
     if (number === undefined) continue;
 
-    if (keep && number.valueText !== undefined && referenced.has(Number(number.valueText))) {
+    const isMain = main !== null && number.address === main;
+    const named =
+      number.valueText !== undefined &&
+      (isMain
+        ? referencedMain.has(mainKeyOf(main, number.valueText, cp.profile.syntax?.sequenceNames === true))
+        : referenced.has(Number(number.valueText)));
+    if (keep && named) {
       kept++;
       note(i, keptRow, 'info');
       continue;

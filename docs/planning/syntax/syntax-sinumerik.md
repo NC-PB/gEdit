@@ -130,6 +130,8 @@ CAM output usually does not contain them.
 
 ### 3.1 Block anatomy
 
+Since M9 the tokenizers, the grammar, Renumber and the jumps agree with this section: a main block `:123` is a block number token (the colon stays when renumbered, and `GOTOF :123` names it), an indexed address (`S[2]=`, `LIMS[2]=`, §3.2) is one word with an `index`, and `1.5EX3` is one number (§3.3).
+
 ```
 [/n] [N123 | :123] [LABEL:] word word … [; comment]
 ```
@@ -480,7 +482,7 @@ A subprogram call, cycles included, has to stand in a block of its own [P §3.2.
 |---|---|---|
 | `L<n>` | Call `L<n>.SPF`. Up to 7 digits, and leading zeros are part of the name: `L123`, `L0123` and `L00123` are three programs. | [M] call form; [P §3.2.3.1, p.534] |
 | `L<n>(args)` | Call with parameters | [M] |
-| `<NAME>` alone in a block | Call `<NAME>` by name; the control looks for `_MPF` first, then `_SPF`, so a subprogram named like its main program calls the main program again. A main program called this way returns at its `M2`/`M30`. | [M]; [P §3.2.3.1, p.534] |
+| `<NAME>` alone in a block | (gEdit: still an unknown token today; a bare `CYCLE800` or `HOME` is not read as a call, §10.2 of the Phase 2 plan, M9-3.) Call `<NAME>` by name; the control looks for `_MPF` first, then `_SPF`, so a subprogram named like its main program calls the main program again. A main program called this way returns at its `M2`/`M30`. | [M]; [P §3.2.3.1, p.534] |
 | `<NAME> P<k>` / `L<n> P<k>` | Repeat the call k times, 1–9999; parameters are passed on the first run only | [P §3.2.3.3, p.538–539] |
 | `<NAME>(args)` | Parameterized call. Needs `PROC` in the callee and, for a program in the workpiece or global folder, `EXTERN` in the caller. | [M]; [P §3.2.3.2, p.536–538] |
 | `CALL <name>` | Indirect call, the name in a `STRING` constant (`CALL "/_N_WKS_DIR/…/_N_TEIL1_SPF"`) or variable; no parameters | [P §3.2.3.5, p.541–542] |

@@ -81,6 +81,7 @@ export function compileProfile(p: Profile): CompiledProfile {
         re: compilePattern(rule?.pattern, `detect.content[${i}].pattern`, flags),
         weight: rule?.weight ?? 0,
       })),
+      detectVetoes: (detect.vetoes ?? []).map((source, i) => compilePattern(source, `detect.vetoes[${i}]`, flags)),
       sectionHeading: compileOptional(syntax.sectionHeading, 'syntax.sectionHeading', flags),
       continuation: compileOptional(syntax.continuation, 'syntax.continuation', flags),
       continuationStart: compileOptional(syntax.continuationStart, 'syntax.continuationStart', flags),

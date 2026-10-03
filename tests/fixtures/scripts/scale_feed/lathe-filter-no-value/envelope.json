@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 1 of 3 feed rates to 150 %; 1 left by the value filter, 1 left because the value filter cannot be compared with it. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 9,
+      "severity": "warning",
+      "message": "F25 is not scaled: what it is worth depends on the machine (25 (As written: X50 and X50. are both 50 mm; G74/G75 P and Q, G76 Q and G83/G87 Q are in microns (Q6000 is 6 mm)), 0.25 (Increments of 0.001 mm (IS-B): X50 is 0.050 mm, X50. is 50 mm, C90000 is 90°; a point-less feed per minute in 1 mm/min (F200 is 200), per revolution in 0.01 mm/rev (F25 is 0.25 mm/rev)) or 0.25 (Increments of 0.0001 mm (IS-C): X50 is 0.0050 mm, X50. is 50 mm; a point-less feed per minute in 1 mm/min (F200 is 200), per revolution in 0.01 mm/rev (F25 is 0.25 mm/rev))), and none is chosen, so the \"only feeds above\" value (0.1) cannot be compared with it. It is left as it is."
+    },
+    {
+      "line": 11,
+      "severity": "info",
+      "message": "F0.05 is at or below the \"only feeds above\" value (0.1), so it is left as it is."
+    }
+  ]
+}

@@ -155,6 +155,7 @@ describe('resolveProfiles', () => {
       ['heidenhain-klartext'],
       ['okuma-osp'],
       ['sinumerik'],
+      ['sinumerik-mill', 'sinumerik'],
     ]);
   });
 

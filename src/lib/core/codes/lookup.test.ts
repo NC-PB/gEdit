@@ -74,7 +74,7 @@ describe('lookupCode', () => {
   });
 
   it('answers null for a code the database does not have', () => {
-    expect(lookupCode(fanuc, 'G12.1')).toBeNull();
+    expect(lookupCode(fanuc, 'G12.2')).toBeNull();
     expect(lookupCode(fanuc, '')).toBeNull();
     expect(lookupCode(heidenhain, 'CYCL DEF 999')).toBeNull();
   });
@@ -155,6 +155,20 @@ describe('lookupWord', () => {
     expect(lookupWord(sinumerik, assigned('M2', '5'))?.entry?.code).toBe('M5');
     expect(lookupWord(sinumerik, assigned('S3', '2400'))).toMatchObject({ entry: null, address: { letter: 'S' } });
     expect(lookupWord(sinumerik, assigned('CR', '15'))).toMatchObject({ entry: null, address: { letter: 'CR' } });
+    // M9 review F1: an indexed assignment (`M[2]=3`) is one too, though the bracket stands
+    // between its address and the `=`.
+    const indexed = (address: string, index: string, valueText: string): NcToken => ({
+      kind: 'word',
+      start: 0,
+      end: 0,
+      text: `${address}[${index}]=${valueText}`,
+      address,
+      index,
+      valueText,
+    });
+    expect(isAssignmentWord(indexed('M', '2', '3'))).toBe(true);
+    expect(isAssignmentWord(indexed('FA', 'X', '100'))).toBe(true);
+    expect(lookupWord(sinumerik, indexed('M', '2', '3'))?.entry?.code).toBe('M3');
     // Without the `=` nothing changes: `M30` is still the code M30.
     expect(lookupWord(sinumerik, word('M', '30'))?.entry?.code).toBe('M30');
   });
@@ -175,7 +189,9 @@ describe('completionsFor', () => {
 
   it('sorts by number, not by text, and keeps a decimal code next to its base', () => {
     const hits = completionsFor(fanuc, 'G5', false).map((e) => e.code);
-    expect(hits).toEqual(['G50', 'G53', 'G54', 'G54.1', 'G55', 'G56', 'G57', 'G58', 'G59']);
+    expect(hits).toEqual([
+      'G5', 'G5.1', 'G50', 'G50.1', 'G51', 'G51.1', 'G52', 'G53', 'G53.1', 'G54', 'G54.1', 'G55', 'G56', 'G57', 'G58', 'G59',
+    ]);
     expect(completionsFor(fanuc, 'M', false).map((e) => e.code).slice(0, 4)).toEqual([
       'M0', 'M1', 'M2', 'M3',
     ]);

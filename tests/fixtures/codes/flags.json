@@ -1,0 +1,119 @@
+{
+  "$format": 1,
+  "note": [
+    "Every code database entry that carries a flag of the M9 contract (plan section 7.2, 7.16 #47 and #48): wordsAreData, axisWords, frame, or sets.speedLimit with its bound. One list per database file, in file order, each row the members the file declares and what the three readers must answer for them. Written by WP9.2.",
+    "src/lib/data/codes/flags.test.ts holds the shipped files to this list (a flag cannot be dropped, added or changed without this file changing, and so a reviewer reading it) and holds the TypeScript readers to the answers; tests/python/test_code_flags.py holds gedit_nc.axis_words_of, frame_of and speed_limit_bound_of to the same answers.",
+    "axisWords: 'data' = the axis words of the block are values, not positions (coordinate set, shift, centre, tilt angle, dwell time); 'machine' = positions outside the program's frame (machine coordinates, reference points). frame: 'open' / 'close' = the code opens or closes a coordinate frame that is not the program's own; a code whose values decide is 'open'. speedLimitBound: 'upper' is the clamp every speed limit was before M9; 'lower' is a minimum.",
+    "droppedByOverride lists the entries a child database replaces with an entry that carries fewer flags than the entry it replaced, each with the reason. An override that drops a flag without a row here fails the test."
+  ],
+  "databases": {
+    "fanuc": [
+      { "code": "G4", "declared": {"axisWords": "data"}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G5.1", "declared": {"axisWords": "data"}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G7.1", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null} },
+      { "code": "G10", "declared": {"wordsAreData": true}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G12.1", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null} },
+      { "code": "G13.1", "declared": {"frame": "close"}, "reads": {"axisWords": null, "frame": "close", "speedLimitBound": null} },
+      { "code": "G28", "declared": {"axisWords": "machine"}, "reads": {"axisWords": "machine", "frame": null, "speedLimitBound": null} },
+      { "code": "G30", "declared": {"axisWords": "machine"}, "reads": {"axisWords": "machine", "frame": null, "speedLimitBound": null} },
+      { "code": "G50", "declared": {"axisWords": "data", "frame": "close", "sets": {"speedLimit": true} }, "reads": {"axisWords": "data", "frame": "close", "speedLimitBound": "upper"} },
+      { "code": "G50.1", "declared": {"axisWords": "data", "frame": "close"}, "reads": {"axisWords": "data", "frame": "close", "speedLimitBound": null} },
+      { "code": "G51", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null} },
+      { "code": "G51.1", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null} },
+      { "code": "G52", "declared": {"axisWords": "data"}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G53", "declared": {"axisWords": "machine"}, "reads": {"axisWords": "machine", "frame": null, "speedLimitBound": null} },
+      { "code": "G65", "declared": {"wordsAreData": true}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G66", "declared": {"wordsAreData": true}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G66.1", "declared": {"wordsAreData": true}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G68", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null} },
+      { "code": "G68.2", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null} },
+      { "code": "G68.3", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null} },
+      { "code": "G68.4", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null} },
+      { "code": "G69", "declared": {"frame": "close"}, "reads": {"axisWords": null, "frame": "close", "speedLimitBound": null} },
+      { "code": "G69.1", "declared": {"frame": "close"}, "reads": {"axisWords": null, "frame": "close", "speedLimitBound": null} },
+      { "code": "G92", "declared": {"axisWords": "data", "sets": {"speedLimit": true} }, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": "upper"} }
+    ],
+    "fanuc-lathe": [
+      { "code": "G4", "declared": {"axisWords": "data"}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G50", "declared": {"axisWords": "data", "sets": {"speedLimit": true} }, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": "upper"} },
+      { "code": "G68", "declared": {"frame": "open"}, "reads": {"axisWords": null, "frame": "open", "speedLimitBound": null} },
+      { "code": "G69", "declared": {"frame": "close"}, "reads": {"axisWords": null, "frame": "close", "speedLimitBound": null} },
+      { "code": "G71", "declared": {"axisWords": "data"}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G72", "declared": {"axisWords": "data"}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G73", "declared": {"axisWords": "data"}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G92", "declared": {"sets": {"speedLimit": true} }, "reads": {"axisWords": null, "frame": null, "speedLimitBound": "upper"} }
+    ],
+    "fanuc-lathe-b": [
+      { "code": "G50", "declared": {"axisWords": "data", "frame": "close", "sets": {"speedLimit": true} }, "reads": {"axisWords": "data", "frame": "close", "speedLimitBound": "upper"} },
+      { "code": "G92", "declared": {"axisWords": "data", "sets": {"speedLimit": true} }, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": "upper"} }
+    ],
+    "heidenhain": [
+      { "code": "BLK FORM", "declared": {"axisWords": "data"}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "CC", "declared": {"axisWords": "data"}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "CYCL DEF 7", "declared": {"axisWords": "data"}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "CYCL DEF 8", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null} },
+      { "code": "CYCL DEF 10", "declared": {"frame": "open"}, "reads": {"axisWords": null, "frame": "open", "speedLimitBound": null} },
+      { "code": "CYCL DEF 11", "declared": {"frame": "open"}, "reads": {"axisWords": null, "frame": "open", "speedLimitBound": null} },
+      { "code": "CYCL DEF 19", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null} },
+      { "code": "CYCL DEF 26", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null} },
+      { "code": "CYCL DEF 247", "declared": {"frame": "close"}, "reads": {"axisWords": null, "frame": "close", "speedLimitBound": null} },
+      { "code": "PLANE SPATIAL", "declared": {"frame": "open"}, "reads": {"axisWords": null, "frame": "open", "speedLimitBound": null} },
+      { "code": "PLANE PROJECTED", "declared": {"frame": "open"}, "reads": {"axisWords": null, "frame": "open", "speedLimitBound": null} },
+      { "code": "PLANE EULER", "declared": {"frame": "open"}, "reads": {"axisWords": null, "frame": "open", "speedLimitBound": null} },
+      { "code": "PLANE VECTOR", "declared": {"frame": "open"}, "reads": {"axisWords": null, "frame": "open", "speedLimitBound": null} },
+      { "code": "PLANE POINTS", "declared": {"frame": "open"}, "reads": {"axisWords": null, "frame": "open", "speedLimitBound": null} },
+      { "code": "PLANE RELATIV", "declared": {"frame": "open"}, "reads": {"axisWords": null, "frame": "open", "speedLimitBound": null} },
+      { "code": "PLANE AXIAL", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null} },
+      { "code": "PLANE RESET", "declared": {"frame": "close"}, "reads": {"axisWords": null, "frame": "close", "speedLimitBound": null} },
+      { "code": "M91", "declared": {"axisWords": "machine"}, "reads": {"axisWords": "machine", "frame": null, "speedLimitBound": null} },
+      { "code": "M92", "declared": {"axisWords": "machine"}, "reads": {"axisWords": "machine", "frame": null, "speedLimitBound": null} },
+      { "code": "TRANS DATUM", "declared": {"axisWords": "data"}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} }
+    ],
+    "okuma": [
+      { "code": "G50", "declared": {"axisWords": "data", "sets": {"speedLimit": true} }, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": "upper"} },
+      { "code": "G136", "declared": {"frame": "close"}, "reads": {"axisWords": null, "frame": "close", "speedLimitBound": null} },
+      { "code": "G137", "declared": {"frame": "open"}, "reads": {"axisWords": null, "frame": "open", "speedLimitBound": null} },
+      { "code": "G138", "declared": {"frame": "open"}, "reads": {"axisWords": null, "frame": "open", "speedLimitBound": null} },
+      { "code": "G161", "declared": {"wordsAreData": true}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G162", "declared": {"wordsAreData": true}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G163", "declared": {"wordsAreData": true}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G164", "declared": {"wordsAreData": true}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G165", "declared": {"wordsAreData": true}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G166", "declared": {"wordsAreData": true}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G167", "declared": {"wordsAreData": true}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G168", "declared": {"wordsAreData": true}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G169", "declared": {"wordsAreData": true}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "G170", "declared": {"wordsAreData": true}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} }
+    ],
+    "sinumerik": [
+      { "code": "G53", "declared": {"axisWords": "machine"}, "reads": {"axisWords": "machine", "frame": null, "speedLimitBound": null} },
+      { "code": "G153", "declared": {"axisWords": "machine"}, "reads": {"axisWords": "machine", "frame": null, "speedLimitBound": null} },
+      { "code": "G74", "declared": {"axisWords": "machine"}, "reads": {"axisWords": "machine", "frame": null, "speedLimitBound": null} },
+      { "code": "G75", "declared": {"axisWords": "machine"}, "reads": {"axisWords": "machine", "frame": null, "speedLimitBound": null} },
+      { "code": "G25", "declared": {"axisWords": "data", "sets": {"speedLimit": true, "speedLimitBound": "lower"}}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": "lower"} },
+      { "code": "G26", "declared": {"axisWords": "data", "sets": {"speedLimit": true}}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": "upper"} },
+      { "code": "CYCLE800", "declared": {"frame": "open"}, "reads": {"axisWords": null, "frame": "open", "speedLimitBound": null} },
+      { "code": "SUPA", "declared": {"axisWords": "machine"}, "reads": {"axisWords": "machine", "frame": null, "speedLimitBound": null} },
+      { "code": "TRANSMIT", "declared": {"frame": "open"}, "reads": {"axisWords": null, "frame": "open", "speedLimitBound": null} },
+      { "code": "TRACYL", "declared": {"frame": "open"}, "reads": {"axisWords": null, "frame": "open", "speedLimitBound": null} },
+      { "code": "TRAFOOF", "declared": {"frame": "close"}, "reads": {"axisWords": null, "frame": "close", "speedLimitBound": null} },
+      { "code": "TRAORI", "declared": {"frame": "open"}, "reads": {"axisWords": null, "frame": "open", "speedLimitBound": null} },
+      { "code": "TRAANG", "declared": {"frame": "open"}, "reads": {"axisWords": null, "frame": "open", "speedLimitBound": null} },
+      { "code": "TRANS", "declared": {"axisWords": "data"}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "ATRANS", "declared": {"axisWords": "data"}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null} },
+      { "code": "ROT", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null} },
+      { "code": "AROT", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null} },
+      { "code": "SCALE", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null} },
+      { "code": "ASCALE", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null} },
+      { "code": "MIRROR", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null} },
+      { "code": "AMIRROR", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null} }
+    ]
+  },
+  "droppedByOverride": {
+    "fanuc-lathe": [
+      {"code": "G50", "why": "By design. The lathe-A G50 sets the coordinate system with X and Z (data) and clamps the spindle speed with S; it does not end a scaling, so it closes no frame."},
+      {"code": "G68", "why": "By design. On the lathe the number is the mirror image for the second turret, which has no centre or angle words; the mill's G68 carries the centre of the rotation."},
+      {"code": "G92", "why": "By design. In G-code system A the number is the threading cycle: X and Z are the end of the pass, positions in the program's frame."}
+    ]
+  }
+}

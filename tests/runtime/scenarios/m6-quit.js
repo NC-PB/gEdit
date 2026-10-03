@@ -148,6 +148,13 @@ scenario('m6-dock-quit-clean-1', { timeout: 300 }, async (h) => {
   const before = await h.alert.visible()
   h.check('no alert is up before the request', before === null, before)
   h.expectExit({ events: ['Exit'], within: 25000 })
+  // `h.expectExit` only *queues* its record, behind the check records made just above, and
+  // each of them is an IPC round trip. `terminate` goes out on its own, so on a slower
+  // machine the app can be gone before the declaration lands, and the run is judged "the
+  // scenario ran to the end" although every check passed (seen on the hosted runner, first
+  // attempt of `m6-dock-quit-clean-1`; the retry passed). The same moment as in
+  // `m2-recent-restart-1` and `m6-dock-quit-dirty` lets the queue empty first.
+  await h.sleep(500)
   await h.window.terminate()
 })
 

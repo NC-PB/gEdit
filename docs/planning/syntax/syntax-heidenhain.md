@@ -158,7 +158,7 @@ On a real control, the words after the cycle number (`BOHREN`) and after `;` in 
 | Labels | `LBL (\d+\|"name"\|QS\d+)`, `CALL LBL … [REP n]` | |
 | Program call | `CALL PGM <path>` | `<path>` is a bare name or `TNC:\dir\file.H`, which may include `.I` (verify: quoting of paths with spaces). |
 | PLANE words | `SPATIAL PROJECTED EULER VECTOR POINTS RELATIV AXIAL RESET`, `SPA SPB SPC`, `MOVE TURN STAY`, `DIST`, `MB`, `SEQ[+-]`, `TABLE ROT`, `COORD ROT` | |
-| TCPM words | `FUNCTION TCPM`, `F TCP`, `F CONT`, `AXIS POS`, `AXIS SPAT`, `PATHCTRL AXIS`, `PATHCTRL VECTOR`, `REFPNT TIP-TIP` (the default), `REFPNT TIP-CENTER`, `REFPNT CENTER-CENTER`, `FUNCTION RESET TCPM` | `CENTER-CENTER` is for CAM output on cutter-centre paths with a tool measured to the tip. The `REFPNT` words are not keywords in the profile yet (`TIP-TIP` is an unknown token). |
+| TCPM words | `FUNCTION TCPM`, `F TCP`, `F CONT`, `AXIS POS`, `AXIS SPAT`, `PATHCTRL AXIS`, `PATHCTRL VECTOR`, `REFPNT TIP-TIP` (the default), `REFPNT TIP-CENTER`, `REFPNT CENTER-CENTER`, `FUNCTION RESET TCPM` | `CENTER-CENTER` is for CAM output on cutter-centre paths with a tool measured to the tip. The `REFPNT` words are keywords in the profile since M9 (`syntax.keywords`), as are the `PLANE` forms and their words. |
 | Numbers | `[+-]?(\d+\.?\d*\|\.\d+)` | Positions are written with an explicit sign by the control (`X+10`). CAM posts do the same. Unsigned is probably accepted (verify). The manual's own examples use the decimal point; a value written with a comma instead (`X241,781`, real CAM output — see the note at the top) is also read now, and kept when the value is written back. |
 | Unknown | — | Use a neutral default token (e.g. `''` or `source`), **not** `invalid`. Leave error marking to the linter. |
 
@@ -233,7 +233,7 @@ Working plane: the tool axis in `TOOL CALL` sets it (Z → XY, Y → ZX, X → Y
 | M6 | Tool change (machine-dependent). **Not** used for tool detection: `TOOL CALL` performs the change | end | – |
 | M8 / M9 | Coolant on / off | start / end | coolant group |
 | M13 / M14 | Spindle CW / CCW **and** coolant on | start | spindle+coolant |
-| M89 | Modal cycle call or a free M function, set by a machine parameter. As a call, it runs the cycle after every following positioning block until `M99` on the last position or the next `CYCL DEF` | – | – |
+| M89 | Modal cycle call or a free M function, set by a machine parameter. As a call, it runs the cycle after every following positioning block until `M99` on the last position or the next `CYCL DEF` | – | – (gEdit reads it as a modal call, `verify`: the block that carries `M89` runs the cycle itself, the manual says to write the first call with it; hover says the database does not describe it yet) |
 | M91 | Coordinates in this block refer to machine zero | start | block only. Tool length is not applied; incremental values refer to the last `M91` position |
 | M92 | Coordinates refer to a machine-builder reference position | start | block only. Tool length is not applied |
 | M94 | Reduce rotary-axis display below 360° | start | block |

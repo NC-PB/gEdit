@@ -95,6 +95,13 @@ describe('required fields', () => {
         (p.detect as { content: unknown[] }).content[2] = { pattern: 'N\\d+' };
       }),
     ).toEqual(['detect.content[2].weight']);
+    // M9 NC review F3: the vetoes are patterns, each named by its index.
+    expect(
+      pathsOf((p) => {
+        (p.detect as Record<string, unknown>).vetoes = ['DIAMON', '(unclosed', 7];
+      }),
+    ).toEqual(['detect.vetoes[1]', 'detect.vetoes[2]']);
+    expect(pathsOf((p) => ((p.detect as Record<string, unknown>).vetoes = 'DIAMON'))).toEqual(['detect.vetoes']);
   });
 });
 
@@ -188,6 +195,34 @@ describe('the turning syntax fields', () => {
     expect(errorsOf((p) => (syntaxOf(p).variables = '(')).map((error) => error.includes(empty))).toEqual([false]);
     expect(pathsOf((p) => (syntaxOf(p).variables = '#\\d+'))).toEqual([]);
     expect(pathsOf((p) => (syntaxOf(p).systemVariables = 'V[A-Z][A-Z0-9]{3}'))).toEqual([]);
+  });
+
+  // M9 review F4: a main-block prefix of `(` read the comment `(20 NOTE)` as block 20
+  // followed by code words, which a scaling script would then change.
+  it('refuse a main-block prefix that already starts a comment, a skip, a string or a mark', () => {
+    const blockNumber = (p: Record<string, unknown>): Record<string, unknown> =>
+      syntaxOf(p).blockNumber as Record<string, unknown>;
+    for (const ch of ['(', ';', '/', '"', "'", '%', '$', '+', '-', '.', ',', '=', '[', '#', '*']) {
+      expect(pathsOf((p) => (blockNumber(p).mainPrefix = ch)), ch).toEqual(['syntax.blockNumber.mainPrefix']);
+    }
+    // The profile's own comment start, whatever it is.
+    expect(
+      pathsOf((p) => {
+        syntaxOf(p).comments = [{ start: '!', end: null }];
+        blockNumber(p).mainPrefix = '!';
+      }),
+    ).toEqual(['syntax.blockNumber.mainPrefix']);
+    expect(pathsOf((p) => (blockNumber(p).mainPrefix = ':'))).toEqual([]);
+    expect(pathsOf((p) => (blockNumber(p).mainPrefix = '!'))).toEqual([]);
+  });
+
+  it('refuse a one-letter exponent marker, which is an address of its own', () => {
+    for (const marker of ['X', 'G', 'N', 'e']) {
+      expect(errorsOf((p) => (syntaxOf(p).exponentMarker = marker)), marker).toEqual([
+        'syntax.exponentMarker: has to be at least two letters: a single letter is an address of its own',
+      ]);
+    }
+    expect(pathsOf((p) => (syntaxOf(p).exponentMarker = 'EX'))).toEqual([]);
   });
 
   // Phase 2 (§7.16): the Fanuc program name, one token like a variable.
@@ -454,8 +489,10 @@ describe('the machine-parameter declaration', () => {
   });
 
   it('wants every variant id and every choice value once', () => {
+    // The lathe declares three variants since M9 (gcodeSystem and the two R6 ones), so a
+    // copy of the first lands at index 3.
     expect(lathePaths((p) => variants(p).push(structuredClone(variants(p)[0])))).toEqual([
-      'machineParams.variants[1].id',
+      'machineParams.variants[3].id',
     ]);
     expect(lathePaths((p) => (choices(p)[1].value = 'A'))).toEqual(['machineParams.variants[0].choices[1].value']);
   });

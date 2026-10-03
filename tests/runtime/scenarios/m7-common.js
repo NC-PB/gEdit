@@ -18,14 +18,15 @@
 //      script through the script backend, and [`osOp`] fills the rest the same way.
 //   3. **`lock`/`unlock` are `chflags(2)`, not `chmod`.** A save over a `chmod 444` file
 //      never reaches the write at all: `fileOps.saveOutcome` reads `stat.readonly` first
-//      and sends it to Save As (AD-23), which is the *right* behaviour and the opposite
-//      of the case `m7-save-fail` has to produce. `UF_IMMUTABLE` leaves the permission
-//      bits alone, so the copy is made, the write is attempted, and `open(2)` refuses it
-//      — a write that fails after the backup exists, which is the branch the milestone's
-//      repair instruction lives in. **Anything that locks a file must unlock it again**
-//      in a `finally`: `run.sh` wipes the run folder before the next run of the same
-//      scenario, and an immutable file left behind would break that wipe rather than
-//      that run.
+//      and sends it to Save As (AD-23). `UF_IMMUTABLE` leaves the permission bits alone,
+//      but `files_stat` asks the operating system (`faccessat`), so it counts as locked
+//      too, and since M9 (WP9.5b) a Save As **onto** such a file is refused up front as
+//      well. A write that fails after the backup exists, which is the branch the
+//      milestone's repair instruction lives in, needs a file this user **may** write on a
+//      volume with no room: `withSmallVolume`. **Anything that locks a file or mounts a
+//      volume must undo it** in a `finally`: `run.sh` wipes the run folder before the
+//      next run of the same scenario, and an immutable file or a mounted image left
+//      behind would break that wipe rather than that run.
 //   4. **A backup entry is compared as bytes.** `h.disk.hex` on the file *before* the
 //      save and on the copy afterwards is the whole claim of AD-21 — "the previous
 //      version, byte for byte" — and it catches a re-encoded or re-terminated copy that
@@ -85,7 +86,8 @@ export function activeDoc(ctx) {
  * profile for a later scenario to discover.
  *
  * @param {Harness} h
- * @param {'chmod' | 'lock' | 'unlock' | 'mkdir' | 'rmtree' | 'stat'} op `stat` changes nothing
+ * @param {'chmod' | 'lock' | 'unlock' | 'mkdir' | 'rmtree' | 'stat' | 'volume' | 'fill' | 'eject'} op `stat` changes
+ *   nothing; `volume` mounts a 1 MB disk image at `path`, `fill` leaves it without a free byte, `eject` removes it
  * @param {string} path
  * @param {{ mode?: string }} [o] `mode` is octal, e.g. `'444'`
  * @returns {Promise<{ exists: boolean, mode: string | null, flags: number | null, isDir: boolean }>}
@@ -98,7 +100,7 @@ export async function osOp(h, op, path, o = {}) {
   return result.data
 }
 
-const OS_OP = `import json, os, shutil, stat, sys
+const OS_OP = `import json, os, shutil, stat, subprocess, sys
 req = json.loads(sys.stdin.read())
 op, path = req["op"], req["path"]
 if op == "chmod":
@@ -111,6 +113,23 @@ elif op == "mkdir":
     os.makedirs(path, exist_ok=True)
 elif op == "rmtree":
     shutil.rmtree(path, ignore_errors=True)
+elif op == "volume":
+    os.makedirs(path, exist_ok=True)
+    subprocess.run(["/usr/bin/hdiutil", "create", "-size", "1m", "-fs", "HFS+", "-volname", "GEFULL", "-ov", path + ".dmg"], check=True, capture_output=True)
+    subprocess.run(["/usr/bin/hdiutil", "attach", path + ".dmg", "-mountpoint", path, "-nobrowse"], check=True, capture_output=True)
+elif op == "fill":
+    fd = os.open(os.path.join(path, ".filler"), os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
+    try:
+        while True:
+            os.write(fd, b"\\0" * 512)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+elif op == "eject":
+    subprocess.run(["/usr/bin/hdiutil", "detach", path, "-force"], capture_output=True)
+    if os.path.exists(path + ".dmg"):
+        os.remove(path + ".dmg")
 elif op == "stat":
     pass
 else:
@@ -159,6 +178,30 @@ export async function whileImmutable(h, path, fn) {
     return await fn()
   } finally {
     await osOp(h, 'unlock', path)
+  }
+}
+
+/**
+ * A 1 MB disk image mounted at `mount`, for a write that begins and cannot finish.
+ *
+ * `fill` is the caller's to call once the program it is about is on the volume. A file
+ * on a full volume is a file this user **may** write — `files_stat` says so, the open
+ * for writing truncates it, and the first bytes of the new text meet `ENOSPC`. That is the
+ * one failure the harness can produce after the stat that let the save through, which is
+ * what `m7-save-fail` needs now that a locked file is refused up front. The volume is
+ * ejected however the caller leaves, for the reason in rule 3 above.
+ * @template T
+ * @param {Harness} h
+ * @param {string} mount an empty folder's path (made if missing)
+ * @param {() => Promise<T>} fn
+ * @returns {Promise<T>}
+ */
+export async function withSmallVolume(h, mount, fn) {
+  try {
+    await osOp(h, 'volume', mount)
+    return await fn()
+  } finally {
+    await osOp(h, 'eject', mount)
   }
 }
 

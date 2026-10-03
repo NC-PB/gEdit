@@ -1,0 +1,11 @@
+{
+  "note": "M9 (WP9.5b): 'GOTOB N20' names an ordinary block 20, and this program has only the main block ':20'. The jump is not read as pointing at the main block: it is reported as a number the program does not have and left exactly as written, while ':20' is renumbered with its prefix.",
+  "profile": "sinumerik",
+  "options": { "start": 100, "step": 10 },
+  "expect": {
+    "summary": "ncNumbering.renumber.summary",
+    "skipped": [{ "line": 3, "severity": "warning" }],
+    "warnings": ["ncNumbering.renumber.referencesUnresolved"],
+    "preflight": "ncNumbering.renumber.references"
+  }
+}

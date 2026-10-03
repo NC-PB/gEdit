@@ -51,6 +51,8 @@ const SINUMERIK = 'sinumerik';
 const KLARTEXT = 'heidenhain-klartext';
 const MILL = 'fanuc-gcode';
 const LATHE = 'fanuc-lathe';
+/** M9 (R2): the milling child of this profile; `sinumerikMill.test.ts` holds the two apart. */
+const SINUMERIK_MILL = 'sinumerik-mill';
 
 /** The minimum distance between the winner and the runner-up that §8.5 asks for. */
 const MIN_MARGIN = 3;
@@ -106,13 +108,16 @@ function scores(path: string | null, text: string): Map<string, number> {
         }
       }
     }
+    // A veto (`detect.vetoes`, rule 5 of detect.ts) takes the profile out of the file.
+    if (cp.re.detectVetoes.some((veto) => lines.some((line) => veto.test(line)))) score = 0;
     out.set(cp.profile.id, score);
   }
   return out;
 }
 
-/** The dialect family a profile belongs to: the Fanuc mill and lathe are one. */
+/** The dialect family a profile belongs to: the Fanuc mill and lathe are one, and so are the two Siemens profiles. */
 function familyOf(id: string): string {
+  if (id === SINUMERIK_MILL) return SINUMERIK;
   return id === LATHE ? MILL : id;
 }
 
@@ -271,18 +276,19 @@ describe('a Sinumerik program is recognised as one', () => {
     expect(scores(null, 'MSG (CHECK THE JAWS)').get(SINUMERIK)).toBe(0);
   });
 
-  it('opens a Siemens milling program with this profile, header or not, until R2', () => {
+  it('opens a Siemens milling program as Siemens, header or not, with the milling profile since R2', () => {
     // `%_N_…_MPF` and `;$PATH=` are decisive (detect.ts, `DECISIVE_WEIGHT`); without them
     // the markers carry the file: `s06-milling.txt` is Demo_1.mpf's case, content only.
-    for (const rel of ['nc/owner-public/sinumerik/2.5D_Milling.mpf', 'nc/owner-public/sinumerik/5X_Milling.mpf']) {
+    // M9 (R2): the milling child wins inside the family (`sinumerikMill.test.ts`).
+    for (const rel of ['nc/owner-public/sinumerik-mill/2.5D_Milling.mpf', 'nc/owner-public/sinumerik-mill/5X_Milling.mpf']) {
       const text = readFixture(rel);
       for (const path of ['/work/prog.nc', '/work/prog.txt', null]) {
-        expect(detectProfile(BUILTINS, path, text, MILL), `${rel} ${String(path)}`).toBe(SINUMERIK);
+        expect(detectProfile(BUILTINS, path, text, MILL), `${rel} ${String(path)}`).toBe(SINUMERIK_MILL);
       }
     }
-    for (const rel of ['nc/owner-public/sinumerik/Demo_1.mpf', 'nc/sinumerik/s06-milling.txt']) {
+    for (const rel of ['nc/owner-public/sinumerik-mill/Demo_1.mpf', 'nc/sinumerik-mill/s06-milling.txt']) {
       const { winner, mine, others } = margins(null, readFixture(rel));
-      expect(winner, rel).toBe(SINUMERIK);
+      expect(winner, rel).toBe(SINUMERIK_MILL);
       for (const [family, score] of others) expect(mine - score, `${rel}: ${family}`).toBeGreaterThanOrEqual(MIN_MARGIN);
     }
   });
@@ -334,13 +340,14 @@ describe('a Sinumerik program is recognised as one', () => {
     // codes, G96/G97), which score what the Fanuc profiles score, and the whole-line `;`
     // comment, which a Klartext fragment without block numbers writes too (§8.5). Every
     // other rule is a marker and must not fire outside this dialect.
-    const own = FIXTURES.flatMap((rel) => sniffLines(readFixture(rel)));
+    // M9 (WP9.1): the Siemens milling programs are Siemens lines too; `s06-milling.txt` moved there.
+    const own = [...FIXTURES, ...listFixtures('nc/sinumerik-mill')].flatMap((rel) => sniffLines(readFixture(rel)));
     // The owner's own Sinumerik programs (`nc/owner-public/sinumerik/`) are this dialect
-    // too, not a negative line.
+    // too, not a negative line, and so are the Siemens milling programs (M9, R2).
     const foreign = listFixtures('nc')
       .filter(
         (rel) =>
-          !rel.startsWith('nc/sinumerik/') && !rel.startsWith('nc/owner-public/sinumerik/') && openFixture(rel).refused === null,
+          !/^nc\/(?:owner-public\/)?sinumerik(?:-mill)?\//.test(rel) && openFixture(rel).refused === null,
       )
       .flatMap((rel) => sniffLines(readFixture(rel)));
     const neutral = new Set([
@@ -476,6 +483,41 @@ describe('the program map', () => {
     expect(itemsOf(['N10 LOOP_A: G1 X10', '/1 N20 SKIP_B:', 'N30 X=5', 'N40 R1:=2'])).toEqual([
       'label@1: LOOP_A',
       'label@2: SKIP_B',
+    ]);
+  });
+
+  it('reads the short transfer header as a program start, as the long one (M9)', () => {
+    // syntax-sinumerik §2.2: line 1 is `%_N_<NAME>_MPF` or the short `%<NAME>_MPF`. The
+    // tokenizer reads both as the header (`syntax.header`, pinned by P9); the map and the
+    // program rule that renumbering and the scripts restart at read them the same way.
+    expect(itemsOf(['%PART_ONE_MPF', 'N10 G0 X0', 'M30', '%_N_SUB_TWO_SPF', 'N10 G0 X1', 'M17'])).toEqual([
+      'program@1: %PART_ONE_MPF',
+      'end@3: M30',
+      'program@4: %_N_SUB_TWO_SPF',
+      'end@6: M17',
+    ]);
+    const starts = sinumerik.re.programStart;
+    const names = ['%PART_ONE_MPF', '%_N_PART_ONE_MPF', '%GROOVE_SPF'].map((line) => {
+      for (const re of starts) {
+        const match = re.exec(line);
+        if (match) return match.groups?.name ?? null;
+      }
+      return null;
+    });
+    expect(names).toEqual(['PART_ONE', 'PART_ONE', 'GROOVE']);
+    // Not a header: no file id, or a `%` that is not at the start.
+    expect(starts.some((re) => re.test('%PART_ONE'))).toBe(false);
+    expect(starts.some((re) => re.test('N10 %PART_MPF'))).toBe(false);
+  });
+
+  it('lists an L subprogram once, with or without its pass count (M9)', () => {
+    // TODO "Sinumerik structure": `L10 (1)` was a map row of its own next to `L10`. One row
+    // per call, named by the subprogram; the count is not part of the name.
+    expect(itemsOf(['N10 L10(1)', 'N20 L10 (1)', 'N30 L10', 'N40 L10 P2'])).toEqual([
+      'subprogram-call@1: L10',
+      'subprogram-call@2: L10',
+      'subprogram-call@3: L10',
+      'subprogram-call@4: L10',
     ]);
   });
 

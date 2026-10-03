@@ -67,6 +67,7 @@
     {
       "code": "G4",
       "group": "nonmodal",
+      "axisWords": "data",
       "label": "Dwell",
       "description": "Holds the tool where it is before the next block runs. It applies to this block only.",
       "params": [
@@ -118,7 +119,8 @@
           "address": "F",
           "label": "Thread lead per revolution",
           "required": true,
-          "min": 0
+          "min": 0,
+          "unit": "feedPerRev"
         }
       ]
     },
@@ -147,8 +149,23 @@
       "code": "G50",
       "group": "nonmodal",
       "sets": { "speedLimit": true },
+      "axisWords": "data",
       "label": "Coordinate set, top spindle speed",
       "description": "Sets the coordinate system without moving. With an S word it gives the highest spindle speed the control may use for constant surface speed; write it in a block of its own in front of G96. G-code system B uses G92 for this."
+    },
+    {
+      "code": "G68",
+      "group": "frame",
+      "frame": "open",
+      "label": "Mirror image for the second turret",
+      "description": "On a lathe with two opposed turrets, mirrors the moves so that the second turret machines the same shape (mirror image, or symmetric machining). G69 ends it. A machining centre uses the same number for a rotation of the coordinate system."
+    },
+    {
+      "code": "G69",
+      "group": "frame",
+      "frame": "close",
+      "label": "Mirror image for the second turret off",
+      "description": "Ends the mirror image that G68 started. A machining centre uses the same number to end a rotation of the coordinate system."
     },
     {
       "code": "G70",
@@ -176,6 +193,7 @@
     {
       "code": "G71",
       "group": "cycle",
+      "axisWords": "data",
       "sets": { "cycle": "start" },
       "label": "Roughing cycle along Z",
       "description": "Roughs an outside or inside contour in passes along Z and leaves an allowance for the finishing cycle. It is written in two blocks: depth of cut and retract first, then the profile range and the allowances.",
@@ -214,6 +232,7 @@
     {
       "code": "G72",
       "group": "cycle",
+      "axisWords": "data",
       "sets": { "cycle": "start" },
       "label": "Roughing cycle along X (facing)",
       "description": "The same as G71, but the passes run along X, so it roughs a face instead of a diameter. The depth of cut in the first block is a W value.",
@@ -252,6 +271,7 @@
     {
       "code": "G73",
       "group": "cycle",
+      "axisWords": "data",
       "sets": { "cycle": "start" },
       "label": "Pattern repeating cycle",
       "description": "Walks the profile again and again, each time a little closer to the finished shape. It suits a blank that is already near the final form, such as a casting or a forging. Two blocks: the stock to remove and the number of passes first, then the profile range and the allowances.",
@@ -403,7 +423,8 @@
           "address": "F",
           "label": "Thread lead per revolution",
           "required": true,
-          "min": 0
+          "min": 0,
+          "unit": "feedPerRev"
         }
       ]
     },
@@ -455,7 +476,7 @@
         },
         {
           "address": "R",
-          "label": "Retract plane",
+          "label": "Distance from the start level to the R point, incremental",
           "required": true
         },
         {
@@ -500,10 +521,26 @@
           "required": true
         },
         {
+          "address": "R",
+          "label": "Distance from the start level to the R point, incremental"
+        },
+        {
+          "address": "P",
+          "label": "Dwell at the bottom in milliseconds",
+          "min": 0,
+          "unit": "count"
+        },
+        {
           "address": "F",
           "label": "Thread lead",
           "required": true,
           "min": 0
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
         }
       ]
     },
@@ -532,14 +569,26 @@
         },
         {
           "address": "R",
-          "label": "Retract plane",
+          "label": "Distance from the start level to the R point, incremental",
           "required": true
+        },
+        {
+          "address": "P",
+          "label": "Dwell at the bottom in milliseconds",
+          "min": 0,
+          "unit": "count"
         },
         {
           "address": "F",
           "label": "Boring feed",
           "required": true,
           "min": 0
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
         }
       ]
     },
@@ -558,7 +607,7 @@
         },
         {
           "address": "R",
-          "label": "Retract plane",
+          "label": "Distance from the start level to the R point, incremental",
           "required": true
         },
         {
@@ -603,10 +652,26 @@
           "required": true
         },
         {
+          "address": "R",
+          "label": "Distance from the start level to the R point, incremental"
+        },
+        {
+          "address": "P",
+          "label": "Dwell at the bottom in milliseconds",
+          "min": 0,
+          "unit": "count"
+        },
+        {
           "address": "F",
           "label": "Thread lead",
           "required": true,
           "min": 0
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
         }
       ]
     },
@@ -625,14 +690,26 @@
         },
         {
           "address": "R",
-          "label": "Retract plane",
+          "label": "Distance from the start level to the R point, incremental",
           "required": true
+        },
+        {
+          "address": "P",
+          "label": "Dwell at the bottom in milliseconds",
+          "min": 0,
+          "unit": "count"
         },
         {
           "address": "F",
           "label": "Boring feed",
           "required": true,
           "min": 0
+        },
+        {
+          "address": "K",
+          "label": "Repeat count",
+          "min": 0,
+          "unit": "count"
         }
       ]
     },
@@ -687,7 +764,8 @@
           "address": "F",
           "label": "Thread lead per revolution",
           "required": true,
-          "min": 0
+          "min": 0,
+          "unit": "feedPerRev"
         }
       ]
     },

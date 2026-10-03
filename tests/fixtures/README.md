@@ -87,6 +87,7 @@ G-code system A, `l05` and `l07` system B; the expected system per file is in
 | `l06-decimal.nc` | The same values with and without a decimal point: `X50`/`X50.`, `Z1000`/`Z1000.`, `F155`/`F155.`, `G83 … Q6000 K3` against `Q6.`, `C90000` against `C90.`, and the dwells `G04 X1.5`, `G04 U2` and `G04 P500`. |
 | `l07-system-b-drill.nc` | Six `G99 G83 …` cycle-return blocks against one `G92 S2000` clamp: the program that decides whether variant detection counts a pattern once or per line (phase 2 plan §8.1). |
 | `l08-named-programs.nc` | Three programs named instead of numbered (30i family): the main program `<SHAFT_T12-F0.2>` calls `M98 <GROOVE_T3_M30> L2` and `M98 <CHAMFER_F12>`, and both subprograms start with their bracketed name. Every name holds a `T`, `F` or `M30` that must not read as a tool change, a feed or a program end. |
+| `l09-y-axis-lathe.nc` | A Y-axis lathe (M9, WP9.6): five-digit `T` words, `G50 S` and `G96`/`G97`, and a live-tool face pocket milled in `G17` whose 22 `X… Y…` moves outnumber the turning markers, with the reference returns such a post writes, `G30 U0. V0.` and `G30 W0.`. It opened as a mill until the lathe's reference-return rule read `G30` and `V`. |
 | `O2001` | A turning program in a file without an extension. |
 | `detect-lathe.txt` | A complete turning program in a `.txt` file, so only the content decides the dialect. |
 
@@ -104,9 +105,27 @@ written in upper case and still count as `mpf` and `spf`.
 | `s03-sub.SPF` | A subprogram: `%_N_GROOVE_SPF`, `PROC GROOVE(REAL XBOT, REAL ZPOS, INT PECKS)`, `DEF REAL` and `DEF INT`, the `R` parameter `R10`, the labels `NEXT_PECK:` and `LAST_CUT:` with `IF … GOTOF` and `GOTOB`, values written `X=XNOW`, the dwell `G4 F0.3`, `MSG("…")` and `MSG()`, the calls `L20`, `L30 P2`, `CALL "…"`, `EXTCALL "…"` and `PROBE_DIA(1,,3)`, and `M17`. |
 | `s04-packed.MPF` | No transfer header, packed words (`N10G18G90G95`, `T1D1`, `G0X90Z2`), the block skips `/` and `/1`, a lower-case block, and every form of the `T` word: `T1`, `T12`, the offset cancel `T0 D0` that is **not** a tool change, `MSG("T1 ROUGH")`, which names a tool inside a string and is not one either, and the spindle forms `T1=5` (tool 5) and `T2="PARTOFF"` next to `M1=4`, `M1=5`, `M2=4` and `M2=5`, which switch spindles and are neither a stop nor the program end. |
 | `s05-diameter.MPF` | Diameter programming assumed on at the top, then switched three ways — `DIAMOF`, `DIAM90` with a `G91` step, `DIAMON` — plus the clamp `G26 S3000`, `G710`, the dwells `G4 F1.5` and `G4 S2` (two spindle revolutions, not a speed) and the optional stop `M1`. |
+| `s07-mill-turn.MPF` | A hub on a turn-mill centre (M9 NC review F3): one turning operation (`DIAMON`, `G96 S220 LIMS=3000`) and three milling operations on the face, each after `T="…" D1` and `M6`, with `SETMS(4)`, `CYCLE800(…)`, `POCKET4(…)`, `SLOT1(…)` and `CYCLE83(…)`. The milling operations outnumber the turning one, and it opened with the milling profile until the turning words vetoed that profile (`detect.vetoes`). |
 | `SHAFT_OP20` | A part-off program in a file without an extension, so only the content decides the dialect. |
-| `s06-milling.txt` | A milling program without the `%_N_` transfer header and without a Siemens extension (the case of the owner's `Demo_1.mpf`): `WORKPIECE(`, a bare `CYCLE800`, tool names as strings, `MSG("…")`, arcs with `CR=`, `MCALL CYCLE81(…)`, `X=AC(…)`, `Y=IC(…)` and `TRAORI`/`TRAFOOF`, most of them on lines that move Y. Detection has to read it as Sinumerik on these markers alone (R1), until a milling profile exists. |
 | `detect-sinumerik.txt` | A finishing pass and a centre hole in a `.txt` file, so only the content decides the dialect. |
+
+`s06-milling.txt` was written for this folder at M8 and moved to `nc/sinumerik-mill/` at M9,
+when the milling profile arrived.
+
+## `nc/sinumerik-mill/`: Siemens Sinumerik 840D milling programs
+
+Written from `docs/planning/syntax/syntax-sinumerik.md` §2-§6 for the milling profile of M9
+(WP9.1, roadmap R2): `M6` changes the tool, with the `T` of its block or the last one before
+it, so the `T` a post writes right after the change preselects the next tool and is no
+change. They open with `sinumerik-mill`, and with its margin over the turning profile
+(`expected/detect/sinumerik-mill.json`).
+
+| File | Contents |
+|---|---|
+| `m01-plate.MPF` | Three tools named as strings: the transfer header, `G17 G90 G94 G40 G710`, `TRAFOOF` and `CYCLE800()` at the top, `T="NAME" D1` then `M6` then the next tool preselected as `T="…"`, `CYCLE832(…)` on and off around each operation, face milling with `CYCLE61(…)`, `MCALL CYCLE83(…)` over four holes, `T0` preselected after the last change and an `M6` at the end that puts the tool away. |
+| `m02-five-axis.MPF` | 3+2 and five-axis words: `G75 Z0 FP=1` and `G75 X0 Y0 FP=1` retracts, `T5 M6` in one block, `CYCLE800(…)` with all 16 arguments and `CYCLE800()`, `DYNROUGH`/`DYNFINISH`/`DYNNORM`, `CYCLE832(…,_ORI_ROUGH,…)`, `TRAORI`, `ORIWKS`, `ORIAXES`, moves with `A` and `C`, `TRAFOOF`, and `T0 M6` at the end, no tool change. |
+| `s06-milling.txt` | A milling program without the `%_N_` transfer header and without a Siemens extension (the case of the owner's `Demo_1.mpf`): `WORKPIECE(`, a bare `CYCLE800`, tool names as strings, `MSG("…")`, arcs with `CR=`, `MCALL CYCLE81(…)`, `X=AC(…)`, `Y=IC(…)` and `TRAORI`/`TRAFOOF`, most of them on lines that move Y. Detection reads it as Sinumerik on these markers alone (R1), and as milling by its `M6` blocks and `G17`/`G94`. Written at M8 for `nc/sinumerik/`. |
+| `detect-sinumerik-mill.txt` | Two drilling tools written `T1 D1`, `M6`, `T2` in a `.txt` file without the transfer header, so only the content decides the dialect, and the profile. |
 
 ## `nc/heidenhain/`: Heidenhain Klartext programs
 
@@ -213,30 +232,37 @@ gEdit has only the turning profile, and they open with it.
 | `DRILLING.min` | Drilling, tapping (`G84`), reaming and boring cycles over modal hole positions, and a tapping pass with chip breaking written out as single `G1` moves between `M3`/`M4`/`M5` reversals, 5,044 lines. |
 | `TURN.min` | The turning part for the OSP lathe: `G140`, six-digit `T010101`, `G50 S`, `G96`/`G97`, `G95`, the one-block thread cycle `G71 … F2`, and driven tools with `SB=`, `M13`, `G101` and the tapping cycle `G184`. |
 
-**`sinumerik/`** — Siemens Sinumerik 840D. Four milling programs and one turning program;
-gEdit has only the turning profile.
+**`sinumerik/`** — Siemens Sinumerik 840D, the turning program. It is a mill-turn program
+(driven tools under `TRANSMIT`, many lines that move `Y`) and opens with the turning profile,
+as R2 asks of a mill-turn program.
+
+| File | Contents |
+|---|---|
+| `TURN_1.mpf` | The turning part: `SETMS(1)`/`SETMS(2)`, `LIMS=`, `DIAMON`, `G95`/`G96`, `L131`, `CYCLE97` threading, and driven tools with `S2=`, `CYCLE81` and `CYCLE84`. |
+
+**`sinumerik-mill/`** — Siemens Sinumerik 840D, the four milling programs. They were in
+`sinumerik/` until M9 and were moved byte for byte (`git mv`) when the milling profile
+arrived (WP9.1); they open with it.
 
 | File | Contents |
 |---|---|
 | `2.5D_Milling.mpf` | The 2.5D part: `%_N_1_MPF` and `;$PATH=`, `CYCLE800` without arguments, `T1 D1` then `M6` with the next tool preselected, `CR=` arcs. |
 | `5X_Milling.mpf` | 5-axis at constant Z under `TRAORI`. |
-| `DRILLING.mpf` | Drilling, tapping, reaming and boring with `MCALL CYCLE81`–`CYCLE86 (…)`, a blank before the bracket, the feed in a block of its own before each call. |
+| `DRILLING.mpf` | Drilling, tapping, reaming and boring with `MCALL CYCLE81`–`CYCLE86 (…)`, a blank before the bracket, the feed in a block of its own before each call, `G75` fixed-point retracts. |
 | `Demo_1.mpf` | A 3+2 program without the transfer header: a `;` comment header, `WORKPIECE(…)`, `T="…" D1` and `M6`, `CYCLE800(…)` swivels, `MSG("…")`. |
-| `TURN_1.mpf` | The turning part: `SETMS(1)`/`SETMS(2)`, `LIMS=`, `DIAMON`, `G95`/`G96`, `L131`, `CYCLE97` threading, and driven tools with `S2=`, `CYCLE81` and `CYCLE84`. |
 
 **Known gaps** (what these programs show gEdit getting wrong; the tests hold the right
 answer):
 
 - **Detection.** None since R1: `5X_MILLING_VECTOR.H` opens as Klartext (its `BEGIN PGM`
-  decides, and every numbered block, `LN` included, counts for it); `2.5D_Milling.mpf`,
-  `5X_Milling.mpf` and `Demo_1.mpf` open as Sinumerik (the turning profile, correctly, by
-  their header or their Siemens-only words — a milling profile for it is R2, in M9
-  (WP9.1); that is a program-map gap now, not a detection one, see below).
+  decides, and every numbered block, `LN` included, counts for it); the four Siemens milling
+  programs open as Sinumerik by their header or their Siemens-only words, and since M9
+  (WP9.1) with the milling profile, by their `M6` blocks, `G17`/`G94` and `CYCLE800`;
+  `TURN_1.mpf` keeps the turning profile.
 - **Program map.** The three Okuma milling programs show no tool change (the turning tool
-  rule wants a four- or six-digit `T` word). `DRILLING.mpf` lists every preselected tool as
-  a change of its own. The three Siemens milling programs above, correctly detected as
-  Sinumerik, still get the turning profile's map and tool rule until R2's milling profile
-  ships.
+  rule wants a four- or six-digit `T` word). The Siemens milling programs are right since
+  M9: one segment per `M6`, and the preselected next tool is no change of its own
+  (`DRILLING.mpf` gave nine segments for five tools under the turning rule).
 - **Tokens.** The `;` that ends every block of `TURN.NC` is `unknown`; `CYCLE800` without
   arguments is `unknown` on Sinumerik; the free cycle name after `CYCL DEF 247` (`INIT.`,
   `REF.PKT`) is `unknown`. (A Klartext decimal comma is read correctly now, `dec/klartext`.)
@@ -287,12 +313,17 @@ walks `nc/` only, so these files are checked by the tests that read them.
 | `expected/detect/<folder>.json` | `src/lib/core/profiles/detect.test.ts` (also `src/lib/data/profiles/fanucLathe.test.ts`) | The expected profile for every file under `nc/` (`fallback` and `refused` are answers too); `fanuc-lathe.json` adds the expected G-code system. The keys together must equal the `nc/` listing, so a new fixture without an entry fails. |
 | `expected/detect/_improvements.json` | `src/lib/core/profiles/detect.test.ts` and `src/lib/data/profiles/okuma.test.ts` | Hand-written detection cases as inline text, each with the answer the first detection (M0) gave and the one it gives now; the leading `_` keeps the file out of the per-folder glob. |
 | `expected/detect/programs/l08-g183-macro.nc` | `src/lib/data/profiles/fanucLathe.test.ts`, `okuma.test.ts`, `src/lib/core/profiles/contradiction.test.ts` | A Fanuc lathe program (written for gEdit) that calls a builder's macro as `G183` next to a two-block `G71`/`G70 P Q`: the M8 re-review's case, which opened as Okuma while `G180`–`G189` weighed 100. It lives here and not under `nc/` because no code database can describe a builder's macro code, and every `nc/` fixture has to be described (`load.test.ts`). |
+| `expected/detect/programs/tie-numbered-blocks` | `src/lib/data/profiles/detectionLeftovers.test.ts` | Ten numbered blocks with `G96`/`G97` and nothing else (written for gEdit, no extension): the Fanuc lathe and the Sinumerik turning profile score it exactly the same, which is the tie two of the owner's local programs showed (M9, WP9.6). It lives here and not under `nc/` because a tie has no margin, and every `nc/` fixture must win by 3. |
 | `expected/detect/owner-public.json` (`knownGaps`) and `expected/outline/owner-public/_known-gaps.json` | `detect.test.ts`, `fanucLathe.test.ts` and `outline.test.ts` | The owner's programs gEdit gets wrong today, each with the reason and the **right** answer (the profile; for the map, every tool change as `[line, tool]`). They run as expected failures (`it.fails`) and get no golden, so a fix fails its test and the entry is replaced by a golden. |
-| `tokens/fanuc-gcode.json` | `src/lib/core/nc/tokenizer.test.ts` and `tests/python/test_gedit_nc.py` | 68 golden lines, 184 tokens. Each entry is `{ line, tokens }` plus an optional `prev` (the incoming `LineState`, default not-a-continuation) and an optional `state` (the expected outgoing one). An entry is compared on the fields it lists; whitespace tokens are left out. |
-| `tokens/fanuc-lathe.json` | the same | 72 golden lines, 197 tokens, same format, written for turning: every `T` spelling, `U`/`W` words, the two-block cycles, `G4U2`, `C90000` and `E1.5`. |
-| `tokens/heidenhain-klartext.json` | the same | 67 golden lines, 323 tokens, same format. |
-| `tokens/okuma-osp.json` | the same | 111 golden lines, 256 tokens, same format: comments, block skips, sequence numbers and names (`NLAP1`), four- and six-digit `T` words, the cycles and macro keywords, `SB=`, the `$…%` header, `X=V1+V2`, and a no-break space before `=`. |
-| `tokens/sinumerik.json` | the same | 125 golden lines, 255 tokens, same format, written for turning: `;` comments, the skip levels, packed words, `T`/`D` pairs, the bare command keywords, strings, calls (also `CYCLE840 (…)` with a blank before the bracket), labels, `R1=R2*2`, `$AA_IM[X]`, and a no-break space before `=`. |
+| `tokens/fanuc-gcode.json` | `src/lib/core/nc/tokenizer.test.ts` and `tests/python/test_gedit_nc.py` | 90 golden lines, 268 tokens. Each entry is `{ line, tokens }` plus an optional `prev` (the incoming `LineState`, default not-a-continuation) and an optional `state` (the expected outgoing one). An entry is compared on the fields it lists; whitespace tokens are left out. |
+| `tokens/fanuc-lathe.json` | the same | 81 golden lines, 224 tokens, same format, written for turning: every `T` spelling, `U`/`W` words, the two-block cycles, `G4U2`, `C90000` and `E1.5`. |
+| `tokens/heidenhain-klartext.json` | the same | 88 golden lines, 433 tokens, same format. |
+| `tokens/okuma-osp.json` | the same | 118 golden lines, 279 tokens, same format: comments, block skips, sequence numbers and names (`NLAP1`), four- and six-digit `T` words, the cycles and macro keywords, `SB=`, the `$…%` header, `X=V1+V2`, and a no-break space before `=`. |
+| `tokens/sinumerik.json` | the same | 145 golden lines, 302 tokens, same format, written for turning: `;` comments, the skip levels, packed words, `T`/`D` pairs, the bare command keywords, strings, calls (also `CYCLE840 (…)` with a blank before the bracket), labels, `R1=R2*2`, `$AA_IM[X]`, and a no-break space before `=`. |
+| `tokens/sinumerik-mill.json` | the same | 73 golden lines, 237 tokens, same format, written for gEdit by the M9 prelude (P9): milling lines under the syntax `sinumerik-mill` inherits — `T="…"` preselects and `M6`, `CYCLE800(…)`, `TRAORI`/`TRAFOOF`, `ORIWKS`, `MCALL CYCLE81(…)`, frames (`ATRANS`, `AROT`), `G75 FP=1`, labels and jumps — read the way the tokenizers read them at P9. |
+| `tokens/sinumerik-call-rules.json` | `src/lib/core/nc/tokenizer.test.ts` (through `OutlineIndex`) and `tests/python/test_gedit_nc.py` (the first outline rule on the masked line) | 30 lines `{ line, call }`, 12 calls and 18 not, under `sinumerik` and `sinumerik-mill`: pins the call-rule exclusions of the Sinumerik profile (`CUT3DCC`, `ORIVIRT1`, `ORIRESET(…)`, `WAITS(…)` are no call; `L10`, `CYCLE81(…)`, `POCKET3(…)` are). Written at WP9.3, the data is P9's. |
+| `pins/m9-syntax.json` | `tests/unit/syntaxPins.test.ts` | The M9 syntax pins (plan §7.1 "The M9 syntax pins"): every built-in profile's resolved `syntax` and its outline call rules at the P9 commit, and the `deferred` values WP9.3 writes with the golden changes they cause. Only the M9 integration edits it. |
+| `expected/owner-public/known-gaps.json` | `tests/unit/ownerPublic.test.ts` and `tests/python/test_owner_public.py` (WP9.6) | Exit criterion X13 on the owner's published programs: every remaining unknown token outside comments (text, count, first line) and every program-map difference, each with its reason and the work package expected to remove it (`allow` for text that is not code). A file it does not list is clean. Both tokenizers must find exactly its entries. Measured at the P9 commit, re-measured by WP9.6 after Wave A (paths of the Siemens milling programs, the Wave A fixes relabelled); `ownerReviewed` stays false until the owner has read it. |
 | `numberformat.cases.json` | `src/lib/core/nc/numberFormat.test.ts` and `tests/python/test_gedit_nc.py` | 57 `formatNumber` cases: the decimal string, the written literal `original` (or `null`, parsed through `parseNumber`), the `NumberFormatOptions` (`fmt`), `significant` (whether the decimal point is significant), the expected text and a `note`. |
 
 ## Transform and script cases

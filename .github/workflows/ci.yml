@@ -2,7 +2,8 @@
 # the bundled Python scripts on the oldest and the newest supported interpreter;
 # Rust checks and debug bundles on macOS, Windows and Linux. The release workflow
 # (release.yml) calls this one on a version tag, without the debug bundles.
-# The runtime harness (tests/runtime) drives native macOS UI and is run locally only.
+# The runtime harness (tests/runtime) drives native macOS UI; it runs in its own workflow
+# (harness.yml, macOS runner, on push to main), not here.
 
 name: CI
 

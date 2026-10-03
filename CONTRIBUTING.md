@@ -52,7 +52,7 @@ A unit test that asserts a wall-clock budget goes through `tests/unit/helpers/bu
 
 ### Before you open a pull request
 
-Run what CI runs: `npm run check`, `npm test`, `npm run build`, `npm run licenses:check`, `npm run versions:check`, and the three cargo commands above. `npm run check` must report **0 errors and 0 warnings**. If you touched `src-tauri/resources/scripts/` or `tests/python/`, run the Python tests too. If your change touches the window, dialogs, file handling or keyboard handling, also run the runtime harness on a Mac (see below) or ask a maintainer to run it.
+Run what CI runs: `npm run check`, `npm test`, `npm run build`, `npm run licenses:check`, `npm run versions:check`, and the three cargo commands above. `npm run check` must report **0 errors and 0 warnings**. If you touched `src-tauri/resources/scripts/` or `tests/python/`, run the Python tests too. If your change touches the window, dialogs, file handling or keyboard handling, also run the runtime harness on a Mac (see below), or push to a branch and start the Harness workflow by hand (Actions tab), or ask a maintainer to run it. Since M9 the runtime suite runs on GitHub on every push to `main`, so the owner's Mac is no longer needed for it.
 
 ## Continuous integration
 
@@ -63,7 +63,7 @@ Run what CI runs: `npm run check`, `npm test`, `npm run build`, `npm run license
 - **rust** (macOS, Windows, Linux): `cargo fmt`, `clippy` with warnings as errors, `cargo test`.
 - **bundle** (macOS, Windows, Linux): an unsigned debug build of the installers, uploaded as workflow artifacts for manual smoke tests.
 
-The runtime harness is not part of CI, because it needs a real macOS desktop.
+The runtime harness has a workflow of its own, `.github/workflows/harness.yml`: it builds the patched app on a GitHub-hosted macOS 14 runner (which has a live desktop session) and runs the cumulative suite m0 to m9 (88 scenarios). It is not part of `ci.yml` and does not run on pull requests, because it takes about 15 minutes of macOS runner time; it runs on every push to `main` and on demand (Actions tab, Harness, Run workflow), and uploads the result files and app logs as the `harness-results` artifact.
 
 ## Releases
 
@@ -165,7 +165,7 @@ The generated surfaces are not documentation to maintain by hand: the shortcut d
 ### Test fixtures are synthetic
 
 - Every NC program under `tests/fixtures/` is written for gEdit and says so in a comment at the top. Never commit real customer or shop programs, not even anonymized ones. The rules and a description of every file are in [tests/fixtures/README.md](tests/fixtures/README.md). The one exception is reserved: `tests/fixtures/nc/owner-public/`, for the few programs the owner hands over as safe to publish. Each one needs a permission line in that README and goes in only after the owner has gone through what `node tests/gen/check-anonymized.mjs` flags in it (a reading aid, not a filter; Phase 2 plan §9.2).
-- Your own programs belong in `tests/real/` (gitignored except its README) or in a folder named by `GEDIT_REAL_FIXTURES`. `npm test -- realFixtures` and `tests/python/test_real_fixtures.py` check them on your machine and print counts only, never a file name or program text; without such a folder they skip. See [tests/real/README.md](tests/real/README.md).
+- Your own programs belong in `tests/real/` (gitignored except its README) or in a folder named by `GEDIT_REAL_FIXTURES`. `npm test -- realFixtures` and `tests/python/test_real_fixtures.py` check them on your machine and print counts only, never a file name or program text; without such a folder they skip. By default they fail only on a crash; `GEDIT_G11=strict` fails on every failure, `GEDIT_G11_REPORT=<file>` writes the report as JSON, and `GEDIT_PYTHON` names the Python 3.9+ the script checks use. See [tests/real/README.md](tests/real/README.md).
 - Fixtures are byte-exact: `.gitattributes` marks them `-text`, so git never rewrites their line endings. Encoding fixtures are produced by `tests/gen/gen-encoding.mjs`; change the generator, not the files, and run `node tests/gen/gen-encoding.mjs` to rewrite them.
 - Large test programs come from `tests/gen/gen-large.mjs` and go into `.perf/`, which is not committed.
 
@@ -196,7 +196,7 @@ Scripts go through `src-tauri/src/scripts/`, whose module documentation states b
 
 ## Runtime harness (macOS)
 
-The harness in `tests/runtime/` builds a test variant of the app and drives it like a user would: native key and mouse events, stubbed file dialogs that grant paths like the real ones, real alerts, and real quit handling. It reads the app state through `data-testid` attributes and the `window.__gedit` test hook. Prerequisites and the full reference are in `tests/runtime/README.md`.
+The harness in `tests/runtime/` builds a test variant of the app and drives it like a user would: native key and mouse events, stubbed file dialogs that grant paths like the real ones, real alerts, and real quit handling. It reads the app state through `data-testid` attributes and the `window.__gedit` test hook. Prerequisites and the full reference are in `tests/runtime/README.md`. A maintainer can run the same suite on a runner with the Harness workflow (see Continuous integration).
 
 ```sh
 tests/runtime/sync.sh                                # copy the repo to $GEDIT_RH_DIR/app (default $TMPDIR/gedit-rh/app), patch in the harness, build

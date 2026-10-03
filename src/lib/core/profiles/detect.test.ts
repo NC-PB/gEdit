@@ -17,6 +17,7 @@ import {
   MAX_SNIFF_LINES,
   VARIANT_MARGIN,
   detectProfile,
+  detectScores,
   detectVariants,
   extensionOf,
 } from './detect';
@@ -321,7 +322,10 @@ describe('decisive headers', () => {
       }
     }
     expect([...headers.values()].every((weight) => weight === DECISIVE_WEIGHT)).toBe(true);
-    expect([...headers.keys()].map((key) => key.split(' ')[0]).sort()).toEqual([KLARTEXT, OKUMA, SINUMERIK, SINUMERIK]);
+    // M9 (WP9.1): the Sinumerik milling profile carries the same two headers as the turning one.
+    expect([...headers.keys()].map((key) => key.split(' ')[0]).sort()).toEqual([
+      KLARTEXT, OKUMA, SINUMERIK, SINUMERIK, 'sinumerik-mill', 'sinumerik-mill',
+    ]);
   });
 
   it('give way only where the content contradicts them hard', () => {
@@ -503,7 +507,10 @@ describe('variant detection', () => {
       '',
     ].join('\n');
     const detected = detectVariants(lathe, program);
-    expect(detected).toEqual({ gcodeSystem: { value: 'B', margin: 3 } });
+    expect(detected.gcodeSystem).toEqual({ value: 'B', margin: 3 });
+    // The two R6 variants carry no rules: they answer with their default and a margin of 0.
+    expect(detected.incrementalAddresses).toEqual({ value: 'uw', margin: 0 });
+    expect(detected.toolWord).toEqual({ value: 'offset2', margin: 0 });
     expect(detected.gcodeSystem.margin).toBeGreaterThanOrEqual(VARIANT_MARGIN);
 
     // Without the threading passes it is a drilling program that says nothing about the
@@ -512,13 +519,40 @@ describe('variant detection', () => {
       .split('\n')
       .filter((line) => !line.startsWith('G78'))
       .join('\n');
-    expect(detectVariants(lathe, drillingOnly)).toEqual({ gcodeSystem: { value: 'A', margin: 2 } });
+    expect(detectVariants(lathe, drillingOnly).gcodeSystem).toEqual({ value: 'A', margin: 2 });
   });
 
   it('leaves a rule that does not compile out instead of throwing', () => {
     const broken = withVariants([{ pattern: '(', weight: 4 }], [{ pattern: 'G92', weight: 4 }]);
     expect(detectVariants(broken, 'N10 G98\n')).toEqual({ gcodeSystem: { value: 'A', margin: 0 } });
     expect(detectVariants(broken, 'N10 G92 S1\n')).toEqual({ gcodeSystem: { value: 'B', margin: 4 } });
+  });
+});
+
+describe('vetoes', () => {
+  // M9 NC review F3: a veto takes a profile out of the file, however much it scored.
+  const strong = variant('strong', { content: [{ pattern: 'M6', weight: 50 }], vetoes: ['DIAMON'] });
+  const weak = variant('weak', { content: [{ pattern: 'G1', weight: 1 }] });
+
+  it('take the profile out of a file that has the vetoed word on any scanned line', () => {
+    const text = 'N10 G1 X1\nN20 M6\nN30 M6\nN40 DIAMON\n';
+    expect(detectProfile([strong, weak], null, text, 'strong')).toBe('weak');
+    expect(detectScores([strong, weak], null, text)).toEqual([0, 1]);
+  });
+
+  it('leave the profile alone without the word, or with it past the scanned lines', () => {
+    expect(detectProfile([strong, weak], null, 'N10 G1 X1\nN20 M6\n', 'weak')).toBe('strong');
+    const late = [...Array.from({ length: MAX_SNIFF_LINES }, () => 'M6'), 'DIAMON'].join('\n');
+    expect(detectProfile([strong, weak], null, late, 'weak')).toBe('strong');
+  });
+
+  it('keep the fallback when the vetoed profile was the only one that scored', () => {
+    expect(detectProfile([strong], null, 'M6\nDIAMON\n', 'other')).toBe('other');
+  });
+
+  it('do not override a folder, which is the user\'s own choice', () => {
+    const machine = variant('machine', { folders: ['/cam/mill'], vetoes: ['DIAMON'] });
+    expect(detectProfile([weak, machine], '/cam/mill/a.nc', 'G1\nDIAMON\n', 'weak')).toBe('machine');
   });
 });
 

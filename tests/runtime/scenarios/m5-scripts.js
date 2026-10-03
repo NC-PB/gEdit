@@ -193,7 +193,7 @@ scenario('m5-scripts-ui', { timeout: 420 }, async (h) => {
   await h.waitFor(() => h.q('modal'), { timeout: 20000 })
   h.check(
     'a script with parameters opens its form before it runs',
-    !!h.q('form-field', { field: 'percent' }) && h.qa('form-field').length === 8,
+    !!h.q('form-field', { field: 'percent' }) && h.qa('form-field').length === 9,
     h.qa('form-field').map((e) => e.dataset.field),
   )
   h.check('the form is titled with the script name, not its file name', (h.q('modal')?.textContent ?? '').includes('Scale feed rates'), h.q('modal')?.textContent?.slice(0, 80))

@@ -15,6 +15,11 @@
 //      in registry order.
 //   4. Nothing scored at all (an empty file, an unknown extension, no marker) keeps
 //      `fallback` — the current or default profile.
+//   5. A profile one of whose `detect.vetoes` matches a scanned line scores nothing for
+//      that file (M9 NC review F3): the Siemens milling profile is out as soon as a program
+//      writes a turning word, so a mill-turn program stays a turning program however many
+//      of its operations mill (R2). Folders (rule 1) are not vetoed: they are the user's
+//      own choice.
 //
 // The behaviour change this brings over M1 is deliberate and is the answer to the open
 // question in the P3 hand-off: the extension is a **weight**, not a verdict, so a
@@ -153,6 +158,40 @@ function extensionWeight(cp: CompiledProfile, ext: string): number {
 }
 
 /**
+ * Every profile's score for a file, in the order of `profiles`: the extension weight plus
+ * the strongest content rule per line over the first [`MAX_SNIFF_LINES`] non-empty lines,
+ * or 0 for a profile one of whose `detect.vetoes` matches one of those lines (rule 5).
+ * Exported for the tests that print the margins (gate G10), so they read what detection
+ * reads.
+ */
+export function detectScores(profiles: CompiledProfile[], path: string | null, text: string): number[] {
+  const ext = path === null ? '' : extensionOf(path);
+  const scores = profiles.map((cp) => extensionWeight(cp, ext));
+  const vetoed = profiles.map(() => false);
+
+  // Strongest pattern per line: the rules are tried in descending weight, and the first
+  // one that matches ends the line for that profile.
+  const rules = profiles.map((cp) => [...cp.re.detectContent].sort((a, b) => b.weight - a.weight));
+  const vetoes = profiles.map((cp) => cp.re.detectVetoes ?? []);
+  for (const line of firstLines(text, MAX_SNIFF_LINES)) {
+    for (let i = 0; i < profiles.length; i++) {
+      if (vetoed[i]) continue;
+      if (vetoes[i].length > 0 && vetoes[i].some((veto) => veto.test(line))) {
+        vetoed[i] = true;
+        continue;
+      }
+      for (const rule of rules[i]) {
+        if (rule.re.test(line)) {
+          scores[i] += rule.weight;
+          break;
+        }
+      }
+    }
+  }
+  return scores.map((score, i) => (vetoed[i] ? 0 : score));
+}
+
+/**
  * Picks the profile id for a file, or returns `fallback` when nothing scores.
  *
  * `profiles` is in registry order, which is the last tie-break. `path` is `null` for an
@@ -175,22 +214,7 @@ export function detectProfile(
     if (folderMatch) return folderMatch.profile.id;
   }
 
-  const ext = path === null ? '' : extensionOf(path);
-  const scores = profiles.map((cp) => extensionWeight(cp, ext));
-
-  // Strongest pattern per line: the rules are tried in descending weight, and the first
-  // one that matches ends the line for that profile.
-  const rules = profiles.map((cp) => [...cp.re.detectContent].sort((a, b) => b.weight - a.weight));
-  for (const line of firstLines(text, MAX_SNIFF_LINES)) {
-    for (let i = 0; i < profiles.length; i++) {
-      for (const rule of rules[i]) {
-        if (rule.re.test(line)) {
-          scores[i] += rule.weight;
-          break;
-        }
-      }
-    }
-  }
+  const scores = detectScores(profiles, path, text);
 
   let bestIndex = -1;
   for (let i = 0; i < profiles.length; i++) {

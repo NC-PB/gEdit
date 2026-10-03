@@ -86,6 +86,24 @@ describe('hoverText: codes', () => {
     });
   });
 
+  it('describes the sub-block of an older cycle by its cycle, and leaves one without an entry alone', () => {
+    // Real programs write `CYCL DEF 19.0` / `19.1` and `7.0` / `7.1`; the database has the whole number.
+    const line = '12 CYCL DEF 19.1 A+0 B+45';
+    expect(klartextHover(line, 'CYCL')).toContain('**CYCL DEF 19**');
+    expect(klartextHover(line, '19.1')).toContain('**CYCL DEF 19**');
+    expect(hoverTarget(line, line.indexOf('19.1'), klartextProfile, heidenhain, undefined)).toMatchObject({
+      address: 'CYCL DEF 19',
+      start: 3,
+      end: 16,
+    });
+    expect(klartextHover('11 CYCL DEF 7.0 DATUM SHIFT', '7.0')).toContain('**CYCL DEF 7**');
+    expect(klartextHover('4 CYCL DEF 32.1 T0.05', '32.1')).toContain('**CYCL DEF 32**');
+    // No entry for the cycle: not joined, the number stays a number with nothing to say.
+    expect(klartextHover('4 CYCL DEF 999.1 Q1', '999.1')).toBeNull();
+    // `BLK FORM 0.1` keeps its own keyword; `LBL 1.5` is no code.
+    expect(klartextHover('1 BLK FORM 0.1 Z X+0 Y+0 Z-40', 'BLK')).toContain('**BLK FORM**');
+  });
+
   it('leaves a number that only follows a keyword alone', () => {
     // `LBL 1` is the label `LBL` and the number 1, not a code called "LBL 1", so the
     // number stays a number: it is its own token and it has nothing to say.
@@ -229,6 +247,16 @@ describe('hoverText: the turning dialects', () => {
     expect(siemensHover('N200 M1=3', 'M1=3')).toContain('Spindle on, clockwise');
   });
 
+  it('reads an indexed assignment as the word of the spindle or axis its index names (M9 review F1)', () => {
+    // `M[2]=3` read as `M3` of the master spindle, and `FA[X]=100` as a word `FA100`.
+    const m = siemensHover('N70 M[2]=3', 'M[2]=3') as string;
+    expect(m.startsWith('**M\\[2\\]=3** — Spindle on, clockwise')).toBe(true);
+    const fa = siemensHover('N80 FA[X]=100', 'FA[X]=100') as string;
+    expect(fa).not.toContain('FA100');
+    expect(fa).toContain('FA\\[X\\]=100');
+    expect(siemensHover('N60 S[2]=500', 'S[2]=500')).toContain('**S** — Spindle speed');
+  });
+
   it('reads a spindle-addressed S or T word as its address, never as a code spelled together', () => {
     expect(siemensHover('N170 S3=2400 M3=3', 'S3=2400')).toContain('**S** — Spindle speed');
     expect(siemensHover('N190 T1=5 D1', 'T1=5')).toContain('**T** — Tool');
@@ -259,6 +287,42 @@ describe('hoverText: the turning dialects', () => {
     expect(siemensHover('GOTOF PASS2', 'PASS2')).toBeNull();
     expect(okumaHover('V1=DIA1*2', 'DIA1')).toBeNull();
     expect(okumaHover('NLAP1 G81 X50', 'NLAP1')).toBeNull();
+  });
+});
+
+describe('hoverText: a local variable among the assignment words (`syntax.extendedAddresses`)', () => {
+  it('calls a name the control does not list a variable, and says only the control knows its value', () => {
+    for (const [line, name] of [
+      ['N30 DIA1=50 ZL1=-20', 'DIA1'],
+      ['N30 DIA1=50 ZL1=-20', 'ZL1'],
+      ['N40 QR=5', 'QR'],
+    ] as const) {
+      const text = okumaHover(line, name) as string;
+      expect(text, `${name} in ${line}`).toContain(`**${name}** — Variable`);
+      expect(text).toContain('Only the control knows the value');
+      expect(text).not.toContain('does not describe');
+    }
+  });
+
+  it('keeps an address of the control an address, and an option address the database lacks undescribed', () => {
+    expect(okumaHover('N40 SB=1200 M13', 'SB=')).toContain('**SB** — Driven\\-tool speed');
+    // `TL` is one of the control's own addresses (the profile lists it) that the database has
+    // no entry for yet: that is "not described", never a variable.
+    const text = okumaHover('N50 TL=2', 'TL') as string;
+    expect(text).toContain('does not describe this word yet');
+    expect(text).not.toContain('Variable');
+  });
+
+  it('describes the same words as before on a profile that lists no addresses', () => {
+    const copy = structuredClone(okumaProfileJson) as unknown as Profile & { syntax: Record<string, unknown> };
+    delete copy.syntax.extendedAddresses;
+    const bare = compileProfile(copy);
+    expect(hover(bare, okuma, 'N40 QR=5', 'QR')).toContain('does not describe this word yet');
+    expect(hover(bare, okuma, 'N30 DIA1=50', 'DIA1')).toBeNull();
+  });
+
+  it('is silent on a name in an expression, which is not an assignment word', () => {
+    expect(okumaHover('V1=DIA1*2', 'DIA1')).toBeNull();
   });
 });
 

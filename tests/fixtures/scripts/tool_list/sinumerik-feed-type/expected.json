@@ -41,7 +41,7 @@
       "line": 5,
       "calls": 1,
       "feed": "0.25-0.3 /rev",
-      "speed": "200 surface"
+      "speed": "200 m/min (G96)"
     },
     {
       "tool": "FINISH",
@@ -57,7 +57,7 @@
     {
       "line": 10,
       "severity": "info",
-      "message": "FINISH: the S of 1 block is a surface speed (G96), not a spindle speed, so it is not in the range."
+      "message": "FINISH: the S of 1 block is a surface speed in m/min (G96), not a spindle speed, so it is not in the range."
     }
   ]
 }

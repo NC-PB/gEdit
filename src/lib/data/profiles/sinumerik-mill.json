@@ -1,0 +1,46 @@
+{
+  "id": "sinumerik-mill",
+  "extends": "sinumerik",
+  "name": "Sinumerik 840D (milling)",
+  "shortName": "Sinumerik M",
+  "version": 1,
+  "machineType": "mill",
+  "files": { "filterName": "Sinumerik milling" },
+  "detect": {
+    "extensions": { "mpf": 8, "spf": 8 },
+    "content": [
+      { "pattern": "^%_N_\\w+_(?:MPF|SPF)", "weight": 5000 },
+      { "pattern": "^;\\$PATH=", "weight": 5000 },
+      { "pattern": "^(?![\\d(;])(?:[^\";]*\"[^\"]*\")*[^\";]*?(?<![A-Z0-9_$])(?:CYCLE(?:6[0134]|7[026-9]|832|899)|POCKET[34]|SLOT[12]|LONGHOLE)(?![A-Z0-9_])", "weight": 6 },
+      { "pattern": "^(?![\\d(;])(?![^;]*(?<![A-Z0-9_$])T\\d+(?![\\d.]|[ \\t]*=))(?:[^\";]*\"[^\"]*\")*[^\";]*?(?<![A-Z0-9_$])M0*6(?![\\d.]|[ \\t]*=)", "weight": 5 },
+      { "pattern": "^(?![\\d(;])(?:[^\";]*\"[^\"]*\")*[^\";]*?(?<![A-Z0-9_$])CYCLE800(?![A-Z0-9_])", "weight": 5 },
+      { "pattern": "(?<![A-Z0-9_$])CYCLE\\d+(?![A-Z0-9_])", "weight": 4 },
+      { "pattern": "=[ \\t]*(?:AC|IC|DC|ACP|ACN)[ \\t]*\\(", "weight": 4 },
+      { "pattern": "(?<![A-Z0-9_$])CR[ \\t]*=", "weight": 4 },
+      { "pattern": "(?<![A-Z0-9_$])(?:TRAORI|TRAFOOF|ORIWKS|ORIAXES|MCALL|SUPA)(?![A-Z0-9_])", "weight": 4 },
+      { "pattern": "(?<![A-Z0-9_$])WORKPIECE[ \\t]*\\(", "weight": 4 },
+      { "pattern": "(?<![A-Z0-9_$])T\\d*[ \\t]*=[ \\t]*\"", "weight": 4 },
+      { "pattern": "(?<![A-Z0-9_$])MSG[ \\t]*\\([ \\t]*[\")]", "weight": 3 },
+      { "pattern": "(?<![A-Z0-9_$])GOTO[FB](?![A-Z0-9_])", "weight": 3 },
+      { "pattern": "(?<![A-Z0-9_$])DEF[ \\t]+(?:REAL|INT)(?![A-Z0-9_])", "weight": 3 },
+      { "pattern": "^(?![\\d(;])[^;]*(?<![A-Z0-9_$])G0*(?:17|94)(?![\\d.])", "weight": 2 },
+      { "pattern": "(?<![A-Z0-9_$])G0*64[0-9](?![\\d.])", "weight": 2 },
+      { "pattern": "^;", "weight": 1 },
+      { "pattern": "^(?![^;]*(?<![A-Z_$])Y)N\\d+", "weight": 1 },
+      { "pattern": "^(?![^;]*(?<![A-Z_$])Y)(?:N\\d+[ \\t]*)?[GM]\\d{1,3}(?![\\d.])", "weight": 1 }
+    ],
+    "priority": -2,
+    "vetoes": [
+      "^(?![\\d(;])(?:[^\";]*\"[^\"]*\")*[^\";]*?(?<![A-Z0-9_$])(?:DIAM(?:ON|90)(?![A-Z0-9_])|LIMS[ \\t]*=|SETMS(?![A-Z0-9_])|TRANSMIT(?![A-Z0-9_])|TRACYL(?![A-Z0-9_])|[MS]\\d+[ \\t]*=)"
+    ]
+  },
+  "toolCall": {
+    "trigger": "^(?:[^\"]*\"[^\"]*\")*[^\"]*?(?<![A-Z0-9_$])M0*6(?![\\d.]|\\s*=)",
+    "ignore": "^(?:[^\"]*\"[^\"]*\")*[^\"]*?(?<![A-Z0-9_$])T(?:\\d*\\s*=\\s*)?0+(?![\\d._])(?!\\s*=)",
+    "toolFrom": "same-line-or-last"
+  },
+  "modal": { "initial": { "plane": "G17", "feedmode": "G94" } },
+  "machineParams": {
+    "diameter": "off"
+  }
+}

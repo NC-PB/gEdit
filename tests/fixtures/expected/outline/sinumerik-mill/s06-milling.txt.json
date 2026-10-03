@@ -1,0 +1,16 @@
+{
+  "profile": "sinumerik-mill",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":2,"text":"COVER PLATE - A MILLING PROGRAM WITHOUT THE TRANSFER HEADER"},
+    {"kind":"subprogram-call","line":3,"text":"WORKPIECE"},
+    {"kind":"subprogram-call","line":5,"text":"CYCLE800"},
+    {"kind":"tool","line":7,"text":"FACEMILL_D50 — FACE THE TOP","tool":"\"FACEMILL_D50\"","endLine":19},
+      {"kind":"comment","line":8,"text":"FACE THE TOP"},
+    {"kind":"tool","line":20,"text":"DRILL_D8 — DRILL FOUR HOLES","tool":"\"DRILL_D8\"","endLine":32},
+      {"kind":"comment","line":21,"text":"DRILL FOUR HOLES"},
+      {"kind":"subprogram-call","line":25,"text":"CYCLE81"},
+    {"kind":"tool","line":33,"text":"BALL_D6","tool":"\"BALL_D6\"","endLine":42},
+      {"kind":"end","line":41,"text":"M30"}
+  ]
+}

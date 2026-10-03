@@ -52,7 +52,11 @@ import type {
   Reading,
   ResolvedClass,
   ResolvedValue,
+  UndeclaredFeedClass,
 } from './types';
+
+/** Every class `valueOf`, `writeBack` and `readingsOf` can be asked about. */
+type ValueClass = NumberClass | UndeclaredFeedClass | 'increment';
 
 /**
  * Addresses that are lengths although no profile field lists them.
@@ -211,14 +215,31 @@ function feedWordsOf(profile: Profile | undefined, unitWords: Map<string, string
   return words;
 }
 
-/** The feed class of a feed unit, or null while the unit says nothing about a length. */
-function feedClassOf(unit: FeedUnit | string | undefined): NumberClass | null {
+/**
+ * The feed class of a feed unit, or null while the unit is unknown.
+ *
+ * M9 (WP9.5a): a feed per tooth and an inverse-time feed have a class of their own now
+ * (`UndeclaredFeedClass`), so a consumer can say what such a word is. No machine declares
+ * a reading for either, so neither gets a value on a profile that declares number input
+ * (`readingFor`). 'unknown' is the honest answer of a tracker that has not seen a feed mode
+ * yet, and it still has no class.
+ */
+function feedClassOf(unit: FeedUnit | string | undefined): NumberClass | UndeclaredFeedClass | null {
   if (unit === 'per-minute') return 'feedPerMin';
   if (unit === 'per-rev') return 'feedPerRev';
-  // 'per-tooth' has no class of its own, 'inverse-time' is not a length per time at all,
-  // and 'unknown' is the honest answer of a tracker that has not seen a feed mode yet.
-  // All three get no value rather than the wrong one.
+  if (unit === 'per-tooth') return 'feedPerTooth';
+  if (unit === 'inverse-time') return 'inverseTime';
   return null;
+}
+
+/** The `unit` a code declares for `word` among its parameters, if one of `codes` does. */
+function declaredUnit(codes: readonly CodeEntry[], word: string): CodeParam['unit'] | undefined {
+  for (const entry of codes) {
+    for (const param of paramsOf(entry)) {
+      if (upper(param?.address ?? '') === word && param?.unit !== undefined) return param.unit;
+    }
+  }
+  return undefined;
 }
 
 function paramsOf(entry: CodeEntry | undefined): readonly CodeParam[] {
@@ -232,22 +253,40 @@ function paramsOf(entry: CodeEntry | undefined): readonly CodeParam[] {
  * The order is fixed by AD-31 and the first match wins:
  *
  *  1. `CodeParam.unit` of a code in this block — a cycle parameter is often the one place
- *     a control breaks its own convention (§8.2 is where these are written down);
+ *     a control breaks its own convention (§8.2 is where these are written down); then
+ *     (M9) the same of a code **in force** (`inForce`: the modal cycle, the motion code or
+ *     a mode the caller's tracker has active), whose parameters keep their reading in the
+ *     blocks that repeat it. A thread **lead** is declared this way (`F` with `unit:
+ *     'feedPerRev'`), and so is the per-minute feed of Okuma `G101`–`G103`;
  *  2. the feed word of an `fNotFeed` block → `dwell` (the `F` of Okuma's and Sinumerik's
  *     `G4` is a time, M8);
- *  3. the feed word under a pitch feed → `feedPerRev`: a thread lead is per revolution
- *     whatever the modal feed mode says;
- *  4. `addresses.angular` → `angle`;
+ *  3. the feed word of a block whose code is `pitchFeedAmbiguous` → no class; and the feed
+ *     word under a pitch the caller could not name (`pitchFeed` with no `pitchFeed` code in
+ *     the block or in `inForce`) → `feedPerRev` under a per-revolution feed unit, where a
+ *     lead and a tap's feed are the same kind of number, and no class otherwise;
+ *  4. `addresses.angular` → `angle`, and so does an incremental twin of an angular axis
+ *     (`addresses.incremental`: `H` of `C` on a Fanuc lathe, M9 review F9);
  *  5. the feed word → the class of the modal feed unit (or of the word's own unit, for a
  *     `feedUnitWords` word such as Klartext `FU`);
- *  6. axes, their incremental twins, arc centres and `R` → `length`;
+ *  6. axes, their incremental twins (of a linear axis), arc centres and `R` → `length`;
  *  7. everything else has no class: `S`, `T`, `D`, `H`, `N`, `O`, `G`, `M` and every
  *     `unit: 'count'` word are never converted.
  *
- * `null` also means "undecidable": a feed while the feed unit is unknown, and the feed of
- * a block whose code is `pitchFeedAmbiguous` (the same number is a threading cycle in
+ * **A pitch is a lead only where the database says so (M9, WP9.5a).** Until M9 rule 3 made
+ * every feed under a `pitchFeed` code a feed per revolution. A tap is not a thread: the
+ * `F` of a Fanuc mill `G84` or `G74`, of Okuma `G184`, of a `G63` tapping mode is the tap's
+ * feed in the feed unit in force — per minute under `G94`, the spindle speed times the
+ * pitch — and read as per revolution it was 100× off on an Okuma 1 µm machine. Such a code
+ * keeps `pitchFeed` (nothing may scale its feed) and its `F` follows rule 5; a code whose
+ * `F` really is the lead says so with its parameter's unit (rule 1). A `G63` mode in force
+ * reaches this function through `inForce` like any other code: it is a tap, so its feed
+ * is in the feed unit (TODO, the modal pitch-feed mode of the Python tracker).
+ *
+ * `null` also means "undecidable": a feed while the feed unit is unknown, the feed of a
+ * block whose code is `pitchFeedAmbiguous` (the same number is a threading cycle in
  * another G-code system, so nothing in the block says whether the `F` is a feed or a
- * lead). Both get no value instead of a wrong one.
+ * lead), and a feed per minute under a pitch nobody named. All get no value instead of a
+ * wrong one.
  */
 export function numberClassOf(
   address: string,
@@ -257,28 +296,39 @@ export function numberClassOf(
     blockCodes: readonly CodeEntry[];
     /** This block, or the cycle that is active, carries a pitch feed. */
     pitchFeed: boolean;
+    /**
+     * M9 (WP9.5a). The database entries of the codes in force that this block does not
+     * write: the modal cycle, the motion code, a mode such as Fanuc `G63`. Optional: a
+     * caller without a modal state passes nothing, and a pitch it flags is then one it
+     * could not name (rule 3).
+     */
+    inForce?: readonly CodeEntry[];
   },
 ): ResolvedClass {
   const word = upper(address);
   if (word === '') return null;
   const codes = Array.isArray(o.blockCodes) ? o.blockCodes : [];
+  const inForce = Array.isArray(o.inForce) ? o.inForce : [];
 
-  // 1. what the code database says about this parameter of this code
-  for (const entry of codes) {
-    for (const param of paramsOf(entry)) {
-      if (upper(param?.address ?? '') === word && param?.unit !== undefined) return param.unit;
-    }
-  }
+  // 1. what the code database says about this parameter of this code, then of the code in
+  //    force: a lead is declared here (`F` with `unit: 'feedPerRev'`), never inferred
+  const declared = declaredUnit(codes, word) ?? declaredUnit(inForce, word);
+  if (declared !== undefined) return declared;
 
   const unitWords = feedUnitWordsOf(o.profile);
   const feedWords = feedWordsOf(o.profile, unitWords);
   if (feedWords.has(word)) {
     // 2. a block where the feed word is a time
     if (codes.some((entry) => (entry as { fNotFeed?: boolean })?.fNotFeed === true)) return 'dwell';
-    // 3. a thread lead, whatever the modal feed mode says
-    if (o.pitchFeed === true || codes.some((entry) => entry?.pitchFeed === true)) return 'feedPerRev';
-    // …and a code that may be a threading cycle in another G-code system tells us nothing.
+    // 3. a code that may be a threading cycle in another G-code system tells us nothing…
     if (codes.some((entry) => entry?.pitchFeedAmbiguous === true)) return null;
+    // …and neither does a pitch nobody named: a lead and a tap's feed are only the same
+    // kind of number in feed per revolution.
+    const named = codes.some((entry) => entry?.pitchFeed === true) || inForce.some((entry) => entry?.pitchFeed === true);
+    if (o.pitchFeed === true && !named) {
+      const unit = unitWords.get(word) ?? o.feedUnit;
+      return unit === 'per-rev' ? 'feedPerRev' : null;
+    }
   }
 
   const addresses = addressesOf(o.profile);
@@ -286,6 +336,13 @@ export function numberClassOf(
   // 4. rotary axes
   const angular = Array.isArray(addresses?.angular) ? addresses.angular : [];
   if (angular.some((entry) => upper(entry) === word)) return 'angle';
+  // An incremental twin moves the axis it names, so it is that axis's kind of number:
+  // `H90.` is 90° of C, never 90 mm (M9 review F9).
+  for (const [twin, axis] of Object.entries(addresses?.incremental ?? {})) {
+    if (upper(twin) === word && typeof axis === 'string' && angular.some((entry) => upper(entry) === upper(axis))) {
+      return 'angle';
+    }
+  }
 
   // 5. the feed word, by the unit in force
   if (feedWords.has(word)) {
@@ -320,14 +377,25 @@ function followsUnits(cls: NumberClass): boolean {
   return cls === 'length' || cls === 'feedPerMin' || cls === 'feedPerRev';
 }
 
-function unitOf(cls: NumberClass, input: NumberInput, units: 'mm' | 'inch'): string | null {
+/**
+ * The unit of `cls` on this input, or null when it declares none.
+ *
+ * An inch unit that is not declared is a tenth of the metric one only where the class is
+ * read in **increments** (or as written, where the unit is never used): that is the
+ * increment systems' own rule, 0.001 mm and 0.0001 in on IS-B. A **scaled** reading is a
+ * unit system, and a unit system declares its inch unit or has none — the Okuma 10 µm
+ * system has no inch counterpart at all, and inventing 0.001 in for it (M9, WP9.5a) gave
+ * an inch program a value no control reads.
+ */
+function unitOf(cls: NumberClass, input: NumberInput, units: 'mm' | 'inch', mode: NumberReading): string | null {
   const entry = input.classes?.[cls];
   if (followsUnits(cls)) {
+    const invent = mode !== 'scale';
     if (typeof entry?.increment === 'string') {
-      if (units === 'inch') return entry.incrementInch ?? tenthOf(entry.increment);
+      if (units === 'inch') return entry.incrementInch ?? (invent ? tenthOf(entry.increment) : null);
       return entry.increment;
     }
-    if (units === 'inch') return input.incrementInch ?? tenthOf(input.incrementMm);
+    if (units === 'inch') return input.incrementInch ?? (invent ? tenthOf(input.incrementMm) : null);
     return input.incrementMm;
   }
   if (cls === 'angle') return entry?.increment ?? input.incrementDeg ?? input.incrementMm;
@@ -354,16 +422,20 @@ function unitOf(cls: NumberClass, input: NumberInput, units: 'mm' | 'inch'): str
  * added. The unit still has to be **declared**, never guessed: a preset that names no
  * increment gives such a word no value and it is reported.
  */
-function readingFor(cls: NumberClass | 'increment', input: NumberInput | null, units: 'mm' | 'inch'): ClassReading | null {
+function readingFor(cls: ValueClass, input: NumberInput | null, units: 'mm' | 'inch'): ClassReading | null {
   // No declaration: the profile's own JSON decides, and it says what it says — as written.
   if (input === null || typeof input !== 'object') return { mode: 'calculator', unit: '1' };
+  // A feed per tooth or an inverse-time feed: no machine declares how it reads one (M9),
+  // so on a profile that declares number input at all, it has no reading.
+  if (cls === 'feedPerTooth' || cls === 'inverseTime') return null;
 
   const key: NumberClass = cls === 'increment' ? 'length' : cls;
   const mode = input.classes?.[key]?.mode ?? input.mode;
-  const unit = unitOf(key, input, units);
+  const reading: NumberReading = cls === 'increment' ? (mode === 'scale' ? 'scale' : 'increment') : mode;
+  const unit = unitOf(key, input, units, reading);
   if (typeof unit !== 'string') return null;
 
-  if (cls === 'increment') return { mode: mode === 'scale' ? 'scale' : 'increment', unit };
+  if (cls === 'increment') return { mode: reading, unit };
   if (mode !== 'increment' && mode !== 'calculator' && mode !== 'scale') return null;
   return { mode, unit };
 }
@@ -387,7 +459,7 @@ function unitDec(reading: ClassReading): Dec | null {
  */
 export function valueOf(
   lit: NumericLiteral,
-  cls: NumberClass | 'increment',
+  cls: ValueClass,
   m: MachineParams,
   units: 'mm' | 'inch',
 ): string | null {
@@ -423,7 +495,7 @@ export function valueOf(
 export function writeBack(
   value: string,
   original: NumericLiteral,
-  cls: NumberClass | 'increment',
+  cls: ValueClass,
   m: MachineParams,
   units: 'mm' | 'inch',
   fmt: NumberFormatOptions,
@@ -479,7 +551,7 @@ function presetsOf(decl: MachineParamsDecl | undefined): NumberInputPreset[] {
  */
 export function readingsOf(
   lit: NumericLiteral,
-  cls: NumberClass | 'increment',
+  cls: ValueClass,
   decl: MachineParamsDecl | undefined,
   units: 'mm' | 'inch',
 ): Reading[] {

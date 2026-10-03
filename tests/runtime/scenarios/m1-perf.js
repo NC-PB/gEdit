@@ -15,6 +15,12 @@ import { scenario } from '../lib/index.js'
 /** The budgets this gate enforces. */
 const OPEN_BUDGET_MS = 2000
 const SWITCH_BUDGET_MS = 100
+// The first switch away from the 10 MB document pays for the editor's one-off teardown, and a
+// hosted CI runner is several times slower than the owner's Mac (334 ms against about 30 ms).
+// Same rule as tests/unit/helpers/budget.ts (plan §5.2 rule 13): x5 when `CI` is set, the budget
+// itself locally. Only this "cheap" check is scaled; the G7 budget for switching onto the
+// document is held as it is.
+const CI_FACTOR = 5
 
 const MIN_LINES = 300000
 const MIN_BYTES = 10 * 1024 * 1024
@@ -151,7 +157,7 @@ scenario('m1-perf-open', { timeout: 300 }, async (h) => {
   const worst = Math.max(...ms(toBig))
   const median = [...ms(toBig)].sort((a, b) => a - b)[Math.floor(toBig.length / 2)]
   h.check('every tab switch showed the document it was asked for', [...toSmall, ...toBig].every((r) => r.ok), { toSmall, toBig })
-  h.check(`switching away from the 10 MB document is cheap: worst ${Math.max(...ms(toSmall))} ms`, Math.max(...ms(toSmall)) <= SWITCH_BUDGET_MS, { toSmall: ms(toSmall) })
+  h.check(`switching away from the 10 MB document is cheap: worst ${Math.max(...ms(toSmall))} ms`, Math.max(...ms(toSmall)) <= (h.cfg.ci ? SWITCH_BUDGET_MS * CI_FACTOR : SWITCH_BUDGET_MS), { toSmall: ms(toSmall), budgetMs: h.cfg.ci ? SWITCH_BUDGET_MS * CI_FACTOR : SWITCH_BUDGET_MS })
   h.check(`a tab switch onto the 10 MB document takes at most ${SWITCH_BUDGET_MS} ms (G7): best ${best}, median ${median}, worst ${worst} ms`, worst <= SWITCH_BUDGET_MS, {
     ontoBigMs: ms(toBig),
     swapOnlyMs: toBig.map((r) => r.swapMs),

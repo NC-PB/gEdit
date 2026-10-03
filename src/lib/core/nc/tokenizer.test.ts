@@ -22,6 +22,7 @@ import { compileProfile } from '$lib/core/profiles/compile';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
 import { blockNumberOf, tokenizeLine } from './tokenizer';
 import type { LineState, NcToken } from './types';
+import { OutlineIndex } from '$lib/core/profiles/outline';
 import { expectWithin, fastest } from '../../../../tests/unit/helpers/budget';
 
 const fanuc = compileProfile(fanucJson as unknown as Profile);
@@ -32,6 +33,11 @@ const sinumerik = compileProfile(sinumerikJson as unknown as Profile);
 // its own file says only what differs from the mill.
 const lathe = compileProfile(
   (BUILTIN_PROFILE_JSON.find((raw) => (raw as Profile).id === 'fanuc-lathe') ?? {}) as Profile,
+);
+// M9 (P9): the Sinumerik milling child inherits the whole `syntax` of the turning profile;
+// its golden holds milling lines (`M6` changes, `CYCLE800`, `TRAORI`), read as P9 reads them.
+const sinumerikMill = compileProfile(
+  (BUILTIN_PROFILE_JSON.find((raw) => (raw as Profile).id === 'sinumerik-mill') ?? {}) as Profile,
 );
 
 interface GoldenEntry {
@@ -70,6 +76,7 @@ describe.each([
   // have to come back exactly as they did in M3.
   ['okuma-osp', okuma],
   ['sinumerik', sinumerik],
+  ['sinumerik-mill', sinumerikMill],
 ])('%s goldens', (profileId, cp) => {
   const entries = golden(profileId);
 
@@ -92,12 +99,12 @@ describe.each([
 
   // The comparison above reads only the fields an entry lists, which is what the Python
   // side does too (§7.10). This keeps our own file from going quiet about one of them.
-  it('spells out every address, value and incremental flag', () => {
+  it('spells out every address, value, incremental flag and index', () => {
     for (const entry of entries) {
       const actual = code(tokenizeLine(entry.line, cp, entry.prev).tokens);
       actual.forEach((token, i) => {
         const listed = Object.keys(entry.tokens[i] ?? {});
-        for (const key of ['address', 'valueText', 'incremental'] as const) {
+        for (const key of ['address', 'valueText', 'incremental', 'index'] as const) {
           if (token[key] !== undefined) expect(listed, `${entry.line}: token ${i + 1}`).toContain(key);
         }
       });
@@ -939,6 +946,320 @@ describe('a variable pattern that can match nothing', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// M9, WP9.3 (R4): the remaining tokenizer rules. The goldens above carry one line per case
+// for both tokenizers (`tests/python/test_gedit_nc.py` runs the same entries); what follows
+// says in sentences what a golden cannot — the value, the edge of a rule, and that each rule
+// is the profile's data and nothing else.
+// ---------------------------------------------------------------------------
+
+/** The profile of `cp` with `edit` applied to its `syntax`, compiled again. */
+function without(cp: CompiledProfile, edit: (syntax: Record<string, unknown>) => void): CompiledProfile {
+  const copy = structuredClone(cp.profile) as Profile;
+  edit(copy.syntax as unknown as Record<string, unknown>);
+  return compileProfile(copy);
+}
+
+const kindsOf = (line: string, cp: CompiledProfile): string[] => code(tokenizeLine(line, cp).tokens).map((token) => token.kind);
+const textsOf = (line: string, cp: CompiledProfile): string[] => code(tokenizeLine(line, cp).tokens).map((token) => token.text);
+
+describe('a main block number (`blockNumber.mainPrefix`)', () => {
+  it('is a block number with the prefix as its address, and not the punched-tape program marker', () => {
+    const [block, word] = code(tokenizeLine(':123 G1 X10', sinumerik).tokens);
+    expect(block).toMatchObject({ kind: 'blockNumber', text: ':123', address: ':', valueText: '123' });
+    expect(block.value?.raw).toBe('123');
+    expect(word).toMatchObject({ kind: 'word', address: 'G' });
+  });
+
+  it('stands where a block number stands: behind a skip mark, and the line may hold nothing else', () => {
+    expect(code(tokenizeLine('/1 :124 G1', sinumerik).tokens).map((token) => `${token.kind}:${token.text}`)).toEqual([
+      'skip:/1',
+      'blockNumber::124',
+      'word:G1',
+    ]);
+    expect(kindsOf(':125', sinumerik)).toEqual(['blockNumber']);
+    expect(kindsOf('  :126', sinumerik)).toEqual(['blockNumber']);
+  });
+
+  it('is found by blockNumberOf, with the prefix inside the span and the digits as the text', () => {
+    expect(blockNumberOf(':123 G1', sinumerik)).toEqual({ value: 123, text: '123', start: 0, end: 4 });
+    expect(blockNumberOf('/1 :124 G1', sinumerik)).toMatchObject({ value: 124, start: 3, end: 7 });
+    expect(blockNumberOf('N10 G1', sinumerik)).toEqual({ value: 10, text: '10', start: 0, end: 3 });
+  });
+
+  it('is left to the tape marker where the profile names no prefix', () => {
+    expect(code(tokenizeLine(':1234', fanuc).tokens)[0]).toMatchObject({ kind: 'programMarker', address: ':', valueText: '1234' });
+    const bare = without(sinumerik, (syntax) => delete (syntax.blockNumber as Record<string, unknown>).mainPrefix);
+    expect(code(tokenizeLine(':123 G1', bare).tokens)[0]).toMatchObject({ kind: 'programMarker', text: ':123' });
+    expect(blockNumberOf(':123 G1', bare)).toBeNull();
+  });
+
+  it('reads whatever prefix the profile gives, and never one elsewhere in the block', () => {
+    const plus = without(sinumerik, (syntax) => ((syntax.blockNumber as Record<string, unknown>).mainPrefix = '+'));
+    expect(code(tokenizeLine('+7 G1', plus).tokens)[0]).toMatchObject({ kind: 'blockNumber', address: '+', valueText: '7' });
+    // Away from the head of the block a `:` is the operator it always was.
+    expect(kindsOf('G1 X10 :5', sinumerik)).not.toContain('blockNumber');
+  });
+
+  it('does not make a sequence name of the prefix, which only the block-number prefix can start', () => {
+    expect(kindsOf(':LAP1 G1', okuma)).not.toContain('label');
+    expect(kindsOf(':LAP1 G1', sinumerik)).not.toContain('blockNumber');
+  });
+});
+
+describe('an indexed assignment (`assignmentIndex`)', () => {
+  const siemens = (line: string): NcToken[] => code(tokenizeLine(line, sinumerik).tokens);
+
+  it('is one word whose address stays the name, with the index beside it', () => {
+    const [limit] = siemens('LIMS[2]=1800');
+    expect(limit).toMatchObject({ kind: 'word', text: 'LIMS[2]=1800', address: 'LIMS', index: '2', valueText: '1800' });
+    expect(limit.value?.raw).toBe('1800');
+    expect(siemens('S[SPI]=300')[0]).toMatchObject({ address: 'S', index: 'SPI', valueText: '300' });
+    expect(siemens('FA[X]=200')[0]).toMatchObject({ address: 'FA', index: 'X', valueText: '200' });
+    expect(siemens('M[2]=3')[0]).toMatchObject({ address: 'M', index: '2', valueText: '3' });
+  });
+
+  it('takes the blanks around the index and the `=` out of the index and keeps them in the text', () => {
+    const [word] = siemens('S[ SPI ] = 500 M3');
+    expect(word).toMatchObject({ text: 'S[ SPI ] = 500', address: 'S', index: 'SPI', valueText: '500' });
+    expect(siemens('S[ SPI ] = 500 M3')[1]).toMatchObject({ address: 'M', valueText: '3' });
+  });
+
+  it('leaves the value null when the right-hand side is no plain number, so nothing can scale it', () => {
+    expect(siemens('T[1]="DRILL_8"')[0]).toMatchObject({ address: 'T', index: '1', valueText: '"DRILL_8"', value: null });
+    expect(siemens('S[2]=R10*2')[0]).toMatchObject({ address: 'S', index: '2', valueText: 'R10*2', value: null });
+    expect(siemens('S[2]=')[0]).toMatchObject({ address: 'S', index: '2', text: 'S[2]=' });
+    expect(siemens('S[2]=')[0].valueText).toBeUndefined();
+  });
+
+  it('is no other word: a comparison, an empty index, a bracket that is not closed, or no `=` behind it', () => {
+    expect(siemens('X[1]==5')[0]).toMatchObject({ address: 'X', valueText: '[1]' });
+    expect(siemens('X[1]==5')[0].index).toBeUndefined();
+    expect(siemens('S[]=3')[0].index).toBeUndefined();
+    expect(siemens('S[2')[0].index).toBeUndefined();
+    expect(siemens('DEF REAL ARR[10]').map((token) => token.kind)).toEqual(['keyword', 'keyword', 'unknown', 'expression']);
+  });
+
+  it('asks the profile whether the name takes an `=`, and sets nothing without the field', () => {
+    const narrow = without(sinumerik, (syntax) => (syntax.assignment = '(?:LIMS|S)(?=\\s*=(?!=))'));
+    expect(code(tokenizeLine('LIMS[2]=1800', narrow).tokens)[0].index).toBe('2');
+    expect(code(tokenizeLine('FA[X]=200', narrow).tokens)[0].index).toBeUndefined();
+    const off = without(sinumerik, (syntax) => delete syntax.assignmentIndex);
+    expect(code(tokenizeLine('LIMS[2]=1800', off).tokens).map((token) => token.kind)).toEqual([
+      'unknown',
+      'expression',
+      'operator',
+      'word',
+    ]);
+    // Okuma declares no index, so its lines read as they did.
+    expect(code(tokenizeLine('SB=1200', okuma).tokens)[0].index).toBeUndefined();
+  });
+
+  it('is also read by the milling profile, which inherits the syntax', () => {
+    expect(code(tokenizeLine('LIMS[2]=3000', sinumerikMill).tokens)[0]).toMatchObject({ address: 'LIMS', index: '2' });
+  });
+});
+
+describe('an exponent inside a number (`exponentMarker`)', () => {
+  const siemens = (line: string): NcToken[] => code(tokenizeLine(line, sinumerik).tokens);
+
+  it('belongs to the value of its word, which then computes as nothing', () => {
+    expect(siemens('G1 X1.5EX3 Y2EX-4')[1]).toMatchObject({ address: 'X', valueText: '1.5EX3', value: null });
+    expect(siemens('G1 X1.5EX3 Y2EX-4')[2]).toMatchObject({ address: 'Y', valueText: '2EX-4', value: null });
+    expect(siemens('X=1.5EX3')[0]).toMatchObject({ address: 'X', valueText: '1.5EX3', value: null });
+    expect(siemens('R1=2.5EX2').map((token) => token.text)).toEqual(['R1', '=', '2.5EX2']);
+    expect(siemens('X-1.5EX+3')[0]).toMatchObject({ valueText: '-1.5EX+3', value: null });
+  });
+
+  it('is read in lower case too, as the rest of the dialect is', () => {
+    expect(siemens('X1.5ex3')[0]).toMatchObject({ valueText: '1.5ex3' });
+  });
+
+  it('needs a digit behind the marker: a lone `EX` is what it was', () => {
+    expect(siemens('G1 X1EX Y1').map((token) => token.text)).toEqual(['G1', 'X1', 'EX', 'Y1']);
+    expect(siemens('X1EX+ Y1').map((token) => token.text)).toEqual(['X1', 'EX', '+', 'Y1']);
+  });
+
+  it('reads the letters from the profile, and nothing without them', () => {
+    const e = without(sinumerik, (syntax) => (syntax.exponentMarker = 'E'));
+    expect(code(tokenizeLine('X1.5E3', e).tokens)[0]).toMatchObject({ valueText: '1.5E3', value: null });
+    const off = without(sinumerik, (syntax) => delete syntax.exponentMarker);
+    expect(code(tokenizeLine('X1.5EX3', off).tokens).map((token) => token.text)).toEqual(['X1.5', 'EX3']);
+    expect(code(tokenizeLine('X1.5EX3', fanuc).tokens).map((token) => token.text)).toEqual(['X1.5', 'E', 'X3']);
+  });
+
+  it('is part of the milling profile as well', () => {
+    expect(code(tokenizeLine('X1.5EX3', sinumerikMill).tokens)[0].valueText).toBe('1.5EX3');
+  });
+});
+
+describe('several skip levels on one block', () => {
+  const marks = (line: string, cp: CompiledProfile): string[] =>
+    code(tokenizeLine(line, cp).tokens)
+      .filter((token) => token.kind === 'skip')
+      .map((token) => token.text);
+
+  it('is one skip token per mark, wherever the profile takes a level', () => {
+    expect(marks('/1 /3 N20 G1 X10.', fanuc)).toEqual(['/1', '/3']);
+    expect(marks('/1/3 G1', fanuc)).toEqual(['/1', '/3']);
+    expect(marks('/0 /9 N30 G0', sinumerik)).toEqual(['/0', '/9']);
+    expect(marks('/2 /4 /6 G0', sinumerik)).toEqual(['/2', '/4', '/6']);
+    expect(marks('/1 /3 N20 G1', lathe)).toEqual(['/1', '/3']);
+  });
+
+  it('reads the block number behind the marks as a block number', () => {
+    expect(code(tokenizeLine('/1 /3 N20 G1', fanuc).tokens)[2]).toMatchObject({ kind: 'blockNumber', valueText: '20' });
+    expect(code(tokenizeLine('/1 /3 N20 G1', sinumerik).tokens)[2]).toMatchObject({ kind: 'blockNumber', valueText: '20' });
+    expect(blockNumberOf('/1 /3 N20 G1', fanuc)).toMatchObject({ value: 20, start: 6, end: 9 });
+    expect(blockNumberOf('/1 /3 N20 G1', sinumerik)).toMatchObject({ value: 20, start: 6, end: 9 });
+  });
+
+  it('is only for a skip mark that takes a level', () => {
+    // Okuma's `/` carries no level, so a second one is what it was: a division operator.
+    expect(marks('/ /3 G1', okuma)).toEqual(['/']);
+    expect(code(tokenizeLine('/ /3 G1', okuma).tokens)[1]).toMatchObject({ kind: 'operator', text: '/' });
+    expect(marks('/ /3 G1', klartext)).toEqual(['/']);
+  });
+
+  it('leaves a single mark and a mark behind the block number as they were', () => {
+    expect(marks('/1 N10 G1', fanuc)).toEqual(['/1']);
+    expect(marks('N120/G0X0Y0', fanuc)).toEqual(['/']);
+  });
+});
+
+describe('the macro function and print names are keywords of the Fanuc profile', () => {
+  it('keeps `FIX[` from being an F, an I and an X word, and `POPEN` from being five', () => {
+    expect(code(tokenizeLine('#1=FIX[#2]', fanuc).tokens).map((token) => `${token.kind}:${token.text}`)).toEqual([
+      'variable:#1',
+      'operator:=',
+      'keyword:FIX',
+      'expression:[#2]',
+    ]);
+    expect(code(tokenizeLine('POPEN', fanuc).tokens).map((token) => `${token.kind}:${token.text}`)).toEqual(['keyword:POPEN']);
+    expect(code(tokenizeLine('DPRNT[X#1[53]]', fanuc).tokens).map((token) => `${token.kind}:${token.text}`)).toEqual([
+      'keyword:DPRNT',
+      'expression:[X#1[53]]',
+    ]);
+  });
+
+  it('does the same on the lathe, which inherits them, and not without the data', () => {
+    expect(kindsOf('#1=ROUND[#2]', lathe)).toEqual(['variable', 'operator', 'keyword', 'expression']);
+    const old = without(fanuc, (syntax) => (syntax.keywords = ['GOTO', 'IF']));
+    expect(code(tokenizeLine('POPEN', old).tokens).map((token) => token.text)).toEqual(['P', 'O', 'P', 'E', 'N']);
+  });
+
+  it('ends a keyword at a letter, so an address word that starts like one stays a word', () => {
+    expect(code(tokenizeLine('G1 X10. F100.', fanuc).tokens).map((token) => token.kind)).toEqual(['word', 'word', 'word']);
+    expect(code(tokenizeLine('G0 ABSX10', fanuc).tokens)[1].kind).not.toBe('keyword');
+  });
+});
+
+describe('the Klartext PLANE, TCPM and tilting words are keywords', () => {
+  it('reads each as one keyword, `REFPNT TIP-TIP` and `F TCP` included', () => {
+    const texts = (line: string): string[] =>
+      code(tokenizeLine(line, klartext).tokens)
+        .filter((token) => token.kind === 'keyword')
+        .map((token) => token.address ?? '');
+    expect(texts('81 FUNCTION TCPM F TCP AXIS SPAT PATHCTRL VECTOR REFPNT TIP-TIP')).toEqual([
+      'FUNCTION TCPM',
+      'F TCP',
+      'AXIS SPAT',
+      'PATHCTRL VECTOR',
+      'REFPNT TIP-TIP',
+    ]);
+    expect(texts('85 PLANE EULER EULPR+0 EULNU+30 EULROT+0 TABLE ROT SEQ+ MB MAX F2000')).toEqual([
+      'PLANE EULER',
+      'TABLE ROT',
+      'SEQ+',
+      'MB',
+      'MAX',
+    ]);
+  });
+
+  it('leaves the angle words values, and the feed word a feed word', () => {
+    const tokens = code(tokenizeLine('85 PLANE EULER EULPR+0 SEQ- F2000', klartext).tokens);
+    expect(tokens[2]).toMatchObject({ kind: 'word', address: 'EULPR', valueText: '+0' });
+    expect(tokens[4]).toMatchObject({ kind: 'word', address: 'F', valueText: '2000' });
+    expect(code(tokenizeLine('9 L X+60 RL F800', klartext).tokens).at(-1)).toMatchObject({ kind: 'word', address: 'F' });
+  });
+});
+
+describe('the short Sinumerik transfer header', () => {
+  it('is one program marker, like the long one', () => {
+    for (const cp of [sinumerik, sinumerikMill]) {
+      expect(code(tokenizeLine('%MYPROG_MPF', cp).tokens)).toMatchObject([{ kind: 'programMarker', text: '%MYPROG_MPF' }]);
+      expect(code(tokenizeLine('%_N_PART_SPF', cp).tokens)).toMatchObject([{ kind: 'programMarker', text: '%_N_PART_SPF' }]);
+      expect(code(tokenizeLine('%MYPROG_MPF ; PART', cp).tokens).map((token) => token.kind)).toEqual(['programMarker', 'comment']);
+    }
+  });
+
+  it('is not a header when the line says something else', () => {
+    expect(code(tokenizeLine('%MYPROG', sinumerik).tokens)[0].text).toBe('%');
+    expect(code(tokenizeLine('G1 %MYPROG_MPF', sinumerik).tokens).map((token) => token.kind)).not.toContain('programMarker');
+  });
+});
+
+describe('the end of block `;` and a name that starts with digits', () => {
+  it('reads the ISO end-of-block character as an operator where `;` is no comment', () => {
+    for (const cp of [fanuc, lathe, okuma]) {
+      expect(code(tokenizeLine('G0 G18 G21 G40;', cp).tokens).at(-1)).toMatchObject({ kind: 'operator', text: ';' });
+      expect(code(tokenizeLine(';', cp).tokens)).toMatchObject([{ kind: 'operator' }]);
+      expect(kindsOf('G1 X10.;(NOTE)', cp)).toEqual(['word', 'word', 'operator', 'comment']);
+    }
+  });
+
+  it('is still the start of a comment in the dialects that use it for one', () => {
+    expect(kindsOf('G1 X10 ;CUT', sinumerik)).toEqual(['word', 'word', 'comment']);
+    expect(kindsOf('5 L X+1 ; NOTE', klartext)).toEqual(['blockNumber', 'keyword', 'word', 'comment']);
+  });
+
+  it('keeps a Klartext program name that starts with a number in one piece', () => {
+    expect(code(tokenizeLine('0 BEGIN PGM 2.5D_MILLING MM', klartext).tokens).map((token) => `${token.kind}:${token.text}`)).toEqual([
+      'blockNumber:0',
+      'keyword:BEGIN PGM',
+      'unknown:2.5D_MILLING',
+      'keyword:MM',
+    ]);
+    expect(textsOf('99 END PGM 5X_MILLING MM', klartext)).toEqual(['99', 'END PGM', '5X_MILLING', 'MM']);
+  });
+
+  it('leaves a number that is followed by anything but a letter a number', () => {
+    expect(code(tokenizeLine('2 BLK FORM 0.1 Z X+0', klartext).tokens)[2]).toMatchObject({ kind: 'word', valueText: '0.1' });
+    expect(code(tokenizeLine('5 FN 0: Q1 = +5', klartext).tokens).map((token) => token.text)).toEqual(['5', 'FN', '0', ':', 'Q1', '=', '+5']);
+    expect(code(tokenizeLine('20 CALL LBL 7 REP 3', klartext).tokens)[2]).toMatchObject({ kind: 'word', valueText: '7' });
+  });
+});
+
+// The `subprogram-call` rules of `sinumerik.json` (and so of `sinumerik-mill`) leave the
+// control's own commands out of the program map: a predefined procedure is a call of the
+// control, not a subprogram. One golden shared with `tests/python/test_gedit_nc.py`.
+describe('the Sinumerik call-rule exclusions', () => {
+  interface CallCase {
+    line: string;
+    call: string | null;
+  }
+  const cases = JSON.parse(
+    readFileSync(fileURLToPath(new URL('../../../../tests/fixtures/tokens/sinumerik-call-rules.json', import.meta.url)), 'utf8'),
+  ) as CallCase[];
+
+  it.each([
+    ['sinumerik', sinumerik],
+    ['sinumerik-mill', sinumerikMill],
+  ])('lists as a call exactly what %s calls, and nothing the control itself does', (_id, cp: CompiledProfile) => {
+    for (const entry of cases) {
+      const index = new OutlineIndex(cp);
+      index.reset([entry.line]);
+      const call = index.items().find((item) => item.kind === 'subprogram-call');
+      expect(call?.text ?? null, entry.line).toBe(entry.call);
+    }
+  });
+
+  it('has cases on both sides, so a rule cannot swallow everything or nothing', () => {
+    expect(cases.filter((entry) => entry.call !== null).length).toBeGreaterThanOrEqual(8);
+    expect(cases.filter((entry) => entry.call === null).length).toBeGreaterThanOrEqual(15);
+  });
+});
+
 describe('performance', () => {
   function program(lines: number, source: string[]): string[] {
     const out: string[] = [];
@@ -956,6 +1277,8 @@ describe('performance', () => {
     '/N%N% #101=[#1+2.]',
     'N%N% IF[#101GT10.]GOTO100',
     'N%N%G0Z25.M9',
+    '/1 /3 N%N% #102=SQRT[#1*#1+#2*#2]+FIX[#3]',
+    'DPRNT[X#1[53]]',
     '',
   ];
   const KLARTEXT_SOURCE = [
@@ -968,6 +1291,9 @@ describe('performance', () => {
     '%N% C X+50 Y+0 DR-',
     '%N% L IX+10 IY-20 F500',
     '%N% * - ROUGHING',
+    '%N% PLANE SPATIAL SPA+0 SPB+30 SPC+0 TURN MB MAX FMAX',
+    '%N% FUNCTION TCPM F TCP AXIS POS PATHCTRL AXIS REFPNT TIP-TIP',
+    '%N% BEGIN PGM 2.5D_MILLING MM',
     '',
   ];
 
@@ -996,6 +1322,9 @@ describe('performance', () => {
     'N%N% R1=R2*2 X=AC(10)',
     'LOOP_A: G0 X200 Z200',
     '/1 N%N% $AA_IM[X]',
+    ':%N% G1 X1.5EX3 Z-2EX-4',
+    '/1 /3 N%N% LIMS[2]=1800 S[SPI]=300 M[2]=3',
+    'N%N% T[1]="DRILL_8" FA[X]=200',
     '',
   ];
 
@@ -1004,6 +1333,7 @@ describe('performance', () => {
     ['heidenhain-klartext', klartext, KLARTEXT_SOURCE],
     ['okuma-osp', okuma, OKUMA_SOURCE],
     ['sinumerik', sinumerik, SINUMERIK_SOURCE],
+    ['sinumerik-mill', sinumerikMill, SINUMERIK_SOURCE],
   ])('tokenizes 300k lines of %s in well under a second', (_id, cp: CompiledProfile, source: string[]) => {
     const lines = program(300_000, source);
     let state: LineState | undefined;
@@ -1051,6 +1381,11 @@ describe('performance', () => {
     ['G1X1 and a bracket behind blanks', (n: number) => `${'G1X1'.repeat(n / 4 - 2)}   (1)`],
     ['G1X1 and an `=` behind blanks', (n: number) => `${'G1X1'.repeat(n / 4 - 2)}   =1`],
     ['V1 in Okuma', (n: number) => 'V1'.repeat(n / 2)],
+    // M9: the indexed assignment reads a bracket behind the run, and the run is not an
+    // assignment word, so every stop of the scanner would have asked again.
+    ['G1X1 and an index with its `=`', (n: number) => `${'G1X1'.repeat(n / 4 - 3)}[1]=5`],
+    ['G1X1 and an unclosed index', (n: number) => `${'G1X1'.repeat(n / 4 - 2)}[1`],
+    ['G1X1 and a number with an exponent', (n: number) => `${'G1X1'.repeat(n / 4 - 3)}1.5EX3`],
   ])('stays linear on a long run of packed words: %s', (_name, make) => {
     const lengths = [4000, 8000, 16000, 32000];
     for (const cp of [sinumerik, okuma]) {

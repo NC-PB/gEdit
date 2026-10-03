@@ -1,0 +1,40 @@
+{
+  "$version": 1,
+  "machines": [
+    {
+      "id": "lathe-u-w-only",
+      "name": "Lathe, U and W incremental",
+      "profile": "fanuc-lathe",
+      "params": { "variants": { "incrementalAddresses": "uw", "toolWord": "offset2" } },
+      "notes": "The default reading, set down explicitly."
+    },
+    {
+      "id": "lathe-u-w-v-h",
+      "name": "Lathe, U W V H incremental",
+      "profile": "fanuc-lathe",
+      "params": { "variants": { "incrementalAddresses": "uwvh", "toolWord": "offset1" } },
+      "notes": "System A with the full incremental set and a one-digit offset."
+    },
+    {
+      "id": "lathe-g91-only",
+      "name": "Lathe, G91 only",
+      "profile": "fanuc-lathe",
+      "params": { "variants": { "gcodeSystem": "B", "incrementalAddresses": "none", "toolWord": "offset3" } },
+      "notes": "System B whose parameter refuses U and W; three-digit offsets."
+    },
+    {
+      "id": "okuma-200-offsets",
+      "name": "Okuma, 200 offsets",
+      "profile": "okuma-osp",
+      "params": { "variants": { "toolWord": "offset3" } },
+      "notes": "Three-digit offsets: T2000 is station 2."
+    },
+    {
+      "id": "okuma-64-offsets",
+      "name": "Okuma, 64 offsets",
+      "profile": "okuma-osp",
+      "params": { "variants": { "toolWord": "offset2" } }
+    }
+  ],
+  "defaults": {}
+}

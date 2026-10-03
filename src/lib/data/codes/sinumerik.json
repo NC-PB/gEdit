@@ -3,20 +3,20 @@
   "version": 1,
   "addresses": {
     "X": {
-      "label": "X axis, a diameter",
-      "description": "Position across the turning axis. It is a diameter while diameter programming is on, which is how this profile starts."
+      "label": "X axis, a diameter on a lathe",
+      "description": "On a lathe, the position across the turning axis; it is a diameter while diameter programming is on, which is how the turning profile starts. On a milling machine it is an ordinary position, and the milling profile starts with diameter programming off."
     },
     "Z": {
       "label": "Z axis",
-      "description": "Position along the turning axis."
+      "description": "Position along the turning axis on a lathe, and along the tool axis on a milling machine working in G17."
     },
     "C": {
       "label": "C axis",
-      "description": "Angle of the spindle, used to place holes and flats for driven tools."
+      "description": "An angle: on a lathe the angle of the spindle, used to place holes and flats for driven tools; on a milling machine usually a rotary table or head."
     },
     "Y": {
       "label": "Y axis",
-      "description": "Position across the turning axis on machines that have a Y axis."
+      "description": "Position on Y: across the turning axis on a lathe that has a Y axis, the second axis of the working plane on a milling machine."
     },
     "I": {
       "label": "Arc centre on X, or a thread lead",
@@ -210,7 +210,12 @@
       "modal": true,
       "pitchFeed": true,
       "label": "Thread cutting",
-      "description": "Cuts a thread with a constant lead, given in I, J or K. The lead is not a feed and may never be scaled like one."
+      "description": "Cuts a thread with a constant lead, given in I, J or K. The lead is not a feed and may never be scaled like one.",
+      "params": [
+        { "address": "I", "label": "Lead along X", "unit": "feedPerRev" },
+        { "address": "J", "label": "Lead along Y", "unit": "feedPerRev" },
+        { "address": "K", "label": "Lead along Z", "unit": "feedPerRev" }
+      ]
     },
     {
       "code": "G331",
@@ -219,7 +224,12 @@
       "pitchFeed": true,
       "tapping": true,
       "label": "Rigid tapping, into the hole",
-      "description": "Drives the tap with the spindle under position control; the lead is in I, J or K and is not a feed. S is read in revolutions per minute here, whatever the feed type says."
+      "description": "Drives the tap with the spindle under position control; the lead is in I, J or K and is not a feed. S is read in revolutions per minute here, whatever the feed type says.",
+      "params": [
+        { "address": "I", "label": "Lead along X", "unit": "feedPerRev" },
+        { "address": "J", "label": "Lead along Y", "unit": "feedPerRev" },
+        { "address": "K", "label": "Lead along Z", "unit": "feedPerRev" }
+      ]
     },
     {
       "code": "G332",
@@ -228,7 +238,12 @@
       "pitchFeed": true,
       "tapping": true,
       "label": "Rigid tapping, back out",
-      "description": "The retract of a rigid tapping pass, with the same lead as the block that cut it."
+      "description": "The retract of a rigid tapping pass, with the same lead as the block that cut it.",
+      "params": [
+        { "address": "I", "label": "Lead along X", "unit": "feedPerRev" },
+        { "address": "J", "label": "Lead along Y", "unit": "feedPerRev" },
+        { "address": "K", "label": "Lead along Z", "unit": "feedPerRev" }
+      ]
     },
     {
       "code": "G34",
@@ -236,7 +251,13 @@
       "modal": true,
       "pitchFeed": true,
       "label": "Thread cutting, lead growing",
-      "description": "Cuts a thread whose lead grows along the thread: I, J or K give the lead at the start, and F the change of the lead per revolution. Neither is a feed, and nothing may scale them."
+      "description": "Cuts a thread whose lead grows along the thread: I, J or K give the lead at the start, and F the change of the lead per revolution. Neither is a feed, and nothing may scale them.",
+      "params": [
+        { "address": "I", "label": "Lead along X at the start", "unit": "feedPerRev" },
+        { "address": "J", "label": "Lead along Y at the start", "unit": "feedPerRev" },
+        { "address": "K", "label": "Lead along Z at the start", "unit": "feedPerRev" },
+        { "address": "F", "label": "Change of the lead per revolution", "unit": "feedPerRev" }
+      ]
     },
     {
       "code": "G35",
@@ -244,7 +265,13 @@
       "modal": true,
       "pitchFeed": true,
       "label": "Thread cutting, lead shrinking",
-      "description": "Cuts a thread whose lead shrinks along the thread: I, J or K give the lead at the start, and F the change of the lead per revolution. Neither is a feed, and nothing may scale them."
+      "description": "Cuts a thread whose lead shrinks along the thread: I, J or K give the lead at the start, and F the change of the lead per revolution. Neither is a feed, and nothing may scale them.",
+      "params": [
+        { "address": "I", "label": "Lead along X at the start", "unit": "feedPerRev" },
+        { "address": "J", "label": "Lead along Y at the start", "unit": "feedPerRev" },
+        { "address": "K", "label": "Lead along Z at the start", "unit": "feedPerRev" },
+        { "address": "F", "label": "Change of the lead per revolution", "unit": "feedPerRev" }
+      ]
     },
     {
       "code": "G335",
@@ -252,7 +279,12 @@
       "modal": true,
       "pitchFeed": true,
       "label": "Thread along an arc, clockwise",
-      "description": "Cuts a thread whose path is a clockwise arc instead of a straight line. The lead is in I, J or K as with G33, so the arc centre is written as IR=, JR= and KR=."
+      "description": "Cuts a thread whose path is a clockwise arc instead of a straight line. The lead is in I, J or K as with G33, so the arc centre is written as IR=, JR= and KR=.",
+      "params": [
+        { "address": "I", "label": "Lead along X", "unit": "feedPerRev" },
+        { "address": "J", "label": "Lead along Y", "unit": "feedPerRev" },
+        { "address": "K", "label": "Lead along Z", "unit": "feedPerRev" }
+      ]
     },
     {
       "code": "G336",
@@ -260,7 +292,12 @@
       "modal": true,
       "pitchFeed": true,
       "label": "Thread along an arc, counter-clockwise",
-      "description": "Cuts a thread whose path is a counter-clockwise arc instead of a straight line. The lead is in I, J or K as with G33, so the arc centre is written as IR=, JR= and KR=."
+      "description": "Cuts a thread whose path is a counter-clockwise arc instead of a straight line. The lead is in I, J or K as with G33, so the arc centre is written as IR=, JR= and KR=.",
+      "params": [
+        { "address": "I", "label": "Lead along X", "unit": "feedPerRev" },
+        { "address": "J", "label": "Lead along Y", "unit": "feedPerRev" },
+        { "address": "K", "label": "Lead along Z", "unit": "feedPerRev" }
+      ]
     },
     {
       "code": "G40",
@@ -284,14 +321,30 @@
     {
       "code": "G53",
       "group": "nonmodal",
+      "axisWords": "machine",
       "label": "Suppress the offsets for this block",
       "description": "Runs this block without the work offsets."
     },
     {
       "code": "G153",
       "group": "nonmodal",
+      "axisWords": "machine",
       "label": "Suppress the offsets for this block, more of them than G53",
       "description": "Leaves out more of the offsets than G53 does, for this block only. Programs use it to move to a machine position, as before a tool change."
+    },
+    {
+      "code": "G74",
+      "group": "nonmodal",
+      "axisWords": "machine",
+      "label": "Reference point approach",
+      "description": "Moves the machine axes written with it, as X1=0 Z1=0, to their reference points. The values say which axes move, not where to. It stands in a block of its own, and no transformation may be on for those axes."
+    },
+    {
+      "code": "G75",
+      "group": "nonmodal",
+      "axisWords": "machine",
+      "label": "Approach a fixed machine point",
+      "description": "Moves the axes written with it, each on its own and at rapid traverse, to the fixed point FP= names (1 to 4; none or 0 is 1), a position set in machine data and reached in machine coordinates. The values of the axis words are not positions, which is why posts write 0. Milling posts use it to retract before a tool change; it is not allowed while radius compensation or a transformation is on."
     },
     {
       "code": "G500",
@@ -411,6 +464,14 @@
       "description": "S is a speed in revolutions per minute again, and F a distance per revolution. Without a new S the spindle keeps the speed it was turning at."
     },
     {
+      "code": "G931",
+      "group": "feedmode",
+      "modal": true,
+      "sets": { "feedUnit": "travel-time", "speedUnit": "rpm" },
+      "label": "Feed given by travel time",
+      "description": "F is the time the block's move takes, not a distance per minute: a larger F is a slower move. It also ends a constant cutting speed, so S is in revolutions per minute."
+    },
+    {
       "code": "G961",
       "group": "feedmode",
       "modal": true,
@@ -471,13 +532,15 @@
     {
       "code": "G25",
       "group": "nonmodal",
-      "sets": { "speedLimit": true },
+      "axisWords": "data",
+      "sets": { "speedLimit": true, "speedLimitBound": "lower" },
       "label": "Lower limit: spindle speed with S, working area with axis words",
       "description": "With S the lowest speed the master spindle may run at, and S2=, S3= set it for the spindle of that number; with axis words the lower end of the working area. Either way it is a limit, not a speed or a position to move to. The control stores it in its settings, so it can still be in force after the program ends."
     },
     {
       "code": "G26",
       "group": "nonmodal",
+      "axisWords": "data",
       "sets": { "speedLimit": true },
       "label": "Upper limit: spindle speed with S, working area with axis words",
       "description": "With S the highest speed the master spindle may run at, and S2=, S3= set it for the spindle of that number; with axis words the upper end of the working area. Either way it is a limit, not a speed or a position to move to. The control stores it in its settings, so it can still be in force after the program ends."
@@ -1533,6 +1596,41 @@
       "description": "Names the contour the turning cycle after it works on. It cuts nothing itself."
     },
     {
+      "code": "CYCLE800",
+      "group": "frame",
+      "frame": "open",
+      "label": "Swivel the working plane",
+      "description": "Swivels the working plane for 3+2 machining, or swivels or aligns the tool, with the swivel data set named in the second argument, and sets the frame that goes with it. Written with no arguments, CYCLE800() clears the swivel and its frames, which is why posts write it at the start of a program, some without the brackets. The reference points before and after the rotation are absolute positions. Older control versions take 15 arguments, without the last one.",
+      "params": [
+        { "address": "_FR", "label": "Retract before swivelling: 0 none, 1 machine axis Z, 2 Z and then X and Y, 4 as far as possible along the tool, 5 by the distance in _FR_I along the tool", "unit": "count" },
+        { "address": "_TC", "label": "Name of the swivel data set: empty when there is only one, \"0\" deselects it and clears the swivel frames" },
+        { "address": "_ST", "label": "State, digit by digit: ones 0 new or 1 on top of the active swivel, tens 1 to follow the tool tip (TRAORI), hundreds to swivel or align the tool", "unit": "count" },
+        { "address": "_MODE", "label": "Swivel mode, bit-coded: how the three angles are read (axis by axis, solid angle, projection angle, rotary axes directly) and the order of the rotations", "unit": "count" },
+        { "address": "_X0", "label": "Reference point X before the rotation, as an absolute position" },
+        { "address": "_Y0", "label": "Reference point Y before the rotation, as an absolute position" },
+        { "address": "_Z0", "label": "Reference point Z before the rotation, as an absolute position" },
+        { "address": "_A", "label": "First rotation, as _MODE says" },
+        { "address": "_B", "label": "Second rotation, as _MODE says" },
+        { "address": "_C", "label": "Third rotation, as _MODE says" },
+        { "address": "_X1", "label": "Reference point X after the rotation, as an absolute position" },
+        { "address": "_Y1", "label": "Reference point Y after the rotation, as an absolute position" },
+        { "address": "_Z1", "label": "Reference point Z after the rotation, as an absolute position" },
+        { "address": "_DIR", "label": "Which way the rotary axes turn: -1 to the smaller value, +1 to the larger one, 0 compute the frame without moving", "unit": "count" },
+        { "address": "_FR_I", "label": "Retract distance along the tool, for _FR 5" },
+        { "address": "_DMODE", "label": "Display mode: ones the plane while the cycle runs (0 the plane in force, 1 G17, 2 G18, 3 G19)", "unit": "count" }
+      ]
+    },
+    {
+      "code": "CYCLE832",
+      "label": "High-speed settings",
+      "description": "Sets the contour tolerance and the machining type for the following moves, and with them the path mode, the compressor, smoothing and feed-forward, so a program that calls it does not write those itself. CYCLE832() or a tolerance of 0 switches it off. The second argument is a number or a word: _FINISH, _SEMIFIN, _ROUGH, _PRECISION, the same with _ORI_ in front when the third argument is an orientation tolerance, and _OFF. Older control versions read the second argument as a packed code of several digits, so its value is shown as written and not decoded.",
+      "params": [
+        { "address": "S_TOL", "label": "Contour tolerance of the geometry axes; 0 switches the settings off" },
+        { "address": "S_TOLM", "label": "Machining type: 0 off, 1 finish, 2 semi-finish, 3 rough, 4 precision; plus 10 when S_OTOL is an orientation tolerance", "unit": "count" },
+        { "address": "S_OTOL", "label": "Orientation tolerance, or a version mark; it is written on a three-axis machine too" }
+      ]
+    },
+    {
       "code": "M0",
       "group": "program",
       "label": "Program stop",
@@ -1678,6 +1776,7 @@
     {
       "code": "SUPA",
       "group": "nonmodal",
+      "axisWords": "machine",
       "label": "Suppress the offsets for this block, all of them",
       "description": "The widest of G53, G153 and SUPA: this block runs in machine coordinates."
     },
@@ -1691,46 +1790,62 @@
     },
     {
       "code": "TRANSMIT",
+      "frame": "open",
       "label": "Face transformation on",
       "description": "Turns on the transformation that lets a driven tool work on the face with X and Y."
     },
     {
       "code": "TRACYL",
-      "label": "Cylinder surface transformation on"
+      "frame": "open",
+      "label": "Cylinder surface transformation on",
+      "description": "Turns on the transformation for work on the cylinder surface, where one axis word is a distance along the unrolled surface. TRAFOOF ends it."
     },
     {
       "code": "TRAFOOF",
+      "frame": "close",
       "label": "Transformation off",
-      "description": "Ends the transformation that is running."
+      "description": "Ends the transformation that is running: TRAORI, TRANSMIT, TRACYL or TRAANG. G74 and G75 do not run while one is on."
     },
     {
       "code": "TRAORI",
-      "label": "Five-axis transformation on"
+      "frame": "open",
+      "label": "Five-axis transformation on",
+      "description": "Turns on the orientation transformation of a four- or five-axis machine: from here on X, Y and Z are the position of the tool tip and the rotary axis words or the orientation words set the tool direction, while the control moves the machine axes to suit. TRAORI(n) picks the transformation set up as number n; further arguments give the basic tool orientation and offsets of the rotary axes. TRAFOOF ends it."
     },
     {
       "code": "TRAANG",
+      "frame": "open",
       "label": "Inclined-axis transformation on"
     },
     {
       "code": "TRANS",
       "group": "frame",
+      "axisWords": "data",
       "label": "Programmable offset",
       "description": "Shifts the zero point by the values in the block. Written on its own it clears the programmable frame."
     },
     {
       "code": "ATRANS",
       "group": "frame",
-      "label": "Additive programmable offset"
+      "axisWords": "data",
+      "label": "Additive programmable offset",
+      "description": "Shifts the zero point by the values in the block, on top of the frame already programmed."
     },
     {
       "code": "ROT",
       "group": "frame",
-      "label": "Programmable rotation"
+      "axisWords": "data",
+      "frame": "open",
+      "label": "Programmable rotation",
+      "description": "Turns the coordinate system by the angles written for the axes, or by RPL= about the axis normal to the working plane, and replaces every frame instruction programmed before it. The axis words are angles, not positions. Written on its own it clears the programmable frame."
     },
     {
       "code": "AROT",
       "group": "frame",
-      "label": "Additive programmable rotation"
+      "axisWords": "data",
+      "frame": "open",
+      "label": "Additive programmable rotation",
+      "description": "Turns the coordinate system by the angles written for the axes, or by RPL=, on top of the frame already programmed. The axis words are angles, not positions."
     },
     {
       "code": "RPL",
@@ -1740,21 +1855,29 @@
     {
       "code": "SCALE",
       "group": "frame",
+      "axisWords": "data",
+      "frame": "open",
       "label": "Programmable scaling"
     },
     {
       "code": "ASCALE",
       "group": "frame",
+      "axisWords": "data",
+      "frame": "open",
       "label": "Additive programmable scaling"
     },
     {
       "code": "MIRROR",
       "group": "frame",
+      "axisWords": "data",
+      "frame": "open",
       "label": "Programmable mirroring"
     },
     {
       "code": "AMIRROR",
       "group": "frame",
+      "axisWords": "data",
+      "frame": "open",
       "label": "Additive programmable mirroring"
     },
     {
@@ -1804,19 +1927,93 @@
     },
     {
       "code": "ORIWKS",
-      "label": "Orientation in workpiece coordinates"
+      "label": "Orientation in workpiece coordinates",
+      "description": "The tool direction a five-axis program writes is read in workpiece coordinates, so it does not depend on the machine the program runs on. It is the control's basic setting."
     },
     {
       "code": "ORIMKS",
-      "label": "Orientation in machine coordinates"
+      "label": "Orientation in machine coordinates",
+      "description": "The tool direction a five-axis program writes is read in machine coordinates, so the rotary axes move as the machine is built."
     },
     {
       "code": "ORIAXES",
-      "label": "Interpolate the orientation axis by axis"
+      "label": "Interpolate the orientation axis by axis",
+      "description": "Changes the tool direction by moving each rotary axis in a straight line from its start to its end value."
     },
     {
       "code": "ORIVECT",
-      "label": "Interpolate the orientation as a vector"
+      "label": "Interpolate the orientation as a vector",
+      "description": "Changes the tool direction along a great circle, in the plane the start and end direction span. ORIPLANE does the same."
+    },
+    {
+      "code": "ORIPLANE",
+      "label": "Interpolate the orientation in a plane",
+      "description": "Changes the tool direction along a great circle, in the plane the start and end direction span, as ORIVECT does."
+    },
+    {
+      "code": "ORIPATH",
+      "label": "Tool orientation relative to the path",
+      "description": "The tool direction is given relative to the path and the surface, by the lead angle LEAD= and the tilt angle TILT=."
+    },
+    {
+      "code": "ORIEULER",
+      "label": "Orientation angles read as Euler angles",
+      "description": "A2=, B2= and C2= are read as Euler angles, in degrees, turned in the order Z, X', Z''."
+    },
+    {
+      "code": "ORIRPY",
+      "label": "Orientation angles read as RPY angles, X Y Z",
+      "description": "A2=, B2= and C2= are read as roll, pitch and yaw angles, in degrees, turned about X, then Y, then Z."
+    },
+    {
+      "code": "ORIRPY2",
+      "label": "Orientation angles read as RPY angles, Z Y X",
+      "description": "A2=, B2= and C2= are read as roll, pitch and yaw angles, in degrees, turned about Z, then Y, then X."
+    },
+    {
+      "code": "ORIVIRT1",
+      "label": "Orientation angles of virtual axes, first definition",
+      "description": "A2=, B2= and C2= are the angles of virtual orientation axes, turned in the order machine data sets up as the first definition."
+    },
+    {
+      "code": "ORIVIRT2",
+      "label": "Orientation angles of virtual axes, second definition",
+      "description": "A2=, B2= and C2= are the angles of virtual orientation axes, turned in the order machine data sets up as the second definition."
+    },
+    {
+      "code": "ORIRESET",
+      "label": "Move the orientation axes to their basic position",
+      "description": "Moves the rotary axes of the orientation together, in straight lines, to the positions written in brackets; an axis with no value goes to the basic position set in machine data. Active frames of the rotary axes are not taken into account. Only while TRAORI is on."
+    },
+    {
+      "code": "DYNNORM",
+      "label": "Dynamics for normal travel",
+      "description": "Switches the path to the acceleration and jerk values the machine builder set up for normal travel. The values are machine data. It acts from the block it stands in, without a stop."
+    },
+    {
+      "code": "DYNPOS",
+      "label": "Dynamics for positioning and tapping",
+      "description": "Switches the path to the acceleration and jerk values the machine builder set up for positioning and tapping. The values are machine data. It acts from the block it stands in, without a stop."
+    },
+    {
+      "code": "DYNROUGH",
+      "label": "Dynamics for roughing",
+      "description": "Switches the path to the acceleration and jerk values the machine builder set up for roughing. The values are machine data. It acts from the block it stands in, without a stop."
+    },
+    {
+      "code": "DYNSEMIFIN",
+      "label": "Dynamics for semi-finishing",
+      "description": "Switches the path to the acceleration and jerk values the machine builder set up for semi-finishing. The values are machine data. It acts from the block it stands in, without a stop."
+    },
+    {
+      "code": "DYNFINISH",
+      "label": "Dynamics for finishing",
+      "description": "Switches the path to the acceleration and jerk values the machine builder set up for finishing. The values are machine data. It acts from the block it stands in, without a stop."
+    },
+    {
+      "code": "DYNPREC",
+      "label": "Dynamics for precision finishing",
+      "description": "Switches the path to the acceleration and jerk values the machine builder set up for precision finishing. The values are machine data. It acts from the block it stands in, without a stop."
     },
     {
       "code": "AC",

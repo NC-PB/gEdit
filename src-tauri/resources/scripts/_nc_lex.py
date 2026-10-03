@@ -72,6 +72,12 @@ class Token:
     the right-hand side, and ``value`` is ``None`` unless that is one plain number — so
     nothing that computes with NC numbers can scale ``F=R10``. A name the program gives
     itself (``XNOW``, ``LAST_CUT``, ``DIA1``) is one ``unknown`` token with no address.
+
+    ``index`` (M9, plan section 7.5, ``syntax.assignmentIndex``) is the bracket index of an
+    assignment word without the brackets: ``'2'`` for ``LIMS[2]=1800``, ``'SPI'`` for
+    ``S[SPI]=300``. ``address`` stays the identifier (``LIMS``, ``S``), so it is still a
+    name the code database knows; ``index`` says which spindle. ``None`` on every other
+    token.
     """
 
     kind: str
@@ -82,6 +88,7 @@ class Token:
     value_text: Optional[str] = None
     value: Optional[NumericLiteral] = None
     incremental: bool = False
+    index: Optional[str] = None
 
 
 @dataclass
@@ -114,8 +121,14 @@ _BRACKET_CLOSE = 0x5D
 _UNDERSCORE = 0x5F
 _NO_CHAR = -1
 
-#: Operators, minus whatever the profile uses to delimit a comment.
-_OPERATOR_CHARS = "=+-*/^%:<>|&,()!"
+#: The longest identifier an indexed assignment (``LIMS[2]=``) may have.
+_MAX_INDEXED_NAME = 64
+
+#: Operators, minus whatever the profile uses to delimit a comment. ``;`` is the
+#: end-of-block character of the ISO tape format (syntax-fanuc section 2.2), which a post
+#: may write at the end of every block; where ``;`` starts a comment (Klartext, Sinumerik)
+#: it is not an operator.
+_OPERATOR_CHARS = "=+-*/^%:<>|&,()!;"
 
 
 def _is_space(code: int) -> bool:
@@ -176,6 +189,8 @@ class _LexSpec:
     strings: bool
     block_number_mode: str  # 'prefix' | 'leading-integer'
     block_number_prefixes: List[str]
+    #: The prefixes a block number may start with: the above, then ``blockNumber.mainPrefix``.
+    block_number_starts: List[str]
     skip: Optional[_Skip]
     keywords: Dict[int, List[_KeywordEntry]]
     variables: Optional[Any]
@@ -207,6 +222,10 @@ class _LexSpec:
     assignment: Optional[Any]
     #: P8 ``syntax.calls``: an identifier in front of ``(`` is one token (``_argument_list_at``).
     calls: bool
+    #: P9 ``syntax.assignmentIndex``: ``LIMS[2]=1800`` is one assignment word with an ``index``.
+    assignment_index: bool
+    #: P9 ``syntax.exponentMarker`` (upper case unless the profile is case sensitive), or ``""``.
+    exponent: str
     #: M8 integration ``syntax.names``: a name the program gives itself is one token.
     names: Optional[Any]
     #: Phase 2 ``syntax.programNames``: a program name (``<SHAFT_T12>``) is one token.
@@ -236,6 +255,8 @@ class CompiledProfile:
 
     ========================  =====================================================
     ``detect_content``        ``[(regex, weight), …]``
+    ``detect_vetoes``         ``[regex, …]``: ``detect.vetoes`` (M9), compiled so a bad
+                              one is reported here too; no script detects a profile
     ``section_heading``       regex or ``None``
     ``continuation``          regex or ``None``
     ``continuation_start``    regex or ``None`` (M8): the leading marker of a line that
@@ -467,6 +488,10 @@ def compile_profile(profile: Dict[str, Any]) -> CompiledProfile:
         regex = _compile_pattern(rule.get("pattern"), "detect.content[%d].pattern" % i, flags)
         weight = rule.get("weight")
         detect_content.append((regex, weight if isinstance(weight, (int, float)) else 0))
+    detect_vetoes = [
+        _compile_pattern(source, "detect.vetoes[%d]" % i, flags)
+        for i, source in enumerate(detect.get("vetoes") or [])
+    ]
 
     outline: List[Tuple[Any, Any]] = []
     for i, rule in enumerate(profile.get("outline") or []):
@@ -481,6 +506,7 @@ def compile_profile(profile: Dict[str, Any]) -> CompiledProfile:
 
     patterns: Dict[str, Any] = {
         "detect_content": detect_content,
+        "detect_vetoes": detect_vetoes,
         "section_heading": _compile_optional(syntax.get("sectionHeading"), "syntax.sectionHeading", flags),
         "continuation": _compile_optional(syntax.get("continuation"), "syntax.continuation", flags),
         "continuation_start": _compile_optional(
@@ -598,6 +624,10 @@ def _build_spec(cp: CompiledProfile) -> _LexSpec:
     separator_alt = syntax.get("decimalSeparatorAlt")
     skip_codes = set(skip.codes if skip is not None else [])
 
+    main_prefix = block_number.get("mainPrefix")
+    main_start = main_prefix if isinstance(main_prefix, str) and main_prefix != "" and main_prefix not in prefixes else None
+    exponent_marker = syntax.get("exponentMarker")
+
     mask_lead_pattern = _build_mask_lead_pattern(
         comments, syntax.get("strings") is True, program_name_pattern, program_name_lead
     )
@@ -609,6 +639,7 @@ def _build_spec(cp: CompiledProfile) -> _LexSpec:
         strings=syntax.get("strings") is True,
         block_number_mode="leading-integer" if block_number.get("mode") == "leading-integer" else "prefix",
         block_number_prefixes=prefixes,
+        block_number_starts=prefixes if main_start is None else prefixes + [main_start],
         skip=skip,
         keywords=keywords,
         variables=cp.patterns.get("variables"),
@@ -625,13 +656,23 @@ def _build_spec(cp: CompiledProfile) -> _LexSpec:
         decimal_point_alt=ord(separator_alt) if isinstance(separator_alt, str) and len(separator_alt) == 1 else _NO_CHAR,
         operators=frozenset(operators),
         tape_marker=_PERCENT not in comment_leads and _PERCENT not in skip_codes,
-        colon_program=block_number.get("mode") != "leading-integer" and _COLON not in comment_leads,
+        # A main block number with the prefix `:` (Sinumerik) is read before the program
+        # marker is asked, and `:1234` is that block number there, not the punched-tape marker.
+        colon_program=block_number.get("mode") != "leading-integer"
+        and _COLON not in comment_leads
+        and main_start != ":",
         sequence_names=syntax.get("sequenceNames") is True,
         labels=cp.patterns.get("labels"),
         header=cp.patterns.get("header"),
         system_variables=cp.patterns.get("system_variables"),
         assignment=cp.patterns.get("assignment"),
         calls=syntax.get("calls") is True,
+        assignment_index=syntax.get("assignmentIndex") is True,
+        exponent=(
+            (exponent_marker if case_sensitive else exponent_marker.upper())
+            if isinstance(exponent_marker, str)
+            else ""
+        ),
         names=cp.patterns.get("names"),
         program_names=cp.patterns.get("program_names"),
         program_name_lead=program_name_lead,
@@ -741,7 +782,11 @@ def _string_end_at(line: str, p: int, limit: int) -> int:
 
 
 def _is_identifier_start(code: int) -> bool:
-    """True for the first character of an identifier: a letter or ``_``."""
+    """True for the first character of an identifier: a letter or ``_``.
+
+    It is also what a value must not run into if it is to stay a value
+    (``2.5D_MILLING`` is a name, not ``2.5`` and ``D_MILLING``).
+    """
     return _is_letter(code) or code == _UNDERSCORE
 
 
@@ -874,7 +919,26 @@ def _number_end_at(line: str, p: int, limit: int, spec: _LexSpec) -> int:
         if digits or j > after_point:
             digits = True
             i = j
-    return i if digits else p
+    if not digits:
+        return p
+    return i if spec.exponent == "" else _exponent_end_at(line, i, limit, spec)
+
+
+def _exponent_end_at(line: str, i: int, limit: int, spec: _LexSpec) -> int:
+    """Where a number that ends at ``i`` really ends once its exponent is read.
+
+    The exponent is ``syntax.exponentMarker``, an optional sign and at least one digit
+    (``1.5EX3``, ``2EX-4``); anything less leaves the number as it is.
+    """
+    if not _match_literal(line, i, spec.exponent, spec.case_sensitive) or i + len(spec.exponent) > limit:
+        return i
+    j = i + len(spec.exponent)
+    if j < limit and ord(line[j]) in (_PLUS, _MINUS):
+        j += 1
+    digits_from = j
+    while j < limit and _is_digit(ord(line[j])):
+        j += 1
+    return j if j > digits_from else i
 
 
 @dataclass
@@ -1000,7 +1064,7 @@ def _scan_block_number(line: str, p: int, limit: int, spec: _LexSpec) -> Optiona
                 return None
         return _BlockNumberScan(start=p, end=i, digits_start=p, prefix="")
 
-    for prefix in spec.block_number_prefixes:
+    for prefix in spec.block_number_starts:
         if not _match_literal(line, p, prefix, spec.case_sensitive):
             continue
         i = p + len(prefix)
@@ -1094,6 +1158,24 @@ def _scan_skip(line: str, p: int, limit: int, spec: _LexSpec) -> int:
     return end
 
 
+def _push_skips(tokens: List[Token], line: str, p: int, limit: int, spec: _LexSpec) -> int:
+    """Pushes the block-skip marks at ``p`` and the blanks behind each; returns the position behind the last.
+
+    One mark is the usual case; a profile whose skip mark takes a level may stack several
+    (``/1 /3 N10 G1``, a block skipped on either of two levels), and each is a ``skip``
+    token of its own. Without levels a second ``/`` is no mark, only what it was before.
+    """
+    at = p
+    while True:
+        end = _scan_skip(line, at, limit, spec)
+        if end == at:
+            return at
+        _push(tokens, "skip", line, at, end)
+        at = _push_space(tokens, line, end, limit)
+        if spec.skip is None or not spec.skip.levels:
+            return at
+
+
 def _match_keyword(line: str, p: int, limit: int, spec: _LexSpec) -> Optional[Tuple[int, _KeywordEntry]]:
     """The keyword that starts at ``p``, with the position behind it."""
     group = spec.keywords.get(_to_upper(ord(line[p])))
@@ -1156,6 +1238,54 @@ def _match_program_marker(line: str, p: int, limit: int, spec: _LexSpec) -> int:
             if start == p and p < end <= limit:
                 return end
     return p
+
+
+@dataclass
+class _IndexedAssignment:
+    address: str
+    index: str
+    equals: int
+
+
+def _indexed_assignment_at(line: str, p: int, name_end: int, limit: int, spec: _LexSpec) -> Optional[_IndexedAssignment]:
+    """An indexed assignment at ``p`` (``LIMS[2]=1800``, ``S[SPI]=300``), or ``None``.
+
+    The identifier ``[p, name_end)``, a bracket expression touching it, and an ``=`` (not
+    ``==``) behind that. ``address`` is the identifier as ``syntax.assignment`` accepts it,
+    ``index`` the text between the brackets with the blanks around it taken off, ``equals``
+    the position of the ``=``. The pattern is asked about the identifier with its ``=``
+    appended, which is the question it is written to answer (``(?=\\s*=(?!=))``): the real
+    ``=`` stands behind the bracket here. Mirrors ``indexedAssignmentAt`` (``tokenizer.ts``).
+    """
+    assignment = spec.assignment
+    if assignment is None or name_end >= limit or ord(line[name_end]) != _BRACKET_OPEN:
+        return None
+    # The scanner stops at every letter of a long packed run, and each stop would slice the
+    # rest of the run and read the bracket behind it: bounded, so a line of 32k characters
+    # costs what its length says. No name a program writes comes near 64 characters.
+    if name_end - p > _MAX_INDEXED_NAME:
+        return None
+    close = _expression_end_at(line, name_end, limit)
+    if close <= name_end + 1 or ord(line[close - 1]) != _BRACKET_CLOSE:
+        return None
+    equals = _skip_space(line, close, limit)
+    if equals >= limit or ord(line[equals]) != _EQUALS or _code_at(line, equals + 1) == _EQUALS:
+        return None
+    start = name_end + 1
+    stop = close - 1
+    while start < stop and _is_space(ord(line[start])):
+        start += 1
+    while stop > start and _is_space(ord(line[stop - 1])):
+        stop -= 1
+    if start == stop:
+        return None  # `S[]=5` indexes nothing
+    name = line[p:name_end]
+    match = assignment.match(name + "=")
+    if match is None or match.end() != len(name):
+        return None
+    return _IndexedAssignment(
+        address=name if spec.case_sensitive else name.upper(), index=line[start:stop], equals=equals
+    )
 
 
 def _ends_operand(tokens: List[Token], spec: _LexSpec) -> bool:
@@ -1271,6 +1401,31 @@ def tokenize_line(
         of a program and behind ``M98``/``G65``) is one ``programMarker`` with no address,
         wherever it stands
 
+    M9 (plan section 7.1 "The M9 syntax pins") adds four more, opt-in like the rest, and two
+    rules that need no field:
+
+    ``blockNumber.mainPrefix``
+        a second block-number prefix that marks a main block (Sinumerik ``:123``): a
+        ``blockNumber`` token with that ``address``. It has the shape of ``N123``, so the
+        punched-tape ``:1234`` program marker yields to it
+    ``assignmentIndex``
+        an assignment address may carry one bracket index in front of its ``=``:
+        ``LIMS[2]=1800`` is one ``word`` with ``address`` ``LIMS``, ``index`` ``2`` and
+        ``value_text`` ``1800``. ``syntax.assignment`` is asked about the identifier with its
+        ``=`` appended, which is the question that pattern is written to answer
+    ``exponentMarker``
+        the letters of an exponent inside a number (Sinumerik ``EX``): ``1.5EX3`` is the one
+        value of its word, ``value`` ``None`` because nothing computes with an exponent yet
+    ``extendedAddresses``
+        read by the grammar and the hover only; no token changes
+    several skip levels
+        on a profile whose skip mark takes a level, each mark at the head of a block is a
+        ``skip`` token of its own (``/1 /3 N10 G1``)
+    ``;``
+        an operator where it starts no comment: the end-of-block character of the ISO tape
+        format. Where words are separated, a number that runs straight into letters is one
+        ``unknown`` token (a Klartext program name ``2.5D_MILLING``), not a value and a name
+
     A block-skip level is one digit, ``0`` included: ``/0`` is the level ``/`` means.
     """
     spec = _lex_spec(cp)
@@ -1342,10 +1497,7 @@ def tokenize_line(
 
     if at_head:
         if spec.skip is not None and spec.skip.before:
-            end = _scan_skip(line, p, limit, spec)
-            if end > p:
-                _push(tokens, "skip", line, p, end)
-                p = _push_space(tokens, line, end, limit)
+            p = _push_skips(tokens, line, p, limit, spec)
         # A label may start with the block-number prefix (`NEXT_PART:`), so it is read
         # before the block number, and once more behind one, because a block may carry both.
         label = _label_span_of(line, spec) if spec.labels is not None else None
@@ -1369,10 +1521,7 @@ def tokenize_line(
                 p = _push_space(tokens, line, block.end, limit)
             if named is not None or block is not None:
                 if spec.skip is not None and spec.skip.after:
-                    end = _scan_skip(line, p, limit, spec)
-                    if end > p:
-                        _push(tokens, "skip", line, p, end)
-                        p = _push_space(tokens, line, end, limit)
+                    p = _push_skips(tokens, line, p, limit, spec)
                 if label is not None and label.start == p:
                     p = push_label(label.start, label.end, label.name)
 
@@ -1514,6 +1663,18 @@ def tokenize_line(
         if assignment is not None and _is_identifier_start(code):
             name_end = identifier_from(p)
             q = run[1]
+            indexed = _indexed_assignment_at(line, p, name_end, limit, spec) if spec.assignment_index else None
+            if indexed is not None:
+                r = _skip_space(line, indexed.equals + 1, limit)
+                value_end = _assigned_value_end_at(line, r, limit, spec)
+                token = _push(tokens, "word", line, p, value_end if value_end > r else indexed.equals + 1)
+                token.address = indexed.address
+                token.index = indexed.index
+                if value_end > r:
+                    token.value_text = line[r:value_end]
+                    token.value = parse_number(token.value_text)
+                p = token.end
+                continue
             if q < limit and ord(line[q]) == _EQUALS and _code_at(line, q + 1) != _EQUALS:
                 match = assignment.match(line, p)
                 if match is not None and match.end() == name_end:
@@ -1627,6 +1788,18 @@ def tokenize_line(
         ):
             stop = limit if spec.packed else chunk_from(p)
             value = _read_value(line, p, stop, spec, False)
+            # Where words are separated, a number that runs straight into letters is no
+            # value but a name that starts with digits (`BEGIN PGM 2.5D_MILLING MM`): one
+            # token, as a name that starts with a letter already is.
+            if (
+                value is not None
+                and not spec.packed
+                and value.end < stop
+                and _is_identifier_start(ord(line[value.end]))
+            ):
+                _push_unknown(tokens, line, p, stop)
+                p = stop
+                continue
             if value is not None:
                 token = _push(tokens, "word", line, p, value.end)
                 token.value_text = value.text
@@ -1682,11 +1855,15 @@ def block_number_of(line: str, cp: CompiledProfile) -> Optional[Dict[str, Any]]:
     while p < limit and _is_space(ord(line[p])):
         p += 1
     if spec.skip is not None and spec.skip.before:
-        end = _scan_skip(line, p, limit, spec)
-        if end > p:
+        while True:
+            end = _scan_skip(line, p, limit, spec)
+            if end == p:
+                break
             p = end
             while p < limit and _is_space(ord(line[p])):
                 p += 1
+            if not spec.skip.levels:
+                break
 
     block = _scan_block_number(line, p, limit, spec)
     if block is None:

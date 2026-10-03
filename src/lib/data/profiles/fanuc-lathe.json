@@ -21,7 +21,7 @@
       { "pattern": "(?<![A-Z])G0*9[67](?![\\d.])", "weight": 4 },
       { "pattern": "(?<![A-Z])G0*7[0-3](?![\\d.])(?=[^(]*P\\s*\\d)(?=[^(]*Q\\s*\\d)", "weight": 6 },
       { "pattern": "(?<![A-Z])G0*7[12]\\s*U[\\d.]+\\s*R", "weight": 6 },
-      { "pattern": "(?<![A-Z])G0*28\\s*U", "weight": 4 },
+      { "pattern": "^(?![^(]*(?<![A-Z])G0*91(?![\\d.]))[^(]*?(?<![A-Z])G0*(?:28|30)(?![\\d.])[ \\t]*(?:(?:P\\d[ \\t]*)?(?:W[-+]?[.\\d]+[ \\t]*)?[UVH]|W)[-+]?[.\\d]", "weight": 4 },
       { "pattern": "(?<![A-Z])[UW][-+]?\\.?\\d", "weight": 1 }
     ],
     "priority": 0
@@ -29,7 +29,6 @@
   "addresses": {
     "axes": ["X", "Z", "C", "Y", "U", "W"],
     "arcCenter": ["I", "K"],
-    "incremental": { "U": "X", "W": "Z" },
     "diameter": ["X", "U"],
     "angular": ["C"]
   },
@@ -47,7 +46,7 @@
       "presets": [
         {
           "id": "is-b",
-          "label": "Increments of 0.001 mm (IS-B): X50 is 0.050 mm, X50. is 50 mm; feeds and speeds as written (F200 is 200)",
+          "label": "Increments of 0.001 mm (IS-B): X50 is 0.050 mm, X50. is 50 mm, C90000 is 90\u00b0; a point-less feed per minute in 1 mm/min (F200 is 200), per revolution in 0.01 mm/rev (F25 is 0.25 mm/rev)",
           "source": "syntax-fanuc.md \u00a73.2",
           "verify": true,
           "value": {
@@ -57,14 +56,14 @@
             "incrementDeg": "0.001",
             "incrementSec": "0.001",
             "classes": {
-              "feedPerMin": { "mode": "calculator" },
-              "feedPerRev": { "mode": "calculator" }
+              "feedPerMin": { "mode": "increment", "increment": "1", "incrementInch": "0.01" },
+              "feedPerRev": { "mode": "increment", "increment": "0.01", "incrementInch": "0.0001" }
             }
           }
         },
         {
           "id": "is-c",
-          "label": "Increments of 0.0001 mm (IS-C): X50 is 0.0050 mm, X50. is 50 mm; feeds and speeds as written (F200 is 200)",
+          "label": "Increments of 0.0001 mm (IS-C): X50 is 0.0050 mm, X50. is 50 mm; a point-less feed per minute in 1 mm/min (F200 is 200), per revolution in 0.01 mm/rev (F25 is 0.25 mm/rev)",
           "source": "syntax-fanuc.md \u00a73.2",
           "verify": true,
           "value": {
@@ -74,8 +73,8 @@
             "incrementDeg": "0.0001",
             "incrementSec": "0.0001",
             "classes": {
-              "feedPerMin": { "mode": "calculator" },
-              "feedPerRev": { "mode": "calculator" }
+              "feedPerMin": { "mode": "increment", "increment": "1", "incrementInch": "0.01" },
+              "feedPerRev": { "mode": "increment", "increment": "0.01", "incrementInch": "0.0001" }
             }
           }
         },
@@ -115,6 +114,68 @@
               { "pattern": "(?<![A-Z])G0*7[789](?![\\d.])", "weight": 5 },
               { "pattern": "(?<![A-Z])G0*9[45](?![\\d.])", "weight": 2 }
             ]
+          }
+        ]
+      },
+      {
+        "id": "incrementalAddresses",
+        "label": "U, W, V and H move incrementally",
+        "default": "uw",
+        "choices": [
+          {
+            "value": "uw",
+            "label": "U and W are incremental X and Z (default, verify)",
+            "overlay": { "addresses": { "incremental": { "U": "X", "W": "Z" } } }
+          },
+          {
+            "value": "uwvh",
+            "label": "U, W, V and H are incremental X, Z, Y and C",
+            "overlay": { "addresses": { "incremental": { "U": "X", "W": "Z", "V": "Y", "H": "C" } } }
+          },
+          {
+            "value": "none",
+            "label": "None of them: G91 is the only incremental mode",
+            "overlay": { "addresses": { "diameter": ["X"] } }
+          }
+        ]
+      },
+      {
+        "id": "toolWord",
+        "label": "Tool word: offset digits",
+        "default": "offset2",
+        "choices": [
+          {
+            "value": "offset2",
+            "label": "The last two digits are the offset: T0101 (default, verify)",
+            "overlay": {
+              "toolCall": {
+                "trigger": "(?<![A-Z])T\\d{1,5}(?!\\d)",
+                "ignore": "(?<![A-Z])T(?:\\d{0,3}00|0+)(?!\\d)",
+                "tool": "(?<![A-Z])T(?<tool>\\d{1,3}?)(?:\\d{2})?(?!\\d)"
+              }
+            }
+          },
+          {
+            "value": "offset1",
+            "label": "The last digit is the offset: T11",
+            "overlay": {
+              "toolCall": {
+                "trigger": "(?<![A-Z])T\\d{1,4}(?!\\d)",
+                "ignore": "(?<![A-Z])T(?:\\d{0,3}0|0+)(?!\\d)",
+                "tool": "(?<![A-Z])T(?<tool>\\d{1,3}?)\\d?(?!\\d)"
+              }
+            }
+          },
+          {
+            "value": "offset3",
+            "label": "The last three digits are the offset: T1001",
+            "overlay": {
+              "toolCall": {
+                "trigger": "(?<![A-Z])T\\d{1,6}(?!\\d)",
+                "ignore": "(?<![A-Z])T(?:\\d{0,3}000|0+)(?!\\d)",
+                "tool": "(?<![A-Z])T(?<tool>\\d{1,3}?)(?:\\d{3})?(?!\\d)"
+              }
+            }
           }
         ]
       }

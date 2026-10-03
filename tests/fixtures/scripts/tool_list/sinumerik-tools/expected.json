@@ -33,7 +33,7 @@
       "line": 6,
       "calls": 1,
       "feed": "0.3 /rev",
-      "speed": "180 surface"
+      "speed": "180 m/min (G96)"
     },
     {
       "tool": "FINISH_35",
@@ -41,7 +41,7 @@
       "line": 15,
       "calls": 1,
       "feed": "0.12 /rev",
-      "speed": "240 surface"
+      "speed": "240 m/min (G96)"
     },
     {
       "tool": "T5",

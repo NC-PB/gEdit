@@ -127,9 +127,14 @@ function lookupAddress(db: CodeDb, address: string): CodeLookup['address'] {
  * True for a word written with `=` behind its address (P8, AD-24 `syntax.assignment`):
  * `SB=1200`, `CR=15`, `S3=2400`, `M3=3`, `T="DRILL"`. Its `valueText` is the right-hand
  * side, so the address and the value are not one code spelled together.
+ *
+ * An indexed one (`syntax.assignmentIndex`: `S[2]=500`, `M[2]=3`, `FA[X]=100`) is one too:
+ * the bracket stands between the address and the `=`, and the word carries it in `index`
+ * (M9 review F1).
  */
 export function isAssignmentWord(token: NcToken): boolean {
   if (token.kind !== 'word' || token.address === undefined) return false;
+  if (token.index !== undefined) return true;
   return /^\s*=/.test(token.text.slice(token.address.length));
 }
 
@@ -189,4 +194,38 @@ export function completionsFor(db: CodeDb, prefix: string, atBlockStart: boolean
     out.push(entry);
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// P9 (roadmap R3, TODO "Ahead"; plan §7.2). How one entry's flags read. Written by the
+// M9 prelude so that TypeScript and Python (`gedit_nc.axis_words_of`,
+// `speed_limit_bound_of`, `frame_of`) answer with one rule each; WP9.2 owns them from
+// Wave A on and holds the two languages to the same flagged-entry golden.
+// ---------------------------------------------------------------------------
+
+/**
+ * What the axis words of a block with this code are: `'data'`, `'machine'`, or `null`
+ * for positions in the program's own frame. `wordsAreData` makes every word data, the
+ * axis words included, so it answers `'data'` whatever `axisWords` says.
+ */
+export function axisWordsOf(entry: CodeEntry | null | undefined): 'data' | 'machine' | null {
+  if (!entry) return null;
+  if (entry.wordsAreData === true) return 'data';
+  return entry.axisWords === 'data' || entry.axisWords === 'machine' ? entry.axisWords : null;
+}
+
+/** Whether the code opens or closes a coordinate frame, or `null`. */
+export function frameOf(entry: CodeEntry | null | undefined): 'open' | 'close' | null {
+  if (!entry) return null;
+  return entry.frame === 'open' || entry.frame === 'close' ? entry.frame : null;
+}
+
+/**
+ * Which side of the speed range the `S` of a block with this code bounds, or `null` when
+ * the code sets no speed limit. A limit without a bound is the clamp every entry meant
+ * before M9: `'upper'`.
+ */
+export function speedLimitBoundOf(entry: CodeEntry | null | undefined): 'upper' | 'lower' | null {
+  if (!entry || entry.sets?.speedLimit !== true) return null;
+  return entry.sets.speedLimitBound === 'lower' ? 'lower' : 'upper';
 }

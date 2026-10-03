@@ -28,13 +28,16 @@ import type { NumberClass } from '$lib/core/machines/types';
  * would be a typo nobody was told about.
  */
 const SETS_VALUES = {
-  feedUnit: ['per-minute', 'per-rev', 'per-tooth', 'inverse-time'],
+  feedUnit: ['per-minute', 'per-rev', 'per-tooth', 'inverse-time', 'travel-time'],
   speedUnit: ['rpm', 'surface'],
   distance: ['absolute', 'incremental'],
   units: ['mm', 'inch'],
   plane: ['XY', 'ZX', 'YZ'],
-  cycle: ['start', 'cancel'],
+  // P9: `define`, `call` and `call-modal` are the "defined cycle" of §7.4 (Klartext).
+  cycle: ['start', 'cancel', 'define', 'call', 'call-modal'],
   diameter: ['on', 'off', 'absolute-only'],
+  // P9: which side a `speedLimit` bounds; checked against `speedLimit` in `readSets`.
+  speedLimitBound: ['upper', 'lower'],
 } as const satisfies Record<string, readonly string[]>;
 
 /** M6 (§7.2, AD-31). How a cycle parameter's value is read, whatever its address suggests. */
@@ -47,6 +50,11 @@ const PARAM_UNITS: readonly (NumberClass | 'increment' | 'count')[] = [
   'increment',
   'count',
 ];
+
+/** P9 (R3, §7.2). What the axis words of a block are, where they are not a position. */
+const AXIS_WORDS = ['data', 'machine'] as const;
+/** P9 (R3, §7.2). Whether a code opens or closes a coordinate frame. */
+const FRAMES = ['open', 'close'] as const;
 
 /** The file is not a code database at all. */
 export class CodeDbError extends Error {
@@ -78,6 +86,20 @@ function bool(v: unknown): boolean | undefined {
 
 function num(v: unknown): number | undefined {
   return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+}
+
+/** A string member that has to be one of `allowed`; anything else is reported and dropped. */
+function oneOf<T extends string>(
+  raw: unknown,
+  allowed: readonly T[],
+  path: string,
+  report: (p: CodeDbProblem) => void,
+): T | undefined {
+  if (raw === undefined) return undefined;
+  const text = str(raw);
+  if (text !== undefined && (allowed as readonly string[]).includes(text)) return text as T;
+  report({ path, message: `has to be one of ${allowed.join(', ')}` });
+  return undefined;
 }
 
 function readParams(
@@ -190,6 +212,12 @@ function readSets(raw: unknown, path: string, report: (p: CodeDbProblem) => void
     }
     out[member] = text;
   }
+  // P9: a bound without a limit says nothing a reader could act on, and a reader that
+  // trusted it would have to guess which word is limited.
+  if (out.speedLimitBound !== undefined && out.speedLimit !== true) {
+    report({ path: `${path}.speedLimitBound`, message: 'speedLimitBound needs speedLimit: true' });
+    delete out.speedLimitBound;
+  }
   return Object.keys(out).length > 0 ? (out as CodeSets) : undefined;
 }
 
@@ -226,6 +254,19 @@ function readEntry(
   // 2026-09: the scripts read these two from the loaded database as well.
   if (bool(raw.tapping)) entry.tapping = true;
   if (bool(raw.wordsAreData)) entry.wordsAreData = true;
+  // P9 (R3): the two flags extents and address arithmetic read instead of code lists.
+  const axisWords = oneOf(raw.axisWords, AXIS_WORDS, `${path}.axisWords`, report);
+  if (axisWords !== undefined) {
+    // Every word of a `wordsAreData` block is data already; calling its axis words a
+    // machine position as well would be two answers to one question.
+    if (entry.wordsAreData === true && axisWords !== 'data') {
+      report({ path: `${path}.axisWords`, message: `axisWords of ${entry.code} contradicts wordsAreData` });
+    } else {
+      entry.axisWords = axisWords;
+    }
+  }
+  const frame = oneOf(raw.frame, FRAMES, `${path}.frame`, report);
+  if (frame !== undefined) entry.frame = frame;
   if (bool(raw.verify)) entry.verify = true;
   const description = str(raw.description);
   if (description) entry.description = description;

@@ -319,6 +319,7 @@ describe('Add', () => {
       'fanuc-lathe',
       'okuma-osp',
       'sinumerik',
+      'sinumerik-mill',
     ]);
     const field = profileField(deps)[0];
     expect(field.id).toBe(FIELD_PROFILE);
@@ -335,6 +336,9 @@ describe('Add', () => {
       FIELD_UNITS,
       FIELD_DIAMETER,
       variantFieldId('gcodeSystem'),
+      // M9 (R6): the two machine choices come with the form for free, from the declaration.
+      variantFieldId('incrementalAddresses'),
+      variantFieldId('toolWord'),
       modalFieldId('feedmode'),
       modalFieldId('spindlemode'),
       modalFieldId('plane'),
@@ -357,7 +361,7 @@ describe('Add', () => {
     expect(saved.notes).toBe('turret 1');
     // The preset's whole rule set is stored, not its id (§7.15).
     expect(saved.params.numberInput).toMatchObject({ mode: expect.any(String) });
-    expect(saved.params.variants).toEqual({ gcodeSystem: 'A' });
+    expect(saved.params.variants).toEqual({ gcodeSystem: 'A', incrementalAddresses: 'uw', toolWord: 'offset2' });
     expect(fake.shown.at(-1)?.text).toBe(t('machines.page.added', { name: 'Lathe 2' }));
   });
 
@@ -387,7 +391,10 @@ describe('Edit', () => {
     expect(await submitDraft({ ...draft, values }, deps)).toBe(true);
     expect(fake.update).toHaveBeenCalledWith('lathe-2', {
       name: 'Lathe 2a',
-      params: expect.objectContaining({ variants: { gcodeSystem: 'B' }, diameter: 'on' }),
+      params: expect.objectContaining({
+        variants: { gcodeSystem: 'B', incrementalAddresses: 'uw', toolWord: 'offset2' },
+        diameter: 'on',
+      }),
       notes: '',
     });
   });

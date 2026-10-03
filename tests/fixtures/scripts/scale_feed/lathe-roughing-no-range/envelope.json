@@ -1,0 +1,15 @@
+{
+  "message": "Scaled 2 of 4 feed rates to 90 %; 2 left because a profile-range cycle names no range and no machine confirms the dialect. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 21,
+      "severity": "warning",
+      "message": "F2.0 is not scaled: G71 is a cycle that runs the profile between its P and Q blocks here, and this block names no P. On another control the same code is a thread cycle whose F is the lead, and no machine is chosen to confirm the dialect. Choose a machine for the document, or scale the block by hand if it really is a feed."
+    },
+    {
+      "line": 22,
+      "severity": "warning",
+      "message": "F2.0 is not scaled: G72 is a cycle that runs the profile between its P and Q blocks here, and this block names no P. On another control the same code is a thread cycle whose F is the lead, and no machine is chosen to confirm the dialect. Choose a machine for the document, or scale the block by hand if it really is a feed."
+    }
+  ]
+}

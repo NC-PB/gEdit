@@ -17,6 +17,19 @@
 //     it may not write;
 //   - **restored snapshots** (AD-21) and **per-file memory** at open (AD-22).
 //
+// M9 (WP9.5b) adds two things to Save As, both about the file the text goes to:
+//
+//   - **a read-only target** is found out before anything happens to it: a stat of the
+//     picked path, and Save As asks again, the way a Save of a read-only file does —
+//     before, the backup was made first and the write then failed on the file;
+//   - **another extension re-detects the dialect** (`a.nc` saved as `a.h`). The
+//     extension is evidence the detection weighs, and a document that keeps the dialect
+//     its old name suggested runs every transform and script under the wrong one. The
+//     same rule as at open: a dialect the user picked by hand for the new file wins, a
+//     dialect or machine picked by hand for the old file goes with the document (and is
+//     remembered for the new file), and a document that had no file yet keeps the
+//     dialect it was created with. Only a dialect that came from detection is re-detected.
+//
 // The order inside `write()` is the load-bearing part: every question that can still end
 // in "no" comes first, then the copy, then the write, then the stamp.
 //
@@ -85,7 +98,7 @@ export interface FileOpsDeps {
    */
   backup(path: string): Promise<string | null>;
   /** M7, AD-22: what the user last chose for a file. A memo is never load-bearing. */
-  fileMemory: Pick<FileMemoryStore, 'profileFor' | 'machineFor'>;
+  fileMemory: Pick<FileMemoryStore, 'profileFor' | 'machineFor' | 'remember'>;
   /** False in a plain browser, where there is no file system to reach. */
   isTauri(): boolean;
 }
@@ -713,6 +726,8 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
       disk: restamp(bytes, stat, doc.disk),
     });
     if (editor.versionId(id) === versionBefore) editor.markClean(id);
+    // Before the save event, so whatever listens to it sees the document's new dialect.
+    const redetected = redetectAfterSaveAs(id, doc.path, path, textLF);
     saveEvent.fire(id, path);
     const saved = switchedToUtf8 ? t('files.savedAsUtf8', { name }) : t('files.saved', { name });
     // The dropped tape leader is a loss, not a footnote: `{ error: true }` gives it the
@@ -724,8 +739,9 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     const warnings: string[] = [];
     if (tapeDropped) warnings.push(t('files.tapeDropped'));
     if (backup.outcome === 'without') warnings.push(t('files.savedWithoutBackup'));
-    if (warnings.length > 0) status.show([saved, ...warnings].join(' · '), { error: true });
-    else status.show(saved);
+    const notes = redetected === null ? [] : [redetected];
+    if (warnings.length > 0) status.show([saved, ...notes, ...warnings].join(' · '), { error: true });
+    else status.show([saved, ...notes].join(' · '));
     return 'saved';
   }
 
@@ -754,7 +770,18 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
       await reportError(t('files.saveFailed', { name }), t('files.alreadyOpen', { name }));
       return 'failed';
     }
-    return write(doc.id, path);
+
+    // A target the user may not write (M9, WP9.5b), found out before anything happens to
+    // it. The save goes back to the dialog, exactly as a Save of a read-only file does
+    // (AD-23): finding out by writing meant a backup of a file that was never replaced,
+    // and then a failed write. The same stat is the changed-on-disk guard's when the
+    // target is the document's own file.
+    const target = await statOne(path);
+    if (target?.readonly === true) {
+      status.show(t('readOnly.saveAsInstead', { name: baseName(path) }));
+      return saveAsOutcome(doc.id);
+    }
+    return write(doc.id, path, target);
   }
 
   async function saveOutcome(id?: DocId): Promise<SaveOutcome> {
@@ -930,6 +957,53 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     // LF model too (AD-5), so it is metadata only.
     if (eol !== 'cr') editor.setModelEol(id, eol);
     docs.update(id, { eol, metaDirty: true });
+  }
+
+  /** The lower-case extension of a path (`'h'` of `/nc/a.H`), `''` without one. */
+  function extensionOf(path: string): string {
+    const name = baseName(path);
+    const dot = name.lastIndexOf('.');
+    return dot <= 0 ? '' : name.slice(dot + 1).toLowerCase();
+  }
+
+  /**
+   * After a Save As to another extension: the dialect the new file reads as (M9, WP9.5b).
+   *
+   * Returns the status text that says so, or null when nothing changed. Only a document
+   * that already had a file is re-detected: an untitled one carries the dialect it was
+   * created with or the user picked, and its first name is no evidence against that.
+   *
+   * Only a dialect that came from **detection** is re-detected. A dialect or a machine the
+   * user picked by hand for the old file (AD-22) is a decision about this program, not
+   * about its name: the document keeps it, and the choice is remembered for the new file
+   * too, so the next open reads it the same way. A choice remembered for the new file
+   * itself still wins over both, exactly as at open.
+   */
+  function redetectAfterSaveAs(id: DocId, oldPath: string | null, newPath: string, textLF: string): string | null {
+    if (oldPath === null || oldPath === newPath || extensionOf(oldPath) === extensionOf(newPath)) return null;
+    const doc = docs.get(id);
+    if (!doc) return null;
+    const remembered = deps.fileMemory.profileFor(newPath);
+    if (remembered === undefined || !profiles.get(remembered)) {
+      const picked = deps.fileMemory.profileFor(oldPath);
+      const machine = deps.fileMemory.machineFor(oldPath);
+      const pickedByHand = (picked !== undefined && profiles.get(picked) !== undefined) || machine !== undefined;
+      if (pickedByHand) {
+        // `machineId` only when one is remembered: a present `undefined` would delete it.
+        deps.fileMemory.remember(newPath, {
+          profileId: doc.profileId,
+          ...(machine !== undefined ? { machineId: machine } : {}),
+        });
+        return null;
+      }
+    }
+    const profileId =
+      remembered !== undefined && profiles.get(remembered)
+        ? remembered
+        : profiles.detect(newPath, textLF, doc.profileId);
+    if (profileId === doc.profileId) return null;
+    setProfile(id, profileId);
+    return t('profiles.changed', { name: baseName(newPath), profile: profiles.get(profileId)?.shortName ?? profileId });
   }
 
   function setProfile(id: DocId, profileId: string): void {

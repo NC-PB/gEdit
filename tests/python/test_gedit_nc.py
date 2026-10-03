@@ -45,11 +45,12 @@ FIELDS = {
     "address": "address",
     "valueText": "value_text",
     "incremental": "incremental",
+    "index": "index",
 }
 
 #: The fields an entry has to spell out when the token carries them, so this file cannot
 #: go quiet about one of them. `tokenizer.test.ts` asserts the same thing.
-SPELLED_OUT = ["address", "valueText", "incremental"]
+SPELLED_OUT = ["address", "valueText", "incremental", "index"]
 
 KEEP = {"decimals": "keep", "trailingZeros": "keep", "keepPoint": True, "plusSign": "keep"}
 
@@ -79,6 +80,11 @@ TURNING_FIELDS = {
     "assignment": "assignment",
     "calls": None,
     "names": "names",
+    # M9 (WP9.3, §7.1 "The M9 syntax pins"): two more switches. `blockNumber.mainPrefix` is
+    # nested and has its own test below; `extendedAddresses` changes no token (the grammar and
+    # the hover read it), so it cannot be one of the fields a golden line depends on.
+    "assignmentIndex": None,
+    "exponentMarker": None,
 }
 
 #: Every field of a profile that holds a `Pattern` (`src/lib/core/profiles/types.ts`), as a
@@ -95,6 +101,7 @@ PATTERN_PATHS = [
     "syntax.header",
     "syntax.names",
     "syntax.programNames",
+    "syntax.extendedAddresses",
     "toolCall.trigger",
     "toolCall.tool",
     "toolCall.ignore",
@@ -488,6 +495,297 @@ _EMPTY_MATCH_CHILD = textwrap.dedent(
 )
 
 
+class TestMainBlockNumberGoldenDependence(unittest.TestCase):
+    """``blockNumber.mainPrefix`` is nested, so the table above cannot switch it off by name."""
+
+    def test_a_golden_line_of_sinumerik_depends_on_it(self):
+        for profile_id in ("sinumerik", "sinumerik-mill"):
+            with self.subTest(profile=profile_id):
+                profile = helpers.load_profile(profile_id)
+                self.assertEqual(profile["syntax"]["blockNumber"]["mainPrefix"], ":")
+                lines = golden_lines(profile_id)
+                full = [shape(gedit_nc.tokenize_line(line, gedit_nc.compile_profile(profile))[0]) for line in lines]
+                reduced = copy.deepcopy(profile)
+                del reduced["syntax"]["blockNumber"]["mainPrefix"]
+                cp = gedit_nc.compile_profile(reduced)
+                changed = [line for line, tokens in zip(lines, full) if shape(gedit_nc.tokenize_line(line, cp)[0]) != tokens]
+                self.assertTrue(changed, "no golden line of %s depends on blockNumber.mainPrefix" % profile_id)
+
+    def test_the_dialects_without_it_keep_the_tape_marker(self):
+        for profile_id in ("fanuc-gcode", "fanuc-lathe", "heidenhain-klartext", "okuma-osp"):
+            with self.subTest(profile=profile_id):
+                self.assertNotIn("mainPrefix", helpers.load_profile(profile_id)["syntax"]["blockNumber"])
+
+
+class TestTheRemainingTokenizerRules(unittest.TestCase):
+    """M9 (WP9.3, R4) in sentences: what a golden entry does not spell out.
+
+    The goldens hold one line per case for both tokenizers; this holds the value, the edge of
+    each rule, and that every rule is the profile's data and nothing else. The TypeScript
+    twin is the block of ``describe`` calls at the end of ``tokenizer.test.ts``.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.fanuc = gedit_nc.compile_profile(helpers.load_profile("fanuc-gcode"))
+        cls.lathe = gedit_nc.compile_profile(helpers.load_profile("fanuc-lathe"))
+        cls.klartext = gedit_nc.compile_profile(helpers.load_profile("heidenhain-klartext"))
+        cls.okuma = gedit_nc.compile_profile(helpers.load_profile("okuma-osp"))
+        cls.sinumerik = gedit_nc.compile_profile(helpers.load_profile("sinumerik"))
+        cls.mill = gedit_nc.compile_profile(helpers.load_profile("sinumerik-mill"))
+
+    def tokens(self, line, cp):
+        return code_tokens(gedit_nc.tokenize_line(line, cp)[0])
+
+    def kinds(self, line, cp):
+        return [token.kind for token in self.tokens(line, cp)]
+
+    def texts(self, line, cp):
+        return [token.text for token in self.tokens(line, cp)]
+
+    def without(self, profile_id, edit):
+        """The profile with ``edit`` applied to its ``syntax``, compiled again."""
+        profile = helpers.load_profile(profile_id)
+        edit(profile["syntax"])
+        return gedit_nc.compile_profile(profile)
+
+    # -- a main block number ------------------------------------------------
+
+    def test_a_main_block_number_is_a_block_number_with_the_prefix_as_its_address(self):
+        block, word = self.tokens(":123 G1 X10", self.sinumerik)[:2]
+        self.assertEqual((block.kind, block.text, block.address, block.value_text), ("blockNumber", ":123", ":", "123"))
+        self.assertEqual(block.value.raw, "123")
+        self.assertEqual((word.kind, word.address), ("word", "G"))
+        self.assertEqual(self.kinds("/1 :124 G1", self.sinumerik), ["skip", "blockNumber", "word"])
+        self.assertEqual(self.kinds("  :126", self.sinumerik), ["blockNumber"])
+
+    def test_block_number_of_finds_it(self):
+        self.assertEqual(
+            gedit_nc.block_number_of(":123 G1", self.sinumerik), {"value": 123, "text": "123", "start": 0, "end": 4}
+        )
+        found = gedit_nc.block_number_of("/1 :124 G1", self.sinumerik)
+        self.assertEqual((found["value"], found["start"], found["end"]), (124, 3, 7))
+
+    def test_where_the_profile_names_no_prefix_the_colon_is_the_tape_marker(self):
+        token = self.tokens(":1234", self.fanuc)[0]
+        self.assertEqual((token.kind, token.address, token.value_text), ("programMarker", ":", "1234"))
+        bare = self.without("sinumerik", lambda syntax: syntax["blockNumber"].pop("mainPrefix"))
+        self.assertEqual(self.tokens(":123 G1", bare)[0].kind, "programMarker")
+        self.assertIsNone(gedit_nc.block_number_of(":123 G1", bare))
+
+    def test_the_prefix_is_the_profiles_and_a_colon_away_from_the_head_is_an_operator(self):
+        plus = self.without("sinumerik", lambda syntax: syntax["blockNumber"].__setitem__("mainPrefix", "+"))
+        token = self.tokens("+7 G1", plus)[0]
+        self.assertEqual((token.kind, token.address, token.value_text), ("blockNumber", "+", "7"))
+        self.assertNotIn("blockNumber", self.kinds("G1 X10 :5", self.sinumerik))
+
+    def test_it_makes_no_sequence_name_of_the_prefix(self):
+        self.assertNotIn("label", self.kinds(":LAP1 G1", self.okuma))
+        self.assertNotIn("blockNumber", self.kinds(":LAP1 G1", self.sinumerik))
+
+    # -- an indexed assignment ----------------------------------------------
+
+    def test_an_indexed_assignment_is_one_word_with_the_name_as_its_address(self):
+        limit = self.tokens("LIMS[2]=1800", self.sinumerik)[0]
+        self.assertEqual(
+            (limit.kind, limit.text, limit.address, limit.index, limit.value_text),
+            ("word", "LIMS[2]=1800", "LIMS", "2", "1800"),
+        )
+        self.assertEqual(limit.value.raw, "1800")
+        for line, address, index, value in [
+            ("S[SPI]=300", "S", "SPI", "300"),
+            ("FA[X]=200", "FA", "X", "200"),
+            ("M[2]=3", "M", "2", "3"),
+        ]:
+            with self.subTest(line=line):
+                token = self.tokens(line, self.sinumerik)[0]
+                self.assertEqual((token.address, token.index, token.value_text), (address, index, value))
+
+    def test_the_blanks_around_the_index_are_not_part_of_it(self):
+        word, nxt = self.tokens("S[ SPI ] = 500 M3", self.sinumerik)
+        self.assertEqual((word.text, word.address, word.index, word.value_text), ("S[ SPI ] = 500", "S", "SPI", "500"))
+        self.assertEqual((nxt.address, nxt.value_text), ("M", "3"))
+
+    def test_nothing_may_compute_with_an_index_whose_right_hand_side_is_no_number(self):
+        for line, text in [('T[1]="DRILL_8"', '"DRILL_8"'), ("S[2]=R10*2", "R10*2")]:
+            with self.subTest(line=line):
+                token = self.tokens(line, self.sinumerik)[0]
+                self.assertEqual(token.value_text, text)
+                self.assertIsNotNone(token.index)
+                self.assertIsNone(token.value)
+        empty = self.tokens("S[2]=", self.sinumerik)[0]
+        self.assertEqual((empty.text, empty.index, empty.value_text), ("S[2]=", "2", None))
+
+    def test_a_comparison_an_empty_index_an_open_bracket_or_no_equals_sign_is_no_indexed_word(self):
+        self.assertIsNone(self.tokens("X[1]==5", self.sinumerik)[0].index)
+        self.assertEqual(self.tokens("X[1]==5", self.sinumerik)[0].value_text, "[1]")
+        self.assertIsNone(self.tokens("S[]=3", self.sinumerik)[0].index)
+        self.assertIsNone(self.tokens("S[2", self.sinumerik)[0].index)
+        self.assertEqual(self.kinds("DEF REAL ARR[10]", self.sinumerik), ["keyword", "keyword", "unknown", "expression"])
+
+    def test_the_profile_pattern_decides_which_name_takes_an_equals_sign(self):
+        narrow = self.without("sinumerik", lambda syntax: syntax.__setitem__("assignment", "(?:LIMS|S)(?=\\s*=(?!=))"))
+        self.assertEqual(self.tokens("LIMS[2]=1800", narrow)[0].index, "2")
+        self.assertIsNone(self.tokens("FA[X]=200", narrow)[0].index)
+
+    def test_without_the_field_the_line_reads_as_it_did(self):
+        off = self.without("sinumerik", lambda syntax: syntax.pop("assignmentIndex"))
+        self.assertEqual(self.kinds("LIMS[2]=1800", off), ["unknown", "expression", "operator", "word"])
+        self.assertIsNone(self.tokens("SB=1200", self.okuma)[0].index)
+
+    def test_the_milling_profile_inherits_it(self):
+        token = self.tokens("LIMS[2]=3000", self.mill)[0]
+        self.assertEqual((token.address, token.index), ("LIMS", "2"))
+
+    # -- an exponent ----------------------------------------------------------
+
+    def test_an_exponent_belongs_to_the_value_of_its_word_and_computes_as_nothing(self):
+        tokens = self.tokens("G1 X1.5EX3 Y2EX-4", self.sinumerik)
+        self.assertEqual((tokens[1].address, tokens[1].value_text, tokens[1].value), ("X", "1.5EX3", None))
+        self.assertEqual((tokens[2].address, tokens[2].value_text, tokens[2].value), ("Y", "2EX-4", None))
+        self.assertEqual(self.tokens("X=1.5EX3", self.sinumerik)[0].value_text, "1.5EX3")
+        self.assertEqual(self.texts("R1=2.5EX2", self.sinumerik), ["R1", "=", "2.5EX2"])
+        self.assertEqual(self.tokens("X-1.5EX+3", self.sinumerik)[0].value_text, "-1.5EX+3")
+        self.assertEqual(self.tokens("X1.5ex3", self.sinumerik)[0].value_text, "1.5ex3")
+
+    def test_a_lone_marker_is_what_it_was(self):
+        self.assertEqual(self.texts("G1 X1EX Y1", self.sinumerik), ["G1", "X1", "EX", "Y1"])
+        self.assertEqual(self.texts("X1EX+ Y1", self.sinumerik), ["X1", "EX", "+", "Y1"])
+
+    def test_the_letters_are_the_profiles(self):
+        e = self.without("sinumerik", lambda syntax: syntax.__setitem__("exponentMarker", "E"))
+        self.assertEqual(self.tokens("X1.5E3", e)[0].value_text, "1.5E3")
+        off = self.without("sinumerik", lambda syntax: syntax.pop("exponentMarker"))
+        self.assertEqual(self.texts("X1.5EX3", off), ["X1.5", "EX3"])
+        self.assertEqual(self.texts("X1.5EX3", self.fanuc), ["X1.5", "E", "X3"])
+        self.assertEqual(self.tokens("X1.5EX3", self.mill)[0].value_text, "1.5EX3")
+
+    # -- several skip levels -----------------------------------------------------
+
+    def marks(self, line, cp):
+        return [token.text for token in self.tokens(line, cp) if token.kind == "skip"]
+
+    def test_each_mark_with_a_level_is_a_skip_token_of_its_own(self):
+        self.assertEqual(self.marks("/1 /3 N20 G1 X10.", self.fanuc), ["/1", "/3"])
+        self.assertEqual(self.marks("/1/3 G1", self.fanuc), ["/1", "/3"])
+        self.assertEqual(self.marks("/0 /9 N30 G0", self.sinumerik), ["/0", "/9"])
+        self.assertEqual(self.marks("/2 /4 /6 G0", self.sinumerik), ["/2", "/4", "/6"])
+        self.assertEqual(self.marks("/1 /3 N20 G1", self.lathe), ["/1", "/3"])
+
+    def test_the_block_number_behind_the_marks_is_one(self):
+        for cp in (self.fanuc, self.sinumerik):
+            self.assertEqual(self.tokens("/1 /3 N20 G1", cp)[2].kind, "blockNumber")
+            found = gedit_nc.block_number_of("/1 /3 N20 G1", cp)
+            self.assertEqual((found["value"], found["start"], found["end"]), (20, 6, 9))
+
+    def test_a_mark_without_levels_is_not_repeated(self):
+        self.assertEqual(self.marks("/ /3 G1", self.okuma), ["/"])
+        self.assertEqual(self.tokens("/ /3 G1", self.okuma)[1].kind, "operator")
+        self.assertEqual(self.marks("/ /3 G1", self.klartext), ["/"])
+        self.assertEqual(self.marks("/1 N10 G1", self.fanuc), ["/1"])
+        self.assertEqual(self.marks("N120/G0X0Y0", self.fanuc), ["/"])
+
+    # -- the data rules ------------------------------------------------------------
+
+    def test_the_macro_function_and_print_names_are_keywords_of_the_fanuc_profile(self):
+        self.assertEqual(
+            [(t.kind, t.text) for t in self.tokens("#1=FIX[#2]", self.fanuc)],
+            [("variable", "#1"), ("operator", "="), ("keyword", "FIX"), ("expression", "[#2]")],
+        )
+        self.assertEqual([(t.kind, t.text) for t in self.tokens("POPEN", self.fanuc)], [("keyword", "POPEN")])
+        self.assertEqual(
+            [(t.kind, t.text) for t in self.tokens("DPRNT[X#1[53]]", self.fanuc)],
+            [("keyword", "DPRNT"), ("expression", "[X#1[53]]")],
+        )
+        self.assertEqual(self.kinds("#1=ROUND[#2]", self.lathe), ["variable", "operator", "keyword", "expression"])
+        old = self.without("fanuc-gcode", lambda syntax: syntax.__setitem__("keywords", ["GOTO", "IF"]))
+        self.assertEqual(self.texts("POPEN", old), ["P", "O", "P", "E", "N"])
+        self.assertEqual(self.kinds("G1 X10. F100.", self.fanuc), ["word", "word", "word"])
+
+    def test_the_klartext_plane_tcpm_and_tilting_words_are_keywords(self):
+        def keywords(line):
+            return [t.address for t in self.tokens(line, self.klartext) if t.kind == "keyword"]
+
+        self.assertEqual(
+            keywords("81 FUNCTION TCPM F TCP AXIS SPAT PATHCTRL VECTOR REFPNT TIP-TIP"),
+            ["FUNCTION TCPM", "F TCP", "AXIS SPAT", "PATHCTRL VECTOR", "REFPNT TIP-TIP"],
+        )
+        self.assertEqual(
+            keywords("85 PLANE EULER EULPR+0 EULNU+30 EULROT+0 TABLE ROT SEQ+ MB MAX F2000"),
+            ["PLANE EULER", "TABLE ROT", "SEQ+", "MB", "MAX"],
+        )
+        tokens = self.tokens("85 PLANE EULER EULPR+0 SEQ- F2000", self.klartext)
+        self.assertEqual((tokens[2].kind, tokens[2].address), ("word", "EULPR"))
+        self.assertEqual((tokens[4].kind, tokens[4].address, tokens[4].value_text), ("word", "F", "2000"))
+
+    def test_the_short_sinumerik_header_is_one_program_marker(self):
+        for cp in (self.sinumerik, self.mill):
+            self.assertEqual([(t.kind, t.text) for t in self.tokens("%MYPROG_MPF", cp)], [("programMarker", "%MYPROG_MPF")])
+            self.assertEqual([(t.kind, t.text) for t in self.tokens("%_N_PART_SPF", cp)], [("programMarker", "%_N_PART_SPF")])
+            self.assertEqual(self.kinds("%MYPROG_MPF ; PART", cp), ["programMarker", "comment"])
+        self.assertEqual(self.tokens("%MYPROG", self.sinumerik)[0].text, "%")
+        self.assertNotIn("programMarker", self.kinds("G1 %MYPROG_MPF", self.sinumerik))
+        self.assertEqual(gedit_nc.mask_comments("%MYPROG_MPF ;NOTE", self.sinumerik), "%MYPROG_MPF      ")
+
+    # -- the end of block, and a name that starts with digits -----------------------------
+
+    def test_the_iso_end_of_block_character_is_an_operator_where_it_is_no_comment(self):
+        for cp in (self.fanuc, self.lathe, self.okuma):
+            self.assertEqual((self.tokens("G0 G18 G21 G40;", cp)[-1].kind, self.tokens("G0 G18 G21 G40;", cp)[-1].text), ("operator", ";"))
+            self.assertEqual(self.kinds(";", cp), ["operator"])
+            self.assertEqual(self.kinds("G1 X10.;(NOTE)", cp), ["word", "word", "operator", "comment"])
+        self.assertEqual(self.kinds("G1 X10 ;CUT", self.sinumerik), ["word", "word", "comment"])
+        self.assertEqual(self.kinds("5 L X+1 ; NOTE", self.klartext), ["blockNumber", "keyword", "word", "comment"])
+
+    def test_a_klartext_name_that_starts_with_digits_is_one_token(self):
+        self.assertEqual(
+            [(t.kind, t.text) for t in self.tokens("0 BEGIN PGM 2.5D_MILLING MM", self.klartext)],
+            [("blockNumber", "0"), ("keyword", "BEGIN PGM"), ("unknown", "2.5D_MILLING"), ("keyword", "MM")],
+        )
+        self.assertEqual(self.texts("99 END PGM 5X_MILLING MM", self.klartext), ["99", "END PGM", "5X_MILLING", "MM"])
+
+    def test_a_number_followed_by_anything_but_a_letter_stays_a_number(self):
+        self.assertEqual(self.tokens("2 BLK FORM 0.1 Z X+0", self.klartext)[2].value_text, "0.1")
+        self.assertEqual(self.texts("5 FN 0: Q1 = +5", self.klartext), ["5", "FN", "0", ":", "Q1", "=", "+5"])
+        self.assertEqual(self.tokens("20 CALL LBL 7 REP 3", self.klartext)[2].value_text, "7")
+
+
+class TestSinumerikCallRuleExclusions(unittest.TestCase):
+    """The ``subprogram-call`` rules of ``sinumerik.json`` leave the control's own commands out.
+
+    A predefined procedure is a call of the control, not a subprogram, so the program map must
+    not list it. One golden shared with ``tokenizer.test.ts``; the first outline rule that
+    matches the masked line decides, as in ``OutlineIndex`` and in ``tool_list.classify``.
+    """
+
+    def cases(self):
+        return helpers.load_json(helpers.FIXTURES_DIR / "tokens" / "sinumerik-call-rules.json")
+
+    def call_of(self, line, cp):
+        masked = gedit_nc.mask_comments(line, cp)
+        for kind, regex in cp.patterns["outline"]:
+            match = regex.search(line if kind in ("comment", "section") else masked)
+            if match is None:
+                continue
+            if kind != "subprogram-call":
+                return None
+            group = match.groupdict().get("text")
+            return group if group is not None else match.group(0)
+        return None
+
+    def test_each_profile_calls_exactly_what_the_golden_says(self):
+        for profile_id in ("sinumerik", "sinumerik-mill"):
+            cp = gedit_nc.compile_profile(helpers.load_profile(profile_id))
+            for entry in self.cases():
+                with self.subTest(profile=profile_id, line=entry["line"]):
+                    self.assertEqual(self.call_of(entry["line"], cp), entry["call"])
+
+    def test_the_golden_has_cases_on_both_sides(self):
+        cases = self.cases()
+        self.assertGreaterEqual(len([c for c in cases if c["call"] is not None]), 8)
+        self.assertGreaterEqual(len([c for c in cases if c["call"] is None]), 15)
+
+
 class TestAPatternThatCanMatchNothing(unittest.TestCase):
     """An empty match of ``variables`` or ``systemVariables`` is no match (G8 M8).
 
@@ -530,6 +828,11 @@ class TestLongLines(unittest.TestCase):
         "G1X1 and a bracket behind blanks": lambda n: "G1X1" * (n // 4 - 2) + "   (1)",
         "G1X1 and an = behind blanks": lambda n: "G1X1" * (n // 4 - 2) + "   =1",
         "V1": lambda n: "V1" * (n // 2),
+        # M9: the indexed assignment reads a bracket behind the run, and the run is not an
+        # assignment word, so every stop of the scanner would have asked again.
+        "G1X1 and an index with its =": lambda n: "G1X1" * (n // 4 - 3) + "[1]=5",
+        "G1X1 and an unclosed index": lambda n: "G1X1" * (n // 4 - 2) + "[1",
+        "G1X1 and a number with an exponent": lambda n: "G1X1" * (n // 4 - 3) + "1.5EX3",
     }
 
     def test_a_long_run_of_packed_words_stays_linear(self):
@@ -780,6 +1083,7 @@ class TestCompileProfile(unittest.TestCase):
                 self.assertEqual(cp.profile["id"], profile_id)
                 for name in [
                     "detect_content",
+                    "detect_vetoes",
                     "tool_trigger",
                     "tool",
                     "program_start",

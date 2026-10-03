@@ -37,22 +37,24 @@
       { "pattern": "^(?![^;]*(?<![A-Z_$])Y)N\\d+", "weight": 1 },
       { "pattern": "^(?![^;]*(?<![A-Z_$])Y)(?:N\\d+[ \\t]*)?[GM]\\d{1,3}(?![\\d.])", "weight": 1 }
     ],
-    "priority": 0
+    "priority": -1
   },
   "syntax": {
     "comments": [{ "start": ";", "end": null }],
     "strings": true,
     "blockSkip": { "chars": "/", "position": "before-number", "levels": true },
-    "blockNumber": { "mode": "prefix", "prefix": "N", "altPrefixes": [], "mandatory": false },
+    "blockNumber": { "mode": "prefix", "prefix": "N", "altPrefixes": [], "mandatory": false, "mainPrefix": ":" },
     "decimalSeparator": ".",
+    "exponentMarker": "EX",
     "decimalPointSignificant": false,
     "wordSeparatorRequired": false,
     "variables": "R\\d+",
     "systemVariables": "\\$[A-Z_][A-Z0-9_]*",
     "assignment": "[A-Z_][A-Z0-9_]*(?=\\s*=(?!=))",
+    "assignmentIndex": true,
     "labels": "^\\s*(?:/\\d?\\s*)?(?:N\\d+[ \\t]+)?(?<name>[A-Z_][A-Z0-9_]*):(?!=)",
     "calls": true,
-    "header": "^%_N_\\w+_(?:MPF|SPF)",
+    "header": "^%(?:_N_)?\\w+_(?:MPF|SPF)",
     "names": "[A-Z_]{2}[A-Z0-9_]*",
     "keywords": [
       "IF",
@@ -165,11 +167,11 @@
     "toolFrom": "same-line"
   },
   "program": {
-    "start": ["^%_N_(?<name>\\w+)_(?:MPF|SPF)", "^\\s*(?:N\\d+[ \\t]+)?PROC[ \\t]+(?<name>[A-Z_][A-Z0-9_]*)"],
+    "start": ["^%(?:_N_)?(?<name>\\w+)_(?:MPF|SPF)", "^\\s*(?:N\\d+[ \\t]+)?PROC[ \\t]+(?<name>[A-Z_][A-Z0-9_]*)"],
     "end": ["(?<![A-Z_])M0*(?:2|30|17)(?![\\d.]|\\s*=)", "(?<![A-Z_])RET(?![A-Z0-9_])"]
   },
   "outline": [
-    { "kind": "program", "pattern": "^%_N_(?<name>\\w+)_(?:MPF|SPF)" },
+    { "kind": "program", "pattern": "^%(?:_N_)?(?<name>\\w+)_(?:MPF|SPF)" },
     { "kind": "program", "pattern": "^\\s*(?:N\\d+[ \\t]+)?PROC[ \\t]+(?<name>[A-Z_][A-Z0-9_]*)" },
     {
       "kind": "end",
@@ -180,7 +182,7 @@
     { "kind": "comment", "pattern": "(?<![A-Z_])MSG\\s*\\(\\s*\"(?<text>[^\"]*)\"\\s*\\)" },
     {
       "kind": "subprogram-call",
-      "pattern": "^\\s*(?:/\\d?[ \\t]*)?(?:N\\d+[ \\t]+)?(?:MCALL[ \\t]+)?(?!(?:AC|IC|DC|ACP|ACN|MSG|IF|WHILE|FOR|CASE|UNTIL|REPEATB|REPEAT|LOOP|GOTOF|GOTOB|GOTOC|GOTO|DEF|SETMS|SETM|CLEARM|WAITMC|WAITM|WAITE|TRAORI|TRANSMIT|TRACYL|TRAANG|EXTCALL|CALLPATH)[ \\t]*\\()(?<text>[A-Z_][A-Z0-9_]*(?=\\()|[A-Z_]{2}[A-Z0-9_]*(?=[ \\t]+\\())[ \\t]*\\("
+      "pattern": "^\\s*(?:/\\d?[ \\t]*)?(?:N\\d+[ \\t]+)?(?:MCALL[ \\t]+)?(?!(?:AC|IC|DC|ACP|ACN|MSG|IF|WHILE|FOR|CASE|UNTIL|REPEATB|REPEAT|LOOP|GOTOF|GOTOB|GOTOC|GOTO|DEF|SETMS|SETM|CLEARM|WAITMC|WAITM|WAITE|WAITS|INIT|START|ORIRESET|FGROUP|TRAORI|TRANSMIT|TRACYL|TRAANG|EXTCALL|CALLPATH)[ \\t]*\\()(?<text>[A-Z_][A-Z0-9_]*(?=\\()|[A-Z_]{2}[A-Z0-9_]*(?=[ \\t]+\\())[ \\t]*\\("
     },
     {
       "kind": "subprogram-call",
@@ -188,7 +190,7 @@
     },
     {
       "kind": "subprogram-call",
-      "pattern": "^\\s*(?:/\\d?[ \\t]*)?(?:N\\d+[ \\t]+)?(?=[A-Z_]*[0-9_]|[A-Z_][A-Z0-9_]*[ \\t]+P\\d)(?!(?:CUT3DC|DIAM90|B_AND|B_NOT|B_XOR|CUT2D|B_OR|CUT2DF|CUT3DFS|CUT3DFF|CUT3DF|CDOF2|ORIRPY2|WALCS\\d+)(?![A-Z0-9_]))(?<text>(?:[A-Z]{2}|_[A-Z])[A-Z0-9_]*(?:[ \\t]+P\\d+)?)[ \\t]*$"
+      "pattern": "^\\s*(?:/\\d?[ \\t]*)?(?:N\\d+[ \\t]+)?(?=[A-Z_]*[0-9_]|[A-Z_][A-Z0-9_]*[ \\t]+P\\d)(?!(?:CUT3DCCD|CUT3DCC|CUT3DC|ORIVIRT[12]|DIAM90|B_AND|B_NOT|B_XOR|CUT2D|B_OR|CUT2DF|CUT3DFS|CUT3DFF|CUT3DF|CDOF2|ORIRPY2|WALCS\\d+)(?![A-Z0-9_]))(?<text>(?:[A-Z]{2}|_[A-Z])[A-Z0-9_]*(?:[ \\t]+P\\d+)?)[ \\t]*$"
     },
     { "kind": "stop", "pattern": "(?<![A-Z_])M0*[01](?![\\d.]|\\s*=)" },
     { "kind": "end", "pattern": "(?<![A-Z_])(?:M0*(?:2|30|17)(?![\\d.]|\\s*=)|RET(?![A-Z0-9_]))" }

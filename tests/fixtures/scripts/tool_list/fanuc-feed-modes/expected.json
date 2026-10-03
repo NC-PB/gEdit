@@ -59,7 +59,7 @@
     {
       "line": 18,
       "severity": "info",
-      "message": "T2: the S of 1 block is a surface speed (G96), not a spindle speed, so it is not in the range."
+      "message": "T2: the S of 1 block is a surface speed in m/min (G96), not a spindle speed, so it is not in the range."
     },
     {
       "line": 20,

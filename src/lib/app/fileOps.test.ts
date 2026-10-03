@@ -320,7 +320,7 @@ interface FakeMemory {
   profiles: Map<string, string>;
   /** `null` is a remembered "none", a missing key is "nothing remembered" (AD-31). */
   machines: Map<string, string | null>;
-  store: Pick<FileMemoryStore, 'profileFor' | 'machineFor'>;
+  store: Pick<FileMemoryStore, 'profileFor' | 'machineFor' | 'remember'>;
 }
 
 function createFakeMemory(): FakeMemory {
@@ -330,6 +330,17 @@ function createFakeMemory(): FakeMemory {
     store: {
       profileFor: (path) => fake.profiles.get(path),
       machineFor: (path) => (fake.machines.has(path) ? fake.machines.get(path) : undefined),
+      // The two members `fileOps` writes; a present `undefined` deletes, as in the real store.
+      remember: (path, patch) => {
+        if ('profileId' in patch) {
+          if (patch.profileId === undefined) fake.profiles.delete(path);
+          else fake.profiles.set(path, patch.profileId);
+        }
+        if ('machineId' in patch) {
+          if (patch.machineId === undefined) fake.machines.delete(path);
+          else fake.machines.set(path, patch.machineId);
+        }
+      },
     },
   };
   return fake;
@@ -1021,6 +1032,141 @@ describe('saveAs', () => {
     expect(await h.files.saveAs(id)).toBe(false);
     expect(h.fs.writes).toEqual([]);
   });
+
+  describe('to another extension (M9, WP9.5b)', () => {
+    // `comment-only.txt` carries no evidence of any dialect, so the extension decides:
+    // `.nc` reads as the Fanuc mill, `.h` as Klartext, `.mpf` as Sinumerik.
+    it('re-detects the dialect, switches the editor language and says so', async () => {
+      const path = h.put('/nc/a.nc', 'nc/ambiguous/comment-only.txt');
+      const [id] = await h.files.open([path]);
+      expect(h.docs.get(id)?.profileId).toBe('fanuc-gcode');
+      h.dialogs.answers.saveFile.push('/nc/a.h');
+
+      expect(await h.files.saveAs(id)).toBe(true);
+
+      expect(h.docs.get(id)?.profileId).toBe('heidenhain-klartext');
+      expect(h.editor.languages.get(id)).toBe('heidenhain-klartext');
+      const shown = h.status.last();
+      expect(shown).toContain(t('files.saved', { name: 'a.h' }));
+      expect(shown).toContain(t('profiles.changed', { name: 'a.h', profile: 'Heidenhain' }));
+    });
+
+    it('keeps the dialect the program itself shows', async () => {
+      // A Fanuc program with its `%` and `O` number is Fanuc under any name.
+      const path = h.put('/nc/a.nc', 'nc/encoding/utf8-lf.nc');
+      const [id] = await h.files.open([path]);
+      h.dialogs.answers.saveFile.push('/nc/a.h');
+
+      expect(await h.files.saveAs(id)).toBe(true);
+
+      expect(h.docs.get(id)?.profileId).toBe('fanuc-gcode');
+      expect(h.status.last()).toBe(t('files.saved', { name: 'a.h' }));
+    });
+
+    it('leaves the dialect alone when the extension stays, even one picked by hand', async () => {
+      const path = h.put('/nc/a.nc', 'nc/ambiguous/comment-only.txt');
+      h.memory.profiles.set(path, 'sinumerik');
+      const [id] = await h.files.open([path]);
+      h.dialogs.answers.saveFile.push('/nc/b.NC');
+
+      expect(await h.files.saveAs(id)).toBe(true);
+
+      expect(h.docs.get(id)?.profileId).toBe('sinumerik');
+    });
+
+    it('takes the dialect the user picked by hand for the new file', async () => {
+      const path = h.put('/nc/a.nc', 'nc/ambiguous/comment-only.txt');
+      h.memory.profiles.set('/nc/a.h', 'sinumerik');
+      const [id] = await h.files.open([path]);
+      h.dialogs.answers.saveFile.push('/nc/a.h');
+
+      expect(await h.files.saveAs(id)).toBe(true);
+
+      expect(h.docs.get(id)?.profileId).toBe('sinumerik');
+    });
+
+    it('keeps a dialect picked by hand for the old file, and remembers it for the new one', async () => {
+      // Review F2: the hand-picked Sinumerik became Klartext because only the new path's
+      // memory was read, and `.h` is Klartext evidence.
+      const path = h.put('/nc/a.nc', 'nc/ambiguous/comment-only.txt');
+      h.memory.profiles.set(path, 'sinumerik');
+      const [id] = await h.files.open([path]);
+      h.dialogs.answers.saveFile.push('/nc/a.h');
+
+      expect(await h.files.saveAs(id)).toBe(true);
+
+      expect(h.docs.get(id)?.profileId).toBe('sinumerik');
+      expect(h.editor.languages.get(id)).not.toBe('heidenhain-klartext');
+      expect(h.status.last()).toBe(t('files.saved', { name: 'a.h' }));
+      expect(h.memory.profiles.get('/nc/a.h')).toBe('sinumerik');
+      expect(h.memory.machines.has('/nc/a.h')).toBe(false);
+    });
+
+    it('keeps the dialect when a machine was picked by hand for the old file', async () => {
+      const path = h.put('/nc/a.nc', 'nc/ambiguous/comment-only.txt');
+      h.memory.machines.set(path, null);
+      const [id] = await h.files.open([path]);
+      expect(h.docs.get(id)?.profileId).toBe('fanuc-gcode');
+      h.dialogs.answers.saveFile.push('/nc/a.h');
+
+      expect(await h.files.saveAs(id)).toBe(true);
+
+      expect(h.docs.get(id)?.profileId).toBe('fanuc-gcode');
+      expect(h.memory.profiles.get('/nc/a.h')).toBe('fanuc-gcode');
+      expect(h.memory.machines.get('/nc/a.h')).toBeNull();
+    });
+
+    it('lets a choice remembered for the new file win over one for the old file', async () => {
+      const path = h.put('/nc/a.nc', 'nc/ambiguous/comment-only.txt');
+      h.memory.profiles.set(path, 'sinumerik');
+      h.memory.profiles.set('/nc/a.h', 'fanuc-lathe');
+      const [id] = await h.files.open([path]);
+      h.dialogs.answers.saveFile.push('/nc/a.h');
+
+      expect(await h.files.saveAs(id)).toBe(true);
+
+      expect(h.docs.get(id)?.profileId).toBe('fanuc-lathe');
+    });
+
+    it('keeps the dialect of a document that had no file yet', async () => {
+      // An untitled document carries the dialect it was created with or the user chose.
+      const id = h.files.newUntitled({ profileId: 'sinumerik', text: '; NOTE\n' });
+      h.dialogs.answers.saveFile.push('/nc/x.h');
+
+      expect(await h.files.saveAs(id)).toBe(true);
+
+      expect(h.docs.get(id)?.profileId).toBe('sinumerik');
+    });
+  });
+
+  describe('to a read-only file (M9, WP9.5b)', () => {
+    it('asks for another file before it backs up or writes anything', async () => {
+      const locked = h.put('/nc/locked.nc', 'nc/encoding/utf8-lf.nc');
+      h.fs.readOnly.add(locked);
+      const id = h.files.newUntitled({ text: 'G0 X1\n' });
+      h.dialogs.answers.saveFile.push(locked, '/nc/ok.nc');
+
+      expect(await h.files.saveAs(id)).toBe(true);
+
+      // No copy of the file that was never going to be replaced.
+      expect(h.trace).toEqual(['backup:/nc/ok.nc', 'write:/nc/ok.nc']);
+      expect(hex(h.fs.files.get(locked) as Uint8Array)).toBe(hex(fixture('nc/encoding/utf8-lf.nc')));
+      expect(h.status.messages.map((m) => m.text)).toContain(t('readOnly.saveAsInstead', { name: 'locked.nc' }));
+      expect(h.docs.get(id)?.path).toBe('/nc/ok.nc');
+    });
+
+    it('writes nothing when the second dialog is cancelled', async () => {
+      const locked = h.put('/nc/locked.nc', 'nc/encoding/utf8-lf.nc');
+      h.fs.readOnly.add(locked);
+      const id = h.files.newUntitled({ text: 'G0 X1\n' });
+      h.dialogs.answers.saveFile.push(locked, null);
+
+      expect(await h.files.saveAs(id)).toBe(false);
+
+      expect(h.trace).toEqual([]);
+      expect(h.docs.get(id)?.path).toBeNull();
+    });
+  });
 });
 
 describe('saveAll', () => {
@@ -1622,9 +1768,35 @@ describe('the backup before a write (AD-21)', () => {
     expect(asked).toHaveLength(1);
     expect(asked[0].args.title).toBe(t('files.saveFailedTitle'));
     expect(String(asked[0].args.message)).toContain('/backups/a.nc');
+    expect(String(asked[0].args.message)).toContain(t('files.saveFailedBackup', { path: '/backups/a.nc' }));
+    // The copy came first and the write was attempted after it (this is the one order
+    // the whole feature rests on), and nothing landed on the file.
+    expect(h.trace).toEqual([`backup:${path}`, `write:${path}`]);
+    expect(h.fs.writes).toEqual([]);
     // The buffer still holds the full text, whatever happened to the file.
     expect(h.editor.getText(id)).toBe('G0 X99\n');
     expect(h.docs.get(id)?.dirty).toBe(true);
+  });
+
+  it('copies before the failed write, and Save As gets the work onto another file', async () => {
+    // The runtime harness cannot fail a write after the stat that let the save through
+    // except with a full volume (m7-save-fail, part A2), so the whole sequence is pinned
+    // here too: copy, failed write, the message with the copy's place, Save As, and the
+    // new file written (it has nothing to copy, as a real new file has not).
+    const path = '/nc/a.nc';
+    const id = await openDirty(path);
+    h.editor.type(id, 'G0 X99\n');
+    h.fs.writeFailures.add(path);
+    h.backup.nothing.add('/nc/rescued.nc');
+    h.dialogs.answers.confirm.push(true);
+    h.dialogs.answers.saveFile.push('/nc/rescued.nc');
+
+    expect(await h.files.save(id)).toBe(true);
+
+    expect(h.trace).toEqual([`backup:${path}`, `write:${path}`, 'backup:/nc/rescued.nc', 'write:/nc/rescued.nc']);
+    expect(h.fs.writes).toEqual(['/nc/rescued.nc']);
+    expect(h.docs.get(id)?.path).toBe('/nc/rescued.nc');
+    expect(h.docs.get(id)?.dirty).toBe(false);
   });
 
   it('says nothing about a copy that was not made', async () => {

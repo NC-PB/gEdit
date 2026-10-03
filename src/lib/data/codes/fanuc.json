@@ -135,6 +135,7 @@
     {
       "code": "G4",
       "group": "nonmodal",
+      "axisWords": "data",
       "label": "Dwell",
       "description": "Holds the tool where it is before the next block runs. It applies to this block only.",
       "params": [
@@ -153,6 +154,34 @@
       ]
     },
     {
+      "code": "G5",
+      "group": "nonmodal",
+      "label": "AI contour control, on and off",
+      "description": "Switches the look-ahead contour control for fast, accurate machining of many short blocks on with P10000 and off again with P0. Write it in a block of its own.",
+      "params": [
+        { "address": "P", "label": "Mode: 10000 on, 0 off", "required": true }
+      ]
+    },
+    {
+      "code": "G5.1",
+      "group": "nonmodal",
+      "axisWords": "data",
+      "label": "Contour control and smoothing modes",
+      "description": "Q chooses a high-speed mode: 1 contour control with look-ahead, 2 smoothing interpolation, 3 nano smoothing, 0 ends the mode. Write it in a block of its own. Axis words in the block, such as X0 Y0 Z0, only name the axes the mode applies to; nothing moves.",
+      "params": [
+        { "address": "Q", "label": "Mode: 1, 2 or 3 on, 0 off", "required": true }
+      ]
+    },
+    {
+      "code": "G7.1",
+      "aliases": ["G107"],
+      "group": "frame",
+      "axisWords": "data",
+      "frame": "open",
+      "label": "Cylindrical interpolation",
+      "description": "Wraps the path of a rotary axis around a cylinder, so that a contour on the unrolled surface can be written as a flat one. The rotary axis word carries the cylinder radius to start the mode and 0 to end it, each in a block of its own. The positions in between are on the unrolled surface, not in the coordinates of the rest of the program."
+    },
+    {
       "code": "G9",
       "group": "nonmodal",
       "label": "Exact stop for this block",
@@ -168,6 +197,23 @@
         { "address": "L", "label": "Which table" },
         { "address": "P", "label": "Which entry" }
       ]
+    },
+    {
+      "code": "G12.1",
+      "aliases": ["G112"],
+      "group": "frame",
+      "axisWords": "data",
+      "frame": "open",
+      "label": "Polar coordinate interpolation on",
+      "description": "Turns moves programmed on a flat plane, made of one linear and one rotary axis, into moves of those two axes, so that the rotary axis can mill a flat face. Write it in a block of its own; G13.1 ends it. Axis words of the block, such as X and C, give the centre of the rotary axis on that plane. In between, the positions are on the plane, not in the coordinates of the rest of the program."
+    },
+    {
+      "code": "G13.1",
+      "aliases": ["G113"],
+      "group": "frame",
+      "frame": "close",
+      "label": "Polar coordinate interpolation off",
+      "description": "Ends the polar coordinate interpolation that G12.1 started and gives back the plane that was selected before it."
     },
     {
       "code": "G17",
@@ -212,8 +258,19 @@
     {
       "code": "G28",
       "group": "nonmodal",
+      "axisWords": "machine",
       "label": "Return to the reference point",
       "description": "Moves to the machine reference point by way of the intermediate point written in the block."
+    },
+    {
+      "code": "G30",
+      "group": "nonmodal",
+      "axisWords": "machine",
+      "label": "Return to the second, third or fourth reference point",
+      "description": "Moves to a further reference point, often the tool change position, by way of the intermediate point written in the block. P says which point; without it the second is meant.",
+      "params": [
+        { "address": "P", "label": "Which reference point: 2, 3 or 4", "min": 2, "max": 4 }
+      ]
     },
     {
       "code": "G32",
@@ -221,7 +278,10 @@
       "modal": true,
       "pitchFeed": true,
       "label": "Thread cutting pass",
-      "description": "One straight threading pass on a lathe in G-code system A. F carries the thread lead per revolution, not a feed rate, so scaling the feed would change the thread."
+      "description": "One straight threading pass on a lathe in G-code system A. F carries the thread lead per revolution, not a feed rate, so scaling the feed would change the thread.",
+      "params": [
+        { "address": "F", "label": "Thread lead per revolution", "unit": "feedPerRev" }
+      ]
     },
     {
       "code": "G33",
@@ -229,7 +289,10 @@
       "modal": true,
       "pitchFeed": true,
       "label": "Thread cutting pass",
-      "description": "One straight threading pass; this is how G-code systems B and C spell G32. F carries the thread lead per revolution, not a feed rate."
+      "description": "One straight threading pass; this is how G-code systems B and C spell G32. F carries the thread lead per revolution, not a feed rate.",
+      "params": [
+        { "address": "F", "label": "Thread lead per revolution", "unit": "feedPerRev" }
+      ]
     },
     {
       "code": "G34",
@@ -243,7 +306,8 @@
           "address": "F",
           "label": "Lead at the start point",
           "required": true,
-          "min": 0
+          "min": 0,
+          "unit": "feedPerRev"
         },
         {
           "address": "K",
@@ -304,6 +368,30 @@
       ]
     },
     {
+      "code": "G43.4",
+      "group": "lengthComp",
+      "modal": true,
+      "label": "Tool centre point control, by rotary positions",
+      "description": "Keeps the tool tip on the programmed path while the rotary axes move; the block writes the end positions of the rotary axes and the length offset register H. The move of this block itself only applies the length offset, and the control starts after it. G49 ends it.",
+      "params": [
+        { "address": "H", "label": "Length offset register", "required": true, "min": 0 }
+      ]
+    },
+    {
+      "code": "G43.5",
+      "group": "lengthComp",
+      "modal": true,
+      "label": "Tool centre point control, by tool direction",
+      "description": "Keeps the tool tip on the programmed path while the tool tilts; the block writes the direction of the tool axis as I, J and K instead of rotary positions, and the length offset register H. The move of this block itself only applies the length offset, and the control starts after it. G49 ends it.",
+      "params": [
+        { "address": "H", "label": "Length offset register", "required": true, "min": 0 },
+        { "address": "I", "label": "Tool axis direction, X component", "unit": "count" },
+        { "address": "J", "label": "Tool axis direction, Y component", "unit": "count" },
+        { "address": "K", "label": "Tool axis direction, Z component", "unit": "count" },
+        { "address": "Q", "label": "Tilt of the tool in the direction of travel", "unit": "angle" }
+      ]
+    },
+    {
       "code": "G44",
       "group": "lengthComp",
       "modal": true,
@@ -327,20 +415,66 @@
       "group": "lengthComp",
       "modal": true,
       "label": "Cancel tool length offset",
-      "description": "Drops the active tool length offset. It is part of the usual safe-start block."
+      "description": "Drops the active tool length offset. It also ends tool centre point control (G43.4, G43.5). It is part of the usual safe-start block."
     },
     {
       "code": "G50",
       "group": "nonmodal",
       "sets": { "speedLimit": true },
+      "axisWords": "data",
+      "frame": "close",
       "label": "Scaling cancel",
       "description": "Ends scaling on a machining centre; G51 switches it on. gEdit still reads an S word in such a block as a spindle-speed clamp, because a lathe program in G-code system A writes its clamp as G50 S and may be opened with this profile by mistake."
     },
     {
+      "code": "G50.1",
+      "group": "frame",
+      "axisWords": "data",
+      "frame": "close",
+      "label": "Programmable mirror image off",
+      "description": "Ends the mirror image of G51.1 for the axes named in the block. The values of the axis words are not used."
+    },
+    {
+      "code": "G51",
+      "group": "frame",
+      "axisWords": "data",
+      "frame": "open",
+      "label": "Scaling",
+      "description": "Enlarges or reduces the programmed shape. The axis words give the centre of the scaling, P the factor for all axes or I, J and K a factor per axis; G50 ends it. Positions written after it are not the positions the tool reaches.",
+      "params": [
+        { "address": "P", "label": "Scale factor for all axes" },
+        { "address": "I", "label": "Scale factor for X", "unit": "count" },
+        { "address": "J", "label": "Scale factor for Y", "unit": "count" },
+        { "address": "K", "label": "Scale factor for Z", "unit": "count" }
+      ]
+    },
+    {
+      "code": "G51.1",
+      "group": "frame",
+      "axisWords": "data",
+      "frame": "open",
+      "label": "Programmable mirror image",
+      "description": "Mirrors the following moves about the position the axis words give; the words are the place of the mirror axis, not a move. G50.1 ends it. Positions written after it are not the positions the tool reaches."
+    },
+    {
+      "code": "G52",
+      "group": "nonmodal",
+      "axisWords": "data",
+      "label": "Local coordinate system",
+      "description": "Sets a local coordinate system inside the active work offset. The axis words give where its zero lies, so they are a shift and not a move; G52 with every axis at zero ends it."
+    },
+    {
       "code": "G53",
       "group": "nonmodal",
+      "axisWords": "machine",
       "label": "Machine coordinates for this block",
       "description": "Reads the positions of this block in machine coordinates instead of the work offset. It needs absolute values and is often used to move to a tool change position."
+    },
+    {
+      "code": "G53.1",
+      "group": "nonmodal",
+      "label": "Turn the tool axis to the tilted plane",
+      "description": "Write it alone in the block after G68.2 or G68.4: the rotary axes move so that the tool stands at right angles to the tilted plane."
     },
     {
       "code": "G54",
@@ -453,11 +587,94 @@
       ]
     },
     {
+      "code": "G66.1",
+      "group": "macro",
+      "modal": true,
+      "wordsAreData": true,
+      "label": "Modal macro call in every block",
+      "description": "Runs the macro program P after every following block, not only after moves, until G67. The other words of this block are its arguments, not moves, feeds or speeds of this program.",
+      "params": [
+        { "address": "P", "label": "Macro program number", "required": true },
+        { "address": "L", "label": "Repeat count", "min": 1 }
+      ]
+    },
+    {
       "code": "G67",
       "group": "macro",
       "modal": true,
       "label": "Modal macro call off",
       "description": "Ends the modal macro call of G66."
+    },
+    {
+      "code": "G68",
+      "group": "frame",
+      "axisWords": "data",
+      "frame": "open",
+      "label": "Coordinate system rotation",
+      "description": "Turns the coordinate system. In the selected plane the axis words give the centre of the rotation and R the angle; with I, J and K it is a three-dimensional rotation about that direction. G69 ends it. On a lathe with two turrets the same number is a mirror image instead.",
+      "params": [
+        { "address": "R", "label": "Rotation angle", "unit": "angle" },
+        { "address": "I", "label": "Rotation axis direction, X component", "unit": "count" },
+        { "address": "J", "label": "Rotation axis direction, Y component", "unit": "count" },
+        { "address": "K", "label": "Rotation axis direction, Z component", "unit": "count" }
+      ]
+    },
+    {
+      "code": "G68.2",
+      "group": "frame",
+      "axisWords": "data",
+      "frame": "open",
+      "label": "Tilted working plane",
+      "description": "Defines a coordinate system tilted against the workpiece and makes it the one the program is written in. X, Y and Z give its origin; I, J and K give the three Euler angles, or with P another way to define the plane (P1 roll-pitch-yaw angles with Q as the order of the turns, P2 three points, P3 two vectors, P4 projection angles). G69 ends it. G53.1 in the next block turns the rotary axes to the new tool direction.",
+      "params": [
+        { "address": "P", "label": "How the plane is defined: none Euler angles, 1 to 4 another form", "min": 1, "max": 4 },
+        { "address": "Q", "label": "Order of the turns (P1) or the number of the point or vector (P2, P3)" },
+        { "address": "I", "label": "First angle, or X component of a vector", "unit": "count" },
+        { "address": "J", "label": "Second angle, or Y component of a vector", "unit": "count" },
+        { "address": "K", "label": "Third angle, or Z component of a vector", "unit": "count" },
+        { "address": "R", "label": "Turn about the new Z axis (P2)", "unit": "angle" }
+      ]
+    },
+    {
+      "code": "G68.3",
+      "group": "frame",
+      "axisWords": "data",
+      "frame": "open",
+      "label": "Tilted working plane from the tool direction",
+      "description": "Makes the coordinate system whose Z axis is the present direction of the tool the one the program is written in. X, Y and Z give its origin in absolute values (the present position when left out); R turns it about its Z axis. G69 ends it.",
+      "params": [
+        { "address": "R", "label": "Turn about the new Z axis", "unit": "angle" }
+      ]
+    },
+    {
+      "code": "G68.4",
+      "group": "frame",
+      "axisWords": "data",
+      "frame": "open",
+      "label": "Tilted working plane, added to the one in force",
+      "description": "Tilts again, relative to the tilted plane that is in force. It is written like G68.2 (P chooses the form), and its origin is given in the coordinates of that plane. Tool length and radius compensation must be off. G69 ends it.",
+      "params": [
+        { "address": "P", "label": "How the plane is defined: none Euler angles, 1 to 4 another form", "min": 1, "max": 4 },
+        { "address": "Q", "label": "Order of the turns (P1) or the number of the point or vector (P2, P3)" },
+        { "address": "I", "label": "First angle, or X component of a vector", "unit": "count" },
+        { "address": "J", "label": "Second angle, or Y component of a vector", "unit": "count" },
+        { "address": "K", "label": "Third angle, or Z component of a vector", "unit": "count" },
+        { "address": "R", "label": "Turn about the new Z axis (P2)", "unit": "angle" }
+      ]
+    },
+    {
+      "code": "G69",
+      "group": "frame",
+      "frame": "close",
+      "label": "Coordinate system rotation off",
+      "description": "Ends G68, G68.2, G68.3 and G68.4 and goes back to the coordinates of the program. On a lathe with two turrets the same number ends the mirror image instead."
+    },
+    {
+      "code": "G69.1",
+      "group": "frame",
+      "frame": "close",
+      "label": "Tilted working plane off, lathe spelling",
+      "description": "The way a lathe control writes the end of a tilted plane or a three-dimensional rotation; a machining centre writes G69."
     },
     {
       "code": "G73",
@@ -1080,6 +1297,7 @@
       "group": "nonmodal",
       "pitchFeedAmbiguous": true,
       "sets": { "speedLimit": true },
+      "axisWords": "data",
       "label": "Coordinate set, spindle speed clamp",
       "description": "Sets the work coordinate system, or with an S word clamps the top spindle speed; lathes in G-code system B and C use the number the same way. In system A this number is the single-pass threading cycle instead, so gEdit never scales the F of such a block."
     },
@@ -1366,6 +1584,162 @@
       "verify": true,
       "label": "Remainder",
       "description": "Gives what is left over after dividing the left side by the right one."
+    },
+    {
+      "code": "SIN",
+      "group": "macro",
+      "label": "Sine",
+      "description": "Sine of the angle in the brackets. Angles are written in degrees, with the minutes as a decimal part: 90 degrees 30 minutes is 90.5."
+    },
+    {
+      "code": "COS",
+      "group": "macro",
+      "label": "Cosine",
+      "description": "Cosine of the angle in the brackets, in degrees."
+    },
+    {
+      "code": "TAN",
+      "group": "macro",
+      "label": "Tangent",
+      "description": "Tangent of the angle in the brackets, in degrees."
+    },
+    {
+      "code": "ASIN",
+      "group": "macro",
+      "label": "Arc sine",
+      "description": "Gives the angle, in degrees, whose sine is the value in the brackets. The value has to lie between -1 and 1, or the control raises an alarm. A control parameter chooses whether the result runs from 270 to 90 degrees or from -90 to 90 degrees."
+    },
+    {
+      "code": "ACOS",
+      "group": "macro",
+      "label": "Arc cosine",
+      "description": "Gives the angle, in degrees, whose cosine is the value in the brackets, from 180 down to 0. The value has to lie between -1 and 1, or the control raises an alarm."
+    },
+    {
+      "code": "ATAN",
+      "group": "macro",
+      "label": "Arc tangent",
+      "description": "With one value in the brackets it gives the principal angle, from -90 to 90 degrees. With two values, written ATAN[#j]/[#k] or ATAN[#j,#k], it gives the direction in degrees of the point (#k, #j) in the X-Y plane, from 0 to 360 or, by a control parameter, from -180 to 180. In a division, put the one-value form in its own brackets or it is read as the two-value form."
+    },
+    {
+      "code": "ATN",
+      "group": "macro",
+      "label": "Arc tangent (short form)",
+      "description": "The short spelling of ATAN, with the same two forms and the same result."
+    },
+    {
+      "code": "SQRT",
+      "group": "macro",
+      "label": "Square root",
+      "description": "Square root of the value in the brackets."
+    },
+    {
+      "code": "SQR",
+      "group": "macro",
+      "label": "Square root (short form)",
+      "description": "The short spelling of SQRT."
+    },
+    {
+      "code": "ABS",
+      "group": "macro",
+      "label": "Absolute value",
+      "description": "Gives the value in the brackets without its sign."
+    },
+    {
+      "code": "BIN",
+      "group": "macro",
+      "label": "Convert BCD to binary",
+      "description": "Converts the value in the brackets from BCD to a binary number. Typically used on signal values exchanged with the machine."
+    },
+    {
+      "code": "BCD",
+      "group": "macro",
+      "label": "Convert binary to BCD",
+      "description": "Converts the value in the brackets from a binary number to BCD. Typically used on signal values exchanged with the machine."
+    },
+    {
+      "code": "ROUND",
+      "group": "macro",
+      "label": "Round",
+      "description": "Rounds to a whole number when it stands in a calculation or in an IF or WHILE condition: 1.2345 gives 1.0. Written at an address of an NC word, it rounds to the smallest input increment of that address instead."
+    },
+    {
+      "code": "RND",
+      "group": "macro",
+      "label": "Round (short form)",
+      "description": "The short spelling of ROUND."
+    },
+    {
+      "code": "FIX",
+      "group": "macro",
+      "label": "Round down to a whole number",
+      "description": "Drops the decimals: 1.2 gives 1.0 and -1.2 gives -1.0, so the value moves towards zero."
+    },
+    {
+      "code": "FUP",
+      "group": "macro",
+      "label": "Round up to a whole number",
+      "description": "Rounds away from zero to the next whole number: 1.2 gives 2.0 and -1.2 gives -2.0."
+    },
+    {
+      "code": "LN",
+      "group": "macro",
+      "label": "Natural logarithm",
+      "description": "Natural logarithm of the value in the brackets. A value of zero or less raises an alarm."
+    },
+    {
+      "code": "EXP",
+      "group": "macro",
+      "label": "Exponential",
+      "description": "The number e raised to the power of the value in the brackets. A result too large for the control raises an alarm."
+    },
+    {
+      "code": "POW",
+      "group": "macro",
+      "label": "Power",
+      "description": "Raises the first value in the brackets to the power of the second: POW[#j,#k] is #j to the power of #k."
+    },
+    {
+      "code": "ADP",
+      "group": "macro",
+      "label": "Add a decimal point",
+      "description": "Inside a macro, ADP[#n] gives an argument that was passed without a decimal point the point it would have had if it had been written with one, so the increment system does not change its value. Writing the point in the macro call is the more portable way."
+    },
+    {
+      "code": "AX",
+      "group": "macro",
+      "label": "Indirect axis address",
+      "description": "Addresses an axis by its number instead of its name: AX[1]=100.0 gives the first axis the value 100. It is always followed by an equals sign. The number may be a variable or an expression, written in brackets."
+    },
+    {
+      "code": "AXNUM",
+      "group": "macro",
+      "label": "Axis number",
+      "description": "Gives the number of the axis with the name in the brackets, for example #500=AXNUM[X]. An axis name the machine does not have raises an alarm."
+    },
+    {
+      "code": "POPEN",
+      "group": "macro",
+      "label": "Open the data output",
+      "description": "Opens the connection to the external input and output device. It stands before the first BPRNT or DPRNT."
+    },
+    {
+      "code": "PCLOS",
+      "group": "macro",
+      "label": "Close the data output",
+      "description": "Closes the connection to the external input and output device. It stands after the last BPRNT or DPRNT."
+    },
+    {
+      "code": "DPRNT",
+      "group": "macro",
+      "label": "Print as text",
+      "description": "Sends characters and variable values to the external device as readable text. A variable is written as #number followed, in brackets, by the digits before and after the decimal point. Leading zeros become spaces or are left out, by a control setting. It stands between POPEN and PCLOS."
+    },
+    {
+      "code": "BPRNT",
+      "group": "macro",
+      "label": "Print as binary",
+      "description": "Sends characters and variable values to the external device as binary numbers, each variable with the number of decimals given in brackets behind it. It stands between POPEN and PCLOS."
     }
   ]
 }

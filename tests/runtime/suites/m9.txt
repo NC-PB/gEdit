@@ -1,0 +1,27 @@
+# M9: real programs read right — the Sinumerik milling profile, the detection leftovers, the
+# number classes and the machine choices, and the Sinumerik structure items.
+# Run with: tests/runtime/suite.sh tests/runtime/suites/m0.txt tests/runtime/suites/m1.txt tests/runtime/suites/m2.txt tests/runtime/suites/m3.txt tests/runtime/suites/m4.txt tests/runtime/suites/m5.txt tests/runtime/suites/m6.txt tests/runtime/suites/m7.txt tests/runtime/suites/m8.txt tests/runtime/suites/m9.txt
+#
+# Every scenario reads its expected answers out of the fixtures (`expected/detect`,
+# `expected/outline`, `expected/owner-public`) wherever a fixture says them, and names the
+# dialect a document got before it judges anything else about it.
+
+# Detection: every committed fixture opens as its golden says, the owner's published programs
+# as their folders say, what WP9.6 added is among them, and Save As finds the dialect again
+# when the extension changes. Run it first: the other three assume a program opens as the
+# dialect it is written in.
+m9-detect
+
+# The Sinumerik milling profile: a milling .MPF opens as `sinumerik-mill` and a turning one as
+# `sinumerik`; F7 and the map visit the M6 changes and not the T that preselects; the tool
+# list gives one row per tool; the power-on codes and the diameter setting of the machine item.
+m9-sinumerik-mill
+
+# What a number is worth: C90000 is an angle, a thread pitch under G94 is a lead, the Okuma
+# 10 µm preset has no inch, a point-less feed per revolution follows its preset; and the
+# U/W/V/H and T-word choices of a machine reaching the scripts and the program map.
+m9-numbers
+
+# The Sinumerik structure items: Remove Comments keeps ;$PATH=, renumber numbers NEXT_PECK:
+# and keeps the colon of a main block, the map shows no call for CUT3DCC or ORIRESET(…).
+m9-structure

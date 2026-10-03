@@ -125,7 +125,7 @@ The feeds, the index position and the `G74` arguments are illustrative only. `T0
 |---|---|---|
 | Letter + number | `X64.` `Z-40` `F0.25` `G01` `M42` `T0202` `S180` | |
 | Letter `=` expression or variable | `Z=V1+V2` `X=DIA1` `X=100+XP2` | `=` is required when the value is not a plain number. Spaces around `=` are allowed. |
-| Two-letter extended address | `SB=1200` `QA=5` `DA=1.5` | **`=` is always required.** Reserved set: one of the letters `A D F I K L R S T U W X Z` followed by `A` or `B` (`SA`, `SB`, `DA`, `ZB`, …), plus `BC` and `BR`. The manual also uses `QA` (C-axis revolutions) and `SA` (C-axis speed in thread cycles). Option functions add more: `CL` (retract in arc threading), `CP`/`CQ`/`CR` (3D coordinate conversion), `SX`/`SY`/`SZ` (a zero-shift macro), and on multi-tasking machines `TL`, `TD`, `TS` and others; the grammar paints them as local variables today. |
+| Two-letter extended address | `SB=1200` `QA=5` `DA=1.5` | **`=` is always required.** Reserved set: one of the letters `A D F I K L R S T U W X Z` followed by `A` or `B` (`SA`, `SB`, `DA`, `ZB`, …), plus `BC` and `BR`. The manual also uses `QA` (C-axis revolutions) and `SA` (C-axis speed in thread cycles). Option functions add more: `CL` (retract in arc threading), `CP`/`CQ`/`CR` (3D coordinate conversion), `SX`/`SY`/`SZ` (a zero-shift macro), and on multi-tasking machines `TL`, `TD`, `TS` and others; the profile lists them in `syntax.extendedAddresses`, the grammar and the hover paint them as addresses (keywords), and any other name in front of `=` is a local variable (M9). |
 | Keyword word | `CALRG` | Selects the larger arc (over 180°) in an `L`-radius arc block |
 
 ### 3.3 Numbers
@@ -159,7 +159,7 @@ The feeds, the index position and the `G74` arguments are illustrative only. `T0
 | C | ±359.999 |
 | F | Up to 8 significant digits |
 | G | 0–999 |
-| M | 0–511 in the code list; option functions use four digits (`M1292`) |
+| M | 0–511 in the code list; option functions use four digits (`M1292`), which the Okuma grammar reads as one code (M9) |
 | S | 0–9999 in the range table, 0–65535 in the S section |
 | T | 4 or 6 digits |
 | O, N | 4 characters |

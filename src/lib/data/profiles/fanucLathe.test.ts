@@ -88,6 +88,8 @@ function scores(path: string | null, text: string): Map<string, number> {
         }
       }
     }
+    // A veto (`detect.vetoes`, rule 5 of detect.ts) takes the profile out of the file.
+    if (cp.re.detectVetoes.some((veto) => lines.some((line) => veto.test(line)))) score = 0;
     out.set(cp.profile.id, score);
   }
   return out;
@@ -475,7 +477,12 @@ describe('what the lathe profile inherits and what it states', () => {
   });
 
   it('reads U and W as incremental twins and X and U as diameters', () => {
-    expect(lathe.profile.addresses.incremental).toEqual({ U: 'X', W: 'Z' });
+    // M9 (R6): the base profile no longer states the incremental twins; the default choice of
+    // the `incrementalAddresses` variant does (r6Variants.test.ts reads every choice).
+    expect(lathe.profile.addresses.incremental).toBeUndefined();
+    const uw = lathe.profile.machineParams?.variants?.find((v) => v.id === 'incrementalAddresses');
+    expect(uw?.default).toBe('uw');
+    expect(uw?.choices[0].overlay?.addresses?.incremental).toEqual({ U: 'X', W: 'Z' });
     expect(lathe.profile.addresses.diameter).toEqual(['X', 'U']);
     expect(lathe.profile.addresses.angular).toEqual(['C']);
     expect(lathe.profile.addresses.arcCenter).toEqual(['I', 'K']);

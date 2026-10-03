@@ -1,0 +1,12 @@
+{
+  "profile": "fanuc-lathe",
+  "variants": {"toolWord":"offset1"},
+  "program": ["O2101","T11 (OD ROUGH)","G0 X50. Z2.","G1 Z-20. F0.2","T10","T22 (OD FINISH)","G0 X40. Z1.","T123","M30"],
+  "items": [
+    {"kind":"program","line":1,"text":"O2101","endLine":9},
+    {"kind":"tool","line":2,"text":"T1 — OD ROUGH","tool":"1","endLine":5},
+    {"kind":"tool","line":6,"text":"T2 — OD FINISH","tool":"2","endLine":7},
+    {"kind":"tool","line":8,"text":"T12","tool":"12","endLine":9},
+    {"kind":"end","line":9,"text":"M30"}
+  ]
+}

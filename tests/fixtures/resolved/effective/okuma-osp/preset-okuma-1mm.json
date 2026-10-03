@@ -15,7 +15,9 @@
         "mode": "calculator"
       },
       "units": "mm",
-      "variants": {}
+      "variants": {
+        "toolWord": "offset2"
+      }
     },
     "source": {
       "diameter": "profile",
@@ -25,7 +27,9 @@
       },
       "numberInput": "machine",
       "units": "profile",
-      "variants": {}
+      "variants": {
+        "toolWord": "profile"
+      }
     }
   },
   "profile": {
@@ -231,7 +235,38 @@
           }
         ]
       },
-      "units": "mm"
+      "units": "mm",
+      "variants": [
+        {
+          "choices": [
+            {
+              "label": "Two-digit offsets (up to 99): T0101 (default, verify)",
+              "overlay": {
+                "toolCall": {
+                  "ignore": "(?<![A-Z])(?:G0*(?:7[1-8]|18\\d)(?![\\d.])|T(?:\\d{2})?00\\d{2}(?!\\d))",
+                  "tool": "(?<![A-Z])T(?:\\d{2}(?=\\d{4}(?!\\d)))?(?<tool>\\d{2})(?=\\d{2}(?!\\d))",
+                  "trigger": "(?<![A-Z])T\\d{4}(?:\\d{2})?(?!\\d)"
+                }
+              },
+              "value": "offset2"
+            },
+            {
+              "label": "Three-digit offsets (200 or more on the machine): T2000",
+              "overlay": {
+                "toolCall": {
+                  "ignore": "(?<![A-Z])(?:G0*(?:7[1-8]|18\\d)(?![\\d.])|T(?:0\\d{2,3}|00\\d{3}|\\d{2}00\\d{3})(?!\\d))",
+                  "tool": "(?<![A-Z])T(?:\\d{2}(?=\\d{2}\\d{3}(?!\\d)))?(?<tool>\\d{2}(?=\\d{3}(?!\\d))|\\d(?=\\d{2,3}(?!\\d)))",
+                  "trigger": "(?<![A-Z])T(?:\\d{3,5}|\\d{7})(?!\\d)"
+                }
+              },
+              "value": "offset3"
+            }
+          ],
+          "default": "offset2",
+          "id": "toolWord",
+          "label": "Tool word: offset digits"
+        }
+      ]
     },
     "machineType": "lathe",
     "modal": {
@@ -348,6 +383,7 @@
       "continuationStart": "^[ \\t]*\\$(?![^\\r\\n]*%)",
       "decimalPointSignificant": false,
       "decimalSeparator": ".",
+      "extendedAddresses": "[ADFIKLRSTUWXZ][AB]|BC|BR|QA|CL|C[PQR]|S[XYZ]|T[LDS]",
       "header": "^\\$[^%]*%",
       "keywords": [
         "GOTO",

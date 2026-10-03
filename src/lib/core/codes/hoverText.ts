@@ -21,6 +21,11 @@
 //     code, and stays silent;
 //   - an assignment word (P8, `M3=3`, `S3=2400`): shown as written, and read as the code
 //     or the address it is — `M3=3` is `M3` for spindle 3, never a code `M33`;
+//   - an assignment word the database does not describe, on a profile that lists the
+//     control's own addresses (`syntax.extendedAddresses`, Okuma): when the word is not one
+//     of them it is a local variable (`DIA1=50`, `ZL=-20`), and says so, instead of being
+//     called a word the database "does not describe yet" — or, when its name is longer than
+//     two letters, staying silent;
 //   - a word the database does not describe: shown as such, never guessed. An entry that
 //     still carries `verify: true` counts as "not described" — its label and description
 //     stay out of hover until someone has confirmed them (content rule, §5 WP3.3).
@@ -51,6 +56,13 @@ export interface HoverOptions {
    * falls back to its address help. `codeAddressesOf()` derives the set from a database.
    */
   codeAddresses?: ReadonlySet<string>;
+  /**
+   * `syntax.extendedAddresses` of the profile, anchored to the whole identifier (see
+   * `extendedAddressesOf`). Present, an assignment word whose address the database does not
+   * know and this pattern does not list is a local variable; absent, the profile has no such
+   * list and the word is described as before.
+   */
+  extendedAddresses?: RegExp | null;
 }
 
 /** Characters markdown would read as formatting. */
@@ -76,6 +88,28 @@ const Q_PARAMETER = /^Q[LRS]?\d+$/i;
 /** Text that is safe inside markdown, whatever a profile or a database put in it. */
 export function escapeMarkdown(text: string): string {
   return text.replace(MARKDOWN, '\\$&');
+}
+
+const EXTENDED = new WeakMap<CompiledProfile, RegExp | null>();
+
+/**
+ * The profile's `syntax.extendedAddresses` as a pattern for a whole identifier, or null when
+ * it declares none (or one that does not compile; the profile validator reports that).
+ */
+export function extendedAddressesOf(cp: CompiledProfile): RegExp | null {
+  const cached = EXTENDED.get(cp);
+  if (cached !== undefined) return cached;
+  const source = cp.profile.syntax?.extendedAddresses;
+  let re: RegExp | null = null;
+  if (typeof source === 'string' && source !== '') {
+    try {
+      re = new RegExp(`^(?:${source})$`, cp.flags);
+    } catch {
+      re = null;
+    }
+  }
+  EXTENDED.set(cp, re);
+  return re;
 }
 
 const CODE_ADDRESSES = new WeakMap<CodeDb, ReadonlySet<string>>();
@@ -117,10 +151,14 @@ function contentNeighbour(tokens: NcToken[], from: number, step: 1 | -1): NcToke
   return null;
 }
 
-/** The digits of a word that carries nothing else: the `200` of `CYCL DEF 200`. */
+/**
+ * The digits of a word that carries nothing else: the `200` of `CYCL DEF 200`, or the `19.1`
+ * of the sub-block `CYCL DEF 19.1` (M9: real Klartext programs write the sub-blocks of the
+ * older cycles with a decimal part).
+ */
 function bareNumberOf(token: NcToken | null): string | null {
   if (!token || token.kind !== 'word' || token.address !== undefined) return null;
-  return /^\d+$/.test(token.text) ? token.text : null;
+  return /^\d+(?:\.\d+)?$/.test(token.text) ? token.text : null;
 }
 
 /**
@@ -141,8 +179,16 @@ function joinWithNumber(tokens: NcToken[], index: number, line: string, db: Code
   if (digits === null || !number) return null;
   if (number.start < keyword.end) return null;
 
-  const code = `${keyword.address ?? keyword.text} ${digits}`;
-  if (!lookupCode(db, code)) return null;
+  const name = keyword.address ?? keyword.text;
+  let code = `${name} ${digits}`;
+  if (!lookupCode(db, code)) {
+    // A sub-block (`CYCL DEF 19.1`) is described by its cycle (`CYCL DEF 19`), when the
+    // database has no entry for the sub-block itself.
+    const whole = /^(\d+)\.\d+$/.exec(digits)?.[1];
+    if (whole === undefined) return null;
+    code = `${name} ${whole}`;
+    if (!lookupCode(db, code)) return null;
+  }
   return {
     kind: 'keyword',
     start: keyword.start,
@@ -198,7 +244,10 @@ export function hoverAt(
 ): HoverInfo | null {
   const token = hoverTarget(line, offset, cp, db, prev);
   if (!token) return null;
-  const markdown = hoverText(token, lookupFor(db, token), t, { codeAddresses: codeAddressesOf(db) });
+  const markdown = hoverText(token, lookupFor(db, token), t, {
+    codeAddresses: codeAddressesOf(db),
+    extendedAddresses: extendedAddressesOf(cp),
+  });
   return markdown === null ? null : { markdown, start: token.start, end: token.end };
 }
 
@@ -279,14 +328,21 @@ function variableHover(token: NcToken, lookup: CodeLookup | null, t: Translate):
   ]);
 }
 
+/** A local variable the program sets with `=` (`DIA1=50`): its kind, and that only the control knows the value. */
+function localVariableHover(name: string, t: Translate): string {
+  return paragraphs([heading(name, t('assistant.hover.variable')), escapeMarkdown(t('assistant.hover.variableValue'))]);
+}
+
 /**
  * The code as the database spells it: the canonical address plus the value as written.
  * An assignment keeps its `=` (`M3=3`, `S3=2400`), because without it the address and
- * the value would read as one code that does not exist.
+ * the value would read as one code that does not exist. An indexed one keeps its bracket
+ * (`M[2]=3`, `FA[X]=100`), which is what says whose word it is.
  */
 function wordDisplay(token: NcToken): string {
   const gap = isAssignmentWord(token) ? '=' : '';
-  return `${token.address ?? ''}${gap}${token.valueText ?? ''}`;
+  const index = token.index !== undefined ? `[${token.index}]` : '';
+  return `${token.address ?? ''}${index}${gap}${token.valueText ?? ''}`;
 }
 
 /** True for a value that could be the number of a code: `83`, not `+5` and not `#101`. */
@@ -341,6 +397,11 @@ export function hoverText(
       if (address) {
         const isCode = o.codeAddresses?.has(address.letter) === true && looksLikeCodeNumber(token);
         return isCode ? unknownHover(display, t, address) : addressHover(address, t, token.incremental);
+      }
+      // Nothing is known about the address. Where the profile lists the control's own
+      // addresses, a name in front of `=` that is none of them is the program's own variable.
+      if (o.extendedAddresses && isAssignmentWord(token) && !o.extendedAddresses.test(token.address)) {
+        return localVariableHover(token.address, t);
       }
       return token.address.length <= MAX_ADDRESS_LENGTH ? unknownHover(display, t) : null;
     }

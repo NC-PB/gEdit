@@ -1,0 +1,14 @@
+{
+  "profile": "sinumerik-mill",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":2,"text":"A PLAIN TEXT FILE: ONLY THE CONTENT DECIDES THE DIALECT"},
+    {"kind":"comment","line":5,"text":"SPOT DRILL D6"},
+    {"kind":"tool","line":7,"text":"T1 — SPOT DRILL D6","tool":"1","endLine":19},
+      {"kind":"subprogram-call","line":13,"text":"CYCLE81"},
+      {"kind":"comment","line":18,"text":"DRILL D5"},
+    {"kind":"tool","line":20,"text":"T2 — DRILL D5","tool":"2","endLine":32},
+      {"kind":"subprogram-call","line":26,"text":"CYCLE83"},
+      {"kind":"end","line":31,"text":"M30"}
+  ]
+}

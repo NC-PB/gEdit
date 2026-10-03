@@ -74,8 +74,22 @@ function tableUnit(dialect: string, code: string, address: string): Unit | undef
   // Rows without a dialect in §8.2 hold wherever the code is defined.
   if (code === 'G4') return address === 'P' ? 'count' : address === 'X' || address === 'U' ? 'dwell' : undefined;
   if (code === 'M98') return address === 'P' || address === 'L' ? 'count' : undefined;
+  // M9 (WP9.5a): the F of a code that cuts a thread is its lead, a feed per revolution
+  // whatever the feed mode says, and the database says so (`numberClassOf` rule 1). A tap's
+  // F is not a lead (`G84`, `G74`, `G63`): it follows the feed unit in force.
+  if (address === 'F' && ['G32', 'G33', 'G34'].includes(code)) return 'feedPerRev';
+  if (address === 'F' && dialect !== MILL && code === 'G76') return 'feedPerRev';
+  if (address === 'F' && ((dialect === A && code === 'G92') || (dialect === B && code === 'G78'))) return 'feedPerRev';
+  // M9 (WP9.2), the 5-axis entries, wherever they are defined: a tool direction, a scale factor
+  // and a rotation axis direction are plain numbers that no reading touches, and a rotation
+  // or tilt is an angle.
+  if (['G43.5', 'G51', 'G68', 'G68.2', 'G68.4'].includes(code) && ['I', 'J', 'K'].includes(address)) return 'count';
+  if (code === 'G43.5' && address === 'Q') return 'angle';
+  if (['G68', 'G68.2', 'G68.3', 'G68.4'].includes(code) && address === 'R') return 'angle';
 
   if (dialect === A || dialect === B) {
+    // M9 (WP9.2): the other face and side cycles count their dwell and repeats too, like G83 and G87.
+    if (['G84', 'G85', 'G88', 'G89'].includes(code)) return address === 'P' || address === 'K' ? 'count' : undefined;
     if (code === 'G74' || code === 'G75') return address === 'P' || address === 'Q' ? 'increment' : undefined;
     if (code === 'G76') return address === 'Q' ? 'increment' : address === 'P' ? 'count' : undefined;
     if (code === 'G83' || code === 'G87') {
@@ -184,6 +198,8 @@ describe('the shipped Fanuc databases', () => {
       plane: ['XY', 'ZX', 'YZ'],
       cycle: ['start', 'cancel'],
       speedLimit: [true],
+      // P9 (§7.2): spelled here because the map lists every member of `CodeSets`.
+      speedLimitBound: ['upper', 'lower'],
       diameter: ['on', 'off', 'absolute-only'],
     };
     for (const e of entriesOf(dialect)) {

@@ -208,11 +208,15 @@ scenario('m6-lathe-detect', { timeout: 420 }, async (h) => {
   const millEntry = entries.find((entry) => entry.label === grouped(millName))
   const latheEntry = entries.find((entry) => entry.label === grouped(latheName))
   // M8 added the Okuma and the Sinumerik turning profiles (plan §5 M8, an intentional
-  // change), so the picker offers five: the three of M6 and those two, asked for by name so
-  // that a registry which lost one of them fails here and not somewhere downstream.
+  // change), so the picker offered five; M9 added the Sinumerik milling profile (P9, an
+  // intentional change), so it offers six: the three of M6 and those three, asked for by name
+  // so that a registry which lost one of them fails here and not somewhere downstream.
+  // Names that share their first words are listed as a family ("Sinumerik 840D · (milling)"):
+  // M9 gave Sinumerik two members, as the Fanuc mill and lathe have been since M6.
+  const ungrouped = (/** @type {string} */ label) => label.replace(' · ', ' ')
   h.check(
-    'the dialect picker offers every profile the registry has: the three of M6 and, since M8, Okuma and Sinumerik',
-    entries.length === ctx.profiles.list().length && entries.length === 5 && ['okuma-osp', 'sinumerik'].every((id) => entries.some((e) => e.label === ctx.profiles.profile(id).name)),
+    'the dialect picker offers every profile the registry has: the three of M6 and, since M8 and M9, Okuma, Sinumerik and Sinumerik milling',
+    entries.length === ctx.profiles.list().length && entries.length === 6 && ['okuma-osp', 'sinumerik', 'sinumerik-mill'].every((id) => entries.some((e) => ungrouped(e.label) === ctx.profiles.profile(id).name)),
     entries.map((e) => e.label),
   )
   h.check('the mill and the lathe are listed as one family, under the part of the name they share', millEntry !== undefined && latheEntry !== undefined && head !== '' && head !== millName, {

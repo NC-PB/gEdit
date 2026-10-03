@@ -1,0 +1,6 @@
+{
+  "percent": 110,
+  "maxFeed": 0.3,
+  "perRevolution": "yes",
+  "limitUnit": "per-rev"
+}

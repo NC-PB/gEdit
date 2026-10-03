@@ -169,6 +169,7 @@
     {
       "code": "BLK FORM",
       "group": "program",
+      "axisWords": "data",
       "label": "Stock definition",
       "description": "Describes the raw part for the graphics. Sub-block 0.1 carries the tool axis and one corner, sub-block 0.2 the opposite corner."
     },
@@ -216,6 +217,7 @@
     {
       "code": "CC",
       "group": "motion",
+      "axisWords": "data",
       "label": "Circle centre",
       "description": "Sets the circle centre, also called the pole, for the arc blocks that follow. It makes no motion and stays until the next CC."
     },
@@ -434,42 +436,93 @@
     {
       "code": "CYCL DEF",
       "group": "cycle",
-      "sets": { "cycle": "cancel" },
+      "sets": {},
       "label": "Cycle definition",
       "description": "Defines a cycle and stores its values. An old-style cycle up to number 39 is written as CYCL DEF <number>.<sub> over several numbered blocks; a cycle from 200 upwards is a header line plus one indented line per Q parameter, and every line but the last ends in a continuation mark."
     },
     {
+      "code": "CYCL DEF 7",
+      "group": "offset",
+      "axisWords": "data",
+      "label": "Datum shift",
+      "description": "Shifts the zero point. The sub-blocks 7.1, 7.2 and 7.3 give the shift in X, Y and Z, or #n takes line n of the datum table. Absolute values refer to the workpiece datum, incremental ones to the last shift. It acts from its definition on and is never called; defining it again with zeros shifts back."
+    },
+    {
+      "code": "CYCL DEF 8",
+      "group": "frame",
+      "axisWords": "data",
+      "frame": "open",
+      "label": "Mirror image",
+      "description": "Mirrors the following work in the working plane about the axes named in sub-block 8.1, which carry no values. Defining it again with no axis ends it. It acts from its definition on and is never called."
+    },
+    {
+      "code": "CYCL DEF 9",
+      "group": "nonmodal",
+      "label": "Dwell time",
+      "description": "Stops the program for the time in seconds that sub-block 9.1 gives, then goes on. It acts where it is defined and is never called, and it leaves states such as the spindle as they are."
+    },
+    {
+      "code": "CYCL DEF 10",
+      "group": "frame",
+      "frame": "open",
+      "label": "Rotation",
+      "description": "Turns the coordinate system in the working plane about the active zero point by the angle in sub-block 10.1. A zero angle ends it. It acts from its definition on and is never called; both axes of the plane have to be moved afterwards for it to show."
+    },
+    {
+      "code": "CYCL DEF 11",
+      "group": "frame",
+      "frame": "open",
+      "label": "Scaling factor",
+      "description": "Enlarges or reduces the contour and the dimensions in the cycles by the factor SCL in sub-block 11.1; a factor of 1 ends it. Shift the datum to a corner of the contour first. It acts from its definition on and is never called."
+    },
+    {
+      "code": "CYCL DEF 19",
+      "group": "tilt",
+      "axisWords": "data",
+      "frame": "open",
+      "label": "Working plane (older tilt cycle)",
+      "description": "Tilts the working plane: sub-block 19.1 gives the angles of the swivel axes A, B and C, and with them the feed and the safety distance for the control's own positioning. Whether the angles are axis positions or solid angles depends on the machine. Define it again with all angles at 0 and then once more without an angle to end it; PLANE RESET ends it as well. It acts from its definition on and is never called."
+    },
+    {
+      "code": "CYCL DEF 26",
+      "group": "frame",
+      "axisWords": "data",
+      "frame": "open",
+      "label": "Scaling factor per axis",
+      "description": "Enlarges or reduces the contour by a factor for each axis named in sub-block 26.1, about the centre CCX, CCY. A factor of 1 for an axis takes it back. It acts from its definition on and is never called; circles must not be stretched unevenly."
+    },
+    {
       "code": "CYCL DEF 32",
       "group": "cycle",
-      "sets": { "cycle": "cancel" },
+      "sets": {},
       "label": "Tolerance cycle",
       "description": "Sets how far the path may leave the programmed contour, which is what decides accuracy against speed on a fast contour. It is written in numbered sub-blocks: 32.0 carries the name, 32.1 the tolerance T in millimetres, and 32.2 the HSC-MODE, 0 for accuracy and 1 for speed, together with TA for the rotary axes."
     },
     {
       "code": "CYCL CALL",
       "group": "cycle",
-      "sets": { "cycle": "cancel" },
+      "sets": { "cycle": "call" },
       "label": "Cycle call",
       "description": "Runs the cycle that was defined last at the current position. CYCL CALL PAT runs it at every point of a preceding pattern definition."
     },
     {
       "code": "CYCL CALL PAT",
       "group": "cycle",
-      "sets": { "cycle": "cancel" },
+      "sets": { "cycle": "call" },
       "label": "Cycle call on a pattern",
       "description": "Runs the cycle that was defined last at every point of the PATTERN DEF or the point table in front of it."
     },
     {
       "code": "CYCL CALL POS",
       "group": "cycle",
-      "sets": { "cycle": "cancel" },
+      "sets": { "cycle": "call" },
       "label": "Cycle call at a position",
       "description": "Moves to the position written in the block and runs the cycle that was defined last there. The block names all three axes, and its positions are absolute."
     },
     {
       "code": "CYCL DEF 200",
       "group": "cycle",
-      "sets": { "cycle": "start" },
+      "sets": { "cycle": "define" },
       "label": "Drilling cycle",
       "description": "Drills to depth, in pecks when an infeed is given, and pulls back fully between the pecks. It pre-positions in the tool axis itself.",
       "params": [
@@ -523,7 +576,7 @@
     {
       "code": "CYCL DEF 201",
       "group": "cycle",
-      "sets": { "cycle": "start" },
+      "sets": { "cycle": "define" },
       "label": "Reaming cycle",
       "description": "Feeds down to depth and feeds back out again, so the reamer leaves a clean wall.",
       "params": [
@@ -569,7 +622,7 @@
     {
       "code": "CYCL DEF 203",
       "group": "cycle",
-      "sets": { "cycle": "start" },
+      "sets": { "cycle": "define" },
       "label": "Universal drilling cycle",
       "description": "Drills to depth with pecks that get shorter as the hole deepens and with chip breaks in between.",
       "params": [
@@ -650,7 +703,7 @@
     {
       "code": "CYCL DEF 205",
       "group": "cycle",
-      "sets": { "cycle": "start" },
+      "sets": { "cycle": "define" },
       "label": "Universal deep-hole drilling cycle",
       "description": "Drills deep holes with shortening pecks, chip breaks and a controlled return into the hole.",
       "params": [
@@ -747,7 +800,7 @@
       "group": "cycle",
       "pitchFeed": true,
       "tapping": true,
-      "sets": { "cycle": "start" },
+      "sets": { "cycle": "define" },
       "label": "Tapping cycle with a floating holder",
       "description": "Cuts a thread with a compensating chuck. The plunging feed follows from the speed and the thread pitch, so scaling it would change the thread.",
       "params": [
@@ -789,7 +842,7 @@
       "group": "cycle",
       "pitchFeed": true,
       "tapping": true,
-      "sets": { "cycle": "start" },
+      "sets": { "cycle": "define" },
       "label": "Rigid tapping cycle",
       "description": "Cuts a thread without a compensating chuck: the control keeps the spindle and the feed in step from the pitch. The sign of the pitch decides right- or left-hand.",
       "params": [
@@ -825,7 +878,7 @@
       "group": "cycle",
       "pitchFeed": true,
       "tapping": true,
-      "sets": { "cycle": "start" },
+      "sets": { "cycle": "define" },
       "label": "Rigid tapping cycle with chip breaking",
       "description": "Cuts a thread without a compensating chuck and pulls back now and then to break the chip.",
       "params": [
@@ -879,7 +932,7 @@
     {
       "code": "CYCL DEF 240",
       "group": "cycle",
-      "sets": { "cycle": "start" },
+      "sets": { "cycle": "define" },
       "label": "Centring cycle",
       "description": "Spots a hole, either down to a depth or until the cone reaches a given diameter.",
       "params": [
@@ -927,14 +980,69 @@
       ]
     },
     {
+      "code": "CYCL DEF 247",
+      "group": "offset",
+      "frame": "close",
+      "label": "Set the datum from the preset table",
+      "description": "Makes a line of the preset table, Q339, the new datum. Datum shift, mirror image, rotation and scaling that were in force are reset by it. It acts where it is defined and is never called.",
+      "params": [
+        { "address": "Q339", "label": "Preset number", "required": true, "min": 0, "max": 65535, "unit": "count" }
+      ]
+    },
+    {
       "code": "PLANE SPATIAL",
       "group": "tilt",
+      "frame": "open",
       "label": "Tilt the working plane by spatial angles",
       "description": "Turns the working plane by three angles around the machine axes. All three are written even when one is zero, and a following word says whether the machine swivels with a compensating move, turns the rotary axes only, or stays put."
     },
     {
+      "code": "PLANE PROJECTED",
+      "group": "tilt",
+      "frame": "open",
+      "label": "Tilt the working plane by projection angles",
+      "description": "Defines the plane by two angles found by projecting it onto the first and the second coordinate plane (PROPR, PROMIN) and a turn about the tilted tool axis (ROT). Only right for a plane that belongs to a rectangular block. A following word says whether the machine swivels with a compensating move, turns the rotary axes only, or stays put."
+    },
+    {
+      "code": "PLANE EULER",
+      "group": "tilt",
+      "frame": "open",
+      "label": "Tilt the working plane by Euler angles",
+      "description": "Defines the plane by three turns of the coordinate system, each about the axis the earlier turn left: precession EULPR about Z, nutation EULNU about the turned X, and rotation EULROT about the new Z. A following word says whether the machine swivels with a compensating move, turns the rotary axes only, or stays put."
+    },
+    {
+      "code": "PLANE VECTOR",
+      "group": "tilt",
+      "frame": "open",
+      "label": "Tilt the working plane by two vectors",
+      "description": "Defines the plane by a base vector BX, BY, BZ, the direction of the main axis in the tilted plane, and a normal vector NX, NY, NZ standing at right angles to it. The control normalises both. A following word says whether the machine swivels with a compensating move, turns the rotary axes only, or stays put."
+    },
+    {
+      "code": "PLANE POINTS",
+      "group": "tilt",
+      "frame": "open",
+      "label": "Tilt the working plane through three points",
+      "description": "Defines the plane by three of its points P1, P2 and P3, each with X, Y and Z. The line from point 1 to point 2 gives the main axis, and point 3 lies on the side the Y axis points to. The datum stays where it is. A following word says whether the machine swivels with a compensating move, turns the rotary axes only, or stays put."
+    },
+    {
+      "code": "PLANE RELATIV",
+      "group": "tilt",
+      "frame": "open",
+      "label": "Tilt the working plane further by one angle",
+      "description": "Turns the plane that is in force by one more spatial angle (SPA, SPB or SPC), for instance for a chamfer on a tilted face. The same angle with the opposite sign goes back to the earlier plane. A following word says whether the machine swivels with a compensating move, turns the rotary axes only, or stays put."
+    },
+    {
+      "code": "PLANE AXIAL",
+      "group": "tilt",
+      "axisWords": "data",
+      "frame": "open",
+      "label": "Tilt the working plane by axis angles",
+      "description": "Defines the plane and the positions of the rotary axes at the same time: the A, B and C words are axis angles, absolute or incremental, and they stay in force. Only the rotary axes the machine really has may be written. PLANE RESET ends it; an angle of 0 does not."
+    },
+    {
       "code": "PLANE RESET",
       "group": "tilt",
+      "frame": "close",
       "label": "Reset the tilted working plane",
       "description": "Switches the tilted plane off again. Use it rather than writing zero angles."
     },
@@ -1040,18 +1148,22 @@
     {
       "code": "M89",
       "group": "cycle",
+      "sets": { "cycle": "call-modal" },
       "label": "Modal cycle call",
-      "description": "Calls the cycle that was defined last as a modal call. What exactly it does is machine dependent."
+      "description": "Runs the cycle that was defined last in this block and again after every positioning block that follows, until an M99 on the last position or the next cycle definition. A machine parameter decides whether M89 is this call or a free M function.",
+      "verify": true
     },
     {
       "code": "M91",
       "group": "program",
+      "axisWords": "machine",
       "label": "Machine coordinates for this block",
       "description": "The positions in this block are read from the machine datum, and the tool length is not applied. It counts for this block only."
     },
     {
       "code": "M92",
       "group": "program",
+      "axisWords": "machine",
       "label": "Builder reference point for this block",
       "description": "The positions in this block are read from a reference point that the machine builder set, and the tool length is not applied. It counts for this block only."
     },
@@ -1064,14 +1176,16 @@
     {
       "code": "TRANS DATUM",
       "group": "offset",
+      "axisWords": "data",
       "label": "Datum shift",
       "description": "Shifts the datum without a cycle: TRANS DATUM AXIS takes the shift from the axis values in the block, TRANS DATUM TABLE takes a line of the datum table, and TRANS DATUM RESET cancels the shift."
     },
     {
       "code": "M99",
       "group": "cycle",
+      "sets": { "cycle": "call" },
       "label": "Call the cycle once",
-      "description": "Runs the last defined cycle once at the end position of this block. It counts for this block only."
+      "description": "Runs the last defined cycle once at the end position of this block. It counts for this block only, and it ends a modal call that M89 switched on."
     },
     {
       "code": "M116",
@@ -1155,6 +1269,114 @@
           "min": 0
         }
       ]
+    },
+    {
+      "code": "MOVE",
+      "group": "tilt",
+      "label": "Tilt with a compensating move",
+      "description": "Ends a PLANE function that swivels automatically: the rotary axes turn and the linear axes make the compensating move, so the tool tip stays in place. The distance of the turning point from the tool tip (DIST), the feed and, if wanted, the retraction length (MB) follow."
+    },
+    {
+      "code": "TURN",
+      "group": "tilt",
+      "label": "Tilt the rotary axes only",
+      "description": "Ends a PLANE function that swivels automatically by turning the rotary axes only, with no compensating move. The tool tip moves. A feed follows, with the retraction length (MB) as an option."
+    },
+    {
+      "code": "STAY",
+      "group": "tilt",
+      "label": "Do not position the rotary axes",
+      "description": "Ends a PLANE function that only defines the plane. The control stores the rotary axis positions it calculated (in Q120, Q121 and Q122) and the program has to move the axes itself in a block of its own after the function. Without rotary axes it tilts the plane by the angle the machine builder entered."
+    },
+    {
+      "code": "TABLE ROT",
+      "group": "tilt",
+      "label": "Transformation type: table rotation",
+      "description": "Chooses how the control treats the rotary axis a tilt leaves free. With SPA and SPB at 0 the free axis is turned by the programmed angle. With SPA or SPB not 0 it keeps its position, and the working plane system is oriented by the programmed spatial angle."
+    },
+    {
+      "code": "COORD ROT",
+      "group": "tilt",
+      "label": "Transformation type: coordinate rotation",
+      "description": "Chooses how the control treats a rotary axis the tilt leaves free. The free axis is positioned to 0 and the working plane system is oriented by the programmed angle. This is the type used when none is written."
+    },
+    {
+      "code": "SEQ+",
+      "group": "tilt",
+      "label": "Solution with a positive master axis angle",
+      "description": "Of the two rotary axis positions that give the same plane, takes the one where the master axis (the first rotary axis counted from the tool, or the last counted from the table) has a positive angle. No effect on PLANE AXIAL."
+    },
+    {
+      "code": "SEQ-",
+      "group": "tilt",
+      "label": "Solution with a negative master axis angle",
+      "description": "Of the two rotary axis positions that give the same plane, takes the one where the master axis has a negative angle. If it is outside the travel range the control reports an error. No effect on PLANE AXIAL."
+    },
+    {
+      "code": "MB",
+      "group": "tilt",
+      "label": "Retraction length before tilting",
+      "description": "Distance the tool retracts along the tool axis before the tilt, counted incrementally from the current position. MB MAX retracts to just before the software limit switch."
+    },
+    {
+      "code": "MAX",
+      "group": "tilt",
+      "label": "Maximum retraction",
+      "description": "Behind MB: retract along the tool axis to just before the software limit switch."
+    },
+    {
+      "code": "F TCP",
+      "group": "tcpm",
+      "label": "Feed at the tool tip",
+      "description": "Under tool centre point management, the programmed feed is the relative speed between the tool tip and the workpiece."
+    },
+    {
+      "code": "F CONT",
+      "group": "tcpm",
+      "label": "Feed along the contour",
+      "description": "Under tool centre point management, the programmed feed is the contour feed of the axes programmed in the block."
+    },
+    {
+      "code": "AXIS POS",
+      "group": "tcpm",
+      "label": "Rotary coordinates are axis positions",
+      "description": "Under tool centre point management, the rotary axis coordinates are read as target positions of the axes. Suited to rotary axes that sit at right angles, and to programs from a CAM system that already give the tool direction."
+    },
+    {
+      "code": "AXIS SPAT",
+      "group": "tcpm",
+      "label": "Rotary coordinates are spatial angles",
+      "description": "Under tool centre point management, the rotary axis coordinates are read as spatial angles in the current, possibly tilted, coordinate system and act as incremental angles. The first move after it should give all three angles, also those that are 0."
+    },
+    {
+      "code": "PATHCTRL AXIS",
+      "group": "tcpm",
+      "label": "Tool tip on a straight line",
+      "description": "Under tool centre point management, the tool tip travels in a straight line between the start and the end of the block. The tool direction at both ends is as programmed, but the side of the tool does not follow a defined path in between."
+    },
+    {
+      "code": "PATHCTRL VECTOR",
+      "group": "tcpm",
+      "label": "Tool tip and tool direction interpolated",
+      "description": "Under tool centre point management, the tool tip travels in a straight line and the tool direction is interpolated so that side milling produces a plane."
+    },
+    {
+      "code": "REFPNT TIP-TIP",
+      "group": "tcpm",
+      "label": "Reference point: tip, turning centre at the tip",
+      "description": "Positions on the theoretical tool tip, and the turning centre is at the tip too. This is the default when no reference point is written."
+    },
+    {
+      "code": "REFPNT TIP-CENTER",
+      "group": "tcpm",
+      "label": "Reference point: tip, turning centre at the nose radius centre",
+      "description": "Positions on the tool tip, and the turning centre is at the centre of the cutting edge radius. Made for turning tools, to turn complex contours while the rotary axes move at the same time."
+    },
+    {
+      "code": "REFPNT CENTER-CENTER",
+      "group": "tcpm",
+      "label": "Reference point: nose radius centre",
+      "description": "Positions on the centre of the cutting edge radius, which is also the turning centre. For CAM programs written for the centre path of a tool measured to its tip. Pocket milling cycles give an error under it."
     }
   ]
 }

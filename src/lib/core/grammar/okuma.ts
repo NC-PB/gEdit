@@ -55,10 +55,16 @@ import {
   type GrammarRule,
 } from './shared';
 
-/** The code letters of the dialect. Neither takes a decimal part here (§3.3: `G` 0–999). */
-const CODE_LETTERS: readonly { letter: string; role: Role }[] = [
-  { letter: 'G', role: 'gcode' },
-  { letter: 'M', role: 'mcode' },
+/**
+ * The code letters of the dialect and how many digits a code may have. Neither takes a
+ * decimal part here (§3.3: `G` 0–999). An `M` function is three digits, or four where a
+ * machine option has one (`M1292`, §3.2): the option codes stand beside the ordinary ones
+ * in the same block, and a rule that stopped at three digits painted the fourth as a
+ * number of its own.
+ */
+const CODE_LETTERS: readonly { letter: string; role: Role; digits: number }[] = [
+  { letter: 'G', role: 'gcode', digits: 3 },
+  { letter: 'M', role: 'mcode', digits: 4 },
 ];
 
 /** The letter a program name starts with (`O1234`, §2.2). */
@@ -69,14 +75,6 @@ const PROGRAM_CALLERS: readonly string[] = ['CALL', 'MODIN'];
 
 /** The digit counts of a `T` word: `T ttoo` and `T rrttoo` (§5.1). Longest first. */
 const TOOL_DIGITS: readonly number[] = [6, 4];
-
-/**
- * The reserved two-letter addresses of §3.2 — one of `A D F I K L R S T U W X Z` followed
- * by `A` or `B`, plus `BC`, `BR` and `QA`. They are always written with `=`, which is what
- * separates them from a local variable of the same length: `SB=1200` is the driven-tool
- * spindle, `AB=…` an address, while `ZL1=-20` names a variable a `CALL` block passes on.
- */
-const EXTENDED_ADDRESS = '[ADFIKLRSTUWXZ][AB]|BC|BR|QA';
 
 /** The comment rules of one marker, closed form first (§3.4: match non-greedily). */
 function commentRules(p: Profile): GrammarRule[] {
@@ -204,7 +202,13 @@ export function okumaRules(p: Profile, db: CodeDb): GrammarRule[] {
       const pattern = namesPattern(names.filter((name): name is string => typeof name === 'string'));
       if (pattern !== null) rules.push([`${pattern}${tail}`, role]);
     };
-    rules.push([`(?:${EXTENDED_ADDRESS})${tail}`, 'keyword']);
+    // The control's own multi-letter addresses (§3.2) are the profile's data
+    // (`syntax.extendedAddresses`), matched against the whole identifier in front of the
+    // `=`: they are always written with it, which is what separates them from a local
+    // variable of the same length — `SB=1200` is the driven-tool spindle, `TL=2` a tool
+    // life, while `ZL1=-20` names a variable a `CALL` block passes on.
+    const extended = p.syntax?.extendedAddresses;
+    if (typeof extended === 'string' && extended !== '') rules.push([`(?:${extended})${tail}`, 'keyword']);
     assign([own.tool], 'tool');
     assign(own.axes, 'axis');
     assign(own.arcCenter, 'arcCenter');
@@ -212,11 +216,11 @@ export function okumaRules(p: Profile, db: CodeDb): GrammarRule[] {
     assign([own.spindle], 'spindle');
   }
 
-  // 13 the code letters. Three digits is the whole range of both (§3.3), and neither takes
-  // a decimal part here; the lookahead is what keeps `G1800` from being painted as the
-  // code `G180` with a stray digit behind it.
-  for (const { letter, role } of CODE_LETTERS) {
-    rules.push([`${escapeLiteral(letter)}${gap}\\d{1,3}(?![\\d.])`, role]);
+  // 13 the code letters. Three digits is the range of a `G` (§3.3) and four of an `M`
+  // (§3.2: the option functions), and neither takes a decimal part here; the lookahead is
+  // what keeps `G1800` from being painted as the code `G180` with a stray digit behind it.
+  for (const { letter, role, digits } of CODE_LETTERS) {
+    rules.push([`${escapeLiteral(letter)}${gap}\\d{1,${digits}}(?![\\d.])`, role]);
   }
 
   // 14 the `T` word in its two lengths (§5.1). Any other length is not a tool word: it is

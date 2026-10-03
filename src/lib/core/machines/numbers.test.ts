@@ -31,6 +31,8 @@ interface Golden {
     feedUnit: FeedUnit;
     pitchFeed?: boolean;
     codes: unknown[];
+    /** M9: the entries of the codes in force the block does not write. */
+    inForce?: unknown[];
     expected: ResolvedClass;
   }[];
   value: {
@@ -147,6 +149,7 @@ describe('machines/numbers.json', () => {
         feedUnit: c.feedUnit,
         blockCodes: c.codes as CodeEntry[],
         pitchFeed: c.pitchFeed === true,
+        ...(c.inForce !== undefined ? { inForce: c.inForce as CodeEntry[] } : {}),
       }),
     ).toBe(c.expected);
   });

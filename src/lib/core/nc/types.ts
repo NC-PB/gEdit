@@ -92,6 +92,12 @@ export interface NcToken {
   value?: NumericLiteral | null;
   /** Klartext `I` prefix: the axis word is incremental. */
   incremental?: boolean;
+  /**
+   * P9 (§7.5, `syntax.assignmentIndex`). The bracket index of an assignment word, without
+   * the brackets: `'2'` for `LIMS[2]=1800`, `'SPI'` for `S[SPI]=300`. Absent on every
+   * other token. Set by both tokenizers.
+   */
+  index?: string;
 }
 
 /** What one line hands to the next. */
@@ -166,9 +172,34 @@ export interface ModalState {
   speed: WordSeen | null;
   /** The last clamp value: an `S` in a `sets.speedLimit` block, or a `speedLimitWords` assignment. */
   speedLimit: WordSeen | null;
+  /**
+   * The modal cycle that runs at every positioning block (Fanuc `G81` until `G80`, a
+   * Sinumerik `MCALL`), from `sets.cycle: 'start'` / `'cancel'`. P9: on a control that
+   * defines a cycle and calls it later (Klartext), it is the defined cycle while a modal
+   * call (`sets.cycle: 'call-modal'`, `M89`) is in force, and `null` otherwise — the same
+   * meaning, "every positioning block runs this cycle".
+   */
   activeCycle: { code: string; line: number; pitchFeed: boolean } | null;
+  /**
+   * P9 (§7.4, AD-19, Klartext). The cycle the last `sets.cycle: 'define'` entry stored
+   * (`CYCL DEF 200`). One definition serves every call after it; no call and no tool change
+   * ends it, only the next `'define'` replaces it. A cycle that takes effect where it is
+   * defined (a datum shift, a plane tilt) carries no `'define'` and leaves it alone. Always
+   * `null` on a database without `'define'` entries (every ISO dialect).
+   */
+  definedCycle: { code: string; line: number; pitchFeed: boolean } | null;
+  /**
+   * P9. The code that switched the modal call on (`M89`, `sets.cycle: 'call-modal'`) and its
+   * line, until a `'call'` (`M99`) or the next `'define'` ends it; `null` otherwise.
+   */
+  modalCall: { code: string; line: number } | null;
   pitchFeedAmbiguous: string | null;
-  /** Flags of the block just applied, and of that block only. */
+  /**
+   * Flags of the block just applied, and of that block only. `cycle` is the code of the
+   * cycle that **runs** in this block: a cycle entry of the block (Fanuc), or — P9 — the
+   * defined cycle where the block calls it (`CYCL CALL`, `M99`, or a positioning block
+   * under a modal call). A `'define'` block runs nothing, so its `cycle` is `null`.
+   */
   block: { cycle: string | null; pitchFeed: boolean; speedLimit: boolean; fNotFeed: boolean; toolChange: boolean };
 }
 

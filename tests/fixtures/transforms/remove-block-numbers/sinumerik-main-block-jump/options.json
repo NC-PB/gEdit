@@ -1,0 +1,10 @@
+{
+  "note": "M9 (WP9.5b hand-off): a Sinumerik main block named by a jump with its own prefix ('GOTOB :20') keeps its number, as an ordinary block named by 'GOTOB N20' does. Before, the reference scan did not see ':20' behind the jump and the run removed the target.",
+  "profile": "sinumerik",
+  "options": {},
+  "expect": {
+    "summary": "ncNumbering.removeBlockNumbers.summary",
+    "skipped": [{ "line": 2, "severity": "info" }],
+    "warnings": ["ncNumbering.removeBlockNumbers.keptReferenced"]
+  }
+}

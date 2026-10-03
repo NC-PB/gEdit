@@ -1,0 +1,30 @@
+{
+  "profile": "sinumerik-mill",
+  "ownerReviewed": false,
+  "items": [
+    {"kind":"program","line":1,"text":"%_N_1_MPF","endLine":822},
+    {"kind":"comment","line":2,"text":"$PATH=/_N_WKS_DIR/_N_2.5D_Milling_WPD"},
+    {"kind":"subprogram-call","line":4,"text":"CYCLE800"},
+    {"kind":"comment","line":7,"text":"PLANFRASER D63 A90 L10 SD41"},
+    {"kind":"tool","line":9,"text":"T1 — PLANFRASER D63 A90 L10 SD41","tool":"1","endLine":226},
+      {"kind":"comment","line":12,"text":"PLANEN"},
+      {"kind":"comment","line":13,"text":"C : 0  ; A : 0"},
+      {"kind":"comment","line":69,"text":"PLANEN"},
+      {"kind":"comment","line":225,"text":"UMFANGSFRASER D10 L35 SD10"},
+    {"kind":"tool","line":227,"text":"T2 — UMFANGSFRASER D10 L35 SD10","tool":"2","endLine":645},
+      {"kind":"comment","line":230,"text":"TASCHENRAUMEN"},
+      {"kind":"comment","line":231,"text":"C : 0  ; A : 0"},
+      {"kind":"comment","line":554,"text":"TASCHENRAUMEN"},
+      {"kind":"comment","line":644,"text":"UMFANGSFRASER D10 L35 SD10"},
+    {"kind":"tool","line":646,"text":"T3 — UMFANGSFRASER D10 L35 SD10","tool":"3","endLine":757},
+      {"kind":"comment","line":649,"text":"BOHREN DURCH UMFAHREN"},
+      {"kind":"comment","line":650,"text":"C : 0  ; A : 0"},
+      {"kind":"comment","line":678,"text":"UMFANGSFRASEN"},
+      {"kind":"comment","line":725,"text":"UMFANGSFRASEN"},
+      {"kind":"comment","line":756,"text":"NC-ANBOHRER UBERLANGE D10 SD10"},
+    {"kind":"tool","line":758,"text":"T4 — NC-ANBOHRER UBERLANGE D10 SD10","tool":"4","endLine":822},
+      {"kind":"comment","line":761,"text":"FRASEN: KANTEN BRECHEN"},
+      {"kind":"comment","line":762,"text":"C : 0  ; A : 0"},
+      {"kind":"end","line":821,"text":"M2"}
+  ]
+}

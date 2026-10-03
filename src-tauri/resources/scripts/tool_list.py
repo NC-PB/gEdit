@@ -92,7 +92,9 @@ Two rules keep the answer honest:
   revolution on a turning one (`modal.initial`, plan AD-19 rule 8, and the document's
   machine may say otherwise) — and a value in another unit is left out and reported, never
   mixed in. A tool that has no value in that unit at all, a turning tool that only ever cuts
-  at a constant surface speed, gets the unit it does have, and the column says which. A
+  at a constant surface speed, gets the unit it does have, and the column says which — a
+  surface speed with its unit and the code that put it in force (`220 m/min (G96)`,
+  `150 m/min (G961)`, `600 ft/min (G96)` in an inch program; M9). A
   `G50` or `G92` clamp is not a cutting speed in any unit; which code clamps comes from the
   database (`sets.speedLimit`, `gedit_nc.speed_limit_of`), not from a list in this file
   (F24), because in G-code system A that same `G92` cuts a thread.
@@ -138,7 +140,7 @@ PER_TOOTH_ADDRESSES = ("FU", "FZ")
 #: A `FeedModeTracker.feed_mode` as the §7.1 feed unit. The tracker answers in Phase 1's
 #: names — per revolution is `'G95'` whatever code the dialect writes for it — and a range
 #: is a claim about a unit, not about a code.
-UNIT_OF_MODE = {"G93": "inverse-time", "G94": "per-minute", "G95": "per-rev"}
+UNIT_OF_MODE = {"G93": "inverse-time", "G94": "per-minute", "G95": "per-rev", "G931": "travel-time"}
 
 #: What a unit is called in a finding.
 UNIT_TEXT = {
@@ -146,6 +148,7 @@ UNIT_TEXT = {
     "per-rev": "per revolution",
     "per-tooth": "per tooth",
     "inverse-time": "inverse time",
+    "travel-time": "a travel time",
     "unknown": "an unknown unit",
 }
 
@@ -154,6 +157,12 @@ UNIT_TEXT = {
 #: have to say what they are — 220 rpm and a surface speed of 220 are not the same number,
 #: and a column that showed both as `220` would be read as the wrong one.
 UNIT_TAG = {"per-rev": "/rev", "per-tooth": "/tooth", "surface": "surface"}
+
+#: M9 (WP9.5a): what a surface speed is measured in, by the program's units. A range of
+#: surface speeds says this and the code that put it in force (`220 m/min (G96)`), because
+#: "surface" alone named neither the unit nor the code, and a Sinumerik `G961` was reported
+#: as `G96`.
+SURFACE_UNIT = {"mm": "m/min", "inch": "ft/min"}
 
 #: The units a feed range may be in. Inverse time is the reciprocal of a time and not a feed
 #: rate, and an unknown unit is unknown: neither ever joins a range.
@@ -230,6 +239,8 @@ class Spec:
         #: profile's power-on state in :func:`build`, where the tracker knows it.
         self.feed_unit = "per-minute"
         self.speed_unit = "rpm"
+        #: The program's units at the start (M9): the document's machine, set in `main`.
+        self.units = "mm"
 
 
 class Mark:
@@ -280,6 +291,7 @@ class Row:
         "speeds",
         "speed_unit",
         "skipped",
+        "surface",
     )
 
     def __init__(self, label: str, number: Optional[str], line: int) -> None:
@@ -306,16 +318,37 @@ class Row:
         self.speed_unit: Optional[str] = None
         #: reason → (first line it happened on, how many blocks); see :func:`findings_of`.
         self.skipped: Dict[str, List[int]] = {}
+        #: M9: (unit text, code) of every surface speed of this tool, in order of first use.
+        self.surface: List[Tuple[str, str]] = []
 
     def add_offset(self, offset: Optional[str]) -> None:
         if offset is not None and offset not in self.offsets:
             self.offsets.append(offset)
 
-    def add(self, kind: str, key: str, value: Tuple[Decimal, str], line: int) -> None:
-        """Records one feed or speed under the mode or unit it was written in."""
+    def add(
+        self, kind: str, key: str, value: Tuple[Decimal, str], line: int, note: Optional[Tuple[str, str]] = None
+    ) -> None:
+        """Records one feed or speed under the mode or unit it was written in.
+
+        ``note`` is the unit text and the code of a surface speed (M9), for its range's tag.
+        """
         found = self.by_mode if kind == "feed" else self.by_speed
         found.setdefault(key, []).append(value)
         self.first_line.setdefault("%s:%s" % (kind, key), line)
+        if note is not None and note not in self.surface:
+            self.surface.append(note)
+
+    def surface_tag(self) -> str:
+        """``m/min (G96)``: the unit and the code of this tool's surface speeds."""
+        units: List[str] = []
+        codes: List[str] = []
+        for unit, code in self.surface:
+            if unit not in units:
+                units.append(unit)
+            if code and code not in codes:
+                codes.append(code)
+        text = " and ".join(units) if units else "surface"
+        return "%s (%s)" % (text, ", ".join(codes)) if codes else text
 
     def skip(self, reason: str, line: int) -> None:
         """Records one block whose value was left out of a range, and why."""
@@ -339,8 +372,10 @@ class Pending:
     def __init__(self) -> None:
         self.calls: List[Tuple[Any, ...]] = []
 
-    def add(self, kind: str, key: str, value: Tuple[Decimal, str], line: int) -> None:
-        self.calls.append(("add", kind, key, value, line))
+    def add(
+        self, kind: str, key: str, value: Tuple[Decimal, str], line: int, note: Optional[Tuple[str, str]] = None
+    ) -> None:
+        self.calls.append(("add", kind, key, value, line, note))
 
     def skip(self, reason: str, line: int) -> None:
         self.calls.append(("skip", reason, line))
@@ -350,7 +385,7 @@ class Pending:
         if row is not None:
             for call in self.calls:
                 if call[0] == "add":
-                    row.add(call[1], call[2], call[3], call[4])
+                    row.add(call[1], call[2], call[3], call[4], call[5])
                 else:
                     row.skip(call[1], call[2])
         self.calls = []
@@ -666,7 +701,7 @@ def describe_tool(
     return from_list.get(number) if number is not None else None
 
 
-def range_text(values: Sequence[Tuple[Any, str]], unit: Optional[str] = None) -> str:
+def range_text(values: Sequence[Tuple[Any, str]], unit: Optional[str] = None, tag: Optional[str] = None) -> str:
     """``[(Decimal, '400.'), …]`` → ``'400.'`` or ``'400.-1500.'``, as the file wrote them.
 
     A range that is not in the unit a reader assumes — feed per minute, speed in rpm — says
@@ -678,7 +713,7 @@ def range_text(values: Sequence[Tuple[Any, str]], unit: Optional[str] = None) ->
     low = min(values, key=lambda pair: pair[0])
     high = max(values, key=lambda pair: pair[0])
     text = low[1] if low[1] == high[1] else "%s-%s" % (low[1], high[1])
-    tag = UNIT_TAG.get(unit or "")
+    tag = tag if tag is not None else UNIT_TAG.get(unit or "")
     return "%s %s" % (text, tag) if tag else text
 
 
@@ -689,6 +724,31 @@ def numeric(token: gedit_nc.Token) -> Optional[Decimal]:
     # Not `Decimal(token.value.raw)`: a Klartext decimal comma stays in `raw` (`S5000,5`),
     # and `Decimal` refuses it, which left the speed and feed columns blank.
     return gedit_nc.decimal_of(token.value)
+
+
+class Surface:
+    """The code that put the surface speed in force, and the program's units (M9).
+
+    Both come from the code database (``sets.speedUnit: 'surface'``, ``sets.units``), so a
+    Sinumerik `G961` names itself and a Fanuc `G20` program reads its surface speeds in feet
+    per minute; the units start from the document's machine.
+    """
+
+    def __init__(self, units: str) -> None:
+        self.units = units if units in SURFACE_UNIT else "mm"
+        self.code: Optional[str] = None
+
+    def read(self, written: Sequence[Tuple[Dict[str, Any], str]]) -> None:
+        """Takes what the codes a line just wrote say about the two (``FeedModeTracker.written``)."""
+        for entry, _ in written:
+            sets = as_dict(entry.get("sets"))
+            if sets.get("units") in SURFACE_UNIT:
+                self.units = sets["units"]
+            if sets.get("speedUnit") == "surface" and isinstance(entry.get("code"), str):
+                self.code = entry["code"]
+
+    def note(self) -> Tuple[str, str]:
+        return (SURFACE_UNIT[self.units], self.code or "")
 
 
 def build(
@@ -733,8 +793,19 @@ def build(
     # What the ranges are in, before the program says anything: this control's own units.
     spec.feed_unit = unit_of(tracker.feed_mode, spec)
     spec.speed_unit = "surface" if tracker.css else "rpm"
+    #: M9: the code that put the surface speed in force, and the program's units, for the
+    #: tag of a surface-speed range (`220 m/min (G96)`).
+    surface = Surface(spec.units)
+    surface.read(tracker.written)
     state: Optional[gedit_nc.LineState] = None
     if preceding:
+        # The codes above a selection are read for the same two answers.
+        above = gedit_nc.FeedModeTracker(codes)
+        above_state: Optional[gedit_nc.LineState] = None
+        for text in preceding:
+            above_tokens, above_state = gedit_nc.tokenize_line(text, cp, above_state)
+            above.update(above_tokens, continued=gedit_nc.continues_block(text, cp))
+            surface.read(above.written)
         state = gedit_nc.prime_tracker(tracker, preceding, cp, lines[0] if lines else None)
     #: Values written since the last move; they go to the tool that moves next.
     pending = Pending()
@@ -743,6 +814,7 @@ def build(
         tokens, state = gedit_nc.tokenize_line(line, cp, state)
         # An Okuma `$` line belongs to the block above it.
         tracker.update(tokens, continued=gedit_nc.continues_block(line, cp))
+        surface.read(tracker.written)
         mark = marks[i]
         number_line = base_line + i
 
@@ -798,7 +870,7 @@ def build(
                     current = row
 
         if spec.feed_speed:
-            collect(pending, tokens, tracker, spec, codes, number_line)
+            collect(pending, tokens, tracker, spec, codes, number_line, surface.note())
             if moves_an_axis(tokens, spec):
                 pending.hand_to(current)
     pending.hand_to(current)
@@ -882,8 +954,11 @@ def collect(
     spec: Spec,
     codes: Sequence[Dict[str, Any]],
     line: int,
+    note: Optional[Tuple[str, str]] = None,
 ) -> None:
     """Adds this block's feed and speed to ``row`` — or records why they were left out.
+
+    ``note`` is the unit and the code of the surface speed in force (M9, :class:`Surface`).
 
     A range only means something inside one unit, so a value measured in another one is
     never silently mixed in. A tool's range is in the unit its **first** value was written
@@ -903,7 +978,7 @@ def collect(
     A feed or speed written as a variable or an expression (``F#101``, ``FQ50``, ``F=R1``)
     carries no number at all, so it is in neither the range nor the findings. Neither is a
     dwell (``fNotFeed``), nor a word under an address of its own: a clamp word (`LIMS=`), a
-    spindle named by its number (`S3=`) or a driven tool's speed (`SB=`) is not the main
+    spindle named by its number (`S3=`, or `S[3]=` with its index) or a driven tool's speed (`SB=`) is not the main
     spindle's `S`, and only that word is read as the speed a tool runs at.
     """
     # A dwell block (`fNotFeed`: Okuma `G04 F2`, Sinumerik `G4 F2` and `G4 S2`) holds a time,
@@ -924,6 +999,10 @@ def collect(
     for token in tokens:
         if token.kind != "word" or token.address is None:
             continue
+        if token.index is not None:
+            # `S[2]=500`, `LIMS[2]=1800` (`syntax.assignmentIndex`): the index names another
+            # spindle, as `S2=` names one in its address, so it is no tool's speed (F1).
+            continue
         value = numeric(token)
         if value is None:
             continue
@@ -936,7 +1015,10 @@ def collect(
             if limit_code is not None:
                 row.skip("limit", line)
             else:
-                row.add("speed", speed_unit, (value, token.value_text or ""), line)
+                row.add(
+                    "speed", speed_unit, (value, token.value_text or ""), line,
+                    note if speed_unit == "surface" else None,
+                )
 
 
 def choose_ranges(row: Row, spec: Spec) -> None:
@@ -993,7 +1075,7 @@ def findings_of(row: Row) -> List[Dict[str, Any]]:
                 % blocks(count)
             )
         elif reason == "css":
-            text = "the S of %s is a surface speed (G96), not a spindle speed" % blocks(count)
+            text = "the S of %s is a surface speed in %s, not a spindle speed" % (blocks(count), row.surface_tag())
         elif reason == "rpm":
             text = (
                 "the S of %s is a spindle speed in rpm, not a surface speed" % blocks(count)
@@ -1065,6 +1147,8 @@ def main() -> int:
     base_line = start if isinstance(start, int) and start >= 1 else 1
 
     spec = Spec(cp, params)
+    machine_units = as_dict(gedit_nc.machine_params(context).get("params")).get("units")
+    spec.units = machine_units if machine_units in SURFACE_UNIT else "mm"
     # The lines above a selection, when the context carries all of them; they prime the
     # feed-mode tracker and are not scanned for tool calls. See `build`.
     preceding = gedit_nc.preceding_lines(context)
@@ -1094,7 +1178,9 @@ def main() -> int:
         entry["calls"] = row.calls
         if spec.feed_speed:
             entry["feed"] = range_text(row.feeds, row.feed_unit)
-            entry["speed"] = range_text(row.speeds, row.speed_unit)
+            entry["speed"] = range_text(
+                row.speeds, row.speed_unit, row.surface_tag() if row.speed_unit == "surface" else None
+            )
         table.append(entry)
 
     gedit_nc.report(

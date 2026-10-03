@@ -113,8 +113,9 @@ describe('registerAll', () => {
       'heidenhain-klartext',
       'okuma-osp',
       'sinumerik',
+      'sinumerik-mill',
     ]);
-    expect(log.grammars).toHaveLength(5);
+    expect(log.grammars).toHaveLength(6);
     expect(log.themes).toHaveLength(2);
   });
 });

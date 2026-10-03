@@ -115,7 +115,10 @@ describe('the shipped Sinumerik database', () => {
     for (const code of ['SOFT', 'BRISK', 'TRANSMIT', 'TRACYL', 'TRAFOOF', 'TRAORI']) {
       expect(entry(code)?.group, code).toBeUndefined();
     }
-    expect(codesWith((e) => e.group === 'nonmodal')).toEqual(['G153', 'G25', 'G26', 'G4', 'G53', 'G63', 'G9', 'STOPRE', 'SUPA']);
+    // M9 (WP9.1): G74 and G75, the reference-point and fixed-point approaches, act in their block only.
+    expect(codesWith((e) => e.group === 'nonmodal')).toEqual([
+      'G153', 'G25', 'G26', 'G4', 'G53', 'G63', 'G74', 'G75', 'G9', 'STOPRE', 'SUPA',
+    ]);
   });
 
   it('describes every keyword the profile tokenizes', () => {
@@ -202,7 +205,9 @@ describe('what a code does to the modal state', () => {
     expect(entry('SVC')?.sets).toEqual({ speedUnit: 'surface' });
     expect(entry('SVC')?.group).toBe('tool');
     const feedType = codesWith((e) => e.code !== 'SVC' && (e.sets?.speedUnit !== undefined || e.sets?.feedUnit !== undefined));
-    expect(feedType).toEqual(['G93', 'G94', 'G942', 'G95', 'G952', 'G96', 'G961', 'G962', 'G97', 'G971', 'G972', 'G973']);
+    expect(feedType).toEqual(['G93', 'G931', 'G94', 'G942', 'G95', 'G952', 'G96', 'G961', 'G962', 'G97', 'G971', 'G972', 'G973']);
+    // M9 review F8: G931's F is the time the move takes, so no script may scale it as a feed.
+    expect(entry('G931')?.sets).toEqual({ feedUnit: 'travel-time', speedUnit: 'rpm' });
     for (const code of feedType) expect(entry(code)?.group, code).toBe('feedmode');
     expect(codesWith((e) => e.group === 'spindlemode')).toEqual([]);
     // G70/G71 are the unit switch on this control, not the Fanuc lathe's finishing and
@@ -372,7 +377,14 @@ describe('the cycles', () => {
     expect(unitOf('CYCLE84', 'PIT')).toBeUndefined();
     expect(unitOf('CYCLE84', 'MPIT')).toBeUndefined();
     const units = new Set(ENTRIES.flatMap((e) => (e.params ?? []).map((p) => p.unit)).filter((u) => u !== undefined));
-    expect([...units].sort()).toEqual(['count', 'dwell']);
+    // M9 (WP9.5a): the leads of the thread codes (`G33` and its kin take theirs from I, J
+    // or K; `G34`/`G35` have the change of the lead in F) are declared as what they are, a
+    // feed per revolution, so their I, J and K are no arc centres. The cycle pitch `PIT`
+    // above is an argument and stays without a class.
+    expect([...units].sort()).toEqual(['count', 'dwell', 'feedPerRev']);
+    expect(
+      ENTRIES.filter((e) => (e.params ?? []).some((p) => p.unit === 'feedPerRev')).map((e) => e.code),
+    ).toEqual(['G33', 'G331', 'G332', 'G34', 'G35', 'G335', 'G336']);
     // CYCLE81 has a dwell too, and a dwell of the drilling cycles is seconds when positive
     // and spindle revolutions when negative.
     expect(entry('CYCLE81')?.params?.map((p) => p.address)).toEqual(['RTP', 'RFP', 'SDIS', 'DP', 'DPR', 'DTB']);

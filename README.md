@@ -8,7 +8,7 @@ not ask to change.
 Built with Tauri, SvelteKit and Monaco. It works offline — the editor is bundled with the
 app and nothing is loaded from the network.
 
-Five dialects:
+Six dialects:
 
 - **Fanuc (ISO) mill** — `.nc`, `.tap`, `.cnc`, `.eia`, `.iso`, `.ncc`, `.ptp`, `.txt`
 - **Fanuc (ISO) lathe** — the same extensions; turret tool changes, the lathe meanings of
@@ -18,6 +18,8 @@ Five dialects:
   tool words, `CALL`/`RTS`, and the machine's unit system, which can scale every number
 - **Sinumerik 840D (turning)** — `.mpf`, `.spf`; `;` comments and strings, labels, cycle
   calls, tools by number or by name, and diameter programming on from the start
+- **Sinumerik 840D (milling)** — the same language; `M6` changes the tool and a `T` alone
+  only preselects it, the program starts in `G17`/`G94`, `X` is a radius
 
 Next to the dialect sits the **machine configuration**: how one particular control reads
 what the dialect describes — whether a number without a decimal point means millimetres or
@@ -132,8 +134,8 @@ macro somebody mailed you. The full picture is in
 ### What gEdit does not do
 
 No backplot, simulation or 3D display. No DNC or machine communication. No program
-management. Only the five dialects above, and milling on an Okuma or a Sinumerik control is
-not covered yet. Python is needed **only** for the script features; everything else works
+management. Only the six dialects above, and milling on an Okuma control is not covered
+yet. Python is needed **only** for the script features; everything else works
 without it. On Windows and Linux, logging out or shutting down skips the unsaved-changes
 prompt, and the crash snapshot, taken every half minute, is all that catches the unsaved
 work. Every text in the program is English. The
@@ -144,7 +146,7 @@ work. Every text in the program is English. The
 
 Phase 2 is being built milestone by milestone (see the
 [roadmap](docs/planning/roadmap.md)). Still ahead, in this order: reading real programs
-right, including a built-in Sinumerik milling profile (M9); block skip, program checks,
+right (M9, built; its Sinumerik milling profile ships in the next release); block skip, program checks,
 extents and arithmetic on address values (M10); comparing a re-posted program without the
 noise of renumbering and number formatting, merging in both directions, and search and
 replace by word value (`T1` but not `T10`, `S>2000`) (M11); multi-channel programs, with a

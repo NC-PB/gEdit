@@ -18,22 +18,28 @@
 
   "inputs": {
     "is-b": {
-      "note": "the fanuc-gcode preset is-b: lengths, angles and the dwell in increments of 0.001, feeds as written",
+      "note": "the fanuc-gcode preset is-b: lengths, angles and the dwell in increments of 0.001; M9 (WP9.5a): a point-less feed per minute in 1 mm/min (0.01 in/min), per revolution in 0.01 mm/rev (0.0001 in/rev), as the control counts them without calculator-type input",
       "mode": "increment",
       "incrementMm": "0.001",
       "incrementInch": "0.0001",
       "incrementDeg": "0.001",
       "incrementSec": "0.001",
-      "classes": { "feedPerMin": { "mode": "calculator" }, "feedPerRev": { "mode": "calculator" } }
+      "classes": {
+        "feedPerMin": { "mode": "increment", "increment": "1", "incrementInch": "0.01" },
+        "feedPerRev": { "mode": "increment", "increment": "0.01", "incrementInch": "0.0001" }
+      }
     },
     "is-c": {
-      "note": "the fanuc-gcode preset is-c: the same, one decimal finer",
+      "note": "the fanuc-gcode preset is-c: lengths, angles and the dwell one decimal finer; the point-less feeds count as on is-b, because their increment is a parameter of its own",
       "mode": "increment",
       "incrementMm": "0.0001",
       "incrementInch": "0.00001",
       "incrementDeg": "0.0001",
       "incrementSec": "0.0001",
-      "classes": { "feedPerMin": { "mode": "calculator" }, "feedPerRev": { "mode": "calculator" } }
+      "classes": {
+        "feedPerMin": { "mode": "increment", "increment": "1", "incrementInch": "0.01" },
+        "feedPerRev": { "mode": "increment", "increment": "0.01", "incrementInch": "0.0001" }
+      }
     },
     "calculator": {
       "note": "the fanuc-gcode preset calculator: every position as written, with or without a point, and the micron parameters of a cycle in increments of 0.001",
@@ -65,7 +71,7 @@
       }
     },
     "okuma-10um": {
-      "note": "section 8.8, the Okuma 10 um unit system; its inch behaviour is unverified, so no inch case uses it",
+      "note": "section 8.8, the Okuma 10 um unit system; the control has no 10 um inch system, so M9 (WP9.5a) gives an inch word on it no value instead of inventing a unit of 0.001 in",
       "mode": "scale",
       "incrementMm": "0.01",
       "incrementDeg": "0.01",
@@ -115,6 +121,20 @@
     "mill": { "profile": "fanuc-gcode" },
     "lathe": { "profile": "fanuc-lathe" },
     "klartext": { "profile": "heidenhain-klartext" },
+    "okuma": { "profile": "okuma-osp" },
+    "lathe-uwvh": {
+      "note": "M9 review F9: the addresses of the Fanuc lathe under its incrementalAddresses variant uwvh (tests/fixtures/resolved/effective/fanuc-lathe/variant-incrementalAddresses-uwvh.json), where H is the incremental twin of the rotary axis C",
+      "inline": {
+        "id": "lathe-uwvh",
+        "addresses": {
+          "feed": "F",
+          "spindle": "S",
+          "axes": ["X", "Z", "C", "Y", "U", "W"],
+          "angular": ["C"],
+          "incremental": { "H": "C", "U": "X", "V": "Y", "W": "Z" }
+        }
+      }
+    },
     "feed-word-e": {
       "note": "stands in for the Okuma profile of M8: a dialect whose E word is a feed per revolution",
       "inline": {
@@ -132,6 +152,22 @@
   },
 
   "class": [
+    {
+      "note": "M9 review F9: an incremental twin is the kind of number of the axis it moves. H of C is an angle, not a length",
+      "profile": "lathe-uwvh",
+      "address": "H",
+      "feedUnit": "per-rev",
+      "codes": [],
+      "expected": "angle"
+    },
+    {
+      "note": "M9 review F9: the twin of a linear axis stays a length",
+      "profile": "lathe-uwvh",
+      "address": "V",
+      "feedUnit": "per-rev",
+      "codes": [],
+      "expected": "length"
+    },
     {
       "note": "1. a cycle parameter wins over everything: Q of a peck cycle is a count of least increments",
       "profile": "mill",
@@ -189,21 +225,109 @@
       "expected": "dwell"
     },
     {
-      "note": "3. a thread lead is per revolution although the modal feed mode says per minute",
+      "note": "3. a thread lead is per revolution although the modal feed mode says per minute. M9 (WP9.5a): because the database says the F is the lead (rule 1), no longer because the code carries a pitch",
       "profile": "lathe",
       "address": "F",
       "feedUnit": "per-minute",
-      "codes": [{ "code": "G76", "group": "cycle", "pitchFeed": true }],
+      "codes": [{ "code": "G76", "group": "cycle", "pitchFeed": true, "params": [{ "address": "F", "label": "Thread lead per revolution", "unit": "feedPerRev" }] }],
       "expected": "feedPerRev"
     },
     {
-      "note": "3b. the same when the pitch comes from the cycle that is still active, not from this block",
+      "note": "3b. M9 (WP9.5a), changed: a pitch in force that the caller does not name may be a thread or a tap, and under a feed per minute the two are different numbers, so there is no class (it was feedPerRev)",
       "profile": "lathe",
       "address": "F",
       "feedUnit": "per-minute",
       "pitchFeed": true,
       "codes": [],
+      "expected": null
+    },
+    {
+      "note": "3b2. M9: the same pitch nobody named under a feed per revolution is a feed per revolution either way",
+      "profile": "lathe",
+      "address": "F",
+      "feedUnit": "per-rev",
+      "pitchFeed": true,
+      "codes": [],
       "expected": "feedPerRev"
+    },
+    {
+      "note": "3b3. M9: the thread in force is named, and the database says its F is the lead, so a later F is a lead under a feed per minute too",
+      "profile": "lathe",
+      "address": "F",
+      "feedUnit": "per-minute",
+      "pitchFeed": true,
+      "codes": [],
+      "inForce": [{ "code": "G92", "group": "motion", "modal": true, "pitchFeed": true, "params": [{ "address": "F", "label": "Thread lead per revolution", "unit": "feedPerRev" }] }],
+      "expected": "feedPerRev"
+    },
+    {
+      "note": "3b4. M9: a tap is not a thread. The F of a mill G84 under G94 is the tap's feed per minute (the speed times the pitch), not a lead per revolution",
+      "profile": "mill",
+      "address": "F",
+      "feedUnit": "per-minute",
+      "codes": [{ "code": "G84", "group": "cycle", "pitchFeed": true, "params": [{ "address": "F", "label": "Feed from the thread pitch" }] }],
+      "expected": "feedPerMin"
+    },
+    {
+      "note": "3b5. M9: the same tap under G95 is a feed per revolution, the pitch itself",
+      "profile": "mill",
+      "address": "F",
+      "feedUnit": "per-rev",
+      "codes": [{ "code": "G84", "group": "cycle", "pitchFeed": true, "params": [{ "address": "F", "label": "Feed from the thread pitch" }] }],
+      "expected": "feedPerRev"
+    },
+    {
+      "note": "3b6. M9: a tapping mode in force (Fanuc G63, the modal pitch-feed mode of the Python tracker) is read as a tap: the feed is in the feed unit, here per minute",
+      "profile": "mill",
+      "address": "F",
+      "feedUnit": "per-minute",
+      "pitchFeed": true,
+      "codes": [],
+      "inForce": [{ "code": "G63", "group": "pathmode", "modal": true, "pitchFeed": true, "tapping": true }],
+      "expected": "feedPerMin"
+    },
+    {
+      "note": "3b7. M9: Okuma G184 taps with a driven tool under G94; on a 1 um machine reading its F per revolution was 100 times off",
+      "profile": "okuma",
+      "address": "F",
+      "feedUnit": "per-minute",
+      "codes": [{ "code": "G184", "group": "cycle", "pitchFeed": true, "params": [{ "address": "F", "label": "Tapping feed, tied to the pitch" }] }],
+      "expected": "feedPerMin"
+    },
+    {
+      "note": "3b8. M9: the F of Okuma G101 is a feed per minute whatever the feed mode, because the database says so",
+      "profile": "okuma",
+      "address": "F",
+      "feedUnit": "per-rev",
+      "codes": [{ "code": "G101", "group": "motion", "modal": true, "params": [{ "address": "F", "label": "Feed per minute", "unit": "feedPerMin" }] }],
+      "expected": "feedPerMin"
+    },
+    {
+      "note": "3b9. M9: and in the blocks after it, while G101 is the move in force",
+      "profile": "okuma",
+      "address": "F",
+      "feedUnit": "per-rev",
+      "codes": [],
+      "inForce": [{ "code": "G101", "group": "motion", "modal": true, "params": [{ "address": "F", "label": "Feed per minute", "unit": "feedPerMin" }] }],
+      "expected": "feedPerMin"
+    },
+    {
+      "note": "3b10. M9: a code in the block wins over the code in force",
+      "profile": "okuma",
+      "address": "F",
+      "feedUnit": "per-rev",
+      "codes": [{ "code": "G33", "group": "motion", "modal": true, "pitchFeed": true, "params": [{ "address": "F", "label": "Thread lead", "unit": "feedPerRev" }] }],
+      "inForce": [{ "code": "G101", "group": "motion", "modal": true, "params": [{ "address": "F", "label": "Feed per minute", "unit": "feedPerMin" }] }],
+      "expected": "feedPerRev"
+    },
+    {
+      "note": "3b11. M9: a cycle parameter keeps its reading in the blocks that repeat the cycle in force",
+      "profile": "mill",
+      "address": "Q",
+      "feedUnit": "per-minute",
+      "codes": [],
+      "inForce": [{ "code": "G83", "group": "cycle", "modal": true, "params": [{ "address": "Q", "label": "Peck", "unit": "increment" }] }],
+      "expected": "increment"
     },
     {
       "note": "3c. a code that is a threading cycle in another G-code system says nothing: no class, no value",
@@ -222,12 +346,28 @@
       "expected": "angle"
     },
     {
-      "note": "4b. the same letter on a profile that does not list it is an ordinary axis",
-      "profile": "mill",
+      "note": "4b. the same letter on a profile that does not list it is an ordinary axis. M9 (WP9.5a): read on Klartext, because the mill lists its rotary axes now (it was the mill)",
+      "profile": "klartext",
       "address": "C",
       "feedUnit": "per-minute",
       "codes": [],
       "expected": "length"
+    },
+    {
+      "note": "4c. M9 (WP9.5a): the Fanuc mill declares A, B and C angular, so C90000 is an angle and not 9 in",
+      "profile": "mill",
+      "address": "C",
+      "feedUnit": "per-minute",
+      "codes": [],
+      "expected": "angle"
+    },
+    {
+      "note": "4d. M9: and so is a tilt axis A or B of a five-axis mill",
+      "profile": "mill",
+      "address": "B",
+      "feedUnit": "per-minute",
+      "codes": [],
+      "expected": "angle"
     },
     {
       "note": "5. the feed word by the modal feed unit: per minute",
@@ -254,12 +394,12 @@
       "expected": null
     },
     {
-      "note": "5d. inverse time is not a length per time; the number has no class",
+      "note": "5d. inverse time is not a length per time. M9 (WP9.5a), changed: it has a class of its own now, which no machine declares a reading for (it had none)",
       "profile": "mill",
       "address": "F",
       "feedUnit": "inverse-time",
       "codes": [],
-      "expected": null
+      "expected": "inverseTime"
     },
     {
       "note": "5e. a word that carries its own feed unit beats the modal one (Klartext FU)",
@@ -270,12 +410,20 @@
       "expected": "feedPerRev"
     },
     {
-      "note": "5f. feed per tooth has no class of its own and is left alone",
+      "note": "5f. M9 (WP9.5a), changed: a feed per tooth has a class of its own, which no machine declares a reading for (it had none)",
       "profile": "klartext",
       "address": "FZ",
       "feedUnit": "per-minute",
       "codes": [],
-      "expected": null
+      "expected": "feedPerTooth"
+    },
+    {
+      "note": "5f2. M9: a plain F under a per-tooth feed unit is a feed per tooth as well",
+      "profile": "klartext",
+      "address": "F",
+      "feedUnit": "per-tooth",
+      "codes": [],
+      "expected": "feedPerTooth"
     },
     {
       "note": "5g. E is a feed per revolution on a dialect that says so",
@@ -382,7 +530,17 @@
     { "note": "IS-B: a dwell is seconds", "literal": "2500", "class": "dwell", "input": "is-b", "units": "mm", "expected": "2.5" },
     { "note": "IS-B: a dwell ignores the unit system too", "literal": "2500", "class": "dwell", "input": "is-b", "units": "inch", "expected": "2.5" },
     { "note": "IS-B: feeds are read as written on this preset", "literal": "155", "class": "feedPerMin", "input": "is-b", "units": "mm", "expected": "155" },
-    { "note": "IS-B: a feed per revolution as written", "literal": "0.155", "class": "feedPerRev", "input": "is-b", "units": "mm", "expected": "0.155" },
+    { "note": "IS-B: a feed per revolution written with a point is as written", "literal": "0.155", "class": "feedPerRev", "input": "is-b", "units": "mm", "expected": "0.155" },
+    { "note": "M9 (WP9.5a): IS-B without calculator input counts a point-less feed per revolution in 0.01 mm/rev, so a lathe F25 is 0.25 mm/rev and not 25", "literal": "25", "class": "feedPerRev", "input": "is-b", "units": "mm", "expected": "0.25" },
+    { "note": "M9: the same in an inch program, in 0.0001 in/rev", "literal": "25", "class": "feedPerRev", "input": "is-b", "units": "inch", "expected": "0.0025" },
+    { "note": "M9: IS-C counts the point-less feed the same way, its increment is a parameter of its own", "literal": "25", "class": "feedPerRev", "input": "is-c", "units": "mm", "expected": "0.25" },
+    { "note": "M9: a point-less feed per minute is 1 mm/min, the number as written", "literal": "155", "class": "feedPerMin", "input": "is-c", "units": "mm", "expected": "155" },
+    { "note": "M9: and 0.01 in/min in an inch program, not inches as written", "literal": "50", "class": "feedPerMin", "input": "is-b", "units": "inch", "expected": "0.5" },
+    { "note": "M9: a feed per minute with a point is as written in an inch program too", "literal": "50.", "class": "feedPerMin", "input": "is-b", "units": "inch", "expected": "50" },
+    { "note": "M9 (WP9.5a): a feed per tooth on a profile that declares no number input is as written", "literal": "0.08", "class": "feedPerTooth", "input": null, "units": "mm", "expected": "0.08" },
+    { "note": "M9: on a machine that declares number input it has no value, because no machine declares how it reads one", "literal": "0.08", "class": "feedPerTooth", "input": "calculator", "units": "mm", "expected": null },
+    { "note": "M9: an inverse-time feed is as written where nothing is declared", "literal": "12.5", "class": "inverseTime", "input": null, "units": "mm", "expected": "12.5" },
+    { "note": "M9: and without a value on an IS-B machine, where a point-less one would count in 0.001 but no preset says so", "literal": "125", "class": "inverseTime", "input": "is-b", "units": "mm", "expected": null },
     { "note": "IS-B in an inch program: the length increment is a tenth of the metric one", "literal": "50", "class": "length", "input": "is-b", "units": "inch", "expected": "0.005" },
     { "note": "IS-B in an inch program: with a point the value is inches as written", "literal": "50.", "class": "length", "input": "is-b", "units": "inch", "expected": "50" },
     { "note": "IS-C: one decimal finer than IS-B", "literal": "50", "class": "length", "input": "is-c", "units": "mm", "expected": "0.005" },
@@ -411,11 +569,17 @@
     { "note": "Okuma 10 um: F23.456 is 0.23456 mm per revolution", "literal": "23.456", "class": "feedPerRev", "input": "okuma-10um", "units": "mm", "expected": "0.23456" },
     { "note": "Okuma 10 um: the feed per minute is read as written on this system", "literal": "1000", "class": "feedPerMin", "input": "okuma-10um", "units": "mm", "expected": "1000" },
     { "note": "Okuma 10 um: the dwell unit is a tenth of a second", "literal": "25", "class": "dwell", "input": "okuma-10um", "units": "mm", "expected": "2.5" },
+    { "note": "M9 (WP9.5a): the Okuma 10 um system has no inch counterpart, so a length in an inch program has no value instead of an invented 0.001 in", "literal": "1000", "class": "length", "input": "okuma-10um", "units": "inch", "expected": null },
+    { "note": "M9: nor does a feed per revolution", "literal": "23.456", "class": "feedPerRev", "input": "okuma-10um", "units": "inch", "expected": null },
+    { "note": "M9: nor a feed per minute", "literal": "1000", "class": "feedPerMin", "input": "okuma-10um", "units": "inch", "expected": null },
+    { "note": "M9: an angle does not follow the units, so it keeps its value in an inch program", "literal": "9000", "class": "angle", "input": "okuma-10um", "units": "inch", "expected": "90" },
+    { "note": "M9: and the 1 um system declares its inch units, so it keeps them", "literal": "10000", "class": "length", "input": "okuma-1um", "units": "inch", "expected": "1" },
+    { "note": "M9: an increment system still takes a tenth of its metric increment where no inch one is declared", "literal": "50", "class": "length", "input": "angles-only", "units": "inch", "expected": "0.005" },
     { "note": "per class: the length follows the machine's own mode", "literal": "50", "class": "length", "input": "mixed", "units": "mm", "expected": "0.05" },
     { "note": "per class: an angle this machine reads as written", "literal": "90", "class": "angle", "input": "mixed", "units": "mm", "expected": "90" },
     { "note": "per class: a feed per revolution this machine scales by its own unit", "literal": "1555", "class": "feedPerRev", "input": "mixed", "units": "mm", "expected": "0.1555" },
     { "note": "per class: a dwell with an increment of its own", "literal": "250", "class": "dwell", "input": "mixed", "units": "mm", "expected": "2.5" },
-    { "note": "per class in an inch program: a class increment without an inch twin is a tenth of itself", "literal": "1555", "class": "feedPerRev", "input": "mixed", "units": "inch", "expected": "0.01555" },
+    { "note": "per class in an inch program: M9 (WP9.5a), changed: a scaled class without an inch twin has no inch unit, because a unit system declares its inch unit or has none (it was a tenth of itself, 0.01555)", "literal": "1555", "class": "feedPerRev", "input": "mixed", "units": "inch", "expected": null },
     { "note": "per class in an inch program: the length increment falls back to a tenth as well", "literal": "50", "class": "length", "input": "mixed", "units": "inch", "expected": "0.005" },
     { "note": "a cycle parameter in least increments: Q6000 is six millimetres on an IS-B control", "literal": "6000", "class": "increment", "input": "is-b", "units": "mm", "expected": "6" },
     { "note": "the same parameter on IS-C", "literal": "6000", "class": "increment", "input": "is-c", "units": "mm", "expected": "0.6" },
@@ -512,6 +676,33 @@
       ]
     },
     {
+      "note": "M9 (WP9.5a): no machine, and a point-less feed per revolution is 0.25 mm/rev on the increment presets and 25 as written on the calculator one, so it is not settled",
+      "literal": "25", "class": "feedPerRev", "decl": "fanuc", "units": "mm",
+      "expected": [
+        { "preset": "is-b", "value": "0.25" },
+        { "preset": "is-c", "value": "0.25" },
+        { "preset": "calculator", "value": "25" }
+      ]
+    },
+    {
+      "note": "M9: with a point every Fanuc preset reads it as written",
+      "literal": "0.25", "class": "feedPerRev", "decl": "fanuc", "units": "mm",
+      "expected": [
+        { "preset": "is-b", "value": "0.25" },
+        { "preset": "is-c", "value": "0.25" },
+        { "preset": "calculator", "value": "0.25" }
+      ]
+    },
+    {
+      "note": "M9 (WP9.5a): the lathe's increment presets are the mill's, so with no machine a lathe F25 is 25 as written on its default and 0.25 mm/rev on IS-B and IS-C: not settled, where it used to pass as 25 mm/rev",
+      "literal": "25", "class": "feedPerRev", "decl": "lathe", "units": "mm",
+      "expected": [
+        { "preset": "calculator", "value": "25" },
+        { "preset": "is-b", "value": "0.25" },
+        { "preset": "is-c", "value": "0.25" }
+      ]
+    },
+    {
       "note": "the lathe inherits the same three presets and lists its own default first",
       "literal": "50", "class": "length", "decl": "lathe", "units": "mm",
       "expected": [
@@ -550,6 +741,10 @@
     { "note": "no machine: a point-less length has no value, and the readings say why", "literal": "50", "class": "length", "source": "profile", "input": "is-b", "decl": "fanuc", "units": "mm", "expected": { "value": null, "readings": ["is-b", "is-c", "calculator"] } },
     { "note": "no machine: a length with a point is settled, because every preset agrees", "literal": "50.", "class": "length", "source": "profile", "input": "is-b", "decl": "fanuc", "units": "mm", "expected": { "value": "50", "readings": [] } },
     { "note": "no machine: a feed is settled on the Fanuc presets", "literal": "155", "class": "feedPerMin", "source": "profile", "input": "is-b", "decl": "fanuc", "units": "mm", "expected": { "value": "155", "readings": [] } },
+    { "note": "M9 (WP9.5a): no machine: a point-less feed per revolution is not settled any more on the Fanuc presets", "literal": "25", "class": "feedPerRev", "source": "profile", "input": "is-b", "decl": "fanuc", "units": "mm", "expected": { "value": null, "readings": ["is-b", "is-c", "calculator"] } },
+    { "note": "M9: an IS-B machine reads it as 0.25 mm/rev", "literal": "25", "class": "feedPerRev", "source": "machine", "input": "is-b", "decl": "fanuc", "units": "mm", "expected": { "value": "0.25", "readings": [] } },
+    { "note": "M9: a calculator-input machine reads it as written", "literal": "25", "class": "feedPerRev", "source": "machine", "input": "calculator", "decl": "fanuc", "units": "mm", "expected": { "value": "25", "readings": [] } },
+    { "note": "M9: an inverse-time feed on the Fanuc presets has no reading, so nothing is settled and nothing is guessed", "literal": "125", "class": "inverseTime", "source": "profile", "input": "is-b", "decl": "fanuc", "units": "mm", "expected": { "value": null, "readings": ["is-b", "is-c", "calculator"] } },
     { "note": "no machine: a dwell is not", "literal": "2500", "class": "dwell", "source": "profile", "input": "is-b", "decl": "fanuc", "units": "mm", "expected": { "value": null, "readings": ["is-b", "is-c", "calculator"] } },
     { "note": "no machine on an Okuma: no length word has a value, with or without a point", "literal": "1000.", "class": "length", "source": "profile", "input": "okuma-1mm", "decl": "okuma", "units": "mm", "expected": { "value": null, "readings": ["okuma-1mm", "okuma-1um", "okuma-10um"] } },
     { "note": "a profile that declares nothing needs no machine: its JSON is the answer", "literal": "50", "class": "length", "source": "profile", "input": null, "decl": "klartext", "units": "mm", "expected": { "value": "50", "readings": [] } },

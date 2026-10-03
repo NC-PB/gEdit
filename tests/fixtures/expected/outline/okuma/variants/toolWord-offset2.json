@@ -1,0 +1,12 @@
+{
+  "profile": "okuma-osp",
+  "variants": {"toolWord":"offset2"},
+  "program": ["O0102","G00 T0101","G00 X50. Z2.","G71 U1. R0.5 T0405","T010203","G00 T0001","T2000","M02"],
+  "items": [
+    {"kind":"program","line":1,"text":"O0102","endLine":8},
+    {"kind":"tool","line":2,"text":"T1","tool":"01","endLine":4},
+    {"kind":"tool","line":5,"text":"T2","tool":"02","endLine":6},
+    {"kind":"tool","line":7,"text":"T20","tool":"20","endLine":8},
+    {"kind":"end","line":8,"text":"M02"}
+  ]
+}

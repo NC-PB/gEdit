@@ -1,0 +1,99 @@
+# The runtime harness (tests/runtime) on a GitHub-hosted macOS runner: the cumulative suite
+# m0..m9, 88 scenarios that drive the real app with native key and mouse events.
+#
+# Why not on every pull request: the job takes about 15 minutes of a macOS runner (the build
+# of the patched app alone is about two), it owns the runner's one screen for that time, and
+# macOS minutes are the scarce ones. It runs on every push to main (so a merge that breaks a
+# window, dialog or file behaviour shows up within the hour) and by hand from the Actions
+# tab (workflow_dispatch) when a pull request touches the window, dialogs, file handling or
+# keyboard handling and a maintainer wants the answer before merging.
+#
+# What the runner is: macOS 14 on arm64 with a live, unlocked desktop session, Accessibility
+# already granted to the job's shell, and bash as the login shell. The harness needs nothing
+# else (the spike behind this file found no harness change necessary). The owner's own Mac
+# stays the machine for the G7 budgets and for the newest macOS; this job proves the suite on
+# macOS 14 and catches a regression without anyone sitting at a Mac.
+
+name: Harness
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: harness-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Outside the checkout, so sync.sh's copy of the repository does not contain itself.
+  GEDIT_RH_DIR: ${{ github.workspace }}/../gedit-rh
+  # The runner's login shell is bash. The scenarios that need zsh pin it themselves; this is
+  # for the app's own shell lookup, which should see what the owner's Mac has.
+  SHELL: /bin/zsh
+
+jobs:
+  harness:
+    name: Runtime harness (macOS 14)
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # The patched app builds into $GEDIT_RH_DIR/target. Caching it (and the crate sources)
+      # takes the build from minutes to the app crate alone. The key follows the lock file,
+      # the toolchain-independent inputs of the patch, and the runner image.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ env.GEDIT_RH_DIR }}/target
+          key: harness-target-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml', 'tests/runtime/harness/**') }}
+          restore-keys: |
+            harness-target-${{ runner.os }}-${{ runner.arch }}-
+
+      - run: npm ci
+
+      - name: Sync (build the patched app)
+        run: |
+          mkdir -p "$RUNNER_TEMP/logs"
+          tests/runtime/sync.sh 2>&1 | tee "$RUNNER_TEMP/logs/sync.log"
+
+      # Exits non-zero on a FAIL or a BLOCKED; a pass on the retry is FLAKY and does not.
+      - name: Suite m0..m9
+        run: |
+          tests/runtime/suite.sh tests/runtime/suites/m{0,1,2,3,4,5,6,7,8,9}.txt 2>&1 | tee "$RUNNER_TEMP/logs/suite.log"
+          exit "${PIPESTATUS[0]}"
+        shell: bash
+
+      - name: Collect
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/collect/runs"
+          cp -R "$GEDIT_RH_DIR/out" "$RUNNER_TEMP/collect/out" 2>/dev/null || true
+          cp -R "$GEDIT_RH_DIR/logs" "$RUNNER_TEMP/collect/sync-logs" 2>/dev/null || true
+          for d in "$GEDIT_RH_DIR"/runs/*/; do
+            n=$(basename "$d")
+            mkdir -p "$RUNNER_TEMP/collect/runs/$n"
+            cp "$d"app.log "$RUNNER_TEMP/collect/runs/$n/" 2>/dev/null || true
+          done
+          cp -R "$RUNNER_TEMP/logs" "$RUNNER_TEMP/collect/ci-logs" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: harness-results
+          path: ${{ runner.temp }}/collect
+          if-no-files-found: warn

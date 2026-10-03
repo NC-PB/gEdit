@@ -1,0 +1,11 @@
+{
+  "note": "M9 (WP9.5b): a Sinumerik jump label whose name starts with N ('NEXT_PECK:') is a label like 'LAST_CUT:', not a block name: its block gets a number in front of the label, as the manual writes it (the label stands right after the block number). Before, the N of NEXT read as a block prefix and the line was skipped as a named block, while 'LAST_CUT:' was numbered.",
+  "profile": "sinumerik",
+  "options": { "start": 10, "step": 10 },
+  "expect": {
+    "summary": "ncNumbering.renumber.summary",
+    "skipped": [],
+    "warnings": [],
+    "preflight": null
+  }
+}

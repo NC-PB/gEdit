@@ -53,6 +53,7 @@
     "variables": "V\\d+",
     "systemVariables": "V[A-Z][A-Z0-9]{3}",
     "assignment": "[A-Z][A-Z0-9]{0,3}(?=\\s*=(?!=))",
+    "extendedAddresses": "[ADFIKLRSTUWXZ][AB]|BC|BR|QA|CL|C[PQR]|S[XYZ]|T[LDS]",
     "header": "^\\$[^%]*%",
     "continuationStart": "^[ \\t]*\\$(?![^\\r\\n]*%)",
     "names": "[A-Z]{2}[A-Z0-9]*",
@@ -182,7 +183,38 @@
     },
     "units": "mm",
     "diameter": "on",
-    "modalGroups": ["feedmode", "distance", "spindlemode"]
+    "modalGroups": ["feedmode", "distance", "spindlemode"],
+    "variants": [
+      {
+        "id": "toolWord",
+        "label": "Tool word: offset digits",
+        "default": "offset2",
+        "choices": [
+          {
+            "value": "offset2",
+            "label": "Two-digit offsets (up to 99): T0101 (default, verify)",
+            "overlay": {
+              "toolCall": {
+                "trigger": "(?<![A-Z])T\\d{4}(?:\\d{2})?(?!\\d)",
+                "ignore": "(?<![A-Z])(?:G0*(?:7[1-8]|18\\d)(?![\\d.])|T(?:\\d{2})?00\\d{2}(?!\\d))",
+                "tool": "(?<![A-Z])T(?:\\d{2}(?=\\d{4}(?!\\d)))?(?<tool>\\d{2})(?=\\d{2}(?!\\d))"
+              }
+            }
+          },
+          {
+            "value": "offset3",
+            "label": "Three-digit offsets (200 or more on the machine): T2000",
+            "overlay": {
+              "toolCall": {
+                "trigger": "(?<![A-Z])T(?:\\d{3,5}|\\d{7})(?!\\d)",
+                "ignore": "(?<![A-Z])(?:G0*(?:7[1-8]|18\\d)(?![\\d.])|T(?:0\\d{2,3}|00\\d{3}|\\d{2}00\\d{3})(?!\\d))",
+                "tool": "(?<![A-Z])T(?:\\d{2}(?=\\d{2}\\d{3}(?!\\d)))?(?<tool>\\d{2}(?=\\d{3}(?!\\d))|\\d(?=\\d{2,3}(?!\\d)))"
+              }
+            }
+          }
+        ]
+      }
+    ]
   },
   "toolList": { "description": "auto", "commentFilter": "^[-*=_\\s]*$", "dropLeadingZeros": true }
 }

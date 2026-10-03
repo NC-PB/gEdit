@@ -15,6 +15,8 @@ import { keyEvent, typeEvents } from './keys.js'
  * @property {string} home HOME of the app
  * @property {string} python interpreter the harness uses for GEDIT_PYTHON by default
  * @property {string} appVersion version in the synced package.json
+ * @property {boolean} [ci] the harness ran with `CI` set (a hosted runner): wall-clock budgets
+ *   that are measured on the owner's Mac get the CI factor of tests/unit/helpers/budget.ts
  * @property {boolean} [robust] false with `GEDIT_RH_ROBUST=0`: the activation gate and
  *   the frame-synced waits are off, so a run can be measured against the old harness
  */

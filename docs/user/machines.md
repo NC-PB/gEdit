@@ -97,22 +97,30 @@ A control can distinguish kinds of word, and gEdit follows it. The classes are:
 | Feed per minute | the feed word while feed per minute is in force | mm/min or in/min |
 | Feed per revolution | the feed word while feed per revolution is in force | mm/rev or in/rev |
 
-On the Fanuc presets that count increments the **feeds are read as written**: a 1 mm/min
-increment gives the same number either way, so `F155` is 155 mm/min whatever the
-decimal-point setting is. That is why the feed limits in the scaling script keep working
-even with no machine chosen. (Whether a control with calculator-type input off really reads
-a feed per revolution as written is one of the things the project has not been able to
-confirm — see
-[What gEdit assumes](#what-gedit-assumes-and-what-it-does-not-know).) On Okuma it is the
-other way round: the unit system scales the feeds too, and by a different factor for a feed
-per minute than for a feed per revolution.
+On the Fanuc presets that count increments, a feed written **without a point** is counted
+too, in its own unit: a feed per minute in steps of 1 mm/min (0.01 in/min), a feed per
+revolution in steps of 0.01 mm/rev (0.0001 in/rev). So `F155` is 155 mm/min whatever the
+decimal-point setting is, and `F25` as a feed per revolution is 0.25 mm/rev on IS-B or IS-C
+and 25 mm/rev with calculator-type input. A feed written with a point is read as written.
+That is why the feed limits in the scaling script keep working for a feed per minute even
+with no machine chosen, and why a point-less feed per revolution has **no value** until a
+machine says which reading applies (the two presets disagree by a factor of a hundred). The
+step sizes come from the control's two feed parameters at their documented defaults; they
+are marked "verify" with the preset. On Okuma the unit system scales the feeds too, and by a
+different factor for a feed per minute than for a feed per revolution.
+
+A feed is not always a feed in the unit that is in force. A thread cutting code's `F` is a
+lead, a feed per revolution, only where the code database says the `F` is a lead; a tapping
+cycle's `F` follows the feed unit in force (under `G94` it is a feed per minute). On Okuma,
+the `F` of `G101`–`G103` is a feed per minute whatever the feed mode is.
 
 Angles and dwells do not follow the metric/inch switch: degrees are degrees and seconds are
 seconds in an inch program too. On a lathe control that counts in thousandths, `C90000` is
 90° and `G04 X2500` is a dwell of 2.5 seconds — in a millimetre program and in an inch
-program alike. The Fanuc mill profile lists no angular words yet, so there `A`, `B` and `C`
-are read like lengths for now: on an IS-B mill `C90000` comes out as 90 mm, or as 9 inches
-in an inch program.
+program alike. The Fanuc mill lists `A`, `B` and `C` as angular words, so on an IS-B mill
+`C90000` is 90° as well, not 90 mm or 9 inches. The Okuma 10 µm preset has no inch reading
+at all (the control has no 10 µm inch system), so an inch value read with it has no value
+rather than an invented one.
 
 A few cycle parameters are counts of increments **whatever** the machine's general setting
 is: the µm depths and steps (`P`, `Q`) of the Fanuc lathe's `G74`, `G75`, `G76`, `G83` and
@@ -154,8 +162,8 @@ What that leaves with a value depends on the dialect:
 
 | | With a value, even with no machine | Without a value until you choose a machine |
 |---|---|---|
-| Fanuc mill | every word written with a point; feeds | point-less lengths and dwells (`X50`, `G04 X2500`), `A`/`B`/`C` among the lengths; the `Q` of `G73`/`G83` has no value with any machine |
-| Fanuc lathe | every word written with a point; feeds | point-less lengths, angles and dwells (`X50`, `C90000`, `G04 X2500`), and the cycle steps counted in microns (`G83 … Q6000`, `G74`/`G75` `P`/`Q`, `G76 Q`) |
+| Fanuc mill | every word written with a point; point-less feeds per minute | point-less lengths, angles and dwells (`X50`, `C90000`, `G04 X2500`), point-less feeds per revolution; the `Q` of `G73`/`G83` has no value with any machine |
+| Fanuc lathe | every word written with a point; point-less feeds per minute | point-less lengths, angles and dwells (`X50`, `C90000`, `G04 X2500`), point-less feeds per revolution, and the cycle steps counted in microns (`G83 … Q6000`, `G74`/`G75` `P`/`Q`, `G76 Q`) |
 | Okuma OSP lathe | nothing that has a unit: no length, feed, angle or dwell | every length, feed, angle and dwell, `X64.` included |
 | Sinumerik 840D (turning) | every word: the control's own language reads a number as written, with or without a point | nothing |
 
@@ -189,9 +197,11 @@ that machine.
 | **Name** | What the status bar and the picker call it. Yours to choose, up to 64 characters and different from every other machine's name, capitals aside: "Lathe 2", "Mill 3", "the old one" |
 | **How the control reads numbers** | One of the dialect's presets — on Okuma, the control's unit system; Sinumerik has only one. Every preset's name says what it does to a word with and without a point, so you can pick it without knowing the jargon |
 | **Units at power-on** | Millimetres or inches — what the control measures in until the program says otherwise |
-| **X and U are diameters at power-on** (Fanuc lathe), **X is a diameter at power-on** (Okuma, Sinumerik) | Turning only. Off for a control set to radius programming. The label names the dialect's diameter words, and on Sinumerik this is the diameter programming (`DIAMON`) a program starts with |
+| **X and U are diameters at power-on** (Fanuc lathe), **X is a diameter at power-on** (Okuma, Sinumerik turning and milling) | Off for a control set to radius programming. The label names the dialect's diameter words, and on Sinumerik this is the diameter programming (`DIAMON`) a program starts with; it defaults to on for turning and to off for the Sinumerik milling profile |
 | **G-code system** | Fanuc lathe only: A or B. See [the Fanuc lathe](#the-fanuc-lathe) |
-| **Feed mode**, **Spindle-speed mode**, **Plane** and **Positioning at power-on** | What is in force before the program sets it, as far as the dialect offers them — Fanuc mill: feed mode, positioning, plane; Fanuc lathe: feed mode, spindle-speed mode, plane; Okuma: feed mode, positioning, spindle-speed mode; Sinumerik: feed mode (the feed type), plane, positioning. "Dialect default" leaves it to the profile |
+| **U, W, V and H move incrementally** | Fanuc lathe only: *U and W* (the default), *U, W, V and H*, or *none*. See [the Fanuc lathe](#the-fanuc-lathe) |
+| **Tool word: offset digits** | Fanuc lathe and Okuma: how a `T` word splits into station and offset. See [the Fanuc lathe](#the-fanuc-lathe) and [Okuma](#okuma-the-unit-system-scales-every-number) |
+| **Feed mode**, **Spindle-speed mode**, **Plane** and **Positioning at power-on** | What is in force before the program sets it, as far as the dialect offers them — Fanuc mill: feed mode, positioning, plane; Fanuc lathe: feed mode, spindle-speed mode, plane; Okuma: feed mode, positioning, spindle-speed mode; Sinumerik turning and milling: feed mode (the feed type), plane, positioning. "Dialect default" leaves it to the profile |
 | **Notes** | Your own note, up to 500 characters. gEdit only stores it |
 
 The feed modes a Fanuc lathe is offered follow its G-code system: `G98`/`G99` in A,
@@ -310,8 +320,26 @@ what it settled on: "detected in this program" when the program pointed clearly 
 wins over what the text looks like.**
 
 **The tool word changes the tool.** A turret lathe has no `M6`: a `T` word is station plus
-offset, and a `T…00` offset cancel is not a change. That is a rule of the dialect, not of the
-machine — see [dialects.md](dialects.md#the-fanuc-iso-lathe-profile).
+offset, and a `T…00` offset cancel is not a change — see
+[dialects.md](dialects.md#the-fanuc-iso-lathe-profile). How many of the digits are the
+offset depends on the machine's tool offset memory, so it is a setting:
+
+| *Tool word: offset digits* | `T0101` | `T12` | `T1001` |
+|---|---|---|---|
+| **The last two digits** (the default, verify) | station 1, offset 01 | the station alone | station 10, offset 01 |
+| The last digit | station 010, offset 1 | station 1, offset 2 | station 100, offset 1 |
+| The last three digits | station 0, offset 101 | the station alone | station 1, offset 001 |
+
+A word whose offset is all zeros (`T0100`, `T120` under the last-digit reading) cancels the
+offset and is no tool change, in every reading.
+
+**Which words are incremental.** `U` and `W` are the incremental twins of `X` and `Z` in
+G-code system A, where `G90`/`G91` are cycles, and the documented default is that they are in
+system B as well. Some system-B machines do not accept them, and a lathe with a Y axis may
+also use `V` (for `Y`) and `H` (for `C`). *U, W, V and H move incrementally* has three
+choices: *U and W* (the default, verify), *U, W, V and H*, and *none* — `G91` is then the only
+incremental mode, and `U` is no longer an incremental diameter. The choice decides what a
+script or a check makes of those words; a program is never rewritten by it.
 
 **A feed can be a thread lead.** In a threading or tapping cycle the `F` word carries a lead
 rather than a feed rate, and scaling it cuts a different thread. Which codes those are
@@ -379,6 +407,14 @@ is known to run correctly on that machine: a 64 mm diameter written as `X64` or 
 1 mm machine, `X6400` a 10 µm machine and `X64000` a 1 µm machine. Do not find out by
 moving the machine.
 
+**Tool word: offset digits.** A machine with up to 99 tool offsets writes a tool as
+station plus a two-digit offset (`T0101`); the default is that reading, marked "verify", and
+the owner's lathes use two or three of about 64 offsets. A machine with 200 or more offsets
+writes the offset with three digits, and `T2000` is then station 2 and not tool 20: choose
+*Three-digit offsets*. Under that reading a word has three, four, five or seven digits
+(`T100`, `T2000`, `T12345`, `T0102003`); a six-digit word fits neither split and is not read
+as a tool change.
+
 The other Okuma parameters are simpler: **X is a diameter**, in incremental mode too, and
 the profile assumes the state after a reset that the manual describes — feed per revolution
 (`G95`) and absolute positions (`G90`). The form also offers **Spindle-speed mode at
@@ -411,8 +447,13 @@ machine chosen. A program written for the control's ISO mode is Fanuc-style code
 usually opens with a Fanuc profile, whose presets cover the increment readings; if the
 status bar says Sinumerik, change it by hand.
 
-**Power-on state.** The profile assumes the turning plane (`G18`) and feed per revolution
-(`G95`). Both are machine data on the control, and both can be corrected per machine, under
+**Sinumerik milling.** The milling profile has the same parameters. Its diameter setting
+defaults to off, and it assumes the plane `G17` and feed per minute (`G94`) at power-on, where
+the turning profile assumes `G18` and `G95`. The tool word is not a setting: `M6` changes the
+tool and a `T` alone preselects.
+
+**Power-on state.** The turning profile assumes the turning plane (`G18`) and feed per
+revolution (`G95`). Both are machine data on the control, and both can be corrected per machine, under
 **Feed mode at power-on** and **Plane at power-on**; the positioning (`G90`/`G91`) under
 **Positioning at power-on**. On this control the constant cutting speed is part of the feed
 type — `G96` is a feed per revolution with a cutting speed, `G961` the same with a feed per
@@ -450,7 +491,7 @@ It is plain JSON and hand-editing is supported:
         "numberInput": { "mode": "calculator", "incrementMm": "0.001" },
         "units": "mm",
         "diameter": "on",
-        "variants": { "gcodeSystem": "B" },
+        "variants": { "gcodeSystem": "B", "incrementalAddresses": "uw", "toolWord": "offset2" },
         "modalInitial": { "feedmode": "G95" }
       },
       "notes": "The big chuck; set up for G-code system B."
@@ -479,6 +520,10 @@ It is plain JSON and hand-editing is supported:
   "defaults": { "fanuc-lathe": "lathe-2", "okuma-osp": "lathe-3" }
 }
 ```
+
+A machine made on the Machines page stores every variant (the G-code system, the `U`/`W`
+choice and the tool word for a Fanuc lathe); one written by hand may name only some of them,
+and the profile's default fills the rest.
 
 A machine stores the whole rule set of the preset it was given — the first machine above is
 what the Fanuc lathe's "As written" preset writes, the second what "Unit 10 µm, metric
@@ -549,14 +594,16 @@ against a machine on a shop floor. Until a machine sets a value, the status item
 shows it as "dialect default, assumed" — or, for a G-code system read off the program, as
 "detected in this program".
 
-| | Fanuc (ISO) mill | Fanuc (ISO) lathe | Okuma OSP lathe | Sinumerik 840D (turning) |
-|---|---|---|---|---|
-| How numbers are read | Increments of 0.001 mm (IS-B); feeds and speeds as written | Positions as written; cycle parameters in microns | Unit 1 mm: everything as written | As written |
-| Other presets offered | Increments of 0.0001 mm (IS-C); as written | Increments of 0.001 mm (IS-B); increments of 0.0001 mm (IS-C) | Unit 1 µm; Unit 10 µm (metric only) | none: the control's own language has only this reading |
-| Units at power-on | Millimetres | Millimetres | Millimetres | Millimetres |
-| X is a diameter | not a parameter of this dialect | on (`X` and `U`) | on | on (`DIAMON`) |
-| G-code system | not a parameter of this dialect | A | not a parameter of this dialect | not a parameter of this dialect |
-| Power-on codes | feed per minute (`G94`) | feed per revolution (`G99`), direct rpm (`G97`), ZX plane (`G18`) | feed per revolution (`G95`), absolute (`G90`); no spindle-speed mode | feed per revolution (`G95`), ZX plane (`G18`) |
+| | Fanuc (ISO) mill | Fanuc (ISO) lathe | Okuma OSP lathe | Sinumerik 840D (turning) | Sinumerik 840D (milling) |
+|---|---|---|---|---|---|
+| How numbers are read | Increments of 0.001 mm (IS-B); point-less feeds in 1 mm/min and 0.01 mm/rev | Positions as written; cycle parameters in microns | Unit 1 mm: everything as written | As written | As written |
+| Other presets offered | Increments of 0.0001 mm (IS-C); as written | Increments of 0.001 mm (IS-B); increments of 0.0001 mm (IS-C) | Unit 1 µm; Unit 10 µm (metric only) | none: the control's own language has only this reading | none |
+| Units at power-on | Millimetres | Millimetres | Millimetres | Millimetres | Millimetres |
+| X is a diameter | not a parameter of this dialect | on (`X` and `U`) | on | on (`DIAMON`) | off |
+| G-code system | not a parameter of this dialect | A | not a parameter of this dialect | not a parameter of this dialect | not a parameter of this dialect |
+| `U`, `W`, `V`, `H` incremental | not a parameter of this dialect | `U` and `W` (verify) | not a parameter of this dialect | not a parameter of this dialect | not a parameter of this dialect |
+| Tool word: offset digits | not a parameter of this dialect | the last two digits (verify) | two-digit offsets (verify) | not a parameter of this dialect | not a parameter of this dialect |
+| Power-on codes | feed per minute (`G94`) | feed per revolution (`G99`), direct rpm (`G97`), ZX plane (`G18`) | feed per revolution (`G95`), absolute (`G90`); no spindle-speed mode | feed per revolution (`G95`), ZX plane (`G18`) | feed per minute (`G94`), XY plane (`G17`) |
 
 Known soft spots in that table, said plainly:
 
@@ -568,11 +615,15 @@ Known soft spots in that table, said plainly:
   steps still counted in microns — taken from turning manuals that write `G0 X40 W-40` for
   40 mm and `G4 U2` for two seconds. It is a reading of those manuals, not a measurement,
   and it is exactly the sort of thing to confirm per machine.
-- Whether a control counting increments reads a **feed per revolution** as written or in
-  increments is not settled in the notes. gEdit assumes as written, and both increment
-  presets say so in their own name — it is the assumption the smallest and largest feed of
-  the scaling script are measured against, so it has to be visible before you rely on
-  those limits.
+- The **point-less feeds** of the two Fanuc increment presets — 1 mm/min per step for a feed
+  per minute and 0.01 mm/rev for a feed per revolution — are the documented defaults of the
+  control's two feed parameters. A control with those parameters changed, or with the
+  option that counts feeds in thousandths, reads them differently; gEdit has no setting for
+  that yet. Both presets say it in their own name.
+- The **`U`/`W` choice** and the **tool word** defaults follow the documented default of both
+  G-code systems and the usual two-digit offset; the project has no machine data for them and
+  marks both "verify". The Okuma default of two-digit offsets matches the owner's lathes,
+  which use two or three of about 64 offsets.
 - The **Okuma default of 1 mm** is the one of the three unit systems that reads a program
   the way it looks. It is **not** known to be what your Okuma machines are set to, and it
   is still to be checked. The metric values inside the three presets come from the unit

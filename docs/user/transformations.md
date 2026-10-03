@@ -133,6 +133,16 @@ points into it just as well. Such a jump is outside the lines the run may change
 **not** rewritten: you are asked first, and afterwards it is listed as a warning. The same
 goes for a jump below the selection. Renumber the whole program, or fix the jump by hand.
 
+##### Main blocks and labels on Sinumerik
+
+A main block, `:20 G1 X10`, is numbered like any other block: renumbering keeps its colon
+and gives it the next number of the same count (`:110`). A jump that names it by its colon,
+`GOTOF :20`, is rewritten with it. `GOTOF N20` names an ordinary `N20` only, never the main
+block `:20`, so it is reported as missing when there is no `N20`. A jump written without a
+blank, `GOTOF:20`, is read as a label and is not followed; leave a blank after the jump word.
+A label that starts with `N`, such as `NEXT_PECK:`, gets a block number in front of it
+(`N20 NEXT_PECK:`) like any other label.
+
 ##### Numbers or names
 
 A Fanuc or Sinumerik control reads a block number as a number: `N0100` and `N100` are the
@@ -181,7 +191,12 @@ on: with it, a program comes out clean except for the handful of blocks that hav
 their numbers, and each of those is listed in Results with the reason.
 
 Switch it off and every number goes. Then you are asked first, and afterwards every line in
-the run that points at a block number is listed so you can fix the jumps by hand.
+the run that points at a block number is listed so you can fix the jumps by hand. (A jump to
+a Sinumerik main block, `GOTOB :20`, is counted in the question but gets no line of its own
+in that list yet.)
+
+On Sinumerik a main block, `:20`, that a jump names (`GOTOF :20`) is one of the numbers that
+stay; a main block nobody names loses its number like the others.
 
 There is one pointer the option cannot keep: a **computed** jump such as `GOTO #100` works
 its target out while the program runs, so there is no number to hold on to and that block
@@ -258,9 +273,12 @@ on), and the run warns that the program needs renumbering and offers to do it. A
 continuation `~` behind a comment survives: `12 ; SETUP ~` becomes `12 ~`, and the block
 stays one block.
 
-On Sinumerik a `;$PATH=…` line is a comment like any other and goes with the rest; keep it
-with **Keep comments in the first lines** if your programs travel in the control's
-transfer format, which uses it.
+On Sinumerik a whole-line comment such as `;$PATH=/_N_MPF_DIR`, which the control's transfer
+format uses to file the program in its folder, is part of the file header and is always kept,
+whatever the options say, and listed in Results as kept ("Comment kept: it is inside the
+header"). The same text behind code is an ordinary comment. The rule is general: a whole-line
+comment that the dialect's detection treats as a decisive mark of the dialect stays, because
+removing it would also remove what identifies the file.
 
 Every comment that was kept is listed in Results with the reason.
 
@@ -279,7 +297,7 @@ the lower-case original — check a program that calls another by name before co
 | **Convert to** | **UPPER CASE** (the default) or **lower case** |
 | **Leave comments as they are** | On by default. Tool names and other text in quotes in the code are always left alone |
 
-It runs on all five shipped dialects; a profile that declares upper and lower case to be
+It runs on all six shipped dialects; a profile that declares upper and lower case to be
 different code refuses it. Lower case asks first on the two Fanuc profiles, whose controls
 read only upper case: such a program may be refused when it is loaded.
 

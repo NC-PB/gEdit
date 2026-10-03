@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// gedit
 # name = "Scale feed rates"
-# description = "Multiplies F values by a percentage. Thread pitches, rapid moves, feeds written as variables and feeds under a code the database does not know are left alone and reported."
+# description = "Multiplies F values by a percentage, an F written in a rapid block included: it is the feed of the moves after it. Thread leads and tapping feeds, rapid keywords such as FMAX, feeds written as variables and feeds under a code the database does not know are left alone and reported."
 # input = "selection-or-document"
 # output = "replace"
 # envelope = true
@@ -61,6 +61,18 @@
 # label = "Only feeds below"
 # help = "Feeds at or above this value are left as they are."
 # required = false
+#
+# [[params]]
+# id = "limitUnit"
+# type = "choice"
+# label = "The limits are in"
+# help = "Which feeds the smallest and largest feed and the two filters above are compared with. A feed in another unit is scaled without the smallest and largest feed, and left as it is while a filter is set, and the run says so: a largest feed of 0.3 meant per revolution must never lower a feed per minute, nor a smallest feed of 100 per minute raise a feed per revolution. Automatically means per revolution on a turning profile and per minute on a milling profile."
+# default = "auto"
+# choices = [
+#   { label = "Automatically (per revolution when turning)", value = "auto" },
+#   { label = "Feed per minute", value = "per-minute" },
+#   { label = "Feed per revolution", value = "per-rev" }
+# ]
 #
 # [[params]]
 # id = "perRevolution"
@@ -216,11 +228,37 @@ written back into the word's own form with `gedit_nc.write_back`, so a point-les
 point-less. `gedit_nc.machine_params` answers the profile's own defaults for a document with
 no machine, and the run's summary always says which of the two it used.
 
-Where a word has **no** value — it has no class at all (a Klartext feed per tooth, an
-inverse-time feed), or no machine is chosen and the profile's presets do not read it alike
-(AD-31, "No machine, no guess") — the feed is still scaled as a count, the limits are not
-applied to it, and the run says so. Guessing the value there is how a feed ends up a
-thousand times too large.
+The limits are also **in one feed unit** (M9, `limitUnit`): per revolution on a turning
+profile and per minute on a milling one, unless the run says otherwise. A feed in another
+unit is scaled without the smallest and largest feed and reported. A largest feed of 0.3
+typed for the turning feeds lowered every `G98 F200` of the same program to `F0.3`, and a
+smallest feed of 100 raised a feed per revolution to 100 mm/rev — a number in the right range for the wrong unit is the
+most dangerous kind there is. The unit of a feed is its number class
+(`gedit_nc.number_class_of`): the feed mode in force, or what the code database declares
+for the code of the block or the move in force (Okuma `G101`-`G103` cut at a feed per
+minute whatever the feed mode is).
+
+Where a word has **no** value — it has no class at all, or no machine is chosen and the
+profile's presets do not read it alike (AD-31, "No machine, no guess"; on the Fanuc presets
+a point-less feed per revolution is 0.25 mm/rev in increments and 25 as written, M9) — the
+feed is still scaled as a count, the limits are not applied to it, and the run says so.
+Guessing the value there is how a feed ends up a thousand times too large.
+
+The two filters are different (M9 review NC-F1). "Only feeds above" and "only feeds below"
+say **which** feeds are scaled, so a feed they cannot be compared with — one in another
+unit, or one with no value — is left exactly as written and reported, whether or not a
+smallest or largest feed is also set. Letting it through scaled every `G98 F200` of a
+program whose filter said "only feeds below 0.3 mm/rev".
+
+A profile-range cycle with no range
+-----------------------------------
+A cycle whose database entry runs the profile between a `P` and a `Q` block (the Fanuc
+lathe roughing cycles `G71`, `G72` and `G73`) carries its feed in the block that names that
+range: a Fanuc `G71` always writes `P`/`Q` or `U…R`. The same `G71 X… Z… F2.` without a `P`
+is an Okuma thread cycle, whose `F` is the lead. A program detected as the wrong one of the
+two — and nothing else in the block says which — had its lead multiplied. So while no
+machine confirms the dialect (the document has none chosen), the `F` of such a block
+without a `P` is left and reported; with a machine of this profile chosen it is scaled.
 
 Everything outside the values it scales — line endings, encoding, the trailing newline,
 spacing, block numbers, skip marks and comments — is handed back byte for byte, because
@@ -253,6 +291,9 @@ PER_REVOLUTION_ADDRESSES = ("FU", "FZ")
 MODE_TEXT = {
     "G95": "a feed per revolution",
     "G93": "an inverse-time feed",
+    # M9 review F8: Sinumerik `G931`. Its F is a time, so scaling it would move the other
+    # way; no option scales it.
+    "G931": "a travel time, not a feed rate",
     "FU": "a feed per revolution",
     "FZ": "a feed per tooth",
 }
@@ -260,17 +301,36 @@ MODE_TEXT = {
 #: The modes whose text carries the code in force. The Klartext modes are addresses: the
 #: word in the finding already spells them out (`FU0.12`), so a code in brackets would only
 #: repeat it.
-CODE_IN_TEXT = ("G93", "G94", "G95")
+CODE_IN_TEXT = ("G93", "G94", "G95", "G931")
 
 #: The modes each option covers.
 PER_REVOLUTION_MODES = ("G95", "FU", "FZ")
+
+#: M9: the number class of the feeds the limits are in, per `limitUnit` choice.
+LIMIT_CLASS = {"per-minute": "feedPerMin", "per-rev": "feedPerRev"}
+
+#: What a finding calls a feed of a number class (`gedit_nc.number_class_of`).
+CLASS_TEXT = {
+    "feedPerMin": "a feed per minute",
+    "feedPerRev": "a feed per revolution",
+    "feedPerTooth": "a feed per tooth",
+    "inverseTime": "an inverse-time feed",
+}
+
+#: The limits' unit, as a finding names it.
+LIMIT_TEXT = {"feedPerMin": "per minute", "feedPerRev": "per revolution"}
+
+#: M9: the feed mode a code's declared feed class puts the word in, whatever mode is in
+#: force (Okuma `G101` cuts at a feed per minute under `G95`). A declared lead is a
+#: thread and never reaches the mode question.
+MODE_OF_CLASS = {"feedPerMin": "G94"}
 INVERSE_TIME_MODES = ("G93",)
 
 #: A `FeedModeTracker.feed_mode` as the §7.1 feed unit the number rules think in. The
 #: tracker answers in Phase 1's names — per revolution is `'G95'` whatever code the dialect
 #: writes — and `gedit_nc.number_class_of` wants the unit. Klartext's `FU` / `FZ` are not
 #: here: they are addresses, and the profile's `addresses.feedUnitWords` says what they mean.
-UNIT_OF_MODE = {"G93": "inverse-time", "G94": "per-minute", "G95": "per-rev"}
+UNIT_OF_MODE = {"G93": "inverse-time", "G94": "per-minute", "G95": "per-rev", "G931": "travel-time"}
 
 #: A cycle parameter whose code-database label names it a feed. The label is display text
 #: out of the database we ship, and this only decides what is **listed**: a cycle
@@ -437,12 +497,39 @@ class Params:
         )
         self.inverse_time = values.get("inverseTime") is True
 
+        # M9: the unit the four limit values are in. "Automatically" follows the profile as
+        # the per-revolution option does: the turning feeds of a lathe, the per-minute
+        # feeds of a mill.
+        limit_unit = values.get("limitUnit")
+        self.limit_choice = limit_unit if limit_unit in ("auto", "per-minute", "per-rev") else "auto"
+        unit = self.limit_choice if self.limit_choice != "auto" else ("per-rev" if self.lathe else "per-minute")
+        self.limit_class = LIMIT_CLASS[unit]
+
         #: True while a limit or a filter is set: only then does the run need to know what
         #: a value is **worth**, and only then does it pay for working it out.
         self.has_limits = any(
             limit is not None
             for limit in (self.min_feed, self.max_feed, self.only_above, self.only_below)
         )
+        #: True while "only feeds above" or "only feeds below" is set. A filter decides
+        #: **whether** a feed is scaled, so a feed it cannot be compared with is left as
+        #: written; the smallest and largest feed only bound a scaled one (NC-F1).
+        self.has_filter = self.only_above is not None or self.only_below is not None
+
+    def filter_text(self) -> str:
+        """The filter the run set, as a finding names it: ``"only feeds below" value (0.3)``."""
+        if self.only_above is not None and self.only_below is not None:
+            return '"only feeds above" and "only feeds below" values (%s and %s)' % (
+                trim(self.only_above),
+                trim(self.only_below),
+            )
+        if self.only_above is not None:
+            return '"only feeds above" value (%s)' % trim(self.only_above)
+        return '"only feeds below" value (%s)' % trim(self.only_below)
+
+    def filter_verb(self) -> str:
+        """``is`` for one filter, ``are`` for both."""
+        return "are" if self.only_above is not None and self.only_below is not None else "is"
 
     def format_for(self, token: gedit_nc.Token) -> Tuple[Dict[str, Any], bool]:
         """The number format for this value, and whether it had to be kept whole.
@@ -564,14 +651,20 @@ class Reading:
         token: gedit_nc.Token,
         tracker: gedit_nc.FeedModeTracker,
         entries: Sequence[Dict[str, Any]],
+        in_force: Sequence[Dict[str, Any]] = (),
     ) -> Optional[str]:
-        """The §7.15 number class of this feed word in this block, or ``None``."""
+        """The §7.15 number class of this feed word in this block, or ``None``.
+
+        ``in_force`` are the entries of the move, the cycle and the mode in force that the
+        block does not write (M9): what they declare for the feed word holds here too.
+        """
         return gedit_nc.number_class_of(
             token.address or "",
             self.profile,
             self.unit_of(feed_mode_of(token, tracker)),
             entries,
             tracker.pitch_feed,
+            list(in_force),
         )
 
     def resolve(
@@ -677,14 +770,30 @@ def block_entries(
     return out
 
 
+def last_motion(entries: Sequence[Dict[str, Any]], motion: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """The motion code in force after a block: the last one it writes, else the one before.
+
+    A modal move is the active code of the motion group until another replaces it (AD-19
+    rule 1); a one-shot cycle of the group does not stay in force.
+    """
+    for entry in entries:
+        if entry.get("group") == "motion" and entry.get("modal") is True:
+            motion = entry
+    return motion
+
+
 def assignment_word(token: gedit_nc.Token) -> bool:
     """True for an address written with `=` (plan §7.5): `F=R1`, `SB=1200`, `M3=3`.
 
     The address is exactly what stands in front of the `=`, so such a word is a value and
-    never a code; `F=R1` is the feed word with a value that is not a number.
+    never a code; `F=R1` is the feed word with a value that is not a number. An indexed
+    one (`M[2]=3`, `FA[X]=100`, `syntax.assignmentIndex`) is one too, though its text in
+    front of the `=` carries the bracket (M9 review F1).
     """
     if token.kind != "word" or not token.address:
         return False
+    if token.index is not None:
+        return True
     head, sep, _ = token.text.partition("=")
     return sep == "=" and head.strip().upper() == token.address.upper()
 
@@ -768,6 +877,11 @@ class Counts:
         self.whole_line = 0
         #: Scaled, but with no settled value, so no limit was applied to it (AD-31).
         self.unresolved = 0
+        #: M9: scaled, but in another feed unit than the limits, so they were not applied.
+        self.other_unit = 0
+        #: Left as written: a value filter is set and cannot be compared with the feed
+        #: (another unit, or no settled value), NC-F1.
+        self.filter_unknown = 0
         #: Left alone because the run would have written a zero feed.
         self.zero = 0
         #: The value was already zero or negative: a limit bounds a feed, it does not
@@ -1203,6 +1317,99 @@ def pitch_code_of(entries: Sequence[Dict[str, Any]], tracker: gedit_nc.FeedModeT
     return tracker.active_cycle or tracker.pitch_mode
 
 
+def lead_addresses(entry: Optional[Dict[str, Any]], feed_address: str) -> List[str]:
+    """The words a thread code takes its lead from, where that is not the feed word.
+
+    M9 (WP9.5a): the database declares a lead as a parameter whose unit is a feed per
+    revolution. A code that declares one under other addresses only (Sinumerik `G33`,
+    `G331`, `G332`: I, J or K) does not cut with its F, so its F is no pitch. Empty when the
+    code declares its F a lead, declares no lead at all (a tap: its F **is** tied to the
+    pitch), or is not known.
+    """
+    if not isinstance(entry, dict):
+        return []
+    leads = [
+        param.get("address")
+        for param in entry.get("params") or []
+        if isinstance(param, dict) and param.get("unit") == "feedPerRev" and isinstance(param.get("address"), str)
+    ]
+    if any(address.upper() == feed_address.upper() for address in leads):
+        return []
+    return leads
+
+
+def or_list(words: Sequence[str]) -> str:
+    """``K`` / ``I or K`` / ``I, J or K``."""
+    if len(words) <= 1:
+        return words[0] if words else ""
+    return "%s or %s" % (", ".join(words[:-1]), words[-1])
+
+
+def declared_feed_class(
+    token: gedit_nc.Token, entries: Sequence[Dict[str, Any]], in_force: Sequence[Dict[str, Any]]
+) -> Optional[str]:
+    """The class a code of the block, or else one in force, declares for this feed word."""
+    address = (token.address or "").upper()
+    for group in (entries, in_force):
+        for entry in group:
+            for param in entry.get("params") or []:
+                if not isinstance(param, dict):
+                    continue
+                written = param.get("address")
+                if isinstance(written, str) and written.upper() == address and isinstance(param.get("unit"), str):
+                    return param["unit"]
+    return None
+
+
+def profile_range_code(entries: Sequence[Dict[str, Any]]) -> Optional[str]:
+    """The code of a cycle in this block that runs a profile between a P and a Q block.
+
+    The database says which (M9): a cycle entry that declares both ``P`` and ``Q`` as block
+    numbers (``unit: 'count'``) and a feed — the Fanuc lathe roughing cycles `G71`-`G73`.
+    """
+    for entry in entries:
+        if entry.get("group") != "cycle":
+            continue
+        units = {
+            param.get("address"): param.get("unit")
+            for param in entry.get("params") or []
+            if isinstance(param, dict)
+        }
+        if units.get("P") == "count" and units.get("Q") == "count" and "F" in units:
+            code = entry.get("code")
+            if isinstance(code, str) and code != "":
+                return code
+    return None
+
+
+def writes_address(tokens: Sequence[gedit_nc.Token], address: str) -> bool:
+    """True when the block writes a word under ``address`` (a plain one, not ``P=…``)."""
+    return any(
+        token.kind == "word" and (token.address or "").upper() == address and not assignment_word(token)
+        for token in tokens
+    )
+
+
+def codes_in_force(
+    tracker: gedit_nc.FeedModeTracker, motion: Optional[Dict[str, Any]], entries: Sequence[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """The entries in force that this block does not write: the move, the cycle, the mode.
+
+    What a code declares for its parameters holds in the blocks it is in force for (M9,
+    `gedit_nc.number_class_of`): the per-minute feed of an Okuma `G101` in the lines that
+    follow it, the lead of a thread pass repeated with a new X.
+    """
+    out: List[Dict[str, Any]] = []
+    for entry in (
+        motion,
+        tracker.entry(tracker.active_cycle) if tracker.active_cycle else None,
+        tracker.entry(tracker.pitch_mode) if tracker.pitch_mode else None,
+    ):
+        if isinstance(entry, dict) and entry not in out and not any(entry is own for own in entries):
+            out.append(entry)
+    return out
+
+
 def readings_text(readings: Sequence[Dict[str, Any]]) -> str:
     """``0.050 mm (increments of 0.001 mm) or 50 mm (as written)``, for a finding.
 
@@ -1230,8 +1437,14 @@ def scale_token(
     findings: Findings,
     counts: Counts,
     unknown: Optional[str] = None,
+    in_force: Sequence[Dict[str, Any]] = (),
+    tokens: Sequence[gedit_nc.Token] = (),
 ) -> Optional[Tuple[int, int, str]]:
-    """The edit this feed word needs, or ``None`` — with a finding when it is left alone."""
+    """The edit this feed word needs, or ``None`` — with a finding when it is left alone.
+
+    ``in_force`` are the database entries of the move, the cycle and the mode in force that
+    this block does not write (:func:`codes_in_force`), ``tokens`` the block's own tokens.
+    """
     word = token.text.strip()
 
     if token.value is None or token.value_text is None:
@@ -1240,12 +1453,29 @@ def scale_token(
         return None
 
     if tracker.pitch_feed:
+        code = pitch_code_of(entries, tracker)
+        elsewhere = lead_addresses(tracker.entry(code) if code else None, token.address or "")
+        if elsewhere:
+            # M9 (WP9.5a): a thread code whose lead is a word of its own (Sinumerik `G33`,
+            # `G331`, `G332`: I, J or K). Its F is no pitch; the control does not cut the
+            # thread with it, and it stays the feed in force afterwards. It is still left,
+            # because nothing here can tell a thread written that way from one whose F the
+            # dialect makes the lead; the finding says what it is and where to look.
+            counts.skip("thread")
+            findings.add(
+                line,
+                "warning",
+                "%s is not scaled: %s takes its lead from %s, not from F, and does not cut "
+                "with this F, which stays the feed in force for the blocks after the thread. "
+                "Check those feeds by hand." % (word, code, or_list(elsewhere)),
+            )
+            return None
         counts.skip("pitch")
         findings.add(
             line,
             "warning",
             "%s is a thread pitch (%s), not a feed rate, so it is not scaled: scaling it "
-            "would cut a different thread." % (word, pitch_code_of(entries, tracker)),
+            "would cut a different thread." % (word, code),
         )
         return None
 
@@ -1281,7 +1511,28 @@ def scale_token(
         )
         return None
 
+    # M9 (WP9.5a, the last "Next up" item): a Fanuc lathe roughing cycle carries its feed
+    # with its profile range, and the same code without one is an Okuma thread cycle whose
+    # F is the lead. Only a machine confirms which dialect the program was written for.
+    range_code = profile_range_code(entries)
+    if range_code is not None and not reading.chosen and not writes_address(tokens, "P"):
+        counts.skip("range")
+        findings.add(
+            line,
+            "warning",
+            "%s is not scaled: %s is a cycle that runs the profile between its P and Q "
+            "blocks here, and this block names no P. On another control the same code is a "
+            "thread cycle whose F is the lead, and no machine is chosen to confirm the "
+            "dialect. Choose a machine for the document, or scale the block by hand if it "
+            "really is a feed." % (word, range_code),
+        )
+        return None
+
     mode = feed_mode_of(token, tracker)
+    # A code that declares the unit of its feed decides the mode (Okuma `G101`: per minute
+    # whatever the feed mode in force says).
+    if token.address not in PER_REVOLUTION_ADDRESSES:
+        mode = MODE_OF_CLASS.get(declared_feed_class(token, entries, in_force) or "", mode)
     if not params.scales(mode):
         counts.skip("mode:" + mode)
         findings.add(line, "info", "%s is %s, so it is not scaled." % (word, reading.mode_text(mode)))
@@ -1296,24 +1547,63 @@ def scale_token(
     number_class = None
     effective: Optional[Decimal] = None
     if params.has_limits:
-        number_class = reading.number_class(token, tracker, entries)
-        effective_text, readings = reading.resolve(token, number_class)
-        if effective_text is not None:
-            effective = Decimal(effective_text)
-        else:
-            counts.unresolved += 1
-            if readings:
-                why = (
-                    "what it is worth depends on the machine (%s), and none is chosen"
-                    % readings_text(readings)
+        number_class = reading.number_class(token, tracker, entries, in_force)
+        if number_class in CLASS_TEXT and number_class != params.limit_class:
+            # M9: the limits are in one feed unit; a feed in another one is never compared
+            # with them, whatever its number looks like.
+            if params.has_filter:
+                # A filter says which feeds to scale. One that cannot be compared with
+                # this feed must not let it through: "only feeds below 0.3 mm/rev" scaling
+                # every `G98 F200` of the program is the opposite of what was asked
+                # (M9 review NC-F1). Left as written, and reported.
+                counts.filter_unknown += 1
+                findings.add(
+                    line,
+                    "warning",
+                    "%s is not scaled: it is %s, and the %s %s for feeds %s, so whether "
+                    "it passes the filter cannot be told. It is left as it is."
+                    % (word, CLASS_TEXT[number_class], params.filter_text(),
+                       params.filter_verb(), LIMIT_TEXT[params.limit_class]),
                 )
-            else:
-                why = "gEdit cannot say what this feed is worth here"
+                return None
+            counts.other_unit += 1
             findings.add(
                 line,
                 "warning",
-                "%s is scaled, but the feed limits were not applied to it: %s." % (word, why),
+                "%s is scaled, but the feed limits were not applied to it: it is %s, and "
+                "the limits are for feeds %s."
+                % (word, CLASS_TEXT[number_class], LIMIT_TEXT[params.limit_class]),
             )
+            number_class = None
+        else:
+            effective_text, readings = reading.resolve(token, number_class)
+            if effective_text is not None:
+                effective = Decimal(effective_text)
+            else:
+                if readings:
+                    why = (
+                        "what it is worth depends on the machine (%s), and none is chosen"
+                        % readings_text(readings)
+                    )
+                else:
+                    why = "gEdit cannot say what this feed is worth here"
+                if params.has_filter:
+                    # The same as a feed in another unit: a filter that cannot be
+                    # compared leaves the feed alone (NC-F1).
+                    counts.filter_unknown += 1
+                    findings.add(
+                        line,
+                        "warning",
+                        "%s is not scaled: %s, so the %s cannot be compared with it. It is "
+                        "left as it is." % (word, why, params.filter_text()),
+                    )
+                    return None
+                counts.unresolved += 1
+                findings.add(
+                    line,
+                    "warning",
+                    "%s is scaled, but the feed limits were not applied to it: %s." % (word, why),
+                )
 
     if effective is not None and params.only_above is not None and effective <= params.only_above:
         counts.filtered += 1
@@ -1619,6 +1909,8 @@ def run(
     out: List[str] = []
     state: Optional[gedit_nc.LineState] = None
     cycle: Optional[Dict[str, Any]] = None
+    #: The motion code in force (M9): its database entry, or None while none was written.
+    motion: Optional[Dict[str, Any]] = None
 
     primed = fragment and bool(preceding)
     if primed:
@@ -1634,6 +1926,7 @@ def run(
             above_entries = block_entries(above_tokens, tracker)
             reading.sets_units(above_entries)
             reading.sets_feed_code(above_entries)
+            motion = last_motion(above_entries, motion)
         # A selection that starts inside the parameter block of a Klartext cycle: the
         # `CYCL DEF` keyword stands above it, so `cycle_definition` below never sees it
         # and the cycle's Q feeds would go unlisted. The tracker knows which cycle is
@@ -1693,6 +1986,10 @@ def run(
         reading.sets_feed_code(entries)
         if params.has_limits:
             reading.sets_units(entries)
+        # The move in force before this block, and the one this block writes (M9): what a
+        # move declares for its feed holds in the blocks it is in force for.
+        motion = last_motion(entries, motion)
+        in_force = codes_in_force(tracker, motion, entries)
 
         # A cycle definition runs from its keyword to the end of its continuation lines.
         if not continued:
@@ -1733,7 +2030,9 @@ def run(
             if carried is not None:
                 report_carried(token, carried, number, findings, counts)
                 continue
-            edit = scale_token(token, tracker, params, reading, entries, number, findings, counts, unknown)
+            edit = scale_token(
+                token, tracker, params, reading, entries, number, findings, counts, unknown, in_force, tokens
+            )
             if edit is not None:
                 edits.append(edit)
 
@@ -1779,6 +2078,8 @@ def summary(counts: Counts, findings: Findings, params: Params, reading: Reading
     parts: List[str] = []
     for reason, text in (
         ("pitch", "left as a thread pitch"),
+        ("thread", "left in a thread block whose lead is written elsewhere"),
+        ("range", "left because a profile-range cycle names no range and no machine confirms the dialect"),
         ("ambiguous", "left because the code means a threading cycle somewhere else"),
         ("unknown", "left under a code the database does not know"),
         ("value", "left as a variable or an expression"),
@@ -1793,6 +2094,11 @@ def summary(counts: Counts, findings: Findings, params: Params, reading: Reading
         parts.append("%s left as written (zero or negative)" % "{:,}".format(counts.nonpositive))
     if counts.filtered:
         parts.append("%s left by the value filter" % "{:,}".format(counts.filtered))
+    if counts.filter_unknown:
+        parts.append(
+            "%s left because the value filter cannot be compared with %s"
+            % ("{:,}".format(counts.filter_unknown), "it" if counts.filter_unknown == 1 else "them")
+        )
     if counts.same:
         parts.append("%s already written that way" % "{:,}".format(counts.same))
     if counts.clamped:
@@ -1822,6 +2128,11 @@ def summary(counts: Counts, findings: Findings, params: Params, reading: Reading
     if counts.unresolved:
         parts.append(
             "%s scaled without a limit check" % "{:,}".format(counts.unresolved)
+        )
+    if counts.other_unit:
+        parts.append(
+            "%s scaled without the limits, which are for feeds %s"
+            % ("{:,}".format(counts.other_unit), LIMIT_TEXT[params.limit_class])
         )
 
     # Which machine the run read the program with. Scaling is unit-free, so this changes no
