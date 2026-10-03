@@ -221,10 +221,12 @@ scenario('m7-perf-recovery', { timeout: 600 }, async (h) => {
   for (let attempt = 0; attempt < SETTLE_TRIES && idleProbe.worstMs > SETTLED_MS; attempt++) {
     idleProbe = await watchMainThread(() => h.sleep(1000))
   }
-  h.check(
-    `the main thread went quiet enough to measure a ${SNAPSHOT_BLOCK_BUDGET_MS} ms budget against: worst idle gap ${idleProbe.worstMs} ms`,
-    idleProbe.worstMs <= SETTLED_MS && idleProbe.ticks > 50,
+  h.checkTime(
+    `the main thread went quiet enough to measure a ${SNAPSHOT_BLOCK_BUDGET_MS} ms budget against: worst idle gap`,
+    idleProbe.worstMs,
+    SETTLED_MS,
     idleProbe,
+    { also: idleProbe.ticks > 50 },
   )
 
   // ------------------------------------------------------------ the snapshot itself
@@ -234,10 +236,11 @@ scenario('m7-perf-recovery', { timeout: 600 }, async (h) => {
   const snapshotFile = `${await h.recoveryDir()}/${folders[0]}/${id}.txt`
   const size = (await h.disk.stat(snapshotFile))?.len ?? 0
   h.check('the whole program really went to disk, not a truncated head of it', written.keys.includes(id) && size >= MIN_BYTES, { keys: written.keys, bytes: size })
-  h.check(
-    `a snapshot of ${(text.length / 1024 / 1024).toFixed(1)} MiB blocks the main thread for at most ${SNAPSHOT_BLOCK_BUDGET_MS} ms: ${snapshot.worstMs} ms`,
-    snapshot.worstMs <= SNAPSHOT_BLOCK_BUDGET_MS,
-    { worstMs: snapshot.worstMs, budgetMs: SNAPSHOT_BLOCK_BUDGET_MS, idleFloorMs: idleProbe.worstMs, tookMs: snapshot.totalMs },
+  h.checkTime(
+    `a snapshot of ${(text.length / 1024 / 1024).toFixed(1)} MiB blocks the main thread for at most the snapshot budget`,
+    snapshot.worstMs,
+    SNAPSHOT_BLOCK_BUDGET_MS,
+    { idleFloorMs: idleProbe.worstMs, tookMs: snapshot.totalMs },
   )
 
   // ------------------------------------------------------------ typing, with and without
@@ -251,13 +254,13 @@ scenario('m7-perf-recovery', { timeout: 600 }, async (h) => {
   const withSnapshots = await measureTyping(id, 10, { flushing: true })
   h.check('the second sample took every keystroke too, with snapshots in flight throughout', withSnapshots.count === KEYSTROKES && withSnapshots.retries <= MAX_RETRIES && withSnapshots.flushes > 0, withSnapshots)
 
-  h.check(
-    `typing costs no more with the snapshots running: p95 ${withSnapshots.p95} ms against ${without.p95} ms, within one frame`,
-    withSnapshots.p95 - without.p95 <= TYPING_COST_BUDGET_MS,
+  h.checkTime(
+    `typing costs no more with the snapshots running (p95 ${withSnapshots.p95} ms against ${without.p95} ms), within one frame: difference`,
+    withSnapshots.p95 - without.p95,
+    TYPING_COST_BUDGET_MS,
     {
       withP95: withSnapshots.p95,
       withoutP95: without.p95,
-      budgetMs: TYPING_COST_BUDGET_MS,
       // Not budgeted: the one keystroke that lands inside a snapshot pays for the block
       // the check above bounds. It is here so the number is on the record.
       withWorst: withSnapshots.worst,

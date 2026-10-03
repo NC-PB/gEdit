@@ -23,12 +23,6 @@ import { context, pythonProbe, read, ready, scriptService } from './m5-common.js
 /** The budgets this gate enforces — the same two numbers M1 was held to. */
 const OPEN_BUDGET_MS = 2000
 const SWITCH_BUDGET_MS = 100
-// The first switch away from the 10 MB document pays for the editor's one-off teardown, and a
-// hosted CI runner is several times slower than the owner's Mac (334 ms against about 30 ms).
-// Same rule as tests/unit/helpers/budget.ts (plan §5.2 rule 13): x5 when `CI` is set, the budget
-// itself locally. Only this "cheap" check is scaled; the G7 budget for switching onto the
-// document is held as it is.
-const CI_FACTOR = 5
 
 const MIN_LINES = 300000
 const MIN_BYTES = 10 * 1024 * 1024
@@ -99,7 +93,7 @@ scenario('m5-perf-open', { timeout: 420 }, async (h) => {
   const openMs = Math.round(performance.now() - started)
   const bigId = drawn ?? ''
   h.check('the 10 MB program is open and drawn', !!drawn && ctx.docs.get(bigId)?.path === path, { docId: bigId, firstLine: firstDrawn() })
-  h.check(`it renders within ${OPEN_BUDGET_MS} ms with every M2–M5 feature on (G7): ${openMs} ms`, openMs <= OPEN_BUDGET_MS, { openMs, budgetMs: OPEN_BUDGET_MS, lines: lineCount, bytes })
+  h.checkTime('it renders within the open budget with every M2–M5 feature on (G7)', openMs, OPEN_BUDGET_MS, { lines: lineCount, bytes })
   h.check('the whole file is in the editor', ctx.editor.getLineCount(bigId) === lineCount + 1, { modelLines: ctx.editor.getLineCount(bigId), fileLines: lineCount })
   h.check('the dialect was detected and the status bar describes the file', ctx.docs.get(bigId)?.profileId === 'fanuc-gcode' && h.q('status-item', { item: 'eol' })?.textContent === 'CRLF', {
     profile: ctx.docs.get(bigId)?.profileId,
@@ -143,13 +137,11 @@ scenario('m5-perf-open', { timeout: 420 }, async (h) => {
   const worst = Math.max(...ms(toBig))
   const median = [...ms(toBig)].sort((a, b) => a - b)[Math.floor(toBig.length / 2)]
   h.check('every tab switch showed the document it was asked for', [...toSmall, ...toBig].every((r) => r.ok), { toSmall, toBig })
-  h.check(`switching away from the 10 MB document is cheap: worst ${Math.max(...ms(toSmall))} ms`, Math.max(...ms(toSmall)) <= (h.cfg.ci ? SWITCH_BUDGET_MS * CI_FACTOR : SWITCH_BUDGET_MS), { toSmall: ms(toSmall), budgetMs: h.cfg.ci ? SWITCH_BUDGET_MS * CI_FACTOR : SWITCH_BUDGET_MS })
-  h.check(`a tab switch onto the 10 MB document takes at most ${SWITCH_BUDGET_MS} ms (G7): median ${median}, worst ${worst} ms`, worst <= SWITCH_BUDGET_MS, {
+  h.checkTime('switching away from the 10 MB document is cheap: worst', Math.max(...ms(toSmall)), SWITCH_BUDGET_MS, { toSmall: ms(toSmall) })
+  h.checkTime(`a tab switch onto the 10 MB document stays within the switch budget (G7): median ${median}, worst`, worst, SWITCH_BUDGET_MS, {
     ontoBigMs: ms(toBig),
     awayMs: ms(toSmall),
     medianMs: median,
-    worstMs: worst,
-    budgetMs: SWITCH_BUDGET_MS,
   })
 
   // ------------------------------------------- the M5 surface on a document this size
@@ -161,7 +153,7 @@ scenario('m5-perf-open', { timeout: 420 }, async (h) => {
   h.click(h.qa('ribbon-tab').find((e) => e.dataset.tab === 'tools'))
   await h.waitFor(() => h.qa('script-item').length > 0, { timeout: 10000 })
   const ribbonMs = Math.round(performance.now() - ribbonStart)
-  h.check(`the Tools group draws over a 10 MB program in ${ribbonMs} ms`, ribbonMs <= 1000, { ribbonMs })
+  h.checkTime('the Tools group draws over a 10 MB program', ribbonMs, 1000)
 
   h.log(`G7 (M5): open ${openMs} ms (${lineCount} lines, ${(bytes / 1024 / 1024).toFixed(2)} MiB); switch onto it ${ms(toBig).join('/')} ms; switch away ${ms(toSmall).join('/')} ms; program map ${mapMs} ms; Tools group ${ribbonMs} ms`)
 })

@@ -92,10 +92,16 @@ caches the build directory. What differs from the owner's Mac, and how the scena
   `SHELL` to `/bin/zsh` themselves, so they mean the same on both machines.
 - Button order read back from an alert is the OS's business: `m0-encoding` checks the set of
   buttons. `m0-py3-stub` compares the interpreter by real path, since Homebrew's layout differs.
-- A wall-clock check measured on the owner's Mac is scaled when `CI` is set (`h.cfg.ci`), by the
-  same factor as the unit tests (`tests/unit/helpers/budget.ts`): the "switching away from the
-  10 MB document is cheap" check of `m1-perf-open` and `m5-perf-open`. The G7 budgets stay
-  as they are.
+- **Wall-clock budgets go through `h.checkTime`.** The budgets of the perf scenarios are the
+  development Mac's (G7, plan §5.2 rule 13). `h.checkTime(name, measuredMs, budgetMs, detail?,
+  { also, strict })` holds the measurement to `budgetMs` locally, unchanged, and to
+  `budgetMs x 10` when `CI` is set (`h.cfg.ci`; the factor is `CI_TIME_FACTOR` in `lib/api.js`),
+  so a hosted runner only catches gross regressions. It is 10 and not 5 because shared-runner UI
+  timings vary 5-10x from run to run (a tab switch onto a 10 MB document measured 349 ms against
+  100, switching away 607 ms). The check's name and detail always show the measured value, the
+  local budget and, on CI, the factor. `also` adds a non-timing condition to the same check;
+  `strict` asks for "below" instead of "at most". A perf scenario never compares a duration with
+  `<=` itself.
 - The cached-interpreter check of `m0-py3-default` counts how often the login shell read the
   profile instead of comparing two run times.
 
@@ -234,6 +240,7 @@ defaults:
 | Call | What it does |
 |---|---|
 | `h.check(name, cond, detail?)` | records a check; a false `cond` fails the scenario |
+| `h.checkTime(name, measuredMs, budgetMs, detail?, { also, strict }?)` | records a wall-clock budget check; on CI the budget is multiplied by 10 (see "On a hosted runner") |
 | `h.checks()` | the checks recorded so far |
 | `h.blocked(reason, detail?)` | this run could not be carried out; the runner reports BLOCKED |
 | `h.log(...args)` | a line in the run's `app.log` |

@@ -217,7 +217,7 @@ scenario('m3-perf', { timeout: 600 }, async (h) => {
   const rendered = await untilDom(() => h.q('editor-host')?.dataset.docId === bigId && drawn('%'), 60000)
   const openMs = Math.round((rendered ?? performance.now()) - startedOpen)
   h.check('the 10 MB program is open and drawn', !!bigId && rendered !== null && ctx.docs.get(bigId)?.path === path, { docId: bigId, profile: ctx.docs.get(bigId)?.profileId })
-  h.check(`it opens and renders within ${OPEN_BUDGET_MS} ms: ${openMs} ms`, openMs <= OPEN_BUDGET_MS, { openMs, budgetMs: OPEN_BUDGET_MS })
+  h.checkTime('it opens and renders within the open budget', openMs, OPEN_BUDGET_MS)
   h.check('it is the profile the grammar and the outline are driven from', ctx.docs.get(bigId)?.profileId === 'fanuc-gcode' && ctx.editor.model(bigId)?.getLanguageId() === 'fanuc-gcode', {
     profile: ctx.docs.get(bigId)?.profileId,
     language: ctx.editor.model(bigId)?.getLanguageId(),
@@ -241,13 +241,13 @@ scenario('m3-perf', { timeout: 600 }, async (h) => {
   h.check('the editor dropped no input: at most a stray NSEvent had to be sent again', big.retries <= MAX_RETRIES && small.retries <= MAX_RETRIES, { big: big.retries, small: small.retries, allowed: MAX_RETRIES })
   h.check('the typing really landed in the document', big.typed === KEYSTROKES, big)
   const onScreenP95 = big.domP95 + FRAME_MS
-  h.check(
-    `keypress to render at ${lineCount} lines: drawn ${big.domP95} ms after the keydown, on screen within ${onScreenP95} ms, under the ${KEYPRESS_P95_BUDGET_MS} ms budget (G7)`,
-    big.count === KEYSTROKES && onScreenP95 < KEYPRESS_P95_BUDGET_MS,
+  h.checkTime(
+    `keypress to render at ${lineCount} lines (G7): drawn ${big.domP95} ms after the keydown, on screen within`,
+    onScreenP95,
+    KEYPRESS_P95_BUDGET_MS,
     {
       toDomP95: big.domP95,
       onScreenP95,
-      budgetMs: KEYPRESS_P95_BUDGET_MS,
       domSamples: big.domSamples,
       rafP50: big.p50,
       rafP95: big.p95,
@@ -256,10 +256,12 @@ scenario('m3-perf', { timeout: 600 }, async (h) => {
       note: '`toDom` is the frame that drew the character, `onScreen` adds a whole frame for its paint; the `raf*` numbers are the upper bound that overcounts by a frame or two (see the header, and the reference buffer below)',
       harnessPostingP95: big.postingP95,
     },
+    { also: big.count === KEYSTROKES, strict: true },
   )
-  h.check(
-    `and the size costs nothing: drawn in ${big.domP95} ms against ${small.domP95} ms in a ${SMALL.split('\n').length}-line buffer`,
-    big.domP95 - small.domP95 <= SIZE_COST_BUDGET_MS && big.p95 - small.p95 <= SIZE_COST_BUDGET_MS,
+  h.checkTime(
+    `and the size costs nothing: drawn in ${big.domP95} ms against ${small.domP95} ms in a ${SMALL.split('\n').length}-line buffer, the larger of the dom and raf p95 differences`,
+    Math.max(big.domP95 - small.domP95, big.p95 - small.p95),
+    SIZE_COST_BUDGET_MS,
     {
       bigDomP95: big.domP95,
       smallDomP95: small.domP95,
@@ -290,16 +292,16 @@ scenario('m3-perf', { timeout: 600 }, async (h) => {
   const outlineWorst = outlineMs.length > 0 ? Math.round(Math.max(...outlineMs)) : -1
   const outlineMedian = outlineMs.length > 0 ? Math.round(percentile(outlineMs, 50)) : -1
   h.check(`all ${EDITS} edits were picked up by the outline`, outlineMs.length === EDITS, { measured: outlineMs.length, of: EDITS })
-  h.check(
-    `the outline is up to date ${outlineWorst} ms after an edit, within the ${OUTLINE_BUDGET_MS} ms budget (G7)`,
-    outlineMs.length === EDITS && outlineWorst <= OUTLINE_BUDGET_MS,
+  h.checkTime(
+    'the outline is up to date after an edit, worst (G7)',
+    outlineWorst,
+    OUTLINE_BUDGET_MS,
     {
-      worstMs: outlineWorst,
       medianMs: outlineMedian,
-      budgetMs: OUTLINE_BUDGET_MS,
       samples: round(outlineMs),
       note: 'edit to the frame the program map drew the new tool row; 150 ms of it is the aggregation debounce',
     },
+    { also: outlineMs.length === EDITS },
   )
 
   h.log(

@@ -142,10 +142,11 @@ scenario('m7-perf-save', { timeout: 600 }, async (h) => {
   const withoutMs = median(off)
   const withMs = median(withBackup)
   const cost = withMs - withoutMs
-  h.check(
-    `the copy costs at most ${BACKUP_COST_BUDGET_MS} ms on a ${(text.length / 1024 / 1024).toFixed(1)} MiB program: ${cost} ms (${withMs} ms against ${withoutMs} ms)`,
-    cost <= BACKUP_COST_BUDGET_MS,
-    { costMs: cost, withBackupMs: withMs, withoutMs, budgetMs: BACKUP_COST_BUDGET_MS, allWith: withBackup, allWithout: off },
+  h.checkTime(
+    `the copy costs at most the backup budget on a ${(text.length / 1024 / 1024).toFixed(1)} MiB program (${withMs} ms against ${withoutMs} ms): cost`,
+    cost,
+    BACKUP_COST_BUDGET_MS,
+    { withBackupMs: withMs, withoutMs, allWith: withBackup, allWithout: off },
   )
 
   h.log(

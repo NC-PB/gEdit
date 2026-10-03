@@ -88,7 +88,7 @@ scenario('m8-perf', { timeout: 900 }, async (h) => {
     const rendered = await untilDom(() => h.q('editor-host')?.dataset.docId === bigId && drawn(h, firstLine), 60000)
     const openMs = Math.round((rendered ?? performance.now()) - started)
     h.check(`${label}: the 10 MB program is open and drawn`, !!bigId && rendered !== null && ctx.docs.get(bigId)?.path === path, { docId: bigId, firstLine })
-    h.check(`${label}: it opens and renders within ${OPEN_BUDGET_MS} ms: ${openMs} ms (G7)`, rendered !== null && openMs <= OPEN_BUDGET_MS, { openMs, budgetMs: OPEN_BUDGET_MS, lines: lineCount, bytes: text.length })
+    h.checkTime(`${label}: it opens and renders within the open budget (G7)`, openMs, OPEN_BUDGET_MS, { lines: lineCount, bytes: text.length }, { also: rendered !== null })
     h.check(
       `${label}: it was read as ${program.profile}, so it is this dialect's tokenizer and grammar that were measured`,
       ctx.docs.get(bigId)?.profileId === program.profile && ctx.editor.model(bigId)?.getLanguageId() === program.profile,
@@ -116,19 +116,20 @@ scenario('m8-perf', { timeout: 900 }, async (h) => {
     const big = await measureTyping(h, bigId, at, KEYSTROKES)
     h.check(`${label}: every one of the ${KEYSTROKES} keystrokes reached the screen, at most ${MAX_RETRIES} sent again`, big.count === KEYSTROKES && big.typed === KEYSTROKES && big.focused && big.warmed && big.retries <= MAX_RETRIES, big)
     const onScreenP95 = big.domP95 + FRAME_MS
-    h.check(
-      `${label}: keypress to render at line ${at} of ${lineCount}: drawn ${big.domP95} ms after the keydown, on screen within ${onScreenP95} ms, under the ${KEYPRESS_P95_BUDGET_MS} ms budget (G7)`,
-      big.count === KEYSTROKES && onScreenP95 < KEYPRESS_P95_BUDGET_MS,
+    h.checkTime(
+      `${label}: keypress to render at line ${at} of ${lineCount} (G7): drawn ${big.domP95} ms after the keydown, on screen within`,
+      onScreenP95,
+      KEYPRESS_P95_BUDGET_MS,
       {
         toDomP95: big.domP95,
         onScreenP95,
-        budgetMs: KEYPRESS_P95_BUDGET_MS,
         domSamples: big.domSamples,
         rafP95: big.rafP95,
         rafWorstMs: big.worst,
         reference: { lines: program.small.length, toDomP95: small.domP95, rafP95: small.rafP95 },
         note: '`toDom` is the frame that drew the character, `onScreen` adds a whole frame for its paint; `raf` is the upper bound that overcounts by a frame or two (m3-perf)',
       },
+      { also: big.count === KEYSTROKES, strict: true },
     )
     summary.push(
       `${label}: open ${openMs} ms (${lineCount} lines, ${(text.length / 1024 / 1024).toFixed(2)} MiB), first outline ${outlineMs} ms, ` +

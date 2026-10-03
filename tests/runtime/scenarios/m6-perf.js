@@ -159,10 +159,11 @@ scenario('m6-perf', { timeout: 900 }, async (h) => {
   const renumberMs = Math.round(performance.now() - started)
   await h.idle({ timeout: 30000 })
 
-  h.check(
-    `renumber with reference rewriting on ${lineCount} lines answers in ${renumberMs} ms, within ${WHOLE_RUN_BUDGET_MS} ms (G7 gives the transform ${RUN_BUDGET_MS} ms and the edit ${APPLY_BUDGET_MS} ms; the pure ≤ 1 s belongs to vitest)`,
-    renumberMs <= WHOLE_RUN_BUDGET_MS,
-    { ms: renumberMs, budget: WHOLE_RUN_BUDGET_MS, status: message(h) },
+  h.checkTime(
+    `renumber with reference rewriting on ${lineCount} lines answers within the whole-run budget (G7 gives the transform ${RUN_BUDGET_MS} ms and the edit ${APPLY_BUDGET_MS} ms; the pure ≤ 1 s belongs to vitest)`,
+    renumberMs,
+    WHOLE_RUN_BUDGET_MS,
+    { status: message(h) },
   )
   h.check('it renumbered from the profile defaults and changed no line count', ctx.editor.getLineCount(id) === lineCount && line(3) === 'N10 G21 G40 G99', {
     lines: ctx.editor.getLineCount(id),
@@ -206,11 +207,7 @@ scenario('m6-perf', { timeout: 900 }, async (h) => {
   await h.nativeKeys([{ key: 'z', mods: ['cmd'] }])
   await h.waitFor(() => line(3) === 'N1000 G21 G40 G99', { timeout: 30000 })
   const undoMs = Math.round(performance.now() - undoStarted)
-  h.check(`one Cmd+Z takes the whole run back, references included, in ${undoMs} ms`, h.app.text() === program && undoMs <= APPLY_BUDGET_MS, {
-    ms: undoMs,
-    budget: APPLY_BUDGET_MS,
-    third: line(3),
-  })
+  h.checkTime('one Cmd+Z takes the whole run back, references included', undoMs, APPLY_BUDGET_MS, { third: line(3) }, { also: h.app.text() === program })
 
   // -------------------------------------- a machine switch rebuilds the map from scratch
   await ctx.outline.whenReady(id)
@@ -233,12 +230,11 @@ scenario('m6-perf', { timeout: 900 }, async (h) => {
   await ctx.outline.whenReady(id)
   const rebuildMs = Math.round(performance.now() - switched)
 
-  h.check(
-    `a machine switch rebuilds the map of ${lineCount} lines in ${rebuildMs} ms, within the ${REBUILD_BUDGET_MS} ms a full build gets in P1 (G7; the ${OUTLINE_EDIT_BUDGET_MS} ms of m3-perf is the incremental number, see the note above)`,
-    rebuildMs <= REBUILD_BUDGET_MS,
+  h.checkTime(
+    `a machine switch rebuilds the map of ${lineCount} lines within the budget a full build gets in P1 (G7; the ${OUTLINE_EDIT_BUDGET_MS} ms of m3-perf is the incremental number, see the note above)`,
+    rebuildMs,
+    REBUILD_BUDGET_MS,
     {
-      ms: rebuildMs,
-      budget: REBUILD_BUDGET_MS,
       editBudgetMs: OUTLINE_EDIT_BUDGET_MS,
       withinEditBudget: rebuildMs <= OUTLINE_EDIT_BUDGET_MS,
       lines: lineCount,

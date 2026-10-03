@@ -129,10 +129,11 @@ scenario('m7-perf-session', { timeout: 600 }, async (h) => {
     h.qa('doc-tab').map((/** @type {any} */ e) => e.dataset.path),
   )
   h.check('and the fresh buffer they replaced is gone, as AD-22 asks', h.qa('doc-tab').length === TABS, h.qa('doc-tab').length)
-  h.check(
-    `a ${TABS}-tab session comes back within ${RESTORE_BUDGET_MS} ms (G7): ${tabsMs} ms to the last tab`,
-    tabsMs <= RESTORE_BUDGET_MS,
-    { tabsMs, resolvedMs, budgetMs: RESTORE_BUDGET_MS, tabs: TABS, bytes },
+  h.checkTime(
+    `a ${TABS}-tab session comes back within the restore budget (G7): time to the last tab`,
+    tabsMs,
+    RESTORE_BUDGET_MS,
+    { resolvedMs, tabs: TABS, bytes },
   )
 
   h.log(

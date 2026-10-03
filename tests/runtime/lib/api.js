@@ -16,7 +16,7 @@ import { keyEvent, typeEvents } from './keys.js'
  * @property {string} python interpreter the harness uses for GEDIT_PYTHON by default
  * @property {string} appVersion version in the synced package.json
  * @property {boolean} [ci] the harness ran with `CI` set (a hosted runner): wall-clock budgets
- *   that are measured on the owner's Mac get the CI factor of tests/unit/helpers/budget.ts
+ *   that are measured on the owner's Mac get `CI_TIME_FACTOR` (see `h.checkTime`)
  * @property {boolean} [robust] false with `GEDIT_RH_ROBUST=0`: the activation gate and
  *   the frame-synced waits are off, so a run can be measured against the old harness
  */
@@ -112,6 +112,14 @@ export function selector(testid, attrs = {}) {
   }
   return sel
 }
+
+/**
+ * How much a wall-clock budget is stretched on a hosted CI runner (`cfg.ci`), see `checkTime`.
+ * The budgets are the development Mac's (G7); a shared macOS runner is not that machine, and
+ * UI timings there vary 5-10x between runs (a tab switch onto a 10 MB document measured 349 ms
+ * against 100, switching away 607 ms against 100). 10 keeps CI to gross regressions only.
+ */
+export const CI_TIME_FACTOR = 10
 
 /**
  * @param {RunConfig} cfg
@@ -225,6 +233,32 @@ export function createHarness(cfg, rec, send, drain = async () => {}) {
       checks.push({ name, pass })
       send({ kind: 'check', name, pass, detail })
       return pass
+    },
+
+    /**
+     * Records a wall-clock budget check: `measured` must stay within `budgetMs`. Locally the
+     * budget is the one the gate (G7, plan §5.2 rule 13) names; with `cfg.ci` it is that budget
+     * times `CI_TIME_FACTOR`, so a shared runner only catches gross regressions. The check's
+     * name always carries the measured value, the budget and, on CI, the factor; the detail
+     * adds `measuredMs`, `budgetMs` (the local one), `effectiveBudgetMs` and `ciFactor`.
+     * Every duration budget of the perf scenarios goes through here, never an inline `<=`.
+     * @param {string} name what is measured, without the numbers
+     * @param {number} measured milliseconds
+     * @param {number} budgetMs the local budget in milliseconds
+     * @param {unknown} [detail] evidence stored with the result (an object is extended)
+     * @param {{ also?: unknown, strict?: boolean }} [opts] `also`: a further condition that must
+     *   hold (not a timing); `strict`: the measurement must be below the budget, not equal to it
+     * @returns {boolean} whether it passed
+     */
+    checkTime(name, measured, budgetMs, detail, opts = {}) {
+      const factor = cfg.ci ? CI_TIME_FACTOR : 1
+      const limit = budgetMs * factor
+      const within = opts.strict ? measured < limit : measured <= limit
+      const shown = Math.round(measured * 10) / 10
+      const budgetText = cfg.ci ? `${limit} ms = ${budgetMs} ms x${factor} on CI` : `${limit} ms`
+      const evidence = { measuredMs: measured, budgetMs, effectiveBudgetMs: limit, ciFactor: factor }
+      const extra = detail && typeof detail === 'object' && !Array.isArray(detail) ? detail : detail === undefined ? {} : { detail }
+      return h.check(`${name} [${shown} ms, budget ${budgetText}]`, within && (opts.also ?? true), { ...extra, ...evidence })
     },
 
     /** Checks recorded so far. */

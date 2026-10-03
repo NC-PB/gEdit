@@ -65,10 +65,11 @@ scenario('m4-perf-transform', { timeout: 900 }, async (h) => {
   await running
   const renumberMs = Math.round(performance.now() - startedRenumber)
   await h.idle({ timeout: 30000 })
-  h.check(
-    `renumber on ${lineCount} lines answers within ${WHOLE_RUN_BUDGET_MS} ms (G7: ${RUN_BUDGET_MS} ms to run, ${APPLY_BUDGET_MS} ms to apply)`,
-    renumberMs <= WHOLE_RUN_BUDGET_MS,
-    { ms: renumberMs, budget: WHOLE_RUN_BUDGET_MS, status: message(h) },
+  h.checkTime(
+    `renumber on ${lineCount} lines answers within the whole-run budget (G7: ${RUN_BUDGET_MS} ms to run, ${APPLY_BUDGET_MS} ms to apply)`,
+    renumberMs,
+    WHOLE_RUN_BUDGET_MS,
+    { status: message(h) },
   )
   h.check('it renumbered the whole program from the profile defaults and changed no line count', ctx.editor.getLineCount(id) === lineCount && firstBlock === 'N1000 G21 G17 G40 G49 G80 G90 G94' && line(3) === 'N10 G21 G17 G40 G49 G80 G90 G94', {
     lines: ctx.editor.getLineCount(id),
@@ -82,7 +83,7 @@ scenario('m4-perf-transform', { timeout: 900 }, async (h) => {
   await h.nativeKeys([{ key: 'z', mods: ['cmd'] }])
   await h.waitFor(() => line(3) === firstBlock, { timeout: 30000 })
   const undoMs = Math.round(performance.now() - startedUndo)
-  h.check(`one Cmd+Z answers within ${UNDO_BUDGET_MS} ms`, undoMs <= UNDO_BUDGET_MS, { ms: undoMs, budget: UNDO_BUDGET_MS })
+  h.checkTime('one Cmd+Z answers within the undo budget', undoMs, UNDO_BUDGET_MS)
   h.check('and it restored all 100,000 lines, not the visible ones', h.app.text() === program, {
     lines: ctx.editor.getLineCount(id),
     expected: lineCount,
@@ -100,10 +101,11 @@ scenario('m4-perf-transform', { timeout: 900 }, async (h) => {
   await removing
   const removeMs = Math.round(performance.now() - startedRemove)
   await h.idle({ timeout: 30000 })
-  h.check(
-    `remove-block-numbers on ${lineCount} lines answers within ${WHOLE_RUN_BUDGET_MS} ms`,
-    removeMs <= WHOLE_RUN_BUDGET_MS,
-    { ms: removeMs, budget: WHOLE_RUN_BUDGET_MS, status: message(h) },
+  h.checkTime(
+    `remove-block-numbers on ${lineCount} lines answers within the whole-run budget`,
+    removeMs,
+    WHOLE_RUN_BUDGET_MS,
+    { status: message(h) },
   )
   h.check('every block number is gone and the program is otherwise as it was', line(3) === 'G21 G17 G40 G49 G80 G90 G94' && ctx.editor.getLineCount(id) === lineCount, {
     third: line(3),
