@@ -6,7 +6,10 @@
 // a single run is not proof: a second failure is the app's, a pass on the retry is the
 // harness's and is reported as FLAKY with the first failure kept. A run that could not
 // take the keyboard (screen locked, another app frontmost) is BLOCKED - retrying it
-// would prove nothing, so it is not retried and it never passes silently.
+// would prove nothing, so it is not retried and it never passes silently. A block with
+// the screen unlocked (the app's main thread did not answer an input in time, which a
+// shared CI runner does now and then) is retried once like a failure: a pass on the
+// retry is FLAKY, with the block kept as the first attempt.
 //
 // Usage: suite.sh <suite.txt | scenario>… [--no-retry] [--repeat N]
 
@@ -90,13 +93,19 @@ async function runOnce(name, blockedSoFar) {
       console.log(`  (blocked, not failed: ${blocker} never ran)`)
     }
   }
-  if (first.status === 'pass' || first.status === 'blocked' || !retry) {
+  // A block a retry can clear: the screen was not locked, and no predecessor that writes
+  // this scenario's HOME was blocked (that block is not this scenario's to clear).
+  const transientBlock =
+    first.status === 'blocked' &&
+    first.screenLocked !== true &&
+    !first.blocked.some((/** @type {{ where?: string }} */ b) => b.where === 'suite')
+  if (first.status === 'pass' || (first.status === 'blocked' && !transientBlock) || !retry) {
     return { status: first.status.toUpperCase(), result: first, first: null }
   }
   const kept = keepFirstAttempt(name)
   const group = retryGroup(name, names)
   const also = group.length > 1 ? ` with ${group.slice(0, -1).join(', ')}, which write its HOME` : ''
-  console.log(`--- ${name} (retry${also}; the first failure is in ${kept ?? 'out/'})`)
+  console.log(`--- ${name} (retry${also}; the first ${first.status === 'blocked' ? 'block' : 'failure'} is in ${kept ?? 'out/'})`)
   let second = first
   for (const member of group) {
     second = await runScenario(rh, member, known, { attempt: 2 })
