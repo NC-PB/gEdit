@@ -939,6 +939,10 @@ mod tests {
     }
 
     const SHORT: Duration = Duration::from_millis(300);
+    /// The start-up grant splits its budget: two thirds to find the files, the rest to
+    /// grant them. A hung path uses up the first part, so with [`SHORT`] the grants had
+    /// about 100 ms, which a loaded CI runner did not always give two threads.
+    const GRANT_SHORT: Duration = Duration::from_millis(1500);
 
     /// The Recent menu re-reads the list on every open. One entry on a hung share
     /// used to hold the answer — on the main thread — for as long as the OS retried;
@@ -1003,7 +1007,7 @@ mod tests {
             &scope,
             &listed,
             MAX_GRANTED_ON_STARTUP,
-            SHORT,
+            GRANT_SHORT,
             move |path| {
                 if path.ends_with("hung.nc") {
                     hang_until(&gate);
