@@ -2,6 +2,33 @@
 
 What changed in each release of gEdit, written for the person who edits NC programs. The release workflow publishes the entry of a version as the notes of its draft release, so the top of each entry has to make sense on its own.
 
+## v0.3.0 (2026-10-04)
+
+Real programs read right: this release is about gEdit reading the owner's real CAM output the way the machines read it, so that every later feature (checks, extents, a Z shift, compare) works on the right values. The installers are unsigned, as in v0.2.0; see "Installing an unsigned build" under v0.2.0.
+
+### New
+
+- **Sinumerik milling.** A new built-in profile, "Sinumerik milling": `M6` is the tool change and a `T` alone only preselects the next tool, so the program map and the tool list show one row per tool with its own feeds and speeds. The plane and feed at power-on are `G17`/`G94`, and diameter programming is off. A Siemens program with any turning word (`DIAMON`, `LIMS=`, `SETMS`, `TRANSMIT`, a spindle written as `S3=`) stays on the turning profile, so mill-turn programs read as turning.
+- **5-axis and high-speed codes** in the code help for Fanuc and Klartext: tool centre point control, tilted working planes, polar and cylindrical interpolation, the Klartext cycles 7, 8, 9, 10, 11, 19, 26 and 247, and the `PLANE` forms. No more "unknown code" on a typical 5-axis or 3+2 program.
+- **Machine settings for Fanuc lathes and Okuma:** whether `U`/`W` (and `V`/`H`) are incremental, and how a tool word splits into tool and offset (Fanuc: the last one, two or three digits; Okuma: two or three digits, two by default). The defaults read programs exactly as before.
+
+### Read correctly now
+
+- Fanuc macro functions and print commands (`FIX[`, `POPEN`, …), Okuma words such as `TL=` and four-digit option M codes, Sinumerik main blocks (`:20`), indexed words (`LIMS[2]=`), numbers like `1.5EX3`, several skip levels on one block (`/1 /3`), and the Klartext `PLANE`/TCPM words are each one word, not a string of address letters.
+- `A`, `B` and `C` are angles on the Fanuc mill (`C90000` is 90°). A tap's feed follows the feed unit in force. Feeds without a decimal point follow the machine's number setting.
+- A Y-axis lathe with five-digit tool words opens as a lathe, not a mill.
+
+### Safer edits
+
+- **Renumber** keeps a Sinumerik main block's colon (`:20` becomes `:110`) and rewrites the jumps to it (`GOTOB :20` and `GOTOB:20`); a block with several skip marks gets exactly one number. Remove Block Numbers keeps a main block that a jump names.
+- **Scale Feed:** the "Only feeds above/below" filters never scale a feed they cannot compare (a feed in the other unit, or one without a value because no machine is chosen); such a feed is left and reported. The limits are given in one feed unit, chosen in a new field. A Fanuc-lathe `G71`/`G72`/`G73` with an `F` but no `P` is left alone while no machine is chosen, because on an Okuma that `F` is a thread lead. A Sinumerik `G931` feed (a travel time) is left and reported.
+- **Scale Spindle Speed** never scales a lower speed limit (Sinumerik `G25`).
+- **Remove Comments** keeps Sinumerik's `;$PATH=` line. **Save As** to another extension re-detects the dialect, unless you chose the dialect by hand.
+
+### Known limits
+
+As listed under v0.2.0, except that Sinumerik milling is now covered. Okuma milling (machining centres) still opens with the turning profile.
+
 ## v0.2.0 (2026-10-01)
 
 The first release with installers for macOS, Windows and Linux, and the first with release notes (v0.1.0 was a Windows-only build without notes). The lists below describe gEdit as it is now, not only what is new. It is an editor for the output of a CAM post-processor: open the program, find your way around it, clean it up, renumber it, scale the feeds, list the tools, compare it with the last version, and save it without changing a byte you did not ask to change. It works offline, and Python is needed only for the script features.
