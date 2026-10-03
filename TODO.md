@@ -8,8 +8,8 @@ An item moves out when it is done. The plans in [docs/planning](docs/planning/RE
 
 The roadmap was re-cut on 2026-09-30 ([roadmap](docs/planning/roadmap.md#phase-2-real-cam-output-safely-in-progress); accepted by the owner on 2026-10-01, D69 and D70). M8 and everything since are on `main` (G6 m0–m8: 84 of 84 on 2026-09-30, CI green on all jobs), and **v0.2.0 is a draft release** on GitHub with installers for all three platforms (universal macOS `.dmg`, Windows `.msi` and `-setup.exe`, Linux `.deb`, `.rpm` and `.AppImage`, `SHA256SUMS`).
 
-1. [ ] **Your check of the v0.2.0 draft, then publish it** — download the installers from the draft (only you see it), run [the release checklist](docs/releases/checklist.md) on macOS, Windows and Linux (open, edit, save byte-exact, the close guard, one script with and without Python, the unsigned-install step of each system), and publish the draft when it passes. This is also the open Phase 1 exit check. **Owner**
-2. [ ] **A tag ruleset on `refs/tags/v*`** (GitHub Settings ▸ Rules ▸ Rulesets: only you may create, move or delete release tags), so nobody else can start a release ([CONTRIBUTING.md](CONTRIBUTING.md#releases)). **Owner**
+1. [ ] **Publish the v0.2.0 draft** — on Windows the checklist is green (2026-10-03: the installer, and the full TypeScript, Python and Rust suites from a clone, the first Windows run of the first two; it found and fixed one test helper that compared paths as text). Run [the release checklist](docs/releases/checklist.md) on macOS and Linux as well if you have not yet, then publish the draft. That also closes the Phase 1 exit check. **Owner**
+2. [x] **A tag ruleset on `refs/tags/v*`** — in place since 2026-10-03 ("Release tags": creation, update, deletion and force pushes restricted; Repository admin may bypass).
 3. [ ] **M9: Real programs read right** — the next milestone ([Ahead](#ahead), [plan](docs/planning/phase-2-implementation.md#m9-real-programs-read-right)); it also takes the last item of the old list, scale feed refusing a Fanuc-lathe `G71`/`G72` `F` without a `P` (WP9.5).
 
 ## Waiting on the owner
