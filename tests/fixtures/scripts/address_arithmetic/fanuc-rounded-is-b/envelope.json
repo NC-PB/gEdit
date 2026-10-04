@@ -1,0 +1,11 @@
+{
+  "message": "Added 0.0005 to Z in 2 words on 2 blocks, 1 rounded to the form it is written in. Machine 'Mill IS-B': numbers without a point are increments of 0.001 mm.",
+  "findings": [
+    {
+      "line": 5,
+      "severity": "info",
+      "message": "Z1000: written as Z1001, rounded half away from zero to what the word's form can hold.",
+      "reason": "rounded"
+    }
+  ]
+}

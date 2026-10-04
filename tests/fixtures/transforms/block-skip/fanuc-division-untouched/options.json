@@ -1,0 +1,11 @@
+{
+  "note": "A / that divides is no skip mark: add only writes at the head, remove never cuts inside the block.",
+  "profile": "fanuc-gcode",
+  "mode": "add",
+  "options": {},
+  "expect": {
+    "summary": "ncBlockSkip.addRun.summary",
+    "skipped": [],
+    "warnings": []
+  }
+}

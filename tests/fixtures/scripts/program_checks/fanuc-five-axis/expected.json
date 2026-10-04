@@ -1,0 +1,60 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 10,
+      "check": "Refused in this state",
+      "checkId": "stateConflicts",
+      "severity": "warning",
+      "message": "G28: the control refuses it while tool centre point control is on (G43.4, line 7)"
+    },
+    {
+      "line": 14,
+      "check": "Refused in this state",
+      "checkId": "stateConflicts",
+      "severity": "warning",
+      "message": "G68.2: the control refuses it while radius compensation is on (G41, line 13)"
+    },
+    {
+      "line": 18,
+      "check": "Refused in this state",
+      "checkId": "stateConflicts",
+      "severity": "warning",
+      "message": "G53.1: the control takes it only while a frame of the group 'frame' is open, and none is"
+    },
+    {
+      "line": 20,
+      "check": "Alone in its block",
+      "checkId": "aloneInBlock",
+      "severity": "error",
+      "message": "G53.1: has to stand in a block of its own; the block writes G0 X0. besides it"
+    },
+    {
+      "line": 23,
+      "check": "Refused in this state",
+      "checkId": "stateConflicts",
+      "severity": "warning",
+      "message": "G43.4: the control refuses it while the cycle G81 is in force"
+    }
+  ],
+  "message": "5 findings in 2 checks. No machine chosen: where the presets read a number differently, the finding lists every reading.",
+  "findings": []
+}

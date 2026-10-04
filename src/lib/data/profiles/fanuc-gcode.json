@@ -31,7 +31,7 @@
   },
   "syntax": {
     "comments": [{ "start": "(", "end": ")" }],
-    "blockSkip": { "chars": "/", "position": "either", "levels": true },
+    "blockSkip": { "chars": "/", "position": "either", "levels": true, "plainLevel": "1" },
     "blockNumber": { "mode": "prefix", "prefix": "N", "altPrefixes": [], "mandatory": false },
     "decimalSeparator": ".",
     "decimalPointSignificant": true,
@@ -42,7 +42,8 @@
       "SIN", "COS", "TAN", "ASIN", "ACOS", "ATAN", "ATN", "SQRT", "SQR", "ABS", "BIN", "BCD", "ROUND", "RND",
       "FIX", "FUP", "LN", "EXP", "POW", "ADP", "AX", "AXNUM", "POPEN", "PCLOS", "DPRNT", "BPRNT"
     ],
-    "programNames": "<[A-Za-z0-9+\\-_.]+>"
+    "programNames": "<[A-Za-z0-9+\\-_.]+>",
+    "maxWordDigits": 8
   },
   "addresses": {
     "tool": "T",

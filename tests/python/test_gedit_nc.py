@@ -1387,6 +1387,48 @@ class TestNormalizeCode(unittest.TestCase):
                 self.assertEqual(gedit_nc.normalize_code(written), canonical)
 
 
+class TestNormalizeCodeIsRemembered(unittest.TestCase):
+    def test_a_repeated_spelling_is_answered_from_the_cache(self):
+        gedit_nc.normalize_code.cache_clear()
+        for _ in range(50):
+            self.assertEqual(gedit_nc.normalize_code("g01"), "G1")
+        info = gedit_nc.normalize_code.cache_info()
+        self.assertEqual((info.misses, info.hits), (1, 49))
+        self.assertGreater(info.maxsize, 0)
+
+
+class TestSharedWordHelpers(unittest.TestCase):
+    """One `is_assignment` and one `same_spindle` for every script (review CODE-9)."""
+
+    def token(self, text, profile_id="sinumerik"):
+        context = helpers.effective_context(profile_id)
+        cp = gedit_nc.compile_profile(context["profile"])
+        tokens, _ = gedit_nc.tokenize_line(text, cp, None)
+        return [t for t in tokens if t.kind == "word"][0]
+
+    def test_an_address_written_with_an_equals_sign_is_an_assignment(self):
+        self.assertTrue(gedit_nc.is_assignment(self.token("S1=900")))
+        self.assertTrue(gedit_nc.is_assignment(self.token("S[2]=500")))
+        self.assertFalse(gedit_nc.is_assignment(self.token("S900")))
+        self.assertFalse(gedit_nc.is_assignment(self.token("G1 X1")))
+
+    def test_the_scripts_use_the_shared_helpers_not_their_own(self):
+        import address_arithmetic
+        import extents
+        import program_checks
+
+        self.assertIs(address_arithmetic.is_assignment, gedit_nc.is_assignment)
+        self.assertIs(program_checks.is_assignment, gedit_nc.is_assignment)
+        self.assertFalse(hasattr(extents, "assigned"))
+
+    def test_one_and_zero_one_are_the_same_spindle(self):
+        self.assertTrue(gedit_nc.same_spindle("01", "1"))
+        self.assertTrue(gedit_nc.same_spindle(" 1 ", "1"))
+        self.assertFalse(gedit_nc.same_spindle("2", "1"))
+        self.assertTrue(gedit_nc.same_spindle("b", "B"))
+        self.assertFalse(gedit_nc.same_spindle("", ""))
+
+
 class TestNumberFormatOf(unittest.TestCase):
     def test_a_profile_without_a_number_format_gets_the_one_that_changes_nothing(self):
         fmt = gedit_nc.number_format_of(helpers.load_profile("fanuc-gcode"))

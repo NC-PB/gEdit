@@ -1,0 +1,13 @@
+{
+  "note": "The mark and the blanks behind it go, before or behind the number; packed blocks are glued back as they were.",
+  "profile": "fanuc-gcode",
+  "mode": "remove",
+  "options": {
+    "level": "all"
+  },
+  "expect": {
+    "summary": "ncBlockSkip.removeRun.summary",
+    "skipped": [],
+    "warnings": []
+  }
+}

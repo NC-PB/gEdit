@@ -1,0 +1,24 @@
+{
+  "note": "The tape marker and the program number are not blocks the program may skip; they are listed and left, the rest is marked.",
+  "profile": "fanuc-gcode",
+  "mode": "add",
+  "options": {},
+  "expect": {
+    "summary": "ncBlockSkip.addRun.summary",
+    "skipped": [
+      {
+        "line": 1,
+        "severity": "info"
+      },
+      {
+        "line": 2,
+        "severity": "info"
+      },
+      {
+        "line": 5,
+        "severity": "info"
+      }
+    ],
+    "warnings": []
+  }
+}

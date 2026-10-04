@@ -13,10 +13,13 @@ import { parseMachinesFile } from '$lib/core/machines/file';
 import {
   type Effective,
   type Python,
+  addressArithmeticUnchangedAt0,
   detectsAs,
   effectiveFor,
   mapTools,
+  extentsRun,
   openBytes,
+  programChecksRun,
   roundTrips,
   station,
   toolListAgrees,
@@ -26,7 +29,19 @@ import {
 import type { MachineConfig, MachineParams } from '$lib/core/machines/types';
 
 /** The checks, in the order the report prints them (`tests/real/README.md`). */
-export const CHECKS = ['detection', 'unknownTokens', 'map', 'toolList', 'roundTrip', 'scaleFeed', 'scaleSpeed', 'noCrash'] as const;
+export const CHECKS = [
+  'detection',
+  'unknownTokens',
+  'map',
+  'toolList',
+  'roundTrip',
+  'scaleFeed',
+  'scaleSpeed',
+  'programChecks',
+  'extents',
+  'addressArithmetic',
+  'noCrash',
+] as const;
 export type Check = (typeof CHECKS)[number];
 
 /** An `allowUnknown` entry: a token text (case ignored), `/…/` for a pattern, or with a reason. */
@@ -69,6 +84,12 @@ export interface G11Report {
   checks: Record<Check, CheckCounts>;
   failures: Failure[];
   noLongerGaps: { check: Check; index: number }[];
+  /**
+   * M10: what the program checks found, by check id: the rows, and in how many programs.
+   * Not pass or fail (a finding is not a failure), but a check that fires on most of the
+   * owner's correct programs is a check that cries wolf, and this is where that shows.
+   */
+  findings: Record<string, { rows: number; programs: number }>;
 }
 
 /** What a check found for one program: passed, failed (maybe at a line), or not run. */
@@ -133,7 +154,7 @@ function machineOf(program: RealProgram, folder: string): MachineConfig | null {
 }
 
 /** Every check over one program. A check that throws fails, and so does `noCrash`. */
-function checkProgram(program: RealProgram, folder: string, python: Python): Record<Check, Outcome> {
+function checkProgram(program: RealProgram, folder: string, python: Python, found: Map<string, number>): Record<Check, Outcome> {
   const out = Object.fromEntries(CHECKS.map((check) => [check, SKIP])) as Record<Check, Outcome>;
   let crashed = false;
   const guard = (check: Check, run: () => Outcome): void => {
@@ -212,6 +233,18 @@ function checkProgram(program: RealProgram, folder: string, python: Python): Rec
     });
     guard('scaleFeed', () => (unchangedAt100(python, 'scale_feed.py', text, effective) ? PASS : fail()));
     guard('scaleSpeed', () => (unchangedAt100(python, 'scale_speed.py', text, effective) ? PASS : fail()));
+    // M10: the three scripts that read the program, started the way the app starts them.
+    // A finding is no failure; the run must end with a well-formed report.
+    guard('programChecks', () => {
+      const rows = programChecksRun(python, text, effective);
+      if (rows === null) return fail();
+      for (const [id, count] of rows) found.set(id, (found.get(id) ?? 0) + count);
+      return PASS;
+    });
+    guard('extents', () => (extentsRun(python, text, effective) ? PASS : fail()));
+    // Adding nothing to Z changes nothing: every word is left as written (the byte-for-byte
+    // guard of M9 for a script that rewrites values).
+    guard('addressArithmetic', () => (addressArithmeticUnchangedAt0(python, text, effective) ? PASS : fail()));
   }
   out.noCrash = crashed ? fail() : PASS;
   return out;
@@ -225,9 +258,16 @@ export function runG11(folder: string, programs: readonly RealProgram[], source:
   >;
   const failures: Failure[] = [];
   const noLongerGaps: { check: Check; index: number }[] = [];
+  const findings: G11Report['findings'] = {};
 
   programs.forEach((program, index) => {
-    const outcomes = checkProgram(program, folder, python);
+    const found = new Map<string, number>();
+    const outcomes = checkProgram(program, folder, python, found);
+    for (const [id, rows] of found) {
+      const entry = (findings[id] ??= { rows: 0, programs: 0 });
+      entry.rows += rows;
+      entry.programs++;
+    }
     for (const check of CHECKS) {
       const outcome = outcomes[check];
       const gap = check !== 'noCrash' && typeof program.knownGaps?.[check] === 'string';
@@ -243,7 +283,7 @@ export function runG11(folder: string, programs: readonly RealProgram[], source:
     }
   });
 
-  return { $format: 1, source, programs: programs.length, checks, failures, noLongerGaps };
+  return { $format: 1, source, programs: programs.length, checks, failures, noLongerGaps, findings };
 }
 
 /** The printed form of a report: one line per check, then the failures (README format). */
@@ -264,5 +304,7 @@ export function formatReport(report: G11Report): string[] {
   lines.push(`G11 failures: ${failed.length > 0 ? failed.join('; ') : '(none)'}`);
   const gone = report.noLongerGaps.map((g) => `${g.check} #${g.index}`);
   lines.push(`G11 no longer a gap: ${gone.length > 0 ? gone.join('; ') : '(none)'}`);
+  const found = Object.entries(report.findings ?? {}).sort((a, b) => b[1].rows - a[1].rows || a[0].localeCompare(b[0]));
+  lines.push(`G11 programChecks findings: ${found.length > 0 ? found.map(([id, f]) => `${id} ${f.rows} in ${f.programs}`).join('; ') : '(none)'}`);
   return lines;
 }

@@ -41,6 +41,38 @@ export interface CodeParam {
    * and the G10 review reads first.
    */
   unit?: NumberClass | 'increment' | 'count';
+  /**
+   * P10 (roadmap R8, accepted 2026-10-01; plan §7.2, §7.16 #106). What this parameter is to a
+   * program shift (address arithmetic, WP10.4), stated per parameter so that nothing is
+   * guessed from its name:
+   *   - `'tool-axis'`: an **absolute** coordinate on the tool axis — the hole's reference
+   *     plane, retraction plane, surface or depth (Fanuc mill `R` under `G90`, Klartext
+   *     `Q203`, Sinumerik `RTP`, `RFP`, `DP`, `FDEP`). A shift on the tool axis moves it with
+   *     the axis words. The tool axis is `Z` while the plane in force is `XY`; in any other
+   *     plane, or an unknown one, the call is refused (Fanuc's drilling axis is a parameter
+   *     there, a Sinumerik cycle can select its own).
+   *   - `'none'`: reviewed, and no absolute position — a distance from another value, a feed,
+   *     a dwell, a count, a direction (Klartext `Q200`, `Q201`, Sinumerik `SDIS`, `DPR`).
+   *   - `'other'`: an absolute position the role does not cover (a point in the working
+   *     plane, a pivot, a point of a rotated frame, a coordinate that adds to the one of
+   *     another block). The block is refused and listed whenever the entry has one.
+   *   - `'mode'`: a mode argument that can change whether, or on which axis, the other
+   *     parameters are positions (Sinumerik `_DMODE`, `_AMODE`, `_GMODE`, `_AXN`). Absent,
+   *     empty or `0` keeps the documented reading; any other value refuses the call.
+   * Absent: **not reviewed**. A cycle call that writes a parameter without a role, or an
+   * argument its entry does not describe, is refused and listed; an axis word is an axis
+   * word unless its own parameter says `'other'`. Read through `positionOf` (`lookup.ts`) /
+   * `gedit_nc.position_of`; the G10 table lists every role.
+   */
+  position?: 'tool-axis' | 'none' | 'other' | 'mode';
+  /**
+   * M10 review (NC-3). The parameter is a **coordinate of this axis** (an axis of the
+   * profile's `addresses.axes`), read in the distance mode in force like the axis word
+   * itself: the intermediate point `I1=`, `J1=`, `K1=` of the Sinumerik `CIP` arc (`X`, `Y`,
+   * `Z`). Address arithmetic moves it with its axis, so the three points of the arc stay one
+   * circle. Absent: the parameter is no coordinate of an axis.
+   */
+  axis?: string;
 }
 
 /**
@@ -98,6 +130,45 @@ export interface CodeSets {
   speedLimitBound?: 'upper' | 'lower';
   /** Switches diameter programming (Sinumerik `DIAMON` on, `DIAMOF` off, `DIAM90` absolute-only). */
   diameter?: 'on' | 'off' | 'absolute-only';
+  /**
+   * P10 (owner/orchestrator decision of 2026-10-04; plan §7.2, §7.16 #107). Switches
+   * **tool centre point control** on or off: while it is on, the `X`/`Y`/`Z` of a block are
+   * the tool tip in the workpiece, whatever the rotary axes do (Fanuc `G43.4`/`G43.5` on,
+   * `G49` off; Klartext `M128` and `FUNCTION TCPM` on, `M129` and `FUNCTION RESET TCPM`
+   * off; Sinumerik `TRAORI` on, `TRAFOOF` off). It is **no frame** (`CodeEntry.frame`): a
+   * block under it can be judged. The modal state's `tcp` follows it (§7.4); another code of
+   * the same modal group as the code that switched it on (`G43` after `G43.4`) ends it too.
+   */
+  tcp?: 'on' | 'off';
+  /**
+   * P10 (§7.2, §7.4, §7.16 #108). A bare axis letter in this block (an axis word without a
+   * value: `TOOL CALL 1 Z S3000`) names the **tool axis**, and with it the working plane:
+   * `Z` → `XY`, `Y` → `ZX`, `X` → `YZ`; another letter makes the plane unknown. Set on the
+   * Klartext tool call, which is where that control takes its plane from. Only `true`.
+   */
+  planeFromAxisWord?: boolean;
+  /**
+   * M10 (WP10.2, the program checks; plan §7.16). The code starts (`'on'`) or stops
+   * (`'off'`) the spindle the program's plain speed word drives (`M3`, `M4` / `M5`; Klartext
+   * `M13`, `M14`). A spindle addressed by its number (`M2=3`) is the script's reading of the
+   * assignment, never a code.
+   */
+  spindle?: 'on' | 'off';
+  /** M10 (WP10.2). The same for a driven tool's own spindle (Okuma `M13`, `M14` / `M12`). */
+  toolSpindle?: 'on' | 'off';
+  /**
+   * M10 (WP10.2). The code moves at rapid (`'rapid'`: `G0`) or at the feed (`'feed'`: the
+   * path and thread moves, the Klartext path functions). A block cuts only under `'feed'`.
+   */
+  motion?: 'rapid' | 'feed';
+  /** M10 (WP10.2). Cutter or nose radius compensation on (`G41`, `G42`, `RL`, `RR`) or off (`G40`, `R0`). */
+  radiusComp?: 'on' | 'off';
+  /** M10 (WP10.2). A tool length offset on (`G43`, `G44`, `G43.4`, `G43.5`) or off (`G49`). */
+  lengthComp?: 'on' | 'off';
+  /** M10 (WP10.2). Leaving this modal code sets the spindle speed to zero (Sinumerik `G331`, `G332`). */
+  exitSpeed?: 'zero';
+  /** M10 (WP10.2). From this code on the control reads its ISO dialect (`'iso'`, Sinumerik `G291`) or its own language (`'native'`, `G290`). */
+  language?: 'iso' | 'native';
 }
 
 /** One G/M code, address keyword or cycle. */
@@ -206,14 +277,76 @@ export interface CodeEntry {
    * P9 (roadmap R3, §7.2, §7.16). The code opens or closes a coordinate frame that is not
    * the program's own: a tilted working plane, a rotation, a transformation or a shift
    * (`'open'`: Fanuc `G68`, `G68.2`–`G68.4`, `G51.1`, Klartext `PLANE SPATIAL`, cycle 19,
-   * Sinumerik `CYCLE800`, `TRAORI`, `ROT`; `'close'`: `G69`, `G69.1`, `PLANE RESET`,
-   * `TRAFOOF`). A consumer that needs the plain frame treats every block from an
-   * `'open'` to the next `'close'` as inside a frame. Where the same code both opens and
-   * closes, depending on its values (`CYCLE800()` with zero angles, `G52 X0 Y0`), it is
-   * `'open'`: the safe reading, which refuses where it could have worked.
+   * Sinumerik `CYCLE800`, `TRANSMIT`, `ROT`; `'close'`: `G69`, `G69.1`, `PLANE RESET`,
+   * `TRAFOOF`). Where the same code both opens and closes, depending on its values
+   * (`CYCLE800()` with zero angles, `G52 X0 Y0`), it is `'open'`: the safe reading, which
+   * refuses where it could have worked.
+   *
+   * P10 (§7.4 rule 13, §7.16 #109): a `'close'` ends the open frames **of its own
+   * `group`** (a close without a group, those without one): `G69` ends `G68`, not the
+   * scaling of `G51`; `PLANE RESET` ends a `PLANE` and cycle 19, not the mirror of cycle 8;
+   * `TRAFOOF` ends `TRANSMIT`, not `CYCLE800`. Opening a code that is already open does not
+   * stack. The modal state's `frame` is the frame in force; tool centre point control is
+   * `sets.tcp`, never a frame (`TRAORI` lost its `'open'` at P10).
    * Set by WP9.1 and WP9.2; read by WP10.3 and WP10.4 instead of a list of codes.
    */
   frame?: 'open' | 'close';
+  /**
+   * P10 (§7.4 rule 13, §7.16 #109). Written **without values** — an empty argument list
+   * (`CYCLE800()`), or a block with no value word besides its codes (`TRANS`, `ROT`,
+   * `SCALE`, `MIRROR` alone) — the code closes the open frames of its own `group`, whatever
+   * `frame` says. The Siemens manuals state both: `CYCLE800()` clears the swivel frames, and
+   * a frame instruction without an axis clears the programmable frame. Only `'close'`.
+   * Anything with a value keeps the safe reading of `frame` (`'open'`).
+   */
+  frameWithoutValues?: 'close';
+  /**
+   * M10 (WP10.2, the program checks; plan §7.16). The states in which the control refuses
+   * this code, each one of `tcp`, `radiusComp`, `lengthComp`, `cycle` (a modal cycle or call),
+   * `surfaceSpeed`, `feedNotPerMinute`, or `frame:<group>` (an open frame of that group); a
+   * leading `!` turns one round ("refused unless"): Fanuc `G53.1` is `['!frame:frame']`. Read
+   * by `program_checks.py` (`stateConflicts`).
+   */
+  conflicts?: string[];
+  /**
+   * M10 (WP10.2). The code has to stand in a block of its own (Fanuc `G53.1`, Okuma `M110`).
+   * On a `wordsAreData` code (a macro call, `G65`) its arguments may follow it.
+   */
+  alone?: boolean;
+  /** M10 (WP10.2). The block of this code has to write at least one of these addresses or keywords (Klartext `PLANE …` one of `MOVE`, `TURN`, `STAY`). */
+  requires?: string[];
+  /**
+   * M10 (WP10.2). The blocks from an `'open'` code to its `'close'` describe a contour a later
+   * cycle machines (the Okuma LAP shape between `G81`/`G82`/`G83` and `G80`); they do not move.
+   */
+  contour?: 'open' | 'close';
+  /**
+   * M10 review (NC-2). The circle centre or pole of a dialect that writes it in a block of its
+   * own (Klartext `CC`): `'set'` on the code whose axis words are the pole, `'use'` on the
+   * codes that move around it (`C`, `LP`, `CP`, `CTP`). The axis words of a `'set'` block are
+   * a **position** in the program's frame (absolute, or with the incremental prefix relative
+   * to the last position), not data, even though the entry keeps `axisWords: 'data'` for the
+   * readers that only ask whether the block moves: address arithmetic moves an absolute pole
+   * with its axes, extents work out the polar moves from it.
+   */
+  pole?: 'set' | 'use';
+  /**
+   * M10 review (NC-6). The code runs another program and hands it the block's words as its
+   * arguments (Fanuc `G65`). Unlike a data code (`G10`, `G52`), those arguments may be
+   * absolute positions of this program (a probing or protected move), so address arithmetic
+   * refuses and lists a block whose call writes a chosen address with a number. Only `true`;
+   * usually together with `wordsAreData`.
+   */
+  call?: boolean;
+  /**
+   * M10 review (NC-7). The axis words of this code shift or set the program's coordinate
+   * system (Fanuc `G52`, `G92`, the lathe `G50`, `G10`; Sinumerik `TRANS`, `ATRANS`; Okuma
+   * `G50`): the absolute positions after it lie in another system than those before it, so
+   * the extents start a new group there, and a multiply or divide refuses to scale it. A
+   * block that writes no axis word (`G50 S2000`, a clamp) shifts nothing, except where it
+   * writes no value at all (`TRANS` alone, a reset). Only `true`.
+   */
+  shift?: boolean;
 }
 
 /** One dialect's database, as stored in JSON. */

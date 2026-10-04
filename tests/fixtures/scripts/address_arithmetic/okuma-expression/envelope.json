@@ -1,0 +1,23 @@
+{
+  "message": "Added 0.5 to X (as a diameter) and Z in 3 words on 2 blocks. Left 3 words as written: 3 variables or expressions. Machine 'Lathe 1mm': numbers are read as written; X is a diameter.",
+  "findings": [
+    {
+      "line": 4,
+      "severity": "info",
+      "message": "X=V1+2: a variable or an expression, which this script does not compute.",
+      "reason": "expression"
+    },
+    {
+      "line": 6,
+      "severity": "info",
+      "message": "X=V2: a variable or an expression, which this script does not compute.",
+      "reason": "expression"
+    },
+    {
+      "line": 6,
+      "severity": "info",
+      "message": "Z=V3: a variable or an expression, which this script does not compute.",
+      "reason": "expression"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "title": "Extents",
+  "columns": [
+    {
+      "key": "where",
+      "label": "Where"
+    },
+    {
+      "key": "axis",
+      "label": "Axis"
+    },
+    {
+      "key": "min",
+      "label": "Min"
+    },
+    {
+      "key": "minLine",
+      "label": "At line"
+    },
+    {
+      "key": "max",
+      "label": "Max"
+    },
+    {
+      "key": "maxLine",
+      "label": "At line"
+    },
+    {
+      "key": "unresolved",
+      "label": "Not resolved"
+    }
+  ],
+  "rows": [
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "X (diameter)",
+      "axisId": "X",
+      "min": "",
+      "minLine": "",
+      "max": "",
+      "maxLine": "",
+      "unresolved": 4,
+      "line": 4
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "",
+      "minLine": "",
+      "max": "",
+      "maxLine": "",
+      "unresolved": 4,
+      "line": 4
+    }
+  ],
+  "message": "No machine: readings assumed from the profile defaults, and a word whose reading depends on the machine is not resolved. X is a diameter: diameter programming is on (assumed from the profile). 8 positions not resolved; the findings say why.",
+  "findings": [
+    {
+      "line": 4,
+      "severity": "warning",
+      "message": "8 words, first X200 (line 4): the value depends on how the machine reads a number (okuma-1mm: 200 mm; okuma-1um: 0.2 mm; okuma-10um: 2 mm). Not resolved; choose a machine for this document to read them.",
+      "reason": "machine-dependent"
+    }
+  ]
+}

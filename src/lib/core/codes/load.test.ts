@@ -69,7 +69,8 @@ describe('built-in code databases', () => {
     expect(setsOf(fanuc.db, 'G83')).toEqual({ cycle: 'start' });
     expect(setsOf(fanuc.db, 'G50')).toEqual({ speedLimit: true });
     expect(setsOf(fanuc.db, 'G96')).toEqual({ speedUnit: 'surface' });
-    expect(setsOf(fanuc.db, 'G0')).toBeUndefined();
+    // M10 (WP10.2): the program checks read a rapid from the database too.
+    expect(setsOf(fanuc.db, 'G0')).toEqual({ motion: 'rapid' });
   });
 
   it('has no duplicate code and no duplicate alias', () => {

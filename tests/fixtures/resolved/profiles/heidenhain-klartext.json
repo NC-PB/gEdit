@@ -1,5 +1,10 @@
 {
   "addresses": {
+    "angular": [
+      "A",
+      "B",
+      "C"
+    ],
     "axes": [
       "X",
       "Y",
@@ -104,6 +109,7 @@
     "end": [
       "\\bEND\\s+PGM\\b"
     ],
+    "endRecord": true,
     "start": [
       "\\bBEGIN\\s+PGM\\s+(?<name>\\S+)"
     ]

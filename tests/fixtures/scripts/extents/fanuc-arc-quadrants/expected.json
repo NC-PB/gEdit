@@ -1,0 +1,313 @@
+{
+  "title": "Extents",
+  "columns": [
+    {
+      "key": "where",
+      "label": "Where"
+    },
+    {
+      "key": "axis",
+      "label": "Axis"
+    },
+    {
+      "key": "min",
+      "label": "Min"
+    },
+    {
+      "key": "minLine",
+      "label": "At line"
+    },
+    {
+      "key": "max",
+      "label": "Max"
+    },
+    {
+      "key": "maxLine",
+      "label": "At line"
+    },
+    {
+      "key": "unresolved",
+      "label": "Not resolved"
+    }
+  ],
+  "rows": [
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "X",
+      "axisId": "X",
+      "min": "-10",
+      "minLine": 13,
+      "max": "10",
+      "maxLine": 19,
+      "unresolved": 0,
+      "line": 19
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "-10",
+      "minLine": 16,
+      "max": "10",
+      "maxLine": 10,
+      "unresolved": 0,
+      "line": 10
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "0",
+      "minLine": 6,
+      "max": "0",
+      "maxLine": 6,
+      "unresolved": 0,
+      "line": 6
+    },
+    {
+      "where": "G54 (line 4)",
+      "scope": "offset",
+      "axis": "X",
+      "axisId": "X",
+      "min": "-10",
+      "minLine": 13,
+      "max": "10",
+      "maxLine": 19,
+      "unresolved": 0,
+      "line": 19
+    },
+    {
+      "where": "G54 (line 4)",
+      "scope": "offset",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "-10",
+      "minLine": 16,
+      "max": "10",
+      "maxLine": 10,
+      "unresolved": 0,
+      "line": 10
+    },
+    {
+      "where": "G54 (line 4)",
+      "scope": "offset",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "0",
+      "minLine": 6,
+      "max": "0",
+      "maxLine": 6,
+      "unresolved": 0,
+      "line": 6
+    },
+    {
+      "where": "G54, T1 (line 5)",
+      "scope": "tool",
+      "axis": "X",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 7,
+      "max": "10",
+      "maxLine": 6,
+      "unresolved": 0,
+      "line": 6
+    },
+    {
+      "where": "G54, T1 (line 5)",
+      "scope": "tool",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "0",
+      "minLine": 6,
+      "max": "10",
+      "maxLine": 7,
+      "unresolved": 0,
+      "line": 7
+    },
+    {
+      "where": "G54, T1 (line 5)",
+      "scope": "tool",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "0",
+      "minLine": 6,
+      "max": "0",
+      "maxLine": 6,
+      "unresolved": 0,
+      "line": 6
+    },
+    {
+      "where": "G54, T2 (line 8)",
+      "scope": "tool",
+      "axis": "X",
+      "axisId": "X",
+      "min": "-7.0711",
+      "minLine": 10,
+      "max": "7.0711",
+      "maxLine": 9,
+      "unresolved": 0,
+      "line": 9
+    },
+    {
+      "where": "G54, T2 (line 8)",
+      "scope": "tool",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "7.0711",
+      "minLine": 9,
+      "max": "10",
+      "maxLine": 10,
+      "unresolved": 0,
+      "line": 10
+    },
+    {
+      "where": "G54, T3 (line 11)",
+      "scope": "tool",
+      "axis": "X",
+      "axisId": "X",
+      "min": "-10",
+      "minLine": 13,
+      "max": "-7.0711",
+      "maxLine": 12,
+      "unresolved": 0,
+      "line": 12
+    },
+    {
+      "where": "G54, T3 (line 11)",
+      "scope": "tool",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "-7.0711",
+      "minLine": 13,
+      "max": "7.0711",
+      "maxLine": 12,
+      "unresolved": 0,
+      "line": 12
+    },
+    {
+      "where": "G54, T4 (line 14)",
+      "scope": "tool",
+      "axis": "X",
+      "axisId": "X",
+      "min": "-7.0711",
+      "minLine": 15,
+      "max": "7.0711",
+      "maxLine": 16,
+      "unresolved": 0,
+      "line": 16
+    },
+    {
+      "where": "G54, T4 (line 14)",
+      "scope": "tool",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "-10",
+      "minLine": 16,
+      "max": "-7.0711",
+      "maxLine": 15,
+      "unresolved": 0,
+      "line": 15
+    },
+    {
+      "where": "G54, T5 (line 17)",
+      "scope": "tool",
+      "axis": "X",
+      "axisId": "X",
+      "min": "7.0711",
+      "minLine": 18,
+      "max": "10",
+      "maxLine": 19,
+      "unresolved": 0,
+      "line": 19
+    },
+    {
+      "where": "G54, T5 (line 17)",
+      "scope": "tool",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "-7.0711",
+      "minLine": 18,
+      "max": "7.0711",
+      "maxLine": 19,
+      "unresolved": 0,
+      "line": 19
+    },
+    {
+      "where": "G54, T6 (line 20)",
+      "scope": "tool",
+      "axis": "X",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 21,
+      "max": "10",
+      "maxLine": 22,
+      "unresolved": 0,
+      "line": 22
+    },
+    {
+      "where": "G54, T6 (line 20)",
+      "scope": "tool",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "0",
+      "minLine": 22,
+      "max": "10",
+      "maxLine": 21,
+      "unresolved": 0,
+      "line": 21
+    },
+    {
+      "where": "G54, T7 (line 23)",
+      "scope": "tool",
+      "axis": "X",
+      "axisId": "X",
+      "min": "-10",
+      "minLine": 25,
+      "max": "10",
+      "maxLine": 24,
+      "unresolved": 0,
+      "line": 24
+    },
+    {
+      "where": "G54, T7 (line 23)",
+      "scope": "tool",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "-10",
+      "minLine": 25,
+      "max": "10",
+      "maxLine": 25,
+      "unresolved": 0,
+      "line": 25
+    },
+    {
+      "where": "G54, T8 (line 26)",
+      "scope": "tool",
+      "axis": "X",
+      "axisId": "X",
+      "min": "-10",
+      "minLine": 28,
+      "max": "10",
+      "maxLine": 27,
+      "unresolved": 0,
+      "line": 27
+    },
+    {
+      "where": "G54, T8 (line 26)",
+      "scope": "tool",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "-10",
+      "minLine": 28,
+      "max": "10",
+      "maxLine": 28,
+      "unresolved": 0,
+      "line": 28
+    }
+  ],
+  "message": "No machine: readings assumed from the profile defaults, and a word whose reading depends on the machine is not resolved.",
+  "findings": []
+}

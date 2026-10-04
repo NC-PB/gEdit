@@ -1,0 +1,41 @@
+{
+  "message": "Added 0.5 to Z in 4 words on 4 blocks. Left 6 blocks as written: 6 rotary moves without tool centre point control. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 7,
+      "severity": "warning",
+      "message": "G43 H1 Z120.: writes Z before the program first writes B (line 9), so its angle here is not known and tool centre point control is off: the tool tip may not move by the shift there.",
+      "reason": "rotary-without-tcp"
+    },
+    {
+      "line": 10,
+      "severity": "warning",
+      "message": "G0 X0. Y0. Z50.: writes Z while B is turned (or its angle is not known) and tool centre point control is off: the tool tip does not move by the shift there.",
+      "reason": "rotary-without-tcp"
+    },
+    {
+      "line": 11,
+      "severity": "warning",
+      "message": "G1 Z10. F100.: writes Z while B is turned (or its angle is not known) and tool centre point control is off: the tool tip does not move by the shift there.",
+      "reason": "rotary-without-tcp"
+    },
+    {
+      "line": 12,
+      "severity": "warning",
+      "message": "G1 X10. Z5. B85.: moves B together with Z while tool centre point control is off: the tool tip does not move by the shift there.",
+      "reason": "rotary-without-tcp"
+    },
+    {
+      "line": 13,
+      "severity": "warning",
+      "message": "G0 Z100.: writes Z while B is turned (or its angle is not known) and tool centre point control is off: the tool tip does not move by the shift there.",
+      "reason": "rotary-without-tcp"
+    },
+    {
+      "line": 21,
+      "severity": "warning",
+      "message": "G0 Z200.: writes Z while B is turned (or its angle is not known) and tool centre point control is off: the tool tip does not move by the shift there.",
+      "reason": "rotary-without-tcp"
+    }
+  ]
+}

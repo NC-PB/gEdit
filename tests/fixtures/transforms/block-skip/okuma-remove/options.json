@@ -1,0 +1,11 @@
+{
+  "note": "Okuma has no levels: every mark at the head goes, behind the sequence name too.",
+  "profile": "okuma-osp",
+  "mode": "remove",
+  "options": {},
+  "expect": {
+    "summary": "ncBlockSkip.removeRun.summary",
+    "skipped": [],
+    "warnings": []
+  }
+}

@@ -1,0 +1,194 @@
+{
+  "title": "Extents",
+  "columns": [
+    {
+      "key": "where",
+      "label": "Where"
+    },
+    {
+      "key": "axis",
+      "label": "Axis"
+    },
+    {
+      "key": "min",
+      "label": "Min"
+    },
+    {
+      "key": "minLine",
+      "label": "At line"
+    },
+    {
+      "key": "max",
+      "label": "Max"
+    },
+    {
+      "key": "maxLine",
+      "label": "At line"
+    },
+    {
+      "key": "unresolved",
+      "label": "Not resolved"
+    }
+  ],
+  "rows": [
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "X (diameter)",
+      "axisId": "X",
+      "min": "40",
+      "minLine": 18,
+      "max": "100",
+      "maxLine": 17,
+      "unresolved": 1,
+      "line": 17
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-15",
+      "minLine": 23,
+      "max": "1000",
+      "maxLine": 12,
+      "unresolved": 3,
+      "line": 12
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "C",
+      "axisId": "C",
+      "min": "90",
+      "minLine": 22,
+      "max": "90",
+      "maxLine": 22,
+      "unresolved": 1,
+      "line": 22
+    },
+    {
+      "where": "T0101 (line 7)",
+      "scope": "tool",
+      "axis": "X (diameter)",
+      "axisId": "X",
+      "min": "50",
+      "minLine": 12,
+      "max": "100",
+      "maxLine": 17,
+      "unresolved": 1,
+      "line": 17
+    },
+    {
+      "where": "T0101 (line 7)",
+      "scope": "tool",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-10",
+      "minLine": 13,
+      "max": "1000",
+      "maxLine": 12,
+      "unresolved": 2,
+      "line": 12
+    },
+    {
+      "where": "T0505 (line 18)",
+      "scope": "tool",
+      "axis": "X (diameter)",
+      "axisId": "X",
+      "min": "40",
+      "minLine": 18,
+      "max": "100",
+      "maxLine": 25,
+      "unresolved": 0,
+      "line": 25
+    },
+    {
+      "where": "T0505 (line 18)",
+      "scope": "tool",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-15",
+      "minLine": 23,
+      "max": "100",
+      "maxLine": 25,
+      "unresolved": 1,
+      "line": 25
+    },
+    {
+      "where": "T0505 (line 18)",
+      "scope": "tool",
+      "axis": "C",
+      "axisId": "C",
+      "min": "90",
+      "minLine": 22,
+      "max": "90",
+      "maxLine": 22,
+      "unresolved": 1,
+      "line": 22
+    },
+    {
+      "where": "G28 (line 6)",
+      "scope": "machine",
+      "axis": "U",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 6,
+      "max": "0",
+      "maxLine": 6,
+      "unresolved": 0,
+      "line": 6
+    },
+    {
+      "where": "G28 (line 6)",
+      "scope": "machine",
+      "axis": "W",
+      "axisId": "Z",
+      "min": "0",
+      "minLine": 6,
+      "max": "0",
+      "maxLine": 6,
+      "unresolved": 0,
+      "line": 6
+    },
+    {
+      "where": "G28 (line 26)",
+      "scope": "machine",
+      "axis": "U",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 26,
+      "max": "0",
+      "maxLine": 26,
+      "unresolved": 0,
+      "line": 26
+    },
+    {
+      "where": "G28 (line 26)",
+      "scope": "machine",
+      "axis": "W",
+      "axisId": "Z",
+      "min": "0",
+      "minLine": 26,
+      "max": "0",
+      "maxLine": 26,
+      "unresolved": 0,
+      "line": 26
+    }
+  ],
+  "message": "No machine: readings assumed from the profile defaults, and a word whose reading depends on the machine is not resolved. X is a diameter: diameter programming is on (assumed from the profile). 5 positions not resolved; the findings say why.",
+  "findings": [
+    {
+      "line": 10,
+      "severity": "warning",
+      "message": "5 words, first X50 (line 10): the value depends on how the machine reads a number (calculator: 50 mm; is-b: 0.05 mm; is-c: 0.005 mm). Not resolved; choose a machine for this document to read them.",
+      "reason": "machine-dependent"
+    },
+    {
+      "line": 14,
+      "severity": "info",
+      "message": "G4, 2 blocks: its axis words are values, not positions; left out of the ranges.",
+      "reason": "data"
+    }
+  ]
+}

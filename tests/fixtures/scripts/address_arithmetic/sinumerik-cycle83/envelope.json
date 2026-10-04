@@ -1,0 +1,35 @@
+{
+  "message": "Added 0.5 to Z in 12 words on 5 blocks, 10 of them cycle positions. Left 4 blocks and 1 word as written: 3 cycles in another mode, 1 cycle with a variable position, 1 incremental word. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 10,
+      "severity": "warning",
+      "message": "N90 CYCLE83(10, 0, 2, -30, , -5, , 1, 0, 0, 1, 0, 0, 0, 0,…: _AMODE is 1, a mode the cycle reads its positions in that a shift cannot judge.",
+      "reason": "cycle-mode"
+    },
+    {
+      "line": 11,
+      "severity": "warning",
+      "message": "N100 CYCLE81(10,R1,2,-30): RFP is written as R1, a variable or an expression, so it cannot be moved with the Z words.",
+      "reason": "cycle-expression"
+    },
+    {
+      "line": 12,
+      "severity": "warning",
+      "message": "N110 MCALL CYCLE81(10,0,2,-12,,,1): _GMODE is 1, a mode the cycle reads its positions in that a shift cannot judge.",
+      "reason": "cycle-mode"
+    },
+    {
+      "line": 13,
+      "severity": "warning",
+      "message": "N120 X40 Y40: part of the same cycle as line 12, which is left as written (another mode).",
+      "reason": "cycle-mode"
+    },
+    {
+      "line": 15,
+      "severity": "info",
+      "message": "Z5: the distance mode is incremental here, so a shift does not apply to it.",
+      "reason": "incremental"
+    }
+  ]
+}

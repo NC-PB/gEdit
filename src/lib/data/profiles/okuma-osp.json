@@ -81,7 +81,8 @@
       "EOR",
       "NOT"
     ],
-    "maxLineLength": 158
+    "maxLineLength": 158,
+    "maxMCodes": 8
   },
   "addresses": {
     "tool": "T",

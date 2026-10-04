@@ -1,0 +1,38 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 11,
+      "check": "Spindle",
+      "checkId": "spindleOff",
+      "severity": "warning",
+      "message": "G1 X40.: a cut while the spindle is stopped (M5 on line 10)"
+    }
+  ],
+  "message": "1 finding in 1 check. No machine chosen: where the presets read a number differently, the finding lists every reading.",
+  "findings": [
+    {
+      "line": 8,
+      "severity": "info",
+      "message": "The program frame, the jump targets and the profile targets need the whole program; they are not checked in a selection."
+    }
+  ]
+}

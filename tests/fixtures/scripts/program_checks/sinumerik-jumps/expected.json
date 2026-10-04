@@ -1,0 +1,53 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 7,
+      "check": "Jump target",
+      "checkId": "jumpTargets",
+      "severity": "error",
+      "message": "GOTOF MISSING_1: no block MISSING_1 in this program"
+    },
+    {
+      "line": 9,
+      "check": "Jump target",
+      "checkId": "jumpTargets",
+      "severity": "warning",
+      "message": "GOTOF SKIP_1: jumps forward, and SKIP_1 stands above it (line 5)"
+    },
+    {
+      "line": 11,
+      "check": "Jump target",
+      "checkId": "jumpTargets",
+      "severity": "warning",
+      "message": "GOTOB LATER_1: jumps back, and LATER_1 stands below it (line 12)"
+    },
+    {
+      "line": 13,
+      "check": "Jump target",
+      "checkId": "jumpTargets",
+      "severity": "error",
+      "message": "LOOP_B: the label is defined twice (lines 10, 13)"
+    }
+  ],
+  "message": "4 findings in 1 check. No machine chosen.",
+  "findings": []
+}

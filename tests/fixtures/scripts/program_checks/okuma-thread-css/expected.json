@@ -1,0 +1,32 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 8,
+      "check": "Thread under surface speed",
+      "checkId": "threadUnderCss",
+      "severity": "warning",
+      "message": "G71 X27.55 Z-30 B60 D0.7 U0.1 H2.45 L2 …: a thread cut under constant surface speed; the speed changes with the diameter and the lead may not follow"
+    }
+  ],
+  "message": "1 finding in 1 check. Machine 'Lathe 1': every number is read as written.",
+  "findings": []
+}

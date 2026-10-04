@@ -1,0 +1,41 @@
+{
+  "message": "Subtracted 0.5 from Z in 3 words on 3 blocks. Left 4 blocks and 2 words as written: 1 machine position, 3 cycles not reviewed, 2 incremental words. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 8,
+      "severity": "info",
+      "message": "W-5.: W moves Z by a distance, so a shift does not apply to it.",
+      "reason": "incremental"
+    },
+    {
+      "line": 9,
+      "severity": "info",
+      "message": "W-2.: W moves Z by a distance, so a shift does not apply to it.",
+      "reason": "incremental"
+    },
+    {
+      "line": 10,
+      "severity": "warning",
+      "message": "G71 U2. R0.5: nobody reviewed the positions of G71 (roadmap R8).",
+      "reason": "cycle-not-reviewed"
+    },
+    {
+      "line": 11,
+      "severity": "warning",
+      "message": "G71 P10 Q20 U0.5 W0.1 F0.25: nobody reviewed the positions of G71 (roadmap R8).",
+      "reason": "cycle-not-reviewed"
+    },
+    {
+      "line": 14,
+      "severity": "warning",
+      "message": "G70 P10 Q20: nobody reviewed the positions of G70 (roadmap R8).",
+      "reason": "cycle-not-reviewed"
+    },
+    {
+      "line": 15,
+      "severity": "warning",
+      "message": "G28 U0. W0.: a machine position (G28): its positions are not in the program's coordinates, so a shift of the program does not apply to them.",
+      "reason": "machine-position"
+    }
+  ]
+}

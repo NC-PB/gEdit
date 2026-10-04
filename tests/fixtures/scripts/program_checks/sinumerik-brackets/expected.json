@@ -1,0 +1,46 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 4,
+      "check": "Brackets",
+      "checkId": "brackets",
+      "severity": "error",
+      "message": "N30 R1=(R2+3: 1 ( is not closed"
+    },
+    {
+      "line": 5,
+      "check": "Brackets",
+      "checkId": "brackets",
+      "severity": "error",
+      "message": "N40 MSG(\"NOT CLOSED): a \" that is not closed"
+    },
+    {
+      "line": 6,
+      "check": "Brackets",
+      "checkId": "brackets",
+      "severity": "error",
+      "message": "N50 R3=R4[1]]: a ] with no [ before it"
+    }
+  ],
+  "message": "3 findings in 1 check. No machine chosen.",
+  "findings": []
+}

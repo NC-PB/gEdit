@@ -1,0 +1,14 @@
+{
+  "profile": "okuma-osp",
+  "machine": {
+    "numberInput": {
+      "classes": {},
+      "incrementDeg": "1",
+      "incrementInch": "1",
+      "incrementMm": "1",
+      "incrementSec": "1",
+      "mode": "calculator"
+    }
+  },
+  "machineName": "Lathe 1"
+}

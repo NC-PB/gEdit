@@ -1,0 +1,23 @@
+{
+  "message": "Multiplied X, Y and Z by 2 in 9 words on 4 blocks. Left 2 blocks and 1 word as written: 2 blocks a multiply or divide does not scale, 1 data word. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 10,
+      "severity": "warning",
+      "message": "G52 X5. Y0.: G52 shifts or sets the coordinate system by X5. and Y0., and whether that shift scales with the program cannot be judged.",
+      "reason": "not-scaled"
+    },
+    {
+      "line": 12,
+      "severity": "warning",
+      "message": "G52 X0. Y0.: G52 shifts or sets the coordinate system by X0. and Y0., and whether that shift scales with the program cannot be judged.",
+      "reason": "not-scaled"
+    },
+    {
+      "line": 13,
+      "severity": "info",
+      "message": "X1.5: a value of G4, not a position of this program.",
+      "reason": "data"
+    }
+  ]
+}

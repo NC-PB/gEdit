@@ -1,0 +1,32 @@
+{
+  "note": "Removing level 2 keeps /1 and /3; a block that carries two levels loses only the asked one.",
+  "profile": "fanuc-gcode",
+  "mode": "remove",
+  "options": {
+    "level": "2"
+  },
+  "expect": {
+    "summary": "ncBlockSkip.removeRun.summary",
+    "skipped": [
+      {
+        "line": 1,
+        "severity": "info"
+      },
+      {
+        "line": 3,
+        "severity": "info"
+      },
+      {
+        "line": 4,
+        "severity": "info"
+      },
+      {
+        "line": 5,
+        "severity": "info"
+      }
+    ],
+    "warnings": [
+      "ncBlockSkip.removeRun.keptLevels"
+    ]
+  }
+}

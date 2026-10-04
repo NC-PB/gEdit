@@ -1,0 +1,41 @@
+{
+  "message": "Added 5 to X, Y and Z in 20 words on 8 blocks. Left 2 blocks and 4 words as written: 2 arcs whose centre or intermediate point cannot be moved, 4 incremental words. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 11,
+      "severity": "info",
+      "message": "X10: the distance mode is incremental here, so a shift does not apply to it.",
+      "reason": "incremental"
+    },
+    {
+      "line": 11,
+      "severity": "info",
+      "message": "Y10: the distance mode is incremental here, so a shift does not apply to it.",
+      "reason": "incremental"
+    },
+    {
+      "line": 11,
+      "severity": "info",
+      "message": "I1=5: the distance mode is incremental here, so a shift does not apply to it.",
+      "reason": "incremental"
+    },
+    {
+      "line": 11,
+      "severity": "info",
+      "message": "J1=8: the distance mode is incremental here, so a shift does not apply to it.",
+      "reason": "incremental"
+    },
+    {
+      "line": 13,
+      "severity": "warning",
+      "message": "N120 G2 X70 Y50 I=AC(R1) J=AC(50): I=AC(R1) is a coordinate of the arc that cannot be computed, so the arc cannot be moved or scaled with its end point.",
+      "reason": "arc-geometry"
+    },
+    {
+      "line": 14,
+      "severity": "warning",
+      "message": "N130 CIP X30 Y50 I1=R2 J1=30: I1=R2 is a coordinate of the arc that cannot be computed, so the arc cannot be moved or scaled with its end point.",
+      "reason": "arc-geometry"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "note": "The mark goes in front of the block number; an unnumbered block takes it at its head; blank lines and the trailing newline get none.",
+  "profile": "fanuc-gcode",
+  "mode": "add",
+  "options": {},
+  "expect": {
+    "summary": "ncBlockSkip.addRun.summary",
+    "skipped": [],
+    "warnings": []
+  }
+}

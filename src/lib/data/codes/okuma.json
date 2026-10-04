@@ -120,6 +120,7 @@
       "code": "G0",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "rapid" },
       "label": "Rapid",
       "description": "Moves to the position at rapid speed. Every axis goes at its own rapid rate instead of in step with the others, so the tool can leave the straight line between start and end."
     },
@@ -127,6 +128,7 @@
       "code": "G1",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "feed" },
       "label": "Linear feed move",
       "description": "Moves to the position on a straight line at the feed in F."
     },
@@ -134,6 +136,7 @@
       "code": "G2",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "feed" },
       "label": "Arc, clockwise",
       "description": "Cuts an arc clockwise in the turning plane. The centre is given by I and K, or the radius by L; with L both X and Z are needed and I and K may not stand in the block.",
       "params": [
@@ -148,6 +151,7 @@
       "code": "G3",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "feed" },
       "label": "Arc, counter-clockwise",
       "description": "Cuts an arc counter-clockwise in the turning plane. The centre is given by I and K, or the radius by L; with L both X and Z are needed and I and K may not stand in the block.",
       "params": [
@@ -182,6 +186,7 @@
       "code": "G15",
       "group": "offset",
       "modal": true,
+      "conflicts": ["surfaceSpeed", "radiusComp"],
       "label": "Program coordinate system",
       "description": "Selects program coordinate system Hn for this block and every block after it; n runs from 1 to 10, 50 or 100, depending on the model. After power-on or a reset the last system chosen with G15 is back. Not allowed while G96 or nose-radius compensation is active.",
       "params": [
@@ -191,6 +196,7 @@
     {
       "code": "G16",
       "group": "offset",
+      "conflicts": ["surfaceSpeed", "radiusComp"],
       "label": "Program coordinate system for one block",
       "description": "Selects program coordinate system Hn for this block only; the next block is back in the system G15 chose. Not allowed while G96 or nose-radius compensation is active.",
       "params": [
@@ -230,6 +236,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "sets": { "motion": "feed" },
       "label": "Thread pass along Z",
       "description": "Cuts one threading pass to the diameter in X, written the same way as G33. A following block with only a new X cuts the next pass. F is the lead of the thread, never a feed rate.",
       "params": [
@@ -247,6 +254,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "sets": { "motion": "feed" },
       "label": "Face thread pass",
       "description": "Cuts one threading pass across the face to the X in the block, at the Z of the pass; the lead runs along X. F is the lead of the thread, never a feed rate.",
       "params": [
@@ -264,6 +272,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "sets": { "motion": "feed" },
       "label": "Thread pass along Z",
       "description": "Cuts one threading pass to the diameter in X and ends at Z. A following block with only a new X cuts the next pass, which is how a post writes a list of passes. F is the lead of the thread, never a feed rate.",
       "params": [
@@ -281,6 +290,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "sets": { "motion": "feed" },
       "label": "Variable-lead thread, lead growing",
       "description": "Cuts a thread whose lead grows by E every turn, starting from the lead in F. Neither F nor E is a feed rate.",
       "params": [
@@ -296,6 +306,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "sets": { "motion": "feed" },
       "label": "Variable-lead thread, lead shrinking",
       "description": "Cuts a thread whose lead shrinks by E every turn, starting from the lead in F. Neither F nor E is a feed rate.",
       "params": [
@@ -313,6 +324,7 @@
       "pitchFeed": true,
       "tapping": true,
       "verify": true,
+      "sets": { "motion": "feed" },
       "label": "Feed in step with the driven tool, forward",
       "description": "Moves the feed axis in step with the turn of the driven-tool spindle. The feed is tied to that spindle like the pitch of a tap, so it may never be scaled on its own."
     },
@@ -323,6 +335,7 @@
       "pitchFeed": true,
       "tapping": true,
       "verify": true,
+      "sets": { "motion": "feed" },
       "label": "Feed in step with the driven tool, reverse",
       "description": "Moves the feed axis in step with the driven-tool spindle turning the other way. The feed is tied to that spindle like the pitch of a tap, so it may never be scaled on its own."
     },
@@ -330,12 +343,14 @@
       "code": "G40",
       "group": "compensation",
       "modal": true,
+      "sets": { "radiusComp": "off" },
       "label": "Nose radius compensation off"
     },
     {
       "code": "G41",
       "group": "compensation",
       "modal": true,
+      "sets": { "radiusComp": "on" },
       "label": "Nose radius compensation, tool left",
       "description": "Offsets the path by the nose radius, with the tool on the left of the part seen along the direction of travel. The radius comes from the nose radius number of the six-digit T word."
     },
@@ -343,6 +358,7 @@
       "code": "G42",
       "group": "compensation",
       "modal": true,
+      "sets": { "radiusComp": "on" },
       "label": "Nose radius compensation, tool right",
       "description": "Offsets the path by the nose radius, with the tool on the right of the part seen along the direction of travel. The radius comes from the nose radius number of the six-digit T word."
     },
@@ -351,6 +367,7 @@
       "group": "nonmodal",
       "sets": { "speedLimit": true },
       "axisWords": "data",
+      "shift": true,
       "label": "Spindle speed limit, or zero shift",
       "description": "With S it is the highest speed the spindle may reach, which a program sets before it turns the constant cutting speed on; the limit holds until another one is set. With X or Z it shifts the zero point for the blocks that follow instead, and no T word may stand in that block.",
       "params": [
@@ -503,24 +520,28 @@
     {
       "code": "G80",
       "group": "lap",
+      "contour": "close",
       "label": "End of a LAP shape",
       "description": "Ends the shape definition that G81, G82 or G83 started. It does not cancel a drilling cycle as on other controls."
     },
     {
       "code": "G81",
       "group": "lap",
+      "contour": "open",
       "label": "Start of a LAP shape along Z",
       "description": "Starts the definition of the finished shape for automatic roughing along Z. Its block carries the sequence name the LAP call refers to. It is not a drilling cycle."
     },
     {
       "code": "G82",
       "group": "lap",
+      "contour": "open",
       "label": "Start of a LAP shape on the face",
       "description": "Starts the definition of the finished shape for automatic roughing across the face. It is not a drilling cycle."
     },
     {
       "code": "G83",
       "group": "lap",
+      "contour": "open",
       "label": "Start of the LAP blank shape",
       "description": "Starts the definition of the blank for automatic roughing. It is not a drilling cycle."
     },
@@ -634,6 +655,7 @@
       "group": "spindlemode",
       "modal": true,
       "sets": { "speedUnit": "surface" },
+      "requires": ["S"],
       "label": "Constant cutting speed",
       "description": "S is a cutting speed from here on, and the control changes the spindle speed with the diameter. The block needs an S word, a speed limit should be set with G50 before it, and no thread may be cut while it is on."
     },
@@ -642,6 +664,7 @@
       "group": "spindlemode",
       "modal": true,
       "sets": { "speedUnit": "rpm" },
+      "requires": ["S"],
       "label": "Fixed spindle speed",
       "description": "S is a speed in revolutions per minute from here on. The block needs an S word."
     },
@@ -649,6 +672,7 @@
       "code": "G101",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "feed" },
       "label": "Contour line with the C axis",
       "description": "Driven-tool contouring: moves in a straight line with X and the C axis together, and Z as well when the block writes it, so a line is cut on the face of the part. F is a feed per minute here, whatever feed mode is in force.",
       "params": [
@@ -662,6 +686,7 @@
       "code": "G102",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "feed" },
       "label": "Contour arc with the C axis, clockwise",
       "description": "Driven-tool contouring: cuts a clockwise arc on the face with X and the C axis together. The arc is given by its radius L and is always the one under 180 degrees, so a longer arc is split into blocks; Z may not move. F is a feed per minute here, whatever feed mode is in force.",
       "params": [
@@ -675,6 +700,7 @@
       "code": "G103",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "feed" },
       "label": "Contour arc with the C axis, counter-clockwise",
       "description": "Driven-tool contouring: cuts a counter-clockwise arc on the face with X and the C axis together. The arc is given by its radius L and is always the one under 180 degrees, so a longer arc is split into blocks; Z may not move. F is a feed per minute here, whatever feed mode is in force.",
       "params": [
@@ -723,6 +749,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "sets": { "motion": "feed" },
       "label": "Thread along an arc, clockwise",
       "description": "Cuts a thread along a clockwise arc, for example in the shape of a LAP thread. The arc is given by a centre in I and K or a radius in L. F is the lead, never a feed rate, and E changes it per thread.",
       "params": [
@@ -734,6 +761,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "sets": { "motion": "feed" },
       "label": "Thread along an arc, counter-clockwise",
       "description": "Cuts a thread along a counter-clockwise arc, for example in the shape of a LAP thread. The arc is given by a centre in I and K or a radius in L. F is the lead, never a feed rate, and E changes it per thread.",
       "params": [
@@ -770,12 +798,14 @@
     {
       "code": "G140",
       "group": "spindle",
+      "conflicts": ["surfaceSpeed", "radiusComp"],
       "label": "Machining with the main spindle",
       "description": "The blocks that follow machine a part held in the main spindle, in its program coordinate system and with its zero offset. It stands at the start of a program, or right after G13 or G14."
     },
     {
       "code": "G141",
       "group": "spindle",
+      "conflicts": ["surfaceSpeed", "radiusComp"],
       "label": "Machining with the sub spindle",
       "description": "The blocks that follow machine a part held in the sub spindle, in its own program coordinate system and with its own zero offset, whose Z runs the other way. Speeds and M codes are written as for the main spindle, so a plain S there may not be the main spindle's."
     },
@@ -1109,18 +1139,21 @@
       "code": "M3",
       "group": "spindle",
       "modal": true,
+      "sets": { "spindle": "on" },
       "label": "Spindle on, forward"
     },
     {
       "code": "M4",
       "group": "spindle",
       "modal": true,
+      "sets": { "spindle": "on" },
       "label": "Spindle on, reverse"
     },
     {
       "code": "M5",
       "group": "spindle",
       "modal": true,
+      "sets": { "spindle": "off" },
       "label": "Spindle stop"
     },
     {
@@ -1144,17 +1177,20 @@
     {
       "code": "M12",
       "group": "spindle",
+      "sets": { "toolSpindle": "off" },
       "label": "Driven-tool spindle stop"
     },
     {
       "code": "M13",
       "group": "spindle",
+      "sets": { "toolSpindle": "on" },
       "label": "Driven-tool spindle on, forward",
       "description": "Starts the driven-tool spindle at the speed in SB=, which is written in the same block or before it. The main spindle is not affected."
     },
     {
       "code": "M14",
       "group": "spindle",
+      "sets": { "toolSpindle": "on" },
       "label": "Driven-tool spindle on, reverse",
       "description": "Starts the driven-tool spindle the other way round, at the speed in SB=. The main spindle is not affected."
     },
@@ -1319,6 +1355,7 @@
     {
       "code": "M110",
       "group": "spindle",
+      "alone": true,
       "label": "C-axis mode on",
       "description": "Couples the C axis to the spindle so it can be positioned for driven tools. It has to stand alone in its block."
     },

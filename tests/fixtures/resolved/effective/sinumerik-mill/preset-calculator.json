@@ -31,6 +31,8 @@
   "profile": {
     "addresses": {
       "angular": [
+        "A",
+        "B",
         "C",
         "AR",
         "SF"
@@ -43,9 +45,11 @@
       "arcCenterMode": "incremental",
       "axes": [
         "X",
+        "Y",
         "Z",
-        "C",
-        "Y"
+        "A",
+        "B",
+        "C"
       ],
       "diameter": [
         "X"
@@ -299,6 +303,7 @@
       "blockSkip": {
         "chars": "/",
         "levels": true,
+        "plainLevel": "0",
         "position": "before-number"
       },
       "calls": true,

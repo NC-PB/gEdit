@@ -1,0 +1,15 @@
+{
+  "about": "M10 prelude (P10, plan §7.4 rules 13 and 14): the frame in force and tool centre point control on a 3+2 and five-axis program. CYCLE800() clears the swivel (frameWithoutValues), a CYCLE800 with values opens it, and TRAORI is tool centre point control, not a frame: TRAFOOF ends it. The X, Y and Z under TRAORI are the tool tip in the workpiece, which is why a block there can be judged.",
+  "input": "../../nc/sinumerik-mill/m02-five-axis.MPF",
+  "states": [
+    { "line": 5, "after": { "plane": "XY", "frame": null, "tcp": null } },
+    { "line": 6, "about": "TRAFOOF at the top ends what was not on: nothing changes.", "after": { "frame": null, "tcp": null } },
+    { "line": 7, "about": "CYCLE800() with no arguments clears the swivel, it opens nothing.", "after": { "frame": null } },
+    { "line": 14, "after": { "frame": "CYCLE800", "tcp": null } },
+    { "line": 19, "about": "The 3+2 moves are inside the swivelled frame.", "after": { "frame": "CYCLE800" } },
+    { "line": 23, "after": { "frame": null } },
+    { "line": 25, "after": { "tcp": "TRAORI", "frame": null } },
+    { "line": 31, "about": "A simultaneous move of A and C under tool centre point control.", "after": { "tcp": "TRAORI", "frame": null } },
+    { "line": 34, "after": { "tcp": null, "frame": null } }
+  ]
+}

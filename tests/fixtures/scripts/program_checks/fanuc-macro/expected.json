@@ -1,0 +1,74 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 12,
+      "check": "DO and END",
+      "checkId": "doEnd",
+      "severity": "error",
+      "message": "END2: the loop DO1 (line 11) is still open inside it; the loops cross"
+    },
+    {
+      "line": 14,
+      "check": "DO and END",
+      "checkId": "doEnd",
+      "severity": "error",
+      "message": "DO4: a loop number has to be 1, 2 or 3"
+    },
+    {
+      "line": 16,
+      "check": "Alone in its block",
+      "checkId": "aloneInBlock",
+      "severity": "error",
+      "message": "G65: has to stand in a block of its own; the block writes G0 in front of it or another G code"
+    },
+    {
+      "line": 17,
+      "check": "Alone in its block",
+      "checkId": "aloneInBlock",
+      "severity": "error",
+      "message": "G65: has to stand in a block of its own; the block writes G90 in front of it or another G code"
+    },
+    {
+      "line": 19,
+      "check": "Jump target",
+      "checkId": "jumpTargets",
+      "severity": "error",
+      "message": "GOTO 200: no block N200 in this program"
+    },
+    {
+      "line": 20,
+      "check": "Digits",
+      "checkId": "wordDigits",
+      "severity": "error",
+      "message": "X123456.789: 9 digits once it is converted to increments; the control takes at most 8"
+    },
+    {
+      "line": 21,
+      "check": "DO and END",
+      "checkId": "doEnd",
+      "severity": "error",
+      "message": "DO3: no END3 follows in the program"
+    }
+  ],
+  "message": "7 findings in 4 checks. No machine chosen: where the presets read a number differently, the finding lists every reading.",
+  "findings": []
+}

@@ -1,0 +1,152 @@
+{
+  "title": "Extents",
+  "columns": [
+    {
+      "key": "where",
+      "label": "Where"
+    },
+    {
+      "key": "axis",
+      "label": "Axis"
+    },
+    {
+      "key": "min",
+      "label": "Min"
+    },
+    {
+      "key": "minLine",
+      "label": "At line"
+    },
+    {
+      "key": "max",
+      "label": "Max"
+    },
+    {
+      "key": "maxLine",
+      "label": "At line"
+    },
+    {
+      "key": "unresolved",
+      "label": "Not resolved"
+    }
+  ],
+  "rows": [
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "X",
+      "axisId": "X",
+      "min": "10",
+      "minLine": 7,
+      "max": "10",
+      "maxLine": 7,
+      "unresolved": 1,
+      "line": 7
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "10",
+      "minLine": 7,
+      "max": "10",
+      "maxLine": 7,
+      "unresolved": 1,
+      "line": 7
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "",
+      "minLine": "",
+      "max": "",
+      "maxLine": "",
+      "unresolved": 1,
+      "line": 6
+    },
+    {
+      "where": "G54 (line 4)",
+      "scope": "offset",
+      "axis": "X",
+      "axisId": "X",
+      "min": "10",
+      "minLine": 7,
+      "max": "10",
+      "maxLine": 7,
+      "unresolved": 1,
+      "line": 7
+    },
+    {
+      "where": "G54 (line 4)",
+      "scope": "offset",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "10",
+      "minLine": 7,
+      "max": "10",
+      "maxLine": 7,
+      "unresolved": 1,
+      "line": 7
+    },
+    {
+      "where": "G54 (line 4)",
+      "scope": "offset",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "",
+      "minLine": "",
+      "max": "",
+      "maxLine": "",
+      "unresolved": 1,
+      "line": 6
+    },
+    {
+      "where": "G54, T1 (line 5)",
+      "scope": "tool",
+      "axis": "X",
+      "axisId": "X",
+      "min": "10",
+      "minLine": 7,
+      "max": "10",
+      "maxLine": 7,
+      "unresolved": 1,
+      "line": 7
+    },
+    {
+      "where": "G54, T1 (line 5)",
+      "scope": "tool",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "10",
+      "minLine": 7,
+      "max": "10",
+      "maxLine": 7,
+      "unresolved": 1,
+      "line": 7
+    },
+    {
+      "where": "G54, T1 (line 5)",
+      "scope": "tool",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "",
+      "minLine": "",
+      "max": "",
+      "maxLine": "",
+      "unresolved": 1,
+      "line": 6
+    }
+  ],
+  "message": "No machine: readings assumed from the profile defaults, and a word whose reading depends on the machine is not resolved. 3 positions not resolved; the findings say why.",
+  "findings": [
+    {
+      "line": 6,
+      "severity": "warning",
+      "message": "3 words, first X0. (line 6), before the program says whether positions are absolute or incremental: not resolved.",
+      "reason": "distance-unknown"
+    }
+  ]
+}

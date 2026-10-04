@@ -1,0 +1,11 @@
+{
+  "note": "Removal leaves every / that is not a mark: a division at the start of an expression block, behind the number, inside brackets.",
+  "profile": "fanuc-gcode",
+  "mode": "remove",
+  "options": {},
+  "expect": {
+    "summary": "ncBlockSkip.removeRun.summary",
+    "skipped": [],
+    "warnings": []
+  }
+}

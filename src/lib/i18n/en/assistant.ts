@@ -46,6 +46,16 @@ export default {
     diametermode: 'Diameter programming',
     /** P8: a programmable offset, rotation, scaling or mirroring — not a work offset. */
     frame: 'Programmable frame',
+    /**
+     * P10: the Fanuc frame families, each in a group of its own, because a frame code closes
+     * the frames of its own group only (G69 does not end the scaling of G51).
+     */
+    scaling: 'Scaling',
+    mirror: 'Mirror image',
+    polar: 'Polar coordinate interpolation',
+    cylindrical: 'Cylindrical interpolation',
+    /** M10 review (NC-5): Fanuc G15/G16, end points as a radius and an angle. */
+    polarCommand: 'Polar coordinate command',
     /** WP8.5: exact stop against continuous path (Sinumerik G60, G64, G641, G642, G645). */
     pathmode: 'Path mode',
     /** WP8.3: which turret a block is for (Okuma G13, G14). */
@@ -59,6 +69,8 @@ export default {
     compensation: 'Tool compensation',
     /** M6/F25: the tool **length** offset is its own modal group, not radius compensation. */
     lengthComp: 'Tool length offset',
+    /** M10 (WP10.2): Sinumerik G290/G291, the language the control reads the program in. */
+    language: 'Programming language',
     cycle: 'Cycle',
     spindle: 'Spindle',
     coolant: 'Coolant',

@@ -159,6 +159,7 @@ export interface ModalState {
   distance: 'absolute' | 'incremental' | 'unknown';
   /** The power-on value is assumed; `G20`/`G21` set it with their line. */
   units: { value: 'mm' | 'inch' | 'unknown'; line: number; assumed: boolean; from?: ParamSource };
+  /** P10: also set by the bare tool-axis letter of a `sets.planeFromAxisWord` block (Klartext `TOOL CALL 1 Z`). */
   plane: 'XY' | 'ZX' | 'YZ' | 'unknown';
   /**
    * Diameter programming of the `addresses.diameter` words; `null` on a profile without
@@ -193,6 +194,20 @@ export interface ModalState {
    * line, until a `'call'` (`M99`) or the next `'define'` ends it; `null` otherwise.
    */
   modalCall: { code: string; line: number } | null;
+  /**
+   * P10 (§7.4 rule 13, `CodeEntry.frame`). The innermost coordinate frame in force — the
+   * last `frame: 'open'` code that no `'close'` of its own `group` has ended — and its
+   * line; `null` outside every frame. Opening a code that is already open moves it to the
+   * end instead of stacking it; a close ends every open frame of its group.
+   */
+  frame: { code: string; line: number } | null;
+  /**
+   * P10 (§7.4 rule 14, `CodeSets.tcp`, decision of 2026-10-04). The code that switched tool
+   * centre point control on (`G43.4`, `M128`, `FUNCTION TCPM`, `TRAORI`) and its line, until
+   * a `tcp: 'off'` code or another code of the same modal group ends it; `null` while it is
+   * off, which is also the power-on reading.
+   */
+  tcp: { code: string; line: number } | null;
   pitchFeedAmbiguous: string | null;
   /**
    * Flags of the block just applied, and of that block only. `cycle` is the code of the

@@ -1,0 +1,13 @@
+{
+  "note": "Level 3 is written as /3 in front of the number.",
+  "profile": "fanuc-gcode",
+  "mode": "add",
+  "options": {
+    "level": "3"
+  },
+  "expect": {
+    "summary": "ncBlockSkip.addRun.summary",
+    "skipped": [],
+    "warnings": []
+  }
+}

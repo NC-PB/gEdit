@@ -31,8 +31,9 @@ And the turning dialects of M8 (WP8.7):
   to the new tool), a dwell and a thread lead kept out of the feed range, and a driven tool
   whose `SB=` speed is not the main spindle's
 * `sinumerik-tools` — `T1`, `T0` (no tool), `T="NAME"`, `T1=5` (the tool of spindle 1),
-  a message that names the tool, dwells kept out of the ranges and `LIMS=` / `S1=` kept out
-  of the speed range
+  a message that names the tool, dwells kept out of the ranges and `LIMS=` kept out of the
+  speed range; `S1=900` is the speed of spindle 1, the main spindle, so it is the drill's
+  speed (M10 P10, the owner's reading of 2026-09-27; until M10 it was kept out too)
 
 And the M8 NC review (G10), each with the program the review ran:
 
@@ -678,7 +679,28 @@ class TestTurningDialects(unittest.TestCase):
 
     def test_driven_tool_and_numbered_spindle_speeds_are_not_the_main_spindle_speed(self):
         self.assertEqual(self.rows("okuma-turret")["T11"]["speed"], "")
-        self.assertEqual(self.rows("sinumerik-tools")["T5"]["speed"], "")
+
+    def test_a_word_that_names_the_main_spindle_is_its_speed(self):
+        # M10 P10 (decision 3; the owner, 2026-09-27: "we consider S1= as main spindle"):
+        # `S1=900` and `S[1]=900` drive spindle 1, the profile's `addresses.mainSpindle`, so
+        # they are the tool's speed like a plain `S`; `S2=` and `S[2]=` stay another
+        # spindle's. Until M10 the drill below showed no speed at all.
+        self.assertEqual(self.rows("sinumerik-tools")["T5"]["speed"], "900")
+        context = helpers.effective_context("sinumerik")
+        program = (
+            "T1 D1\nG97 S1=800 M1=3\nG1 X10 F0.1\nT2 D1\nG97 S[1]=700 M3\nG1 X10 F0.1\n"
+            "T3 D1\nG97 S2=600 M2=3\nG1 X10 F0.1\nT4 D1\nG97 S[2]=500 M3\nG1 X10 F0.1\nM30\n"
+        )
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        speeds = {row["tool"]: row["speed"] for row in result.json()["rows"]}
+        self.assertEqual(speeds, {"T1": "800", "T2": "700", "T3": "", "T4": ""})
+        # A profile that names no main spindle has none: there `S1=` stays another spindle's.
+        profile = dict(context["profile"])
+        profile["addresses"] = {k: v for k, v in profile["addresses"].items() if k != "mainSpindle"}
+        result = helpers.run_script(SCRIPT, stdin=program, context=dict(context, profile=profile))
+        self.assertTrue(result.ok, result.stderr)
+        self.assertEqual([row["speed"] for row in result.json()["rows"]], ["", "", "", ""])
 
     def test_an_indexed_spindle_word_is_not_the_main_spindle_speed(self):
         # M9 review F1: `S[2]=500` was read as the main spindle's `S`, so the roughing tool

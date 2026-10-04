@@ -52,6 +52,7 @@ on the View tab, without shortcuts.
 |---|---|
 | `Ctrl+G` | Go to line or block — type `120` for the line, `N120` for the block |
 | `F7` / `Shift+F7` | Next / previous tool change |
+| `Cmd/Ctrl+F7` | Select the lines of a tool: the segment the cursor is in, or the tool you pick — see [Tool segments](transformations.md#tool-segments) |
 | `Cmd/Ctrl+F2` | Set or clear a bookmark |
 | `F2` / `Shift+F2` | Next / previous bookmark |
 | `Cmd/Ctrl+Shift+O` | Quick outline — jump to a tool call or section |
@@ -86,9 +87,10 @@ Upper case, lower case, folding and the zoom are buttons on the Home and View ta
 
 ## NC
 
-Nothing on the NC tab has a shortcut: renumbering and the cleanups are deliberate,
-one-at-a-time operations and are reached from the ribbon or from `F1`. See
-[transformations.md](transformations.md).
+Only one command on the NC tab has a key: **Select Tool Segment**, `Cmd/Ctrl+F7`, listed
+under [Moving around the program](#moving-around-the-program). Renumbering, the cleanups and
+Insert and Remove Block Skip are deliberate, one-at-a-time operations and are reached from
+the ribbon or from `F1`. See [transformations.md](transformations.md).
 
 ## Scripts
 
@@ -98,7 +100,8 @@ one-at-a-time operations and are reached from the ribbon or from `F1`. See
 | `Cmd/Ctrl+F9` | Run the last script again, straight away, with the values you used last time — it does not open the parameter form |
 
 **Run Script**, **Stop**, **New Script**, **Edit Script**, **Rescan** and **Add Folder**
-are on the Tools tab and in the palette. **Copy to My Scripts** is in the palette only;
+are on the Tools tab and in the palette; so is each bundled script, **Program checks**,
+**Extents** and **Address arithmetic** included. **Copy to My Scripts** is in the palette only;
 **Edit Script** on a bundled script offers the same copy (*Copy and edit*). See
 [scripts.md](scripts.md).
 

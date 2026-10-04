@@ -1,0 +1,23 @@
+{
+  "message": "Multiplied Z by 2 in 5 words on 4 blocks, 1 of them a cycle position. Left 2 blocks and 1 word as written: 2 blocks a multiply or divide does not scale, 1 count. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 7,
+      "severity": "info",
+      "message": "K3: a parameter of G81, not an arc centre.",
+      "reason": "count"
+    },
+    {
+      "line": 10,
+      "severity": "warning",
+      "message": "G83 X30. Y10. Z-5. R2. Q1. F100.: G83 writes Q1., which may be a depth or a distance a multiply or divide does not scale, so the cycle cannot be scaled in one piece.",
+      "reason": "not-scaled"
+    },
+    {
+      "line": 11,
+      "severity": "warning",
+      "message": "X40. Y10.: part of the same cycle as line 10, which is left as written (not scaled).",
+      "reason": "not-scaled"
+    }
+  ]
+}

@@ -2,8 +2,9 @@
 
 gEdit is a desktop editor for NC code. It is meant for the program you get back from the
 post-processor: read it, find your way around it, correct a few things, clean it up,
-renumber it, scale the feeds, list the tools, compare it with the last version, and save
-it without changing a single byte you did not ask to change.
+renumber it, scale the feeds, list the tools, check it before it goes to the machine,
+compare it with the last version, and save it without changing a single byte you did not
+ask to change.
 
 This guide describes what the program does today. It is written for the person who runs
 the machine, not for the person who builds the editor — the build and design notes are in
@@ -14,8 +15,8 @@ the machine, not for the person who builds the editor — the build and design n
 | This page | The window, files, never losing work, navigation, code help, comparing, settings, and the limits |
 | [Dialects](dialects.md) | Dialect profiles: what they decide, which six ship, how the dialect is picked |
 | [Machines](machines.md) | Machine configurations: what `X50` is worth on **your** control, and how to tell gEdit |
-| [Transformations](transformations.md) | The NC tab: renumbering, removing block numbers and the five cleanups |
-| [Scripts](scripts.md) | Running Python scripts, and how to write one |
+| [Transformations](transformations.md) | The NC tab: renumbering, removing block numbers, the five cleanups, block skip and selecting a tool's lines |
+| [Scripts](scripts.md) | Running Python scripts, the six that ship (feeds, speeds, tool list, program checks, extents, address arithmetic), and how to write one |
 | [Shortcuts](shortcuts.md) | The keyboard |
 
 ---
@@ -33,7 +34,7 @@ Across the top is the **ribbon**, with five tabs:
 |---|---|
 | **Home** | New, Open, Save, Save As, Save All, Close · the recent-files list · **Program Header** (Fanuc mill and Klartext only) · undo, redo, find, replace, comment, duplicate, move, delete line, select all, upper and lower case (plain text commands; on a program use **Convert Case…** on the NC tab) |
 | **Insert** | The ready-made blocks of the active dialect — Fanuc mill and Klartext only in this version; on a Fanuc lathe, Okuma or Sinumerik program the tab shows no blocks |
-| **NC** | Renumbering, removing block numbers and the cleanups — see [Transformations](transformations.md) |
+| **NC** | Renumbering, removing block numbers, the cleanups, block skip and selecting a tool segment — see [Transformations](transformations.md) |
 | **Tools** | Compare, and the scripts — see [Scripts](scripts.md) |
 | **View** | The command palette, the panels, folding, display switches, zoom, theme, settings, the shortcut list and About |
 
@@ -447,6 +448,7 @@ is that program.
 | A place you keep coming back to | A bookmark: `Cmd/Ctrl+F2` to set or clear it, `F2` and `Shift+F2` to step through them |
 | Text | `Cmd/Ctrl+F`, the editor's own find and replace |
 | A section, collapsed | `View ▸ Fold All` / `Unfold All`, and the sticky heading at the top of the editor |
+| All the lines of one tool | `Cmd/Ctrl+F7` (Select Tool Segment): the segment the cursor is in, or the tool you pick — see [Tool segments](transformations.md#tool-segments) |
 
 **Ctrl+G** is the Control key on every platform, not Cmd — Cmd+G stays with "find next"
 on a Mac. It finds block **numbers**; names — an Okuma `NLAP1`, a Sinumerik label — are in
@@ -488,6 +490,22 @@ which is the honest answer while nobody has confirmed it; the completion list sh
 a "Not verified yet" note instead. **Your control's manual is the authority, not this
 editor.**
 
+## Checking a program before the machine
+
+Two bundled scripts read a program without running it, and a third does arithmetic on it.
+They are on the Tools tab and are described in [Scripts](scripts.md):
+
+| | What it tells you |
+|---|---|
+| [Program checks](scripts.md#program-checks) | What the program does that the control or the machine will not like: a cut with the spindle stopped, a tool change inside a cycle, a jump to a block that is not there, a thread under constant surface speed, a number whose value depends on how your machine reads it, the stops |
+| [Extents](scripts.md#extents) | The smallest and largest value of every axis, for the program, each work offset and each tool, with the arcs counted, and how many positions could not be worked out |
+| [Address arithmetic](scripts.md#address-arithmetic) | Adds to, subtracts from, multiplies or divides chosen addresses. A Z shift moves the cycle positions that go with it, or refuses a block it cannot judge and lists it |
+
+None of this is a backplot or a simulation: they read the text, and a result is only as
+good as what gEdit is told about the machine. With no machine chosen they say "assumed" or
+leave a value alone rather than guess ([Machines](machines.md)). Block skip, for marking a
+prove-out section, is on the NC tab ([Transformations](transformations.md#block-skip)).
+
 ## Comparing two programs
 
 `Cmd/Ctrl+Alt+C` compares the current document with the version on disk, another open tab,
@@ -509,7 +527,8 @@ run `npm test -- realFixtures`. For each program it checks that the dialect is d
 you said, that no unknown mark is left outside comments (except the ones you list with a
 reason), that the program map and the tool list name the tools you expect, that the file
 survives a byte-exact round trip, that Scale Feed and Scale Speed at 100 % give back every
-byte, and that nothing crashes. It prints counts only, never a file name or program text.
+byte, that the program checks, the extents and Address arithmetic run without a crash (adding 0 to `Z` must give back every byte), and that nothing else crashes. It prints counts only, never a file name or program text, and
+for the program checks a line of how many findings each check made in how many programs, which is where a check that cries wolf shows.
 The manifest and the report are described in [tests/real/README.md](../../tests/real/README.md).
 
 ## Settings

@@ -1,0 +1,176 @@
+{
+  "title": "Extents",
+  "columns": [
+    {
+      "key": "where",
+      "label": "Where"
+    },
+    {
+      "key": "axis",
+      "label": "Axis"
+    },
+    {
+      "key": "min",
+      "label": "Min"
+    },
+    {
+      "key": "minLine",
+      "label": "At line"
+    },
+    {
+      "key": "max",
+      "label": "Max"
+    },
+    {
+      "key": "maxLine",
+      "label": "At line"
+    },
+    {
+      "key": "unresolved",
+      "label": "Not resolved"
+    }
+  ],
+  "rows": [
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "X (diameter)",
+      "axisId": "X",
+      "min": "20",
+      "minLine": 12,
+      "max": "100",
+      "maxLine": 21,
+      "unresolved": 3,
+      "line": 21
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-40",
+      "minLine": 18,
+      "max": "100",
+      "maxLine": 21,
+      "unresolved": 2,
+      "line": 21
+    },
+    {
+      "where": "T0101 (line 6)",
+      "scope": "tool",
+      "axis": "X (diameter)",
+      "axisId": "X",
+      "min": "20",
+      "minLine": 12,
+      "max": "100",
+      "maxLine": 21,
+      "unresolved": 2,
+      "line": 21
+    },
+    {
+      "where": "T0101 (line 6)",
+      "scope": "tool",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-40",
+      "minLine": 18,
+      "max": "100",
+      "maxLine": 21,
+      "unresolved": 2,
+      "line": 21
+    },
+    {
+      "where": "T0303 (line 22)",
+      "scope": "tool",
+      "axis": "X (diameter)",
+      "axisId": "X",
+      "min": "55",
+      "minLine": 24,
+      "max": "65",
+      "maxLine": 23,
+      "unresolved": 1,
+      "line": 23
+    },
+    {
+      "where": "T0303 (line 22)",
+      "scope": "tool",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-20",
+      "minLine": 23,
+      "max": "5",
+      "maxLine": 27,
+      "unresolved": 0,
+      "line": 27
+    },
+    {
+      "where": "G28 (line 5)",
+      "scope": "machine",
+      "axis": "U",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 5,
+      "max": "0",
+      "maxLine": 5,
+      "unresolved": 0,
+      "line": 5
+    },
+    {
+      "where": "G28 (line 5)",
+      "scope": "machine",
+      "axis": "W",
+      "axisId": "Z",
+      "min": "0",
+      "minLine": 5,
+      "max": "0",
+      "maxLine": 5,
+      "unresolved": 0,
+      "line": 5
+    },
+    {
+      "where": "G28 (line 28)",
+      "scope": "machine",
+      "axis": "U",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 28,
+      "max": "0",
+      "maxLine": 28,
+      "unresolved": 0,
+      "line": 28
+    },
+    {
+      "where": "G28 (line 28)",
+      "scope": "machine",
+      "axis": "W",
+      "axisId": "Z",
+      "min": "0",
+      "minLine": 28,
+      "max": "0",
+      "maxLine": 28,
+      "unresolved": 0,
+      "line": 28
+    }
+  ],
+  "message": "No machine: readings assumed from the profile defaults, and a word whose reading depends on the machine is not resolved. X is a diameter: diameter programming is on (assumed from the profile). 5 positions not resolved; the findings say why.",
+  "findings": [
+    {
+      "line": 10,
+      "severity": "warning",
+      "message": "G71, 2 blocks: the control computes the passes of this cycle from its values; the start point and the profile are in the ranges, the passes are not resolved.",
+      "reason": "multi-pass"
+    },
+    {
+      "line": 25,
+      "severity": "info",
+      "message": "G4, 1 block: its axis words are values, not positions; left out of the ranges.",
+      "reason": "data"
+    },
+    {
+      "line": 27,
+      "severity": "warning",
+      "message": "1 word written as a variable or an expression, first X#100 (line 27): not resolved.",
+      "reason": "expression"
+    }
+  ]
+}

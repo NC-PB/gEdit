@@ -1,0 +1,46 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 13,
+      "check": "Call in a profile",
+      "checkId": "callInProfile",
+      "severity": "error",
+      "message": "a subprogram call inside the profile N100 to N200 that G71 on line 10 runs"
+    },
+    {
+      "line": 15,
+      "check": "Profile targets",
+      "checkId": "profileTargets",
+      "severity": "error",
+      "message": "G70: P300 names no block of this program"
+    },
+    {
+      "line": 16,
+      "check": "Profile targets",
+      "checkId": "profileTargets",
+      "severity": "error",
+      "message": "G70: the block of P200 (line 14) stands after the block of Q100 (line 11)"
+    }
+  ],
+  "message": "3 findings in 2 checks. No machine chosen: where the presets read a number differently, the finding lists every reading.",
+  "findings": []
+}

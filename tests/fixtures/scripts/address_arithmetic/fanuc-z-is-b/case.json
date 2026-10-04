@@ -1,0 +1,12 @@
+{
+  "machine": {
+    "numberInput": {
+      "incrementDeg": "0.001",
+      "incrementInch": "0.0001",
+      "incrementMm": "0.001",
+      "incrementSec": "0.001",
+      "mode": "increment"
+    }
+  },
+  "machineName": "Mill IS-B"
+}

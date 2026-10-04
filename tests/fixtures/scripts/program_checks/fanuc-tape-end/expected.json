@@ -1,0 +1,39 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 3,
+      "check": "Tape marker",
+      "checkId": "tapeMarkerInComment",
+      "severity": "error",
+      "message": "(100% FEED): a % inside a comment ends the program when it is read in from tape or a serial line"
+    },
+    {
+      "line": 7,
+      "check": "Program frame",
+      "checkId": "programFrame",
+      "severity": "error",
+      "message": "%: the tape ends here, and the program O5012 (100% FEED) (line 3) has no end code"
+    }
+  ],
+  "message": "2 findings in 2 checks. No machine chosen: where the presets read a number differently, the finding lists every reading.",
+  "findings": []
+}

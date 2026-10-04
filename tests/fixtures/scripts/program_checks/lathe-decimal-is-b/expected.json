@@ -1,0 +1,67 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 10,
+      "check": "Machine reading",
+      "checkId": "machineReading",
+      "severity": "info",
+      "message": "X50: 0.05 mm on machine 'Lathe IS-B'; X50. would be 50 mm"
+    },
+    {
+      "line": 10,
+      "check": "Machine reading",
+      "checkId": "machineReading",
+      "severity": "info",
+      "message": "Z1000: 1 mm on machine 'Lathe IS-B'; Z1000. would be 1000 mm"
+    },
+    {
+      "line": 11,
+      "check": "Machine reading",
+      "checkId": "machineReading",
+      "severity": "info",
+      "message": "Z-10: -0.01 mm on machine 'Lathe IS-B'; Z-10. would be -10 mm"
+    },
+    {
+      "line": 18,
+      "check": "Machine reading",
+      "checkId": "machineReading",
+      "severity": "info",
+      "message": "C90000: 90° on machine 'Lathe IS-B'; C90000. would be 90000°"
+    },
+    {
+      "line": 20,
+      "check": "Machine reading",
+      "checkId": "machineReading",
+      "severity": "info",
+      "message": "Z-15: -0.015 mm on machine 'Lathe IS-B'; Z-15. would be -15 mm"
+    },
+    {
+      "line": 20,
+      "check": "Machine reading",
+      "checkId": "machineReading",
+      "severity": "info",
+      "message": "R2: 0.002 mm on machine 'Lathe IS-B'; R2. would be 2 mm"
+    }
+  ],
+  "message": "6 findings in 1 check. Machine 'Lathe IS-B': numbers without a point are increments of 0.001 mm.",
+  "findings": []
+}

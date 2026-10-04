@@ -201,6 +201,19 @@ describe('the shipped Fanuc databases', () => {
       // P9 (§7.2): spelled here because the map lists every member of `CodeSets`.
       speedLimitBound: ['upper', 'lower'],
       diameter: ['on', 'off', 'absolute-only'],
+      // P10 (§7.2): tool centre point control (G43.4, G43.5 on, G49 off), and the Klartext
+      // tool-axis plane, which no Fanuc entry sets.
+      tcp: ['on', 'off'],
+      planeFromAxisWord: [],
+      // M10 (WP10.2): what the program checks read. No Fanuc code drives a tool spindle of
+      // its own, leaves a zero speed behind or switches the language.
+      spindle: ['on', 'off'],
+      toolSpindle: [],
+      motion: ['rapid', 'feed'],
+      radiusComp: ['on', 'off'],
+      lengthComp: ['on', 'off'],
+      exitSpeed: [],
+      language: [],
     };
     for (const e of entriesOf(dialect)) {
       for (const [member, value] of Object.entries(e.sets ?? {})) {
@@ -284,7 +297,9 @@ describe('the mill corrections of §8.3', () => {
 
 describe('the lathe database of G-code system A (§8.2)', () => {
   it('drops the mill codes a turret lathe does not have', () => {
-    for (const code of ['G43', 'G44', 'G49', 'G81', 'G82', 'G86', 'G91', 'G95']) {
+    // P10: the tool centre point codes are length offsets too, and the lathe has no G49 to
+    // end them, so their tool centre point control would never read as off (§7.16 #107).
+    for (const code of ['G43', 'G43.4', 'G43.5', 'G44', 'G49', 'G81', 'G82', 'G86', 'G91', 'G95']) {
       expect(entry(A, code), code).toBeUndefined();
       expect(entry(MILL, code), code).toBeDefined();
     }
@@ -299,8 +314,9 @@ describe('the lathe database of G-code system A (§8.2)', () => {
     expect(entry(A, 'G98')?.group).toBe('feedmode');
     expect(entry(A, 'G99')?.group).toBe('feedmode');
     for (const code of ['G90', 'G92', 'G94']) expect(entry(A, code)?.group, code).toBe('motion');
-    expect(entry(A, 'G90')?.sets).toBeUndefined();
-    expect(entry(A, 'G94')?.sets).toBeUndefined();
+    // M10 (WP10.2): single cycles cut, so they are feed moves to the program checks.
+    expect(entry(A, 'G90')?.sets).toEqual({ motion: 'feed' });
+    expect(entry(A, 'G94')?.sets).toEqual({ motion: 'feed' });
   });
 
   it('knows that G92 is a thread here and not a coordinate set', () => {
@@ -313,7 +329,7 @@ describe('the lathe database of G-code system A (§8.2)', () => {
     // carries no S word, so this costs nothing in system A — and it is what keeps a
     // system-B program opened with a system-A machine from having its `G92 S3000` top
     // speed multiplied by a speed scaling run.
-    expect(entry(A, 'G92')?.sets).toEqual({ speedLimit: true });
+    expect(entry(A, 'G92')?.sets).toEqual({ speedLimit: true, motion: 'feed' });
   });
 
   it('protects a system-B thread lead even while the program is read as system A', () => {

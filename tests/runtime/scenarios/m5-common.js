@@ -28,8 +28,18 @@ export { context, ready, ribbonTab, setField, setInput }
 
 /** @typedef {import('../lib/api.js').Harness} Harness */
 
-/** The three scripts `src-tauri/resources/scripts` ships, sorted. */
-export const BUNDLED = ['bundled:scale_feed.py', 'bundled:scale_speed.py', 'bundled:tool_list.py']
+/**
+ * The scripts `src-tauri/resources/scripts` ships, sorted: the three of Phase 1 and, since
+ * M10, address arithmetic, extents and the program checks.
+ */
+export const BUNDLED = [
+  'bundled:address_arithmetic.py',
+  'bundled:extents.py',
+  'bundled:program_checks.py',
+  'bundled:scale_feed.py',
+  'bundled:scale_speed.py',
+  'bundled:tool_list.py',
+]
 
 /** Every `script.*` command `contrib/scripts.ts` registers, in its own order. */
 export const SCRIPT_COMMANDS = [

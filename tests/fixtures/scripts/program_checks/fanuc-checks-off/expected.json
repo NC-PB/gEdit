@@ -1,0 +1,32 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 8,
+      "check": "Comment",
+      "checkId": "unclosedComments",
+      "severity": "error",
+      "message": "(A COMMENT NOT CLOSED: the comment is opened with ( and not closed with ) on its line"
+    }
+  ],
+  "message": "1 finding in 1 check. No machine chosen: where the presets read a number differently, the finding lists every reading.",
+  "findings": []
+}

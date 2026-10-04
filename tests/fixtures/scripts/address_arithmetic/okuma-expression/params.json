@@ -1,0 +1,8 @@
+{
+  "operation": "add",
+  "operand": 0.5,
+  "addresses": [
+    "X",
+    "Z"
+  ]
+}

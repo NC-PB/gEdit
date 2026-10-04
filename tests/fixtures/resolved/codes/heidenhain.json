@@ -177,6 +177,9 @@
     },
     {
       "code": "TOOL CALL",
+      "conflicts": [
+        "tcp"
+      ],
       "description": "Changes to the tool given as a number, a name in quotes or a QS parameter, sets the tool axis and the speed, and switches the length compensation on. A tool call without a tool argument only changes speed or feed and is not a tool change.",
       "group": "tool",
       "label": "Tool call",
@@ -202,7 +205,10 @@
           "address": "DR2",
           "label": "Corner radius oversize"
         }
-      ]
+      ],
+      "sets": {
+        "planeFromAxisWord": true
+      }
     },
     {
       "code": "TOOL DEF",
@@ -214,20 +220,28 @@
       "code": "L",
       "description": "Straight move to the end point. Axes that are not written keep their last value. The block may also carry the radius compensation, a feed and M functions.",
       "group": "motion",
-      "label": "Straight line"
+      "label": "Straight line",
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "axisWords": "data",
       "code": "CC",
       "description": "Sets the circle centre, also called the pole, for the arc blocks that follow. It makes no motion and stays until the next CC.",
       "group": "motion",
-      "label": "Circle centre"
+      "label": "Circle centre",
+      "pole": "set"
     },
     {
       "code": "C",
       "description": "Arc to the end point around the last CC, turning in the direction that DR gives. An end point equal to the start point makes a full circle.",
       "group": "motion",
-      "label": "Arc around the centre"
+      "label": "Arc around the centre",
+      "pole": "use",
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "CR",
@@ -244,13 +258,19 @@
           "address": "DR",
           "label": "Direction of rotation"
         }
-      ]
+      ],
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "CT",
       "description": "Arc to the end point that joins the previous contour element smoothly. It needs at least two positioned blocks before it.",
       "group": "motion",
-      "label": "Tangential arc"
+      "label": "Tangential arc",
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "RND",
@@ -288,91 +308,139 @@
       "code": "LP",
       "description": "Straight line given around the pole set with CC: PR is the radius, PA the angle, and IPR or IPA make them incremental.",
       "group": "motion",
-      "label": "Straight line, polar"
+      "label": "Straight line, polar",
+      "pole": "use",
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "CP",
       "description": "Arc around the pole set with CC, given by the angle PA and the direction DR. With an incremental total angle and a height in the tool axis it becomes a helix.",
       "group": "motion",
-      "label": "Arc around the pole, polar"
+      "label": "Arc around the pole, polar",
+      "pole": "use",
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "CTP",
       "description": "Arc that leaves the previous element tangentially and ends at a polar point, given by PR and PA.",
       "group": "motion",
-      "label": "Tangential arc, polar"
+      "label": "Tangential arc, polar",
+      "pole": "use",
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "LN",
       "description": "Straight line that also carries the direction of the surface: X, Y and Z give the end point, NX, NY and NZ the normal, and TX, TY and TZ the tool orientation. The control uses them for three-dimensional compensation.",
       "group": "motion",
-      "label": "Straight line with a surface normal"
+      "label": "Straight line with a surface normal",
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "APPR LT",
       "description": "Moves onto the first contour point along a straight line that leaves the contour tangentially. LEN gives the length of that line.",
       "group": "motion",
-      "label": "Approach on a tangential line"
+      "label": "Approach on a tangential line",
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "APPR LN",
       "description": "Moves onto the first contour point along a straight line at a right angle to the contour. LEN gives the length of that line.",
       "group": "motion",
-      "label": "Approach on a normal line"
+      "label": "Approach on a normal line",
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "APPR CT",
       "description": "Moves onto the first contour point along an arc that meets the contour tangentially, given by its radius R and the centre angle CCA.",
       "group": "motion",
-      "label": "Approach on a tangential arc"
+      "label": "Approach on a tangential arc",
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "APPR LCT",
       "description": "Moves onto the first contour point along a straight line followed by an arc that meets the contour tangentially.",
       "group": "motion",
-      "label": "Approach on a line and a tangential arc"
+      "label": "Approach on a line and a tangential arc",
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "DEP LT",
       "description": "Leaves the last contour point along a straight line that continues the contour tangentially, and cancels the radius compensation.",
       "group": "motion",
-      "label": "Depart on a tangential line"
+      "label": "Depart on a tangential line",
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "DEP LN",
       "description": "Leaves the last contour point along a straight line at a right angle to the contour, and cancels the radius compensation.",
       "group": "motion",
-      "label": "Depart on a normal line"
+      "label": "Depart on a normal line",
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "DEP CT",
       "description": "Leaves the last contour point along an arc that continues the contour tangentially, and cancels the radius compensation.",
       "group": "motion",
-      "label": "Depart on a tangential arc"
+      "label": "Depart on a tangential arc",
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "DEP LCT",
       "description": "Leaves the last contour point along a tangential arc followed by a straight line, and cancels the radius compensation.",
       "group": "motion",
-      "label": "Depart on an arc and a line"
+      "label": "Depart on an arc and a line",
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "R0",
       "description": "The centre of the tool follows the programmed path. CAM output usually works this way.",
       "group": "compensation",
-      "label": "No radius compensation"
+      "label": "No radius compensation",
+      "sets": {
+        "radiusComp": "off"
+      }
     },
     {
       "code": "RL",
       "description": "Puts the tool to the left of the contour seen in the direction of travel. Go through an R0 block before switching to the other side, and do not switch it on in an arc.",
       "group": "compensation",
-      "label": "Radius compensation, left"
+      "label": "Radius compensation, left",
+      "sets": {
+        "radiusComp": "on"
+      }
     },
     {
       "code": "RR",
       "description": "Puts the tool to the right of the contour seen in the direction of travel. Go through an R0 block before switching to the other side, and do not switch it on in an arc.",
       "group": "compensation",
-      "label": "Radius compensation, right"
+      "label": "Radius compensation, right",
+      "sets": {
+        "radiusComp": "on"
+      }
     },
     {
       "aliases": [
@@ -514,6 +582,23 @@
       "description": "Runs the cycle that was defined last at every point of the PATTERN DEF or the point table in front of it.",
       "group": "cycle",
       "label": "Cycle call on a pattern",
+      "params": [
+        {
+          "address": "X",
+          "label": "X of each point of the pattern or the point table, outside this block",
+          "position": "other"
+        },
+        {
+          "address": "Y",
+          "label": "Y of each point of the pattern or the point table, outside this block",
+          "position": "other"
+        },
+        {
+          "address": "Z",
+          "label": "Surface of each point of the pattern or the point table, which adds to the surface coordinate the cycle defines",
+          "position": "other"
+        }
+      ],
       "sets": {
         "cycle": "call"
       }
@@ -523,6 +608,23 @@
       "description": "Moves to the position written in the block and runs the cycle that was defined last there. The block names all three axes, and its positions are absolute.",
       "group": "cycle",
       "label": "Cycle call at a position",
+      "params": [
+        {
+          "address": "X",
+          "label": "Start point X; the start point a cycle defines adds to it",
+          "position": "other"
+        },
+        {
+          "address": "Y",
+          "label": "Start point Y; the start point a cycle defines adds to it",
+          "position": "other"
+        },
+        {
+          "address": "Z",
+          "label": "Start point in the tool axis: it shifts the cycle like a datum shift, on top of the surface coordinate the cycle defines",
+          "position": "other"
+        }
+      ],
       "sets": {
         "cycle": "call"
       }
@@ -536,47 +638,56 @@
         {
           "address": "Q200",
           "label": "Safety clearance above the surface",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q201",
           "label": "Depth, negative into the material",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q206",
           "label": "Plunging feed",
           "min": 0,
+          "position": "none",
           "required": true
         },
         {
           "address": "Q202",
           "label": "Infeed per peck",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q210",
           "label": "Dwell at the top after each retract",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q203",
           "label": "Workpiece surface in the tool axis",
+          "position": "tool-axis",
           "required": true
         },
         {
           "address": "Q204",
           "label": "Second clearance for retracting",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q211",
           "label": "Dwell at the hole bottom",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q395",
-          "label": "Depth reference: 0 tool tip, 1 full diameter"
+          "label": "Depth reference: 0 tool tip, 1 full diameter",
+          "position": "none"
         }
       ],
       "sets": {
@@ -592,38 +703,111 @@
         {
           "address": "Q200",
           "label": "Safety clearance above the surface",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q201",
           "label": "Depth, negative into the material",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q206",
           "label": "Plunging feed",
           "min": 0,
+          "position": "none",
           "required": true
         },
         {
           "address": "Q211",
           "label": "Dwell at the hole bottom",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q208",
           "label": "Retract feed",
           "min": 0,
+          "position": "none",
           "required": true
         },
         {
           "address": "Q203",
           "label": "Workpiece surface in the tool axis",
+          "position": "tool-axis",
           "required": true
         },
         {
           "address": "Q204",
           "label": "Second clearance for retracting",
+          "position": "none",
+          "required": true
+        }
+      ],
+      "sets": {
+        "cycle": "define"
+      }
+    },
+    {
+      "code": "CYCL DEF 202",
+      "description": "Feeds a boring bar down to depth, stops the spindle at an angle, moves the cutting edge clear of the wall and pulls the tool out.",
+      "group": "cycle",
+      "label": "Boring cycle",
+      "params": [
+        {
+          "address": "Q200",
+          "label": "Safety clearance above the surface",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q201",
+          "label": "Depth, negative into the material",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q206",
+          "label": "Plunging feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q211",
+          "label": "Dwell at the hole bottom",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q208",
+          "label": "Retract feed",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q203",
+          "label": "Workpiece surface in the tool axis",
+          "position": "tool-axis",
+          "required": true
+        },
+        {
+          "address": "Q204",
+          "label": "Second clearance for retracting",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q214",
+          "label": "Direction the cutting edge moves clear of the wall: 0 none, 1 to 4 the four axis directions",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q336",
+          "label": "Spindle angle for moving clear",
+          "position": "none",
           "required": true
         }
       ],
@@ -640,74 +824,88 @@
         {
           "address": "Q200",
           "label": "Safety clearance above the surface",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q201",
           "label": "Depth, negative into the material",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q206",
           "label": "Plunging feed",
           "min": 0,
+          "position": "none",
           "required": true
         },
         {
           "address": "Q202",
           "label": "Infeed per peck",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q210",
           "label": "Dwell at the top after each retract",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q203",
           "label": "Workpiece surface in the tool axis",
+          "position": "tool-axis",
           "required": true
         },
         {
           "address": "Q204",
           "label": "Second clearance for retracting",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q212",
           "label": "How much shorter each peck gets",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q213",
           "label": "Chip breaks before retracting",
           "min": 0,
+          "position": "none",
           "required": true
         },
         {
           "address": "Q205",
           "label": "Smallest infeed",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q211",
           "label": "Dwell at the hole bottom",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q208",
           "label": "Retract feed",
           "min": 0,
+          "position": "none",
           "required": true
         },
         {
           "address": "Q256",
           "label": "Retract distance for a chip break",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q395",
-          "label": "Depth reference: 0 tool tip, 1 full diameter"
+          "label": "Depth reference: 0 tool tip, 1 full diameter",
+          "position": "none"
         }
       ],
       "sets": {
@@ -723,88 +921,105 @@
         {
           "address": "Q200",
           "label": "Safety clearance above the surface",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q201",
           "label": "Depth, negative into the material",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q206",
           "label": "Plunging feed",
           "min": 0,
+          "position": "none",
           "required": true
         },
         {
           "address": "Q202",
           "label": "Infeed per peck",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q203",
           "label": "Workpiece surface in the tool axis",
+          "position": "tool-axis",
           "required": true
         },
         {
           "address": "Q204",
           "label": "Second clearance for retracting",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q212",
           "label": "How much shorter each peck gets",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q205",
           "label": "Smallest infeed",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q258",
           "label": "Upper stop distance for the fast return",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q259",
           "label": "Lower stop distance for the fast return",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q257",
           "label": "Drilling depth between chip breaks",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q256",
           "label": "Retract distance for a chip break",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q211",
           "label": "Dwell at the hole bottom",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q379",
           "label": "Deeper starting point",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q253",
           "label": "Feed for pre-positioning",
           "min": 0,
+          "position": "none",
           "required": true
         },
         {
           "address": "Q208",
           "label": "Retract feed",
-          "min": 0
+          "min": 0,
+          "position": "none"
         },
         {
           "address": "Q395",
-          "label": "Depth reference: 0 tool tip, 1 full diameter"
+          "label": "Depth reference: 0 tool tip, 1 full diameter",
+          "position": "none"
         }
       ],
       "sets": {
@@ -820,32 +1035,38 @@
         {
           "address": "Q200",
           "label": "Safety clearance above the surface",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q201",
           "label": "Thread depth, negative into the material",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q206",
           "label": "Plunging feed from speed times pitch",
           "min": 0,
+          "position": "none",
           "required": true
         },
         {
           "address": "Q211",
           "label": "Dwell at the hole bottom",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q203",
           "label": "Workpiece surface in the tool axis",
+          "position": "tool-axis",
           "required": true
         },
         {
           "address": "Q204",
           "label": "Second clearance for retracting",
+          "position": "none",
           "required": true
         }
       ],
@@ -864,26 +1085,31 @@
         {
           "address": "Q200",
           "label": "Safety clearance above the surface",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q201",
           "label": "Thread depth, negative into the material",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q239",
           "label": "Thread pitch, negative for left-hand",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q203",
           "label": "Workpiece surface in the tool axis",
+          "position": "tool-axis",
           "required": true
         },
         {
           "address": "Q204",
           "label": "Second clearance for retracting",
+          "position": "none",
           "required": true
         }
       ],
@@ -894,6 +1120,72 @@
       "tapping": true
     },
     {
+      "code": "CYCL DEF 208",
+      "description": "Mills a hole on a helix down to depth, to the diameter given, from a pre-drilled diameter or from solid.",
+      "group": "cycle",
+      "label": "Bore milling cycle",
+      "params": [
+        {
+          "address": "Q200",
+          "label": "Safety clearance above the surface",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q201",
+          "label": "Depth, negative into the material",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q206",
+          "label": "Plunging feed on the helix",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q334",
+          "label": "Infeed per turn of the helix",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q203",
+          "label": "Workpiece surface in the tool axis",
+          "position": "tool-axis",
+          "required": true
+        },
+        {
+          "address": "Q204",
+          "label": "Second clearance for retracting",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q335",
+          "label": "Diameter to mill",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q342",
+          "label": "Diameter drilled before, 0 from solid",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q351",
+          "label": "Milling direction: +1 climb, -1 conventional",
+          "position": "none",
+          "required": true
+        }
+      ],
+      "sets": {
+        "cycle": "define"
+      }
+    },
+    {
       "code": "CYCL DEF 209",
       "description": "Cuts a thread without a compensating chuck and pulls back now and then to break the chip.",
       "group": "cycle",
@@ -902,46 +1194,55 @@
         {
           "address": "Q200",
           "label": "Safety clearance above the surface",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q201",
           "label": "Thread depth, negative into the material",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q239",
           "label": "Thread pitch, negative for left-hand",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q203",
           "label": "Workpiece surface in the tool axis",
+          "position": "tool-axis",
           "required": true
         },
         {
           "address": "Q204",
           "label": "Second clearance for retracting",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q257",
           "label": "Depth between chip breaks",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q256",
           "label": "Retract distance for a chip break",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q336",
           "label": "Spindle angle",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q403",
           "label": "Factor for the retract speed",
+          "position": "none",
           "required": true
         }
       ],
@@ -960,42 +1261,130 @@
         {
           "address": "Q200",
           "label": "Safety clearance above the surface",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q343",
           "label": "Mode: 0 to a depth, 1 to a diameter",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q201",
           "label": "Depth, negative into the material",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q344",
           "label": "Centring diameter",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q206",
           "label": "Plunging feed",
           "min": 0,
+          "position": "none",
           "required": true
         },
         {
           "address": "Q211",
           "label": "Dwell at the bottom",
+          "position": "none",
           "required": true
         },
         {
           "address": "Q203",
           "label": "Workpiece surface in the tool axis",
+          "position": "tool-axis",
           "required": true
         },
         {
           "address": "Q204",
           "label": "Second clearance for retracting",
+          "position": "none",
+          "required": true
+        }
+      ],
+      "sets": {
+        "cycle": "define"
+      }
+    },
+    {
+      "code": "CYCL DEF 262",
+      "description": "Mills a thread on a helix in a pre-drilled hole. The pitch is a parameter of its own, so the milling feed is an ordinary feed.",
+      "group": "cycle",
+      "label": "Thread milling cycle",
+      "params": [
+        {
+          "address": "Q335",
+          "label": "Nominal diameter of the thread",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q239",
+          "label": "Thread pitch, negative for left-hand",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q201",
+          "label": "Thread depth, negative into the material",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q355",
+          "label": "Threads per offset step: 0 one helix over the depth, 1 each thread on its own",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q253",
+          "label": "Feed for pre-positioning",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q351",
+          "label": "Milling direction: +1 climb, -1 conventional",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q200",
+          "label": "Safety clearance above the surface",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q203",
+          "label": "Workpiece surface in the tool axis",
+          "position": "tool-axis",
+          "required": true
+        },
+        {
+          "address": "Q204",
+          "label": "Second clearance for retracting",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q207",
+          "label": "Milling feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q512",
+          "label": "Feed for approaching the thread, 0 the milling feed",
+          "min": 0,
+          "position": "none",
           "required": true
         }
       ],
@@ -1025,42 +1414,72 @@
       "description": "Turns the working plane by three angles around the machine axes. All three are written even when one is zero, and a following word says whether the machine swivels with a compensating move, turns the rotary axes only, or stays put.",
       "frame": "open",
       "group": "tilt",
-      "label": "Tilt the working plane by spatial angles"
+      "label": "Tilt the working plane by spatial angles",
+      "requires": [
+        "MOVE",
+        "TURN",
+        "STAY"
+      ]
     },
     {
       "code": "PLANE PROJECTED",
       "description": "Defines the plane by two angles found by projecting it onto the first and the second coordinate plane (PROPR, PROMIN) and a turn about the tilted tool axis (ROT). Only right for a plane that belongs to a rectangular block. A following word says whether the machine swivels with a compensating move, turns the rotary axes only, or stays put.",
       "frame": "open",
       "group": "tilt",
-      "label": "Tilt the working plane by projection angles"
+      "label": "Tilt the working plane by projection angles",
+      "requires": [
+        "MOVE",
+        "TURN",
+        "STAY"
+      ]
     },
     {
       "code": "PLANE EULER",
       "description": "Defines the plane by three turns of the coordinate system, each about the axis the earlier turn left: precession EULPR about Z, nutation EULNU about the turned X, and rotation EULROT about the new Z. A following word says whether the machine swivels with a compensating move, turns the rotary axes only, or stays put.",
       "frame": "open",
       "group": "tilt",
-      "label": "Tilt the working plane by Euler angles"
+      "label": "Tilt the working plane by Euler angles",
+      "requires": [
+        "MOVE",
+        "TURN",
+        "STAY"
+      ]
     },
     {
       "code": "PLANE VECTOR",
       "description": "Defines the plane by a base vector BX, BY, BZ, the direction of the main axis in the tilted plane, and a normal vector NX, NY, NZ standing at right angles to it. The control normalises both. A following word says whether the machine swivels with a compensating move, turns the rotary axes only, or stays put.",
       "frame": "open",
       "group": "tilt",
-      "label": "Tilt the working plane by two vectors"
+      "label": "Tilt the working plane by two vectors",
+      "requires": [
+        "MOVE",
+        "TURN",
+        "STAY"
+      ]
     },
     {
       "code": "PLANE POINTS",
       "description": "Defines the plane by three of its points P1, P2 and P3, each with X, Y and Z. The line from point 1 to point 2 gives the main axis, and point 3 lies on the side the Y axis points to. The datum stays where it is. A following word says whether the machine swivels with a compensating move, turns the rotary axes only, or stays put.",
       "frame": "open",
       "group": "tilt",
-      "label": "Tilt the working plane through three points"
+      "label": "Tilt the working plane through three points",
+      "requires": [
+        "MOVE",
+        "TURN",
+        "STAY"
+      ]
     },
     {
       "code": "PLANE RELATIV",
       "description": "Turns the plane that is in force by one more spatial angle (SPA, SPB or SPC), for instance for a chamfer on a tilted face. The same angle with the opposite sign goes back to the earlier plane. A following word says whether the machine swivels with a compensating move, turns the rotary axes only, or stays put.",
       "frame": "open",
       "group": "tilt",
-      "label": "Tilt the working plane further by one angle"
+      "label": "Tilt the working plane further by one angle",
+      "requires": [
+        "MOVE",
+        "TURN",
+        "STAY"
+      ]
     },
     {
       "axisWords": "data",
@@ -1068,28 +1487,44 @@
       "description": "Defines the plane and the positions of the rotary axes at the same time: the A, B and C words are axis angles, absolute or incremental, and they stay in force. Only the rotary axes the machine really has may be written. PLANE RESET ends it; an angle of 0 does not.",
       "frame": "open",
       "group": "tilt",
-      "label": "Tilt the working plane by axis angles"
+      "label": "Tilt the working plane by axis angles",
+      "requires": [
+        "MOVE",
+        "TURN",
+        "STAY"
+      ]
     },
     {
       "code": "PLANE RESET",
       "description": "Switches the tilted plane off again. Use it rather than writing zero angles.",
       "frame": "close",
       "group": "tilt",
-      "label": "Reset the tilted working plane"
+      "label": "Reset the tilted working plane",
+      "requires": [
+        "MOVE",
+        "TURN",
+        "STAY"
+      ]
     },
     {
       "code": "FUNCTION TCPM",
       "description": "Keeps the tool tip on the programmed path while the rotary axes move, and says how the feed and the rotary positions are read. Switch it off before a tool call or a machine-coordinate block.",
       "group": "tcpm",
       "label": "Tool centre point management on",
-      "modal": true
+      "modal": true,
+      "sets": {
+        "tcp": "on"
+      }
     },
     {
       "code": "FUNCTION RESET TCPM",
       "description": "Switches tool centre point management off again.",
       "group": "tcpm",
       "label": "Tool centre point management off",
-      "modal": true
+      "modal": true,
+      "sets": {
+        "tcp": "off"
+      }
     },
     {
       "code": "M0",
@@ -1126,21 +1561,30 @@
       "description": "Starts the spindle clockwise at the start of the block.",
       "group": "spindle",
       "label": "Spindle on, clockwise",
-      "modal": true
+      "modal": true,
+      "sets": {
+        "spindle": "on"
+      }
     },
     {
       "code": "M4",
       "description": "Starts the spindle counter-clockwise at the start of the block.",
       "group": "spindle",
       "label": "Spindle on, counter-clockwise",
-      "modal": true
+      "modal": true,
+      "sets": {
+        "spindle": "on"
+      }
     },
     {
       "code": "M5",
       "description": "Stops the spindle at the end of the block.",
       "group": "spindle",
       "label": "Spindle stop",
-      "modal": true
+      "modal": true,
+      "sets": {
+        "spindle": "off"
+      }
     },
     {
       "code": "M6",
@@ -1167,14 +1611,20 @@
       "description": "Starts the spindle clockwise and the coolant in one go.",
       "group": "spindle",
       "label": "Spindle clockwise and coolant on",
-      "modal": true
+      "modal": true,
+      "sets": {
+        "spindle": "on"
+      }
     },
     {
       "code": "M14",
       "description": "Starts the spindle counter-clockwise and the coolant in one go.",
       "group": "spindle",
       "label": "Spindle counter-clockwise and coolant on",
-      "modal": true
+      "modal": true,
+      "sets": {
+        "spindle": "on"
+      }
     },
     {
       "code": "M89",
@@ -1189,6 +1639,9 @@
     {
       "axisWords": "machine",
       "code": "M91",
+      "conflicts": [
+        "tcp"
+      ],
       "description": "The positions in this block are read from the machine datum, and the tool length is not applied. It counts for this block only.",
       "group": "program",
       "label": "Machine coordinates for this block"
@@ -1196,6 +1649,9 @@
     {
       "axisWords": "machine",
       "code": "M92",
+      "conflicts": [
+        "tcp"
+      ],
       "description": "The positions in this block are read from a reference point that the machine builder set, and the tool length is not applied. It counts for this block only.",
       "group": "program",
       "label": "Builder reference point for this block"
@@ -1262,14 +1718,20 @@
           "label": "Feed for the compensating moves",
           "min": 0
         }
-      ]
+      ],
+      "sets": {
+        "tcp": "on"
+      }
     },
     {
       "code": "M129",
       "description": "Takes back M128 at the end of the block.",
       "group": "tcpm",
       "label": "Keep the tool tip on the path off",
-      "modal": true
+      "modal": true,
+      "sets": {
+        "tcp": "off"
+      }
     },
     {
       "code": "M136",

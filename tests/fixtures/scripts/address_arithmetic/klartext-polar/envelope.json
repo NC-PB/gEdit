@@ -1,0 +1,71 @@
+{
+  "message": "Added 5 to X, Y and Z in 11 words on 6 blocks. Left 3 blocks and 8 words as written: 3 blocks around a pole that cannot be moved, 6 data words, 2 incremental words. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 3,
+      "severity": "info",
+      "message": "X+0: a value of BLK FORM, not a position of this program.",
+      "reason": "data"
+    },
+    {
+      "line": 3,
+      "severity": "info",
+      "message": "Y+0: a value of BLK FORM, not a position of this program.",
+      "reason": "data"
+    },
+    {
+      "line": 3,
+      "severity": "info",
+      "message": "Z-20: a value of BLK FORM, not a position of this program.",
+      "reason": "data"
+    },
+    {
+      "line": 4,
+      "severity": "info",
+      "message": "X+100: a value of BLK FORM, not a position of this program.",
+      "reason": "data"
+    },
+    {
+      "line": 4,
+      "severity": "info",
+      "message": "Y+100: a value of BLK FORM, not a position of this program.",
+      "reason": "data"
+    },
+    {
+      "line": 4,
+      "severity": "info",
+      "message": "Z+0: a value of BLK FORM, not a position of this program.",
+      "reason": "data"
+    },
+    {
+      "line": 13,
+      "severity": "info",
+      "message": "IX+10: written as an incremental distance, so a shift does not apply to it.",
+      "reason": "incremental"
+    },
+    {
+      "line": 13,
+      "severity": "info",
+      "message": "IY+0: written as an incremental distance, so a shift does not apply to it.",
+      "reason": "incremental"
+    },
+    {
+      "line": 15,
+      "severity": "warning",
+      "message": "14 CC X+Q1 Y+50: X+Q1 cannot be moved (a variable or an expression, which this script does not compute), so the pole and the moves around it cannot be moved in one piece.",
+      "reason": "pole"
+    },
+    {
+      "line": 16,
+      "severity": "warning",
+      "message": "15 LP PR+20 PA+0: part of the same contour around the pole as line 15, which is left as written (a pole that cannot be moved).",
+      "reason": "pole"
+    },
+    {
+      "line": 17,
+      "severity": "warning",
+      "message": "16 C X+70 Y+50 DR+: part of the same contour around the pole as line 15, which is left as written (a pole that cannot be moved).",
+      "reason": "pole"
+    }
+  ]
+}

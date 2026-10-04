@@ -1,0 +1,20 @@
+{
+  "profile": "okuma-osp",
+  "machine": {
+    "numberInput": {
+      "classes": {
+        "feedPerMin": {
+          "increment": "1"
+        },
+        "feedPerRev": {
+          "increment": "0.01"
+        }
+      },
+      "incrementDeg": "0.01",
+      "incrementMm": "0.01",
+      "incrementSec": "0.1",
+      "mode": "scale"
+    }
+  },
+  "machineName": "Lathe 10um"
+}

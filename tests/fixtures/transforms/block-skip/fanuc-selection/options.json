@@ -1,0 +1,15 @@
+{
+  "note": "A selection takes only its own lines; the rest of the program is read for the state only.",
+  "profile": "fanuc-gcode",
+  "mode": "add",
+  "options": {},
+  "scope": {
+    "startLine": 3,
+    "endLine": 4
+  },
+  "expect": {
+    "summary": "ncBlockSkip.addRun.summary",
+    "skipped": [],
+    "warnings": []
+  }
+}

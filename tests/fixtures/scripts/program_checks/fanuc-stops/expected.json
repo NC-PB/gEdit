@@ -1,0 +1,39 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 7,
+      "check": "Stop",
+      "checkId": "stops",
+      "severity": "info",
+      "message": "M0: Program stop"
+    },
+    {
+      "line": 9,
+      "check": "Stop",
+      "checkId": "stops",
+      "severity": "info",
+      "message": "M01: Optional stop"
+    }
+  ],
+  "message": "2 findings in 1 check. No machine chosen: where the presets read a number differently, the finding lists every reading.",
+  "findings": []
+}

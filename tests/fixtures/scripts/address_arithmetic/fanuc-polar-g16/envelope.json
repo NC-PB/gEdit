@@ -1,0 +1,29 @@
+{
+  "message": "Added 5 to X and Y in 6 words on 3 blocks. Left 3 blocks as written: 3 inside a frame. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 9,
+      "severity": "warning",
+      "message": "G16: opens a coordinate frame (G16): what a shift of the program's coordinates does there cannot be judged.",
+      "reason": "frame"
+    },
+    {
+      "line": 10,
+      "severity": "warning",
+      "message": "G0 X50. Y45.: inside the coordinate frame of G16 (line 9): what a shift of the program's coordinates does there cannot be judged.",
+      "reason": "frame"
+    },
+    {
+      "line": 12,
+      "severity": "warning",
+      "message": "X50. Y135.: inside the coordinate frame of G16 (line 9): what a shift of the program's coordinates does there cannot be judged.",
+      "reason": "frame"
+    },
+    {
+      "line": 15,
+      "severity": "warning",
+      "message": "G123: a code the database does not know, in 1 block this run had nothing to change in; if it changes how the blocks after it are read (a polar or another coordinate mode), this run cannot see that. Check those blocks by hand.",
+      "reason": "unknown-code-note"
+    }
+  ]
+}

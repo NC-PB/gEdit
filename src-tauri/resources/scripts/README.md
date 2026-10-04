@@ -19,6 +19,9 @@ unless an extra folder holds one too (Phase 1 plan §3, AD-13).
 | `tool_list.py` | tools in order of first use, with descriptions and call counts — `output = "report"` |
 | `scale_feed.py` | multiply `F` values by a percentage — `output = "replace"` |
 | `scale_speed.py` | multiply `S` values by a percentage — `output = "replace"` |
+| `program_checks.py` | M10 (WP10.2): what a program does that the control or the machine will not like — `output = "report"` |
+| `extents.py` | M10 (WP10.3): the smallest and largest value of every axis, per offset, tool and program — `output = "report"` |
+| `address_arithmetic.py` | M10 (WP10.4): add, subtract, multiply or divide the values of chosen addresses; a shift of the tool axis moves the cycle positions that hold one (roadmap R8) — `output = "replace"` |
 
 `gedit_nc.py`, and any file or folder whose name starts with `_` or `.`, is **not listed as
 a script**: discovery skips them, because they are library code, not commands. The `_nc_*`
@@ -157,6 +160,28 @@ the block are arguments or data, not a feed or a position — `G65`, `G66`, `G10
 can carry `addresses.mainSpindle` (which spindle number is the main one, Sinumerik `"1"`)
 and `syntax.programNames`/`syntax.decimalSeparatorAlt` (a program-name token, a second
 decimal separator). `scale_feed.py` and `scale_speed.py` read all of these.
+
+M10 added the members `program_checks.py` reads, all optional and all read straight off the
+entry dictionary: `sets.spindle` and `sets.toolSpindle` (`on`/`off`: the code starts or stops
+the main or a driven-tool spindle), `sets.motion` (`rapid`/`feed`), `sets.radiusComp` and
+`sets.lengthComp` (`on`/`off`), `sets.exitSpeed` (`zero`: a tapping mode that ends with the
+speed at zero), `sets.language` (`iso`/`native`: a Sinumerik code that switches the control's
+programming language); and, on the entry itself, `conflicts` (the states in which the control
+refuses the code: `tcp`, `radiusComp`, `lengthComp`, `cycle`, `surfaceSpeed`,
+`feedNotPerMinute`, `frame:<group>`, and `!` in front of a condition for "refused unless"),
+`alone` (the code has to stand alone in its block), `requires` (words of which the block must
+carry one) and `contour` (`open`/`close`: the blocks between define a shape, not a cut). A
+profile can carry `syntax.maxWordDigits` and `syntax.maxMCodes`. `program_checks.py` says in
+its report when the database has none of the spindle members, instead of guessing.
+
+The M10 review added four more, read straight off the entry by `address_arithmetic.py` and
+`extents.py`: `pole` (`set` on the code whose axis words are the circle centre or pole,
+Klartext `CC`; `use` on the moves around it, `C`, `LP`, `CP`, `CTP`), `call` (`true`: the code
+runs another program and hands it the block's words as arguments, Fanuc `G65`), `shift`
+(`true`: the code's axis words shift or set the coordinate system, `G52`, `G92`, `TRANS`), and
+on a parameter `axis` (the axis whose coordinate the parameter is, the `CIP` point `I1=`). A
+profile can carry `syntax.blockSkip.plainLevel` (the level the bare `/` is) and
+`program.endRecord` (an `end` line is the closing record of the file, Klartext `END PGM`).
 
 Both are **effective**: the profile is resolved through its `extends` chain and the
 document's machine configuration is already applied to it, so the chosen G-code system has
@@ -298,7 +323,7 @@ docstrings in the file are the detail.
 | `mask_comments(line, cp)` | the line with the comments blanked, same offsets — what a profile's own patterns run against |
 | `block_number_of(line, cp)` | the block number of a line, as `{value, text, start, end}`, or `None` |
 | `continues_block(line, cp)` | whether the line belongs to the block above it by a marker at its start (Okuma `$`) |
-| `normalize_code(code)` | the canonical form of a written code: `G01` → `G1`, `cycl  def 200` → `CYCL DEF 200` |
+| `normalize_code(code)` | the canonical form of a written code: `G01` → `G1`, `cycl  def 200` → `CYCL DEF 200` (remembered per spelling: `functools.lru_cache`, bounded) |
 | `parse_number`, `format_number`, `scale_decimal` | NC numbers as decimal strings, never as floats |
 | `decimal_of(literal_or_text)` | the exact value of a token's value or raw text, read strictly and then, on failure, with a Klartext-style decimal comma retried as the point — beyond §7.10, used where a value has to be exact rather than merely "roughly the right class" (a limit check, a same-value comparison) |
 | `number_format_of(profile)` | the profile's number format with its defaults filled in, for `format_number` and `write_back` |
@@ -306,6 +331,11 @@ docstrings in the file are the detail.
 | `FeedModeTracker(codes)` | the older, smaller view: `feed_mode` (`G93`/`G94`/`G95`, or Klartext `FU`/`FZ`), `css` (between `G96` and `G97`), `active_cycle`, `pitch_feed` (the block's `F` is a thread pitch), `pitch_feed_ambiguous` and `ambiguous_code` (a code that is a threading cycle on another kind of machine, in the other G-code system or on another make of control), `f_not_feed` and `f_not_feed_code` (a dwell). Without a code database it still reads `G93`–`G95` and `G96`/`G97` by their usual meaning, but knows no cycle and no thread pitch. Also: `tapping` and `tapping_code` (a tapping code or cycle is in force), `pitch_mode` (a `pitchFeed` code that is modal and sits in a group of its own outside `cycle`/`motion` — Fanuc `G63` — is in force, so its feed is a lead too), `data_code` (a `wordsAreData` code's block — its words are not fed at all), `written` (a `CodeEntry.tapping` code was restated or an axis moved in this block, for `scale_speed`'s tapping rule) |
 | `prime_tracker(tracker, lines, cp, first=None)` | walks the lines above a selection through a tracker and returns the `LineState` the selection begins in (§6); `first` is the first selected line |
 | `speed_limit_of(codes, tokens)` | the code in this block whose `sets.speedLimit` makes the block's `S` a clamp, or `None` |
+| `axis_words_of(entry)`, `frame_of(entry)`, `speed_limit_bound_of(entry)`, `tcp_of(entry)` | how one code entry's flags read (§7.2): the block's axis words are `'data'` or a `'machine'` position; the code opens or closes a coordinate `frame`; the side a speed limit bounds; tool centre point control `'on'`/`'off'` (M10) |
+| `position_of(param)` | M10 (roadmap R8): what a cycle parameter is to a program shift — `'tool-axis'` (an absolute coordinate on the tool axis), `'none'`, `'other'` (an absolute position a shift cannot judge), `'mode'`, or `None` when nobody reviewed it |
+| `is_assignment(token)`, `same_spindle(written, main)` | M10 review: a word written with `=` (`S1=900`, an indexed `S[2]=500`), which is a value and never a code; whether `1`, `01` and `1` name one spindle (a letter without case) |
+| `names_main_spindle(token, speed_address, main_spindle)` | M10: a speed word that names the main spindle by its number (`S1=`, `S[1]=` where `addresses.mainSpindle` is 1) |
+| `RotaryState(profile)` | M10 review: where each rotary axis stands while tool centre point control is off — `'unwritten'`, `'zero'`, `'turned'` or `'unknown'` (`state`); `update(words, line, machine)` with `(address, literal, incremental)` per rotary word; `blocking(linear, *states)` answers which rotary axes that turn a linear axis (ISO 841; on a lathe `C` does not turn `X`) are turned or unknown, and which are still unwritten; `first_written` says where each was first written. Address arithmetic and extents use it to leave positions of a tilted machine alone |
 | `machine_type_of(profile)`, `incremental_axes(profile)`, `diameter_axes(profile)` | `'mill'` or `'lathe'`, the `{'U': 'X', 'W': 'Z'}` pairs, and the words written as a diameter |
 | `machine_params(context)` | the document's machine: `params` (how numbers are read, units, diameter, variants, power-on codes) and `source` for each of them — `"machine"`, `"detected"` or `"profile"` (§3) |
 | `number_class_of`, `value_of`, `readings_of`, `resolve_value`, `write_back` | what a word's number **is** on this machine, and how to write a value back into it — see [below](#why-your-script-needs-the-number-rules) |
@@ -344,8 +374,9 @@ for number, line in enumerate(lines, context["input"]["startLine"]):   # documen
 
 `interp.state` is the whole picture: the active code per modal group with the line that set
 it, the feed unit, the speed unit, the distance and diameter modes, the units, the plane,
-the last tool, feed, speed and speed clamp, the active cycle, and the flags of the block
-just applied. A value nothing in the program set is marked `assumed`, with `from` saying
+the last tool, feed, speed and speed clamp, the active cycle, the coordinate frame in force
+(`frame`, M10) and tool centre point control (`tcp`, M10), and the flags of the block just
+applied. A value nothing in the program set is marked `assumed`, with `from` saying
 where it came from — the document's machine, a detected variant, or the profile's documented
 default. Nothing is guessed: a group nothing has named reads `unknown`.
 
@@ -371,7 +402,9 @@ from the tokens, not from a dialect name:
   its own argument (`CYCLE84`, `CYCLE99`) does not carry the flag;
 * a word written with **`=`** (`SB=2000`, `S3=2400`, `M3=3`, `LIMS=3000`, `F=R1`) is a
   value and never a code: `M3=3` switches spindle 3 and is neither `M33` nor the `M3` of
-  the spindle the state follows, and only the plain `S` is the speed in force. A word the
+  the spindle the state follows, and only the plain `S` is the speed in force — and, from
+  M10, a word that names the **main** spindle by its number (`S1=`, `S[1]=` where the
+  profile's `addresses.mainSpindle` is 1: the owner's reading of 2026-09-27). A word the
   profile lists in `addresses.speedLimitWords` (`LIMS=`) is a clamp wherever it stands. The
   state does not follow which spindle is the master (`SETMS(3)`); `scale_speed.py` reads
   that itself, from a call of a non-modal code of the database's ``spindle`` group;
@@ -379,6 +412,22 @@ from the tokens, not from a dialect name:
   a whole: its `F` is a time and its `S` counts revolutions, so neither changes the feed or
   the speed in force. `FeedModeTracker` says so with `f_not_feed` and names the code in
   `f_not_feed_code`; a script that scales feeds or speeds leaves both words alone.
+
+Three readings arrived with M10 (the prelude P10; plan §7.4 rules 13–15), for the scripts
+that move or measure positions:
+
+* **`frame`** is the innermost coordinate frame in force — a tilted plane, a rotation, a
+  mirror, a scaling, a transformation — as `{code, line}`, or `None`; `open_frames` lists
+  them all. A `frame: 'close'` code ends the open frames of its **own group** only (`G69`
+  ends `G68`, not the scaling of `G51`; `PLANE RESET` ends a `PLANE`, not the mirror of cycle
+  8); a frame code written without values closes its group where the database says so
+  (`CYCLE800()`, `TRANS` alone). A close that matches nothing leaves the frame open: when in
+  doubt, a position is in a frame.
+* **`tcp`** is the code that switched tool centre point control on (`TRAORI`, `G43.4`,
+  `M128`, `FUNCTION TCPM`), or `None`. Under it `X`/`Y`/`Z` are the tool tip in the
+  workpiece; it is not a frame.
+* **`plane`** follows the bare tool-axis letter of a Klartext `TOOL CALL 1 Z` (`XY`), which
+  is the database's `sets.planeFromAxisWord`.
 
 Okuma continues a block on lines that **start** with `$` (the profile's
 `syntax.continuationStart`), and the lead of a `G71` thread cycle often stands on one:

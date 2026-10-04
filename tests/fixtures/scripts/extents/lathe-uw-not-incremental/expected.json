@@ -1,0 +1,133 @@
+{
+  "title": "Extents",
+  "columns": [
+    {
+      "key": "where",
+      "label": "Where"
+    },
+    {
+      "key": "axis",
+      "label": "Axis"
+    },
+    {
+      "key": "min",
+      "label": "Min"
+    },
+    {
+      "key": "minLine",
+      "label": "At line"
+    },
+    {
+      "key": "max",
+      "label": "Max"
+    },
+    {
+      "key": "maxLine",
+      "label": "At line"
+    },
+    {
+      "key": "unresolved",
+      "label": "Not resolved"
+    }
+  ],
+  "rows": [
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "X (diameter)",
+      "axisId": "X",
+      "min": "40",
+      "minLine": 6,
+      "max": "50",
+      "maxLine": 9,
+      "unresolved": 0,
+      "line": 9
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-10",
+      "minLine": 7,
+      "max": "2",
+      "maxLine": 6,
+      "unresolved": 0,
+      "line": 6
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "U",
+      "axisId": "U",
+      "min": "2",
+      "minLine": 8,
+      "max": "2",
+      "maxLine": 8,
+      "unresolved": 0,
+      "line": 8
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "W",
+      "axisId": "W",
+      "min": "-1",
+      "minLine": 8,
+      "max": "-1",
+      "maxLine": 8,
+      "unresolved": 0,
+      "line": 8
+    },
+    {
+      "where": "T0101 (line 5)",
+      "scope": "tool",
+      "axis": "X (diameter)",
+      "axisId": "X",
+      "min": "40",
+      "minLine": 6,
+      "max": "50",
+      "maxLine": 9,
+      "unresolved": 0,
+      "line": 9
+    },
+    {
+      "where": "T0101 (line 5)",
+      "scope": "tool",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-10",
+      "minLine": 7,
+      "max": "2",
+      "maxLine": 6,
+      "unresolved": 0,
+      "line": 6
+    },
+    {
+      "where": "T0101 (line 5)",
+      "scope": "tool",
+      "axis": "U",
+      "axisId": "U",
+      "min": "2",
+      "minLine": 8,
+      "max": "2",
+      "maxLine": 8,
+      "unresolved": 0,
+      "line": 8
+    },
+    {
+      "where": "T0101 (line 5)",
+      "scope": "tool",
+      "axis": "W",
+      "axisId": "W",
+      "min": "-1",
+      "minLine": 8,
+      "max": "-1",
+      "maxLine": 8,
+      "unresolved": 0,
+      "line": 8
+    }
+  ],
+  "message": "Machine 'Lathe C'. X is a diameter: diameter programming is on (assumed from the profile).",
+  "findings": []
+}

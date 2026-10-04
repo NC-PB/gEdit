@@ -106,6 +106,7 @@ Each row names the owning work package and the feature.
 | `layoutPersist.ts` | WP2.3 | restores `ui.layout` and then follows it |
 | `machineSelect.ts` | WP6.10 | machine status item and picker, `file.setMachine`, `machines.manage`, `machines.openFile` |
 | `navigation.ts` | WP3.5 | `nav.goto` (Ctrl+G), `nav.nextTool` / `nav.prevTool` (F7 / Shift+F7) |
+| `ncBlockSkip.ts` | WP10.1 | NC tab "Block Skip": `nc.blockSkip.add` / `nc.blockSkip.remove` |
 | `ncCleanup.ts` | WP4.3 | NC tab "Cleanup": spaces, empty lines, comments, case |
 | `ncNumbering.ts` | WP4.2 | NC tab "Numbering": `nc.renumber`, `nc.removeBlockNumbers` |
 | `palette.ts` | WP1.1 | `view.commandPalette` (F1) |
@@ -117,6 +118,7 @@ Each row names the owning work package and the feature.
 | `recovery.ts` | WP7.4 | crash-recovery snapshots, the restore dialog, `recovery.showPending` |
 | `results.ts` | WP4.1 | the Results panel (bottom region) |
 | `scripts.ts` | WP5.2 | the script UI: Tools group, `script.*` commands, Output panel, status item |
+| `segments.ts` | WP10.1 | `nav.selectToolSegment` (Mod+F7): select from one tool change to the next |
 | `session.ts` | WP7.5 | session restore at start, and the per-file memory that follows the tabs |
 | `settings.ts` | WP2.7 | the settings dialog, `settings.open` (Mod+,), reload on save |
 | `tabs.ts` | WP1.2 | next/previous/switch tab |

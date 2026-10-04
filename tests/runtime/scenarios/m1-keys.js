@@ -1,5 +1,5 @@
 // Keyboard handling (plan §5 M1 H1 `m1-keys`, §7.11, AD-4): the default shortcuts are
-// the ones §7.11 lists and nothing else, they reach the command registry from inside
+// the ones of `lib/shortcuts.js` (§7.11, and §7.13 for Phase 2) and nothing else, they reach the command registry from inside
 // Monaco as well as from a focused ribbon button, and they fire exactly once.
 //
 // Two shortcuts are also regression guards for decisions:
@@ -12,38 +12,7 @@
 // them; see the H1 hand-off note.
 
 import { scenario } from '../lib/index.js'
-
-/**
- * §7.11 verbatim, for every command M1 **and M2** register with a key. The check below is
- * two-way, so every new default binding has to be added here (mergeA; WP2.5 §4.1).
- * M2 is complete: `settings.open` (WP2.7) was the last unclaimed binding of §7.11.
- * M3 added the three `nav.*` bindings; M4 the three `bookmark.*` ones (WP4.4); M5 (WP5.2)
- * the last two, F9 and Mod+F9. **§7.11 is now claimed in full** — so from here a new row
- * is a new binding the plan has to gain first, not a gap being closed.
- */
-const SHORTCUTS = [
-  ['file.new', 'Mod+N'],
-  ['file.open', 'Mod+O'],
-  ['file.save', 'Mod+S'],
-  ['file.saveAs', 'Mod+Shift+S'],
-  ['file.saveAll', 'Mod+Alt+S'],
-  ['file.close', 'Mod+W'],
-  ['file.closeWindow', 'Mod+Shift+W'],
-  ['view.nextTab', 'Ctrl+Tab'],
-  ['view.prevTab', 'Ctrl+Shift+Tab'],
-  ['view.switchTab', 'Mod+Alt+O'],
-  ['view.commandPalette', 'F1'],
-  ['compare.with', 'Mod+Alt+C'],
-  ['settings.open', 'Mod+,'],
-  ['nav.goto', 'Ctrl+G'],
-  ['nav.nextTool', 'F7'],
-  ['nav.prevTool', 'Shift+F7'],
-  ['bookmark.toggle', 'Mod+F2'],
-  ['bookmark.next', 'F2'],
-  ['bookmark.prev', 'Shift+F2'],
-  ['script.runPicker', 'F9'],
-  ['script.runLast', 'Mod+F9'],
-]
+import { SHORTCUTS } from '../lib/shortcuts.js'
 
 scenario('m1-keys', { timeout: 180 }, async (h) => {
   const ctx = /** @type {import('$lib/app/types').AppContext} */ (h.app.ctx)
@@ -56,7 +25,7 @@ scenario('m1-keys', { timeout: 180 }, async (h) => {
     .map((c) => [c.id, typeof c.keys === 'string' ? c.keys : JSON.stringify(c.keys)])
     .sort((a, b) => a[0].localeCompare(b[0]))
   const expected = [...SHORTCUTS].sort((a, b) => a[0].localeCompare(b[0]))
-  h.check('every default shortcut is §7.11, and §7.11 is every default shortcut', JSON.stringify(bound) === JSON.stringify(expected), { bound, expected })
+  h.check('every default shortcut is in the table (§7.11, and §7.13 for Phase 2), and the table is every default shortcut', JSON.stringify(bound) === JSON.stringify(expected), { bound, expected })
   h.check('no two commands claim the same keys', new Set(bound.map(([, k]) => k)).size === bound.length, bound.map(([, k]) => k))
   h.check('the registry loaded without a conflict or a broken contribution', h.rec.errors.length === 0, h.rec.errors)
 

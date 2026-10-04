@@ -1,0 +1,61 @@
+{
+  "title": "Extents",
+  "columns": [
+    {
+      "key": "where",
+      "label": "Where"
+    },
+    {
+      "key": "axis",
+      "label": "Axis"
+    },
+    {
+      "key": "min",
+      "label": "Min"
+    },
+    {
+      "key": "minLine",
+      "label": "At line"
+    },
+    {
+      "key": "max",
+      "label": "Max"
+    },
+    {
+      "key": "maxLine",
+      "label": "At line"
+    },
+    {
+      "key": "unresolved",
+      "label": "Not resolved"
+    }
+  ],
+  "rows": [
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "X (diameter)",
+      "axisId": "X",
+      "min": "0.052",
+      "minLine": 6,
+      "max": "0.2",
+      "maxLine": 4,
+      "unresolved": 0,
+      "line": 4
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-0.03",
+      "minLine": 7,
+      "max": "0.2",
+      "maxLine": 4,
+      "unresolved": 0,
+      "line": 4
+    }
+  ],
+  "message": "Machine 'Lathe 3'. X is a diameter: diameter programming is on (assumed from the profile).",
+  "findings": []
+}

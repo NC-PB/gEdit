@@ -10,6 +10,12 @@ packages set the flags, and WP9.2's flagged-entry golden lists them.
 * ``frame_of``: a code that opens or closes a coordinate frame.
 * ``speed_limit_bound_of``: a speed limit without a bound is the upper one, the clamp it
   always was; Sinumerik ``G25`` is a lower one.
+
+M10 (P10) adds two, with their TypeScript twins ``positionOf`` and ``tcpOf``:
+
+* ``position_of``: what a code parameter is to a program shift (roadmap R8) —
+  ``'tool-axis'``, ``'none'``, ``'other'``, ``'mode'``, or ``None`` for one nobody reviewed.
+* ``tcp_of``: a code that switches tool centre point control ``'on'`` or ``'off'``.
 """
 
 from __future__ import annotations
@@ -118,6 +124,7 @@ class FlaggedEntriesGoldenTest(unittest.TestCase):
                             "axisWords": gedit_nc.axis_words_of(entry),
                             "frame": gedit_nc.frame_of(entry),
                             "speedLimitBound": gedit_nc.speed_limit_bound_of(entry),
+                            "tcp": gedit_nc.tcp_of(entry),
                         },
                         row["reads"],
                     )
@@ -125,9 +132,53 @@ class FlaggedEntriesGoldenTest(unittest.TestCase):
         self.assertGreaterEqual(rows, 45)
 
 
+class PositionTest(unittest.TestCase):
+    """P10 (R8): the twin of ``R8: the parameter role`` in ``flagsContract.test.ts``."""
+
+    def test_the_four_roles_and_nothing_else(self) -> None:
+        cases = [
+            ({"address": "Q203", "position": "tool-axis"}, "tool-axis"),
+            ({"address": "Q201", "position": "none"}, "none"),
+            ({"address": "_X0", "position": "other"}, "other"),
+            ({"address": "_AMODE", "position": "mode"}, "mode"),
+            ({"address": "RTP"}, None),
+            ({"address": "RTP", "position": "TOOL-AXIS"}, None),
+            ({"address": "RTP", "position": "absolute"}, None),
+            ({"address": "RTP", "position": True}, None),
+            (None, None),
+            ("RTP", None),
+        ]
+        for param, want in cases:
+            with self.subTest(param=param):
+                self.assertEqual(gedit_nc.position_of(param), want)
+
+
+class TcpTest(unittest.TestCase):
+    """P10 (decision of 2026-10-04): the twin of ``tool centre point control`` there."""
+
+    def test_on_off_or_nothing(self) -> None:
+        cases = [
+            ({"code": "G43.4", "sets": {"tcp": "on"}}, "on"),
+            ({"code": "TRAFOOF", "frame": "close", "sets": {"tcp": "off"}}, "off"),
+            ({"code": "TRAORI", "frame": "open"}, None),
+            ({"code": "M128", "sets": {"tcp": "ON"}}, None),
+            ({"code": "M128", "sets": {"tcp": True}}, None),
+            ({"code": "G1"}, None),
+            (None, None),
+        ]
+        for entry, want in cases:
+            with self.subTest(entry=entry):
+                self.assertEqual(gedit_nc.tcp_of(entry), want)
+
+    def test_tcp_and_the_frame_are_two_questions(self) -> None:
+        # TRAFOOF ends a frame (TRANSMIT) and tool centre point control (TRAORI) at once.
+        entry = {"code": "TRAFOOF", "frame": "close", "sets": {"tcp": "off"}}
+        self.assertEqual((gedit_nc.frame_of(entry), gedit_nc.tcp_of(entry)), ("close", "off"))
+
+
 class ExportTest(unittest.TestCase):
     def test_the_readers_are_part_of_the_module(self) -> None:
-        for name in ("axis_words_of", "frame_of", "speed_limit_bound_of"):
+        for name in ("axis_words_of", "frame_of", "speed_limit_bound_of", "position_of", "tcp_of", "names_main_spindle"):
             with self.subTest(name=name):
                 self.assertIn(name, gedit_nc.__all__)
 

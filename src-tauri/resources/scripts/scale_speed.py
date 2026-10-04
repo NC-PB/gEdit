@@ -425,10 +425,7 @@ class Params:
         """True when ``spindle`` (as written: `1`, `01`) is the main spindle's number."""
         if self.main_spindle is None or spindle is None:
             return False
-        a, b = spindle.strip(), self.main_spindle
-        if a.isdigit() and b.isdigit():
-            return int(a, 10) == int(b, 10)
-        return a.upper() == b.upper()
+        return gedit_nc.same_spindle(spindle, self.main_spindle)
 
     def format_for(self, token: gedit_nc.Token) -> Tuple[Dict[str, Any], bool]:
         """The number format for this value, and whether it had to be kept whole.

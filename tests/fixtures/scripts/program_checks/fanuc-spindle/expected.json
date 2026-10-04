@@ -1,0 +1,46 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 8,
+      "check": "Spindle after tool change",
+      "checkId": "toolChangeSpindle",
+      "severity": "warning",
+      "message": "G1 Z-1. F200. (CUT BEFORE THE FIRST SPI…: the first cut after the tool change on line 5 (T1 M6), and no spindle start between them"
+    },
+    {
+      "line": 12,
+      "check": "Spindle",
+      "checkId": "spindleOff",
+      "severity": "warning",
+      "message": "G1 X20. (CUT AFTER M5): a cut while the spindle is stopped (M5 on line 11)"
+    },
+    {
+      "line": 20,
+      "check": "Spindle after tool change",
+      "checkId": "toolChangeSpindle",
+      "severity": "warning",
+      "message": "G81 Z-5. R2. F100. (CUT AFTER THE TOOL …: the first cut after the tool change on line 17 (T2 M6), and no spindle start between them"
+    }
+  ],
+  "message": "3 findings in 2 checks. No machine chosen: where the presets read a number differently, the finding lists every reading.",
+  "findings": []
+}

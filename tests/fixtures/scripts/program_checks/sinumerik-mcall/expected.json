@@ -1,0 +1,39 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 9,
+      "check": "Tool change in a cycle",
+      "checkId": "toolChangeInCycle",
+      "severity": "warning",
+      "message": "N80 M6: a tool change while the modal call of CYCLE81 (line 6) is in force"
+    },
+    {
+      "line": 15,
+      "check": "Modal call",
+      "checkId": "modalCallOpen",
+      "severity": "warning",
+      "message": "M30: the modal call of CYCLE81 (line 13) is still in force at the end of the program"
+    }
+  ],
+  "message": "2 findings in 2 checks. No machine chosen.",
+  "findings": []
+}

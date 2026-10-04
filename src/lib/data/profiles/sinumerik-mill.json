@@ -39,6 +39,10 @@
     "ignore": "^(?:[^\"]*\"[^\"]*\")*[^\"]*?(?<![A-Z0-9_$])T(?:\\d*\\s*=\\s*)?0+(?![\\d._])(?!\\s*=)",
     "toolFrom": "same-line-or-last"
   },
+  "addresses": {
+    "axes": ["X", "Y", "Z", "A", "B", "C"],
+    "angular": ["A", "B", "C", "AR", "SF"]
+  },
   "modal": { "initial": { "plane": "G17", "feedmode": "G94" } },
   "machineParams": {
     "diameter": "off"

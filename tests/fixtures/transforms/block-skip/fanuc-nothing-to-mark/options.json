@@ -1,0 +1,11 @@
+{
+  "note": "Only blank lines: nothing is marked and the summary says so.",
+  "profile": "fanuc-gcode",
+  "mode": "add",
+  "options": {},
+  "expect": {
+    "summary": "ncBlockSkip.addRun.nothing",
+    "skipped": [],
+    "warnings": []
+  }
+}

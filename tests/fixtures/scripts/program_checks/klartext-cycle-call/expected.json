@@ -1,0 +1,32 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 5,
+      "check": "Cycle call",
+      "checkId": "cycleUndefined",
+      "severity": "error",
+      "message": "M99: a cycle call, and no cycle is defined before it"
+    }
+  ],
+  "message": "1 finding in 1 check. No machine chosen.",
+  "findings": []
+}

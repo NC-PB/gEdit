@@ -1,9 +1,11 @@
 # Transformations
 
 The **NC** tab holds the changes you make to a whole program rather than to one line:
-renumbering it, unpacking or packing it, throwing out empty lines or comments, and fixing
-the case. They are built into the editor, so they work whether or not Python is installed.
-Feeds, speeds and tool lists are done by scripts instead — see [Scripts](scripts.md).
+renumbering it, unpacking or packing it, throwing out empty lines or comments, fixing
+the case, and marking lines to be skipped. It also selects the lines of one tool. They are
+built into the editor, so they work whether or not Python is installed. Feeds, speeds, tool
+lists, program checks, extents and arithmetic on address values are done by scripts instead
+— see [Scripts](scripts.md).
 
 ## Four rules that hold for all of them
 
@@ -312,11 +314,94 @@ cursor — comments and quoted tool names included. Use **Convert Case…** on a
 
 ---
 
+## Block skip
+
+A block that starts with a slash is skipped when the control's skip switch is on: the
+standard way to mark a prove-out section, a measuring pass or a part of the program that
+runs only on some jobs. Two commands, in the **Block Skip** group of the NC tab, put the
+mark on a selection and take it off again. Neither has a shortcut.
+
+They are offered where the dialect has a block skip mark, and, like the other commands on this
+tab, refused on a program that plainly belongs to another dialect.
+
+### Insert Block Skip…
+
+Marks every block of the selection that can take a mark.
+
+| Option | What it does |
+|---|---|
+| **Skip level** | Only on a dialect with several skip switches (Fanuc, Sinumerik). **Plain (/)** writes the bare slash; a level writes `/1` to `/9`, followed by a blank (`/3 N10`) |
+
+**Where the mark goes** is the dialect's habit. In front of a block number that starts with
+a letter (`/N100 G0 X0`, an Okuma sequence name `/NLAP1`); behind a Klartext block number,
+which is a plain integer (`12 /L X+0 Y+0`); at the head of a block that has no number. A
+blank line is never marked.
+
+- **With nothing selected** the command asks first, because every line of the program would
+  be marked. A selection never asks, unless it covers the whole file.
+- **A block that already carries a mark** — at any level, in front of or behind the number —
+  is never marked twice. If its level is not the one you asked for it is listed, and the
+  count is in the summary.
+- **A continuation is part of the block that starts it.** A Klartext block continued with `~`
+  and an Okuma `$` line carry no mark of their own: the first line has it. If your
+  selection starts in the middle of such a block, that block is **not** marked and the
+  summary says so; select from its first line to skip it.
+- **Left unmarked, and listed:** a program number or name (`%`, `O1001`, the Okuma and
+  Sinumerik file headers such as `$PART.MIN%` and `;$PATH=`), a Klartext `BEGIN PGM` and
+  `END PGM`. Skipping the line that names or closes the program would hide it from the
+  control. An `M30` is an ordinary block and is marked if it is in your selection.
+- **Only the mark is written.** A slash that is division (`#1=#2/2`, `R1=R2/2`,
+  `[#1/#2]`), and a mid-block mark on Fanuc (`/5` meaning "skip from here"), are never
+  touched.
+
+### Remove Block Skip…
+
+Takes the mark off every block of the selection, and the blanks behind it.
+
+| Option | What it does |
+|---|---|
+| **Skip level** | Only on Fanuc and Sinumerik. **All levels** (the default), **Plain**, or one digit. A mark of another level stays; it is counted in the summary and listed as information |
+
+The bare `/` is level 1 on Fanuc, the same switch as `/1`, and level 0 on Sinumerik, the
+same as `/0`; **Plain** takes off whichever of the two the dialect means. Remove never asks
+before it runs.
+
+Insert and then Remove on the same lines gives the program back **byte for byte**: Remove
+cuts the blanks behind the mark, and keeps one only where the control needs the words
+apart and the cut would glue two together.
+
+Both commands are one undo step, say in the status bar what they did, and list in Results
+what they left.
+
+## Tool segments
+
+**Select Tool Segment** (`Cmd/Ctrl+F7`, and the **Segments** group of the NC tab) selects
+the lines that belong to one tool: from the line that calls it up to the line before the
+next tool call, or to the end of the program for the last one. Trailing blank lines are left
+out. Then copy it, move it, or run a command on it: every command on this tab works on the
+selection, and so does Block Skip.
+
+- **Cursor inside a segment**: that segment is selected.
+- **Cursor outside every segment**, in the header before the first tool call: a question asks which tool, one choice
+  for each tool that is used, with the line it starts at. A tool called more than once is
+  one choice.
+- **A tool used in several places** (a roughing and a finishing call, say): the first
+  segment at or after the cursor, wrapping round; the status bar says how many segments
+  that tool has.
+- A program with no tool changes says so.
+
+What a tool change is comes from the dialect, as in the program map and `F7`: `M6` on a
+mill, the `T` word on a lathe, `TOOL CALL` in Klartext.
+
+---
+
 ## Where the rest is
 
 | You want | Where |
 |---|---|
 | Scale feeds or spindle speeds | A bundled script — [Scripts](scripts.md) |
 | A tool list | A bundled script — [Scripts](scripts.md) |
-| Coordinate arithmetic, mirroring, splitting by tool, program checks | Not in this version; write a script, or wait for the bundled library to grow |
+| Program checks, the smallest and largest value of every axis | Bundled scripts — [Program checks](scripts.md#program-checks) and [Extents](scripts.md#extents) |
+| Adding to, subtracting from, multiplying or dividing the values of chosen addresses (a Z shift, say) | A bundled script — [Address arithmetic](scripts.md#address-arithmetic) |
+| Mirroring, splitting by tool, joining programs | Not in this version; write a script, or wait for the bundled library to grow |
 | Find and replace | The editor's own: `Cmd/Ctrl+F` to find, `Ctrl+H` on Windows and Linux or `Cmd+Alt+F` on macOS to replace |

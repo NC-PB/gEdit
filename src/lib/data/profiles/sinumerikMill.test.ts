@@ -471,7 +471,15 @@ describe('what a milling program starts with', () => {
     expect(mill.profile.outline).toEqual(turn.profile.outline);
     expect(mill.profile.numbering).toEqual(turn.profile.numbering);
     expect(mill.profile.program).toEqual(turn.profile.program);
-    expect(mill.profile.addresses).toEqual(turn.profile.addresses);
+    // P10 (§6 M10 item 4): the milling profile names its rotary axes, A and B as well as C,
+    // as axes and as angles, so a simultaneous rotary move is seen (address arithmetic refuses
+    // it without tool centre point control) and extents can list them. Nothing else differs.
+    const { axes, angular, ...rest } = mill.profile.addresses ?? {};
+    const { axes: turnAxes, angular: turnAngular, ...turnRest } = turn.profile.addresses ?? {};
+    expect(rest).toEqual(turnRest);
+    expect(axes).toEqual(['X', 'Y', 'Z', 'A', 'B', 'C']);
+    expect(angular).toEqual(['A', 'B', 'C', 'AR', 'SF']);
+    expect([turnAxes, turnAngular]).toEqual([['X', 'Z', 'C', 'Y'], ['C', 'AR', 'SF']]);
     expect(mill.profile.toolCall.tool).toBe(turn.profile.toolCall.tool);
     expect(mill.profile.machineParams?.numberInput).toEqual(turn.profile.machineParams?.numberInput);
   });

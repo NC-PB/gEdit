@@ -1,0 +1,67 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 10,
+      "check": "Machine reading",
+      "checkId": "machineReading",
+      "severity": "info",
+      "message": "X50: read as 50 mm by 'As written' (the assumed default), 0.05 mm by 'Increments of 0.001 mm (IS-B)' or 0.005 mm by 'Increments of 0.0001 mm (IS-C)'; choose a machine"
+    },
+    {
+      "line": 10,
+      "check": "Machine reading",
+      "checkId": "machineReading",
+      "severity": "info",
+      "message": "Z1000: read as 1000 mm by 'As written' (the assumed default), 1 mm by 'Increments of 0.001 mm (IS-B)' or 0.1 mm by 'Increments of 0.0001 mm (IS-C)'; choose a machine"
+    },
+    {
+      "line": 11,
+      "check": "Machine reading",
+      "checkId": "machineReading",
+      "severity": "info",
+      "message": "Z-10: read as -10 mm by 'As written' (the assumed default), -0.01 mm by 'Increments of 0.001 mm (IS-B)' or -0.001 mm by 'Increments of 0.0001 mm (IS-C)'; choose a machine"
+    },
+    {
+      "line": 18,
+      "check": "Machine reading",
+      "checkId": "machineReading",
+      "severity": "info",
+      "message": "C90000: read as 90000° by 'As written' (the assumed default), 90° by 'Increments of 0.001 mm (IS-B)' or 9° by 'Increments of 0.0001 mm (IS-C)'; choose a machine"
+    },
+    {
+      "line": 20,
+      "check": "Machine reading",
+      "checkId": "machineReading",
+      "severity": "info",
+      "message": "Z-15: read as -15 mm by 'As written' (the assumed default), -0.015 mm by 'Increments of 0.001 mm (IS-B)' or -0.0015 mm by 'Increments of 0.0001 mm (IS-C)'; choose a machine"
+    },
+    {
+      "line": 20,
+      "check": "Machine reading",
+      "checkId": "machineReading",
+      "severity": "info",
+      "message": "R2: read as 2 mm by 'As written' (the assumed default), 0.002 mm by 'Increments of 0.001 mm (IS-B)' or 0.0002 mm by 'Increments of 0.0001 mm (IS-C)'; choose a machine"
+    }
+  ],
+  "message": "6 findings in 1 check. No machine chosen: where the presets read a number differently, the finding lists every reading.",
+  "findings": []
+}

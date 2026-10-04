@@ -1,0 +1,32 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 9,
+      "check": "Speed after tapping",
+      "checkId": "speedAfterTapping",
+      "severity": "error",
+      "message": "N80 G1 Z-2 F100: a cut after G332 (left on line 8) with no new S; leaving G332 sets the spindle speed to zero"
+    }
+  ],
+  "message": "1 finding in 1 check. No machine chosen.",
+  "findings": []
+}

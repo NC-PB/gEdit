@@ -1,0 +1,20 @@
+{
+  "note": "/ and /0 are one level; \"plain\" takes both and leaves /2.",
+  "profile": "sinumerik",
+  "mode": "remove",
+  "options": {
+    "level": "plain"
+  },
+  "expect": {
+    "summary": "ncBlockSkip.removeRun.summary",
+    "skipped": [
+      {
+        "line": 3,
+        "severity": "info"
+      }
+    ],
+    "warnings": [
+      "ncBlockSkip.removeRun.keptLevels"
+    ]
+  }
+}

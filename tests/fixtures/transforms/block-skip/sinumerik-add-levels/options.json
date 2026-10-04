@@ -1,0 +1,13 @@
+{
+  "note": "The mark stands in front of the number, with its level.",
+  "profile": "sinumerik",
+  "mode": "add",
+  "options": {
+    "level": "2"
+  },
+  "expect": {
+    "summary": "ncBlockSkip.addRun.summary",
+    "skipped": [],
+    "warnings": []
+  }
+}

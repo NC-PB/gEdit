@@ -569,3 +569,19 @@ describe('the machine-parameter declaration', () => {
     }
   });
 });
+
+describe('M10 review: the plain skip level and the closing record', () => {
+  const skipOf = (p: Record<string, unknown>) => (p.syntax as Record<string, Record<string, unknown>>).blockSkip;
+  const programOf = (p: Record<string, unknown>) => p.program as Record<string, unknown>;
+
+  it('takes a digit as the plain level and refuses anything else', () => {
+    expect(errorsOf((p) => (skipOf(p).plainLevel = '1'))).toEqual([]);
+    expect(pathsOf((p) => (skipOf(p).plainLevel = '/'))).toEqual(['syntax.blockSkip.plainLevel']);
+    expect(pathsOf((p) => (skipOf(p).plainLevel = 1))).toEqual(['syntax.blockSkip.plainLevel']);
+  });
+
+  it('takes true or false as program.endRecord', () => {
+    expect(errorsOf((p) => (programOf(p).endRecord = true))).toEqual([]);
+    expect(pathsOf((p) => (programOf(p).endRecord = 'yes'))).toEqual(['program.endRecord']);
+  });
+});

@@ -1,0 +1,17 @@
+{
+  "message": "Added 0.5 to Z in 1 word on 1 block. Left 2 blocks as written: 2 cycles started above the selection. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 7,
+      "severity": "warning",
+      "message": "X20. Y20.: part of the same cycle as line 6 above the selection, which this run does not change.",
+      "reason": "cycle-outside"
+    },
+    {
+      "line": 8,
+      "severity": "warning",
+      "message": "X30. Y30.: part of the same cycle as line 6 above the selection, which this run does not change.",
+      "reason": "cycle-outside"
+    }
+  ]
+}

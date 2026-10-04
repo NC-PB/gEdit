@@ -1,0 +1,206 @@
+{
+  "title": "Extents",
+  "columns": [
+    {
+      "key": "where",
+      "label": "Where"
+    },
+    {
+      "key": "axis",
+      "label": "Axis"
+    },
+    {
+      "key": "min",
+      "label": "Min"
+    },
+    {
+      "key": "minLine",
+      "label": "At line"
+    },
+    {
+      "key": "max",
+      "label": "Max"
+    },
+    {
+      "key": "maxLine",
+      "label": "At line"
+    },
+    {
+      "key": "unresolved",
+      "label": "Not resolved"
+    }
+  ],
+  "rows": [
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "X",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 6,
+      "max": "5",
+      "maxLine": 13,
+      "unresolved": 0,
+      "line": 13
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "0",
+      "minLine": 6,
+      "max": "5",
+      "maxLine": 13,
+      "unresolved": 0,
+      "line": 13
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-5",
+      "minLine": 7,
+      "max": "50",
+      "maxLine": 15,
+      "unresolved": 0,
+      "line": 15
+    },
+    {
+      "where": "G54 (line 5)",
+      "scope": "offset",
+      "axis": "X",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 6,
+      "max": "0",
+      "maxLine": 6,
+      "unresolved": 0,
+      "line": 6
+    },
+    {
+      "where": "G54 (line 5)",
+      "scope": "offset",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "0",
+      "minLine": 6,
+      "max": "0",
+      "maxLine": 6,
+      "unresolved": 0,
+      "line": 6
+    },
+    {
+      "where": "G54 (line 5)",
+      "scope": "offset",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-5",
+      "minLine": 7,
+      "max": "10",
+      "maxLine": 6,
+      "unresolved": 0,
+      "line": 6
+    },
+    {
+      "where": "G54 + G52 (line 9)",
+      "scope": "offset",
+      "axis": "X",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 10,
+      "max": "0",
+      "maxLine": 10,
+      "unresolved": 0,
+      "line": 10
+    },
+    {
+      "where": "G54 + G52 (line 9)",
+      "scope": "offset",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "0",
+      "minLine": 10,
+      "max": "0",
+      "maxLine": 10,
+      "unresolved": 0,
+      "line": 10
+    },
+    {
+      "where": "G54 + G52 (line 9)",
+      "scope": "offset",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-5",
+      "minLine": 11,
+      "max": "10",
+      "maxLine": 10,
+      "unresolved": 0,
+      "line": 10
+    },
+    {
+      "where": "G54 + G52 (line 12)",
+      "scope": "offset",
+      "axis": "X",
+      "axisId": "X",
+      "min": "5",
+      "minLine": 13,
+      "max": "5",
+      "maxLine": 13,
+      "unresolved": 0,
+      "line": 13
+    },
+    {
+      "where": "G54 + G52 (line 12)",
+      "scope": "offset",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "5",
+      "minLine": 13,
+      "max": "5",
+      "maxLine": 13,
+      "unresolved": 0,
+      "line": 13
+    },
+    {
+      "where": "G54 + G52 (line 12)",
+      "scope": "offset",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "20",
+      "minLine": 13,
+      "max": "20",
+      "maxLine": 13,
+      "unresolved": 0,
+      "line": 13
+    },
+    {
+      "where": "G54 + G92 (line 14)",
+      "scope": "offset",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "50",
+      "minLine": 15,
+      "max": "50",
+      "maxLine": 15,
+      "unresolved": 0,
+      "line": 15
+    }
+  ],
+  "message": "No machine: readings assumed from the profile defaults, and a word whose reading depends on the machine is not resolved.",
+  "findings": [
+    {
+      "line": 9,
+      "severity": "info",
+      "message": "G52, 2 blocks: its axis words are values, not positions; left out of the ranges.",
+      "reason": "data"
+    },
+    {
+      "line": 14,
+      "severity": "info",
+      "message": "G92, 1 block: its axis words are values, not positions; left out of the ranges.",
+      "reason": "data"
+    }
+  ]
+}

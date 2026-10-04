@@ -1,0 +1,10 @@
+{
+  "about": "M10 prelude (P10, plan §7.4 rule 15): the tool axis of TOOL CALL names the working plane (Z: XY), which is the tool axis the R8 role of a cycle's Q203 is on. A TOOL CALL without an axis keeps it; nothing else in a Klartext program sets the plane.",
+  "input": "../../nc/heidenhain/h05-tool-axis.h",
+  "states": [
+    { "line": 1, "after": { "plane": "unknown", "frame": null, "tcp": null } },
+    { "line": 4, "after": { "plane": "XY" } },
+    { "line": 6, "about": "A speed change names no axis and keeps the plane.", "after": { "plane": "XY" } },
+    { "line": 8, "after": { "plane": "XY" } }
+  ]
+}

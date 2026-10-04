@@ -149,7 +149,7 @@ describe('the local programs', () => {
       const python = findPython();
       const report = runG11(local.path, programs ?? [], sourceOf(local), python);
       const lines = formatReport(report);
-      if (!python.ok) lines.push(`G11 toolList, scaleFeed and scaleSpeed skipped: ${python.reason}`);
+      if (!python.ok) lines.push(`G11 the script checks skipped: ${python.reason}`);
       for (const line of lines) expect(line).not.toContain(local.path);
       console.log(lines.join('\n'));
 
@@ -306,14 +306,14 @@ describe('G11 on a synthetic manifest', () => {
     expect(report.failures.filter((f) => f.check === 'noCrash')).toEqual([{ check: 'noCrash', index: 5 }]);
   });
 
-  it.runIf(python.ok)('runs the tool list and both scaling scripts at 100 % on every program that opens', () => {
-    for (const check of ['toolList', 'scaleFeed', 'scaleSpeed'] as const) {
+  it.runIf(python.ok)('runs the tool list, the scaling scripts at 100 % and the M10 scripts on every program that opens', () => {
+    for (const check of ['toolList', 'scaleFeed', 'scaleSpeed', 'programChecks', 'extents', 'addressArithmetic'] as const) {
       expect(report.checks[check], check).toEqual({ pass: 8, fail: 0, known: 0, skipped: 2 });
     }
   });
 
   it.runIf(!python.ok)('reports the script checks as skipped without Python, never as passed', () => {
-    for (const check of ['toolList', 'scaleFeed', 'scaleSpeed'] as const) {
+    for (const check of ['toolList', 'scaleFeed', 'scaleSpeed', 'programChecks', 'extents', 'addressArithmetic'] as const) {
       expect(report.checks[check], check).toEqual({ pass: 0, fail: 0, known: 0, skipped: 10 });
     }
   });

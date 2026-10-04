@@ -1,0 +1,60 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 6,
+      "check": "Lower case",
+      "checkId": "lowerCase",
+      "severity": "info",
+      "message": "g0, x10., y10.: written in lower case; this control reads its addresses in upper case"
+    },
+    {
+      "line": 8,
+      "check": "Comment",
+      "checkId": "unclosedComments",
+      "severity": "error",
+      "message": "(A COMMENT NOT CLOSED: the comment is opened with ( and not closed with ) on its line"
+    },
+    {
+      "line": 9,
+      "check": "Brackets",
+      "checkId": "brackets",
+      "severity": "error",
+      "message": "#1=[#2+[#3*2.]: 1 [ is not closed"
+    },
+    {
+      "line": 10,
+      "check": "Brackets",
+      "checkId": "brackets",
+      "severity": "error",
+      "message": "G1 X30. ): a ) with no ( before it"
+    },
+    {
+      "line": 11,
+      "check": "Characters",
+      "checkId": "characters",
+      "severity": "warning",
+      "message": "µ: µ (micro sign) is not an ASCII character, outside a comment"
+    }
+  ],
+  "message": "5 findings in 4 checks. No machine chosen: where the presets read a number differently, the finding lists every reading.",
+  "findings": []
+}

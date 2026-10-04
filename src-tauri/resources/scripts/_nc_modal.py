@@ -48,7 +48,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from _nc_lex import CompiledProfile, LineState, Token, continues_block, normalize_code, tokenize_line
+from _nc_lex import CompiledProfile, LineState, Token, continues_block, decimal_of, normalize_code, tokenize_line
 
 #: The feed modes plan §7.10 names, for a run **without** a code database. With one, the
 #: database decides (``sets.feedUnit``) and these are never consulted: on a lathe in G-code
@@ -197,6 +197,73 @@ def speed_limit_bound_of(entry: Optional[Dict[str, Any]]) -> Optional[str]:
     return "lower" if sets.get("speedLimitBound") == "lower" else "upper"
 
 
+# -- P10 (roadmap R8; the decision of 2026-10-04 on tool centre point control; plan section
+# 7.2): two more readers. The TypeScript twins are `positionOf` and `tcpOf` in
+# `src/lib/core/codes/lookup.ts`, held to the same cases.
+
+#: What a parameter may be to a program shift (``CodeParam.position``).
+_POSITIONS = ("tool-axis", "none", "other", "mode")
+
+
+def position_of(param: Optional[Dict[str, Any]]) -> Optional[str]:
+    """What a code parameter is to a program shift (R8), or ``None`` when nobody reviewed it.
+
+    ``'tool-axis'``: an absolute coordinate on the tool axis (Klartext ``Q203``, Sinumerik
+    ``RTP``/``RFP``/``DP``, the ``R`` of a Fanuc mill drilling cycle), which a shift on the
+    tool axis moves with the axis words; ``'none'``: reviewed, no absolute position (a
+    distance, a feed, a count); ``'other'``: an absolute position the role does not cover,
+    which refuses the block; ``'mode'``: a mode argument that refuses the call unless it is
+    absent, empty or ``0``. ``None`` is refused like ``'other'`` by address arithmetic.
+    """
+    if not isinstance(param, dict):
+        return None
+    value = param.get("position")
+    return value if value in _POSITIONS else None
+
+
+def tcp_of(entry: Optional[Dict[str, Any]]) -> Optional[str]:
+    """``'on'`` or ``'off'`` for a code that switches tool centre point control, else ``None``.
+
+    ``G43.4``/``G43.5``, ``M128``, ``FUNCTION TCPM`` and ``TRAORI`` switch it on; ``G49``,
+    ``M129``, ``FUNCTION RESET TCPM`` and ``TRAFOOF`` off (``sets.tcp``). It is no frame:
+    under it, the ``X``/``Y``/``Z`` of a block are the tool tip in the workpiece.
+    """
+    value = _sets_of(entry).get("tcp")
+    return value if value in ("on", "off") else None
+
+
+#: P10 (§7.4 rule 15): the tool axis a bare axis letter names -> the working plane.
+_PLANE_OF_TOOL_AXIS = {"Z": "XY", "Y": "ZX", "X": "YZ"}
+
+
+def same_spindle(written: str, main: str) -> bool:
+    """``1`` and ``01`` name the same spindle; a letter is compared without case."""
+    a, b = written.strip(), main.strip()
+    if a.isdigit() and b.isdigit():
+        return int(a, 10) == int(b, 10)
+    return a != "" and a.upper() == b.upper()
+
+
+def names_main_spindle(token: Token, speed_address: str, main_spindle: Optional[str]) -> bool:
+    """True for a speed word that names the **main** spindle by its number (P10, decision 3).
+
+    ``S1=900`` and ``S[1]=900`` while the profile's ``addresses.mainSpindle`` is ``1``: the
+    owner's reading of 2026-09-27 ("we consider S1= as main spindle"), which ``scale_speed``
+    already follows. The plain ``S`` is not such a word (it is the speed word itself), and a
+    word for any other spindle (``S2=``, ``S[2]=``, ``SB=``) is not one either. A profile
+    without ``mainSpindle`` names no main spindle, so nothing is.
+    """
+    if main_spindle is None or main_spindle.strip() == "" or token.kind != "word" or not token.address:
+        return False
+    speed = speed_address.upper()
+    address = token.address.upper()
+    if token.index is not None:
+        return address == speed and same_spindle(token.index, main_spindle)
+    if not is_assignment(token) or not address.startswith(speed) or address == speed:
+        return False
+    return same_spindle(address[len(speed) :], main_spindle)
+
+
 def _next_code_token(tokens: Sequence[Token], start: int, count: int) -> Optional[Token]:
     """The next token that is not whitespace, or ``None``."""
     for i in range(start, count):
@@ -205,7 +272,7 @@ def _next_code_token(tokens: Sequence[Token], start: int, count: int) -> Optiona
     return None
 
 
-def _is_assignment(token: Token) -> bool:
+def is_assignment(token: Token) -> bool:
     """True for an address written with ``=`` (plan §7.5, AD-24 ``syntax.assignment``).
 
     ``SB=1200``, ``S3=2500``, ``M3=3``, ``LIMS=3000``, ``F=R1``: the token is a ``word`` whose
@@ -242,7 +309,7 @@ def _written_codes(tokens: Sequence[Token], index: Dict[str, Dict[str, Any]]) ->
     (``GOTO100``). Both spellings end up as one written code here.
 
     Two more come with the turning dialects (M8). A ``call`` token is the code of its
-    identifier (``CYCLE84(…)`` is ``CYCLE84``); an assignment word (:func:`_is_assignment`)
+    identifier (``CYCLE84(…)`` is ``CYCLE84``); an assignment word (:func:`is_assignment`)
     is a value and never a code, so ``M3=3`` does not become the code ``M33``.
 
     The kind (``'word'``, ``'call'``, ``'keyword'``) is what tells a cycle **defined** by a
@@ -254,7 +321,7 @@ def _written_codes(tokens: Sequence[Token], index: Dict[str, Dict[str, Any]]) ->
     for i, token in enumerate(tokens):
         if token.kind == "word":
             address = token.address or ""
-            if address != "" and not _is_assignment(token):
+            if address != "" and not is_assignment(token):
                 out.append((address + (token.value_text or ""), "word"))
         elif token.kind == "call":
             name = token.address or ""
@@ -404,6 +471,9 @@ class ModalInterpreter:
         self._feed_address = feed.upper() if isinstance(feed, str) and feed != "" else _FEED_ADDRESS
         spindle = addresses.get("spindle")
         self._speed_address = spindle.upper() if isinstance(spindle, str) and spindle != "" else "S"
+        #: P10 (decision 3): the main spindle's number, whose `S1=` / `S[1]=` is the speed.
+        main = addresses.get("mainSpindle")
+        self._main_spindle: Optional[str] = main.strip() if isinstance(main, str) and main.strip() != "" else None
         words = addresses.get("feedUnitWords")
         self._feed_unit_words: Dict[str, str] = (
             {str(k).upper(): str(v) for k, v in words.items() if isinstance(k, str)}
@@ -433,6 +503,10 @@ class ModalInterpreter:
         self._has_distance = any(
             _sets_of(entry).get("distance") in ("absolute", "incremental") for entry in self.codes
         )
+        #: Rule 13 reads the block's values only for a code that closes its frame when it is
+        #: written without any (`frameWithoutValues`, Siemens `TRANS`/`CYCLE800`); a database
+        #: with no such code never asks, so no block pays for the walk.
+        self._has_bare_frames = any(isinstance(entry, dict) and entry.get("frameWithoutValues") == "close" for entry in self.codes)
         self.reset()
 
     # -- the power-on state -------------------------------------------------
@@ -465,6 +539,16 @@ class ModalInterpreter:
         # is unchanged.
         self._defined_cycle: Optional[Dict[str, Any]] = None
         self._modal_call: Optional[Dict[str, Any]] = None
+        # P10 (rules 13 and 14): the open coordinate frames, innermost last, and tool centre
+        # point control. Both are off at power-on: nothing has opened a frame, and a control
+        # that powered on under TCP would be one nobody can read a program for.
+        self._frames: List[Dict[str, Any]] = []
+        self._tcp: Optional[Dict[str, Any]] = None
+        #: Rule 15: set while a block's codes say its bare axis letter names the plane.
+        self._axis_plane = False
+        #: Rule 13: the block's calls without arguments, and whether it writes any value.
+        self._calls_bare = {}
+        self._block_values = False
         self._modal_ambiguous: Optional[str] = None
         # Before the power-on codes below, which are applied through `_apply_sets` and may
         # touch the block's flags.
@@ -552,8 +636,12 @@ class ModalInterpreter:
         # Two passes, because a block is not a sentence: `G50 S2500` and `S2500 G50` mean
         # the same thing, so every code of the block is applied before a single address
         # word is read (rules 4 and 6 both depend on it).
+        self._axis_plane = False
+        self._read_values(tokens)
         for code in _codes_in(tokens, self._entries):
             self._apply_code(code, line)
+        if self._axis_plane:
+            self._apply_tool_axis(tokens)
         self._apply_modal_call(tokens)
         self._apply_words(tokens, line)
         if masked:
@@ -592,6 +680,10 @@ class ModalInterpreter:
             self._groups[group] = {"code": canonical, "line": line, "assumed": False, "from": None}
 
         self._apply_sets(sets, line, assumed=False)
+        self._apply_frame(entry, canonical, group, line)
+        self._apply_tcp(sets, canonical, group if modal else None, line)
+        if sets.get("planeFromAxisWord") is True:
+            self._axis_plane = True
 
         # Rule 6: the block's feed word is a time here, not a feed.
         if entry.get("fNotFeed") is True:
@@ -641,6 +733,85 @@ class ModalInterpreter:
             # block alone.
             self._block_ambiguous = canonical
 
+    def _read_values(self, tokens: "Sequence[Token]") -> None:
+        """Rule 13: which calls of the block are written without arguments, and whether the
+        block writes any value besides its codes (``frameWithoutValues``)."""
+        self._calls_bare: Dict[str, bool] = {}
+        self._block_values = False
+        if not self._has_bare_frames:
+            return
+        for token in tokens:
+            if token.kind == "call" and token.address:
+                self._calls_bare[normalize_code(token.address)] = (token.value_text or "").strip() == ""
+            elif token.kind == "word" and (token.value_text or "") != "":
+                address = token.address or ""
+                if address != "" and not is_assignment(token) and normalize_code(address + (token.value_text or "")) in self._entries:
+                    continue  # one of the block's codes (`G17`), not a value
+                self._block_values = True
+
+    def _written_bare(self, code: str) -> bool:
+        """Rule 13: the code is written without values — ``CYCLE800()``, or ``TRANS`` alone."""
+        key = normalize_code(code)
+        if key in self._calls_bare:
+            return self._calls_bare[key]
+        return not self._block_values
+
+    def _apply_frame(self, entry: Dict[str, Any], code: str, group: Optional[str], line: int) -> None:
+        """Rule 13 (P10): the coordinate frames a code opens and closes (``CodeEntry.frame``).
+
+        An ``'open'`` code is in force from its block on; written again, it moves to the end
+        rather than being counted twice (a second ``PLANE SPATIAL`` or ``CYCLE800`` replaces
+        the first). A ``'close'`` ends the open frames **of its own group**, and a close
+        without a group those without one: ``G69`` ends ``G68`` and ``G68.2`` but not the
+        scaling of ``G51``, ``PLANE RESET`` ends a ``PLANE`` and cycle 19 but not the mirror of
+        cycle 8, and ``TRAFOOF`` ends ``TRANSMIT`` but not ``CYCLE800``. A close that matches
+        nothing changes nothing, so a frame stays open when in doubt — the safe reading for
+        anything that moves positions.
+
+        ``frameWithoutValues: 'close'``: written without values (``CYCLE800()``, ``TRANS`` or
+        ``ROT`` alone) the code closes the frames of its group instead, as the Siemens manuals
+        say it does; with any value it keeps the reading of ``frame``.
+        """
+        frame = frame_of(entry)
+        if entry.get("frameWithoutValues") == "close" and self._written_bare(code):
+            frame = "close"
+        if frame == "open":
+            self._frames = [f for f in self._frames if f["code"] != code]
+            self._frames.append({"code": code, "line": line, "group": group})
+        elif frame == "close":
+            self._frames = [f for f in self._frames if f["group"] != group]
+
+    def _apply_tcp(self, sets: Dict[str, Any], code: str, group: Optional[str], line: int) -> None:
+        """Rule 14 (P10): tool centre point control (``sets.tcp``), which is no frame.
+
+        ``'on'`` keeps the code and its line, ``'off'`` ends it. A modal code of the same group
+        as the code that switched it on ends it too, because it replaces that code on the
+        control (``G43`` after ``G43.4``): reading TCP as still on there would let a
+        simultaneous rotary move be judged that is not.
+        """
+        tcp = sets.get("tcp")
+        if tcp == "on":
+            self._tcp = {"code": code, "line": line, "group": group}
+        elif tcp == "off":
+            self._tcp = None
+        elif self._tcp is not None and group is not None and self._tcp.get("group") == group:
+            self._tcp = None
+
+    def _apply_tool_axis(self, tokens: "Sequence[Token]") -> None:
+        """Rule 15 (P10): the bare axis letter of a ``planeFromAxisWord`` block names the plane.
+
+        ``TOOL CALL 1 Z`` works with the tool along ``Z``, so in the ``XY`` plane; ``Y`` is
+        ``ZX`` and ``X`` is ``YZ``. Any other letter (a parallel axis ``W``) leaves the plane
+        unknown rather than guessed; a block with no bare letter keeps the plane in force.
+        """
+        for token in tokens:
+            if token.kind != "word" or not token.address or (token.value_text or "") != "":
+                continue
+            letter = token.address.upper()
+            if letter in self._axes or letter in _PLANE_OF_TOOL_AXIS:
+                self._plane = _PLANE_OF_TOOL_AXIS.get(letter, UNKNOWN)
+                return
+
     def _apply_defined(self, cycle: str, code: str, line: int, pitch: bool) -> None:
         """Rule 11: a cycle defined once and run where it is called (plan §7.4 rules 1–4)."""
         if cycle == "define":
@@ -679,7 +850,7 @@ class ModalInterpreter:
         found = False
         for token in tokens:
             if token.kind == "word" and (token.address or "").upper() in axes and (token.value_text or "") != "":
-                if not _is_assignment(token):
+                if not is_assignment(token):
                     found = True
                     break
         if not found:
@@ -730,11 +901,16 @@ class ModalInterpreter:
             address = (token.address or "").upper()
             if address == "":
                 continue
-            if token.index is not None:
+            main = names_main_spindle(token, self._speed_address, self._main_spindle)
+            if token.index is not None and not main:
                 # `S[2]=500`, `LIMS[2]=1800`: the spindle (or axis) is the index's, the way
                 # `S2=` and `SB=` name theirs in the address, so this is neither the speed
                 # in force nor the main clamp (M9 review F1).
                 continue
+            if main:
+                # P10 (decision 3): `S1=` and `S[1]=` are the main spindle's speed, read like
+                # the plain `S` (a dwell's revolutions and a clamp block included).
+                address = self._speed_address
             if address in self._feed_unit_words:
                 # Rule 5: the word says which unit its own value is in.
                 self._feed_unit_word = address
@@ -822,6 +998,8 @@ class ModalInterpreter:
             "activeCycle": self._active_cycle_state(),
             "definedCycle": dict(self._defined_cycle) if self._defined_cycle is not None else None,
             "modalCall": dict(self._modal_call) if self._modal_call is not None else None,
+            "frame": self.frame,
+            "tcp": self.tcp,
             "pitchFeedAmbiguous": self.pitch_feed_ambiguous,
             "block": self._block_state(),
         }
@@ -882,6 +1060,26 @@ class ModalInterpreter:
     def modal_call(self) -> Optional[str]:
         """The code that switched the modal call on (``M89``), or ``None`` (rule 11)."""
         return self._modal_call["code"] if self._modal_call is not None else None
+
+    @property
+    def frame(self) -> Optional[Dict[str, Any]]:
+        """The innermost coordinate frame in force, ``{code, line}``, or ``None`` (rule 13)."""
+        if not self._frames:
+            return None
+        last = self._frames[-1]
+        return {"code": last["code"], "line": last["line"]}
+
+    @property
+    def open_frames(self) -> List[Dict[str, Any]]:
+        """Every open frame, outermost first, as ``{code, line}`` (rule 13)."""
+        return [{"code": f["code"], "line": f["line"]} for f in self._frames]
+
+    @property
+    def tcp(self) -> Optional[Dict[str, Any]]:
+        """The code that switched tool centre point control on, ``{code, line}``, or ``None``."""
+        if self._tcp is None:
+            return None
+        return {"code": self._tcp["code"], "line": self._tcp["line"]}
 
     @property
     def pitch_feed(self) -> bool:
@@ -1099,7 +1297,7 @@ class FeedModeTracker:
             kind = token.kind
             if kind == "word":
                 address = token.address
-                if not address or address.upper() not in self._heads or _is_assignment(token):
+                if not address or address.upper() not in self._heads or is_assignment(token):
                     continue
                 entry = self._lookup(address + (token.value_text or ""))
             elif kind == "call":
@@ -1371,3 +1569,136 @@ def diameter_axes(profile: Dict[str, Any]) -> List[str]:
     if not isinstance(found, list):
         return []
     return [str(word).upper() for word in found if isinstance(word, str)]
+
+
+# ---------------------------------------------------------------------------
+# M10 review (NC-4, NC-10): where the rotary axes stand while nothing compensates them
+# ---------------------------------------------------------------------------
+
+#: ISO 841: the linear axes a rotary axis turns. A turns about X (so it tilts Y and Z),
+#: B about Y (X and Z), C about Z (X and Y). U, V and W are parallel to X, Y and Z.
+_TURNS = {"A": ("Y", "Z"), "B": ("X", "Z"), "C": ("X", "Y")}
+_PARALLEL = {"U": "X", "V": "Y", "W": "Z"}
+
+#: What :class:`RotaryState` knows about one rotary axis.
+ROTARY_UNWRITTEN = "unwritten"
+ROTARY_ZERO = "zero"
+ROTARY_TURNED = "turned"
+ROTARY_UNKNOWN = "unknown"
+
+
+class RotaryState:
+    """Whether each rotary axis of the profile stands at zero, turned, or nobody knows.
+
+    While tool centre point control is off and no frame is open, the linear words of a block
+    are the positions of the machine's linear axes. They are positions in the workpiece only
+    while every rotary axis that turns them stands at zero: under ``B90.`` a ``Z`` word is no
+    longer a height above the part. Address arithmetic refuses such a word and the extents do
+    not put it into a range (roadmap R3; the M10 review).
+
+    The answer is per linear axis (:meth:`turning`): a rotary axis turns the linear axes of
+    ISO 841 (:data:`_TURNS`), so a C-axis lathe can still shift ``Z``; on a **lathe** the
+    spindle axis ``C`` does not turn ``X`` either, which is a radius about it.
+
+    A rotary axis the program has not written yet is **unwritten**: where it stands is not
+    known, but a program that never writes it (a three-axis program on a profile that lists
+    ``A``/``B``/``C``) never moves it, and one whose first value is ``0`` shows it means the
+    axis to stand at zero; so a caller decides at the end of its walk, with
+    :meth:`known_later`, whether that unknown mattered. A literal ``0`` is zero, any other
+    literal is turned (the reading of the number does not matter for that), a variable or an
+    expression is unknown, an incremental word keeps a zero only when it adds zero, and a
+    machine position leaves the axis at zero for a ``0`` (the machine's zero: ``G53 B0``,
+    ``M92`` with ``A0``, ``G28 B0``, which ends at the reference point) and unknown for any
+    other value.
+    """
+
+    def __init__(self, profile: Dict[str, Any]) -> None:
+        addresses = (profile or {}).get("addresses") or {}
+        axes = {str(a).upper() for a in addresses.get("axes") or [] if isinstance(a, str)}
+        angular = {str(a).upper() for a in addresses.get("angular") or [] if isinstance(a, str)}
+        self.rotary = frozenset(a for a in axes & angular if a in _TURNS)
+        self.twins = {
+            twin: axis for twin, axis in incremental_axes(profile).items() if axis in self.rotary
+        }
+        self.lathe = machine_type_of(profile) == "lathe"
+        self.state: Dict[str, str] = {axis: ROTARY_UNWRITTEN for axis in self.rotary}
+        #: The first line that writes each rotary axis, and where that line leaves it.
+        self.first_written: Dict[str, int] = {}
+        self.first_state: Dict[str, str] = {}
+        self._turning: Dict[str, frozenset] = {}
+
+    def axis_of(self, address: str) -> Optional[str]:
+        """The rotary axis a word moves (``C``, or its incremental twin ``H``), else ``None``."""
+        word = (address or "").upper()
+        if word in self.rotary:
+            return word
+        return self.twins.get(word)
+
+    def turning(self, linear: str) -> frozenset:
+        """The rotary axes that turn the linear axis ``linear`` (``Z`` -> ``{A, B}``)."""
+        found = self._turning.get(linear)
+        if found is None:
+            axis = _PARALLEL.get(linear, linear)
+            found = frozenset(
+                r for r in self.rotary if axis in _TURNS[r] and not (self.lathe and r == "C" and axis == "X")
+            )
+            self._turning[linear] = found
+        return found
+
+    def update(self, words: Sequence[Tuple[str, Any, bool]], line: int, machine: bool = False) -> None:
+        """One block's rotary words: ``(address, literal or None, incremental)``.
+
+        ``incremental`` is ``True`` for an incremental word, ``False`` for an absolute one and
+        ``None`` while the distance mode is not known. ``machine`` is a machine-position block.
+        """
+        for address, literal, incremental in words:
+            axis = self.axis_of(address)
+            if axis is None:
+                continue
+            first = axis not in self.first_written
+            self.first_written.setdefault(axis, line)
+            self._set(axis, literal, incremental, machine)
+            if first:
+                self.first_state[axis] = self.state[axis]
+
+    def _set(self, axis: str, literal: Any, incremental: Optional[bool], machine: bool) -> None:
+        """The state one rotary word leaves its axis in."""
+        before = self.state.get(axis, ROTARY_UNWRITTEN)
+        value = decimal_of(literal) if literal is not None else None
+        if machine:
+            # A machine position: its 0 is the machine's own zero, where a tilting axis
+            # stands untilted (`G53 B0`, `L A0 C0 M92`, `G28 B0` ends at the reference
+            # point); any other value is not known in the program's frame.
+            self.state[axis] = ROTARY_ZERO if value == 0 else ROTARY_UNKNOWN
+            return
+        if value is None:
+            self.state[axis] = ROTARY_UNKNOWN
+        elif incremental is False:
+            self.state[axis] = ROTARY_ZERO if value == 0 else ROTARY_TURNED
+        elif value == 0 and before in (ROTARY_ZERO, ROTARY_TURNED) and incremental is True:
+            self.state[axis] = before
+        elif value == 0 and incremental is None and before == ROTARY_ZERO:
+            self.state[axis] = ROTARY_ZERO
+        else:
+            self.state[axis] = ROTARY_UNKNOWN
+
+    def known_later(self, axes: Any) -> List[str]:
+        """Of ``axes`` (still unwritten when a block ran), those the program writes later to
+        anything but zero: where they stood before is then not known. An axis whose first
+        value is ``0`` shows the program means it to stand at zero, and one it never writes is
+        not moved by it at all."""
+        return sorted(a for a in axes if a in self.first_written and self.first_state.get(a) != ROTARY_ZERO)
+
+    def blocking(self, linear: str, *states: Dict[str, str]) -> Tuple[frozenset, frozenset]:
+        """For the linear axis ``linear``: the rotary axes that are turned or unknown in any of
+        ``states``, and those still unwritten in the last of them (which a caller judges at
+        the end, by :attr:`first_written`)."""
+        turned = set()
+        unwritten = set()
+        for axis in self.turning(linear):
+            for state in states:
+                if state.get(axis) in (ROTARY_TURNED, ROTARY_UNKNOWN):
+                    turned.add(axis)
+            if states and states[-1].get(axis) == ROTARY_UNWRITTEN:
+                unwritten.add(axis)
+        return frozenset(turned), frozenset(unwritten)

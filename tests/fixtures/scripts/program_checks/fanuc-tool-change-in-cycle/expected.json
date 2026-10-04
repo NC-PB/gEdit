@@ -1,0 +1,32 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 11,
+      "check": "Tool change in a cycle",
+      "checkId": "toolChangeInCycle",
+      "severity": "warning",
+      "message": "T2 M6: a tool change while the cycle G81 (line 9) is in force"
+    }
+  ],
+  "message": "1 finding in 1 check. No machine chosen: where the presets read a number differently, the finding lists every reading.",
+  "findings": []
+}

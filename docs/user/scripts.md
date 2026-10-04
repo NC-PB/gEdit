@@ -1,10 +1,11 @@
 # Scripts
 
 A script is a small Python program that reads your NC code and gives something back: new
-code, or a table. Scripts are how gEdit is extended. Scaling feeds, scaling spindle speeds
-and listing tools are done by scripts that ship with the app, and they use exactly the
-same contract as one you write yourself — so if a bundled script is nearly what you need,
-copy it and change the part that is not.
+code, or a table. Scripts are how gEdit is extended. Scaling feeds, scaling spindle speeds,
+listing tools, checking a program, finding its extents and doing arithmetic on address
+values are done by scripts that ship with the app, and they use exactly the same contract
+as one you write yourself — so if a bundled script is nearly what you need, copy it and
+change the part that is not.
 
 > **Only run scripts you trust.** A script is an ordinary program running with your rights:
 > it can read and write your files and reach the network. gEdit does not sandbox it.
@@ -371,6 +372,346 @@ If a program has `T` words but no tool change at all, the list says so rather th
 back silently empty. On a milling dialect that usually means the program is really a turning
 program opened with a mill profile — switch the dialect in the status bar.
 
+### Program checks
+
+Lists what a program does that the control or the machine will not like, before the
+program goes to the machine. It changes nothing: the result is a table in the **Results**
+panel, one row per finding, in line order, with the line, the check, a severity and the
+finding. Click a row to jump to the line.
+
+It is **a reading of the text, not a simulation**. It does not know where the tool is, what
+the stock looks like or whether the tool fits the hole; it finds what a program says about
+itself that cannot be right. A check that cries wolf on a correct program is worse than no
+check, so each one is driven by the dialect, the code database and the machine, never by a
+guess about what your post usually writes, and where a check cannot judge it says nothing
+rather than flag every line.
+
+| Severity | Means |
+|---|---|
+| **Error** | The control refuses the program, or it is broken where it stands: an unclosed comment, a `G70` target that is not there, code after the end |
+| **Warning** | Almost certainly not what was meant: a cut with the spindle stopped |
+| **Info** | A list you asked for (every stop), or a reading to confirm (the machine reading, lower case) |
+
+Every check is a tick box on the form, all on; clear one and its rows go. A check whose
+data the dialect does not have is not run; the general checks run on every dialect.
+
+| Check | Severity | What it finds |
+|---|---|---|
+| **Program frame** | error, warning | A program that runs into the next start marker or the closing `%` with no end code; code after the end or after the closing `%`, which never runs; the end written twice; a tape with only one `%` |
+| **Spindle** | warning | A cut while the spindle is stopped (the row names the code that stopped it), or a cut before the program starts a spindle. The second is reported only in a program that starts a spindle somewhere, because a subprogram runs under its caller's spindle |
+| **Spindle after tool change** | warning | The first cut after a tool change with no spindle start in between. Only on a machining centre, whose tool change stops the spindle; a turret does not |
+| **Tool change in a cycle** | warning | A tool change while a modal cycle, or a modal call such as `MCALL` or Klartext `M89`, is in force |
+| **Offset cancel** | warning | Lathe: a cut after a lone tool word that cancels the offset (`T0100`) and before the next tool call |
+| **Speed after tapping** | error | Sinumerik: a cut after leaving a tapping move that sets the speed to zero (`G331`, `G332`) with no new speed |
+| **Speed clamp** | warning | Constant surface speed with no spindle-speed limit earlier in the program (once per program) |
+| **Thread under surface speed** | warning | A thread cut under constant surface speed (once per stretch of it) |
+| **Refused in this state** | warning | A code written in a state the control refuses it in. Examples: `G28` or `G53` under tool centre point control, a tilted working plane under compensation or inside another frame, Klartext `TOOL CALL` or `M91` while `M128` is on, Sinumerik `G75` under radius compensation, Okuma `G140` under constant surface speed |
+| **Missing word** | error | A code whose block lacks the word the control needs with it: Klartext `PLANE` without `MOVE`, `TURN` or `STAY`, Okuma `G96` without `S` |
+| **Alone in its block** | error | A code that has to stand in a block of its own does not: Fanuc `G53.1` and a `G65` macro call (its arguments may follow it, nothing may stand in front), Okuma `M110` |
+| **Rigid tapping** | error | A speed word or a move between the rigid-tapping call (`M29`) and its cycle, or the call inside a running tapping cycle. `M29` counts as a tapping call only when a tapping cycle follows it, so on a lathe where that M number means something else nothing is reported |
+| **Cycle call** | error | A cycle call with no cycle defined before it. A Klartext definition the database does not know still counts as a definition, so nothing is reported after one |
+| **Modal call** | warning | A modal call still in force at the end of the program |
+| **Control language** | warning | A code that switches the control to its ISO dialect (Sinumerik `G291`) |
+| **Profile targets** | error | Lathe: the `P` and `Q` blocks of a roughing or finishing cycle missing, or `P` after `Q` |
+| **Call in a profile** | error | Lathe: a subprogram call inside such a `P` to `Q` profile |
+| **Jump target** | error, warning | A jump to a block or label that is not in the program; a target written on two lines; `GOTOF` to a label above, `GOTOB` to one below. A jump to a name that no label has but that begins labels which exist (`GOTOF TOOL` over `TOOL_1_0:`) is a string variable the check cannot see, and is not reported |
+| **DO and END** | error | Loop numbers outside 1 to 3, an `END` with no `DO`, loops that cross, a `DO` never ended |
+| **Words in a block** | error | Two speed words or two tool words in one block; more M codes than the control takes (Okuma: eight) |
+| **Tool word** | warning | A tool word the machine's tool-word format does not describe, and tool words of different lengths in one file. Only where the machine itself states the format |
+| **Program name** | error | A program name that shares its block with other words |
+| **Sequence name** | error | A sequence name or block number with no space or tab behind it |
+| **Digits** | error | A word with more digits than the control stores (Fanuc: eight), once converted to increments, under every reading the machine or the presets allow |
+| **Machine reading** | info | A dimension word without a decimal point whose value depends on how the machine reads numbers, see below |
+| **Tape marker** | error | A `%` inside a comment, which ends the program when the tape is read in |
+| **Comment** | error | A comment opened and not closed on its line |
+| **Brackets** | error | Brackets or quotes that are not balanced in a block, or a `)` with no `(` |
+| **Lower case** | info | Lower-case addresses outside comments and strings, on a control that reads upper case |
+| **Characters** | warning, error | Characters outside ASCII outside comments (warning); blocks longer than the control takes (error) |
+| **Stop** | info | Every program stop and optional stop, as a list |
+
+**Small things that are not findings.** `F MAX` written apart is the rapid word `FMAX` and
+not a feed. A thread cycle that carries a tool word starts the cycle, and `G80 T2 M6` ends
+it, so neither is a tool change inside one. The blocks that describe an Okuma LAP shape are
+not cuts.
+
+**The decimal-point finding.** `X50` is 50 mm on one control and 0.050 mm on the next
+([Machines](machines.md)). **Machine reading** names the words whose value depends on that:
+
+- With a machine whose numbers are **increments**, one row per such word says what it is
+  read as on that machine ("0.050 mm on machine 'Lathe 2'") and what it would be with a
+  point.
+- With a machine that uses **calculator-type input**, or an Okuma **unit system**, no row:
+  the machine reads every literal one way.
+- With **no machine**, the rows list the readings of the dialect's presets, the assumed one
+  first. On Fanuc that is one row per number without a point; on Okuma it is one row for
+  the whole program, because every number there depends on the unit system. The report
+  says "No machine chosen" and the way out is to choose one.
+
+It is information and not a warning, so that a post which writes no points does not drown
+the report.
+
+**A selection** is read together with the lines above it, so the spindle, the cycle and the
+other state at its first line are right. Some checks need the whole program, the program
+frame and the jump and profile targets among them, and the report says so in a note when
+you run on a selection.
+
+**What it does not check, and why.**
+
+- Okuma `G136` alone in its block, and the first blocks after `G137`: the manual states
+  them for ending a conversion, and the owner's own post writes `G136 M109`; no rule says
+  that is wrong.
+- A code a Heidenhain TNC 640 refuses (`M104`, `FN 15`, cycles 1 to 6): which codes it
+  refuses depends on a setting of the control generation, which the machine configuration
+  does not have.
+- The two-turret spindle rule of Okuma: a two-turret program is two channels.
+- The Fanuc lathe's `G69` ending a tilted plane instead of `G69.1`, and `G53.1` standing
+  directly after `G68.2`.
+
+**Long reports are cut at 5,000 rows.** Errors are kept first, then warnings, then
+information; what is kept stays in line order, and a note says how many were left out. An
+error on the last line of a very long program is still there.
+
+**It takes time on a long program.** Tokenizing and following the modal state are most of
+the cost: a 300,000-line program takes a minute or more on a busy machine. The three
+scripts of this section ask for 300 seconds in their headers, which wins over
+`Settings ▸ Scripts ▸ Script timeout`.
+
+### Extents
+
+The smallest and largest value of every axis, for the whole program, for each work offset
+and for each tool. Also a table in the **Results** panel; click a row to jump to the line
+of the largest value. It reads the program and changes nothing.
+
+| Column | |
+|---|---|
+| **Where** | The program, a work offset (`G55 (line 14)`), a tool inside it (`G55, T2 (line 15)`), or a machine position |
+| **Axis** | `X`, `Y`, `Z` and the rotary axes. On a **turning** dialect the X column is `X (diameter)`, see below |
+| **Min**, **Max** and their lines | In the program's units, rounded to 0.0001 mm (0.00001 inch, 0.0001 degree) |
+| **Not resolved** | How many positions of this axis in this scope could not be worked out |
+
+Everything is in **effective values**: a word is converted by the way the machine reads
+it, so a program that switches between millimetres and inches does not mix the two, and an
+incremental move (`G91`, `U`/`W` on a lathe, a Klartext `I` prefix, a Sinumerik `IC()`) is
+added to where the tool was. **Arcs count**: the largest and smallest values on a circle
+are found from its centre or radius in the plane in force, so the bulge of an arc is in the
+range and not only its end point.
+
+**One X column on a lathe.** Every `X` is turned into a diameter, so a program that
+switches between diameter and radius programming (`DIAMON`, `DIAMOF`) never mixes the two
+in one minimum or maximum. A word written as a radius counts double. The message above the
+table says which mode the program starts in and where that came from: the dialect, the
+machine, or the program. A milling dialect keeps a plain `X`, in which a diameter word
+counts half.
+
+**Machine positions** (`G28`, `G30`, `G53`, `M91`, `M92`, Sinumerik `SUPA`) are listed in
+rows of their own and never enter a range: they are places on the machine, not on the
+part. The axes they moved are in an unknown place afterwards, which matters to a later
+incremental move.
+
+**Tool centre point control.** Under `G43.4`, `G43.5`, `M128`, `FUNCTION TCPM` or `TRAORI`
+the `X`, `Y` and `Z` are the tool tip in the workpiece, and they are in the ranges.
+
+**Work offsets and shifts.** A change of work offset starts a new group. So does a shift
+written over it (a local shift `G52`, `G92`, Sinumerik `TRANS`), and the group is named for
+both (`G54 + G52 (line 8)`), because the positions after it are in another system than
+those before. A speed clamp such as `G50 S2000` is not a shift.
+
+**"Not resolved"** means gEdit would have had to guess, so it counted instead. The
+findings under the table say which and why, once per kind:
+
+- **No machine is chosen**, and the dialect's presets read the word differently.
+- A **variable** or an expression (`X#101`, `Z+Q5`).
+- A position inside a **tilted plane, a rotation, a mirror, a scaling, `TRANSMIT`, polar
+  coordinates (`G16`) or polar interpolation**: its numbers are not coordinates of the
+  workpiece.
+- A position written while a **rotary axis that turns it stands turned**, or at an angle
+  nobody knows, with tool centre point control off: it is a position of the machine's axes
+  (see [the rotary rule](#rotary-axes-and-tool-centre-point-control)).
+- An **incremental move from an unknown start**: the first one of a run, or one after a
+  machine position, a cycle, a shift or a value that was not resolved.
+- **Cycle depths** of Klartext and Sinumerik cycles: the depth is a distance from another
+  parameter, and where both are written the control takes one of them, so a depth would
+  show a place the cycle never reaches.
+- **Lathe roughing passes** (`G71` to `G73`): the control works the passes out.
+- An **arc it cannot compute** (Klartext `CT`, `CIP`, a centre written as a variable, a
+  radius shorter than half the chord, an Okuma arc by radius `L`).
+- A **code the database does not know** under the move letter, because it may hide a
+  machine position or a frame.
+
+Klartext polar moves are worked out from the pole `CC`; with no pole, or no radius or angle
+to start from, they are not resolved. Blocks whose words are values and not positions
+(`G92`, `G52`, the `X` of a dwell, `CYCL DEF 7`, `BLK FORM`) are left out of the ranges and
+listed once per code.
+
+A subprogram call is not followed: the called blocks are read where they stand in the
+file. A selection is read with the lines above it, as in the program checks.
+
+### Address arithmetic
+
+Adds, subtracts, multiplies or divides the **written values** of the addresses you choose:
+the part sits half a millimetre higher, so every `Z` moves; a flipped sign; a scale. It
+replaces the text as one undo step and ends with a message that says what it changed and
+what it left, so read the message.
+
+| Field | |
+|---|---|
+| **Operation** | Add, Subtract, Multiply, Divide |
+| **Value** | For add and subtract, in the program's units (millimetres or inches; degrees for a rotary axis). For multiply and divide, a plain factor. A factor of 0 is refused |
+| **Addresses** | The words to change: `X Y Z U V W A B C I J K R`. `G`, `M`, `N`, `O` and `T` are never offered. Default `Z`. When multiplying, add `R` if your arcs are written with a radius |
+| **Arc centres** | Also change the centre words of the chosen axes: `I` with `X`, `J` with `Y`, `K` with `Z`. *Automatically* means no for add and subtract, where a centre is a distance from the start point on most controls, and yes for multiply and divide |
+| **The X value is** | On a turning dialect only: whether the value is a diameter or a radius. Each `X` word is converted by the mode it is written in, so a Sinumerik program that switches `DIAMON` and `DIAMOF` moves right. On a milling dialect the value is a plain coordinate: a radius word moves by it, a word read as a diameter by twice it |
+| **Decimal places** | *As written* keeps the decimals each value had and adds what the result needs, at most four; or 0 to 4 |
+
+It never guesses what a number is worth. Each word's value is read the way **the
+machine** reads it ([Machines](machines.md)) and the result is written back in the word's
+own form: a point stays a point, and a word without a point stays a whole number of
+increments, rounded half away from zero and reported when it had to round. With **no
+machine chosen**, a word whose value depends on the machine is left as written and listed,
+unless every preset of the dialect would write the same result. A count (a repeat count
+`K`, a dwell, a block number) changes only when you choose its address.
+
+Examples: `Z1000` minus 0.5 is `Z500` on an increment machine (IS-B) and `Z999.5` on a
+calculator-type one, and is left with no machine; `Z10.` becomes `Z9.5` on all three. On an
+Okuma machine with 10 µm units, `Z1000` minus 0.5 is `Z950` and `Z10.` minus 0.5 is
+`Z-40.`.
+
+**Multiply and divide treat a distance like a position.** An incremental move is scaled
+too, whatever the distance mode, and so are the cycle positions on a scaled tool axis. What
+would be left unscaled while the positions around it are scaled is refused: a coordinate
+shift or set written with a chosen axis, and, when the tool axis is chosen, a cycle that
+writes a length parameter of its own (a peck depth `Q`, Klartext `Q201`, Sinumerik `SDIS`).
+The radius `R` of an arc is scaled only when you choose `R`.
+
+#### What a Z shift moves in a cycle
+
+A drilling cycle holds absolute positions on the tool axis that are not axis words: the
+`R` plane of a Fanuc `G81`, Klartext's `Q203`, the Sinumerik `RTP`, `RFP`, `DP` and `FDEP`.
+Moving every `Z` and leaving those would move the surface and not the hole. So **a shift of
+the tool axis moves them too**, while the plane in force is the one the tool axis stands
+across (`Z` in the XY plane); in another plane, or one that is not known, the cycle is
+refused.
+
+| Dialect | What moves with `Z` |
+|---|---|
+| Fanuc mill | The `R` plane of `G73`, `G74`, `G76`, `G81` to `G89` (absolute under `G90`; under `G91` it is a distance and is left) |
+| Klartext | `Q203` of cycles 200 to 209, 240 and 262 |
+| Sinumerik | `RTP`, `RFP` and `DP` of `CYCLE81` to `CYCLE89` and `CYCLE840`, and `FDEP` of `CYCLE83` |
+
+A call argument and a Klartext `Q` are absolute positions and move under `G91` as well.
+The other parameters of those cycles are reviewed and left. A shift of `X` or `Y` does not
+touch them: they are `Z` coordinates.
+
+A cycle and the blocks that run it are **moved in one piece, or not at all**: a modal cycle
+and its positions, a Klartext definition and every call of it, an `MCALL` and its
+positions. If one member cannot be moved, every member is left, and the row names the line
+of the first refused one ("part of the same cycle as line 12"). A cycle that starts above
+your selection cannot be moved from a selection, so its blocks inside the selection are
+left and the row says why.
+
+#### What it refuses, and lists
+
+A block it cannot judge is **left as written and listed, never shifted in part**: a shift
+that moves the surface around a cycle but not the cycle scraps the part. There is one row
+per refused block, with the block as written and the reason in plain words.
+
+- **A machine position**: `G53`, `G28`, `G30`, `M91`, `M92`, `SUPA`. A place on the
+  machine, not on the part.
+- **Inside a frame**: a tilted plane, a rotation, a mirror, a scaling, polar coordinates
+  (`G16`), `CYCLE800`, `G68`. The numbers there are not the part's coordinates. A frame
+  that is closed again (`G69`, `G15`, `PLANE RESET`, `CYCLE800()`) ends it.
+- **A rotary axis without tool centre point control**, see the next section.
+- **A cycle it has no role for**: every lathe and Okuma cycle, a Fanuc `G65` that hands a
+  chosen address a number, a Sinumerik or Klartext cycle the database has not reviewed, and
+  **a call it does not know that has a number among its arguments** (`CYCLE61(50,0,2,-1,…)`,
+  `POCKET4(…)`, a subprogram `MYSUB(10)`), since its depth could be an absolute position
+  nobody described. A call with no number (`MYSUB`, `CYCLE832()`) is not a cycle with
+  positions and is not touched. Until the database describes the standard milling cycles,
+  this listing is the guard.
+- **A cycle with positions it cannot move**: Klartext `CYCL CALL POS` (its tool-axis
+  position acts as a second datum shift on top of `Q203`, so moving both would move the hole
+  twice) and `CYCL CALL PAT` (the points stand outside the block), and the points of
+  `CYCLE800`. The definition is refused together with its call.
+- **A mode argument** other than empty or 0 (`_AMODE`, `_DMODE`, `_GMODE`, `_AXN`).
+- **Another plane than XY**, or one that is not known: the tool axis is then not `Z` for
+  sure.
+- **A variable or an expression** where the shift would move a cycle position, or an axis
+  word of a chosen address written as one inside a cycle block (`Z#101` under `G83`).
+- **A pole and the moves around it, or an arc whose centre cannot be moved with its end
+  point**, see "The Klartext pole and arc geometry" below.
+- **A distance mode that is not known**: nothing before the block says `G90` or `G91`.
+  Adding to an incremental word would add the offset twice, so a word is moved only while
+  the mode is known to be absolute. A program that never writes `G90` falls under this
+  unless the machine says what the control starts in
+  ([Machines](machines.md#the-power-on-distance-mode)).
+- **A code the database does not know** under the move letter (a `G` code), in a block it
+  would otherwise change: it may be a machine position or a frame. A code it does not know
+  in a block with nothing to change is listed once, as a note, with the number of blocks.
+
+Words it leaves inside a block it does change are listed too, at information level: an
+**incremental** word (`G91`, a lathe `U`/`W`, a Klartext `IZ`); a **variable** or an
+expression (Okuma `X=V1+2`, Sinumerik `X=R1`); a **code whose words are values** (`G92`,
+`G52`, `G10`, `CYCL DEF 7`, `TRANS`); a **count** reached through the arc centres; and a
+word whose reading **depends on the machine**. A Sinumerik `Z=AC(3.25)` is an absolute
+position and is moved; `Z=IC(2)` is an incremental distance and is left.
+
+At most 500 rows are listed, and the message says how many more there were. Its last
+sentence names the machine ("Machine 'Lathe 2': numbers without a point are increments of
+0.001 mm; X is a diameter.") or says "No machine chosen: words whose reading depends on the
+machine are left alone."
+
+#### Rotary axes, and tool centre point control
+
+A rotary axis that is turned changes what a `Z` word means: with `B` at 90 degrees, a move
+along `Z` is a move along the workpiece's `X`. So a chosen linear word is **refused while a
+rotary axis that turns it stands turned, or may, and tool centre point control is off**. A
+rotary position stays in force after the block that wrote it, so the blocks behind it are
+refused too.
+
+- **Under tool centre point control** (`G43.4`, `G43.5`, `M128`, `FUNCTION TCPM`,
+  `TRAORI`) the numbers are the tool tip in the workpiece, whatever the rotary axes do. A
+  shift there is right and is made. Tool centre point control is not a frame and does not
+  stop a shift.
+- **Which axis turns which**, by the usual convention: `A` and `B` turn `Z`, `B` and `C`
+  turn `X`, `A` and `C` turn `Y`. On a lathe `C` does not turn `X`, so a lathe `Z` or `X`
+  shift is not stopped by it.
+- **An axis at zero is not turned.** An axis the program first writes as 0 stays out of the
+  way. An axis first written to a value other than 0 counts as unknown from the start of
+  the run up to that line, and so does an axis the program moves by an expression or an
+  incremental move. An axis the program never writes does not exist for it.
+- **On a machine position** (`L A0 C0 M92`) a literal 0 is zero, so a program that parks
+  its axes at 0 on the machine does not lose its whole three-axis part.
+- A cycle's tool-axis positions under a tilt are refused as well. The row says "moves B
+  together with Z" when the block writes the turning axis itself.
+
+A rotary position written without any frame (`G0 B90.` and then plain 2D moves) is judged
+like any other block. On a table whose axis is not the shifted one, check such a program
+by hand.
+
+#### The Klartext pole and arc geometry
+
+A shift on `X` or `Y` has to move **the pole** `CC` together with the points around it, or
+the polar moves and arcs would be drawn about the old centre. An absolute `CC X+50 Y+50`
+moves with the axes of the plane; an incremental `CC IX+10` is left. The pole and the moves
+around it up to the next pole (`C`, `LP`, `CP`, `CTP`) are refused **together** when a pole
+word is a variable or has no value, the plane is not known, or the run multiplies or
+divides (the polar radii would stay). A shift of `Z` alone leaves the pole alone.
+
+Arc centres written as absolute coordinates move with the end point: Sinumerik `I=AC(…)`,
+`J=AC(…)`, `K=AC(…)` and the `CIP` intermediate point `I1=`, `J1=`, `K1=`. An arc whose
+centre cannot be computed (`I=AC(R1)`) or cannot be changed while the end point is, is
+refused.
+
+A Klartext value that changes sign is written without its plus: `Z-2` plus 5 becomes `Z3`.
+That is the editor's number format for the dialect, not something this script chose.
+
+#### Not covered yet
+
+There is no entry for the standard Sinumerik milling cycles (`CYCLE61`, `POCKET4`,
+`SLOT1`) with their position roles, so a call to one is refused and listed. A Klartext
+cycle the database lacks (`CYCL DEF 251`) does not replace the earlier definition in the
+modal state, so address arithmetic refuses it with its calls. The fix for both is database
+content, not the script.
+
 ## Where scripts live
 
 | Folder | |
@@ -606,6 +947,16 @@ also carries `definedCycle` (the last `CYCL DEF`, which no call ends) and `modal
 `active_cycle` includes the defined cycle while a modal call runs it. `FeedModeTracker` is
 unchanged. On the other dialects both are `None`.
 
+The modal state also carries, since the checks and the arithmetic needed them, the
+coordinate **frame** in force (`frame`: a tilted plane, a rotation, a mirror, a scaling, or
+`None`) and **tool centre point control** (`tcp`: the code that switched it on, or `None`);
+`RotaryState` follows where each rotary axis stands while tool centre point control is off,
+and `position_of` says what a cycle parameter is to a shift of positions (an absolute
+coordinate on the tool axis or not). The three bundled scripts use them; so can yours. A
+code database entry can also carry a few optional members that the checks read, for example
+`conflicts`, `alone` and `requires` ([the library reference](../../src-tauri/resources/scripts/README.md)
+lists them all).
+
 ### Five rules that matter more than any feature
 
 1. **A selection is a fragment of a modal language.** `G95` three hundred blocks above the
@@ -686,6 +1037,69 @@ def main() -> int:
 if __name__ == "__main__":
     sys.exit(main())
 ```
+
+### Running another program from a script
+
+A script is an ordinary program, so it can start another one: the shop's own formatter, a
+checker that reads the NC text, a converter. gEdit has no "external commands" feature of its
+own; this is how you get one. The example passes the selection through a tool and replaces
+it with what the tool prints.
+
+```python
+#!/usr/bin/env python3
+# /// gedit
+# name = "Format with the shop tool"
+# description = "Pass the selection through the shop's own formatter and replace it with the result."
+# input = "selection-or-document"
+# output = "replace"
+# timeout = 60
+# ///
+from __future__ import annotations
+
+import subprocess
+import sys
+
+import gedit_nc
+
+TOOL = ["/opt/shop/bin/ncformat", "--stdin", "--stdout"]   # your program and its arguments
+
+
+def main() -> int:
+    lines = gedit_nc.read_input()
+    try:
+        done = subprocess.run(
+            TOOL,
+            input="\n".join(lines),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=45,          # shorter than the script's own `timeout`
+        )
+    except (OSError, subprocess.TimeoutExpired) as err:
+        print("Could not run %s: %s" % (TOOL[0], err), file=sys.stderr)
+        return 1
+    if done.returncode != 0 or not done.stdout.strip():
+        print(done.stderr or "The tool returned nothing.", file=sys.stderr)
+        return 1
+    sys.stdout.write(done.stdout.rstrip("\n"))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+Four habits keep it safe:
+
+- **A list of arguments, never `shell=True`.** A file name or a program fragment must never
+  be read as a command line.
+- **A timeout on the child, shorter than the script's own.** Stopping a script on Windows
+  ends the script but not a program it started, so a child that hangs is yours to bound.
+- **A failure ends the script with an error.** A non-zero exit means gEdit applies nothing
+  and shows what the script wrote on its error output; an empty result in `replace` mode is
+  refused too. Never print half an answer.
+- **The tool runs with your rights**, like the script. Read it before you trust it with a
+  program, and see [Security](#security).
 
 ---
 

@@ -1,0 +1,11 @@
+{
+  "message": "Added 0.5 to X (as a diameter) in 4 words on 4 blocks. Left 1 word as written: 1 incremental word. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 10,
+      "severity": "info",
+      "message": "X=IC(2): written as an incremental distance, so a shift does not apply to it.",
+      "reason": "incremental"
+    }
+  ]
+}

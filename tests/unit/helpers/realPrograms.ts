@@ -292,6 +292,34 @@ export function unchangedAt100(python: Extract<Python, { ok: true }>, script: st
 }
 
 /**
+ * M10: the program checks over the whole program with every check on (their default).
+ * The rows by check id (`checkId`), or `null` when the run failed or answered with something
+ * that is not a report. A finding is not a failure.
+ */
+export function programChecksRun(python: Extract<Python, { ok: true }>, text: string, eff: Effective): Map<string, number> | null {
+  const run = runScript(python, 'program_checks.py', text, eff, {});
+  if (!run.ok || !Array.isArray(run.json.rows)) return null;
+  const counts = new Map<string, number>();
+  for (const row of run.json.rows as { checkId?: unknown }[]) {
+    if (typeof row?.checkId !== 'string') return null;
+    counts.set(row.checkId, (counts.get(row.checkId) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** M10: the extents ended with a report whose rows are an array. */
+export function extentsRun(python: Extract<Python, { ok: true }>, text: string, eff: Effective): boolean {
+  const run = runScript(python, 'extents.py', text, eff, {});
+  return run.ok && Array.isArray(run.json.rows);
+}
+
+/** M10: address arithmetic adding 0 to Z hands back every byte of the program. */
+export function addressArithmeticUnchangedAt0(python: Extract<Python, { ok: true }>, text: string, eff: Effective): boolean {
+  const run = runScript(python, 'address_arithmetic.py', text, eff, { operation: 'add', operand: 0, addresses: ['Z'] });
+  return run.ok && run.json.text === text;
+}
+
+/**
  * The first line where `tool_list` disagrees with the map, `0` when they agree on every
  * row (station, first call, number of calls), `-1` when the script failed.
  */

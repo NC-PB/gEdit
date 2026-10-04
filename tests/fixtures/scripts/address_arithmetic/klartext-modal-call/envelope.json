@@ -1,0 +1,17 @@
+{
+  "message": "Subtracted 0.25 from Z in 4 words on 4 blocks, 1 of them a cycle position. Left 2 blocks as written: 2 inside a frame. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 16,
+      "severity": "warning",
+      "message": "8 PLANE SPATIAL SPA+0 SPB+30 SPC+0 TURN MB MAX FMAX: opens a coordinate frame (PLANE SPATIAL): what a shift of the program's coordinates does there cannot be judged.",
+      "reason": "frame"
+    },
+    {
+      "line": 17,
+      "severity": "warning",
+      "message": "9 L Z+50 R0 FMAX: inside the coordinate frame of PLANE SPATIAL (line 16): what a shift of the program's coordinates does there cannot be judged.",
+      "reason": "frame"
+    }
+  ]
+}

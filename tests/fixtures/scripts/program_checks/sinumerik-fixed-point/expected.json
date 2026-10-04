@@ -1,0 +1,46 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 7,
+      "check": "Refused in this state",
+      "checkId": "stateConflicts",
+      "severity": "warning",
+      "message": "G75: the control refuses it while radius compensation is on (G41, line 6)"
+    },
+    {
+      "line": 11,
+      "check": "Refused in this state",
+      "checkId": "stateConflicts",
+      "severity": "warning",
+      "message": "G75: the control refuses it while tool centre point control is on (TRAORI, line 10)"
+    },
+    {
+      "line": 13,
+      "check": "Control language",
+      "checkId": "languageSwitch",
+      "severity": "warning",
+      "message": "G291: from here the control reads the program in its ISO dialect; these checks read it as written for this profile"
+    }
+  ],
+  "message": "3 findings in 2 checks. No machine chosen.",
+  "findings": []
+}

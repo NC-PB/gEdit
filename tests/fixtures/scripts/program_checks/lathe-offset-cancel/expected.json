@@ -1,0 +1,32 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 12,
+      "check": "Offset cancel",
+      "checkId": "offsetCancelCut",
+      "severity": "warning",
+      "message": "G1 Z-10. F0.2: a cut after T0100 cancelled the tool offset (line 10), with no tool call between"
+    }
+  ],
+  "message": "1 finding in 1 check. No machine chosen: where the presets read a number differently, the finding lists every reading.",
+  "findings": []
+}

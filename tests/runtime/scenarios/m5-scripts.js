@@ -139,7 +139,7 @@ scenario('m5-scripts-ui', { timeout: 420 }, async (h) => {
     last: ctx.commands.get('script.runLast')?.keys,
   })
   h.check(
-    'the Tools group offers the three bundled scripts for a Fanuc program',
+    'the Tools group offers the six bundled scripts for a Fanuc program (three before M10)',
     JSON.stringify([...menuScriptIds(h)].sort()) === JSON.stringify(BUNDLED),
     menuScriptIds(h),
   )
@@ -170,7 +170,7 @@ scenario('m5-scripts-ui', { timeout: 420 }, async (h) => {
   h.check('F9 opens the script picker', !!picker)
   h.check(
     'it offers exactly the scripts the Tools group offers',
-    h.qa('quick-pick-item').length === 3,
+    h.qa('quick-pick-item').length === BUNDLED.length,
     h.qa('quick-pick-item').map((e) => e.textContent?.trim().split('\n')[0]),
   )
   await h.nativeKeys([{ key: 'Escape' }])
@@ -661,7 +661,7 @@ scenario('m5-no-python', { timeout: 300, python: '{run}/no-such-folder/python3' 
   await ribbonTab(h, 'tools')
   h.check('the Tools group says Python was not found', (h.q('scripts-menu')?.textContent ?? '').includes('Python 3.9 or newer was not found'), h.q('scripts-menu')?.textContent?.trim())
   h.check('so it offers no script to run', h.qa('script-item').length === 0, menuScriptIds(h))
-  h.check('discovery still worked: the backend reads no Python to find a script', read(service.list).filter((/** @type {any} */ e) => e.root === 'bundled').length === 3, read(service.list).map((/** @type {any} */ e) => e.id))
+  h.check('discovery still worked: the backend reads no Python to find a script', read(service.list).filter((/** @type {any} */ e) => e.root === 'bundled').length === BUNDLED.length, read(service.list).map((/** @type {any} */ e) => e.id))
 
   const docId = await newDoc(h, PROGRAM)
   const runCommands = ['script.runPicker', 'script.runLast', ...BUNDLED.map((id) => `script.run:${id}`)]
@@ -708,7 +708,7 @@ scenario('m5-no-python', { timeout: 300, python: '{run}/no-such-folder/python3' 
   await h.waitFor(() => ctx.commands.isEnabled('script.runPicker'), { timeout: 10000 })
   h.check('the run commands come back on', ctx.commands.isEnabled('script.runPicker') === true && ctx.commands.isEnabled(`script.run:${BUNDLED[0]}`) === true)
   await ribbonTab(h, 'tools')
-  h.check('and the Tools group offers the scripts again', h.qa('script-item').length === 3, menuScriptIds(h))
+  h.check('and the Tools group offers the scripts again', h.qa('script-item').length === BUNDLED.length, menuScriptIds(h))
 
   ctx.docs.activate(fanucId)
   await h.waitFor(() => ctx.docs.getActiveId() === fanucId, { timeout: 5000 })

@@ -1,0 +1,65 @@
+{
+  "message": "Added 0.5 to Z in 3 words on 3 blocks, 1 of them a cycle position. Left 7 blocks and 3 words as written: 1 machine position, 2 cycles not reviewed, 2 cycle calls with positions of their own, 2 cycles with a variable position, 2 data words, 1 incremental word. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 3,
+      "severity": "info",
+      "message": "Z-20: a value of BLK FORM, not a position of this program.",
+      "reason": "data"
+    },
+    {
+      "line": 4,
+      "severity": "info",
+      "message": "Z+0: a value of BLK FORM, not a position of this program.",
+      "reason": "data"
+    },
+    {
+      "line": 19,
+      "severity": "warning",
+      "message": "9 CYCL DEF 200 DRILLING ~: part of the same cycle as line 29, which is left as written (positions of its own).",
+      "reason": "cycle-position"
+    },
+    {
+      "line": 29,
+      "severity": "warning",
+      "message": "10 CYCL CALL POS X+40 Y+40 Z+0 FMAX: CYCL CALL POS has positions of its own (X, Y and Z) that a shift cannot judge.",
+      "reason": "cycle-position"
+    },
+    {
+      "line": 30,
+      "severity": "warning",
+      "message": "11 CYCL DEF 251 POCKET ~: CYCL DEF 251 is not in the code database, so nobody reviewed its positions.",
+      "reason": "cycle-not-reviewed"
+    },
+    {
+      "line": 32,
+      "severity": "warning",
+      "message": "12 CYCL CALL: the cycle it runs (line 30) is not in the code database, so nobody reviewed its positions.",
+      "reason": "cycle-not-reviewed"
+    },
+    {
+      "line": 33,
+      "severity": "warning",
+      "message": "13 CYCL DEF 200 DRILLING ~: Q203 is written as +Q10, a variable or an expression, so it cannot be moved with the Z words.",
+      "reason": "cycle-expression"
+    },
+    {
+      "line": 37,
+      "severity": "warning",
+      "message": "14 L X+60 Y+60 R0 FMAX M99: part of the same cycle as line 33, which is left as written (a variable position).",
+      "reason": "cycle-expression"
+    },
+    {
+      "line": 38,
+      "severity": "info",
+      "message": "IZ+5: written as an incremental distance, so a shift does not apply to it.",
+      "reason": "incremental"
+    },
+    {
+      "line": 39,
+      "severity": "warning",
+      "message": "16 L Z-5 R0 FMAX M91: a machine position (M91): its positions are not in the program's coordinates, so a shift of the program does not apply to them.",
+      "reason": "machine-position"
+    }
+  ]
+}

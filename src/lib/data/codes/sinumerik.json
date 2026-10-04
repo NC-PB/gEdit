@@ -88,6 +88,7 @@
       "code": "G0",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "rapid" },
       "label": "Rapid",
       "description": "Moves to the position at rapid speed."
     },
@@ -95,6 +96,7 @@
       "code": "G1",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "feed" },
       "label": "Linear feed move",
       "description": "Moves to the position on a straight line at the feed in F."
     },
@@ -102,6 +104,7 @@
       "code": "G2",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "feed" },
       "label": "Arc, clockwise",
       "description": "Cuts an arc clockwise to the end point in the axis words. I, J and K give the centre."
     },
@@ -109,6 +112,7 @@
       "code": "G3",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "feed" },
       "label": "Arc, counter-clockwise",
       "description": "Cuts an arc counter-clockwise, described the same way as G2."
     },
@@ -116,13 +120,20 @@
       "code": "CIP",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "feed" },
       "label": "Arc through a point",
-      "description": "Cuts an arc through an intermediate point given with I1=, J1= and K1=."
+      "description": "Cuts an arc through an intermediate point given with I1=, J1= and K1=.",
+      "params": [
+        { "address": "I1", "label": "Intermediate point, X", "axis": "X" },
+        { "address": "J1", "label": "Intermediate point, Y", "axis": "Y" },
+        { "address": "K1", "label": "Intermediate point, Z", "axis": "Z" }
+      ]
     },
     {
       "code": "CT",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "feed" },
       "label": "Arc, tangential",
       "description": "Cuts an arc that joins the path before it without a corner. Only the end point is given."
     },
@@ -209,6 +220,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "sets": { "motion": "feed" },
       "label": "Thread cutting",
       "description": "Cuts a thread with a constant lead, given in I, J or K. The lead is not a feed and may never be scaled like one.",
       "params": [
@@ -223,6 +235,7 @@
       "modal": true,
       "pitchFeed": true,
       "tapping": true,
+      "sets": { "motion": "feed", "exitSpeed": "zero" },
       "label": "Rigid tapping, into the hole",
       "description": "Drives the tap with the spindle under position control; the lead is in I, J or K and is not a feed. S is read in revolutions per minute here, whatever the feed type says.",
       "params": [
@@ -237,6 +250,7 @@
       "modal": true,
       "pitchFeed": true,
       "tapping": true,
+      "sets": { "motion": "feed", "exitSpeed": "zero" },
       "label": "Rigid tapping, back out",
       "description": "The retract of a rigid tapping pass, with the same lead as the block that cut it.",
       "params": [
@@ -250,6 +264,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "sets": { "motion": "feed" },
       "label": "Thread cutting, lead growing",
       "description": "Cuts a thread whose lead grows along the thread: I, J or K give the lead at the start, and F the change of the lead per revolution. Neither is a feed, and nothing may scale them.",
       "params": [
@@ -264,6 +279,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "sets": { "motion": "feed" },
       "label": "Thread cutting, lead shrinking",
       "description": "Cuts a thread whose lead shrinks along the thread: I, J or K give the lead at the start, and F the change of the lead per revolution. Neither is a feed, and nothing may scale them.",
       "params": [
@@ -278,6 +294,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "sets": { "motion": "feed" },
       "label": "Thread along an arc, clockwise",
       "description": "Cuts a thread whose path is a clockwise arc instead of a straight line. The lead is in I, J or K as with G33, so the arc centre is written as IR=, JR= and KR=.",
       "params": [
@@ -291,6 +308,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "sets": { "motion": "feed" },
       "label": "Thread along an arc, counter-clockwise",
       "description": "Cuts a thread whose path is a counter-clockwise arc instead of a straight line. The lead is in I, J or K as with G33, so the arc centre is written as IR=, JR= and KR=.",
       "params": [
@@ -303,12 +321,14 @@
       "code": "G40",
       "group": "compensation",
       "modal": true,
+      "sets": { "radiusComp": "off" },
       "label": "Radius compensation off"
     },
     {
       "code": "G41",
       "group": "compensation",
       "modal": true,
+      "sets": { "radiusComp": "on" },
       "label": "Radius compensation, tool left",
       "description": "Offsets the path by the radius of the edge that D selects, seen along the direction of travel."
     },
@@ -316,6 +336,7 @@
       "code": "G42",
       "group": "compensation",
       "modal": true,
+      "sets": { "radiusComp": "on" },
       "label": "Radius compensation, tool right"
     },
     {
@@ -343,6 +364,7 @@
       "code": "G75",
       "group": "nonmodal",
       "axisWords": "machine",
+      "conflicts": ["radiusComp", "tcp"],
       "label": "Approach a fixed machine point",
       "description": "Moves the axes written with it, each on its own and at rapid traverse, to the fixed point FP= names (1 to 4; none or 0 is 1), a position set in machine data and reached in machine coordinates. The values of the axis words are not positions, which is why posts write 0. Milling posts use it to retract before a tool change; it is not allowed while radius compensation or a transformation is on."
     },
@@ -578,28 +600,52 @@
       "params": [
         {
           "address": "RTP",
-          "label": "Retraction plane, as an absolute position"
+          "label": "Retraction plane, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "RFP",
-          "label": "Reference plane: the top of the hole, as an absolute position"
+          "label": "Reference plane: the top of the hole, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "SDIS",
-          "label": "Safety distance above the reference plane, written without a sign"
+          "label": "Safety distance above the reference plane, written without a sign",
+          "position": "none"
         },
         {
           "address": "DP",
-          "label": "Final depth, as an absolute position"
+          "label": "Final depth, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "DPR",
-          "label": "Final depth, measured from the reference plane"
+          "label": "Final depth, measured from the reference plane",
+          "position": "none"
         },
         {
           "address": "DTB",
           "label": "Dwell at the bottom of the hole: seconds when positive, spindle revolutions when negative",
-          "unit": "dwell"
+          "unit": "dwell",
+          "position": "none"
+        },
+        {
+          "address": "_GMODE",
+          "label": "Geometry mode: tens 0 drill to the depth, 1 DP is the diameter of a centring",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_DMODE",
+          "label": "Display mode, digit by digit: ones the plane while the cycle runs (0 the plane in force, 1 G17, 2 G18, 3 G19)",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_AMODE",
+          "label": "Alternative mode, digit by digit: whether the depth is absolute or measured from the reference plane, and how the dwell is read; 0 the reading of the parameters above",
+          "unit": "count",
+          "position": "mode"
         }
       ]
     },
@@ -612,28 +658,52 @@
       "params": [
         {
           "address": "RTP",
-          "label": "Retraction plane, as an absolute position"
+          "label": "Retraction plane, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "RFP",
-          "label": "Reference plane: the top of the hole, as an absolute position"
+          "label": "Reference plane: the top of the hole, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "SDIS",
-          "label": "Safety distance above the reference plane, written without a sign"
+          "label": "Safety distance above the reference plane, written without a sign",
+          "position": "none"
         },
         {
           "address": "DP",
-          "label": "Final depth, as an absolute position"
+          "label": "Final depth, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "DPR",
-          "label": "Final depth, measured from the reference plane"
+          "label": "Final depth, measured from the reference plane",
+          "position": "none"
         },
         {
           "address": "DTB",
           "label": "Dwell at the bottom of the hole: seconds when positive, spindle revolutions when negative",
-          "unit": "dwell"
+          "unit": "dwell",
+          "position": "none"
+        },
+        {
+          "address": "_GMODE",
+          "label": "Geometry mode: tens 0 the depth is to the tip, 1 to the full diameter",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_DMODE",
+          "label": "Display mode, digit by digit: ones the plane while the cycle runs (0 the plane in force, 1 G17, 2 G18, 3 G19)",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_AMODE",
+          "label": "Alternative mode, digit by digit: whether the depth is absolute or measured from the reference plane, and how the dwell is read; 0 the reading of the parameters above",
+          "unit": "count",
+          "position": "mode"
         }
       ]
     },
@@ -646,54 +716,111 @@
       "params": [
         {
           "address": "RTP",
-          "label": "Retraction plane, as an absolute position"
+          "label": "Retraction plane, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "RFP",
-          "label": "Reference plane: the top of the hole, as an absolute position"
+          "label": "Reference plane: the top of the hole, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "SDIS",
-          "label": "Safety distance above the reference plane, written without a sign"
+          "label": "Safety distance above the reference plane, written without a sign",
+          "position": "none"
         },
         {
           "address": "DP",
-          "label": "Final depth, as an absolute position"
+          "label": "Final depth, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "DPR",
-          "label": "Final depth, measured from the reference plane"
+          "label": "Final depth, measured from the reference plane",
+          "position": "none"
         },
         {
           "address": "FDEP",
-          "label": "Depth of the first peck, as an absolute position"
+          "label": "Depth of the first peck, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "FDPR",
-          "label": "Depth of the first peck, measured from the reference plane"
+          "label": "Depth of the first peck, measured from the reference plane",
+          "position": "none"
         },
         {
           "address": "_DAM",
-          "label": "How much each further peck is reduced"
+          "label": "How much each further peck is reduced",
+          "position": "none"
         },
         {
           "address": "DTB",
           "label": "Dwell at the bottom of the hole: seconds when positive, spindle revolutions when negative",
-          "unit": "dwell"
+          "unit": "dwell",
+          "position": "none"
         },
         {
           "address": "DTS",
           "label": "Dwell at the start point: seconds when positive, spindle revolutions when negative",
-          "unit": "dwell"
+          "unit": "dwell",
+          "position": "none"
         },
         {
           "address": "FRF",
-          "label": "Feed factor for the first peck"
+          "label": "Feed factor for the first peck",
+          "position": "none"
         },
         {
           "address": "VARI",
           "label": "Chip breaking or full retract",
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_AXN",
+          "label": "Drilling axis: 0 or 3 and up the third axis of the plane, 1 the first, 2 the second",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_MDEP",
+          "label": "Smallest infeed, for a degressive peck",
+          "position": "none"
+        },
+        {
+          "address": "_VRT",
+          "label": "Retract distance after each peck when breaking the chip; 0 the standard 1 mm",
+          "position": "none"
+        },
+        {
+          "address": "_DTD",
+          "label": "Dwell at the final depth",
+          "unit": "dwell",
+          "position": "none"
+        },
+        {
+          "address": "_DIS1",
+          "label": "Advance distance before the next peck when the drill comes back into the hole",
+          "position": "none"
+        },
+        {
+          "address": "_GMODE",
+          "label": "Geometry mode: tens 0 the depth is to the tip, 1 to the full diameter",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_DMODE",
+          "label": "Display mode, digit by digit: ones the plane while the cycle runs (0 the plane in force, 1 G17, 2 G18, 3 G19)",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_AMODE",
+          "label": "Alternative mode, digit by digit: whether the depth is absolute or measured from the reference plane, and how the dwell is read; 0 the reading of the parameters above",
+          "unit": "count",
+          "position": "mode"
         }
       ]
     },
@@ -707,53 +834,132 @@
       "params": [
         {
           "address": "RTP",
-          "label": "Retraction plane, as an absolute position"
+          "label": "Retraction plane, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "RFP",
-          "label": "Reference plane: the top of the hole, as an absolute position"
+          "label": "Reference plane: the top of the hole, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "SDIS",
-          "label": "Safety distance above the reference plane, written without a sign"
+          "label": "Safety distance above the reference plane, written without a sign",
+          "position": "none"
         },
         {
           "address": "DP",
-          "label": "Final depth, as an absolute position"
+          "label": "Final depth, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "DPR",
-          "label": "Final depth, measured from the reference plane"
+          "label": "Final depth, measured from the reference plane",
+          "position": "none"
         },
         {
           "address": "DTB",
           "label": "Dwell at the bottom of the hole, in seconds",
-          "unit": "dwell"
+          "unit": "dwell",
+          "position": "none"
         },
         {
           "address": "SDAC",
           "label": "Direction of rotation after the cycle",
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         },
         {
           "address": "MPIT",
-          "label": "Thread size, as a metric nominal diameter"
+          "label": "Thread size, as a metric nominal diameter",
+          "position": "none"
         },
         {
           "address": "PIT",
-          "label": "Thread pitch, as a length"
+          "label": "Thread pitch, as a length",
+          "position": "none"
         },
         {
           "address": "POSS",
-          "label": "Angle the spindle stops at"
+          "label": "Angle the spindle stops at",
+          "position": "none"
         },
         {
           "address": "SST",
-          "label": "Spindle speed while tapping"
+          "label": "Spindle speed while tapping",
+          "position": "none"
         },
         {
           "address": "SST1",
-          "label": "Spindle speed while retracting"
+          "label": "Spindle speed while retracting",
+          "position": "none"
+        },
+        {
+          "address": "_AXN",
+          "label": "Drilling axis: 0 or 3 and up the third axis of the plane, 1 the first, 2 the second",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_PITA",
+          "label": "Unit of the pitch: 0 or 1 mm, 2 threads per inch, 3 inch, 4 module",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_TECHNO",
+          "label": "Technology, digit by digit: exact stop, precontrol (FFWON or FFWOF), acceleration and the spindle mode of a modal call",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_VARI",
+          "label": "Machining: 0 one cut, 1 chip breaking, 2 full retract",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_DAM",
+          "label": "Largest infeed, for chip breaking or full retract",
+          "position": "none"
+        },
+        {
+          "address": "_VRT",
+          "label": "Retract distance after each infeed when breaking the chip",
+          "position": "none"
+        },
+        {
+          "address": "_PITM",
+          "label": "Text that marks how the pitch was entered",
+          "position": "none"
+        },
+        {
+          "address": "_PTAB",
+          "label": "Thread table the pitch was taken from",
+          "position": "none"
+        },
+        {
+          "address": "_PTABA",
+          "label": "Entry of the thread table",
+          "position": "none"
+        },
+        {
+          "address": "_GMODE",
+          "label": "Reserved, written as 0 or left empty",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_DMODE",
+          "label": "Display mode, digit by digit: ones the plane while the cycle runs (0 the plane in force, 1 G17, 2 G18, 3 G19)",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_AMODE",
+          "label": "Alternative mode, digit by digit: whether the depth is absolute or measured from the reference plane, and how the dwell is read; 0 the reading of the parameters above",
+          "unit": "count",
+          "position": "mode"
         }
       ]
     },
@@ -768,51 +974,113 @@
       "params": [
         {
           "address": "RTP",
-          "label": "Retraction plane, as an absolute position"
+          "label": "Retraction plane, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "RFP",
-          "label": "Reference plane: the top of the hole, as an absolute position"
+          "label": "Reference plane: the top of the hole, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "SDIS",
-          "label": "Safety distance above the reference plane, written without a sign"
+          "label": "Safety distance above the reference plane, written without a sign",
+          "position": "none"
         },
         {
           "address": "DP",
-          "label": "Final depth, as an absolute position"
+          "label": "Final depth, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "DPR",
-          "label": "Final depth, measured from the reference plane"
+          "label": "Final depth, measured from the reference plane",
+          "position": "none"
         },
         {
           "address": "DTB",
           "label": "Dwell at the bottom of the hole, in seconds",
-          "unit": "dwell"
+          "unit": "dwell",
+          "position": "none"
         },
         {
           "address": "SDR",
           "label": "Direction of rotation for the retract",
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         },
         {
           "address": "SDAC",
           "label": "Direction of rotation after the cycle",
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         },
         {
           "address": "ENC",
           "label": "Whether the spindle is read by an encoder",
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         },
         {
           "address": "MPIT",
-          "label": "Thread size, as a metric nominal diameter"
+          "label": "Thread size, as a metric nominal diameter",
+          "position": "none"
         },
         {
           "address": "PIT",
-          "label": "Thread pitch, as a length"
+          "label": "Thread pitch, as a length",
+          "position": "none"
+        },
+        {
+          "address": "_AXN",
+          "label": "Drilling axis: 0 or 3 and up the third axis of the plane, 1 the first, 2 the second",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_PITA",
+          "label": "Unit of the pitch: 0 or 1 mm, 2 threads per inch, 3 inch, 4 module",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_TECHNO",
+          "label": "Technology, digit by digit: exact stop and precontrol (FFWON or FFWOF)",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_PITM",
+          "label": "Text that marks how the pitch was entered",
+          "position": "none"
+        },
+        {
+          "address": "_PTAB",
+          "label": "Thread table the pitch was taken from",
+          "position": "none"
+        },
+        {
+          "address": "_PTABA",
+          "label": "Entry of the thread table",
+          "position": "none"
+        },
+        {
+          "address": "_GMODE",
+          "label": "Reserved, written as 0 or left empty",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_DMODE",
+          "label": "Display mode, digit by digit: ones the plane while the cycle runs (0 the plane in force, 1 G17, 2 G18, 3 G19)",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_AMODE",
+          "label": "Alternative mode, digit by digit: whether the depth is absolute or measured from the reference plane, and how the dwell is read; 0 the reading of the parameters above",
+          "unit": "count",
+          "position": "mode"
         }
       ]
     },
@@ -825,36 +1093,62 @@
       "params": [
         {
           "address": "RTP",
-          "label": "Retraction plane, as an absolute position"
+          "label": "Retraction plane, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "RFP",
-          "label": "Reference plane: the top of the hole, as an absolute position"
+          "label": "Reference plane: the top of the hole, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "SDIS",
-          "label": "Safety distance above the reference plane, written without a sign"
+          "label": "Safety distance above the reference plane, written without a sign",
+          "position": "none"
         },
         {
           "address": "DP",
-          "label": "Final depth, as an absolute position"
+          "label": "Final depth, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "DPR",
-          "label": "Final depth, measured from the reference plane"
+          "label": "Final depth, measured from the reference plane",
+          "position": "none"
         },
         {
           "address": "DTB",
           "label": "Dwell at the bottom of the hole: seconds when positive, spindle revolutions when negative",
-          "unit": "dwell"
+          "unit": "dwell",
+          "position": "none"
         },
         {
           "address": "FFR",
-          "label": "Feed on the way in"
+          "label": "Feed on the way in",
+          "position": "none"
         },
         {
           "address": "RFF",
-          "label": "Feed on the way out"
+          "label": "Feed on the way out",
+          "position": "none"
+        },
+        {
+          "address": "_GMODE",
+          "label": "Reserved, written as 0 or left empty",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_DMODE",
+          "label": "Display mode, digit by digit: ones the plane while the cycle runs (0 the plane in force, 1 G17, 2 G18, 3 G19)",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_AMODE",
+          "label": "Alternative mode, digit by digit: whether the depth is absolute or measured from the reference plane, and how the dwell is read; 0 the reading of the parameters above",
+          "unit": "count",
+          "position": "mode"
         }
       ]
     },
@@ -867,49 +1161,78 @@
       "params": [
         {
           "address": "RTP",
-          "label": "Retraction plane, as an absolute position"
+          "label": "Retraction plane, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "RFP",
-          "label": "Reference plane: the top of the hole, as an absolute position"
+          "label": "Reference plane: the top of the hole, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "SDIS",
-          "label": "Safety distance above the reference plane, written without a sign"
+          "label": "Safety distance above the reference plane, written without a sign",
+          "position": "none"
         },
         {
           "address": "DP",
-          "label": "Final depth, as an absolute position"
+          "label": "Final depth, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "DPR",
-          "label": "Final depth, measured from the reference plane"
+          "label": "Final depth, measured from the reference plane",
+          "position": "none"
         },
         {
           "address": "DTB",
           "label": "Dwell at the bottom of the hole: seconds when positive, spindle revolutions when negative",
-          "unit": "dwell"
+          "unit": "dwell",
+          "position": "none"
         },
         {
           "address": "SDIR",
           "label": "Direction of rotation for the cycle",
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         },
         {
           "address": "RPA",
-          "label": "Lift-off in the first axis of the plane"
+          "label": "Lift-off in the first axis of the plane",
+          "position": "none"
         },
         {
           "address": "RPO",
-          "label": "Lift-off in the second axis of the plane"
+          "label": "Lift-off in the second axis of the plane",
+          "position": "none"
         },
         {
           "address": "RPAP",
-          "label": "Lift-off along the tool axis"
+          "label": "Lift-off along the tool axis",
+          "position": "none"
         },
         {
           "address": "POSS",
-          "label": "Angle the spindle stops at"
+          "label": "Angle the spindle stops at",
+          "position": "none"
+        },
+        {
+          "address": "_GMODE",
+          "label": "Lift-off mode: 0 lift the tool off the wall, 1 do not",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_DMODE",
+          "label": "Display mode, digit by digit: ones the plane while the cycle runs (0 the plane in force, 1 G17, 2 G18, 3 G19)",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_AMODE",
+          "label": "Alternative mode, digit by digit: whether the depth is absolute or measured from the reference plane, and how the dwell is read; 0 the reading of the parameters above",
+          "unit": "count",
+          "position": "mode"
         }
       ]
     },
@@ -922,28 +1245,34 @@
       "params": [
         {
           "address": "RTP",
-          "label": "Retraction plane, as an absolute position"
+          "label": "Retraction plane, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "RFP",
-          "label": "Reference plane: the top of the hole, as an absolute position"
+          "label": "Reference plane: the top of the hole, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "SDIS",
-          "label": "Safety distance above the reference plane, written without a sign"
+          "label": "Safety distance above the reference plane, written without a sign",
+          "position": "none"
         },
         {
           "address": "DP",
-          "label": "Final depth, as an absolute position"
+          "label": "Final depth, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "DPR",
-          "label": "Final depth, measured from the reference plane"
+          "label": "Final depth, measured from the reference plane",
+          "position": "none"
         },
         {
           "address": "SDIR",
           "label": "Direction of rotation for the cycle",
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         }
       ]
     },
@@ -956,33 +1285,40 @@
       "params": [
         {
           "address": "RTP",
-          "label": "Retraction plane, as an absolute position"
+          "label": "Retraction plane, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "RFP",
-          "label": "Reference plane: the top of the hole, as an absolute position"
+          "label": "Reference plane: the top of the hole, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "SDIS",
-          "label": "Safety distance above the reference plane, written without a sign"
+          "label": "Safety distance above the reference plane, written without a sign",
+          "position": "none"
         },
         {
           "address": "DP",
-          "label": "Final depth, as an absolute position"
+          "label": "Final depth, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "DPR",
-          "label": "Final depth, measured from the reference plane"
+          "label": "Final depth, measured from the reference plane",
+          "position": "none"
         },
         {
           "address": "DTB",
           "label": "Dwell at the bottom of the hole, in seconds",
-          "unit": "dwell"
+          "unit": "dwell",
+          "position": "none"
         },
         {
           "address": "SDIR",
           "label": "Direction of rotation for the cycle",
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         }
       ]
     },
@@ -995,28 +1331,34 @@
       "params": [
         {
           "address": "RTP",
-          "label": "Retraction plane, as an absolute position"
+          "label": "Retraction plane, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "RFP",
-          "label": "Reference plane: the top of the hole, as an absolute position"
+          "label": "Reference plane: the top of the hole, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "SDIS",
-          "label": "Safety distance above the reference plane, written without a sign"
+          "label": "Safety distance above the reference plane, written without a sign",
+          "position": "none"
         },
         {
           "address": "DP",
-          "label": "Final depth, as an absolute position"
+          "label": "Final depth, as an absolute position",
+          "position": "tool-axis"
         },
         {
           "address": "DPR",
-          "label": "Final depth, measured from the reference plane"
+          "label": "Final depth, measured from the reference plane",
+          "position": "none"
         },
         {
           "address": "DTB",
           "label": "Dwell at the bottom of the hole, in seconds",
-          "unit": "dwell"
+          "unit": "dwell",
+          "position": "none"
         }
       ]
     },
@@ -1597,27 +1939,28 @@
     },
     {
       "code": "CYCLE800",
-      "group": "frame",
+      "group": "tilt",
       "frame": "open",
+      "frameWithoutValues": "close",
       "label": "Swivel the working plane",
       "description": "Swivels the working plane for 3+2 machining, or swivels or aligns the tool, with the swivel data set named in the second argument, and sets the frame that goes with it. Written with no arguments, CYCLE800() clears the swivel and its frames, which is why posts write it at the start of a program, some without the brackets. The reference points before and after the rotation are absolute positions. Older control versions take 15 arguments, without the last one.",
       "params": [
-        { "address": "_FR", "label": "Retract before swivelling: 0 none, 1 machine axis Z, 2 Z and then X and Y, 4 as far as possible along the tool, 5 by the distance in _FR_I along the tool", "unit": "count" },
-        { "address": "_TC", "label": "Name of the swivel data set: empty when there is only one, \"0\" deselects it and clears the swivel frames" },
-        { "address": "_ST", "label": "State, digit by digit: ones 0 new or 1 on top of the active swivel, tens 1 to follow the tool tip (TRAORI), hundreds to swivel or align the tool", "unit": "count" },
-        { "address": "_MODE", "label": "Swivel mode, bit-coded: how the three angles are read (axis by axis, solid angle, projection angle, rotary axes directly) and the order of the rotations", "unit": "count" },
-        { "address": "_X0", "label": "Reference point X before the rotation, as an absolute position" },
-        { "address": "_Y0", "label": "Reference point Y before the rotation, as an absolute position" },
-        { "address": "_Z0", "label": "Reference point Z before the rotation, as an absolute position" },
-        { "address": "_A", "label": "First rotation, as _MODE says" },
-        { "address": "_B", "label": "Second rotation, as _MODE says" },
-        { "address": "_C", "label": "Third rotation, as _MODE says" },
-        { "address": "_X1", "label": "Reference point X after the rotation, as an absolute position" },
-        { "address": "_Y1", "label": "Reference point Y after the rotation, as an absolute position" },
-        { "address": "_Z1", "label": "Reference point Z after the rotation, as an absolute position" },
-        { "address": "_DIR", "label": "Which way the rotary axes turn: -1 to the smaller value, +1 to the larger one, 0 compute the frame without moving", "unit": "count" },
-        { "address": "_FR_I", "label": "Retract distance along the tool, for _FR 5" },
-        { "address": "_DMODE", "label": "Display mode: ones the plane while the cycle runs (0 the plane in force, 1 G17, 2 G18, 3 G19)", "unit": "count" }
+        { "address": "_FR", "label": "Retract before swivelling: 0 none, 1 machine axis Z, 2 Z and then X and Y, 4 as far as possible along the tool, 5 by the distance in _FR_I along the tool", "unit": "count", "position": "none" },
+        { "address": "_TC", "label": "Name of the swivel data set: empty when there is only one, \"0\" deselects it and clears the swivel frames", "position": "none" },
+        { "address": "_ST", "label": "State, digit by digit: ones 0 new or 1 on top of the active swivel, tens 1 to follow the tool tip (TRAORI), hundreds to swivel or align the tool", "unit": "count", "position": "mode" },
+        { "address": "_MODE", "label": "Swivel mode, bit-coded: how the three angles are read (axis by axis, solid angle, projection angle, rotary axes directly) and the order of the rotations", "unit": "count", "position": "mode" },
+        { "address": "_X0", "label": "Reference point X before the rotation, as an absolute position", "position": "other" },
+        { "address": "_Y0", "label": "Reference point Y before the rotation, as an absolute position", "position": "other" },
+        { "address": "_Z0", "label": "Reference point Z before the rotation, as an absolute position", "position": "other" },
+        { "address": "_A", "label": "First rotation, as _MODE says", "position": "none" },
+        { "address": "_B", "label": "Second rotation, as _MODE says", "position": "none" },
+        { "address": "_C", "label": "Third rotation, as _MODE says", "position": "none" },
+        { "address": "_X1", "label": "Reference point X after the rotation, as an absolute position", "position": "other" },
+        { "address": "_Y1", "label": "Reference point Y after the rotation, as an absolute position", "position": "other" },
+        { "address": "_Z1", "label": "Reference point Z after the rotation, as an absolute position", "position": "other" },
+        { "address": "_DIR", "label": "Which way the rotary axes turn: -1 to the smaller value, +1 to the larger one, 0 compute the frame without moving", "unit": "count", "position": "none" },
+        { "address": "_FR_I", "label": "Retract distance along the tool, for _FR 5", "position": "none" },
+        { "address": "_DMODE", "label": "Display mode: ones the plane while the cycle runs (0 the plane in force, 1 G17, 2 G18, 3 G19)", "unit": "count", "position": "mode" }
       ]
     },
     {
@@ -1662,6 +2005,7 @@
       "code": "M3",
       "group": "spindle",
       "modal": true,
+      "sets": { "spindle": "on" },
       "label": "Spindle on, clockwise",
       "description": "Starts the master spindle clockwise. M3=3 does the same for spindle 3."
     },
@@ -1669,6 +2013,7 @@
       "code": "M4",
       "group": "spindle",
       "modal": true,
+      "sets": { "spindle": "on" },
       "label": "Spindle on, counter-clockwise",
       "description": "Starts the master spindle counter-clockwise. M3=4 does the same for spindle 3."
     },
@@ -1676,6 +2021,7 @@
       "code": "M5",
       "group": "spindle",
       "modal": true,
+      "sets": { "spindle": "off" },
       "label": "Spindle stop",
       "description": "Stops the master spindle. M3=5 stops spindle 3."
     },
@@ -1803,12 +2149,13 @@
     {
       "code": "TRAFOOF",
       "frame": "close",
+      "sets": { "tcp": "off" },
       "label": "Transformation off",
       "description": "Ends the transformation that is running: TRAORI, TRANSMIT, TRACYL or TRAANG. G74 and G75 do not run while one is on."
     },
     {
       "code": "TRAORI",
-      "frame": "open",
+      "sets": { "tcp": "on" },
       "label": "Five-axis transformation on",
       "description": "Turns on the orientation transformation of a four- or five-axis machine: from here on X, Y and Z are the position of the tool tip and the rotary axis words or the orientation words set the tool direction, while the control moves the machine axes to suit. TRAORI(n) picks the transformation set up as number n; further arguments give the basic tool orientation and offsets of the rotary axes. TRAFOOF ends it."
     },
@@ -1821,6 +2168,8 @@
       "code": "TRANS",
       "group": "frame",
       "axisWords": "data",
+      "shift": true,
+      "frameWithoutValues": "close",
       "label": "Programmable offset",
       "description": "Shifts the zero point by the values in the block. Written on its own it clears the programmable frame."
     },
@@ -1828,6 +2177,7 @@
       "code": "ATRANS",
       "group": "frame",
       "axisWords": "data",
+      "shift": true,
       "label": "Additive programmable offset",
       "description": "Shifts the zero point by the values in the block, on top of the frame already programmed."
     },
@@ -1836,6 +2186,7 @@
       "group": "frame",
       "axisWords": "data",
       "frame": "open",
+      "frameWithoutValues": "close",
       "label": "Programmable rotation",
       "description": "Turns the coordinate system by the angles written for the axes, or by RPL= about the axis normal to the working plane, and replaces every frame instruction programmed before it. The axis words are angles, not positions. Written on its own it clears the programmable frame."
     },
@@ -1857,6 +2208,7 @@
       "group": "frame",
       "axisWords": "data",
       "frame": "open",
+      "frameWithoutValues": "close",
       "label": "Programmable scaling"
     },
     {
@@ -1871,6 +2223,7 @@
       "group": "frame",
       "axisWords": "data",
       "frame": "open",
+      "frameWithoutValues": "close",
       "label": "Programmable mirroring"
     },
     {
@@ -2273,6 +2626,22 @@
       "code": "FRAME",
       "group": "macro",
       "label": "Coordinate-transformation variable"
+    },
+    {
+      "code": "G290",
+      "group": "language",
+      "modal": true,
+      "sets": { "language": "native" },
+      "label": "Siemens language mode",
+      "description": "The control reads the program in its own language again, after G291."
+    },
+    {
+      "code": "G291",
+      "group": "language",
+      "modal": true,
+      "sets": { "language": "iso" },
+      "label": "ISO dialect mode",
+      "description": "From this block on the control reads the program in its ISO dialect, with Fanuc-style codes and words, until G290."
     }
   ]
 }

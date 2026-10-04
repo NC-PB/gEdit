@@ -1,0 +1,32 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 8,
+      "check": "Spindle",
+      "checkId": "spindleOff",
+      "severity": "warning",
+      "message": "N70 G1 X40: a cut while the spindle is stopped (M1=5 on line 7)"
+    }
+  ],
+  "message": "1 finding in 1 check. No machine chosen.",
+  "findings": []
+}

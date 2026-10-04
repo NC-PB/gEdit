@@ -1,0 +1,32 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 3,
+      "check": "Speed clamp",
+      "checkId": "cssClamp",
+      "severity": "warning",
+      "message": "G96: constant surface speed with no spindle speed clamp before it; the spindle speeds up as the diameter shrinks"
+    }
+  ],
+  "message": "1 finding in 1 check. No machine chosen.",
+  "findings": []
+}

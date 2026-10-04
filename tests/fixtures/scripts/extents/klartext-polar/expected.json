@@ -1,0 +1,116 @@
+{
+  "title": "Extents",
+  "columns": [
+    {
+      "key": "where",
+      "label": "Where"
+    },
+    {
+      "key": "axis",
+      "label": "Axis"
+    },
+    {
+      "key": "min",
+      "label": "Min"
+    },
+    {
+      "key": "minLine",
+      "label": "At line"
+    },
+    {
+      "key": "max",
+      "label": "Max"
+    },
+    {
+      "key": "maxLine",
+      "label": "At line"
+    },
+    {
+      "key": "unresolved",
+      "label": "Not resolved"
+    }
+  ],
+  "rows": [
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "X",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 5,
+      "max": "80",
+      "maxLine": 8,
+      "unresolved": 1,
+      "line": 8
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "0",
+      "minLine": 5,
+      "max": "80",
+      "maxLine": 11,
+      "unresolved": 1,
+      "line": 11
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "5",
+      "minLine": 12,
+      "max": "10",
+      "maxLine": 4,
+      "unresolved": 0,
+      "line": 4
+    },
+    {
+      "where": "TOOL CALL 1 Z (line 3)",
+      "scope": "tool",
+      "axis": "X",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 5,
+      "max": "80",
+      "maxLine": 8,
+      "unresolved": 1,
+      "line": 8
+    },
+    {
+      "where": "TOOL CALL 1 Z (line 3)",
+      "scope": "tool",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "0",
+      "minLine": 5,
+      "max": "80",
+      "maxLine": 11,
+      "unresolved": 1,
+      "line": 11
+    },
+    {
+      "where": "TOOL CALL 1 Z (line 3)",
+      "scope": "tool",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "5",
+      "minLine": 12,
+      "max": "10",
+      "maxLine": 4,
+      "unresolved": 0,
+      "line": 4
+    }
+  ],
+  "message": "No machine: readings assumed from the profile defaults, and a word whose reading depends on the machine is not resolved. 2 positions not resolved; the findings say why.",
+  "findings": [
+    {
+      "line": 6,
+      "severity": "warning",
+      "message": "1 polar move, first LP (line 6), that cannot be resolved from the pole (no pole, no radius or angle to start from, or a value that was not resolved).",
+      "reason": "polar"
+    }
+  ]
+}

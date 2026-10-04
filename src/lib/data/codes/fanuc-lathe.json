@@ -4,6 +4,8 @@
   "extends": "fanuc",
   "remove": [
     "G43",
+    "G43.4",
+    "G43.5",
     "G44",
     "G49",
     "G81",
@@ -104,6 +106,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "sets": { "motion": "feed" },
       "label": "Thread cutting pass",
       "description": "Cuts one straight or tapered threading pass to the end point in the block. F is the thread lead per revolution, not a feed rate, so scaling the feed would change the thread. G-code system B spells this G33.",
       "params": [
@@ -128,6 +131,7 @@
       "code": "G40",
       "group": "compensation",
       "modal": true,
+      "sets": { "radiusComp": "off" },
       "label": "Cancel nose radius compensation",
       "description": "Turns nose radius compensation off. Do it during a retract move, not in an arc."
     },
@@ -135,6 +139,7 @@
       "code": "G41",
       "group": "compensation",
       "modal": true,
+      "sets": { "radiusComp": "on" },
       "label": "Nose radius compensation, tool left",
       "description": "Offsets the path by the insert nose radius to the left of the direction of travel. The radius and the tip direction come from the tool offset the T word selects, so no register is written in the block. Switch it on during an approach move."
     },
@@ -142,6 +147,7 @@
       "code": "G42",
       "group": "compensation",
       "modal": true,
+      "sets": { "radiusComp": "on" },
       "label": "Nose radius compensation, tool right",
       "description": "Offsets the path by the insert nose radius to the right of the direction of travel. The radius and the tip direction come from the tool offset the T word selects, so no register is written in the block. Switch it on during an approach move."
     },
@@ -150,6 +156,7 @@
       "group": "nonmodal",
       "sets": { "speedLimit": true },
       "axisWords": "data",
+      "shift": true,
       "label": "Coordinate set, top spindle speed",
       "description": "Sets the coordinate system without moving. With an S word it gives the highest spindle speed the control may use for constant surface speed; write it in a block of its own in front of G96. G-code system B uses G92 for this."
     },
@@ -433,6 +440,7 @@
       "group": "motion",
       "modal": true,
       "verify": true,
+      "sets": { "motion": "feed" },
       "label": "Turning pass (G-code system B)",
       "description": "G-code system A does not use this number; in system B it is the single-pass turning cycle that system A writes as G90. Its F is an ordinary feed. A program that writes it was almost certainly posted for system B, so set a machine with that G-code system to read it properly."
     },
@@ -442,6 +450,7 @@
       "modal": true,
       "pitchFeedAmbiguous": true,
       "verify": true,
+      "sets": { "motion": "feed" },
       "label": "Threading pass (G-code system B)",
       "description": "G-code system A does not use this number; in system B it is the single-pass threading cycle that system A writes as G92, and its F is the thread lead per revolution. gEdit therefore never scales the F of such a block, whichever G-code system the document is read in: a program that writes G78 was almost certainly posted for system B. Set a machine with that G-code system to read the rest of the program properly."
     },
@@ -450,6 +459,7 @@
       "group": "motion",
       "modal": true,
       "verify": true,
+      "sets": { "motion": "feed" },
       "label": "Facing pass (G-code system B)",
       "description": "G-code system A does not use this number; in system B it is the single-pass facing cycle that system A writes as G94. Its F is an ordinary feed. A program that writes it was almost certainly posted for system B, so set a machine with that G-code system to read it properly."
     },
@@ -717,6 +727,7 @@
       "code": "G90",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "feed" },
       "label": "Turning pass",
       "description": "Cuts one outside or inside turning pass, straight or tapered, and returns to the start point. It belongs to the motion group, so the next G00 or G01 ends it. On a mill and in G-code system B the same number means absolute positions instead.",
       "params": [
@@ -744,7 +755,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
-      "sets": { "speedLimit": true },
+      "sets": { "speedLimit": true, "motion": "feed" },
       "label": "Threading pass as a cycle",
       "description": "Cuts one threading pass, straight or tapered, and returns to the start point, so a thread is written as a list of X values. F is the thread lead per revolution, not a feed rate. On a mill and in G-code system B the same number sets the coordinate system and clamps the spindle speed instead. A threading pass carries no S word, so gEdit reads the S of a G92 block as that speed clamp rather than as a speed to scale — which is what protects a system-B program opened with a system-A machine.",
       "params": [
@@ -773,6 +784,7 @@
       "code": "G94",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "feed" },
       "label": "Facing pass",
       "description": "Cuts one facing pass, square or tapered, and returns to the start point. It belongs to the motion group, so the next G00 or G01 ends it. On a mill and in G-code system B the same number means feed per minute instead; on a lathe in system A the feed modes are G98 and G99.",
       "params": [

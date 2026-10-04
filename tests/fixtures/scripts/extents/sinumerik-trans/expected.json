@@ -1,0 +1,194 @@
+{
+  "title": "Extents",
+  "columns": [
+    {
+      "key": "where",
+      "label": "Where"
+    },
+    {
+      "key": "axis",
+      "label": "Axis"
+    },
+    {
+      "key": "min",
+      "label": "Min"
+    },
+    {
+      "key": "minLine",
+      "label": "At line"
+    },
+    {
+      "key": "max",
+      "label": "Max"
+    },
+    {
+      "key": "maxLine",
+      "label": "At line"
+    },
+    {
+      "key": "unresolved",
+      "label": "Not resolved"
+    }
+  ],
+  "rows": [
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "X",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 3,
+      "max": "10",
+      "maxLine": 9,
+      "unresolved": 0,
+      "line": 9
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "0",
+      "minLine": 3,
+      "max": "1",
+      "maxLine": 11,
+      "unresolved": 0,
+      "line": 11
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-5",
+      "minLine": 4,
+      "max": "10",
+      "maxLine": 3,
+      "unresolved": 0,
+      "line": 3
+    },
+    {
+      "where": "G54 (line 2)",
+      "scope": "offset",
+      "axis": "X",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 3,
+      "max": "0",
+      "maxLine": 3,
+      "unresolved": 0,
+      "line": 3
+    },
+    {
+      "where": "G54 (line 2)",
+      "scope": "offset",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "0",
+      "minLine": 3,
+      "max": "0",
+      "maxLine": 3,
+      "unresolved": 0,
+      "line": 3
+    },
+    {
+      "where": "G54 (line 2)",
+      "scope": "offset",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-5",
+      "minLine": 4,
+      "max": "10",
+      "maxLine": 3,
+      "unresolved": 0,
+      "line": 3
+    },
+    {
+      "where": "G54 + TRANS (line 5)",
+      "scope": "offset",
+      "axis": "X",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 6,
+      "max": "0",
+      "maxLine": 6,
+      "unresolved": 0,
+      "line": 6
+    },
+    {
+      "where": "G54 + TRANS (line 5)",
+      "scope": "offset",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "0",
+      "minLine": 6,
+      "max": "0",
+      "maxLine": 6,
+      "unresolved": 0,
+      "line": 6
+    },
+    {
+      "where": "G54 + TRANS (line 5)",
+      "scope": "offset",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-5",
+      "minLine": 7,
+      "max": "10",
+      "maxLine": 6,
+      "unresolved": 0,
+      "line": 6
+    },
+    {
+      "where": "G54 + ATRANS (line 8)",
+      "scope": "offset",
+      "axis": "X",
+      "axisId": "X",
+      "min": "10",
+      "minLine": 9,
+      "max": "10",
+      "maxLine": 9,
+      "unresolved": 0,
+      "line": 9
+    },
+    {
+      "where": "G54 + TRANS (line 10)",
+      "scope": "offset",
+      "axis": "X",
+      "axisId": "X",
+      "min": "1",
+      "minLine": 11,
+      "max": "1",
+      "maxLine": 11,
+      "unresolved": 0,
+      "line": 11
+    },
+    {
+      "where": "G54 + TRANS (line 10)",
+      "scope": "offset",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "1",
+      "minLine": 11,
+      "max": "1",
+      "maxLine": 11,
+      "unresolved": 0,
+      "line": 11
+    }
+  ],
+  "message": "No machine: readings assumed from the profile defaults, and a word whose reading depends on the machine is not resolved.",
+  "findings": [
+    {
+      "line": 5,
+      "severity": "info",
+      "message": "TRANS, 1 block: its axis words are values, not positions; left out of the ranges.",
+      "reason": "data"
+    },
+    {
+      "line": 8,
+      "severity": "info",
+      "message": "ATRANS, 1 block: its axis words are values, not positions; left out of the ranges.",
+      "reason": "data"
+    }
+  ]
+}

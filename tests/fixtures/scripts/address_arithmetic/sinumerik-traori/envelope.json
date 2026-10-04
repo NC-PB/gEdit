@@ -1,0 +1,29 @@
+{
+  "message": "Added 0.5 to Z in 3 words on 3 blocks. Left 2 blocks and 2 words as written: 1 machine position, 1 rotary move without tool centre point control, 1 data word, 1 incremental word. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 7,
+      "severity": "warning",
+      "message": "N60 G1 X10 Y0 Z5 A30 C45: moves A together with Z while tool centre point control is off: the tool tip does not move by the shift there.",
+      "reason": "rotary-without-tcp"
+    },
+    {
+      "line": 9,
+      "severity": "warning",
+      "message": "N80 SUPA G0 Z0 D0: a machine position (SUPA): its positions are not in the program's coordinates, so a shift of the program does not apply to them.",
+      "reason": "machine-position"
+    },
+    {
+      "line": 10,
+      "severity": "info",
+      "message": "Z=IC(10): written as an incremental distance, so a shift does not apply to it.",
+      "reason": "incremental"
+    },
+    {
+      "line": 11,
+      "severity": "info",
+      "message": "Z5: a value of TRANS, not a position of this program.",
+      "reason": "data"
+    }
+  ]
+}

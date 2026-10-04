@@ -157,8 +157,13 @@ scenario('m4-transforms', { timeout: 420 }, async (h) => {
   h.check('the ribbon has an NC tab between Insert and Tools', JSON.stringify(tabs) === '["home","insert","nc","tools","view"]', tabs)
 
   await ribbonTab(h, 'nc')
-  const ncButtons = h.qa('cmd-button').map((e) => e.dataset.command).filter((id) => id?.startsWith('nc.'))
+  const allNcButtons = h.qa('cmd-button').map((e) => e.dataset.command).filter((id) => id?.startsWith('nc.'))
+  // M10 (WP10.1) adds Insert and Remove Block Skip to the tab, in a group of their own; the
+  // seven transforms of M4 keep their commands and their order, which is what this counts.
+  const BLOCK_SKIP = ['nc.blockSkip.add', 'nc.blockSkip.remove']
+  const ncButtons = allNcButtons.filter((id) => !BLOCK_SKIP.includes(id ?? ''))
   h.check('the NC tab shows all seven transform commands', NC_COMMANDS.every((id) => ncButtons.includes(id)) && ncButtons.length === NC_COMMANDS.length, ncButtons)
+  h.check('and the two block-skip commands M10 added (the scenario m10-blockskip drives them)', BLOCK_SKIP.every((id) => allNcButtons.includes(id)) && allNcButtons.length === NC_COMMANDS.length + BLOCK_SKIP.length, allNcButtons)
   // Numbering before Cleanup, and each group in its own contribution order. Both used to
   // start at order 10, so `ribbonModel.groupsOf` broke the tie by first appearance — the
   // alphabetical load order of the two contribution files — and Cleanup came first by

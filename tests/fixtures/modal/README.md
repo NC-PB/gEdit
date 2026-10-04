@@ -55,6 +55,17 @@ station, and `feed`, `speed` and `speedLimit` are the value **as written** (`"22
 
 Python exposes the same camelCase keys, so one golden reads the same in both languages.
 
+`definedCycle` and `modalCall` (M9, §7.4 rules 1-8) are the code or `null`. From M10 (the
+prelude P10, §7.4 rules 13-15) two more keys are the code or `null`:
+
+| Key | What it is |
+|---|---|
+| `frame` | the innermost coordinate frame in force: the last `frame: 'open'` code that no close of its own `group` has ended (`"CYCLE800"`, `"PLANE SPATIAL"`, `"G68.2"`), or `null` outside every frame |
+| `tcp` | the code that switched tool centre point control on (`"TRAORI"`, `"G43.4"`, `"M128"`), or `null` while it is off — also the power-on reading |
+
+`plane` also follows the bare tool-axis letter of a `sets.planeFromAxisWord` block (Klartext
+`TOOL CALL 1 Z` → `"XY"`).
+
 ## The machine, and why a golden names it
 
 The interpreter never reads a machine configuration. Everything machine-specific reaches

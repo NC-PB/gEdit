@@ -1,9 +1,9 @@
 {
   "codes": "fanuc-lathe",
   "machine": {
-    "choice": "document",
-    "id": "review",
-    "name": "review",
+    "choice": "none",
+    "id": null,
+    "name": null,
     "params": {
       "diameter": "on",
       "modalInitial": {},
@@ -25,7 +25,7 @@
         "plane": "profile",
         "spindlemode": "profile"
       },
-      "numberInput": "machine",
+      "numberInput": "profile",
       "units": "profile",
       "variants": {
         "gcodeSystem": "profile",
@@ -488,6 +488,7 @@
       "blockSkip": {
         "chars": "/",
         "levels": true,
+        "plainLevel": "1",
         "position": "either"
       },
       "comments": [
@@ -542,6 +543,7 @@
         "DPRNT",
         "BPRNT"
       ],
+      "maxWordDigits": 8,
       "programNames": "<[A-Za-z0-9+\\-_.]+>",
       "variables": "#\\d+",
       "wordSeparatorRequired": false

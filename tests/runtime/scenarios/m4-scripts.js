@@ -29,8 +29,15 @@ import { scenario } from '../lib/index.js'
 import { configPaths } from './m2-common.js'
 import { context, ready } from './m4-common.js'
 
-/** The three scripts `src-tauri/resources/scripts` ships, sorted. */
-const BUNDLED = ['bundled:scale_feed.py', 'bundled:scale_speed.py', 'bundled:tool_list.py']
+/** The scripts `src-tauri/resources/scripts` ships, sorted (M10 added the first three). */
+const BUNDLED = [
+  'bundled:address_arithmetic.py',
+  'bundled:extents.py',
+  'bundled:program_checks.py',
+  'bundled:scale_feed.py',
+  'bundled:scale_speed.py',
+  'bundled:tool_list.py',
+]
 
 /** In the grandchild's command line, so `pgrep -f` can find it. No regex characters. */
 const GRANDCHILD = 'GEDITRHGRANDCHILD'
@@ -124,7 +131,7 @@ scenario('m4-scripts-backend', { timeout: 420 }, async (h) => {
   /** @type {any[]} */
   const scripts = list.ok ? list.value.scripts : []
   const bundled = scripts.filter((s) => s.root === 'bundled').map((s) => s.id).sort()
-  h.check('the three bundled scripts are listed and nothing else is bundled', JSON.stringify(bundled) === JSON.stringify(BUNDLED), bundled)
+  h.check('the six bundled scripts (the three of Phase 1, address arithmetic, extents and program checks from M10) are listed and nothing else is bundled', JSON.stringify(bundled) === JSON.stringify(BUNDLED), bundled)
   h.check('the library module is not offered as a script', !scripts.some((s) => s.id.includes('gedit_nc')), scripts.map((s) => s.id))
   h.check(
     'every bundled header parsed, with no warning, and none of them is editable',

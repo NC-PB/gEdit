@@ -31,9 +31,12 @@ AXIS_WORDS = {
     "data": ["AMIRROR", "AROT", "ASCALE", "ATRANS", "G25", "G26", "MIRROR", "ROT", "SCALE", "TRANS"],
 }
 FRAME = {
-    "open": ["AMIRROR", "AROT", "ASCALE", "CYCLE800", "MIRROR", "ROT", "SCALE", "TRAANG", "TRACYL", "TRANSMIT", "TRAORI"],
+    # P10 (decision of 2026-10-04): TRAORI is tool centre point control, not a frame.
+    "open": ["AMIRROR", "AROT", "ASCALE", "CYCLE800", "MIRROR", "ROT", "SCALE", "TRAANG", "TRACYL", "TRANSMIT"],
     "close": ["TRAFOOF"],
 }
+#: P10: the codes that switch tool centre point control (`sets.tcp`).
+TCP = {"on": ["TRAORI"], "off": ["TRAFOOF"]}
 
 
 def tool_rows(profile_id: str, rel: str):
@@ -90,9 +93,14 @@ class PowerOnTest(unittest.TestCase):
         self.assertEqual(mill["machineParams"]["diameter"], "off")
         self.assertEqual(turn["machineParams"]["diameter"], "on")
         self.assertEqual(helpers.effective_context(MILLING)["machine"]["params"]["diameter"], "off")
-        # Everything else is the turning profile's (AD-16).
-        for key in ("syntax", "outline", "numbering", "program", "addresses", "codes", "grammar"):
+        # Everything else is the turning profile's (AD-16) — but for the rotary axes, which
+        # the milling profile names as axes and as angles since M10 (P10).
+        for key in ("syntax", "outline", "numbering", "program", "codes", "grammar"):
             self.assertEqual(mill[key], turn[key], key)
+        rest = lambda addresses: {k: v for k, v in addresses.items() if k not in ("axes", "angular")}
+        self.assertEqual(rest(mill["addresses"]), rest(turn["addresses"]))
+        self.assertEqual(mill["addresses"]["axes"], ["X", "Y", "Z", "A", "B", "C"])
+        self.assertEqual(mill["addresses"]["angular"], ["A", "B", "C", "AR", "SF"])
         self.assertEqual(mill["toolCall"]["tool"], turn["toolCall"]["tool"])
         self.assertEqual(mill["toolCall"]["toolFrom"], "same-line-or-last")
 
@@ -105,6 +113,9 @@ class FlagTest(unittest.TestCase):
             self.assertEqual(got, want, value)
         for value, want in FRAME.items():
             got = sorted(entry["code"] for entry in codes if gedit_nc.frame_of(entry) == value)
+            self.assertEqual(got, want, value)
+        for value, want in TCP.items():
+            got = sorted(entry["code"] for entry in codes if gedit_nc.tcp_of(entry) == value)
             self.assertEqual(got, want, value)
 
 

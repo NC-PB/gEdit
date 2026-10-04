@@ -24,7 +24,7 @@ import { describe, expect, it } from 'vitest';
 import { BUILTIN_CODE_DB_JSON } from '$lib/data/codes';
 import { BUILTIN_PROFILE_JSON } from '$lib/data/profiles';
 import { compileProfile } from '$lib/core/profiles/compile';
-import { axisWordsOf, frameOf, lookupCode, normalizeCode, speedLimitBoundOf } from '$lib/core/codes/lookup';
+import { axisWordsOf, frameOf, lookupCode, normalizeCode, speedLimitBoundOf, tcpOf } from '$lib/core/codes/lookup';
 import { resolveCodeDbFiles, resolveCodeDbs } from '$lib/core/codes/resolve';
 import { tokenizeLine } from '$lib/core/nc/tokenizer';
 import type { LineState } from '$lib/core/nc/types';
@@ -36,6 +36,8 @@ interface Reads {
   axisWords: 'data' | 'machine' | null;
   frame: 'open' | 'close' | null;
   speedLimitBound: 'upper' | 'lower' | null;
+  /** P10: tool centre point control on or off (`sets.tcp`). */
+  tcp: 'on' | 'off' | null;
 }
 interface Row {
   code: string;
@@ -63,9 +65,15 @@ function declaredOf(entry: CodeEntry): Record<string, unknown> {
   if (entry.wordsAreData !== undefined) out.wordsAreData = entry.wordsAreData;
   if (entry.axisWords !== undefined) out.axisWords = entry.axisWords;
   if (entry.frame !== undefined) out.frame = entry.frame;
+  if (entry.frameWithoutValues !== undefined) out.frameWithoutValues = entry.frameWithoutValues;
+  // M10 review: the pole (NC-2), a program call (NC-6) and a coordinate shift (NC-7).
+  if (entry.pole !== undefined) out.pole = entry.pole;
+  if (entry.call !== undefined) out.call = entry.call;
+  if (entry.shift !== undefined) out.shift = entry.shift;
   const sets: Record<string, unknown> = {};
   if (entry.sets?.speedLimit !== undefined) sets.speedLimit = entry.sets.speedLimit;
   if (entry.sets?.speedLimitBound !== undefined) sets.speedLimitBound = entry.sets.speedLimitBound;
+  if (entry.sets?.tcp !== undefined) sets.tcp = entry.sets.tcp;
   if (Object.keys(sets).length > 0) out.sets = sets;
   return out;
 }
@@ -74,6 +82,7 @@ const readsOf = (entry: CodeEntry): Reads => ({
   axisWords: axisWordsOf(entry),
   frame: frameOf(entry),
   speedLimitBound: speedLimitBoundOf(entry),
+  tcp: tcpOf(entry),
 });
 
 const loadedEntry = (dialect: string, code: string): CodeEntry => {
@@ -118,7 +127,8 @@ describe('the flagged entries of the shipped databases', () => {
         const lost =
           (was.axisWords !== null && now.axisWords !== was.axisWords) ||
           (was.frame !== null && now.frame !== was.frame) ||
-          (was.speedLimitBound !== null && now.speedLimitBound !== was.speedLimitBound);
+          (was.speedLimitBound !== null && now.speedLimitBound !== was.speedLimitBound) ||
+          (was.tcp !== null && now.tcp !== was.tcp);
         if (lost) dropped.push(`${dialect} ${normalizeCode(entry.code)}`);
       }
     }
@@ -163,12 +173,13 @@ describe('what the flags decide (the reasons are in the entries and in the G10 t
 
   it('Fanuc mill: every code that opens a frame has a code that closes it', () => {
     expect(codesWith('fanuc', (e) => e.frame === 'open')).toEqual([
-      'G7.1', 'G12.1', 'G51', 'G51.1', 'G68', 'G68.2', 'G68.3', 'G68.4',
+      'G7.1', 'G12.1', 'G16', 'G51', 'G51.1', 'G68', 'G68.2', 'G68.3', 'G68.4',
     ]);
     // G69 ends the rotations and tilts, G69.1 is the lathe spelling; G50 and G50.1 end the
-    // scaling and the mirror; G13.1 ends the polar interpolation. G7.1 ends itself (a zero
-    // radius), which is why it is only ever `open`.
-    expect(codesWith('fanuc', (e) => e.frame === 'close')).toEqual(['G13.1', 'G50', 'G50.1', 'G69', 'G69.1']);
+    // scaling and the mirror; G13.1 ends the polar interpolation and G15 the polar coordinate
+    // command of G16 (M10 review, NC-5). G7.1 ends itself (a zero radius), which is why it is
+    // only ever `open`.
+    expect(codesWith('fanuc', (e) => e.frame === 'close')).toEqual(['G13.1', 'G15', 'G50', 'G50.1', 'G69', 'G69.1']);
   });
 
   it('tool centre point control is no frame: the positions under it are tool tip positions of the program', () => {
@@ -179,6 +190,24 @@ describe('what the flags decide (the reasons are in the entries and in the G10 t
     for (const code of ['G43.4', 'G43.5', 'G49']) expect(loadedEntry('fanuc', code).frame, code).toBeUndefined();
     for (const code of ['FUNCTION TCPM', 'FUNCTION RESET TCPM', 'M128', 'M129']) {
       expect(loadedEntry('heidenhain', code).frame, code).toBeUndefined();
+    }
+    // P10 (decision of 2026-10-04): Sinumerik TRAORI is the same control and is no frame
+    // either; one shared flag, `sets.tcp`, says on or off in all three dialects. TRAFOOF
+    // keeps its close, because it also ends TRANSMIT, TRACYL and TRAANG, which are frames.
+    expect(loadedEntry('sinumerik', 'TRAORI').frame).toBeUndefined();
+    expect(loadedEntry('sinumerik', 'TRAFOOF').frame).toBe('close');
+    const switching = (dialect: string, value: 'on' | 'off') => codesWith(dialect, (e) => tcpOf(e) === value);
+    expect([switching('fanuc', 'on'), switching('fanuc', 'off')]).toEqual([['G43.4', 'G43.5'], ['G49']]);
+    expect([switching('heidenhain', 'on'), switching('heidenhain', 'off')]).toEqual([
+      ['FUNCTION TCPM', 'M128'],
+      ['FUNCTION RESET TCPM', 'M129'],
+    ]);
+    expect([switching('sinumerik', 'on'), switching('sinumerik', 'off')]).toEqual([['TRAORI'], ['TRAFOOF']]);
+    // The lathe has no G49 to end it (no length offset on a turret lathe), so it has neither
+    // of the codes that would start it: tool centre point control can never read as on there.
+    for (const code of ['G43.4', 'G43.5', 'G49']) expect(lookupCode(LOADED['fanuc-lathe'], code), code).toBeNull();
+    for (const dialect of ['okuma', 'fanuc-lathe', 'fanuc-lathe-b']) {
+      expect([switching(dialect, 'on'), switching(dialect, 'off')], dialect).toEqual([[], []]);
     }
   });
 
@@ -303,13 +332,43 @@ describe('what the flags decide (the reasons are in the entries and in the G10 t
     // TRANS and ATRANS shift the program's own frame (like Fanuc G52): data words, no frame of their own.
     expect(loadedEntry('sinumerik', 'TRANS').frame).toBeUndefined();
     expect(codesWith('sinumerik', (e) => e.frame === 'open')).toEqual(
-      ['CYCLE800', 'TRANSMIT', 'TRACYL', 'TRAORI', 'TRAANG', 'ROT', 'AROT', 'SCALE', 'ASCALE', 'MIRROR', 'AMIRROR'],
+      ['CYCLE800', 'TRANSMIT', 'TRACYL', 'TRAANG', 'ROT', 'AROT', 'SCALE', 'ASCALE', 'MIRROR', 'AMIRROR'],
     );
     expect(codesWith('sinumerik', (e) => e.frame === 'close')).toEqual(['TRAFOOF']);
-    // Open question for M10 (WP10.4): TRAORI is flagged open, as plan section 7.2 lists it, although
-    // Fanuc/Klartext tool centre point control carries no frame flag (WP9.2 #57). Address
-    // arithmetic therefore refuses every block under TRAORI. One member of one entry changes it.
-    expect(loadedEntry('sinumerik', 'TRAORI').frame).toBe('open');
+    // P10 (decided 2026-10-04, the open question M9 left): TRAORI is tool centre point
+    // control, as G43.4 and M128 are, so it carries `sets.tcp: 'on'` and no frame. Address
+    // arithmetic judges a block under it, and refuses a simultaneous rotary move without it.
+    expect(loadedEntry('sinumerik', 'TRAORI').frame).toBeUndefined();
+    expect(tcpOf(loadedEntry('sinumerik', 'TRAORI'))).toBe('on');
+    // P10 (§7.4 rule 13): written without values these close the frames of their group, as
+    // the Siemens manuals say — CYCLE800() clears the swivel, a frame instruction without an
+    // axis the programmable frame. CYCLE800 is in its own group ('tilt'), so CYCLE800() does
+    // not end a ROT, and TRANS alone ends ROT, SCALE and MIRROR but not the swivel.
+    expect(codesWith('sinumerik', (e) => e.frameWithoutValues === 'close')).toEqual(['CYCLE800', 'TRANS', 'ROT', 'SCALE', 'MIRROR']);
+    expect(loadedEntry('sinumerik', 'CYCLE800').group).toBe('tilt');
+    for (const code of ['TRANS', 'ROT', 'SCALE', 'MIRROR', 'AROT', 'ASCALE', 'AMIRROR']) {
+      expect(loadedEntry('sinumerik', code).group, code).toBe('frame');
+    }
+    for (const dialect of DIALECTS.filter((d) => d !== 'sinumerik')) {
+      expect(codesWith(dialect, (e) => e.frameWithoutValues !== undefined), dialect).toEqual([]);
+    }
+  });
+
+  it('Fanuc mill (P10): each frame family has a group of its own, so a close ends only its own family', () => {
+    // §7.4 rule 13: a close ends the open frames of its group. G69 ends the rotations and
+    // tilts; G50 the scaling; G50.1 the mirror; G13.1 the polar interpolation. In one group,
+    // G69 would have ended the scaling of G51 too, and a later shift would have moved
+    // positions that the control still scales.
+    const groupOf = (code: string) => loadedEntry('fanuc', code).group;
+    expect(['G68', 'G68.2', 'G68.3', 'G68.4', 'G69', 'G69.1'].map(groupOf)).toEqual(Array(6).fill('frame'));
+    expect(['G51', 'G50'].map(groupOf)).toEqual(['scaling', 'scaling']);
+    expect(['G51.1', 'G50.1'].map(groupOf)).toEqual(['mirror', 'mirror']);
+    expect(['G12.1', 'G13.1'].map(groupOf)).toEqual(['polar', 'polar']);
+    // Ended by G7.1 with a zero radius only, a value: so nothing closes it, the safe reading.
+    expect(groupOf('G7.1')).toBe('cylindrical');
+    for (const code of ['G7.1', 'G12.1', 'G13.1', 'G50', 'G50.1', 'G51', 'G51.1', 'G68', 'G69']) {
+      expect(loadedEntry('fanuc', code).modal, code).toBeUndefined();
+    }
   });
 });
 
@@ -362,11 +421,12 @@ describe('X13: the 5-axis programs of the owner-public set name no unknown code'
     ).toEqual([]);
   });
 
-  it('Klartext: the drilling program still names cycle 202, a calling cycle left to the cycle family of WP9.5b', () => {
-    // Cycle 202 (boring) starts something a later call runs, so its `sets` belong with the
-    // other `CYCL DEF 2xx` entries, which WP9.5b rewrites (§7.4). Cycles 208 and 262 wait
-    // with it. Delete this test with the entry.
-    expect(unknownCodes('heidenhain-klartext', ['DRILLING.H'])).toEqual(['CYCL DEF 202']);
+  it('Klartext: the drilling program names no unknown cycle (P10 added 202, 208 and 262)', () => {
+    // §10.2 / P10 item 4: a CYCL CALL after a definition the database lacked read as
+    // "nothing defined", which the program check (WP10.2) would have reported, and address
+    // arithmetic could not judge the call. P10 added the three cycles the M9 review named,
+    // with their R8 roles (§7.16 #110).
+    expect(unknownCodes('heidenhain-klartext', ['DRILLING.H'])).toEqual([]);
   });
 
   it('Okuma milling: only G56 and M54 are left, and they are R9', () => {

@@ -515,6 +515,7 @@ function checkSyntax(value: unknown, p: Problems): void {
     str(blockSkip.chars, 'syntax.blockSkip.chars', p);
     enumOf(blockSkip.position, 'syntax.blockSkip.position', p, ['before-number', 'after-number', 'either'] as const);
     optBool(blockSkip.levels, 'syntax.blockSkip.levels', p);
+    optEnum(blockSkip.plainLevel, 'syntax.blockSkip.plainLevel', p, ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'] as const);
   }
 
   const blockNumber = obj(syntax.blockNumber, 'syntax.blockNumber', p);
@@ -589,6 +590,9 @@ function checkSyntax(value: unknown, p: Problems): void {
   optStr(syntax.incrementalPrefix, 'syntax.incrementalPrefix', p, ADDRESS);
   optStrArr(syntax.keywords, 'syntax.keywords', p);
   optNum(syntax.maxLineLength, 'syntax.maxLineLength', p, { int: true, min: 1 });
+  // M10 (WP10.2): read by the program checks.
+  optNum(syntax.maxWordDigits, 'syntax.maxWordDigits', p, { int: true, min: 1 });
+  optNum(syntax.maxMCodes, 'syntax.maxMCodes', p, { int: true, min: 1 });
 }
 
 function checkAddresses(value: unknown, p: Problems): void {
@@ -1021,6 +1025,7 @@ export function validateProfile(raw: unknown, o: ProfileValidationOptions = {}):
   if (program) {
     patternList(program.start, 'program.start', p);
     patternList(program.end, 'program.end', p);
+    optBool(program.endRecord, 'program.endRecord', p);
   }
 
   checkOutline(root.outline, p);

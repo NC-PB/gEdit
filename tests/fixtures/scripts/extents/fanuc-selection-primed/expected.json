@@ -1,0 +1,109 @@
+{
+  "title": "Extents",
+  "columns": [
+    {
+      "key": "where",
+      "label": "Where"
+    },
+    {
+      "key": "axis",
+      "label": "Axis"
+    },
+    {
+      "key": "min",
+      "label": "Min"
+    },
+    {
+      "key": "minLine",
+      "label": "At line"
+    },
+    {
+      "key": "max",
+      "label": "Max"
+    },
+    {
+      "key": "maxLine",
+      "label": "At line"
+    },
+    {
+      "key": "unresolved",
+      "label": "Not resolved"
+    }
+  ],
+  "rows": [
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "X",
+      "axisId": "X",
+      "min": "15",
+      "minLine": 9,
+      "max": "40",
+      "maxLine": 11,
+      "unresolved": 0,
+      "line": 11
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "25",
+      "minLine": 9,
+      "max": "30",
+      "maxLine": 11,
+      "unresolved": 0,
+      "line": 11
+    },
+    {
+      "where": "G54 (line 4)",
+      "scope": "offset",
+      "axis": "X",
+      "axisId": "X",
+      "min": "15",
+      "minLine": 9,
+      "max": "40",
+      "maxLine": 11,
+      "unresolved": 0,
+      "line": 11
+    },
+    {
+      "where": "G54 (line 4)",
+      "scope": "offset",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "25",
+      "minLine": 9,
+      "max": "30",
+      "maxLine": 11,
+      "unresolved": 0,
+      "line": 11
+    },
+    {
+      "where": "G54, T1 (line 5)",
+      "scope": "tool",
+      "axis": "X",
+      "axisId": "X",
+      "min": "15",
+      "minLine": 9,
+      "max": "40",
+      "maxLine": 11,
+      "unresolved": 0,
+      "line": 11
+    },
+    {
+      "where": "G54, T1 (line 5)",
+      "scope": "tool",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "25",
+      "minLine": 9,
+      "max": "30",
+      "maxLine": 11,
+      "unresolved": 0,
+      "line": 11
+    }
+  ],
+  "message": "No machine: readings assumed from the profile defaults, and a word whose reading depends on the machine is not resolved.",
+  "findings": []
+}

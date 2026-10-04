@@ -17,6 +17,7 @@ import { noMachine } from '$lib/core/machines/effective';
 import { convertCase } from '$lib/core/transforms/convertCase';
 import { insertSpaces } from '$lib/core/transforms/insertSpaces';
 import { removeBlockNumbers } from '$lib/core/transforms/removeBlockNumbers';
+import { blockSkipAdd, blockSkipRemove } from '$lib/core/transforms/blockSkip';
 import { removeComments } from '$lib/core/transforms/removeComments';
 import { removeEmptyLines } from '$lib/core/transforms/removeEmptyLines';
 import { removeSpaces } from '$lib/core/transforms/removeSpaces';
@@ -351,7 +352,7 @@ describe('reading the document', () => {
 
 describe('the guarded rewrites', () => {
   it('decides every NC transform: the ones that read comment, string or number syntax refuse', () => {
-    const all = [removeComments, renumber, removeBlockNumbers, insertSpaces, removeSpaces, convertCase, removeEmptyLines];
+    const all = [removeComments, renumber, removeBlockNumbers, insertSpaces, removeSpaces, convertCase, blockSkipAdd, blockSkipRemove, removeEmptyLines];
     expect(all.filter((def) => GUARDED_TRANSFORMS.has(def.id)).map((def) => def.id).sort()).toEqual([...GUARDED_TRANSFORMS].sort());
     expect(all.filter((def) => !GUARDED_TRANSFORMS.has(def.id)).map((def) => def.id)).toEqual(['remove-empty-lines']);
   });
@@ -442,8 +443,8 @@ describe('the transform runner', () => {
 
   beforeEach(() => results.clear());
 
-  it('refuses Remove Comments and Renumber on a Siemens program read as Fanuc, before the form opens', async () => {
-    for (const def of [removeComments, renumber]) {
+  it('refuses Remove Comments, Renumber and the block skip pair on a Siemens program read as Fanuc, before the form opens', async () => {
+    for (const def of [removeComments, renumber, blockSkipAdd, blockSkipRemove]) {
       const { service, seen } = run('fanuc-gcode', SIEMENS, def);
       expect(await service.run(def), def.id).toBeNull();
       expect(seen.forms, def.id).toBe(0);

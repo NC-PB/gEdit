@@ -205,7 +205,18 @@ function buildAll(): Map<string, string> {
       typeof machineBlock === 'object' && machineBlock !== null
         ? machineWith(profile, machineBlock as MachineConfig['params'])
         : noMachine(profile);
-    const name = `effective/${profileId}/${keyOf(machine.params)}.json`;
+    // The key names the whole effective machine, not only its parameters: a golden machine
+    // whose parameters equal the profile defaults (an Okuma 1 mm preset written out) is a
+    // different view from "no machine" and must not overwrite its file (M10 WP10.2 and
+    // WP10.4 both ran into it). "No machine" keeps the key it always had.
+    const key =
+      machine.choice === 'none'
+        ? keyOf(machine.params)
+        : keyOf({ params: machine.params, choice: machine.choice, source: machine.source });
+    const name = `effective/${profileId}/${key}.json`;
+    if (produced.has(name) && produced.get(name) !== text(effectiveOf(profile, machine))) {
+      throw new Error(`${path}: two different effective views share the file ${name}`);
+    }
     emit(name, effectiveOf(profile, machine));
     index[path] = name;
   }

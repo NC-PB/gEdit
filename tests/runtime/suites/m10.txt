@@ -1,0 +1,33 @@
+# M10: check before the machine — block skip and the tool segment, the program checks and the
+# extents from the Tools tab, address arithmetic and its R8 refusals, and their budgets.
+# Run with: tests/runtime/suite.sh tests/runtime/suites/m0.txt tests/runtime/suites/m1.txt tests/runtime/suites/m2.txt tests/runtime/suites/m3.txt tests/runtime/suites/m4.txt tests/runtime/suites/m5.txt tests/runtime/suites/m6.txt tests/runtime/suites/m7.txt tests/runtime/suites/m8.txt tests/runtime/suites/m9.txt tests/runtime/suites/m10.txt
+#
+# The three scripts are written by other work packages, so every expected answer comes from
+# the plan and from the README of the script's fixture folder (the form ids, the `checkId`,
+# `scope`, `axisId` and `reason` members, the R8 roles in `tests/fixtures/codes/positions.json`)
+# and from the program text itself, never from the script's own output. A section that cannot
+# run costs a failed check by name and not the scenarios after it.
+
+# Insert and remove the skip mark on a selection in Fanuc, Klartext and Sinumerik: the
+# position from the profile, a mark never twice, a division never touched, a level kept, one
+# undo each; and Select Tool Segment (Mod+F7) against the outline's own segment bounds.
+m10-blockskip
+
+# Program checks and extents from the Tools tab: the form with one box per check, the rows
+# with their hidden check ids, a click on a row jumping to its line, no finding on a correct
+# program, and the decimal point of l06-decimal.nc under IS-B, calculator input and no
+# machine; the diameter column and the "not resolved" count of the extents.
+m10-scripts
+
+# Address arithmetic: Z less 0.5 on the lathe under three machines (X11 c), the W words
+# reported, the Okuma 10 µm machine, and R8 on the Fanuc mill, Klartext and Sinumerik
+# milling - a drilling cycle's tool-axis parameter moves with the axis words, CYCL CALL POS,
+# CYCLE800 and its frame, M91, G75, G28 and a lathe's own cycles are left and listed, TRAORI
+# is judged and a rotary move without it is refused - and never a cycle moved in part.
+m10-arith
+
+# G7: program checks and extents on 300,000 lines and address arithmetic on 100,000, each
+# inside the 300 s the scripts' headers ask the app for (200 s on the development Mac), the
+# extents and the shifted program checked against the text, and the undo of the shift within
+# the 2 s of an apply. Slow; keep it last.
+m10-perf

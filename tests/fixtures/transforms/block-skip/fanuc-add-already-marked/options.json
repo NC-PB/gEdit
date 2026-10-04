@@ -1,0 +1,20 @@
+{
+  "note": "A block that already carries a mark, at any level or behind the number, is not marked twice; a different level is listed (/2; on Fanuc /1 is the plain level, BDT1).",
+  "profile": "fanuc-gcode",
+  "mode": "add",
+  "options": {
+    "level": "plain"
+  },
+  "expect": {
+    "summary": "ncBlockSkip.addRun.summary",
+    "skipped": [
+      {
+        "line": 3,
+        "severity": "info"
+      }
+    ],
+    "warnings": [
+      "ncBlockSkip.addRun.already"
+    ]
+  }
+}

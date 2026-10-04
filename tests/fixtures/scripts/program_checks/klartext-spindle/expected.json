@@ -1,0 +1,46 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 5,
+      "check": "Spindle after tool change",
+      "checkId": "toolChangeSpindle",
+      "severity": "warning",
+      "message": "4 L Z-2 R0 F200: the first cut after the tool change on line 3 (2 TOOL CALL 1 Z S3000), and no spindle start between them"
+    },
+    {
+      "line": 11,
+      "check": "Spindle after tool change",
+      "checkId": "toolChangeSpindle",
+      "severity": "warning",
+      "message": "10 LP PR+10 PA+45 F300: the first cut after the tool change on line 10 (9 TOOL CALL 2 Z S2000), and no spindle start between them"
+    },
+    {
+      "line": 16,
+      "check": "Spindle",
+      "checkId": "spindleOff",
+      "severity": "warning",
+      "message": "15 L Z-5 F100: a cut while the spindle is stopped (M5 on line 15)"
+    }
+  ],
+  "message": "3 findings in 2 checks. No machine chosen.",
+  "findings": []
+}

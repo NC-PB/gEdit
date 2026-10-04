@@ -1,0 +1,39 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 5,
+      "check": "Missing word",
+      "checkId": "requiredWords",
+      "severity": "error",
+      "message": "PLANE SPATIAL: the block has to write MOVE, TURN or STAY"
+    },
+    {
+      "line": 9,
+      "check": "Missing word",
+      "checkId": "requiredWords",
+      "severity": "error",
+      "message": "PLANE RESET: the block has to write MOVE, TURN or STAY"
+    }
+  ],
+  "message": "2 findings in 1 check. No machine chosen.",
+  "findings": []
+}

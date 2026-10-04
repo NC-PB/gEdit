@@ -1,0 +1,32 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 14,
+      "check": "Jump target",
+      "checkId": "jumpTargets",
+      "severity": "error",
+      "message": "G85 NAT02: no block NAT02 in this program"
+    }
+  ],
+  "message": "1 finding in 1 check. Machine 'Lathe 1': every number is read as written.",
+  "findings": []
+}

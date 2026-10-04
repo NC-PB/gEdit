@@ -95,6 +95,9 @@ def render(state: Dict[str, Any]) -> Dict[str, Any]:
         "activeCycle": cycle["code"] if cycle is not None else None,
         "definedCycle": state["definedCycle"]["code"] if state["definedCycle"] is not None else None,
         "modalCall": state["modalCall"]["code"] if state["modalCall"] is not None else None,
+        # P10 (rules 13 and 14): the frame in force and tool centre point control, by code.
+        "frame": state["frame"]["code"] if state["frame"] is not None else None,
+        "tcp": state["tcp"]["code"] if state["tcp"] is not None else None,
         "pitchFeedAmbiguous": state["pitchFeedAmbiguous"],
         "block": state["block"],
         "feed": state["feed"],
@@ -615,8 +618,22 @@ class TestTurningDialects(ModalTestCase):
         states = self.run_lines("sinumerik", ["M5", "M3=3", "M3"])
         self.assertEqual([state["groups"]["spindle"]["code"] for state in states], ["M5", "M5", "M3"])
 
-    def test_a_numbered_spindle_speed_is_not_the_speed_in_force(self) -> None:
-        states = self.run_lines("sinumerik", ["S500 M3", "S3=2400", "S1=900 M1=3"])
+    def test_a_numbered_spindle_speed_is_the_speed_in_force_only_for_the_main_spindle(self) -> None:
+        # M10 P10 (decision 3; the owner, 2026-09-27: "we consider S1= as main spindle"):
+        # `S1=` and `S[1]=` name spindle 1, the profile's `addresses.mainSpindle`, so they are
+        # the speed in force like the plain `S`; `S3=` and `S[2]=` stay other spindles'.
+        # Until M10 `S1=900` left the speed at 500.
+        states = self.run_lines("sinumerik", ["S500 M3", "S3=2400", "S1=900 M1=3", "S[2]=100", "S[1]=700", "G4 S1=3"])
+        self.assertEqual(
+            [state["speed"]["valueText"] for state in states], ["500", "500", "900", "900", "700", "700"]
+        )
+        # A dwell's revolutions are no speed, whichever way the spindle is named (rule 6).
+        self.assertTrue(states[5]["block"]["fNotFeed"])
+
+    def test_without_a_main_spindle_every_numbered_word_is_another_spindle(self) -> None:
+        profile = dict(helpers.effective_context("sinumerik")["profile"])
+        profile["addresses"] = {k: v for k, v in profile["addresses"].items() if k != "mainSpindle"}
+        states = self.walk(profile, TURNING_CODES, ["S500 M3", "S1=900", "S[1]=700"])
         self.assertEqual([state["speed"]["valueText"] for state in states], ["500", "500", "500"])
 
     def test_an_indexed_spindle_word_is_neither_the_speed_nor_the_clamp_nor_a_code(self) -> None:
@@ -1010,8 +1027,9 @@ class TestDefinedCycle(ModalTestCase):
         cycle = {code: (entry.get("sets") or {}).get("cycle") for code, entry in codes.items()}
         self.assertEqual(
             sorted(code for code, value in cycle.items() if value == "define"),
-            ["CYCL DEF 200", "CYCL DEF 201", "CYCL DEF 203", "CYCL DEF 205", "CYCL DEF 206", "CYCL DEF 207",
-             "CYCL DEF 209", "CYCL DEF 240"],
+            # M10 P10 added 202 (boring), 208 (bore milling) and 262 (thread milling).
+            ["CYCL DEF 200", "CYCL DEF 201", "CYCL DEF 202", "CYCL DEF 203", "CYCL DEF 205", "CYCL DEF 206",
+             "CYCL DEF 207", "CYCL DEF 208", "CYCL DEF 209", "CYCL DEF 240", "CYCL DEF 262"],
         )
         self.assertEqual(sorted(code for code, value in cycle.items() if value == "call"),
                          ["CYCL CALL", "CYCL CALL PAT", "CYCL CALL POS", "M99"])
@@ -1129,3 +1147,131 @@ class TestSinumerikProgramStart(unittest.TestCase):
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# M10 prelude (P10): the frame in force, tool centre point control and the tool-axis plane
+# (plan §7.4 rules 13-15, §7.16 #107-#109), on the shipped databases
+# ---------------------------------------------------------------------------
+
+
+class TestFramesAndTcp(ModalTestCase):
+    """What address arithmetic (WP10.4) and extents (WP10.3) read instead of code lists."""
+
+    def run_lines(self, profile_id: str, lines: Sequence[str]) -> List[Dict[str, Any]]:
+        context = helpers.effective_context(profile_id)
+        return self.walk(context["profile"], context["codes"], lines)
+
+    @staticmethod
+    def frames(states: Sequence[Dict[str, Any]]) -> List[Optional[str]]:
+        return [state["frame"]["code"] if state["frame"] is not None else None for state in states]
+
+    @staticmethod
+    def tcps(states: Sequence[Dict[str, Any]]) -> List[Optional[str]]:
+        return [state["tcp"]["code"] if state["tcp"] is not None else None for state in states]
+
+    def test_a_close_ends_the_frames_of_its_own_group_only(self) -> None:
+        # Rule 13. G69 ends the rotation, not the scaling of G51 (each family has its own
+        # group, P10); G50 ends the scaling. A second G68.2 replaces the first.
+        states = self.run_lines(
+            "fanuc-gcode",
+            ["G17 G90", "G51 X0 Y0 P2000", "G68 X0 Y0 R30", "G69", "G50", "G68.2 X0 Y0 Z0 I0 J45 K0", "G68.2 X0 Y0 Z0 I0 J30 K0", "G69"],
+        )
+        self.assertEqual(self.frames(states), [None, "G51", "G68", "G51", None, "G68.2", "G68.2", None])
+        self.assertEqual(states[2]["frame"]["line"], 3)
+        # The mirror and the polar interpolation are families of their own too.
+        states = self.run_lines("fanuc-gcode", ["G68.2 X0 Y0 Z0 I0 J45 K0", "G51.1 X0", "G69", "G50.1 X0", "G12.1", "G13.1"])
+        self.assertEqual(self.frames(states), ["G68.2", "G51.1", "G51.1", None, "G12.1", None])
+
+    def test_a_close_that_matches_nothing_leaves_the_frame_open(self) -> None:
+        # The safe reading: a spurious reset of another family does not end this one.
+        states = self.run_lines("fanuc-gcode", ["G51 X0 Y0 P2000", "G69", "G13.1"])
+        self.assertEqual(self.frames(states), ["G51", "G51", "G51"])
+
+    def test_klartext_plane_reset_ends_the_tilt_and_not_the_mirror(self) -> None:
+        # PLANE RESET resets a PLANE function and cycle 19 (TNC 640 user's manual), never the
+        # mirror of cycle 8; a second PLANE of another kind is in the same family.
+        states = self.run_lines(
+            "heidenhain-klartext",
+            ["CYCL DEF 8.0 MIRROR", "CYCL DEF 8.1 X", "PLANE SPATIAL SPA+0 SPB+45 SPC+0 TURN", "PLANE VECTOR BX0 BY0 BZ1 NX0 NY1 NZ0 STAY", "PLANE RESET STAY", "CYCL DEF 19.0 WORKING PLANE", "CYCL DEF 19.1 B+30", "PLANE RESET STAY"],
+        )
+        self.assertEqual(
+            self.frames(states),
+            ["CYCL DEF 8", "CYCL DEF 8", "PLANE SPATIAL", "PLANE VECTOR", "CYCL DEF 8", "CYCL DEF 19", "CYCL DEF 19", "CYCL DEF 8"],
+        )
+
+    def test_the_values_of_a_block_are_read_only_for_a_database_that_has_a_bare_frame_code(self) -> None:
+        # Rule 13 needs to know whether a block writes values only for the codes that close
+        # their frame when written without (Siemens `TRANS`, `CYCLE800()`). Any other
+        # database never asks, and no block should pay for the walk.
+        fanuc = helpers.effective_context("fanuc-gcode")
+        cp = gedit_nc.compile_profile(fanuc["profile"])
+        interp = gedit_nc.ModalInterpreter(cp, fanuc["codes"])
+        tokens, _ = gedit_nc.tokenize_line("G1 X10. Y20. F100.", cp, None)
+        interp.update(tokens, 1, "G1 X10. Y20. F100.")
+        self.assertFalse(interp._block_values)
+        self.assertEqual(interp._calls_bare, {})
+
+        siemens = helpers.effective_context("sinumerik-mill")
+        cp = gedit_nc.compile_profile(siemens["profile"])
+        interp = gedit_nc.ModalInterpreter(cp, siemens["codes"])
+        tokens, _ = gedit_nc.tokenize_line("G1 X10 Y20 F100", cp, None)
+        interp.update(tokens, 1, "G1 X10 Y20 F100")
+        self.assertTrue(interp._block_values)
+
+    def test_a_siemens_frame_code_without_values_closes_its_group(self) -> None:
+        # CYCLE800() clears the swivel frames and TRANS alone the programmable frame (the
+        # Siemens programming manual); with any value they open, as before.
+        states = self.run_lines(
+            "sinumerik-mill",
+            ["G17", 'CYCLE800(1,"",0,57,0,0,0,30,0,0,0,0,0,-1,100,1)', "ROT RPL=45", "CYCLE800()", "TRANS X10", "TRANS", "ROT", "SCALE X2 Y2", "G0 SCALE", "MIRROR X0", "N10 MIRROR"],
+        )
+        self.assertEqual(
+            self.frames(states),
+            [None, "CYCLE800", "ROT", "ROT", "ROT", None, None, "SCALE", None, "MIRROR", None],
+        )
+        self.assertEqual([f["code"] for f in self.open_frames("sinumerik-mill", ['CYCLE800(1,"",0,57,0,0,0,30,0,0,0,0,0,-1,100,1)', "ROT RPL=45", "CYCLE800()"])], ["ROT"])
+
+    def open_frames(self, profile_id: str, lines: Sequence[str]) -> List[Dict[str, Any]]:
+        context = helpers.effective_context(profile_id)
+        cp = gedit_nc.compile_profile(context["profile"])
+        interp = gedit_nc.ModalInterpreter(cp, context["codes"])
+        state = None
+        for number, line in enumerate(lines, 1):
+            tokens, state = gedit_nc.tokenize_line(line, cp, state)
+            interp.update(tokens, number, gedit_nc.mask_comments(line, cp))
+        return interp.open_frames
+
+    def test_traori_is_tool_centre_point_control_and_trafoof_ends_both(self) -> None:
+        # Decision 2 (2026-10-04): TRAORI opens no frame; TRAFOOF still ends TRANSMIT.
+        states = self.run_lines("sinumerik-mill", ["TRAORI", "G1 X10 A10 C20 F1000", "TRANSMIT", "TRAFOOF", 'CYCLE800(1,"",0,57,0,0,0,30,0,0,0,0,0,-1,100,1)', "TRAORI", "TRAFOOF"])
+        self.assertEqual(self.tcps(states), ["TRAORI", "TRAORI", "TRAORI", None, None, "TRAORI", None])
+        self.assertEqual(self.frames(states), [None, None, "TRANSMIT", None, "CYCLE800", "CYCLE800", "CYCLE800"])
+
+    def test_tcp_ends_with_its_off_code_or_another_code_of_its_group(self) -> None:
+        # Rule 14. G43 replaces G43.4 in the length-offset group on the control, so tool
+        # centre point control is off after it, not on.
+        states = self.run_lines("fanuc-gcode", ["G43.4 H1", "G1 X10 A10 F500", "G43 H1", "G43.5 H2", "G49", "G43.4 H1", "G40"])
+        self.assertEqual(self.tcps(states), ["G43.4", "G43.4", None, "G43.5", None, "G43.4", "G43.4"])
+        states = self.run_lines("heidenhain-klartext", ["M128", "M129", "FUNCTION TCPM F TCP AXIS POS PATHCTRL AXIS", "M129", "M128", "FUNCTION RESET TCPM"])
+        self.assertEqual(self.tcps(states), ["M128", None, "FUNCTION TCPM", None, "M128", None])
+
+    def test_tcp_is_off_at_power_on_and_on_a_lathe_never_on(self) -> None:
+        self.assertIsNone(self.run_lines("fanuc-gcode", ["G0 X0"])[0]["tcp"])
+        # The lathe database has neither G43.4 nor G49 (no length offset on a turret lathe).
+        self.assertIsNone(self.run_lines("fanuc-lathe", ["G43.4 H1", "G1 X10 C20 F0.2"])[1]["tcp"])
+
+    def test_the_klartext_tool_axis_names_the_plane(self) -> None:
+        # Rule 15. TOOL CALL carries the tool axis as a bare letter; a call without one keeps
+        # the plane, and a parallel axis leaves it unknown rather than guessed.
+        states = self.run_lines(
+            "heidenhain-klartext",
+            ["TOOL CALL 1 Z S3000", "TOOL CALL S5000", "TOOL CALL 2 Y S2000", "TOOL CALL \"MILL\" X", "TOOL CALL 3 W", "TOOL CALL 4 Z"],
+        )
+        self.assertEqual([state["plane"] for state in states], ["XY", "XY", "ZX", "YZ", "unknown", "XY"])
+        # Nothing else does: a positioning block with a Z word is no tool axis.
+        self.assertEqual(self.run_lines("heidenhain-klartext", ["L Z+100 R0 FMAX"])[0]["plane"], "unknown")
+
+    def test_an_iso_plane_code_still_decides_there(self) -> None:
+        states = self.run_lines("fanuc-gcode", ["G17", "G18", "G19"])
+        self.assertEqual([state["plane"] for state in states], ["XY", "ZX", "YZ"])

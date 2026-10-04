@@ -53,9 +53,13 @@ const AXIS_WORDS = {
   data: ['AMIRROR', 'AROT', 'ASCALE', 'ATRANS', 'G25', 'G26', 'MIRROR', 'ROT', 'SCALE', 'TRANS'],
 };
 const FRAME = {
-  open: ['AMIRROR', 'AROT', 'ASCALE', 'CYCLE800', 'MIRROR', 'ROT', 'SCALE', 'TRAANG', 'TRACYL', 'TRANSMIT', 'TRAORI'],
+  // P10 (decision of 2026-10-04): TRAORI is tool centre point control, not a frame; TRAFOOF
+  // keeps its close for TRANSMIT, TRACYL and TRAANG.
+  open: ['AMIRROR', 'AROT', 'ASCALE', 'CYCLE800', 'MIRROR', 'ROT', 'SCALE', 'TRAANG', 'TRACYL', 'TRANSMIT'],
   close: ['TRAFOOF'],
 };
+/** P10: the codes that switch tool centre point control (`sets.tcp`). */
+const TCP = { on: ['TRAORI'], off: ['TRAFOOF'] };
 
 describe('the milling and 5-axis entries', () => {
   it('load without a problem, the flags included', () => {
@@ -78,7 +82,9 @@ describe('the milling and 5-axis entries', () => {
     // programming manual's (06/2019), so none is held back from hover.
     for (const code of MILLING) {
       const e = entry(code);
-      expect(e?.sets, code).toBeUndefined();
+      // P10: tool centre point control is the one thing two of them switch.
+      const tcp = TCP.on.includes(code) ? { tcp: 'on' } : TCP.off.includes(code) ? { tcp: 'off' } : undefined;
+      expect(e?.sets, code).toEqual(tcp);
       expect(e?.verify, code).toBeUndefined();
       expect(e?.modal, code).toBeUndefined();
       expect(e?.pitchFeed, code).toBeUndefined();
@@ -86,7 +92,9 @@ describe('the milling and 5-axis entries', () => {
     }
     expect(entry('G74')?.group).toBe('nonmodal');
     expect(entry('G75')?.group).toBe('nonmodal');
-    expect(entry('CYCLE800')?.group).toBe('frame');
+    // P10: the swivel is a tilted working plane of its own group, so CYCLE800() ends it and
+    // nothing of the programmable frame (§7.4 rule 13).
+    expect(entry('CYCLE800')?.group).toBe('tilt');
   });
 });
 

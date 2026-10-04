@@ -1,0 +1,20 @@
+{
+  "note": "The mark stands behind the block number; a continuation tail belongs to its block and gets none; BEGIN PGM opens the program and END PGM closes it (program.endRecord): both are listed and left.",
+  "profile": "heidenhain-klartext",
+  "mode": "add",
+  "options": {},
+  "expect": {
+    "summary": "ncBlockSkip.addRun.summary",
+    "skipped": [
+      {
+        "line": 1,
+        "severity": "info"
+      },
+      {
+        "line": 7,
+        "severity": "info"
+      }
+    ],
+    "warnings": []
+  }
+}

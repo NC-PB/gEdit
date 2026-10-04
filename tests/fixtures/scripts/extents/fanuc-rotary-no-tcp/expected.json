@@ -1,0 +1,230 @@
+{
+  "title": "Extents",
+  "columns": [
+    {
+      "key": "where",
+      "label": "Where"
+    },
+    {
+      "key": "axis",
+      "label": "Axis"
+    },
+    {
+      "key": "min",
+      "label": "Min"
+    },
+    {
+      "key": "minLine",
+      "label": "At line"
+    },
+    {
+      "key": "max",
+      "label": "Max"
+    },
+    {
+      "key": "maxLine",
+      "label": "At line"
+    },
+    {
+      "key": "unresolved",
+      "label": "Not resolved"
+    }
+  ],
+  "rows": [
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "X",
+      "axisId": "X",
+      "min": "5",
+      "minLine": 15,
+      "max": "5",
+      "maxLine": 15,
+      "unresolved": 2,
+      "line": 15
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "0",
+      "minLine": 9,
+      "max": "5",
+      "maxLine": 15,
+      "unresolved": 1,
+      "line": 15
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-1",
+      "minLine": 13,
+      "max": "50",
+      "maxLine": 12,
+      "unresolved": 4,
+      "line": 12
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "B",
+      "axisId": "B",
+      "min": "0",
+      "minLine": 11,
+      "max": "90",
+      "maxLine": 8,
+      "unresolved": 0,
+      "line": 8
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "C",
+      "axisId": "C",
+      "min": "0",
+      "minLine": 8,
+      "max": "30",
+      "maxLine": 11,
+      "unresolved": 0,
+      "line": 11
+    },
+    {
+      "where": "G54 (line 5)",
+      "scope": "offset",
+      "axis": "X",
+      "axisId": "X",
+      "min": "5",
+      "minLine": 15,
+      "max": "5",
+      "maxLine": 15,
+      "unresolved": 2,
+      "line": 15
+    },
+    {
+      "where": "G54 (line 5)",
+      "scope": "offset",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "0",
+      "minLine": 9,
+      "max": "5",
+      "maxLine": 15,
+      "unresolved": 1,
+      "line": 15
+    },
+    {
+      "where": "G54 (line 5)",
+      "scope": "offset",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-1",
+      "minLine": 13,
+      "max": "50",
+      "maxLine": 12,
+      "unresolved": 4,
+      "line": 12
+    },
+    {
+      "where": "G54 (line 5)",
+      "scope": "offset",
+      "axis": "B",
+      "axisId": "B",
+      "min": "0",
+      "minLine": 11,
+      "max": "90",
+      "maxLine": 8,
+      "unresolved": 0,
+      "line": 8
+    },
+    {
+      "where": "G54 (line 5)",
+      "scope": "offset",
+      "axis": "C",
+      "axisId": "C",
+      "min": "0",
+      "minLine": 8,
+      "max": "30",
+      "maxLine": 11,
+      "unresolved": 0,
+      "line": 11
+    },
+    {
+      "where": "G54, T1 (line 6)",
+      "scope": "tool",
+      "axis": "X",
+      "axisId": "X",
+      "min": "5",
+      "minLine": 15,
+      "max": "5",
+      "maxLine": 15,
+      "unresolved": 2,
+      "line": 15
+    },
+    {
+      "where": "G54, T1 (line 6)",
+      "scope": "tool",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "0",
+      "minLine": 9,
+      "max": "5",
+      "maxLine": 15,
+      "unresolved": 1,
+      "line": 15
+    },
+    {
+      "where": "G54, T1 (line 6)",
+      "scope": "tool",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-1",
+      "minLine": 13,
+      "max": "50",
+      "maxLine": 12,
+      "unresolved": 4,
+      "line": 12
+    },
+    {
+      "where": "G54, T1 (line 6)",
+      "scope": "tool",
+      "axis": "B",
+      "axisId": "B",
+      "min": "0",
+      "minLine": 11,
+      "max": "90",
+      "maxLine": 8,
+      "unresolved": 0,
+      "line": 8
+    },
+    {
+      "where": "G54, T1 (line 6)",
+      "scope": "tool",
+      "axis": "C",
+      "axisId": "C",
+      "min": "0",
+      "minLine": 8,
+      "max": "30",
+      "maxLine": 11,
+      "unresolved": 0,
+      "line": 11
+    }
+  ],
+  "message": "No machine: readings assumed from the profile defaults, and a word whose reading depends on the machine is not resolved. 7 positions not resolved; the findings say why.",
+  "findings": [
+    {
+      "line": 7,
+      "severity": "warning",
+      "message": "5 positions, first Z (line 7), written while B stood turned (or at an angle that is not known) and tool centre point control was off: they are positions of the machine's axes, not of the workpiece, so they are not resolved.",
+      "reason": "rotary"
+    },
+    {
+      "line": 12,
+      "severity": "warning",
+      "message": "2 positions, first X (line 12), written while C stood turned (or at an angle that is not known) and tool centre point control was off: they are positions of the machine's axes, not of the workpiece, so they are not resolved.",
+      "reason": "rotary"
+    }
+  ]
+}

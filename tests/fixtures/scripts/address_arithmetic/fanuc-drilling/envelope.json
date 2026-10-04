@@ -1,0 +1,71 @@
+{
+  "message": "Added 0.5 to Z in 5 words on 4 blocks, 2 of them cycle positions. Left 8 blocks and 3 words as written: 1 under a code the database does not know, 2 machine positions, 2 inside a frame, 1 cycle not reviewed, 2 cycles with a variable position, 2 incremental words, 1 variable or expression. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 11,
+      "severity": "warning",
+      "message": "G83 X40. Y40. Z-8. R2. Q2. F100.: part of the same cycle as line 12, which is left as written (a variable position).",
+      "reason": "cycle-expression"
+    },
+    {
+      "line": 12,
+      "severity": "warning",
+      "message": "X50. Y40. Z#101: Z#101 cannot be moved (a variable or an expression, which this script does not compute), so the cycle cannot be moved in one piece.",
+      "reason": "cycle-expression"
+    },
+    {
+      "line": 14,
+      "severity": "info",
+      "message": "Z-7.: the distance mode is incremental here, so a shift does not apply to it.",
+      "reason": "incremental"
+    },
+    {
+      "line": 14,
+      "severity": "info",
+      "message": "R-48.: the distance mode is incremental here, so a shift does not apply to it.",
+      "reason": "incremental"
+    },
+    {
+      "line": 16,
+      "severity": "warning",
+      "message": "G53 Z0.: a machine position (G53): its positions are not in the program's coordinates, so a shift of the program does not apply to them.",
+      "reason": "machine-position"
+    },
+    {
+      "line": 17,
+      "severity": "warning",
+      "message": "G28 G91 Z0.: a machine position (G28): its positions are not in the program's coordinates, so a shift of the program does not apply to them.",
+      "reason": "machine-position"
+    },
+    {
+      "line": 18,
+      "severity": "warning",
+      "message": "G90 G68 X0. Y0. R30.: opens a coordinate frame (G68): what a shift of the program's coordinates does there cannot be judged.",
+      "reason": "frame"
+    },
+    {
+      "line": 19,
+      "severity": "warning",
+      "message": "G1 Z-1. F300.: inside the coordinate frame of G68 (line 18): what a shift of the program's coordinates does there cannot be judged.",
+      "reason": "frame"
+    },
+    {
+      "line": 22,
+      "severity": "warning",
+      "message": "G100 Z-3.: G100 is not in the code database, and a code nobody described may be a machine position or a frame.",
+      "reason": "unknown-code"
+    },
+    {
+      "line": 23,
+      "severity": "warning",
+      "message": "G65 P9001 Z5.: G65 runs another program and hands it Z5., which may be a position of this program that nobody described.",
+      "reason": "cycle-not-reviewed"
+    },
+    {
+      "line": 24,
+      "severity": "info",
+      "message": "Z[#1+2.]: a variable or an expression, which this script does not compute.",
+      "reason": "expression"
+    }
+  ]
+}

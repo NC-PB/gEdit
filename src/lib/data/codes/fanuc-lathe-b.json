@@ -8,6 +8,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "sets": { "motion": "feed" },
       "label": "Thread cutting pass",
       "description": "Cuts one straight or tapered threading pass to the end point in the block. F is the thread lead per revolution, not a feed rate, so scaling the feed would change the thread. G-code system A spells this G32.",
       "params": [
@@ -41,6 +42,7 @@
       "code": "G77",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "feed" },
       "label": "Turning pass",
       "description": "Cuts one outside or inside turning pass, straight or tapered, and returns to the start point. It belongs to the motion group, so the next G00 or G01 ends it. G-code system A spells this G90.",
       "params": [
@@ -68,6 +70,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "sets": { "motion": "feed" },
       "label": "Threading pass as a cycle",
       "description": "Cuts one threading pass, straight or tapered, and returns to the start point, so a thread is written as a list of X values. F is the thread lead per revolution, not a feed rate. G-code system A spells this G92.",
       "params": [
@@ -96,6 +99,7 @@
       "code": "G79",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "feed" },
       "label": "Facing pass",
       "description": "Cuts one facing pass, square or tapered, and returns to the start point. It belongs to the motion group, so the next G00 or G01 ends it. G-code system A spells this G94.",
       "params": [
@@ -140,6 +144,7 @@
       "pitchFeedAmbiguous": true,
       "sets": { "speedLimit": true },
       "axisWords": "data",
+      "shift": true,
       "label": "Coordinate set, top spindle speed",
       "description": "Sets the coordinate system without moving. With an S word it gives the highest spindle speed the control may use for constant surface speed; write it in a block of its own in front of G96. G-code system A uses G50 for this and reads G92 as the single-pass threading cycle, whose F is the thread lead — so gEdit will not scale the F of such a block here either: a program posted for system A and opened with a system-B machine would otherwise have its thread leads multiplied in silence."
     },

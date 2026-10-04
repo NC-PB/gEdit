@@ -1,0 +1,95 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 3,
+      "check": "Program name",
+      "checkId": "programNameBlock",
+      "severity": "error",
+      "message": "O1234 G50: the program name has to stand in a block of its own"
+    },
+    {
+      "line": 4,
+      "check": "Sequence name",
+      "checkId": "sequenceSeparator",
+      "severity": "error",
+      "message": "N100G00: the sequence name has to be followed by a space or a tab"
+    },
+    {
+      "line": 7,
+      "check": "Words in a block",
+      "checkId": "blockWords",
+      "severity": "error",
+      "message": "G96 S180 M03 S200: 2 S words in one block"
+    },
+    {
+      "line": 8,
+      "check": "Missing word",
+      "checkId": "requiredWords",
+      "severity": "error",
+      "message": "G97: the block has to write S"
+    },
+    {
+      "line": 10,
+      "check": "Alone in its block",
+      "checkId": "aloneInBlock",
+      "severity": "error",
+      "message": "M110: has to stand in a block of its own; the block writes M08 besides it"
+    },
+    {
+      "line": 11,
+      "check": "Words in a block",
+      "checkId": "blockWords",
+      "severity": "error",
+      "message": "T0101 T0202: 2 T words in one block"
+    },
+    {
+      "line": 12,
+      "check": "Words in a block",
+      "checkId": "blockWords",
+      "severity": "error",
+      "message": "M3 M8 M10 M11 M12 M13 M14 M15 M16: 9 M codes in one block; the control takes at most 8"
+    },
+    {
+      "line": 14,
+      "check": "Refused in this state",
+      "checkId": "stateConflicts",
+      "severity": "warning",
+      "message": "G140: the control refuses it while constant surface speed is on"
+    },
+    {
+      "line": 18,
+      "check": "Tool word",
+      "checkId": "toolWordFormat",
+      "severity": "warning",
+      "message": "T010202: a 6-digit tool word after 4-digit ones (line 6); one file should keep to one form"
+    },
+    {
+      "line": 19,
+      "check": "Tool word",
+      "checkId": "toolWordFormat",
+      "severity": "warning",
+      "message": "T12345: not a tool word this machine's tool-word format describes (5 digits)"
+    }
+  ],
+  "message": "10 findings in 7 checks. Machine 'Lathe 1': every number is read as written.",
+  "findings": []
+}

@@ -1,0 +1,13 @@
+{
+  "note": "\"Plain\" is the switch the bare mark answers to, which on Fanuc is BDT1: / and /1 are one level (plainLevel '1'), so both go.",
+  "profile": "fanuc-gcode",
+  "mode": "remove",
+  "options": {
+    "level": "plain"
+  },
+  "expect": {
+    "summary": "ncBlockSkip.removeRun.summary",
+    "skipped": [],
+    "warnings": []
+  }
+}

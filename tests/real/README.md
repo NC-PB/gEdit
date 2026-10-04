@@ -97,10 +97,13 @@ the bundled scripts are started the way the app starts them:
 | `roundTrip` | reading and writing the file gives back the same bytes: line endings, encoding, a byte-order mark and a NUL leader included (a file that mixes line endings does not: the editor writes one) |
 | `scaleFeed` | scale feed at 100 % gives back every byte of the program |
 | `scaleSpeed` | scale speed at 100 % gives back every byte of the program |
+| `programChecks` | M10: the program checks (every check on) end with a well-formed report, every row carrying its `checkId`. A finding is **not** a failure; the counts of findings by check go on their own line (below) so that a check that fires on most correct programs shows |
+| `extents` | M10: the extents end with a report whose rows are an array |
+| `addressArithmetic` | M10: address arithmetic adding 0 to `Z` gives back every byte of the program |
 | `noCrash` | nothing above threw or timed out, the file is there, and the machine the entry names exists |
 
-`toolList`, `scaleFeed` and `scaleSpeed` need Python 3.9 or newer: `GEDIT_PYTHON` names
-the interpreter, else `python3` (`python` on Windows) is used. Without one, the three are
+`toolList`, `scaleFeed`, `scaleSpeed` and the three M10 checks need Python 3.9 or newer:
+`GEDIT_PYTHON` names the interpreter, else `python3` (`python` on Windows) is used. Without one, they are
 counted as skipped, never as passed, and the report says why. A file the app refuses to
 open (binary) fails `roundTrip` and skips everything else; a missing file fails `noCrash`.
 
@@ -119,10 +122,17 @@ G11 toolList       12 pass   0 fail   0 known
 G11 roundTrip      12 pass   0 fail   0 known
 G11 scaleFeed      12 pass   0 fail   0 known
 G11 scaleSpeed     12 pass   0 fail   0 known
+G11 programChecks  12 pass   0 fail   0 known
+G11 extents        12 pass   0 fail   0 known
+G11 addressArithmetic 12 pass   0 fail   0 known
 G11 noCrash        12 pass   0 fail
 G11 failures: detection #3; unknownTokens #1:40 #7:212
 G11 no longer a gap: (none)
+G11 programChecks findings: stops 40 in 6; machineReading 12 in 3; spindleOff 2 in 2
 ```
+
+The last line counts the program checks' rows by check id and the programs they came in. It
+is not a pass or a fail: it is how you see a check that fires on most of your correct programs.
 
 (An example of the shape, not a result.) The Python half prints the same lines for
 `unknownTokens` and `noCrash`, each starting with `G11 (Python)`; the two must name the

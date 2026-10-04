@@ -108,6 +108,7 @@
       "code": "G0",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "rapid" },
       "label": "Rapid positioning",
       "description": "Moves to the target at rapid speed. The axes are not interpolated, so the path can bend."
     },
@@ -115,6 +116,7 @@
       "code": "G1",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "feed" },
       "label": "Linear feed move",
       "description": "Straight move to the target at the active feed."
     },
@@ -122,6 +124,7 @@
       "code": "G2",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "feed" },
       "label": "Circular move, clockwise",
       "description": "Arc to the target in the active plane, turning clockwise. The centre comes from I, J and K measured from the arc start, or from a radius R."
     },
@@ -129,6 +132,7 @@
       "code": "G3",
       "group": "motion",
       "modal": true,
+      "sets": { "motion": "feed" },
       "label": "Circular move, counter-clockwise",
       "description": "Arc to the target in the active plane, turning counter-clockwise. The centre comes from I, J and K measured from the arc start, or from a radius R."
     },
@@ -175,7 +179,7 @@
     {
       "code": "G7.1",
       "aliases": ["G107"],
-      "group": "frame",
+      "group": "cylindrical",
       "axisWords": "data",
       "frame": "open",
       "label": "Cylindrical interpolation",
@@ -191,6 +195,7 @@
       "code": "G10",
       "group": "nonmodal",
       "wordsAreData": true,
+      "shift": true,
       "label": "Data setting",
       "description": "Writes a tool offset, a work coordinate system or a parameter from the program: L says which table, P which entry. The other words of the block are the values written there, not a move, a feed or a speed.",
       "params": [
@@ -201,7 +206,7 @@
     {
       "code": "G12.1",
       "aliases": ["G112"],
-      "group": "frame",
+      "group": "polar",
       "axisWords": "data",
       "frame": "open",
       "label": "Polar coordinate interpolation on",
@@ -210,10 +215,26 @@
     {
       "code": "G13.1",
       "aliases": ["G113"],
-      "group": "frame",
+      "group": "polar",
       "frame": "close",
       "label": "Polar coordinate interpolation off",
       "description": "Ends the polar coordinate interpolation that G12.1 started and gives back the plane that was selected before it."
+    },
+    {
+      "code": "G15",
+      "group": "polarCommand",
+      "modal": true,
+      "frame": "close",
+      "label": "Polar coordinate command off",
+      "description": "Ends the polar coordinate command of G16: the axis words of the plane are coordinates again."
+    },
+    {
+      "code": "G16",
+      "group": "polarCommand",
+      "modal": true,
+      "frame": "open",
+      "label": "Polar coordinate command",
+      "description": "From here on, until G15, the end point of a move is given in polar form in the selected plane: the word of the first axis of the plane is the radius, the word of the second the angle, counter-clockwise from the first axis. Under G90 the radius is measured from the zero point of the work coordinate system (of a G52 local system, where one is set), under G91 from the current position."
     },
     {
       "code": "G17",
@@ -259,6 +280,7 @@
       "code": "G28",
       "group": "nonmodal",
       "axisWords": "machine",
+      "conflicts": ["tcp"],
       "label": "Return to the reference point",
       "description": "Moves to the machine reference point by way of the intermediate point written in the block."
     },
@@ -266,6 +288,7 @@
       "code": "G30",
       "group": "nonmodal",
       "axisWords": "machine",
+      "conflicts": ["tcp"],
       "label": "Return to the second, third or fourth reference point",
       "description": "Moves to a further reference point, often the tool change position, by way of the intermediate point written in the block. P says which point; without it the second is meant.",
       "params": [
@@ -277,6 +300,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "sets": { "motion": "feed" },
       "label": "Thread cutting pass",
       "description": "One straight threading pass on a lathe in G-code system A. F carries the thread lead per revolution, not a feed rate, so scaling the feed would change the thread.",
       "params": [
@@ -288,6 +312,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "sets": { "motion": "feed" },
       "label": "Thread cutting pass",
       "description": "One straight threading pass; this is how G-code systems B and C spell G32. F carries the thread lead per revolution, not a feed rate.",
       "params": [
@@ -299,6 +324,7 @@
       "group": "motion",
       "modal": true,
       "pitchFeed": true,
+      "sets": { "motion": "feed" },
       "label": "Thread cutting with a variable lead",
       "description": "Cuts a thread whose lead grows or shrinks by K with every spindle revolution. F is the lead at the start point, not a feed rate, so scaling the feed would change the thread.",
       "params": [
@@ -319,6 +345,7 @@
       "code": "G40",
       "group": "compensation",
       "modal": true,
+      "sets": { "radiusComp": "off" },
       "label": "Cancel cutter radius compensation",
       "description": "Turns radius compensation off. Do it during a retract move, not in an arc."
     },
@@ -326,6 +353,7 @@
       "code": "G41",
       "group": "compensation",
       "modal": true,
+      "sets": { "radiusComp": "on" },
       "label": "Cutter radius compensation, left",
       "description": "Offsets the path by the tool radius to the left of the direction of travel. Mills take the radius from the register D, lathes from the tool offset. Switch it on during an approach move.",
       "params": [
@@ -339,6 +367,7 @@
       "code": "G42",
       "group": "compensation",
       "modal": true,
+      "sets": { "radiusComp": "on" },
       "label": "Cutter radius compensation, right",
       "description": "Offsets the path by the tool radius to the right of the direction of travel. Mills take the radius from the register D, lathes from the tool offset. Switch it on during an approach move.",
       "params": [
@@ -352,6 +381,7 @@
       "code": "G43",
       "group": "lengthComp",
       "modal": true,
+      "sets": { "lengthComp": "on" },
       "label": "Tool length offset",
       "description": "Applies the tool length from the offset register named by H while moving in the tool axis.",
       "params": [
@@ -371,6 +401,8 @@
       "code": "G43.4",
       "group": "lengthComp",
       "modal": true,
+      "sets": { "tcp": "on", "lengthComp": "on" },
+      "conflicts": ["cycle", "surfaceSpeed", "feedNotPerMinute", "frame:frame", "frame:polar", "frame:cylindrical"],
       "label": "Tool centre point control, by rotary positions",
       "description": "Keeps the tool tip on the programmed path while the rotary axes move; the block writes the end positions of the rotary axes and the length offset register H. The move of this block itself only applies the length offset, and the control starts after it. G49 ends it.",
       "params": [
@@ -381,6 +413,8 @@
       "code": "G43.5",
       "group": "lengthComp",
       "modal": true,
+      "sets": { "tcp": "on", "lengthComp": "on" },
+      "conflicts": ["cycle", "surfaceSpeed", "feedNotPerMinute", "frame:frame", "frame:polar", "frame:cylindrical"],
       "label": "Tool centre point control, by tool direction",
       "description": "Keeps the tool tip on the programmed path while the tool tilts; the block writes the direction of the tool axis as I, J and K instead of rotary positions, and the length offset register H. The move of this block itself only applies the length offset, and the control starts after it. G49 ends it.",
       "params": [
@@ -395,6 +429,7 @@
       "code": "G44",
       "group": "lengthComp",
       "modal": true,
+      "sets": { "lengthComp": "on" },
       "label": "Tool length offset, negative",
       "description": "Applies the tool length from the offset register named by H the other way round than G43. CAM output normally writes G43.",
       "params": [
@@ -414,12 +449,13 @@
       "code": "G49",
       "group": "lengthComp",
       "modal": true,
+      "sets": { "tcp": "off", "lengthComp": "off" },
       "label": "Cancel tool length offset",
       "description": "Drops the active tool length offset. It also ends tool centre point control (G43.4, G43.5). It is part of the usual safe-start block."
     },
     {
       "code": "G50",
-      "group": "nonmodal",
+      "group": "scaling",
       "sets": { "speedLimit": true },
       "axisWords": "data",
       "frame": "close",
@@ -428,7 +464,7 @@
     },
     {
       "code": "G50.1",
-      "group": "frame",
+      "group": "mirror",
       "axisWords": "data",
       "frame": "close",
       "label": "Programmable mirror image off",
@@ -436,7 +472,7 @@
     },
     {
       "code": "G51",
-      "group": "frame",
+      "group": "scaling",
       "axisWords": "data",
       "frame": "open",
       "label": "Scaling",
@@ -450,7 +486,7 @@
     },
     {
       "code": "G51.1",
-      "group": "frame",
+      "group": "mirror",
       "axisWords": "data",
       "frame": "open",
       "label": "Programmable mirror image",
@@ -460,6 +496,7 @@
       "code": "G52",
       "group": "nonmodal",
       "axisWords": "data",
+      "shift": true,
       "label": "Local coordinate system",
       "description": "Sets a local coordinate system inside the active work offset. The axis words give where its zero lies, so they are a shift and not a move; G52 with every axis at zero ends it."
     },
@@ -467,12 +504,15 @@
       "code": "G53",
       "group": "nonmodal",
       "axisWords": "machine",
+      "conflicts": ["tcp"],
       "label": "Machine coordinates for this block",
       "description": "Reads the positions of this block in machine coordinates instead of the work offset. It needs absolute values and is often used to move to a tool change position."
     },
     {
       "code": "G53.1",
       "group": "nonmodal",
+      "conflicts": ["!frame:frame"],
+      "alone": true,
       "label": "Turn the tool axis to the tilted plane",
       "description": "Write it alone in the block after G68.2 or G68.4: the rotary axes move so that the tool stands at right angles to the tilted plane."
     },
@@ -567,6 +607,8 @@
       "code": "G65",
       "group": "nonmodal",
       "wordsAreData": true,
+      "call": true,
+      "alone": true,
       "label": "Macro call",
       "description": "Runs the macro program P once. The other words of the block are its arguments, handed over as local variables, not moves, feeds or speeds of this program.",
       "params": [
@@ -610,6 +652,7 @@
       "group": "frame",
       "axisWords": "data",
       "frame": "open",
+      "conflicts": ["tcp"],
       "label": "Coordinate system rotation",
       "description": "Turns the coordinate system. In the selected plane the axis words give the centre of the rotation and R the angle; with I, J and K it is a three-dimensional rotation about that direction. G69 ends it. On a lathe with two turrets the same number is a mirror image instead.",
       "params": [
@@ -624,6 +667,7 @@
       "group": "frame",
       "axisWords": "data",
       "frame": "open",
+      "conflicts": ["tcp", "radiusComp", "lengthComp", "cycle", "surfaceSpeed", "frame:frame", "frame:mirror", "frame:scaling", "frame:polar", "frame:cylindrical"],
       "label": "Tilted working plane",
       "description": "Defines a coordinate system tilted against the workpiece and makes it the one the program is written in. X, Y and Z give its origin; I, J and K give the three Euler angles, or with P another way to define the plane (P1 roll-pitch-yaw angles with Q as the order of the turns, P2 three points, P3 two vectors, P4 projection angles). G69 ends it. G53.1 in the next block turns the rotary axes to the new tool direction.",
       "params": [
@@ -640,6 +684,7 @@
       "group": "frame",
       "axisWords": "data",
       "frame": "open",
+      "conflicts": ["tcp", "radiusComp", "lengthComp", "cycle", "surfaceSpeed", "frame:frame", "frame:mirror", "frame:scaling", "frame:polar", "frame:cylindrical"],
       "label": "Tilted working plane from the tool direction",
       "description": "Makes the coordinate system whose Z axis is the present direction of the tool the one the program is written in. X, Y and Z give its origin in absolute values (the present position when left out); R turns it about its Z axis. G69 ends it.",
       "params": [
@@ -651,6 +696,7 @@
       "group": "frame",
       "axisWords": "data",
       "frame": "open",
+      "conflicts": ["tcp", "radiusComp", "lengthComp", "cycle", "surfaceSpeed", "frame:frame", "frame:mirror", "frame:scaling", "frame:polar", "frame:cylindrical"],
       "label": "Tilted working plane, added to the one in force",
       "description": "Tilts again, relative to the tilted plane that is in force. It is written like G68.2 (P chooses the form), and its origin is given in the coordinates of that plane. Tool length and radius compensation must be off. G69 ends it.",
       "params": [
@@ -681,6 +727,7 @@
       "group": "cycle",
       "modal": true,
       "sets": { "cycle": "start" },
+      "conflicts": ["tcp"],
       "label": "Peck drilling cycle with chip break",
       "description": "Drills in steps of Q and pulls back only a short way between the steps to break the chip. On lathes in G-code system A, G73 repeats a profile for a pre-shaped blank instead.",
       "params": [
@@ -700,25 +747,29 @@
         {
           "address": "R",
           "label": "Retract plane",
-          "required": true
+          "required": true,
+          "position": "tool-axis"
         },
         {
           "address": "Q",
           "label": "Peck depth",
           "required": true,
-          "min": 0
+          "min": 0,
+          "position": "none"
         },
         {
           "address": "F",
           "label": "Drilling feed",
           "required": true,
-          "min": 0
+          "min": 0,
+          "position": "none"
         },
         {
           "address": "K",
           "label": "Repeat count",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         }
       ]
     },
@@ -729,6 +780,7 @@
       "pitchFeed": true,
       "tapping": true,
       "sets": { "cycle": "start" },
+      "conflicts": ["tcp"],
       "label": "Left-hand tapping cycle",
       "description": "Cuts a left-hand thread: the spindle turns back at the bottom of the hole. F carries the pitch, so scaling the feed would change the thread. On lathes in G-code system A, G74 is a face pecking or grooving cycle instead.",
       "params": [
@@ -748,25 +800,29 @@
         {
           "address": "R",
           "label": "Retract plane",
-          "required": true
+          "required": true,
+          "position": "tool-axis"
         },
         {
           "address": "F",
           "label": "Feed from the thread pitch",
           "required": true,
-          "min": 0
+          "min": 0,
+          "position": "none"
         },
         {
           "address": "P",
           "label": "Dwell at the bottom in milliseconds",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         },
         {
           "address": "K",
           "label": "Repeat count",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         }
       ]
     },
@@ -776,6 +832,7 @@
       "modal": true,
       "pitchFeedAmbiguous": true,
       "sets": { "cycle": "start" },
+      "conflicts": ["tcp"],
       "label": "Fine boring cycle",
       "description": "Bores to depth, turns the spindle to a fixed angle and shifts the tool by Q clear of the wall before retracting. On lathes in G-code system A, G76 is a multi-pass threading cycle whose F is the thread lead.",
       "params": [
@@ -795,30 +852,35 @@
         {
           "address": "R",
           "label": "Retract plane",
-          "required": true
+          "required": true,
+          "position": "tool-axis"
         },
         {
           "address": "Q",
           "label": "Shift away from the wall",
-          "min": 0
+          "min": 0,
+          "position": "none"
         },
         {
           "address": "F",
           "label": "Boring feed",
           "required": true,
-          "min": 0
+          "min": 0,
+          "position": "none"
         },
         {
           "address": "P",
           "label": "Dwell at the bottom in milliseconds",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         },
         {
           "address": "K",
           "label": "Repeat count",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         }
       ]
     },
@@ -835,6 +897,7 @@
       "group": "cycle",
       "modal": true,
       "sets": { "cycle": "start" },
+      "conflicts": ["tcp"],
       "label": "Drilling cycle",
       "description": "Feeds down to Z and pulls out at rapid. Every following block that carries a position drills another hole, until G80.",
       "params": [
@@ -854,19 +917,22 @@
         {
           "address": "R",
           "label": "Retract plane",
-          "required": true
+          "required": true,
+          "position": "tool-axis"
         },
         {
           "address": "F",
           "label": "Drilling feed",
           "required": true,
-          "min": 0
+          "min": 0,
+          "position": "none"
         },
         {
           "address": "K",
           "label": "Repeat count",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         }
       ]
     },
@@ -875,6 +941,7 @@
       "group": "cycle",
       "modal": true,
       "sets": { "cycle": "start" },
+      "conflicts": ["tcp"],
       "label": "Drilling cycle with dwell",
       "description": "Like G81, but waits at the hole bottom for the time given by P before pulling out. The dwell cleans up the bottom of a flat hole.",
       "params": [
@@ -894,25 +961,29 @@
         {
           "address": "R",
           "label": "Retract plane",
-          "required": true
+          "required": true,
+          "position": "tool-axis"
         },
         {
           "address": "P",
           "label": "Dwell at the bottom in milliseconds",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         },
         {
           "address": "F",
           "label": "Drilling feed",
           "required": true,
-          "min": 0
+          "min": 0,
+          "position": "none"
         },
         {
           "address": "K",
           "label": "Repeat count",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         }
       ]
     },
@@ -921,6 +992,7 @@
       "group": "cycle",
       "modal": true,
       "sets": { "cycle": "start" },
+      "conflicts": ["tcp"],
       "label": "Peck drilling cycle",
       "description": "Drills in steps of Q and pulls all the way back to the retract plane after each step, so the chips clear. Active until G80.",
       "params": [
@@ -940,25 +1012,29 @@
         {
           "address": "R",
           "label": "Retract plane",
-          "required": true
+          "required": true,
+          "position": "tool-axis"
         },
         {
           "address": "Q",
           "label": "Peck depth",
           "required": true,
-          "min": 0
+          "min": 0,
+          "position": "none"
         },
         {
           "address": "F",
           "label": "Drilling feed",
           "required": true,
-          "min": 0
+          "min": 0,
+          "position": "none"
         },
         {
           "address": "K",
           "label": "Repeat count",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         }
       ]
     },
@@ -969,6 +1045,7 @@
       "pitchFeed": true,
       "tapping": true,
       "sets": { "cycle": "start" },
+      "conflicts": ["tcp"],
       "label": "Tapping cycle",
       "description": "Cuts a right-hand thread: the spindle turns back at the bottom of the hole. F carries the pitch (pitch times speed with G94, pitch with G95), so scaling the feed would change the thread. Rigid tapping is normally switched on with an M code in the block before.",
       "params": [
@@ -988,30 +1065,35 @@
         {
           "address": "R",
           "label": "Retract plane",
-          "required": true
+          "required": true,
+          "position": "tool-axis"
         },
         {
           "address": "F",
           "label": "Feed from the thread pitch",
           "required": true,
-          "min": 0
+          "min": 0,
+          "position": "none"
         },
         {
           "address": "P",
           "label": "Dwell at the bottom in milliseconds",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         },
         {
           "address": "K",
           "label": "Repeat count",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         },
         {
           "address": "Q",
           "label": "Peck depth, for peck tapping",
-          "min": 0
+          "min": 0,
+          "position": "none"
         }
       ]
     },
@@ -1022,16 +1104,17 @@
       "pitchFeed": true,
       "tapping": true,
       "sets": { "cycle": "start" },
+      "conflicts": ["tcp"],
       "label": "Rigid tapping cycle, older block format",
       "description": "Rigid tapping of a right-hand thread, written in the block format of an older control generation. F carries the pitch, so scaling the feed would change the thread.",
       "params": [
         { "address": "X", "label": "Hole position X" },
         { "address": "Y", "label": "Hole position Y" },
         { "address": "Z", "label": "Hole bottom", "required": true },
-        { "address": "R", "label": "Retract plane", "required": true },
-        { "address": "F", "label": "Feed from the thread pitch", "required": true, "min": 0 },
-        { "address": "P", "label": "Dwell at the bottom in milliseconds", "min": 0, "unit": "count" },
-        { "address": "L", "label": "Repeat count", "min": 0, "unit": "count" }
+        { "address": "R", "label": "Retract plane", "required": true, "position": "tool-axis" },
+        { "address": "F", "label": "Feed from the thread pitch", "required": true, "min": 0, "position": "none" },
+        { "address": "P", "label": "Dwell at the bottom in milliseconds", "min": 0, "unit": "count", "position": "none" },
+        { "address": "L", "label": "Repeat count", "min": 0, "unit": "count", "position": "none" }
       ]
     },
     {
@@ -1041,16 +1124,17 @@
       "pitchFeed": true,
       "tapping": true,
       "sets": { "cycle": "start" },
+      "conflicts": ["tcp"],
       "label": "Left-hand rigid tapping cycle, older block format",
       "description": "Rigid tapping of a left-hand thread, written in the block format of an older control generation. F carries the pitch, so scaling the feed would change the thread.",
       "params": [
         { "address": "X", "label": "Hole position X" },
         { "address": "Y", "label": "Hole position Y" },
         { "address": "Z", "label": "Hole bottom", "required": true },
-        { "address": "R", "label": "Retract plane", "required": true },
-        { "address": "F", "label": "Feed from the thread pitch", "required": true, "min": 0 },
-        { "address": "P", "label": "Dwell at the bottom in milliseconds", "min": 0, "unit": "count" },
-        { "address": "L", "label": "Repeat count", "min": 0, "unit": "count" }
+        { "address": "R", "label": "Retract plane", "required": true, "position": "tool-axis" },
+        { "address": "F", "label": "Feed from the thread pitch", "required": true, "min": 0, "position": "none" },
+        { "address": "P", "label": "Dwell at the bottom in milliseconds", "min": 0, "unit": "count", "position": "none" },
+        { "address": "L", "label": "Repeat count", "min": 0, "unit": "count", "position": "none" }
       ]
     },
     {
@@ -1058,6 +1142,7 @@
       "group": "cycle",
       "modal": true,
       "sets": { "cycle": "start" },
+      "conflicts": ["tcp"],
       "label": "Boring cycle",
       "description": "Feeds down to Z and feeds back out again, which leaves a cleaner wall than a rapid retract.",
       "params": [
@@ -1077,19 +1162,22 @@
         {
           "address": "R",
           "label": "Retract plane",
-          "required": true
+          "required": true,
+          "position": "tool-axis"
         },
         {
           "address": "F",
           "label": "Boring feed",
           "required": true,
-          "min": 0
+          "min": 0,
+          "position": "none"
         },
         {
           "address": "K",
           "label": "Repeat count",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         }
       ]
     },
@@ -1098,6 +1186,7 @@
       "group": "cycle",
       "modal": true,
       "sets": { "cycle": "start" },
+      "conflicts": ["tcp"],
       "label": "Boring cycle with spindle stop",
       "description": "Feeds down to Z, stops the spindle and pulls out at rapid.",
       "params": [
@@ -1117,19 +1206,22 @@
         {
           "address": "R",
           "label": "Retract plane",
-          "required": true
+          "required": true,
+          "position": "tool-axis"
         },
         {
           "address": "F",
           "label": "Boring feed",
           "required": true,
-          "min": 0
+          "min": 0,
+          "position": "none"
         },
         {
           "address": "K",
           "label": "Repeat count",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         }
       ]
     },
@@ -1138,6 +1230,7 @@
       "group": "cycle",
       "modal": true,
       "sets": { "cycle": "start" },
+      "conflicts": ["tcp"],
       "label": "Back boring cycle",
       "description": "Bores a face on the underside of the workpiece, shifting by Q to get the tool through the hole. On lathes in G-code system A, G87 drills into the side of the part along X instead.",
       "params": [
@@ -1157,30 +1250,35 @@
         {
           "address": "R",
           "label": "Plane below the workpiece",
-          "required": true
+          "required": true,
+          "position": "tool-axis"
         },
         {
           "address": "Q",
           "label": "Shift away from the wall",
-          "min": 0
+          "min": 0,
+          "position": "none"
         },
         {
           "address": "F",
           "label": "Boring feed",
           "required": true,
-          "min": 0
+          "min": 0,
+          "position": "none"
         },
         {
           "address": "P",
           "label": "Dwell at the bottom in milliseconds",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         },
         {
           "address": "K",
           "label": "Repeat count",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         }
       ]
     },
@@ -1189,6 +1287,7 @@
       "group": "cycle",
       "modal": true,
       "sets": { "cycle": "start" },
+      "conflicts": ["tcp"],
       "label": "Boring cycle with manual retract",
       "description": "Feeds down to Z, dwells and stops so that the operator pulls the tool out by hand. It is rare in CAM output. On lathes in G-code system A, G88 taps along X instead.",
       "params": [
@@ -1208,25 +1307,29 @@
         {
           "address": "R",
           "label": "Retract plane",
-          "required": true
+          "required": true,
+          "position": "tool-axis"
         },
         {
           "address": "P",
           "label": "Dwell at the bottom in milliseconds",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         },
         {
           "address": "F",
           "label": "Boring feed",
           "required": true,
-          "min": 0
+          "min": 0,
+          "position": "none"
         },
         {
           "address": "K",
           "label": "Repeat count",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         }
       ]
     },
@@ -1235,6 +1338,7 @@
       "group": "cycle",
       "modal": true,
       "sets": { "cycle": "start" },
+      "conflicts": ["tcp"],
       "label": "Boring cycle with dwell",
       "description": "Feeds down to Z, waits for the time given by P and feeds back out.",
       "params": [
@@ -1254,25 +1358,29 @@
         {
           "address": "R",
           "label": "Retract plane",
-          "required": true
+          "required": true,
+          "position": "tool-axis"
         },
         {
           "address": "P",
           "label": "Dwell at the bottom in milliseconds",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         },
         {
           "address": "F",
           "label": "Boring feed",
           "required": true,
-          "min": 0
+          "min": 0,
+          "position": "none"
         },
         {
           "address": "K",
           "label": "Repeat count",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "position": "none"
         }
       ]
     },
@@ -1298,6 +1406,7 @@
       "pitchFeedAmbiguous": true,
       "sets": { "speedLimit": true },
       "axisWords": "data",
+      "shift": true,
       "label": "Coordinate set, spindle speed clamp",
       "description": "Sets the work coordinate system, or with an S word clamps the top spindle speed; lathes in G-code system B and C use the number the same way. In system A this number is the single-pass threading cycle instead, so gEdit never scales the F of such a block."
     },
@@ -1306,6 +1415,7 @@
       "group": "feedmode",
       "modal": true,
       "sets": { "feedUnit": "inverse-time" },
+      "conflicts": ["tcp"],
       "label": "Inverse time feed",
       "description": "The F word no longer gives a speed but the reciprocal of the time the block may take, so F12.5 runs the block in 4.8 seconds. Every move needs its own F while this mode is on.",
       "params": [
@@ -1330,6 +1440,7 @@
       "group": "feedmode",
       "modal": true,
       "sets": { "feedUnit": "per-rev" },
+      "conflicts": ["tcp"],
       "label": "Feed per revolution",
       "description": "F is read as distance per spindle revolution, which keeps the chip thickness steady when the speed changes."
     },
@@ -1338,6 +1449,7 @@
       "group": "spindlemode",
       "modal": true,
       "sets": { "speedUnit": "surface" },
+      "conflicts": ["tcp"],
       "label": "Constant surface speed",
       "description": "S is read as surface speed, and the control raises the spindle speed as the diameter gets smaller. Clamp the top speed in a block of its own beforehand."
     },
@@ -1385,6 +1497,7 @@
       "code": "M3",
       "group": "spindle",
       "modal": true,
+      "sets": { "spindle": "on" },
       "label": "Spindle on, clockwise",
       "description": "Starts the spindle clockwise at the active S speed."
     },
@@ -1392,6 +1505,7 @@
       "code": "M4",
       "group": "spindle",
       "modal": true,
+      "sets": { "spindle": "on" },
       "label": "Spindle on, counter-clockwise",
       "description": "Starts the spindle counter-clockwise at the active S speed."
     },
@@ -1399,6 +1513,7 @@
       "code": "M5",
       "group": "spindle",
       "modal": true,
+      "sets": { "spindle": "off" },
       "label": "Spindle stop",
       "description": "Stops the spindle."
     },

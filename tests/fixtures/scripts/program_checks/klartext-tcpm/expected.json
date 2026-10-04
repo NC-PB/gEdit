@@ -1,0 +1,46 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 7,
+      "check": "Refused in this state",
+      "checkId": "stateConflicts",
+      "severity": "warning",
+      "message": "M91: the control refuses it while tool centre point control is on (M128, line 5)"
+    },
+    {
+      "line": 8,
+      "check": "Refused in this state",
+      "checkId": "stateConflicts",
+      "severity": "warning",
+      "message": "TOOL CALL: the control refuses it while tool centre point control is on (M128, line 5)"
+    },
+    {
+      "line": 13,
+      "check": "Refused in this state",
+      "checkId": "stateConflicts",
+      "severity": "warning",
+      "message": "M92: the control refuses it while tool centre point control is on (FUNCTION TCPM, line 12)"
+    }
+  ],
+  "message": "3 findings in 1 check. No machine chosen.",
+  "findings": []
+}

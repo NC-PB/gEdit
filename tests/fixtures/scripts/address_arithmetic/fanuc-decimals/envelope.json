@@ -1,0 +1,23 @@
+{
+  "message": "Divided Z by 3 in 3 words on 3 blocks, 3 rounded to the form they are written in. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 5,
+      "severity": "info",
+      "message": "Z5.: written as Z1.667, rounded half away from zero to what the word's form can hold.",
+      "reason": "rounded"
+    },
+    {
+      "line": 6,
+      "severity": "info",
+      "message": "Z-1.25: written as Z-0.417, rounded half away from zero to what the word's form can hold.",
+      "reason": "rounded"
+    },
+    {
+      "line": 7,
+      "severity": "info",
+      "message": "Z-.5: written as Z-.167, rounded half away from zero to what the word's form can hold.",
+      "reason": "rounded"
+    }
+  ]
+}

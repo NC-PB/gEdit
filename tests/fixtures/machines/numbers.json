@@ -135,6 +135,13 @@
         }
       }
     },
+    "rotary-unlisted": {
+      "note": "M10 P10: a profile that writes C as an axis and does not list it as an angle (Klartext lists A, B and C since P10)",
+      "inline": {
+        "id": "rotary-unlisted",
+        "addresses": { "feed": "F", "spindle": "S", "axes": ["X", "Y", "Z", "C"] }
+      }
+    },
     "feed-word-e": {
       "note": "stands in for the Okuma profile of M8: a dialect whose E word is a feed per revolution",
       "inline": {
@@ -346,12 +353,20 @@
       "expected": "angle"
     },
     {
-      "note": "4b. the same letter on a profile that does not list it is an ordinary axis. M9 (WP9.5a): read on Klartext, because the mill lists its rotary axes now (it was the mill)",
-      "profile": "klartext",
+      "note": "4b. the same letter on a profile that does not list it is an ordinary axis. M9 (WP9.5a): read on Klartext, because the mill lists its rotary axes now (it was the mill); M10 P10: on a profile of its own, because Klartext lists them now too",
+      "profile": "rotary-unlisted",
       "address": "C",
       "feedUnit": "per-minute",
       "codes": [],
       "expected": "length"
+    },
+    {
+      "note": "4d. M10 P10: Klartext lists its rotary axes A, B and C as angles (addresses.angular), so a simultaneous rotary move is seen as one",
+      "profile": "klartext",
+      "address": "C",
+      "feedUnit": "per-minute",
+      "codes": [],
+      "expected": "angle"
     },
     {
       "note": "4c. M9 (WP9.5a): the Fanuc mill declares A, B and C angular, so C90000 is an angle and not 9 in",

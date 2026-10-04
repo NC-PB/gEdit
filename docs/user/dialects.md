@@ -149,13 +149,14 @@ from its extension.
 
 **If the program's own text says it is another dialect's, some cleanups refuse to run.**
 Remove Comments, Renumber, Remove Block Numbers, Insert Spaces, Remove Spaces, Convert Case,
-and a script whose result replaces the program or opens as a new one, all check the text
+Insert and Remove Block Skip, and a script whose result replaces the program or opens as a
+new one (Address arithmetic among them), all check the text
 first: a header of another dialect (`BEGIN PGM`, `%_N_…_MPF`, `;$PATH=`, `$NAME.MIN%`), or a
 line only that other control writes, refuses the run and names the line, the dialect it
 looks like, and the current one — with a **Change Dialect…** action, or use the status-bar
 dialect item, then run again. This happens even when you chose the dialect by hand: the
-check reads only the text. Remove Empty Lines, reports and panel scripts are never refused
-this way, because they change no NC text a wrong dialect could corrupt.
+check reads only the text. Remove Empty Lines, Select Tool Segment, reports (Program checks and
+Extents among them) and panel scripts are never refused this way, because they change no NC text a wrong dialect could corrupt.
 
 For a Siemens program the refusal also says which of the two Sinumerik profiles the text
 looks like: milling when it has an `M6`, `CYCLE800`, `CYCLE832` or a milling cycle and none
@@ -594,8 +595,9 @@ master spindle — the one a plain `S` and `M3` are meant for — until `SETMS` 
 returns to the master spindle the machine is set up with. The hover reads `M3=3` as `M3` for
 spindle 3, not as a code `M33`. **gEdit's main spindle is spindle 1**: a plain `S` while
 spindle 1 is the master (the default, `SETMS`, or `SETMS(1)`), and `S1=`, are the main
-spindle's speed; `S2=` and a plain `S` after `SETMS(2)` are another spindle. If a program
-makes another spindle the default master before gEdit reads it, tell the project.
+spindle's speed, in the tool list as well as in the feed and speed scripts; `S2=` and a plain
+`S` after `SETMS(2)` are another spindle. If a program makes another spindle the default
+master before gEdit reads it, tell the project.
 
 **What the feed and speed scripts do with this dialect.** They read it from its own
 database:
@@ -693,9 +695,11 @@ high-speed milling: `CYCLE800` (swivel), `CYCLE832` (high-speed settings), `TRAO
 and the `DYN…` dynamic words, `TRANS`, `ROT`, `SCALE` and `MIRROR` and their additive forms.
 It does not describe the milling cycles themselves (`CYCLE61`, `POCKET3` …), `CUT3DCC`,
 `COMPSURF`, `G601`–`G603`, `G643`/`G644` or the tolerance words `CTOL=`, `OTOL=` and `FP=`:
-those are coloured and listed as calls and have no code help. The rotary axes `A` and `B` of a
-five-axis machine are not among the profile's axes yet, so scripts give their values no
-unit. The profile's `M6` entry is not verified yet, so its hover says the database does not
+those are coloured and listed as calls and have no code help. The profile lists `A`, `B` and
+`C` as axes and as angles, so the scripts read the rotary axes of a five-axis machine in
+degrees. `TRAORI` is tool centre point control and not a coordinate frame; `TRAFOOF` ends it
+and `TRANSMIT`, `TRACYL` and `TRAANG` too; `CYCLE800` is a tilted plane, which is a frame.
+The profile's `M6` entry is not verified yet, so its hover says the database does not
 describe it.
 
 **A mill-turn program stays with the turning profile.** A lathe with a driven tool and a
@@ -713,6 +717,24 @@ but the lathe's tool-station reading is still what shows, not a machining-centre
 milling profile needs a code database of its own, because on those controls the same numbers
 mean different things. That waits for real milling programs and the control's programming
 manual to write it from.
+
+## What the checks and the arithmetic read from a dialect
+
+The program checks, the extents and address arithmetic ([Scripts](scripts.md)) have no
+list of codes of their own: they read the code database and the profile of the dialect. What
+the dialects give them:
+
+| | |
+|---|---|
+| **Fanuc mill** | Which codes start and stop the spindle and which moves are rapid; the states the control refuses a code in (`G28`, `G53`, the drilling cycles and `G68` under tool centre point control; `G53.1` outside a tilted plane); `G65` as a program call that hands its arguments over, and a word limit of eight digits. `G15` and `G16` (polar coordinates) are described and count as a frame, like `G51` (scaling), `G51.1` (mirror), `G12.1` (polar interpolation), `G7.1` (cylindrical interpolation) and `G68` (rotation). The drilling cycles `G73`, `G74`, `G76`, `G81` to `G89` carry the `R` plane that a Z shift moves |
+| **Fanuc lathe** | The same, except that it has no `G43.4` or `G43.5`; its cycles are not shifted by address arithmetic (a lathe's `R` may be incremental or absolute by a machine parameter), they are refused and listed |
+| **Heidenhain Klartext** | Cycles 200 to 209, 240 and 262 hold `Q203`, the surface, which a Z shift moves; **202** (boring), **208** (bore milling) and **262** (thread milling) are described. The pole `CC` is shifted with an `X` or `Y` shift. `PLANE` needs `MOVE`, `TURN` or `STAY`, and `TOOL CALL` and `M91`/`M92` are refused while `M128` is on. The tool axis comes from `TOOL CALL`, which decides the plane. `END PGM` is the closing record and takes no skip mark. Cycle 19 and `PLANE SPATIAL` with all angles zero never end the tilted plane for the scripts, so everything after one is treated as inside a frame |
+| **Okuma OSP lathe** | A limit of eight M codes in a block; `G96` and `G97` need `S`; `M110` stands alone; `G140`, `G141`, `G15` and `G16` are refused under constant surface speed or nose-radius compensation; the LAP shape between `G81` and `G80` is not a cut. No cycle is shifted by address arithmetic |
+| **Sinumerik 840D** | `CYCLE81` to `CYCLE89` and `CYCLE840` carry `RTP`, `RFP`, `DP` (and `FDEP` of `CYCLE83`) for a Z shift, with the trailing mode arguments described; `G290` and `G291` switch the control between its own language and ISO mode; `G75` is refused under radius compensation. A program that never writes `G90` is not known to be absolute (see [Machines](machines.md#the-power-on-distance-mode)) |
+
+Where the data is missing the scripts say so, once, and do not flag every line: a code the
+database lacks under the move letter makes a block "not reviewed" for the arithmetic and
+"not resolved" for the extents.
 
 ## Other controls
 

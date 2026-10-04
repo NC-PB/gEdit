@@ -38,7 +38,22 @@ const SETS_VALUES = {
   diameter: ['on', 'off', 'absolute-only'],
   // P9: which side a `speedLimit` bounds; checked against `speedLimit` in `readSets`.
   speedLimitBound: ['upper', 'lower'],
+  // P10: tool centre point control on or off (decision of 2026-10-04, §7.16 #107).
+  tcp: ['on', 'off'],
+  // M10 (WP10.2, the program checks): the spindle, the driven tool's spindle, a rapid or a
+  // feed move, radius and length compensation, the speed a code leaves behind, and the
+  // language the control reads the program in.
+  spindle: ['on', 'off'],
+  toolSpindle: ['on', 'off'],
+  motion: ['rapid', 'feed'],
+  radiusComp: ['on', 'off'],
+  lengthComp: ['on', 'off'],
+  exitSpeed: ['zero'],
+  language: ['iso', 'native'],
 } as const satisfies Record<string, readonly string[]>;
+
+/** P10: the `sets` members that are flags, `true` or absent (`false` is read as absent). */
+const SETS_FLAGS = ['speedLimit', 'planeFromAxisWord'] as const;
 
 /** M6 (§7.2, AD-31). How a cycle parameter's value is read, whatever its address suggests. */
 const PARAM_UNITS: readonly (NumberClass | 'increment' | 'count')[] = [
@@ -51,10 +66,54 @@ const PARAM_UNITS: readonly (NumberClass | 'increment' | 'count')[] = [
   'count',
 ];
 
+/** P10 (R8, §7.2, §7.16 #106). What a parameter is to a program shift. */
+const POSITIONS = ['tool-axis', 'none', 'other', 'mode'] as const;
+
 /** P9 (R3, §7.2). What the axis words of a block are, where they are not a position. */
 const AXIS_WORDS = ['data', 'machine'] as const;
 /** P9 (R3, §7.2). Whether a code opens or closes a coordinate frame. */
 const FRAMES = ['open', 'close'] as const;
+/** M10 review (NC-2): `CodeEntry.pole`. */
+const POLES = ['set', 'use'] as const;
+
+/** M10 (WP10.2). The states `CodeEntry.conflicts` may name, besides `frame:<group>`. */
+const CONFLICTS = ['tcp', 'radiusComp', 'lengthComp', 'cycle', 'surfaceSpeed', 'feedNotPerMinute'] as const;
+
+/** M10 (WP10.2). A list of conditions: one of `CONFLICTS` or `frame:<group>`, `!` in front to negate. */
+function readConflicts(raw: unknown, path: string, report: (p: CodeDbProblem) => void): string[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) {
+    report({ path, message: 'conflicts is not an array' });
+    return undefined;
+  }
+  const out: string[] = [];
+  raw.forEach((item, i) => {
+    const text = str(item);
+    const name = text?.startsWith('!') ? text.slice(1) : text;
+    const ok =
+      name !== undefined &&
+      ((CONFLICTS as readonly string[]).includes(name) || /^frame:[A-Za-z][A-Za-z0-9]*$/.test(name));
+    if (ok && text !== undefined) out.push(text);
+    else report({ path: `${path}[${i}]`, message: `has to be one of ${CONFLICTS.join(', ')} or frame:<group>` });
+  });
+  return out.length > 0 ? out : undefined;
+}
+
+/** M10 (WP10.2). A list of addresses or keywords, upper case. */
+function readWords(raw: unknown, path: string, report: (p: CodeDbProblem) => void): string[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) {
+    report({ path, message: 'requires is not an array' });
+    return undefined;
+  }
+  const out: string[] = [];
+  raw.forEach((item, i) => {
+    const text = str(item);
+    if (text !== undefined) out.push(text.toUpperCase());
+    else report({ path: `${path}[${i}]`, message: 'has to be an address or a keyword' });
+  });
+  return out.length > 0 ? out : undefined;
+}
 
 /** The file is not a code database at all. */
 export class CodeDbError extends Error {
@@ -80,8 +139,15 @@ function str(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined;
 }
 
-function bool(v: unknown): boolean | undefined {
-  return v === true ? true : undefined;
+/**
+ * A flag that is `true` or absent. A flag written as anything else (`"yes"`, `1`) is
+ * reported and dropped: a typo that silently turns a check off is worse than one that
+ * says so, and `false` is the same as not writing it.
+ */
+function flag(v: unknown, path: string, report: (p: CodeDbProblem) => void): true | undefined {
+  if (v === true) return true;
+  if (v !== undefined && v !== null && v !== false) report({ path, message: `${path.split('.').pop()} has to be true or false` });
+  return undefined;
 }
 
 function num(v: unknown): number | undefined {
@@ -126,7 +192,7 @@ function readParams(
       return;
     }
     const param: CodeParam = { address: address.toUpperCase(), label };
-    if (bool(item.required)) param.required = true;
+    if (flag(item.required, `${at}.required`, report)) param.required = true;
     const min = num(item.min);
     const max = num(item.max);
     if (min !== undefined) param.min = min;
@@ -138,6 +204,16 @@ function readParams(
       } else {
         report({ path: `${at}.unit`, message: `unit has to be one of ${PARAM_UNITS.join(', ')}` });
       }
+    }
+    // P10 (R8): an unknown role is dropped and reported, and the parameter is then "not
+    // reviewed", which address arithmetic refuses: a typo can only make it refuse more.
+    const position = oneOf(item.position, POSITIONS, `${at}.position`, report);
+    if (position !== undefined) param.position = position;
+    // M10 review (NC-3): the axis a parameter is a coordinate of; a letter or nothing.
+    if (item.axis !== undefined) {
+      const axis = str(item.axis);
+      if (axis !== undefined && /^[A-Za-z]$/.test(axis)) param.axis = axis.toUpperCase();
+      else report({ path: `${at}.axis`, message: 'axis has to be one axis letter' });
     }
     out.push(param);
   });
@@ -195,9 +271,9 @@ function readSets(raw: unknown, path: string, report: (p: CodeDbProblem) => void
   const out: Record<string, unknown> = {};
   for (const [member, value] of Object.entries(raw)) {
     const at = `${path}.${member}`;
-    if (member === 'speedLimit') {
-      if (value === true) out.speedLimit = true;
-      else if (value !== false) report({ path: at, message: 'speedLimit has to be true or false' });
+    if ((SETS_FLAGS as readonly string[]).includes(member)) {
+      if (value === true) out[member] = true;
+      else if (value !== false) report({ path: at, message: `${member} has to be true or false` });
       continue;
     }
     const allowed = (SETS_VALUES as Record<string, readonly string[] | undefined>)[member];
@@ -244,16 +320,16 @@ function readEntry(
   const entry: CodeEntry = { code: normalizeCode(rawCode), label };
   const group = str(raw.group);
   if (group) entry.group = group;
-  if (bool(raw.modal)) entry.modal = true;
-  if (bool(raw.pitchFeed)) entry.pitchFeed = true;
-  if (bool(raw.pitchFeedAmbiguous)) entry.pitchFeedAmbiguous = true;
-  if (bool(raw.tappingElsewhere)) entry.tappingElsewhere = true;
+  if (flag(raw.modal, `${path}.modal`, report)) entry.modal = true;
+  if (flag(raw.pitchFeed, `${path}.pitchFeed`, report)) entry.pitchFeed = true;
+  if (flag(raw.pitchFeedAmbiguous, `${path}.pitchFeedAmbiguous`, report)) entry.pitchFeedAmbiguous = true;
+  if (flag(raw.tappingElsewhere, `${path}.tappingElsewhere`, report)) entry.tappingElsewhere = true;
   // P8: a dwell block's `F` is a time. The loader is what the scripts and the interpreter
   // read, so a flag the file sets and the loader drops would be a flag that does nothing.
-  if (bool(raw.fNotFeed)) entry.fNotFeed = true;
+  if (flag(raw.fNotFeed, `${path}.fNotFeed`, report)) entry.fNotFeed = true;
   // 2026-09: the scripts read these two from the loaded database as well.
-  if (bool(raw.tapping)) entry.tapping = true;
-  if (bool(raw.wordsAreData)) entry.wordsAreData = true;
+  if (flag(raw.tapping, `${path}.tapping`, report)) entry.tapping = true;
+  if (flag(raw.wordsAreData, `${path}.wordsAreData`, report)) entry.wordsAreData = true;
   // P9 (R3): the two flags extents and address arithmetic read instead of code lists.
   const axisWords = oneOf(raw.axisWords, AXIS_WORDS, `${path}.axisWords`, report);
   if (axisWords !== undefined) {
@@ -267,7 +343,23 @@ function readEntry(
   }
   const frame = oneOf(raw.frame, FRAMES, `${path}.frame`, report);
   if (frame !== undefined) entry.frame = frame;
-  if (bool(raw.verify)) entry.verify = true;
+  // P10: the close a code makes when it is written without values (`CYCLE800()`, `TRANS`).
+  const bare = oneOf(raw.frameWithoutValues, ['close'] as const, `${path}.frameWithoutValues`, report);
+  if (bare !== undefined) entry.frameWithoutValues = bare;
+  // M10 (WP10.2): what the program checks read about a code besides its `sets`.
+  const conflicts = readConflicts(raw.conflicts, `${path}.conflicts`, report);
+  if (conflicts) entry.conflicts = conflicts;
+  if (flag(raw.alone, `${path}.alone`, report)) entry.alone = true;
+  const requires = readWords(raw.requires, `${path}.requires`, report);
+  if (requires) entry.requires = requires;
+  const contour = oneOf(raw.contour, FRAMES, `${path}.contour`, report);
+  if (contour !== undefined) entry.contour = contour;
+  // M10 review: the pole, a program call and a coordinate shift (NC-2, NC-6, NC-7).
+  const pole = oneOf(raw.pole, POLES, `${path}.pole`, report);
+  if (pole !== undefined) entry.pole = pole;
+  if (flag(raw.call, `${path}.call`, report)) entry.call = true;
+  if (flag(raw.shift, `${path}.shift`, report)) entry.shift = true;
+  if (flag(raw.verify, `${path}.verify`, report)) entry.verify = true;
   const description = str(raw.description);
   if (description) entry.description = description;
   const params = readParams(raw.params, `${path}.params`, report);

@@ -119,14 +119,20 @@
       "description": "Moves to the position at rapid speed. Every axis goes at its own rapid rate instead of in step with the others, so the tool can leave the straight line between start and end.",
       "group": "motion",
       "label": "Rapid",
-      "modal": true
+      "modal": true,
+      "sets": {
+        "motion": "rapid"
+      }
     },
     {
       "code": "G1",
       "description": "Moves to the position on a straight line at the feed in F.",
       "group": "motion",
       "label": "Linear feed move",
-      "modal": true
+      "modal": true,
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "G2",
@@ -157,7 +163,10 @@
           "min": 0,
           "unit": "length"
         }
-      ]
+      ],
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "G3",
@@ -188,7 +197,10 @@
           "min": 0,
           "unit": "length"
         }
-      ]
+      ],
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "G4",
@@ -220,6 +232,10 @@
     },
     {
       "code": "G15",
+      "conflicts": [
+        "surfaceSpeed",
+        "radiusComp"
+      ],
       "description": "Selects program coordinate system Hn for this block and every block after it; n runs from 1 to 10, 50 or 100, depending on the model. After power-on or a reset the last system chosen with G15 is back. Not allowed while G96 or nose-radius compensation is active.",
       "group": "offset",
       "label": "Program coordinate system",
@@ -235,6 +251,10 @@
     },
     {
       "code": "G16",
+      "conflicts": [
+        "surfaceSpeed",
+        "radiusComp"
+      ],
       "description": "Selects program coordinate system Hn for this block only; the next block is back in the system G15 chose. Not allowed while G96 or nose-radius compensation is active.",
       "group": "offset",
       "label": "Program coordinate system for one block",
@@ -319,7 +339,10 @@
           "unit": "count"
         }
       ],
-      "pitchFeed": true
+      "pitchFeed": true,
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "G32",
@@ -365,7 +388,10 @@
           "unit": "count"
         }
       ],
-      "pitchFeed": true
+      "pitchFeed": true,
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "G33",
@@ -411,7 +437,10 @@
           "unit": "count"
         }
       ],
-      "pitchFeed": true
+      "pitchFeed": true,
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "G34",
@@ -448,7 +477,10 @@
           "unit": "count"
         }
       ],
-      "pitchFeed": true
+      "pitchFeed": true,
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "G35",
@@ -485,7 +517,10 @@
           "unit": "count"
         }
       ],
-      "pitchFeed": true
+      "pitchFeed": true,
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "G36",
@@ -494,6 +529,9 @@
       "label": "Feed in step with the driven tool, forward",
       "modal": true,
       "pitchFeed": true,
+      "sets": {
+        "motion": "feed"
+      },
       "tapping": true,
       "verify": true
     },
@@ -504,6 +542,9 @@
       "label": "Feed in step with the driven tool, reverse",
       "modal": true,
       "pitchFeed": true,
+      "sets": {
+        "motion": "feed"
+      },
       "tapping": true,
       "verify": true
     },
@@ -511,21 +552,30 @@
       "code": "G40",
       "group": "compensation",
       "label": "Nose radius compensation off",
-      "modal": true
+      "modal": true,
+      "sets": {
+        "radiusComp": "off"
+      }
     },
     {
       "code": "G41",
       "description": "Offsets the path by the nose radius, with the tool on the left of the part seen along the direction of travel. The radius comes from the nose radius number of the six-digit T word.",
       "group": "compensation",
       "label": "Nose radius compensation, tool left",
-      "modal": true
+      "modal": true,
+      "sets": {
+        "radiusComp": "on"
+      }
     },
     {
       "code": "G42",
       "description": "Offsets the path by the nose radius, with the tool on the right of the part seen along the direction of travel. The radius comes from the nose radius number of the six-digit T word.",
       "group": "compensation",
       "label": "Nose radius compensation, tool right",
-      "modal": true
+      "modal": true,
+      "sets": {
+        "radiusComp": "on"
+      }
     },
     {
       "axisWords": "data",
@@ -549,7 +599,8 @@
       ],
       "sets": {
         "speedLimit": true
-      }
+      },
+      "shift": true
     },
     {
       "code": "G64",
@@ -945,24 +996,28 @@
     },
     {
       "code": "G80",
+      "contour": "close",
       "description": "Ends the shape definition that G81, G82 or G83 started. It does not cancel a drilling cycle as on other controls.",
       "group": "lap",
       "label": "End of a LAP shape"
     },
     {
       "code": "G81",
+      "contour": "open",
       "description": "Starts the definition of the finished shape for automatic roughing along Z. Its block carries the sequence name the LAP call refers to. It is not a drilling cycle.",
       "group": "lap",
       "label": "Start of a LAP shape along Z"
     },
     {
       "code": "G82",
+      "contour": "open",
       "description": "Starts the definition of the finished shape for automatic roughing across the face. It is not a drilling cycle.",
       "group": "lap",
       "label": "Start of a LAP shape on the face"
     },
     {
       "code": "G83",
+      "contour": "open",
       "description": "Starts the definition of the blank for automatic roughing. It is not a drilling cycle.",
       "group": "lap",
       "label": "Start of the LAP blank shape"
@@ -1192,6 +1247,9 @@
       "group": "spindlemode",
       "label": "Constant cutting speed",
       "modal": true,
+      "requires": [
+        "S"
+      ],
       "sets": {
         "speedUnit": "surface"
       }
@@ -1202,6 +1260,9 @@
       "group": "spindlemode",
       "label": "Fixed spindle speed",
       "modal": true,
+      "requires": [
+        "S"
+      ],
       "sets": {
         "speedUnit": "rpm"
       }
@@ -1230,7 +1291,10 @@
           "label": "Feed per minute",
           "unit": "feedPerMin"
         }
-      ]
+      ],
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "G102",
@@ -1259,7 +1323,10 @@
           "label": "Feed per minute",
           "unit": "feedPerMin"
         }
-      ]
+      ],
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "G103",
@@ -1288,7 +1355,10 @@
           "label": "Feed per minute",
           "unit": "feedPerMin"
         }
-      ]
+      ],
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "G107",
@@ -1341,7 +1411,10 @@
           "unit": "feedPerRev"
         }
       ],
-      "pitchFeed": true
+      "pitchFeed": true,
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "G113",
@@ -1356,7 +1429,10 @@
           "unit": "feedPerRev"
         }
       ],
-      "pitchFeed": true
+      "pitchFeed": true,
+      "sets": {
+        "motion": "feed"
+      }
     },
     {
       "code": "G136",
@@ -1393,12 +1469,20 @@
     },
     {
       "code": "G140",
+      "conflicts": [
+        "surfaceSpeed",
+        "radiusComp"
+      ],
       "description": "The blocks that follow machine a part held in the main spindle, in its program coordinate system and with its zero offset. It stands at the start of a program, or right after G13 or G14.",
       "group": "spindle",
       "label": "Machining with the main spindle"
     },
     {
       "code": "G141",
+      "conflicts": [
+        "surfaceSpeed",
+        "radiusComp"
+      ],
       "description": "The blocks that follow machine a part held in the sub spindle, in its own program coordinate system and with its own zero offset, whose Z runs the other way. Speeds and M codes are written as for the main spindle, so a plain S there may not be the main spindle's.",
       "group": "spindle",
       "label": "Machining with the sub spindle"
@@ -1998,19 +2082,28 @@
       "code": "M3",
       "group": "spindle",
       "label": "Spindle on, forward",
-      "modal": true
+      "modal": true,
+      "sets": {
+        "spindle": "on"
+      }
     },
     {
       "code": "M4",
       "group": "spindle",
       "label": "Spindle on, reverse",
-      "modal": true
+      "modal": true,
+      "sets": {
+        "spindle": "on"
+      }
     },
     {
       "code": "M5",
       "group": "spindle",
       "label": "Spindle stop",
-      "modal": true
+      "modal": true,
+      "sets": {
+        "spindle": "off"
+      }
     },
     {
       "code": "M6",
@@ -2033,19 +2126,28 @@
     {
       "code": "M12",
       "group": "spindle",
-      "label": "Driven-tool spindle stop"
+      "label": "Driven-tool spindle stop",
+      "sets": {
+        "toolSpindle": "off"
+      }
     },
     {
       "code": "M13",
       "description": "Starts the driven-tool spindle at the speed in SB=, which is written in the same block or before it. The main spindle is not affected.",
       "group": "spindle",
-      "label": "Driven-tool spindle on, forward"
+      "label": "Driven-tool spindle on, forward",
+      "sets": {
+        "toolSpindle": "on"
+      }
     },
     {
       "code": "M14",
       "description": "Starts the driven-tool spindle the other way round, at the speed in SB=. The main spindle is not affected.",
       "group": "spindle",
-      "label": "Driven-tool spindle on, reverse"
+      "label": "Driven-tool spindle on, reverse",
+      "sets": {
+        "toolSpindle": "on"
+      }
     },
     {
       "code": "M15",
@@ -2206,6 +2308,7 @@
       "label": "C-axis mode off"
     },
     {
+      "alone": true,
       "code": "M110",
       "description": "Couples the C axis to the spindle so it can be positioned for driven tools. It has to stand alone in its block.",
       "group": "spindle",

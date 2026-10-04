@@ -1,0 +1,9 @@
+{
+  "machine": {
+    "numberInput": {
+      "incrementMm": "0.001",
+      "mode": "calculator"
+    }
+  },
+  "machineName": "Mill Calculator"
+}

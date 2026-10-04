@@ -1,0 +1,85 @@
+{
+  "title": "Extents",
+  "columns": [
+    {
+      "key": "where",
+      "label": "Where"
+    },
+    {
+      "key": "axis",
+      "label": "Axis"
+    },
+    {
+      "key": "min",
+      "label": "Min"
+    },
+    {
+      "key": "minLine",
+      "label": "At line"
+    },
+    {
+      "key": "max",
+      "label": "Max"
+    },
+    {
+      "key": "maxLine",
+      "label": "At line"
+    },
+    {
+      "key": "unresolved",
+      "label": "Not resolved"
+    }
+  ],
+  "rows": [
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "X (diameter)",
+      "axisId": "X",
+      "min": "30",
+      "minLine": 8,
+      "max": "100",
+      "maxLine": 4,
+      "unresolved": 0,
+      "line": 4
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-40",
+      "minLine": 9,
+      "max": "10",
+      "maxLine": 11,
+      "unresolved": 0,
+      "line": 11
+    },
+    {
+      "where": "T1 (line 2)",
+      "scope": "tool",
+      "axis": "X (diameter)",
+      "axisId": "X",
+      "min": "30",
+      "minLine": 8,
+      "max": "100",
+      "maxLine": 4,
+      "unresolved": 0,
+      "line": 4
+    },
+    {
+      "where": "T1 (line 2)",
+      "scope": "tool",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-40",
+      "minLine": 9,
+      "max": "10",
+      "maxLine": 11,
+      "unresolved": 0,
+      "line": 11
+    }
+  ],
+  "message": "No machine: readings assumed from the profile defaults, and a word whose reading depends on the machine is not resolved. X is a diameter: diameter programming is on (assumed from the profile). The program switches it: DIAMON (line 3), DIAMOF (line 7), DIAMON (line 10); a radius value counts double.",
+  "findings": []
+}

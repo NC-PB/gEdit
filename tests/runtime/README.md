@@ -81,8 +81,8 @@ tests/runtime/suite.sh tests/runtime/suites/m0.txt   # run a suite and print the
 
 ## On a hosted runner
 
-`harness.yml` runs `sync.sh` and then `suite.sh tests/runtime/suites/m{0..9}.txt` on `macos-14`
-(30 minute limit), always uploads `$GEDIT_RH_DIR/out`, the app logs and the sync logs, and
+`harness.yml` runs `sync.sh` and then `suite.sh tests/runtime/suites/m{0..10}.txt` on `macos-14`
+(45 minute limit), always uploads `$GEDIT_RH_DIR/out`, the app logs and the sync logs, and
 caches the build directory. What differs from the owner's Mac, and how the scenarios deal with it:
 
 - The runner has a live, unlocked session with Accessibility already granted, so no setup
@@ -107,11 +107,11 @@ caches the build directory. What differs from the owner's Mac, and how the scena
 
 ## Suites
 
-One file per milestone, `suites/m0.txt` … `suites/m9.txt`: one scenario name per line, `#`
+One file per milestone, `suites/m0.txt` … `suites/m10.txt`: one scenario name per line, `#`
 starts a comment. A cumulative run is all of them in order:
 
 ```sh
-tests/runtime/suite.sh tests/runtime/suites/m{0,1,2,3,4,5,6,7,8,9}.txt
+tests/runtime/suite.sh tests/runtime/suites/m{0,1,2,3,4,5,6,7,8,9,10}.txt
 ```
 
 ## PASS, FLAKY, FAIL, BLOCKED
@@ -193,7 +193,11 @@ scenario('m1-example', { timeout: 90 }, async (h) => {
   `openFixture`), `m6-common.js` drives the machine picker and the Machines page,
   `m7-common.js` changes file modes and flags (`osOp`), ages a heartbeat (`makeStale`),
   finds backups (`backupsRoot`, `historyOf`) and quits cleanly (`quitCleanly`), and
-  `m8-common.js` walks the fixture goldens (`detectGolden`, `outlineGolden`, `scriptCase`).
+  `m8-common.js` walks the fixture goldens (`detectGolden`, `outlineGolden`, `scriptCase`), `m9-common.js`
+  opens probe programs and walks number classes (`openProbe`, `numberWalk`), and `m10-common.js` runs
+  the M10 scripts (`runFromTools` from the Tools tab, `runReplace` for an envelope), fills a script's form
+  (`fillForm`, `pick`), makes machines from a profile's own presets (`machineMaker`) and compares a shifted
+  program with the one it should be (`bump`, `differences`, `outcomeOf`).
 - Find elements with `h.q('<test id>', { attr: 'value' })`. The test ids are a contract:
   §7.9 of `docs/planning/phase-1-implementation.md` (Phase 1) and §7.12 of
   `docs/planning/phase-2-implementation.md` (from M6 on). A new one goes into the Phase 2

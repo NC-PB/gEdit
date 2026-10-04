@@ -42,7 +42,7 @@
   "syntax": {
     "comments": [{ "start": ";", "end": null }],
     "strings": true,
-    "blockSkip": { "chars": "/", "position": "before-number", "levels": true },
+    "blockSkip": { "chars": "/", "position": "before-number", "levels": true, "plainLevel": "0" },
     "blockNumber": { "mode": "prefix", "prefix": "N", "altPrefixes": [], "mandatory": false, "mainPrefix": ":" },
     "decimalSeparator": ".",
     "exponentMarker": "EX",

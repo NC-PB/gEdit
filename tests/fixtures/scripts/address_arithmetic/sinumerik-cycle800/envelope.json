@@ -1,0 +1,23 @@
+{
+  "message": "Added 0.5 to Z in 3 words on 3 blocks. Left 3 blocks as written: 3 inside a frame. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 6,
+      "severity": "warning",
+      "message": "N50 CYCLE800(1,\"TC1\",0,57,0,0,0,0,30,0,0,0,0,1,100,1): opens a coordinate frame (CYCLE800): what a shift of the program's coordinates does there cannot be judged.",
+      "reason": "frame"
+    },
+    {
+      "line": 7,
+      "severity": "warning",
+      "message": "N60 G0 X10 Y10 Z20: inside the coordinate frame of CYCLE800 (line 6): what a shift of the program's coordinates does there cannot be judged.",
+      "reason": "frame"
+    },
+    {
+      "line": 8,
+      "severity": "warning",
+      "message": "N70 G1 Z-2 F200: inside the coordinate frame of CYCLE800 (line 6): what a shift of the program's coordinates does there cannot be judged.",
+      "reason": "frame"
+    }
+  ]
+}

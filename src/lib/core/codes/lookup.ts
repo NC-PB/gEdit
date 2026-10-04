@@ -14,7 +14,7 @@
 //     (Fanuc allows the space; `CALL LBL` and `CYCL DEF 200` keep theirs)
 
 import type { NcToken } from '$lib/core/nc/types';
-import type { CodeDb, CodeEntry, CodeLookup } from './types';
+import type { CodeDb, CodeEntry, CodeLookup, CodeParam } from './types';
 
 /** Letters and digits of a code, no separator: `G83`, `M6`, `R0`. */
 const LETTER_NUMBER = /^[A-Z]+\d/;
@@ -228,4 +228,28 @@ export function frameOf(entry: CodeEntry | null | undefined): 'open' | 'close' |
 export function speedLimitBoundOf(entry: CodeEntry | null | undefined): 'upper' | 'lower' | null {
   if (!entry || entry.sets?.speedLimit !== true) return null;
   return entry.sets.speedLimitBound === 'lower' ? 'lower' : 'upper';
+}
+
+// ---------------------------------------------------------------------------
+// P10 (roadmap R8; the decision of 2026-10-04 on tool centre point control; plan §7.2,
+// §7.16 #106, #107). Two more readers, with their Python twins `gedit_nc.position_of` and
+// `gedit_nc.tcp_of`, held to the same cases (`flagsContract.test.ts`,
+// `tests/python/test_code_flags.py`) and to the data goldens `tests/fixtures/codes/
+// {positions,flags}.json`.
+// ---------------------------------------------------------------------------
+
+/**
+ * What a parameter is to a program shift (R8): `'tool-axis'`, `'none'`, `'other'`,
+ * `'mode'`, or `null` for a parameter nobody has reviewed — which address arithmetic
+ * refuses, the same as `'other'`.
+ */
+export function positionOf(param: CodeParam | null | undefined): 'tool-axis' | 'none' | 'other' | 'mode' | null {
+  const value = param?.position;
+  return value === 'tool-axis' || value === 'none' || value === 'other' || value === 'mode' ? value : null;
+}
+
+/** Whether the code switches tool centre point control `'on'` or `'off'`, or `null`. */
+export function tcpOf(entry: CodeEntry | null | undefined): 'on' | 'off' | null {
+  const value = entry?.sets?.tcp;
+  return value === 'on' || value === 'off' ? value : null;
 }

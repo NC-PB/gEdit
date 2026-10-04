@@ -1,0 +1,11 @@
+{
+  "note": "Both positions the manuals and the posts use are read: behind the number and in front of it.",
+  "profile": "heidenhain-klartext",
+  "mode": "remove",
+  "options": {},
+  "expect": {
+    "summary": "ncBlockSkip.removeRun.summary",
+    "skipped": [],
+    "warnings": []
+  }
+}

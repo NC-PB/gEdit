@@ -114,6 +114,7 @@
     "rapid": "FMAX",
     "spindle": "S",
     "axes": ["X", "Y", "Z", "A", "B", "C", "U", "V", "W"],
+    "angular": ["A", "B", "C"],
     "feedUnitWords": { "FU": "per-rev", "FZ": "per-tooth" }
   },
   "toolCall": {
@@ -123,7 +124,8 @@
   },
   "program": {
     "start": ["\\bBEGIN\\s+PGM\\s+(?<name>\\S+)"],
-    "end": ["\\bEND\\s+PGM\\b"]
+    "end": ["\\bEND\\s+PGM\\b"],
+    "endRecord": true
   },
   "outline": [
     { "kind": "section", "pattern": "^\\s*(?:/\\s*)?\\d+\\s+(?:/\\s*)?\\*\\s*-?\\s*(?<text>.*)$" },

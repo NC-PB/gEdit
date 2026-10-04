@@ -257,6 +257,7 @@
     "blockSkip": {
       "chars": "/",
       "levels": true,
+      "plainLevel": "0",
       "position": "before-number"
     },
     "calls": true,

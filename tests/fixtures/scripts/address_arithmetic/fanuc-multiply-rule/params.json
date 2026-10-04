@@ -1,0 +1,5 @@
+{
+  "operation": "multiply",
+  "operand": 2,
+  "addresses": ["X", "Y", "Z"]
+}

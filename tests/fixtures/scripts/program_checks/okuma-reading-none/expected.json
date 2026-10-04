@@ -1,0 +1,32 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 7,
+      "check": "Machine reading",
+      "checkId": "machineReading",
+      "severity": "info",
+      "message": "the unit system decides every value, written with a point or without: X54: read as 54 mm by 'Unit 1 mm' (the assumed default), 0.054 mm by 'Unit 1 µm' or 0.54 mm by 'Unit 10 µm, metric only'; choose a machine"
+    }
+  ],
+  "message": "1 finding in 1 check. No machine chosen: where the presets read a number differently, the finding lists every reading.",
+  "findings": []
+}

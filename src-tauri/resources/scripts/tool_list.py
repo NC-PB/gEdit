@@ -104,7 +104,9 @@ Two rules keep the answer honest:
   goes to the next tool when a tool change comes before the next move.
 * Only the plain feed and spindle words are read (M8): the `F` and `S` of a dwell block
   (`fNotFeed`: `G04 F2`, `G4 S2`) are times, and a clamp word (`LIMS=`), a spindle named by
-  its number (`S3=`) or a driven tool's speed (`SB=`) is not the main spindle's `S`.
+  its number (`S3=`) or a driven tool's speed (`SB=`) is not the main spindle's `S`. A word
+  that names the **main** spindle by its number is (`S1=`, `S[1]=` where the profile's
+  `addresses.mainSpindle` is 1; M10, the owner's reading of 2026-09-27).
 
 A run over a **selection** is primed from `input.precedingLines` when the context carries
 them (`gedit_nc.prime_tracker`), so a `G95` or a `G96` that starts above the selection is
@@ -226,6 +228,10 @@ class Spec:
         ]
         self.feed_address = addresses.get("feed") if isinstance(addresses.get("feed"), str) else "F"
         self.spindle_address = addresses.get("spindle") if isinstance(addresses.get("spindle"), str) else "S"
+        #: P10 (decision 3, the owner's reading of 2026-09-27): the main spindle's number,
+        #: whose `S1=` / `S[1]=` is a tool's speed like the plain `S` (`addresses.mainSpindle`).
+        main = addresses.get("mainSpindle")
+        self.main_spindle = main.strip() if isinstance(main, str) and main.strip() != "" else None
         self.feed_speed = params.get("feedSpeed") is not False
         #: The addresses that move the machine: a block with one of them is where a tool cuts
         #: with the feed and speed in force (:class:`Pending`).
@@ -979,7 +985,9 @@ def collect(
     carries no number at all, so it is in neither the range nor the findings. Neither is a
     dwell (``fNotFeed``), nor a word under an address of its own: a clamp word (`LIMS=`), a
     spindle named by its number (`S3=`, or `S[3]=` with its index) or a driven tool's speed (`SB=`) is not the main
-    spindle's `S`, and only that word is read as the speed a tool runs at.
+    spindle's `S`, and only that word is read as the speed a tool runs at — together with the
+    words that name the main spindle by its number (`S1=`, `S[1]=` where the profile's
+    `addresses.mainSpindle` is 1; P10, the owner's reading of 2026-09-27).
     """
     # A dwell block (`fNotFeed`: Okuma `G04 F2`, Sinumerik `G4 F2` and `G4 S2`) holds a time,
     # not a feed and not a speed. It belongs to no range and needs no finding: nobody reads
@@ -999,14 +1007,25 @@ def collect(
     for token in tokens:
         if token.kind != "word" or token.address is None:
             continue
-        if token.index is not None:
+        main = gedit_nc.names_main_spindle(token, spec.spindle_address, spec.main_spindle)
+        if token.index is not None and not main:
             # `S[2]=500`, `LIMS[2]=1800` (`syntax.assignmentIndex`): the index names another
             # spindle, as `S2=` names one in its address, so it is no tool's speed (F1).
             continue
         value = numeric(token)
         if value is None:
             continue
-        if token.address == spec.feed_address or token.address in PER_TOOTH_ADDRESSES:
+        if main:
+            # P10 (decision 3): `S1=900` and `S[1]=900` where spindle 1 is the main spindle
+            # are the main spindle's speed, read like a plain `S` (a clamp block included).
+            if limit_code is not None:
+                row.skip("limit", line)
+            else:
+                row.add(
+                    "speed", speed_unit, (value, token.value_text or ""), line,
+                    note if speed_unit == "surface" else None,
+                )
+        elif token.address == spec.feed_address or token.address in PER_TOOTH_ADDRESSES:
             if pitch_reason is not None:
                 row.skip(pitch_reason, line)
             else:

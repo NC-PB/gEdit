@@ -296,6 +296,8 @@ export function leadingLines(read: (first: number, last: number) => string[], li
  *   are left alone.
  * - `convert-case`: that strings (Siemens tool names) and, on request, comments keep
  *   their case.
+ * - `block-skip-add`, `block-skip-remove`: where the mark stands (in front of an Okuma
+ *   sequence name, behind a Klartext block number) and which text is a block number.
  *
  * `remove-empty-lines` is not guarded: an empty line is empty in every dialect, and the
  * transform reads nothing else.
@@ -307,6 +309,8 @@ export const GUARDED_TRANSFORMS: ReadonlySet<string> = new Set([
   'insert-spaces',
   'remove-spaces',
   'convert-case',
+  'block-skip-add',
+  'block-skip-remove',
 ]);
 
 /**

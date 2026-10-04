@@ -157,14 +157,20 @@ from _nc_machine import (
 from _nc_modal import (
     FeedModeTracker,
     ModalInterpreter,
+    RotaryState,
     axis_words_of,
     diameter_axes,
     frame_of,
     incremental_axes,
+    is_assignment,
     machine_type_of,
+    names_main_spindle,
+    position_of,
     prime_tracker,
+    same_spindle,
     speed_limit_bound_of,
     speed_limit_of,
+    tcp_of,
 )
 
 
@@ -175,6 +181,8 @@ __all__ = [
     "CompiledProfile",
     "FeedModeTracker",
     "ModalInterpreter",
+    # M10 review (NC-4, NC-10): where the rotary axes stand while nothing compensates them.
+    "RotaryState",
     "load_context",
     "read_input",
     "to_py_regex",
@@ -207,6 +215,13 @@ __all__ = [
     "axis_words_of",
     "frame_of",
     "speed_limit_bound_of",
+    # Section 7.2 again (M10, P10): a parameter's role to a program shift (roadmap R8),
+    # tool centre point control, and the speed words that name the main spindle.
+    "position_of",
+    "tcp_of",
+    "names_main_spindle",
+    "same_spindle",
+    "is_assignment",
     # Beyond section 7.10, see the module docstring.
     "mask_comments",
     "block_number_of",

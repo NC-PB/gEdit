@@ -1,0 +1,272 @@
+{
+  "title": "Extents",
+  "columns": [
+    {
+      "key": "where",
+      "label": "Where"
+    },
+    {
+      "key": "axis",
+      "label": "Axis"
+    },
+    {
+      "key": "min",
+      "label": "Min"
+    },
+    {
+      "key": "minLine",
+      "label": "At line"
+    },
+    {
+      "key": "max",
+      "label": "Max"
+    },
+    {
+      "key": "maxLine",
+      "label": "At line"
+    },
+    {
+      "key": "unresolved",
+      "label": "Not resolved"
+    }
+  ],
+  "rows": [
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "X",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 5,
+      "max": "60",
+      "maxLine": 6,
+      "unresolved": 2,
+      "line": 6
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "0",
+      "minLine": 5,
+      "max": "50",
+      "maxLine": 7,
+      "unresolved": 2,
+      "line": 7
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-2",
+      "minLine": 6,
+      "max": "50",
+      "maxLine": 5,
+      "unresolved": 5,
+      "line": 5
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "A",
+      "axisId": "A",
+      "min": "0",
+      "minLine": 5,
+      "max": "10",
+      "maxLine": 13,
+      "unresolved": 0,
+      "line": 13
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "C",
+      "axisId": "C",
+      "min": "0",
+      "minLine": 5,
+      "max": "20",
+      "maxLine": 13,
+      "unresolved": 0,
+      "line": 13
+    },
+    {
+      "where": "G54 (line 3)",
+      "scope": "offset",
+      "axis": "X",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 5,
+      "max": "60",
+      "maxLine": 6,
+      "unresolved": 2,
+      "line": 6
+    },
+    {
+      "where": "G54 (line 3)",
+      "scope": "offset",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "0",
+      "minLine": 5,
+      "max": "50",
+      "maxLine": 7,
+      "unresolved": 2,
+      "line": 7
+    },
+    {
+      "where": "G54 (line 3)",
+      "scope": "offset",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-2",
+      "minLine": 6,
+      "max": "50",
+      "maxLine": 5,
+      "unresolved": 5,
+      "line": 5
+    },
+    {
+      "where": "G54 (line 3)",
+      "scope": "offset",
+      "axis": "A",
+      "axisId": "A",
+      "min": "0",
+      "minLine": 5,
+      "max": "10",
+      "maxLine": 13,
+      "unresolved": 0,
+      "line": 13
+    },
+    {
+      "where": "G54 (line 3)",
+      "scope": "offset",
+      "axis": "C",
+      "axisId": "C",
+      "min": "0",
+      "minLine": 5,
+      "max": "20",
+      "maxLine": 13,
+      "unresolved": 0,
+      "line": 13
+    },
+    {
+      "where": "G54, T=\"MILL_D10\" (line 2)",
+      "scope": "tool",
+      "axis": "X",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 5,
+      "max": "60",
+      "maxLine": 6,
+      "unresolved": 2,
+      "line": 6
+    },
+    {
+      "where": "G54, T=\"MILL_D10\" (line 2)",
+      "scope": "tool",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "0",
+      "minLine": 5,
+      "max": "50",
+      "maxLine": 7,
+      "unresolved": 2,
+      "line": 7
+    },
+    {
+      "where": "G54, T=\"MILL_D10\" (line 2)",
+      "scope": "tool",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "-2",
+      "minLine": 6,
+      "max": "50",
+      "maxLine": 5,
+      "unresolved": 5,
+      "line": 5
+    },
+    {
+      "where": "G54, T=\"MILL_D10\" (line 2)",
+      "scope": "tool",
+      "axis": "A",
+      "axisId": "A",
+      "min": "0",
+      "minLine": 5,
+      "max": "10",
+      "maxLine": 13,
+      "unresolved": 0,
+      "line": 13
+    },
+    {
+      "where": "G54, T=\"MILL_D10\" (line 2)",
+      "scope": "tool",
+      "axis": "C",
+      "axisId": "C",
+      "min": "0",
+      "minLine": 5,
+      "max": "20",
+      "maxLine": 13,
+      "unresolved": 0,
+      "line": 13
+    },
+    {
+      "where": "SUPA (line 21)",
+      "scope": "machine",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "0",
+      "minLine": 21,
+      "max": "0",
+      "maxLine": 21,
+      "unresolved": 0,
+      "line": 21
+    }
+  ],
+  "message": "No machine: readings assumed from the profile defaults, and a word whose reading depends on the machine is not resolved. 9 positions not resolved; the findings say why.",
+  "findings": [
+    {
+      "line": 9,
+      "severity": "warning",
+      "message": "3 positions inside the coordinate frame of CYCLE800 (line 8): they are in that frame's coordinates, not the program's, so they are not resolved.",
+      "reason": "frame"
+    },
+    {
+      "line": 15,
+      "severity": "warning",
+      "message": "1 position, first Z (line 15), written while A stood turned (or at an angle that is not known) and tool centre point control was off: they are positions of the machine's axes, not of the workpiece, so they are not resolved.",
+      "reason": "rotary"
+    },
+    {
+      "line": 15,
+      "severity": "warning",
+      "message": "1 position, first Y (line 15), written while A and C stood turned (or at an angle that is not known) and tool centre point control was off: they are positions of the machine's axes, not of the workpiece, so they are not resolved.",
+      "reason": "rotary"
+    },
+    {
+      "line": 15,
+      "severity": "warning",
+      "message": "1 position, first X (line 15), written while C stood turned (or at an angle that is not known) and tool centre point control was off: they are positions of the machine's axes, not of the workpiece, so they are not resolved.",
+      "reason": "rotary"
+    },
+    {
+      "line": 16,
+      "severity": "warning",
+      "message": "CYCLE81 (line 16), run in 1 block: the positions this cycle works to are in its parameters, which the extents do not compute; they are not resolved (its depth is not in the Z range).",
+      "reason": "cycle"
+    },
+    {
+      "line": 17,
+      "severity": "warning",
+      "message": "CYCLE83 (line 17), run in 1 block: the positions this cycle works to are in its parameters, which the extents do not compute; they are not resolved (its depth is not in the Z range).",
+      "reason": "cycle"
+    },
+    {
+      "line": 20,
+      "severity": "warning",
+      "message": "1 incremental word, first Z=IC(5) (line 20), move from a position the program does not state (the start, or after a machine position, a cycle, a frame or a value that was not resolved): not resolved.",
+      "reason": "incremental-start"
+    }
+  ]
+}

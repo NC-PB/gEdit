@@ -1,0 +1,46 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 7,
+      "check": "Program frame",
+      "checkId": "programFrame",
+      "severity": "error",
+      "message": "O5011 (SECOND PROGRAM): a new program starts, and the one before it (O5010 (FIRST PROGRAM, NO END), line 3) has no end code"
+    },
+    {
+      "line": 10,
+      "check": "Program frame",
+      "checkId": "programFrame",
+      "severity": "error",
+      "message": "G0 X20.: after the program end M30 on line 9; it never runs"
+    },
+    {
+      "line": 13,
+      "check": "Program frame",
+      "checkId": "programFrame",
+      "severity": "error",
+      "message": "G0 X30.: after the closing % on line 12; the control never reads it"
+    }
+  ],
+  "message": "3 findings in 1 check. No machine chosen: where the presets read a number differently, the finding lists every reading.",
+  "findings": []
+}

@@ -1,0 +1,46 @@
+{
+  "title": "Program checks",
+  "columns": [
+    {
+      "key": "line",
+      "label": "Line"
+    },
+    {
+      "key": "check",
+      "label": "Check"
+    },
+    {
+      "key": "severity",
+      "label": "Severity"
+    },
+    {
+      "key": "message",
+      "label": "Finding"
+    }
+  ],
+  "rows": [
+    {
+      "line": 11,
+      "check": "Rigid tapping",
+      "checkId": "rigidTapping",
+      "severity": "error",
+      "message": "M29 S500: written while the tapping cycle G84 is in force"
+    },
+    {
+      "line": 14,
+      "check": "Rigid tapping",
+      "checkId": "rigidTapping",
+      "severity": "error",
+      "message": "S600: a spindle speed between M29 (line 13) and the tapping cycle"
+    },
+    {
+      "line": 18,
+      "check": "Rigid tapping",
+      "checkId": "rigidTapping",
+      "severity": "error",
+      "message": "G0 X20.: a move between M29 (line 17) and the tapping cycle"
+    }
+  ],
+  "message": "3 findings in 1 check. No machine chosen: where the presets read a number differently, the finding lists every reading.",
+  "findings": []
+}

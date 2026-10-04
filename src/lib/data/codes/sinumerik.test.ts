@@ -65,6 +65,8 @@ const codesWith = (predicate: (e: CodeEntry) => boolean): string[] =>
 const MODAL_GROUPS = [
   'motion', 'plane', 'units', 'distance', 'feedmode', 'spindlemode', 'spindle', 'coolant', 'compensation',
   'lengthComp', 'offset', 'cycle', 'cyclereturn', 'diametermode', 'pathmode',
+  // M10 (WP10.2): G290/G291, the language the control reads the program in.
+  'language',
 ];
 
 describe('the shipped Sinumerik database', () => {
@@ -347,11 +349,15 @@ describe('the cycles', () => {
       expect(params.slice(0, 5).map((p) => p.address), code).toEqual(['RTP', 'RFP', 'SDIS', 'DP', 'DPR']);
       for (const param of params) expect(param.label.length, `${code} ${param.address}`).toBeGreaterThan(0);
     }
+    // P10 (R8): the arguments a newer control writes after these are described too, so that
+    // address arithmetic can tell a mode argument at 0 from one that changes the positions.
     expect(entry('CYCLE83')?.params?.map((p) => p.address)).toEqual([
       'RTP', 'RFP', 'SDIS', 'DP', 'DPR', 'FDEP', 'FDPR', '_DAM', 'DTB', 'DTS', 'FRF', 'VARI',
+      '_AXN', '_MDEP', '_VRT', '_DTD', '_DIS1', '_GMODE', '_DMODE', '_AMODE',
     ]);
     expect(entry('CYCLE84')?.params?.map((p) => p.address)).toEqual([
       'RTP', 'RFP', 'SDIS', 'DP', 'DPR', 'DTB', 'SDAC', 'MPIT', 'PIT', 'POSS', 'SST', 'SST1',
+      '_AXN', '_PITA', '_TECHNO', '_VARI', '_DAM', '_VRT', '_PITM', '_PTAB', '_PTABA', '_GMODE', '_DMODE', '_AMODE',
     ]);
   });
 
@@ -387,7 +393,7 @@ describe('the cycles', () => {
     ).toEqual(['G33', 'G331', 'G332', 'G34', 'G35', 'G335', 'G336']);
     // CYCLE81 has a dwell too, and a dwell of the drilling cycles is seconds when positive
     // and spindle revolutions when negative.
-    expect(entry('CYCLE81')?.params?.map((p) => p.address)).toEqual(['RTP', 'RFP', 'SDIS', 'DP', 'DPR', 'DTB']);
+    expect(entry('CYCLE81')?.params?.map((p) => p.address)).toEqual(['RTP', 'RFP', 'SDIS', 'DP', 'DPR', 'DTB', '_GMODE', '_DMODE', '_AMODE']);
     expect(entry('CYCLE81')?.params?.[5].label).toMatch(/revolutions when negative/);
   });
 

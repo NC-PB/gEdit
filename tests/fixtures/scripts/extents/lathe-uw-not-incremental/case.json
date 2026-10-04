@@ -1,0 +1,9 @@
+{
+  "profile": "fanuc-lathe",
+  "machine": {
+    "variants": {
+      "incrementalAddresses": "none"
+    }
+  },
+  "machineName": "Lathe C"
+}

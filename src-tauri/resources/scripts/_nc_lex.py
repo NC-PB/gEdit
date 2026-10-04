@@ -22,6 +22,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field, replace
 from decimal import Decimal, localcontext
+from functools import lru_cache
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 # ---------------------------------------------------------------------------
@@ -2228,6 +2229,7 @@ _CODE_JOIN = re.compile(r"^([A-Z]) (?=[-+.]?\d)", re.ASCII)
 _CODE_PAD = re.compile(r"^([A-Z]+)0+(?=\d)", re.ASCII)
 
 
+@lru_cache(maxsize=32768)
 def normalize_code(code: str) -> str:
     """The canonical form of a written code: ``G01`` → ``G1``, ``cycl  def 200`` → ``CYCL DEF 200``.
 
@@ -2235,6 +2237,10 @@ def normalize_code(code: str) -> str:
     padding is dropped, a decimal part is kept (``G54.1``), whitespace inside a multi-word
     code collapses to one space, and a single address letter written apart from its digits
     joins up (``G 83`` → ``G83``, while ``CALL LBL`` keeps its space).
+
+    Remembered per written form: every word of every block asks (``G1``, ``M3``, ``X0.5``),
+    a program repeats the same few hundred spellings, and the answer is a pure function of
+    the text. The cache is bounded, so a program of distinct coordinates cannot grow it.
     """
     packed = _CODE_SPACE.sub(" ", code.upper().strip())
     return _CODE_PAD.sub(r"\1", _CODE_JOIN.sub(r"\1", packed))

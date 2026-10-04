@@ -3,6 +3,7 @@
     "The syntax sections and the outline call rules (the subprogram-call patterns) of every built-in profile, pinned for M9 by its prelude P9 (plan section 6 M9, P9 item 4; section 7.1, 'The M9 syntax pins').",
     "Read by tests/unit/syntaxPins.test.ts against the resolved built-ins. 'pinned' is the state of the P9 commit. 'deferred' are values P9 decided but could not write without changing an existing golden or snapshot (section 5.2 rule 2): WP9.3 writes exactly these into the profile JSON, with the golden changes they cause, and the test accepts either value until I9 folds them into 'pinned'.",
     "Any other change to a pinned member during M9 is a hand-off note to the integration (I9), which applies it and updates this file. A content work package never edits it.",
+    "M10 review (NC-9): the block skip of the Fanuc and Sinumerik profiles gains plainLevel, the level the bare mark is (BDT1 on Fanuc, /0 on Sinumerik): a named pin change.",
     "Integration I9 folded the three deferred values (Fanuc function and print names, Klartext PLANE and TCPM words, the short Sinumerik header) into 'pinned'; 'deferred' is empty. A later value that cannot be written without changing an existing golden goes into 'deferred' again."
   ],
   "milestone": "M9",
@@ -18,6 +19,7 @@
         "blockSkip": {
           "chars": "/",
           "levels": true,
+          "plainLevel": "1",
           "position": "either"
         },
         "comments": [
@@ -72,6 +74,7 @@
           "DPRNT",
           "BPRNT"
         ],
+        "maxWordDigits": 8,
         "programNames": "<[A-Za-z0-9+\\-_.]+>",
         "variables": "#\\d+",
         "wordSeparatorRequired": false
@@ -91,6 +94,7 @@
         "blockSkip": {
           "chars": "/",
           "levels": true,
+          "plainLevel": "1",
           "position": "either"
         },
         "comments": [
@@ -145,6 +149,7 @@
           "DPRNT",
           "BPRNT"
         ],
+        "maxWordDigits": 8,
         "programNames": "<[A-Za-z0-9+\\-_.]+>",
         "variables": "#\\d+",
         "wordSeparatorRequired": false
@@ -304,6 +309,7 @@
           "NOT"
         ],
         "maxLineLength": 158,
+        "maxMCodes": 8,
         "names": "[A-Z]{2}[A-Z0-9]*",
         "sequenceNames": true,
         "systemVariables": "V[A-Z][A-Z0-9]{3}",
@@ -328,6 +334,7 @@
         "blockSkip": {
           "chars": "/",
           "levels": true,
+          "plainLevel": "0",
           "position": "before-number"
         },
         "calls": true,
@@ -460,6 +467,7 @@
         "blockSkip": {
           "chars": "/",
           "levels": true,
+          "plainLevel": "0",
           "position": "before-number"
         },
         "calls": true,

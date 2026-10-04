@@ -1,0 +1,857 @@
+{
+  "$format": [
+    "codes: per database (src/lib/data/codes/<id>.json), per code as that file writes it, the members the resolved database must carry. 'sets' members are compared one by one. add: whole new entries (their members must equal the resolved entry's).",
+    "profiles: per profile id, the syntax members the resolved profile must carry."
+  ],
+  "note": "The database and profile members the program checks read (WP10.2, M10), pinned. WP10.2 handed them to the integration as a patch; the integration (I10) wrote them into the shipped data, and tests/python/test_program_checks.py (TestShippedData) holds the shipped, resolved values to this file, so a change to one of these members is a change to a check.",
+  "codes": {
+    "fanuc": {
+      "G0": {
+        "sets": {
+          "motion": "rapid"
+        }
+      },
+      "G1": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G2": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G3": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G32": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G33": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G34": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G28": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G30": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G40": {
+        "sets": {
+          "radiusComp": "off"
+        }
+      },
+      "G41": {
+        "sets": {
+          "radiusComp": "on"
+        }
+      },
+      "G42": {
+        "sets": {
+          "radiusComp": "on"
+        }
+      },
+      "G43": {
+        "sets": {
+          "lengthComp": "on"
+        }
+      },
+      "G44": {
+        "sets": {
+          "lengthComp": "on"
+        }
+      },
+      "G43.4": {
+        "sets": {
+          "lengthComp": "on"
+        },
+        "conflicts": [
+          "cycle",
+          "surfaceSpeed",
+          "feedNotPerMinute",
+          "frame:frame",
+          "frame:polar",
+          "frame:cylindrical"
+        ]
+      },
+      "G43.5": {
+        "sets": {
+          "lengthComp": "on"
+        },
+        "conflicts": [
+          "cycle",
+          "surfaceSpeed",
+          "feedNotPerMinute",
+          "frame:frame",
+          "frame:polar",
+          "frame:cylindrical"
+        ]
+      },
+      "G49": {
+        "sets": {
+          "lengthComp": "off"
+        }
+      },
+      "G53": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G53.1": {
+        "alone": true,
+        "conflicts": [
+          "!frame:frame"
+        ]
+      },
+      "G65": {
+        "alone": true
+      },
+      "G68": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G68.2": {
+        "conflicts": [
+          "tcp",
+          "radiusComp",
+          "lengthComp",
+          "cycle",
+          "surfaceSpeed",
+          "frame:frame",
+          "frame:mirror",
+          "frame:scaling",
+          "frame:polar",
+          "frame:cylindrical"
+        ]
+      },
+      "G68.3": {
+        "conflicts": [
+          "tcp",
+          "radiusComp",
+          "lengthComp",
+          "cycle",
+          "surfaceSpeed",
+          "frame:frame",
+          "frame:mirror",
+          "frame:scaling",
+          "frame:polar",
+          "frame:cylindrical"
+        ]
+      },
+      "G68.4": {
+        "conflicts": [
+          "tcp",
+          "radiusComp",
+          "lengthComp",
+          "cycle",
+          "surfaceSpeed",
+          "frame:frame",
+          "frame:mirror",
+          "frame:scaling",
+          "frame:polar",
+          "frame:cylindrical"
+        ]
+      },
+      "G73": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G74": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G76": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G81": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G82": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G83": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G84": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G84.2": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G84.3": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G85": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G86": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G87": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G88": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G89": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G93": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G95": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "G96": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "M3": {
+        "sets": {
+          "spindle": "on"
+        }
+      },
+      "M4": {
+        "sets": {
+          "spindle": "on"
+        }
+      },
+      "M5": {
+        "sets": {
+          "spindle": "off"
+        }
+      }
+    },
+    "fanuc-lathe": {
+      "G32": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G40": {
+        "sets": {
+          "radiusComp": "off"
+        }
+      },
+      "G41": {
+        "sets": {
+          "radiusComp": "on"
+        }
+      },
+      "G42": {
+        "sets": {
+          "radiusComp": "on"
+        }
+      },
+      "G77": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G78": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G79": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G90": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G92": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G94": {
+        "sets": {
+          "motion": "feed"
+        }
+      }
+    },
+    "fanuc-lathe-b": {
+      "G33": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G77": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G78": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G79": {
+        "sets": {
+          "motion": "feed"
+        }
+      }
+    },
+    "heidenhain": {
+      "L": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "C": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "CR": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "CT": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "LP": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "CP": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "CTP": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "LN": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "APPR LT": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "APPR LN": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "APPR CT": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "APPR LCT": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "DEP LT": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "DEP LN": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "DEP CT": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "DEP LCT": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "R0": {
+        "sets": {
+          "radiusComp": "off"
+        }
+      },
+      "RL": {
+        "sets": {
+          "radiusComp": "on"
+        }
+      },
+      "RR": {
+        "sets": {
+          "radiusComp": "on"
+        }
+      },
+      "TOOL CALL": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "M91": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "M92": {
+        "conflicts": [
+          "tcp"
+        ]
+      },
+      "M3": {
+        "sets": {
+          "spindle": "on"
+        }
+      },
+      "M4": {
+        "sets": {
+          "spindle": "on"
+        }
+      },
+      "M5": {
+        "sets": {
+          "spindle": "off"
+        }
+      },
+      "M13": {
+        "sets": {
+          "spindle": "on"
+        }
+      },
+      "M14": {
+        "sets": {
+          "spindle": "on"
+        }
+      },
+      "PLANE SPATIAL": {
+        "requires": [
+          "MOVE",
+          "TURN",
+          "STAY"
+        ]
+      },
+      "PLANE PROJECTED": {
+        "requires": [
+          "MOVE",
+          "TURN",
+          "STAY"
+        ]
+      },
+      "PLANE EULER": {
+        "requires": [
+          "MOVE",
+          "TURN",
+          "STAY"
+        ]
+      },
+      "PLANE VECTOR": {
+        "requires": [
+          "MOVE",
+          "TURN",
+          "STAY"
+        ]
+      },
+      "PLANE POINTS": {
+        "requires": [
+          "MOVE",
+          "TURN",
+          "STAY"
+        ]
+      },
+      "PLANE RELATIV": {
+        "requires": [
+          "MOVE",
+          "TURN",
+          "STAY"
+        ]
+      },
+      "PLANE AXIAL": {
+        "requires": [
+          "MOVE",
+          "TURN",
+          "STAY"
+        ]
+      },
+      "PLANE RESET": {
+        "requires": [
+          "MOVE",
+          "TURN",
+          "STAY"
+        ]
+      }
+    },
+    "okuma": {
+      "G0": {
+        "sets": {
+          "motion": "rapid"
+        }
+      },
+      "G1": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G2": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G3": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G80": {
+        "contour": "close"
+      },
+      "G81": {
+        "contour": "open"
+      },
+      "G82": {
+        "contour": "open"
+      },
+      "G83": {
+        "contour": "open"
+      },
+      "G15": {
+        "conflicts": [
+          "surfaceSpeed",
+          "radiusComp"
+        ]
+      },
+      "G16": {
+        "conflicts": [
+          "surfaceSpeed",
+          "radiusComp"
+        ]
+      },
+      "G31": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G32": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G33": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G34": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G35": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G36": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G37": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G40": {
+        "sets": {
+          "radiusComp": "off"
+        }
+      },
+      "G41": {
+        "sets": {
+          "radiusComp": "on"
+        }
+      },
+      "G42": {
+        "sets": {
+          "radiusComp": "on"
+        }
+      },
+      "G96": {
+        "requires": [
+          "S"
+        ]
+      },
+      "G97": {
+        "requires": [
+          "S"
+        ]
+      },
+      "G101": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G102": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G103": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G112": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G113": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G140": {
+        "conflicts": [
+          "surfaceSpeed",
+          "radiusComp"
+        ]
+      },
+      "G141": {
+        "conflicts": [
+          "surfaceSpeed",
+          "radiusComp"
+        ]
+      },
+      "M3": {
+        "sets": {
+          "spindle": "on"
+        }
+      },
+      "M4": {
+        "sets": {
+          "spindle": "on"
+        }
+      },
+      "M5": {
+        "sets": {
+          "spindle": "off"
+        }
+      },
+      "M12": {
+        "sets": {
+          "toolSpindle": "off"
+        }
+      },
+      "M13": {
+        "sets": {
+          "toolSpindle": "on"
+        }
+      },
+      "M14": {
+        "sets": {
+          "toolSpindle": "on"
+        }
+      },
+      "M110": {
+        "alone": true
+      }
+    },
+    "sinumerik": {
+      "G0": {
+        "sets": {
+          "motion": "rapid"
+        }
+      },
+      "G1": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G2": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G3": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "CIP": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "CT": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G33": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G331": {
+        "sets": {
+          "motion": "feed",
+          "exitSpeed": "zero"
+        }
+      },
+      "G332": {
+        "sets": {
+          "motion": "feed",
+          "exitSpeed": "zero"
+        }
+      },
+      "G34": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G35": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G335": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G336": {
+        "sets": {
+          "motion": "feed"
+        }
+      },
+      "G40": {
+        "sets": {
+          "radiusComp": "off"
+        }
+      },
+      "G41": {
+        "sets": {
+          "radiusComp": "on"
+        }
+      },
+      "G42": {
+        "sets": {
+          "radiusComp": "on"
+        }
+      },
+      "G75": {
+        "conflicts": [
+          "radiusComp",
+          "tcp"
+        ]
+      },
+      "M3": {
+        "sets": {
+          "spindle": "on"
+        }
+      },
+      "M4": {
+        "sets": {
+          "spindle": "on"
+        }
+      },
+      "M5": {
+        "sets": {
+          "spindle": "off"
+        }
+      }
+    }
+  },
+  "add": {
+    "sinumerik": [
+      {
+        "code": "G290",
+        "group": "language",
+        "modal": true,
+        "sets": {
+          "language": "native"
+        },
+        "label": "Siemens language mode",
+        "description": "The control reads the program in its own language again, after G291."
+      },
+      {
+        "code": "G291",
+        "group": "language",
+        "modal": true,
+        "sets": {
+          "language": "iso"
+        },
+        "label": "ISO dialect mode",
+        "description": "From this block on the control reads the program in its ISO dialect, with Fanuc-style codes and words, until G290."
+      }
+    ]
+  },
+  "profiles": {
+    "fanuc-gcode": {
+      "syntax": {
+        "maxWordDigits": 8
+      }
+    },
+    "okuma-osp": {
+      "syntax": {
+        "maxMCodes": 8
+      }
+    }
+  }
+}

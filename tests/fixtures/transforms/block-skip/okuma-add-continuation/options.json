@@ -1,0 +1,11 @@
+{
+  "note": "An OSP $ line continues the block above and gets no mark of its own; the mark stands in front of the sequence name.",
+  "profile": "okuma-osp",
+  "mode": "add",
+  "options": {},
+  "expect": {
+    "summary": "ncBlockSkip.addRun.summary",
+    "skipped": [],
+    "warnings": []
+  }
+}

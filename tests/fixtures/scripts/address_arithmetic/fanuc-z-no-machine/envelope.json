@@ -1,0 +1,11 @@
+{
+  "message": "Subtracted 0.5 from Z in 2 words on 2 blocks. Left 1 word as written: 1 word whose reading depends on the machine. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 7,
+      "severity": "info",
+      "message": "Z1000: the reading depends on the machine (1 mm under \"Increments of 0.001 mm (IS-B)\", 0.1 mm under \"Increments of 0.0001 mm (IS-C)\" or 1000 mm under \"As written\"); choose a machine.",
+      "reason": "machine-dependent"
+    }
+  ]
+}

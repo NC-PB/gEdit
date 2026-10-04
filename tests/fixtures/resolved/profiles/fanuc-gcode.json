@@ -288,6 +288,7 @@
     "blockSkip": {
       "chars": "/",
       "levels": true,
+      "plainLevel": "1",
       "position": "either"
     },
     "comments": [
@@ -342,6 +343,7 @@
       "DPRNT",
       "BPRNT"
     ],
+    "maxWordDigits": 8,
     "programNames": "<[A-Za-z0-9+\\-_.]+>",
     "variables": "#\\d+",
     "wordSeparatorRequired": false

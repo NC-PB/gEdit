@@ -191,7 +191,18 @@ export interface Profile {
      * block above, so the lead on it is still the lead of that block's thread cycle.
      */
     continuationStart?: Pattern;
-    blockSkip?: { chars: string; position: 'before-number' | 'after-number' | 'either'; levels?: boolean };
+    /**
+     * `plainLevel` (M10 review, NC-9): the level a bare mark (`/`) is, `'0'` to `'9'`.
+     * Sinumerik reads `/` as `/0` (absent: `'0'`); a Fanuc control reads `/` and `/1` as one
+     * switch (BDT1), so its profiles say `'1'`. Insert and remove block skip treat the bare
+     * mark and that digit as one level.
+     */
+    blockSkip?: {
+      chars: string;
+      position: 'before-number' | 'after-number' | 'either';
+      levels?: boolean;
+      plainLevel?: '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
+    };
     blockNumber: {
       mode: 'prefix' | 'leading-integer';
       prefix?: string;
@@ -225,6 +236,13 @@ export interface Profile {
     keywords?: string[];
     /** Longest block the control accepts; used by the lint rules and the rulers. */
     maxLineLength?: number;
+    /**
+     * M10 (WP10.2, the program checks). The most digits a word may have once the control
+     * has converted it to increments (Fanuc: 8). The program checks report a longer one.
+     */
+    maxWordDigits?: number;
+    /** M10 (WP10.2). The most M codes the control takes in one block (Okuma: 8). */
+    maxMCodes?: number;
     /**
      * P8. The block-number prefix also carries **names**: `N` followed by a letter-led
      * name (Okuma `NLAP1`) is a `label` token, never a block number, so renumbering never
@@ -391,7 +409,12 @@ export interface Profile {
      */
     ignore?: Pattern;
   };
-  program: { start: Pattern[]; end: Pattern[] };
+  /**
+   * `endRecord` (M10 review, NC-8): a line that matches `end` is the closing record of the
+   * program in the file (Klartext `END PGM`), the counterpart of the `start` line, and not a
+   * block the program could skip. Absent: an `end` line is an ordinary block (`M30`).
+   */
+  program: { start: Pattern[]; end: Pattern[]; endRecord?: boolean };
   /** Ordered; the first matching rule wins. Named groups `text` and `name` give the label. */
   outline: { kind: OutlineKind; pattern: Pattern }[];
   numbering: NumberingOptions;

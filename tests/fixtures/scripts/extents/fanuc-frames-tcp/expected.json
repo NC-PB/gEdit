@@ -1,0 +1,338 @@
+{
+  "title": "Extents",
+  "columns": [
+    {
+      "key": "where",
+      "label": "Where"
+    },
+    {
+      "key": "axis",
+      "label": "Axis"
+    },
+    {
+      "key": "min",
+      "label": "Min"
+    },
+    {
+      "key": "minLine",
+      "label": "At line"
+    },
+    {
+      "key": "max",
+      "label": "Max"
+    },
+    {
+      "key": "maxLine",
+      "label": "At line"
+    },
+    {
+      "key": "unresolved",
+      "label": "Not resolved"
+    }
+  ],
+  "rows": [
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "X",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 6,
+      "max": "20",
+      "maxLine": 10,
+      "unresolved": 2,
+      "line": 10
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "0",
+      "minLine": 6,
+      "max": "10",
+      "maxLine": 10,
+      "unresolved": 2,
+      "line": 10
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "30",
+      "minLine": 12,
+      "max": "50",
+      "maxLine": 6,
+      "unresolved": 0,
+      "line": 6
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "A",
+      "axisId": "A",
+      "min": "0",
+      "minLine": 6,
+      "max": "20",
+      "maxLine": 12,
+      "unresolved": 0,
+      "line": 12
+    },
+    {
+      "where": "Program",
+      "scope": "program",
+      "axis": "C",
+      "axisId": "C",
+      "min": "0",
+      "minLine": 6,
+      "max": "45",
+      "maxLine": 12,
+      "unresolved": 0,
+      "line": 12
+    },
+    {
+      "where": "G54 (line 4)",
+      "scope": "offset",
+      "axis": "X",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 6,
+      "max": "20",
+      "maxLine": 10,
+      "unresolved": 1,
+      "line": 10
+    },
+    {
+      "where": "G54 (line 4)",
+      "scope": "offset",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "0",
+      "minLine": 6,
+      "max": "10",
+      "maxLine": 10,
+      "unresolved": 1,
+      "line": 10
+    },
+    {
+      "where": "G54 (line 4)",
+      "scope": "offset",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "30",
+      "minLine": 12,
+      "max": "50",
+      "maxLine": 6,
+      "unresolved": 0,
+      "line": 6
+    },
+    {
+      "where": "G54 (line 4)",
+      "scope": "offset",
+      "axis": "A",
+      "axisId": "A",
+      "min": "0",
+      "minLine": 6,
+      "max": "20",
+      "maxLine": 12,
+      "unresolved": 0,
+      "line": 12
+    },
+    {
+      "where": "G54 (line 4)",
+      "scope": "offset",
+      "axis": "C",
+      "axisId": "C",
+      "min": "0",
+      "minLine": 6,
+      "max": "45",
+      "maxLine": 12,
+      "unresolved": 0,
+      "line": 12
+    },
+    {
+      "where": "G54, T1 (line 5)",
+      "scope": "tool",
+      "axis": "X",
+      "axisId": "X",
+      "min": "0",
+      "minLine": 6,
+      "max": "20",
+      "maxLine": 10,
+      "unresolved": 1,
+      "line": 10
+    },
+    {
+      "where": "G54, T1 (line 5)",
+      "scope": "tool",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "0",
+      "minLine": 6,
+      "max": "10",
+      "maxLine": 10,
+      "unresolved": 1,
+      "line": 10
+    },
+    {
+      "where": "G54, T1 (line 5)",
+      "scope": "tool",
+      "axis": "Z",
+      "axisId": "Z",
+      "min": "30",
+      "minLine": 12,
+      "max": "50",
+      "maxLine": 6,
+      "unresolved": 0,
+      "line": 6
+    },
+    {
+      "where": "G54, T1 (line 5)",
+      "scope": "tool",
+      "axis": "A",
+      "axisId": "A",
+      "min": "0",
+      "minLine": 6,
+      "max": "20",
+      "maxLine": 12,
+      "unresolved": 0,
+      "line": 12
+    },
+    {
+      "where": "G54, T1 (line 5)",
+      "scope": "tool",
+      "axis": "C",
+      "axisId": "C",
+      "min": "0",
+      "minLine": 6,
+      "max": "45",
+      "maxLine": 12,
+      "unresolved": 0,
+      "line": 12
+    },
+    {
+      "where": "G54 + G52 (line 15)",
+      "scope": "offset",
+      "axis": "X",
+      "axisId": "X",
+      "min": "1",
+      "minLine": 16,
+      "max": "1",
+      "maxLine": 16,
+      "unresolved": 0,
+      "line": 16
+    },
+    {
+      "where": "G54 + G52 (line 15)",
+      "scope": "offset",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "1",
+      "minLine": 16,
+      "max": "1",
+      "maxLine": 16,
+      "unresolved": 0,
+      "line": 16
+    },
+    {
+      "where": "G54 + G52, T1 (line 5)",
+      "scope": "tool",
+      "axis": "X",
+      "axisId": "X",
+      "min": "1",
+      "minLine": 16,
+      "max": "1",
+      "maxLine": 16,
+      "unresolved": 0,
+      "line": 16
+    },
+    {
+      "where": "G54 + G52, T1 (line 5)",
+      "scope": "tool",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "1",
+      "minLine": 16,
+      "max": "1",
+      "maxLine": 16,
+      "unresolved": 0,
+      "line": 16
+    },
+    {
+      "where": "G54 + G52 (line 17)",
+      "scope": "offset",
+      "axis": "X",
+      "axisId": "X",
+      "min": "",
+      "minLine": "",
+      "max": "",
+      "maxLine": "",
+      "unresolved": 1,
+      "line": 18
+    },
+    {
+      "where": "G54 + G52 (line 17)",
+      "scope": "offset",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "",
+      "minLine": "",
+      "max": "",
+      "maxLine": "",
+      "unresolved": 1,
+      "line": 18
+    },
+    {
+      "where": "G54 + G52, T1 (line 5)",
+      "scope": "tool",
+      "axis": "X",
+      "axisId": "X",
+      "min": "",
+      "minLine": "",
+      "max": "",
+      "maxLine": "",
+      "unresolved": 1,
+      "line": 18
+    },
+    {
+      "where": "G54 + G52, T1 (line 5)",
+      "scope": "tool",
+      "axis": "Y",
+      "axisId": "Y",
+      "min": "",
+      "minLine": "",
+      "max": "",
+      "maxLine": "",
+      "unresolved": 1,
+      "line": 18
+    }
+  ],
+  "message": "No machine: readings assumed from the profile defaults, and a word whose reading depends on the machine is not resolved. 4 positions not resolved; the findings say why.",
+  "findings": [
+    {
+      "line": 7,
+      "severity": "info",
+      "message": "G68, 1 block: its axis words are values, not positions; left out of the ranges.",
+      "reason": "data"
+    },
+    {
+      "line": 8,
+      "severity": "warning",
+      "message": "2 positions inside the coordinate frame of G68 (line 7): they are in that frame's coordinates, not the program's, so they are not resolved.",
+      "reason": "frame"
+    },
+    {
+      "line": 15,
+      "severity": "info",
+      "message": "G52, 2 blocks: its axis words are values, not positions; left out of the ranges.",
+      "reason": "data"
+    },
+    {
+      "line": 18,
+      "severity": "warning",
+      "message": "G5.9: a code the code database does not know, in 1 block; the positions of those blocks are not resolved, because the code may move them outside the program's frame.",
+      "reason": "unknown-code"
+    }
+  ]
+}

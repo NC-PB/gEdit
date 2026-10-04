@@ -14,7 +14,7 @@ yours to tell gEdit, once per machine.
 
 You do not have to. Everything in this editor works without a single machine configured:
 the highlighting, the program map, the code help, the renumbering, the cleanups, the tool
-list and the scaling scripts. What a machine buys you is that gEdit stops saying "I cannot
+list, the scaling scripts, the program checks, the extents and address arithmetic. What a machine buys you is that gEdit stops saying "I cannot
 know that" about the values in your program.
 
 ---
@@ -157,6 +157,11 @@ Concretely, with no machine:
   maximum.
 - A word whose value depends on the machine is **listed, never converted**. Where gEdit can
   show you what each preset would make of it, it does — the assumed default first.
+- The three scripts that came with the checks follow the same rule. **Program checks** lists
+  the readings of every preset for a word without a point (the **Machine reading** rows);
+  **Extents** counts a position it cannot read as "not resolved" instead of putting a guess
+  into a minimum or maximum; **Address arithmetic** leaves such a word as written and lists
+  it, unless every preset would write the same result.
 
 What that leaves with a value depends on the dialect:
 
@@ -224,6 +229,19 @@ Afterwards:
 - **Default for its dialect** makes it the machine a document of that dialect gets when
   nothing else applies. On the default machine the same button reads **Not the default any
   more**.
+
+### The power-on distance mode
+
+Whether a program is absolute or incremental before it says so (`G90` or `G91`) is the
+**Positioning at power-on** field. It matters to the scripts that add to, or total up,
+positions. **Address arithmetic** moves a word only while it knows the program is absolute,
+because adding to an incremental word would add the offset twice; **Extents** cannot place
+an axis word at all while the mode is not known. A program whose post always writes `G90`
+is fine. A program that never does, such as the Siemens programs of some posts, is read as
+"not known" and every word is left as written and listed. The profiles of Fanuc and
+Sinumerik assume nothing here (Okuma starts absolute), because the state after a reset is a
+machine setting: if your control starts in `G90`, say so in the machine and the arithmetic
+and the extents work on those programs.
 
 ## Choosing the machine for a document
 
@@ -332,6 +350,12 @@ offset depends on the machine's tool offset memory, so it is a setting:
 
 A word whose offset is all zeros (`T0100`, `T120` under the last-digit reading) cancels the
 offset and is no tool change, in every reading.
+
+**The G-code system also decides what some blocks are.** A `G92` with `I` and `K` is a
+thread cycle in system A and the coordinate system in B; read as system A, a program that
+is really system B shows a thread under constant surface speed in the **Program checks**
+where there is none. A program that carries no marker of its system is read as A, so
+choose the machine for such a program rather than trust the guess.
 
 **Which words are incremental.** `U` and `W` are the incremental twins of `X` and `Z` in
 G-code system A, where `G90`/`G91` are cycles, and the documented default is that they are in

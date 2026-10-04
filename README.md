@@ -2,8 +2,8 @@
 
 A desktop editor for NC code. It is the tool you open after the post-processor has run:
 read the program, find your way around it, clean it up, renumber it, scale the feeds, list
-the tools, compare it with the last version, and save it without changing a byte you did
-not ask to change.
+the tools, check it before it goes to the machine, compare it with the last version, and
+save it without changing a byte you did not ask to change.
 
 Built with Tauri, SvelteKit and Monaco. It works offline — the editor is bundled with the
 app and nothing is loaded from the network.
@@ -92,7 +92,8 @@ if you ask, your header), convert case. Each one runs on the selection or the wh
 program, is one undo step, and lists in a Results panel every line it refused to touch and
 why. Renumbering rewrites the jumps, subprogram calls and cycle references whose target
 block it can prove, and asks before it leaves one behind; removing block numbers keeps the
-numbers something points at.
+numbers something points at. Block skip puts the skip mark on a selection, at a level where
+the control has several, and takes it off again; one key selects all the lines of a tool.
 
 **Comparison.** Compare the document with the version on disk, another tab, or any file,
 side by side or inline.
@@ -101,13 +102,13 @@ side by side or inline.
 stdin and the document's metadata, the resolved dialect, the code database and the
 document's machine in a JSON context. Its result can replace the input as one undo step,
 open in a new tab, or come back as a clickable table of findings. Parameters declared in
-the script become a form. Runs have a time limit and a Stop button. Three scripts ship with
-the app — scale feed rates, scale spindle speeds, tool list — and they use the same
-contract as one you write yourself.
+the script become a form. Runs have a time limit and a Stop button. Six scripts ship with
+the app — scale feed rates, scale spindle speeds, tool list, program checks, extents and
+address arithmetic — and they use the same contract as one you write yourself.
 
 ![A script run reported in the Results panel](docs/screenshots/script-run.png)
 
-*The Tools tab, with the three bundled scripts in the Python Scripts group, just after the
+*The Tools tab as it was in the first release, with the first three bundled scripts in the Python Scripts group, just after the
 tool list ran over the program in the editor. Its table is in the Results panel — the
 tools in order of first use, with the comment that describes each one, the line it is first
 called on, the number of calls and the feed and speed range — and under it the one finding:
@@ -146,8 +147,8 @@ work. Every text in the program is English. The
 
 Phase 2 is being built milestone by milestone (see the
 [roadmap](docs/planning/roadmap.md)). Still ahead, in this order: reading real programs
-right (M9, built; its Sinumerik milling profile ships in the next release); block skip, program checks,
-extents and arithmetic on address values (M10); comparing a re-posted program without the
+right (M9, in v0.3.0); block skip, program checks, extents and arithmetic on address values
+(M10, built, release v0.4 to follow); comparing a re-posted program without the
 noise of renumbering and number formatting, merging in both directions, and search and
 replace by word value (`T1` but not `T10`, `S>2000`) (M11); multi-channel programs, with a
 check that the wait codes of the channels match (M12); your own dialect profiles and typing

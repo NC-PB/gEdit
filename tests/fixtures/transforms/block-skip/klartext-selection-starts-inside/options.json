@@ -1,0 +1,17 @@
+{
+  "note": "A selection that starts inside a block (its head is above) cannot mark that block; it says so and marks the blocks that start in it.",
+  "profile": "heidenhain-klartext",
+  "mode": "add",
+  "options": {},
+  "scope": {
+    "startLine": 2,
+    "endLine": 5
+  },
+  "expect": {
+    "summary": "ncBlockSkip.addRun.summary",
+    "skipped": [],
+    "warnings": [
+      "ncBlockSkip.addRun.startsInside"
+    ]
+  }
+}
