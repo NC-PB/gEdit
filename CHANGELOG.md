@@ -2,6 +2,22 @@
 
 What changed in each release of gEdit, written for the person who edits NC programs. The release workflow publishes the entry of a version as the notes of its draft release, so the top of each entry has to make sense on its own.
 
+## v0.4.0 (2026-10-05)
+
+Check before the machine: this release adds the checks you run on a program before it goes to the machine, and makes the daily position edits safe. The installers are unsigned, as before; see "Installing an unsigned build" under v0.2.0.
+
+### New
+
+- **Program checks** (Tools tab): a report of what would stop or harm a program at the machine, each check switchable: a cut with the spindle stopped or never started, a tool change without a spindle start or inside a cycle, the `M0`/`M1` stops, the program's start and end, a number whose meaning depends on the machine (`X50` without a decimal point), and the rules the control manuals make certain for each dialect. Every row jumps to its line.
+- **Extents** (Tools tab): the minimum and maximum of every axis, per tool and for the whole program, in real values: a lathe's X as a diameter, arcs included, incremental moves resolved, work offsets and coordinate shifts kept apart, machine-coordinate moves listed separately. A value gEdit cannot be sure of is counted as "not resolved", never guessed.
+- **Address arithmetic** (Tools tab): add, subtract, multiply or divide chosen addresses, for example a Z shift. Hole depths inside drilling cycles move with the shift (Fanuc `R`, Klartext `Q203`, Sinumerik `RTP`/`RFP`/`DP`). Cycles whose positions gEdit cannot judge, unknown calls, incremental and machine-coordinate blocks, a tilted plane, and rotary moves without tool centre point control are left as written and listed, never shifted in part. A Klartext pole `CC` moves with the polar moves around it; Sinumerik `I=AC()`/`J=AC()` arc centres and `CIP` points move with their arcs.
+- **Block skip** (NC tab): insert or remove `/` on the selected blocks, with the level where the control has levels; a block is never marked twice, and a `/` that divides is never touched.
+- **Select Tool Segment** (`Mod+F7`): selects the tool at the cursor from its tool change to the next.
+
+### Changed
+
+- On a Sinumerik, `S1=` counts as the main spindle in the tool list too.
+
 ## v0.3.0 (2026-10-04)
 
 Real programs read right: this release is about gEdit reading the owner's real CAM output the way the machines read it, so that every later feature (checks, extents, a Z shift, compare) works on the right values. The installers are unsigned, as in v0.2.0; see "Installing an unsigned build" under v0.2.0.
