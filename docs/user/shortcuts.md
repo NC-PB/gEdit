@@ -85,6 +85,17 @@ These come from the editor component and are the ones you already know:
 
 Upper case, lower case, folding and the zoom are buttons on the Home and View tabs.
 
+## Search
+
+| Keys | |
+|---|---|
+| `Cmd/Ctrl+Shift+F` | Find All… — every hit of an address, a value or some text, in a list in the Results panel |
+
+**Replace All…** and **Find Whole Address…** have no shortcut; they are on the Home tab (*Search*)
+and in the palette. See [Searching](README.md#searching). `Cmd/Ctrl+F` and the replace keys in
+the Editing table are the editor's own find box, which takes a [regular expression](regex.md)
+too.
+
 ## NC
 
 Only one command on the NC tab has a key: **Select Tool Segment**, `Cmd/Ctrl+F7`, listed
@@ -110,10 +121,17 @@ are on the Tools tab and in the palette; so is each bundled script, **Program ch
 | Keys | |
 |---|---|
 | `Cmd/Ctrl+Alt+C` | Compare with… |
+| `Cmd/Ctrl+Alt+Right` | Copy Change to Current Document — while a comparison is open: the other side's version of the difference goes into your document |
+| `Cmd/Ctrl+Alt+Left` | Copy Change to Original — while a comparison is open: your version goes into the other side |
 | `Cmd/Ctrl+,` | Settings |
 
-Next and previous difference, the inline view and closing a comparison are buttons in the
-comparison itself. `About gEdit` and this shortcut list are on the View tab.
+Next and previous difference (the arrow buttons), the inline view, the **Raw** and **Review**
+buttons (the command is called Review Mode), the copy buttons ← and →, Export Differences… and closing
+a comparison are buttons in the comparison itself; **Compare Two Files…** is on the Tools tab. None of them has a key,
+and all are in the palette. See [Comparing two programs](README.md#comparing-two-programs).
+On Windows and Linux some graphics drivers and desktops take `Ctrl+Alt+Arrow` for
+themselves (they rotate the screen, or switch the workspace); if the copy keys do nothing,
+that is the reason, and the buttons in the comparison do the same. `About gEdit` and this shortcut list are on the View tab.
 
 ## Custom shortcuts
 

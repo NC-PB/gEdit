@@ -1,9 +1,12 @@
 <!--
-  The comparison overlay (plan §5 WP2.5, §7.9: `compare-view` with `data-source`).
+  The comparison overlay (plan §5 WP2.5, §7.9: `compare-view` with `data-source`; M11:
+  `data-mode`, the Raw/Review switch, the review bar, copy, export and go to line).
 
   Mounted by `PanelHost` in the `overlay` region, which means it takes the editor's place
   in the shell (AD-6). The diff editor itself lives in `$lib/monaco/diff`; this component
-  owns the container, the toolbar and the Esc key.
+  owns the container, the toolbar and the Esc key. It builds one diff editor per session
+  and tells it what to show (`sides`): the documents themselves in raw mode, the
+  normalized read-only copies in review mode.
 
   Esc is handled in the *bubble* phase on purpose, and the test is propagation, not
   `defaultPrevented`. Monaco's text area calls `preventDefault()` on *every* Escape
@@ -18,11 +21,19 @@
 <script lang="ts">
   import { get } from 'svelte/store';
   import { compareController } from '$lib/app/compare';
-  import { createDiff, currentDiff, setCurrentDiff, type DiffHandle } from '$lib/monaco/diff';
+  import { createDiff, currentDiff, setCurrentDiff, settleCreated, type DiffHandle } from '$lib/monaco/diff';
   import { t } from '$lib/i18n';
 
+  import { COMPARE_OPTION_KEYS, type CompareOptions } from '$lib/core/compare/types';
+
   const content = compareController.content;
-  const options = compareController.options;
+  const options = compareController.view;
+  const mode = compareController.mode;
+  const review = compareController.review;
+  const reviewInfo = compareController.reviewInfo;
+  const reviewOptions = compareController.options;
+  const sides = compareController.sides;
+  const copyBlock = compareController.copyBlock;
 
   let host = $state<HTMLElement | undefined>(undefined);
   let error = $state('');
@@ -42,7 +53,7 @@
     createDiff({
       container,
       modifiedDocId: session.docId,
-      original: session.original,
+      sides: get(sides) ?? { original: session.original, modified: { kind: 'document', docId: session.docId } },
       inline: initial.inline,
       ignoreTrimWhitespace: initial.ignoreTrimWhitespace,
     }).then(
@@ -53,6 +64,8 @@
         }
         handle = created;
         setCurrentDiff(created);
+        // A toggle may have been pressed while the editor was being built.
+        settleCreated(created, { sides: get(sides), ...get(options) });
         // The comparison owns the keyboard from here: Esc then reaches this component by
         // bubbling out of Monaco, and the diff navigation works without a click first.
         created.focus();
@@ -82,6 +95,41 @@
     handle?.setIgnoreTrimWhitespace(live.ignoreTrimWhitespace);
   });
 
+  // What the panes show: raw documents or the normalized copies. The same editor takes
+  // both, so a toggle does not rebuild it (and the scratch models are reused).
+  $effect(() => {
+    const live = $sides;
+    if (live) handle?.show(live);
+  });
+
+  /** One review toggle's label; written out so `i18n/keys.test.ts` sees the keys. */
+  function optionLabel(key: keyof CompareOptions): string {
+    switch (key) {
+      case 'ignoreBlockNumbers':
+        return t('compare.optionIgnoreBlockNumbers');
+      case 'ignoreWhitespace':
+        return t('compare.optionIgnoreWhitespace');
+      case 'ignoreComments':
+        return t('compare.optionIgnoreComments');
+      case 'ignoreCase':
+        return t('compare.optionIgnoreCase');
+      case 'ignoreNumberFormat':
+        return t('compare.optionIgnoreNumberFormat');
+    }
+  }
+
+  function copy(event: MouseEvent, direction: 'toModified' | 'toOriginal'): void {
+    void compareController.copyChange(direction, { lineOnly: event.shiftKey, thenNext: !event.shiftKey });
+  }
+
+  let gotoLine = $state('');
+  function onGoto(event: KeyboardEvent): void {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    event.stopPropagation();
+    compareController.goToLine(Number(gotoLine), event.shiftKey ? 'original' : 'modified');
+  }
+
   function onKeyDown(event: KeyboardEvent): void {
     if (event.key !== 'Escape') return;
     event.preventDefault();
@@ -95,20 +143,42 @@
   class="compare-view"
   data-testid="compare-view"
   data-source={$content?.source.kind ?? ''}
+  data-mode={$mode}
   aria-label={$content?.title ?? t('compare.title')}
   onkeydown={onKeyDown}
 >
   <div class="toolbar">
     <span class="caption" title={$content?.title ?? ''}>{$content?.title ?? ''}</span>
     <div class="spacer"></div>
-    <label class="switch">
-      <input
-        type="checkbox"
-        checked={$options.ignoreTrimWhitespace}
-        onchange={(event) => compareController.setIgnoreTrimWhitespace(event.currentTarget.checked)}
-      />
-      {t('compare.ignoreWhitespace')}
-    </label>
+    <div class="group" role="group" aria-label={t('compare.title')}>
+      <button
+        type="button"
+        class="tool"
+        data-testid="compare-mode"
+        data-mode="raw"
+        aria-pressed={$mode === 'raw'}
+        onclick={() => compareController.setMode('raw')}
+      >{t('compare.modeRaw')}</button>
+      <button
+        type="button"
+        class="tool"
+        data-testid="compare-mode"
+        data-mode="review"
+        aria-pressed={$mode === 'review'}
+        title={t('compare.toggleReview')}
+        onclick={() => compareController.setMode('review')}
+      >{t('compare.modeReview')}</button>
+    </div>
+    {#if $mode === 'raw'}
+      <label class="switch">
+        <input
+          type="checkbox"
+          checked={$options.ignoreTrimWhitespace}
+          onchange={(event) => compareController.setIgnoreTrimWhitespace(event.currentTarget.checked)}
+        />
+        {t('compare.ignoreWhitespace')}
+      </label>
+    {/if}
     <button
       type="button"
       class="tool"
@@ -133,11 +203,81 @@
     <button
       type="button"
       class="tool"
+      data-testid="compare-copy"
+      data-direction="toOriginal"
+      data-disabled={$copyBlock.toOriginal !== null}
+      title={t('compare.copyTitle', { action: t('compare.copyToOriginal') })}
+      aria-disabled={$copyBlock.toOriginal !== null}
+      aria-label={t('compare.copyToOriginal')}
+      onclick={(event) => copy(event, 'toOriginal')}
+    >{t('compare.copyToOriginalShort')}</button>
+    <button
+      type="button"
+      class="tool"
+      data-testid="compare-copy"
+      data-direction="toModified"
+      data-disabled={$copyBlock.toModified !== null}
+      title={t('compare.copyTitle', { action: t('compare.copyToModified') })}
+      aria-disabled={$copyBlock.toModified !== null}
+      aria-label={t('compare.copyToModified')}
+      onclick={(event) => copy(event, 'toModified')}
+    >{t('compare.copyToModifiedShort')}</button>
+    <button
+      type="button"
+      class="tool"
+      data-testid="compare-export"
+      data-normalized={$mode === 'review'}
+      title={t('compare.exportDiff')}
+      aria-label={t('compare.exportDiff')}
+      onclick={() => void compareController.exportDiff({ normalized: $mode === 'review' })}
+    >{t('compare.exportDiff')}</button>
+    <input
+      type="number"
+      min="1"
+      class="goto"
+      data-testid="compare-goto"
+      placeholder={t('compare.gotoLine')}
+      title={t('compare.gotoLineHint')}
+      aria-label={t('compare.gotoLine')}
+      bind:value={gotoLine}
+      onkeydown={onGoto}
+    />
+    <button
+      type="button"
+      class="tool"
       title={t('compare.close')}
       aria-label={t('compare.close')}
       onclick={() => compareController.close()}
     >✕</button>
   </div>
+
+  {#if $mode === 'review' && $content}
+    <div class="review-bar" role="group" aria-label={t('compare.reviewBar')}>
+      {#each COMPARE_OPTION_KEYS as key (key)}
+        <button
+          type="button"
+          class="tool"
+          data-testid="compare-option"
+          data-option={key}
+          data-default={$reviewInfo ? $reviewOptions[key] === $reviewInfo.defaults[key] : true}
+          aria-pressed={$reviewOptions[key]}
+          title={t('compare.optionHint', { what: optionLabel(key) })}
+          onclick={() => compareController.setOptions({ [key]: !$reviewOptions[key] })}
+        >{optionLabel(key)}</button>
+      {/each}
+      <button
+        type="button"
+        class="tool"
+        data-testid="compare-defaults"
+        data-profile-id={$reviewInfo?.profileId ?? ''}
+        title={t('compare.profileDefaultsHint', { profile: $reviewInfo?.profileId ?? '' })}
+        onclick={() => compareController.resetOptions()}
+      >{t('compare.profileDefaults')}</button>
+      {#each $review?.notes ?? [] as note, index (index)}
+        <span class="note" data-testid="compare-note" data-reason={note.reason}>{note.text}</span>
+      {/each}
+    </div>
+  {/if}
 
   {#if $content}
     <div class="diff-host" bind:this={host}></div>
@@ -180,6 +320,45 @@
     font-size: 12px;
     white-space: nowrap;
     text-overflow: ellipsis;
+  }
+
+  .group {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 2px;
+  }
+
+  .goto {
+    flex: 0 0 auto;
+    width: 84px;
+    padding: 2px 4px;
+    color: var(--text-main);
+    font: inherit;
+    font-size: 11px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+  }
+
+  .review-bar {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    padding: 4px 8px;
+    background-color: var(--bg-ribbon);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .note {
+    flex: 1 1 100%;
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+
+  .tool[data-disabled='true'] {
+    opacity: 0.5;
   }
 
   .spacer {

@@ -16,6 +16,15 @@
 // raises only when a keybinding matched — so the two checks are now kept together: a
 // plain Esc closes the comparison, and an Esc that closes the find widget does not.
 //
+// M11 (H11): a comparison's text sides (the saved version, a file, a review copy) live in two
+// scratch models, `original` and `modified`, created on first use, reused with `setValue` and never
+// disposed - which is what closes the old race between a late dispose and the next comparison.
+// "No model is left behind" therefore reads: the registry holds at most two more models than before
+// the first comparison, and **a repeated comparison adds none**. `steady` is the count after the
+// first comparison has been closed. The raw toggle `aria-pressed` is not the first one in the view
+// any more (the Raw/Review buttons carry it too), so the inline button is found by what it lacks:
+// a test id.
+//
 // Counting models needs Monaco's `IModelService`, and the page has no `monaco` global:
 // the scenario bundle would only bundle a second, unrelated copy of the editor. The one
 // live handle is the editor instance, so the registry is read out of its instantiation
@@ -70,6 +79,7 @@ scenario('m2-compare', { timeout: 300 }, async (h) => {
   h.check('Monaco’s model registry is reachable (monaco 0.55 internals)', models !== null)
   const modelCount = () => models?.getModels().length ?? -1
   const baseline = modelCount()
+  let steady = baseline
 
   // ------------------------------------------------------------ Mod+Alt+C, the saved version
   await h.nativeKeys([{ key: 'c', mods: ['cmd', 'alt'] }])
@@ -138,15 +148,19 @@ scenario('m2-compare', { timeout: 300 }, async (h) => {
   h.check('the document was never touched', ctx.editor.getText(id) === textBefore)
   await h.waitFor(() => JSON.stringify(h.app.cursor()) === cursorBefore, { timeout: 5000 })
   h.check('and the cursor is where it was', JSON.stringify(h.app.cursor()) === cursorBefore, { before: cursorBefore, after: JSON.stringify(h.app.cursor()) })
-  // The model is let go of a moment after the close on purpose (mergeA §2.5, I2), so
-  // every count below waits instead of reading straight away.
-  await h.waitFor(() => modelCount() === baseline, { timeout: 5000 })
-  h.check('no temporary model is left behind', modelCount() === baseline, { baseline, now: modelCount() })
+  // The scratch models stay (and are blanked); what matters is that they are at most two and that
+  // no later comparison adds one.
+  steady = modelCount()
+  h.check('the first comparison leaves at most the two scratch models behind', steady >= baseline && steady <= baseline + 2, { baseline, steady })
 
   // ------------------------------------------------------------ the toolbar
   void ctx.commands.run('compare.withSaved', { docId: id })
   await h.waitFor(() => !!view()?.querySelector('.monaco-diff-editor'), { timeout: 15000 })
-  const inlineButton = () => /** @type {HTMLElement | null} */ (view()?.querySelector('[aria-pressed]') ?? null)
+  // The inline toggle is the only toggle button without a test id (Raw/Review and the review
+  // options have one).
+  const inlineButton = () => /** @type {HTMLElement | null} */ (view()?.querySelector('button.tool[aria-pressed]:not([data-testid])') ?? null)
+  h.check('the toolbar has the M11 controls: Raw and Review, copy both ways, export, go to line', h.qa('compare-mode').map((e) => e.dataset.mode).join() === 'raw,review' && h.qa('compare-copy').length === 2 && !!h.q('compare-export') && !!h.q('compare-goto'))
+  h.check('Raw is pressed and the raw whitespace switch is offered', h.q('compare-mode', { mode: 'raw' })?.getAttribute('aria-pressed') === 'true' && !!view()?.querySelector('input[type="checkbox"]'))
   h.check('it starts side by side', inlineButton()?.getAttribute('aria-pressed') === 'false', inlineButton()?.getAttribute('aria-pressed'))
   await ctx.commands.run('compare.toggleInline')
   await h.waitFor(() => inlineButton()?.getAttribute('aria-pressed') === 'true', { timeout: 5000 })
@@ -161,8 +175,7 @@ scenario('m2-compare', { timeout: 300 }, async (h) => {
   await h.sleep(300)
   h.check('stepping through the differences leaves the comparison up and the document alone', !!view() && ctx.editor.getText(id) === textBefore)
   await closeAndWait()
-  await h.waitFor(() => modelCount() === baseline, { timeout: 5000 })
-  h.check('compare.close drops the model as well', modelCount() === baseline, { baseline, now: modelCount() })
+  h.check('compare.close adds no model: the count is the steady one', modelCount() === steady, { steady, now: modelCount() })
 
   // ------------------------------------------------------------ closed before the first diff
   // mergeA §2.5: this threw `no diff result available` as an unhandled rejection. A
@@ -175,8 +188,7 @@ scenario('m2-compare', { timeout: 300 }, async (h) => {
   await h.sleep(1500)
   const after = h.rec.errors.slice(errorsBefore).filter((/** @type {string} */ e) => !/Canceled/.test(e))
   h.check('a comparison closed before its first diff says nothing at all', after.length === 0 && !h.rec.errors.some((/** @type {string} */ e) => /diff result/.test(e)), after)
-  await h.waitFor(() => modelCount() === baseline, { timeout: 5000 })
-  h.check('and leaves no model behind either', modelCount() === baseline, { baseline, now: modelCount() })
+  h.check('and adds no model either', modelCount() === steady, { steady, now: modelCount() })
 
   // ------------------------------------------------------------ with another document
   await ctx.commands.run('compare.withDocument')
@@ -184,7 +196,7 @@ scenario('m2-compare', { timeout: 300 }, async (h) => {
   h.check('with exactly two tabs open there is nothing to pick', view()?.dataset.source === 'document' && !h.q('quick-pick'), view()?.dataset.source)
   h.check('the caption names the other tab', /f01-mill-3tools\.nc ↔ h01-3tools\.h/.test(view()?.textContent ?? ''), view()?.querySelector('.caption')?.textContent)
   await h.waitFor(() => !!view()?.querySelector('.monaco-diff-editor'), { timeout: 15000 })
-  h.check('a document comparison owns no model of its own', modelCount() === baseline, { baseline, now: modelCount() })
+  h.check('a document comparison owns no model of its own', modelCount() === steady, { steady, now: modelCount() })
   await closeAndWait()
   h.check('closing a document comparison keeps both documents', ctx.docs.all().length === 2 && ctx.editor.getText(id) === textBefore, ctx.docs.all().map((/** @type {any} */ d) => d.title))
 
@@ -196,10 +208,9 @@ scenario('m2-compare', { timeout: 300 }, async (h) => {
   h.check('a file comparison names the file', view()?.dataset.source === 'file' && /f02-packed\.nc/.test(view()?.textContent ?? ''), view()?.dataset.source)
   await h.waitFor(() => !!view()?.querySelector('.monaco-diff-editor'), { timeout: 15000 })
   h.check('the file is not opened as a tab', ctx.docs.all().length === 2 && !ctx.docs.byPath(other), ctx.docs.all().map((/** @type {any} */ d) => d.title))
-  h.check('its temporary model is on the original side', modelCount() === baseline + 1, { baseline, now: modelCount() })
+  h.check('its text goes into the scratch model on the original side, which the saved-version comparison already made: no new model', modelCount() === steady, { steady, now: modelCount() })
   await closeAndWait()
-  await h.waitFor(() => modelCount() === baseline, { timeout: 5000 })
-  h.check('and it is disposed when the comparison closes', modelCount() === baseline, { baseline, now: modelCount() })
+  h.check('and closing keeps the count at the steady one', modelCount() === steady, { steady, now: modelCount() })
 
   // ------------------------------------------------------------ the 50 MB guard (F8)
   const huge = `${h.cfg.run}/huge.nc`
@@ -211,7 +222,8 @@ scenario('m2-compare', { timeout: 300 }, async (h) => {
   await h.sleep(500)
   h.check('a file above the limit is refused, and no diff is built', !view() && !!h.q('editor-host'), { opened, view: !!view() })
   h.check('the status bar says why', h.q('status-message')?.dataset.error === '1' && /cannot be compared/.test(h.q('status-message')?.textContent ?? ''), h.q('status-message')?.textContent)
-  h.check('nothing of it stayed in the model registry', modelCount() === baseline, { baseline, now: modelCount() })
+  h.check('nothing of it entered the model registry', modelCount() === steady, { steady, now: modelCount() })
+  h.check('after all those comparisons the registry still holds no more than the two scratch models', modelCount() <= baseline + 2, { baseline, now: modelCount() })
 
   // The comparison never wrote anything: the config folder is still untouched by it.
   const paths = configPaths(ctx)

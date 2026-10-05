@@ -561,3 +561,39 @@ describe('performance', () => {
     expect(ms, `${Math.round(ms)} ms for 100k lines`).toBeLessThan(3000);
   });
 });
+
+describe('Sinumerik jump targets (M11 review NC-3)', () => {
+  const cp = compiled('sinumerik');
+  const FREE = { start: 10, step: 10, skipStartingWith: '', restartAtProgramStart: false };
+
+  it('follows a jump to a block number written without N', () => {
+    for (const jump of ['GOTOF', 'GOTOB', 'GOTOC', 'GOTO']) {
+      const result = renumber.run([`N5 ${jump} 7`, 'N6 G0 X0', 'N7 M30'], context(cp, FREE));
+      expect(result.lines, jump).toEqual([`N10 ${jump} 30`, 'N20 G0 X0', 'N30 M30']);
+      expect(result.warnings, jump).toEqual([{ key: 'ncNumbering.renumber.referencesRewritten', params: { count: 1 } }]);
+    }
+  });
+
+  it('still follows a jump to a main block and to an N block', () => {
+    expect(renumber.run(['N5 GOTOF :7', 'N6 G0 X0', ':7 M30'], context(cp, FREE)).lines).toEqual(['N10 GOTOF :30', 'N20 G0 X0', ':30 M30']);
+    expect(renumber.run(['N5 GOTOF N7', 'N6 G0 X0', 'N7 M30'], context(cp, FREE)).lines).toEqual(['N10 GOTOF N30', 'N20 G0 X0', 'N30 M30']);
+  });
+
+  it('reports a jump through a string or a name that is no label of the program', () => {
+    for (const jump of ['GOTOF DEST', 'GOTOF "N"<<R10']) {
+      const lines = [`N5 ${jump}`, 'N6 G0 X0', 'N7 M30'];
+      const result = renumber.run(lines, context(cp, FREE));
+      expect(result.lines[0], jump).toBe(`N10 ${jump}`);
+      expect(result.warnings, jump).toEqual([{ key: 'ncNumbering.renumber.referencesUnresolved', params: { count: 1 } }]);
+      expect(renumber.preflight?.(lines, context(cp, FREE))?.key, jump).toBe('ncNumbering.renumber.references');
+    }
+  });
+
+  it('says nothing about a jump to a label of the program', () => {
+    const lines = ['N5 LOOP_A: G0 X0', 'N6 GOTOB LOOP_A', 'N7 M30'];
+    const result = renumber.run(lines, context(cp, FREE));
+    expect(result.lines).toEqual(['N10 LOOP_A: G0 X0', 'N20 GOTOB LOOP_A', 'N30 M30']);
+    expect(result.warnings).toEqual([]);
+    expect(renumber.preflight?.(lines, context(cp, FREE))).toBeNull();
+  });
+});

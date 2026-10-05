@@ -18,6 +18,7 @@
 import type { Component } from 'svelte';
 import type { Readable } from 'svelte/store';
 import type { CodeDb, CodeEntry, CodeLookup } from '$lib/core/codes/types';
+import type { CompareOptions } from '$lib/core/compare/types';
 import type { FieldSpec } from '$lib/core/forms/types';
 import type { NcToken } from '$lib/core/nc/types';
 import type { Settings } from '$lib/core/settings/schema';
@@ -340,6 +341,8 @@ export interface EditorService {
   selectionLines(): { startLine: number; endLine: number; empty: boolean } | null;
   selectedText(): string;
   triggerAction(actionId: string, payload?: unknown): void;
+  /** Fills the find widget's search without showing it, so `findWithArgs` does not seed it from the cursor word. */
+  presetFind(searchString: string): void;
   updateOptions(o: Record<string, unknown>): void;
   onDidChangeContent(cb: (id: DocId, c: ContentChange) => void): Disposable;
   onDidChangeCursor(cb: (c: CursorInfo) => void): Disposable;
@@ -644,7 +647,7 @@ export type CompareSource =
   | { kind: 'file'; path: string }
   | { kind: 'saved' };
 
-/** app/compare.ts → `export const compare: CompareService` (owner: WP2.5) */
+/** app/compare.ts → `export const compare: CompareService` (owner: WP2.5; M11: WP11.3) */
 export interface CompareService {
   /** The open comparison, or null. `title` is already translated. */
   readonly session: Readable<{ docId: DocId; source: CompareSource; title: string } | null>;
@@ -652,6 +655,29 @@ export interface CompareService {
   open(docId: DocId, source: CompareSource): Promise<boolean>;
   /** Disposes any temporary model and restores the editor's view state. */
   close(): void;
+
+  // M11 (P11, §7.7, AD-26). Stubs until WP11.3; the rules are in `core/compare/types.ts`.
+
+  /** `raw`: the documents as they are (P1). `review`: both sides normalized, read-only. */
+  readonly mode: Readable<'raw' | 'review'>;
+  setMode(m: 'raw' | 'review'): void;
+  /**
+   * The review-mode toggles in force: the modified document's profile defaults
+   * (`compareDefaults`) with the user's saved changes over them (`CompareMemo`, §7.11).
+   */
+  readonly options: Readable<CompareOptions>;
+  setOptions(p: Partial<CompareOptions>): void;
+  /**
+   * Copies the change at the cursor (a block of lines, or the one line with `lineOnly`) to
+   * the other side, as one undo step in the target, then optionally moves to the next
+   * change. Raw mode only; `toOriginal` only while the original side is an open document.
+   * False when nothing was copied (no change at the cursor, review mode, a locked target).
+   */
+  copyChange(direction: 'toModified' | 'toOriginal', o?: { lineOnly?: boolean; thenNext?: boolean }): Promise<boolean>;
+  /** A unified diff (raw or normalized) into a new untitled document; null when none. */
+  exportDiff(o: { normalized: boolean }): Promise<DocId | null>;
+  /** Picks what is missing, opens both as documents (dialog grants, F3), compares. */
+  openFiles(a?: string, b?: string): Promise<boolean>;
 }
 
 // ---------------------------------------------------------------------------
@@ -749,6 +775,12 @@ export interface ReportData {
   message?: string;
   /** Display order; `key` indexes into each row. */
   columns: { key: string; label: string }[];
+  /**
+   * A row that carries `line` is clickable. M11 (P11, §7.16 #139): a row may also carry its
+   * own `docId` (an open document's id), which wins over `document` and the report's
+   * `docId` — find-all over every open document lists rows of several documents, and two
+   * of them can have the same name.
+   */
   rows: Record<string, unknown>[];
   findings?: Located[];
   /** The document the lines refer to; the active one when it is missing. */

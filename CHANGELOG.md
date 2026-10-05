@@ -2,6 +2,34 @@
 
 What changed in each release of gEdit, written for the person who edits NC programs. The release workflow publishes the entry of a version as the notes of its draft release, so the top of each entry has to make sense on its own.
 
+## v0.5.0 (2026-10-05)
+
+Compare and search: this release makes a re-posted program comparable without numbering noise, merges the differences in both directions, and finds and replaces any word by its value. The installers are unsigned, as before; see "Installing an unsigned build" under v0.2.0.
+
+### New
+
+- **NC-aware search and replace** (Home tab, *Search*; `Mod+Shift+F` for Find All): the form reads each line the way the dialect does, so it knows a comment from a block.
+- A **word query** finds an address by its value as written: `G1` finds `G01` and `G1.` but not `G10`; `T01` finds `T1`; `S>12000` and `X<=-5.5` are conditions; `SB=500` and `S1=` work on Okuma and Sinumerik; `Q206` finds a variable. A word is never found in a comment or a string.
+- **Whole address** finds every use of an address; **Regular expression** and plain text work as in the editor, with the text also searched in comments when you tick *Also in comments*.
+- **Scope:** the active document or all open documents; the hits go to the Results panel with a count, and a click jumps to the line.
+- **Program-number references:** `O2000` finds the program and the calls that name it (`M98 P2000`, `G65 P2000`, the macro calls), including the packed Fanuc form `M98 P52000`.
+- **Replace All** changes the hits in place or into a new tab, as one undo step, and says how many it changed. A word typed without a value replaces only the address and keeps the value.
+- **Find Whole Address** puts the pattern of an address into the editor's own find box, so you can step through the hits.
+- **Compare review mode:** compares the program as the control reads it, not as it is spelled. Five options (block numbers, whitespace, comments, case, number format), each profile with its own defaults, and what review mode will not hide is kept and noted in the bar: a block number that a jump points at, a decimal point the machine reads, a comment the control shows the operator.
+- **Merge in both directions:** `Mod+Alt+Right` copies the difference at the cursor into the current document, `Mod+Alt+Left` into the original. Each copy is one undo step; a copy refuses while the comparison is still updating.
+- **Export Differences** writes the differences as a unified diff into a new tab, raw or from the review mode text.
+- **Compare Two Files** (Tools tab) opens two files from disk and compares them.
+- **Saved options:** the compare mode and the changed review options are remembered per profile across sessions.
+- **Regular expressions** help page in the user guide, with NC examples, the differences between the editor's flavour and Python's, and what to do about a slow pattern.
+
+### Fixed
+
+- Closing a comparison while the diff is still updating no longer races: the temporary models are reused and filled only while the diff editor is detached.
+- Sinumerik `GOTOF :200` and `GOTOF 200` now count as references to the block, so Renumber follows them and review mode keeps the number; a jump to a name that is no label (`GOTOF WERKZEUG`) is reported, not guessed.
+- Okuma `MSG` and `G215` comments are kept by review mode, since the operator sees them.
+- Fanuc mill `G70.7` to `G73.7` are references to the contour blocks they name; `M198 P` names a program.
+- Klartext `IX+10` is its own address in search, so a search for `X10` no longer finds or changes it.
+
 ## v0.4.0 (2026-10-05)
 
 Check before the machine: this release adds the checks you run on a program before it goes to the machine, and makes the daily position edits safe. The installers are unsigned, as before; see "Installing an unsigned build" under v0.2.0.

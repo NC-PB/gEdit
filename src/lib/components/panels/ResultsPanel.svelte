@@ -15,8 +15,9 @@
   buttons, the same shape `ProgramMapPanel` uses. A row with no line stays a plain `<div>`
   — not clickable, not focusable, and it still carries its test id.
 
-  Revealing switches documents: `Located.document` (a script naming a file) wins, then the
-  report's `docId`, then the active document.
+  Revealing switches documents: a row's own `docId` (find-all over several documents, plan
+  §7.16 #139) wins, then `Located.document` (a script naming a file), then the report's
+  `docId`, then the active document.
 -->
 <script module lang="ts">
   import { t } from '$lib/i18n';
@@ -194,9 +195,12 @@
     sort = { report, key, dir };
   }
 
-  /** Which document a line belongs to: the named one, the report's, then the active one. */
-  function documentOf(name: unknown): DocId | null {
+  /** Which document a line belongs to: its own id, the named one, the report's, then the active one. */
+  function documentOf(name: unknown, id?: unknown): DocId | null {
     void $docList; // re-resolve when a document opens, closes or is renamed
+    // A row that names its document by id (§7.16 #139) is that document or nothing: once it
+    // is closed the row is inert, and must not fall through to another tab of the same name.
+    if (typeof id === 'string' && id !== '') return docs.get(id) ? id : null;
     if (typeof name === 'string' && name !== '') {
       const wanted = name.toLowerCase();
       const byTitle = docs.all().find((doc) => doc.title.toLowerCase() === wanted);
@@ -295,7 +299,7 @@
         </div>
         {#each rows as row, index (index)}
           {@const line = rowLine(row)}
-          {@const docId = documentOf(row.document)}
+          {@const docId = documentOf(row.document, row.docId)}
           {#if line !== null && docId !== null}
             <button
               type="button"

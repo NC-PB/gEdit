@@ -94,6 +94,7 @@ function createFakeEditor(docs: DocumentStore): FakeEditor {
     calls,
     languages,
     eols,
+    presetFind: () => {},
     focusCount: 0,
     type: change,
 

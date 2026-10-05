@@ -302,6 +302,11 @@ Three programs and the bytes `m5-exit-criteria` and `m5-exit-criteria-nopython` 
 top-level README. Written by `exit/gen-exit.py`; do not edit them by hand.
 `exit/README.md` describes each file. `tests/unit/fixtures.test.ts` does not walk `exit/`.
 
+## `compare/`: compare fixtures (WP11.2)
+
+Synthetic programs for the review-mode normalization and the unified diff (X5), read by
+`src/lib/core/compare/compare.test.ts`; `compare/README.md` describes each file.
+
 ## Expectations and golden files
 
 Not NC programs: tables that say what a module must answer. The sample lines in them are

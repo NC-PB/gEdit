@@ -6,7 +6,7 @@
 // the edit shapes are only there to prove which strategy answered.
 
 import { describe, expect, it } from 'vitest';
-import { charSpan, computeLineEdits, DEFAULT_MAX_D, type LineEdit } from './lineDiff';
+import { charSpan, computeLineEdits, DEFAULT_MAX_D, diffLines, type LineEdit } from './lineDiff';
 import { expectWithin } from '../../../../tests/unit/helpers/budget';
 
 /** Applies the edits from the last to the first, exactly as Monaco applies a batch. */
@@ -207,6 +207,38 @@ describe('computeLineEdits: the Myers fallback', () => {
       }
       roundTrip(oldLines, newLines);
     }
+  });
+});
+
+describe('diffLines: the Myers diff on its own (M11, WP11.2)', () => {
+  it('keeps an insertion and a deletion apart where the lengths happen to match', () => {
+    const oldLines = ['A', 'B', 'C', 'D', 'E', 'F'];
+    const newLines = ['A', 'NEW', 'B', 'C', 'D', 'E'];
+    // The same-length shortcut pairs by position: five changed lines.
+    expect(computeLineEdits(oldLines, newLines)).toEqual([{ oldStart: 1, oldEnd: 6, newLines: newLines.slice(1) }]);
+    const edits = diffLines(oldLines, newLines);
+    expect(edits).toEqual([
+      { oldStart: 1, oldEnd: 1, newLines: ['NEW'] },
+      { oldStart: 5, oldEnd: 6, newLines: [] },
+    ]);
+    expectWellFormed(edits, oldLines.length);
+    expect(applyEdits(oldLines, edits)).toEqual(newLines);
+  });
+
+  it('answers what computeLineEdits answers where the lengths differ', () => {
+    const oldLines = ['N10', 'N20', 'N30', 'N40'];
+    const newLines = ['N10', 'N25', 'N30'];
+    expect(diffLines(oldLines, newLines)).toEqual(computeLineEdits(oldLines, newLines));
+    expect(diffLines([], [])).toEqual([]);
+    expect(diffLines([], ['A'])).toEqual([{ oldStart: 0, oldEnd: 0, newLines: ['A'] }]);
+    expect(diffLines(['A', 'B'], [])).toEqual([{ oldStart: 0, oldEnd: 2, newLines: [] }]);
+  });
+
+  it('gives one hunk past the cap: correct, not minimal', () => {
+    const oldLines = Array.from({ length: 50 }, (_, i) => `O${i}`);
+    const newLines = Array.from({ length: 50 }, (_, i) => `N${i}`);
+    const edits = diffLines(oldLines, newLines, { maxD: 10 });
+    expect(edits).toEqual([{ oldStart: 0, oldEnd: 50, newLines }]);
   });
 });
 

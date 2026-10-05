@@ -965,7 +965,9 @@ lists them all).
    instead of assuming the top-of-program state.
 2. **Work on tokens, not on a regular expression over raw lines.** `tokenize_line` knows
    what is a comment, a string, a variable and an expression *in this dialect*. A naive
-   `re.sub` rewrites the `G1` inside `(FINISH G1 PASS)` and corrupts the program.
+   `re.sub` rewrites the `G1` inside `(FINISH G1 PASS)` and corrupts the program. Inside a word
+   or a comment you already isolated a pattern is fine; how Python's `re` differs from the
+   editor's find, and the NC examples, are on [Regular expressions](regex.md#in-a-script).
 3. **Never widen or narrow a number by accident.** Use `scale_decimal` and `format_number`,
    never a float. They keep `10.` from becoming `10`, keep the precision each value was
    written with, and round the way the editor's own transformations do.

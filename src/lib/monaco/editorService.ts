@@ -667,6 +667,20 @@ export function createEditorService(deps: EditorServiceDeps): EditorService {
       instance?.trigger('gedit', actionId, payload);
     },
 
+    /**
+     * Puts `searchString` into the find widget's state without showing it. Monaco's
+     * "find with arguments" seeds an *empty* search from the word at the cursor and lets
+     * that win over its own `searchString` argument; with the state already filled it
+     * seeds nothing, so the argument is what stays (M11 fix).
+     */
+    presetFind(searchString: string): void {
+      const controller = instance?.getContribution('editor.contrib.findController') as
+        | { getState(): { change(changes: { searchString: string }, moveCursor: boolean): void } }
+        | null
+        | undefined;
+      controller?.getState().change({ searchString }, false);
+    },
+
     updateOptions(o: Record<string, unknown>): void {
       // Remembered before it is applied, so an option set while there is no editor (the
       // theme, during startup) still reaches the one that appears later.

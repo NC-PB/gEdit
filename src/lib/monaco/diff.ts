@@ -1,14 +1,17 @@
 // The diff editor behind Compare (plan §5 WP2.5). Owner: WP2.5.
 //
 // This is the only module besides `editorService` that may hold a Monaco object, and the
-// rules are the same: the instance never goes into a store, and everything it created is
-// disposed on close. Monaco does not sync a model above 50 MB to its worker, so a diff
+// rules are the same: the instance never goes into a store, and the editor it created is
+// disposed on close. The two scratch models behind a text side are the exception: they are
+// reused, not disposed (see `scratchModel`), and their text changes only while no diff
+// view model that could still be computing a diff for them exists. Monaco does not sync a model above 50 MB to its worker, so a diff
 // for such a side never arrives (F8) — `CompareService.open()` checks the sizes with
 // `modelCharCount()` first and answers false rather than showing an editor that stays
 // empty.
 //
-// `DiffHandle` is what `CompareView` holds: the navigation the toolbar drives, plus the
-// two live options.
+// `DiffHandle` is what `CompareView` holds: the navigation the toolbar drives, the two live
+// options, the content to show (raw or the normalized copies of review mode, M11) and the
+// handful of reads and the model access that the merge needs (`app/compare.ts` plans it).
 //
 // Three rules the construction options follow, all verified against Monaco 0.55:
 //
@@ -38,6 +41,7 @@ import { editor as editorService } from '$lib/monaco/editorService';
 import { docs } from '$lib/stores/documents';
 import { t } from '$lib/i18n';
 import type { Disposable, DocId } from '$lib/app/types';
+import type { EditableModel } from '$lib/monaco/applyLines';
 
 /**
  * Monaco stops syncing a model to the editor worker above this many UTF-16 code units
@@ -47,7 +51,25 @@ import type { Disposable, DocId } from '$lib/app/types';
  */
 export const MODEL_SYNC_LIMIT_CHARS = 50 * 1024 * 1024;
 
-/** A mounted diff editor. `dispose()` also disposes any model this module created. */
+/** The two panes of a diff editor. */
+export type DiffSide = 'original' | 'modified';
+
+/** One Monaco line change, as `IStandaloneDiffEditor.getLineChanges()` reports it. */
+export interface DiffLineChange {
+  /** An empty side has `…EndLineNumber` 0, and its start is the line *before* the change. */
+  originalStartLineNumber: number;
+  originalEndLineNumber: number;
+  modifiedStartLineNumber: number;
+  modifiedEndLineNumber: number;
+}
+
+/** Where the user is: the pane that has the keyboard (the modified one by default) and its line. */
+export interface DiffCursor {
+  side: DiffSide;
+  line: number;
+}
+
+/** A mounted diff editor. `dispose()` also lets go of the scratch models this module lent it. */
 export interface DiffHandle {
   /** Moves to the next or previous change and reveals it. */
   goToDiff(direction: 'next' | 'previous'): void;
@@ -55,83 +77,185 @@ export interface DiffHandle {
   setIgnoreTrimWhitespace(ignore: boolean): void;
   /** Focuses the editable side, so the keyboard reaches the comparison. */
   focus(): void;
+  /**
+   * Shows other content in the same editor (raw ↔ review, another set of toggles). A text
+   * side goes into one of the two scratch models, which are reused, never disposed (see
+   * `scratchModel`). A text modified side is read-only: it is a normalized copy.
+   */
+  show(sides: DiffSides): void;
+  cursor(): DiffCursor | null;
+  /** The blocks Monaco found, or null while the first diff has not arrived. */
+  lineChanges(): DiffLineChange[] | null;
+  /**
+   * Whether `lineChanges()` describes the text as it is now. Monaco recomputes the diff
+   * 200 ms or more after an edit and serves the old blocks until then, so a merge planned
+   * from them would act on line numbers that no longer hold what they did (M11 CODE-1).
+   */
+  isCurrent(): boolean;
+  /** The model behind a pane, for the merge (it edits through the model, one undo step). */
+  model(side: DiffSide): EditableModel | null;
+  /** Puts the cursor of a pane on `line` (clamped) and scrolls it into view. */
+  reveal(side: DiffSide, line: number): void;
+  /**
+   * Goes to the next change once the diff has been recomputed. A merge edit changes the
+   * text, and `goToDiff` asked straight away would still see the block that was just
+   * copied; Monaco's own update event is the ordering that makes it right.
+   */
+  nextWhenUpdated(): void;
   dispose: Disposable;
 }
 
-/** The read-only side: another document's live model, or text read from disk. */
-export type DiffOriginal =
+/** What one pane shows: another document's live model, or text (a file, or a normalized copy). */
+export type DiffSource =
   | { kind: 'document'; docId: DocId }
   | { kind: 'text'; text: string; languageId: string };
 
-/** What the two sides of a comparison are. */
+/** The read-only side of a raw comparison. */
+export type DiffOriginal = DiffSource;
+
+/** The two panes' content. */
+export interface DiffSides {
+  original: DiffSource;
+  modified: DiffSource;
+}
+
+/** What `CompareView` asks for. */
 export interface DiffRequest {
   container: HTMLElement;
-  /** The document whose model is the editable, modified side. */
+  /** The compared document: its lock decides whether the modified side may be edited. */
   modifiedDocId: DocId;
-  /** The other document's model, or a file's text for a temporary model. */
-  original: DiffOriginal;
+  sides: DiffSides;
   inline: boolean;
   ignoreTrimWhitespace: boolean;
 }
 
-/**
- * Lets go of a model this module created (mergeA).
- *
- * The diff itself is computed in Monaco's editor worker, and a request that is already on
- * its way answers `null` when the model it asks about has been unsynced in the meantime.
- * `WorkerBasedDocumentDiffProvider` turns that `null` into `throw new Error('no diff
- * result available')` unless its cancellation token has been flagged by then
- * (`diffProviderFactoryService.js:103,110`) — and closing a comparison flags that token
- * through the observable graph, which settles a tick later than `dispose()` returns. A
- * comparison closed before its first diff had arrived therefore left an unhandled
- * rejection behind, which fails a runtime-harness run (reproduced: a `document` original,
- * which has no model of ours to drop, never showed it).
- *
- * The model is detached from the editor before this runs, so nothing renders it in the
- * meantime, and letting go of it later is free.
- *
- * The delay is a *margin, not a proof* (I2). mergeA handed the disposal to the next
- * macrotask, which is enough when the main thread is idle, but the rejection came back
- * once in four full-suite runs — in `m2-external`, which closes a comparison and then
- * immediately reloads the document. Cancellation travels through Monaco's observable
- * graph, so a busy main thread delays it, while the worker's `null` answer arrives on a
- * message task that does not wait. A margin of `GRACE_MS` is some two orders of magnitude
- * more than a worker round trip and survives that, but it cannot rule the race out.
- *
- * The deterministic fix is to stop unsyncing the model at all: reuse one scratch model
- * across comparisons, so the worker is never asked about a model that has gone. That
- * changes what "no temporary model is left behind" means (one model would persist), so it
- * wants WP2.5 and the `m2-compare` check together rather than a late integration commit.
- */
-const GRACE_MS = 250;
+// ---------------------------------------------------------------------------
+// Scratch models
+// ---------------------------------------------------------------------------
 
-function disposeOwnedModel(model: MonacoApi.editor.ITextModel): void {
-  if (typeof setTimeout !== 'function') {
-    model.dispose();
-    return;
-  }
-  setTimeout(() => model.dispose(), GRACE_MS);
+/**
+ * Two models, one per pane, created on first use and **never disposed**. A text side (a
+ * file read from disk, or a normalized copy in review mode) is put into one of them with
+ * `setValue`, and it is blanked when the comparison closes.
+ *
+ * Two races decide how. Both come from the diff being computed in Monaco's editor worker
+ * while the main thread goes on (`diffEditorViewModel.js`, `diffProviderFactoryService.js`):
+ *
+ *  1. A request that is on its way answers `null` when its model has been unsynced in the
+ *     meantime, and `WorkerBasedDocumentDiffProvider` turns that into `throw new Error('no
+ *     diff result available')` unless the request's cancellation token is set by then.
+ *     Disposing a model unsyncs it, so these models are never disposed (this replaced a
+ *     250 ms delay).
+ *  2. The view model records the edits made while its request is on its way and applies
+ *     them to the answer, assuming the worker diffed the text as it was when the request
+ *     started. But `EditorWorkerClient.computeDiff` awaits a `$ping` of the worker before
+ *     it syncs the models, and a synced model forwards every edit straight away, so an
+ *     edit in that window is diffed by the worker *and* applied again on top: a diff of
+ *     the old text is laid over the new one and `LineRange` throws ("startLineNumber 5
+ *     cannot be after endLineNumberExclusive 2" after a blank-on-close). Monaco drops an
+ *     answer only when the token is set, and a view model it created itself is disposed —
+ *     which sets the token — in a `setTimeout(0)` after `setModel` replaced it, so a
+ *     `setValue` right after `setModel(null)` is still inside the window.
+ *
+ * So this module creates the view models itself (`createViewModel`). Monaco never disposes
+ * a view model it was given, and `detach` disposes it synchronously right after
+ * `setModel(null)`: its token is set before any scratch text changes, and an answer that
+ * arrives later is dropped at Monaco's cancellation check before it reads a model. A
+ * scratch model's text changes only while no live view model holds it — the order is the
+ * proof, not a margin. "No temporary model is left behind" reads: at most these two exist,
+ * however many comparisons were opened.
+ */
+const scratch: Partial<Record<DiffSide, MonacoApi.editor.ITextModel>> = {};
+
+/** A handle, as far as the scratch slots are concerned. */
+interface ScratchOwner {
+  /** Takes the models off its diff editor and disposes its view model (no-op when detached). */
+  detach(): void;
 }
+
+/**
+ * Which handle last filled a slot, so a late `dispose()` of an older handle blanks nothing,
+ * and so a newer handle that takes the slot detaches the older one before it refills it.
+ */
+const scratchOwner: Partial<Record<DiffSide, ScratchOwner>> = {};
+
+function scratchModel(
+  monaco: typeof MonacoApi,
+  slot: DiffSide,
+  owner: ScratchOwner,
+  text: string,
+  languageId: string,
+): MonacoApi.editor.ITextModel {
+  // Another handle that still shows this model (a comparison rebuilt before the old one
+  // was disposed) lets go of it first, so its view model is gone before the text changes.
+  const previous = scratchOwner[slot];
+  if (previous && previous !== owner) previous.detach();
+  let model = scratch[slot];
+  if (!model || model.isDisposed()) {
+    model = monaco.editor.createModel(text, languageId);
+    scratch[slot] = model;
+  } else {
+    if (model.getLanguageId() !== languageId) monaco.editor.setModelLanguage(model, languageId);
+    model.setValue(text);
+  }
+  scratchOwner[slot] = owner;
+  return model;
+}
+
+/** Empties the slots `owner` filled last: the text of a 50 MB file does not outlive its view. */
+function releaseScratch(owner: ScratchOwner): void {
+  for (const slot of ['original', 'modified'] as const) {
+    if (scratchOwner[slot] !== owner) continue;
+    scratchOwner[slot] = undefined;
+    const model = scratch[slot];
+    if (model && !model.isDisposed()) model.setValue('');
+  }
+}
+
+/** The models a comparison runs on (a test counts them through Monaco's registry). */
+export function scratchModelCount(): number {
+  return Object.values(scratch).filter((model) => model && !model.isDisposed()).length;
+}
+
+// ---------------------------------------------------------------------------
+// The diff editor
+// ---------------------------------------------------------------------------
 
 /** Mounts a diff editor into `container`. Rejects when a side has no model. */
 export async function createDiff(req: DiffRequest): Promise<DiffHandle> {
   const monaco = await getMonaco();
+  let diffEditor: MonacoApi.editor.IStandaloneDiffEditor | undefined;
+  /** The view model on screen, created and disposed by this module (see `scratch`). */
+  let viewModel: MonacoApi.editor.IDiffEditorViewModel | null = null;
+  const detach = (): void => {
+    if (!diffEditor || !viewModel) return;
+    diffEditor.setModel(null);
+    // Synchronously, not in Monaco's `setTimeout(0)`: this sets the cancellation token of a
+    // diff that is still being computed, before anyone changes the text it was asked about.
+    viewModel.dispose();
+    viewModel = null;
+  };
+  const attach = (original: MonacoApi.editor.ITextModel, modified: MonacoApi.editor.ITextModel): void => {
+    if (!diffEditor) return;
+    const next = diffEditor.createViewModel({ original, modified });
+    diffEditor.setModel(next);
+    viewModel = next;
+  };
+  const owner: ScratchOwner = { detach };
 
-  const modified = editorService.model(req.modifiedDocId);
-  if (!modified) throw new Error(`compare: document "${req.modifiedDocId}" has no model`);
+  const modelOf = (slot: DiffSide, source: DiffSource): MonacoApi.editor.ITextModel => {
+    if (source.kind === 'text') return scratchModel(monaco, slot, owner, source.text, source.languageId);
+    const model = editorService.model(source.docId);
+    if (!model) throw new Error(`compare: document "${source.docId}" has no model`);
+    return model;
+  };
 
-  // Only a `text` original belongs to this module; a document's model is the store's.
-  let owned: MonacoApi.editor.ITextModel | undefined;
-  let original: MonacoApi.editor.ITextModel | undefined;
-  if (req.original.kind === 'document') {
-    original = editorService.model(req.original.docId);
-    if (!original) throw new Error(`compare: document "${req.original.docId}" has no model`);
-  } else {
-    owned = monaco.editor.createModel(req.original.text, req.original.languageId);
-    original = owned;
-  }
+  const modifiedModel = modelOf('modified', req.sides.modified);
+  const originalModel = modelOf('original', req.sides.original);
 
-  const lockedNow = (): boolean => docs.get(req.modifiedDocId)?.readOnly === true;
+  // The modified side is a normalized copy in review mode: nothing may write it.
+  let reviewing = req.sides.modified.kind === 'text';
+  const lockedNow = (): boolean => reviewing || docs.get(req.modifiedDocId)?.readOnly === true;
   let appliedLock = lockedNow();
 
   let instance: MonacoApi.editor.IStandaloneDiffEditor;
@@ -149,19 +273,56 @@ export async function createDiff(req: DiffRequest): Promise<DiffHandle> {
       renderOverviewRuler: true,
     });
   } catch (err) {
-    owned?.dispose();
+    releaseScratch(owner);
     throw err;
   }
-  instance.setModel({ original, modified });
+  diffEditor = instance;
+  attach(originalModel, modifiedModel);
 
   let disposed = false;
-  // Rule 3: `fileOps.setReadOnly` changes the document without changing which one is open.
-  const stopFollowingLock = docs.list.subscribe(() => {
+  // CODE-1: false from any change of either pane's text (or model) until Monaco has
+  // recomputed the diff for it.
+  let fresh = false;
+  let shown = req.sides;
+  let pendingNext: MonacoApi.IDisposable | null = null;
+
+  const applyLock = (): void => {
     const locked = lockedNow();
     if (disposed || locked === appliedLock) return;
     appliedLock = locked;
     instance.updateOptions({ readOnly: locked });
-  });
+  };
+  // Rule 3: `fileOps.setReadOnly` changes the document without changing which one is open.
+  const stopFollowingLock = docs.list.subscribe(applyLock);
+
+  // A toolbar button takes the focus away from both panes, so the pane the user was last
+  // in is remembered: that is the one a "copy" starts from.
+  let lastSide: DiffSide = 'modified';
+  const trackFocus = [
+    instance.getOriginalEditor().onDidFocusEditorText(() => {
+      lastSide = 'original';
+    }),
+    instance.getModifiedEditor().onDidFocusEditorText(() => {
+      lastSide = 'modified';
+    }),
+  ];
+
+  const markStale = (): void => {
+    fresh = false;
+  };
+  const trackFresh = [
+    instance.getOriginalEditor().onDidChangeModelContent(markStale),
+    instance.getModifiedEditor().onDidChangeModelContent(markStale),
+    instance.getOriginalEditor().onDidChangeModel(markStale),
+    instance.getModifiedEditor().onDidChangeModel(markStale),
+    instance.onDidUpdateDiff(() => {
+      fresh = true;
+    }),
+  ];
+
+  const editorOf = (side: DiffSide): MonacoApi.editor.ICodeEditor =>
+    side === 'original' ? instance.getOriginalEditor() : instance.getModifiedEditor();
+
   return {
     goToDiff(direction: 'next' | 'previous'): void {
       if (!disposed) instance.goToDiff(direction);
@@ -175,18 +336,109 @@ export async function createDiff(req: DiffRequest): Promise<DiffHandle> {
     focus(): void {
       if (!disposed) instance.getModifiedEditor().focus();
     },
+    show(sides: DiffSides): void {
+      if (disposed || sides === shown) return;
+      // CODE-12: everything that can throw happens before anything changes, so a refused
+      // show() leaves the handle (and the scratch models) as they were.
+      for (const source of [sides.modified, sides.original]) {
+        if (source.kind === 'document' && !editorService.model(source.docId)) {
+          throw new Error(`compare: document "${source.docId}" has no model`);
+        }
+      }
+      // The scratch models are filled with `setValue`, and nothing may hold them while
+      // that happens: the diff editor would shrink the model under view zones and
+      // decorations built for the old text ("Illegal value for lineNumber"), and a view
+      // model still computing a diff would lay it over the new text (see `scratch`). So
+      // the editor is detached first — its view model disposed — filled, and attached to
+      // a new view model.
+      const refills = sides.modified.kind === 'text' || sides.original.kind === 'text';
+      if (refills) detach();
+      const modified = modelOf('modified', sides.modified);
+      const original = modelOf('original', sides.original);
+      shown = sides;
+      reviewing = sides.modified.kind === 'text';
+      applyLock();
+      const current = viewModel?.model;
+      if (current?.original !== original || current?.modified !== modified) {
+        detach();
+        attach(original, modified);
+      }
+      // A side that is a document again no longer needs its scratch text (up to the size
+      // of the program, twice): blank it, now that no pane shows it.
+      for (const slot of ['original', 'modified'] as const) {
+        if (sides[slot].kind !== 'document' || scratchOwner[slot] !== owner) continue;
+        scratchOwner[slot] = undefined;
+        const model = scratch[slot];
+        if (model && !model.isDisposed()) model.setValue('');
+      }
+    },
+    isCurrent(): boolean {
+      return !disposed && fresh;
+    },
+    cursor(): DiffCursor | null {
+      if (disposed) return null;
+      const side: DiffSide = instance.getOriginalEditor().hasTextFocus()
+        ? 'original'
+        : instance.getModifiedEditor().hasTextFocus()
+          ? 'modified'
+          : lastSide;
+      const position = editorOf(side).getPosition();
+      return position ? { side, line: position.lineNumber } : null;
+    },
+    lineChanges(): DiffLineChange[] | null {
+      return disposed ? null : instance.getLineChanges();
+    },
+    model(side: DiffSide): EditableModel | null {
+      if (disposed) return null;
+      return editorOf(side).getModel() as EditableModel | null;
+    },
+    reveal(side: DiffSide, line: number): void {
+      if (disposed) return;
+      const editor = editorOf(side);
+      const count = editor.getModel()?.getLineCount() ?? 1;
+      const lineNumber = Math.min(Math.max(Math.floor(line), 1), count);
+      editor.setPosition({ lineNumber, column: 1 });
+      editor.revealLineInCenterIfOutsideViewport(lineNumber);
+    },
+    nextWhenUpdated(): void {
+      if (disposed) return;
+      pendingNext?.dispose();
+      pendingNext = instance.onDidUpdateDiff(() => {
+        pendingNext?.dispose();
+        pendingNext = null;
+        if (!disposed) instance.goToDiff('next');
+      });
+    },
     dispose(): void {
       if (disposed) return;
       disposed = true;
+      pendingNext?.dispose();
+      pendingNext = null;
       stopFollowingLock();
-      // Detach first: the modified model (and a `document` original) outlives this view.
-      instance.setModel(null);
+      for (const listener of trackFocus) listener.dispose();
+      for (const listener of trackFresh) listener.dispose();
+      // Detach first: the document models outlive this view, the view model is disposed
+      // (its pending diff cancelled) before the scratch models are blanked, and they are
+      // blanked, not disposed, so the worker is never asked about one that has gone.
+      detach();
       instance.dispose();
-      const model = owned;
-      owned = undefined;
-      if (model) disposeOwnedModel(model);
+      releaseScratch(owner);
     },
   };
+}
+
+/**
+ * Brings a freshly instance editor up to what the toolbar says now. The effects that drive
+ * the live editor ran while it was still being built (`handle` was null), so a toggle
+ * pressed in that window was shown by its button and applied by nothing (CODE-11).
+ */
+export function settleCreated(
+  handle: Pick<DiffHandle, 'show' | 'setInline' | 'setIgnoreTrimWhitespace'>,
+  latest: { sides: DiffSides | null; inline: boolean; ignoreTrimWhitespace: boolean },
+): void {
+  if (latest.sides) handle.show(latest.sides);
+  handle.setInline(latest.inline);
+  handle.setIgnoreTrimWhitespace(latest.ignoreTrimWhitespace);
 }
 
 // ---------------------------------------------------------------------------

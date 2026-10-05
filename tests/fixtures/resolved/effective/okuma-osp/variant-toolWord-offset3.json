@@ -56,6 +56,17 @@
       "tool": "T"
     },
     "codes": "okuma",
+    "compare": {
+      "ignoreBlockNumbers": true,
+      "ignoreCase": false,
+      "ignoreComments": true,
+      "ignoreNumberFormat": true,
+      "ignoreWhitespace": true,
+      "keepComments": [
+        "\\([^)]*%",
+        "(?<![A-Z])(?:MSG|G0*215)(?![A-Z0-9])"
+      ]
+    },
     "detect": {
       "content": [
         {

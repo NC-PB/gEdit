@@ -216,7 +216,20 @@ export function computeLineEdits(
 ): LineEdit[] {
   if (oldLines.length === newLines.length) return sameLengthEdits(oldLines, newLines);
   if (lineMap && lineMap.length === oldLines.length) return lineMapEdits(oldLines, newLines, lineMap);
+  return diffLines(oldLines, newLines, o);
+}
 
+/**
+ * Strategy 3 on its own: the capped Myers diff of two arrays of lines, with the same
+ * invariants as `computeLineEdits` (ascending, never touching, `oldEnd` exclusive).
+ *
+ * M11 (WP11.2): the unified diff of `core/compare` needs this and not `computeLineEdits`.
+ * The same-length shortcut there is right for an editor, which only has to reach the new
+ * text, but it pairs lines by position: one line inserted and one deleted further down
+ * come back as a run of changed lines in between, and a diff a person reads would show
+ * every one of them as changed.
+ */
+export function diffLines(oldLines: string[], newLines: string[], o?: { maxD?: number }): LineEdit[] {
   // Trim what both sides share, so the diff only sees the part that moved.
   const limit = Math.min(oldLines.length, newLines.length);
   let prefix = 0;

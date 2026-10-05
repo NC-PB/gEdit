@@ -73,6 +73,17 @@ export interface CodeParam {
    * circle. Absent: the parameter is no coordinate of an axis.
    */
   axis?: string;
+  /**
+   * P11 (§7.6, §7.16 #136). The parameter's value **names a program** by its number, so a
+   * search for that program number (`O2000`) finds the call too:
+   *   - `'plain'`: the value is the program number (`G65 P2000`, `G66 P2000`);
+   *   - `'packed'`: as `'plain'`, and a value of more than four digits may also be read as a
+   *     repeat count in front of a four-digit program number (`M98 P52000` = five times
+   *     `O2000`; a five- to eight-digit program number is called with `L` instead), so it
+   *     names both programs and search finds it under both.
+   * Absent: the value names no program. Only search reads it; a replace never follows it.
+   */
+  programNumber?: 'plain' | 'packed';
 }
 
 /**

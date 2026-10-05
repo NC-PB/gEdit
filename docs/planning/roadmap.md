@@ -78,8 +78,8 @@ Status, milestone by milestone:
 | Windows pass | One spelling per path, long file names in the backup history, Windows device names refused, an interpreter lookup that never takes the Microsoft Store placeholders; the Rust tests run on Windows in CI | shipped |
 | M8 | Okuma OSP lathe and Sinumerik 840D turning: profiles, grammars and code databases, the Okuma unit systems as machine presets, the Sinumerik diameter default, and both dialects in the bundled scripts | shipped |
 | [M9](phase-2-implementation.md#m9-real-programs-read-right) | Real programs read right: a built-in Sinumerik milling profile, 5-axis and high-speed codes, the remaining tokenizer rules, per-machine `U`/`W` and tool-word choices, the values the editor reads wrong today, the detection leftovers and an automated check over the owner's local programs (exit X13) | shipped (on `main` since 2026-10-04; the Sinumerik milling profile is in v0.3.0) |
-| [M10](phase-2-implementation.md#m10-check-before-the-machine) | Check before the machine: block skip, selecting a tool segment, program checks, extents and address arithmetic (a shift that moves cycle depths with it, or refuses) | implemented on `m10/int`, landing on `main` after the owner's check; v0.4 follows |
-| [M11](phase-2-implementation.md#m11-compare-and-search) | Compare and search: review mode, merge in both directions, export, two files on disk; NC-aware search and replace; a regex help page | planned |
+| [M10](phase-2-implementation.md#m10-check-before-the-machine) | Check before the machine: block skip, selecting a tool segment, program checks, extents and address arithmetic (a shift that moves cycle depths with it, or refuses) | on `main` (2026-10-05); v0.4.0 is a draft |
+| [M11](phase-2-implementation.md#m11-compare-and-search) | Compare and search: review mode, merge in both directions, export, two files on disk; NC-aware search and replace; a regex help page | on `main` (2026-10-05); v0.5 follows |
 | [M12](phase-2-implementation.md#m12-multi-channel-programs) | Multi-channel programs: channels and wait codes in the machine configuration, the wait-code check, the map and tool list per channel, sync-point navigation, a one-way split into channel documents | planned |
 | [M13](phase-2-implementation.md#m13-your-own-dialects-and-codes-and-the-phase-2-exit) | Your own dialects and codes, and the Phase 2 exit: user profiles and code files, the Profiles page, import and export of profiles and machines, typing options | planned |
 
@@ -89,8 +89,8 @@ Releases (accepted 2026-10-01; [D70](phase-2-implementation.md#101-decided-by-th
 |---|---|---|
 | v0.2 | M6–M8 with the fixes made since; the release workflow comes first (size S) | draft release made; the owner publishes it |
 | v0.3 | M9, with the Sinumerik milling profile | published |
-| v0.4 | M10 | next, after M10 lands on `main` |
-| v0.5 | M11 | planned |
+| v0.4 | M10 | draft release made; the owner publishes it |
+| v0.5 | M11 | next, after M11 lands on `main` |
 | v0.6 | M12 | planned |
 | 1.0 | M13, the Phase 2 exit | planned |
 
@@ -111,16 +111,16 @@ Row by row:
 | NC | [Extents](nc-transformations.md#extents), [program checks](nc-transformations.md#program-checks), [combined tool list](nc-transformations.md#combined-tool-list) | M | Script | extents and program checks implemented (M10, WP10.2 and WP10.3); combined tool list deferred (backlog or Phase 4) |
 | NC | [Multi-channel programs](phase-2-implementation.md#m12-multi-channel-programs) (from the backlog): the channels and wait-code patterns of a machine in its configuration, a check that the wait codes of the channels match, the map and tool list per channel, sync-point navigation, a split into channel documents | L | Core + Script | planned (M12, with the wait-code model R5 decided first); the side-by-side channel view is Phase 4 |
 | Assistant | Hover with cycle parameters and modal context, the code inspector with value editing, parametric templates | M | Core | moved to Phase 3 (table below) |
-| Editor | [NC-aware whole-address match](editor-core.md#nc-aware-whole-address-match), [find-all results panel](editor-core.md#find-all-results-panel), [search in open documents](editor-core.md#search-in-all-open-documents), [replace into new document](editor-core.md#replace-into-a-new-document) | M | Core | planned (M11), with a replace count and word conditions (`S>2000`) |
+| Editor | [NC-aware whole-address match](editor-core.md#nc-aware-whole-address-match), [find-all results panel](editor-core.md#find-all-results-panel), [search in open documents](editor-core.md#search-in-all-open-documents), [replace into new document](editor-core.md#replace-into-a-new-document) | M | Core | implemented (M11), with a replace count and word conditions (`S>2000`) |
 | Editor | [Next and previous NC event](editor-core.md#next-and-previous-nc-event), [bookmarks v2](editor-core.md#bookmarks) (names, panel, persistence) | M | Core | bookmark persistence shipped (M7); names and panel deferred (Phase 4); NC event deferred (Phase 4, if asked for) |
 | Editor | [Block range](editor-core.md#select-or-delete-a-block-range), [tool segment](editor-core.md#select-or-extract-a-tool-segment), [insert/append file](editor-core.md#insert-file-and-append-file) | S | Core | selecting a tool segment implemented (M10, `Mod+F7`); the rest deferred (Phase 4) |
 | Editor | [Read-only files](editor-core.md#read-only-files), [backup and recovery](editor-core.md#backup-on-save-and-crash-recovery) | S | Core | shipped (M7) |
 | Editor | [OS file associations](editor-core.md#os-file-associations) | S | Core | deferred (Phase 4) |
 | Editor | macOS quit guard: Dock → Quit and logout stop at the unsaved-changes prompt (deferred from Phase 1) | S | Core | shipped (M6) |
 | Editor | [Forced uppercase](editor-core.md#forced-uppercase), [prevent joining blocks](editor-core.md#prevent-joining-blocks) | S | Core | planned (M13) |
-| Editor | [Bundled user guide](editor-core.md#bundled-user-guide), [regex help](editor-core.md#regular-expression-help) | S | Core | in-app guide cut (the guide is `docs/user`); regex help planned as a page there (M11) |
-| Compare | [Ignore options](file-compare.md#ignore-options) via [review mode](file-compare.md#nc-aware-review-mode), [word-level marking](file-compare.md#word-level-marking) | M | Core | review mode planned (M11), without a numeric tolerance (cut); word-level marking deferred (Phase 4) |
-| Compare | [Merge in both directions](file-compare.md#copy-differences-in-both-directions), [export differences](file-compare.md#export-differences), two files on disk | M | Core | planned (M11) |
+| Editor | [Bundled user guide](editor-core.md#bundled-user-guide), [regex help](editor-core.md#regular-expression-help) | S | Core | in-app guide cut (the guide is `docs/user`); regex help is a page there, `docs/user/regex.md` (M11) |
+| Compare | [Ignore options](file-compare.md#ignore-options) via [review mode](file-compare.md#nc-aware-review-mode), [word-level marking](file-compare.md#word-level-marking) | M | Core | review mode implemented (M11), without a numeric tolerance (cut); word-level marking deferred (Phase 4) |
+| Compare | [Merge in both directions](file-compare.md#copy-differences-in-both-directions), [export differences](file-compare.md#export-differences), two files on disk | M | Core | implemented (M11) |
 | Scripting | [External commands](scripting.md#external-commands) | M | Core | cut: a script can start a program itself |
 | Settings | [Full settings dialog](settings-ui.md#settings-dialog), [role color editor](settings-ui.md#themes-and-colors), [session restore and per-file memory](settings-ui.md#session-and-state), [profile import/export](settings-ui.md#configuration-portability) | M | Core | session restore and per-file memory shipped (M7); the dialog grows by pages (Machines in M6, Profiles in M13), without a search box; import and export of profiles and machines planned (M13); role color editor deferred (Phase 4) |
 

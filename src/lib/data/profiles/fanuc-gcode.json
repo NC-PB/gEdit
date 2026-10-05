@@ -86,7 +86,7 @@
       { "trigger": "(?<![A-Z])M\\s*0*99(?!\\d)", "addresses": ["P"], "rewrite": false },
       { "trigger": "^(?=[^(]*Q\\s*\\d)[^(]*(?<![A-Z])M\\s*0*98(?!\\d)", "addresses": ["Q"] },
       { "trigger": "^(?=[^(]*P\\s*\\d)(?=[^(]*Q\\s*\\d)[^(]*(?<![A-Z])M\\s*0*98(?!\\d)", "addresses": ["Q"], "rewrite": false },
-      { "trigger": "^(?=[^(]*P\\s*\\d)(?=[^(]*Q\\s*\\d)[^(]*(?<![A-Z])G\\s*0*7[0-3](?![\\d.])", "addresses": ["P", "Q"], "rewrite": false },
+      { "trigger": "^(?=[^(]*P\\s*\\d)(?=[^(]*Q\\s*\\d)[^(]*(?<![A-Z])G\\s*0*7[0-3](?:\\.7)?(?![\\d.])", "addresses": ["P", "Q"], "rewrite": false },
       { "trigger": "(?<![A-Z])GOTO", "addresses": ["GOTO"] }
     ]
   },
@@ -146,10 +146,10 @@
   "compare": {
     "ignoreBlockNumbers": true,
     "ignoreWhitespace": true,
-    "ignoreComments": false,
-    "ignoreCase": true,
+    "ignoreComments": true,
+    "ignoreCase": false,
     "ignoreNumberFormat": true,
-    "tolerance": 0
+    "keepComments": ["^\\s*(?:[O:]\\d+|<[^>]*>)", "#\\s*30(?:00|06)\\s*=", "\\([^)]*%"]
   },
   "toolList": { "description": "auto", "commentFilter": "^[-*=_\\s]*$", "dropLeadingZeros": true }
 }

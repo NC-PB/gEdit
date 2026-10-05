@@ -12,11 +12,12 @@ the machine, not for the person who builds the editor — the build and design n
 
 | Page | What is in it |
 |---|---|
-| This page | The window, files, never losing work, navigation, code help, comparing, settings, and the limits |
+| This page | The window, files, never losing work, navigation, searching, code help, comparing, settings, and the limits |
 | [Dialects](dialects.md) | Dialect profiles: what they decide, which six ship, how the dialect is picked |
 | [Machines](machines.md) | Machine configurations: what `X50` is worth on **your** control, and how to tell gEdit |
 | [Transformations](transformations.md) | The NC tab: renumbering, removing block numbers, the five cleanups, block skip and selecting a tool's lines |
 | [Scripts](scripts.md) | Running Python scripts, the six that ship (feeds, speeds, tool list, program checks, extents, address arithmetic), and how to write one |
+| [Regular expressions](regex.md) | Patterns for the editor's find and for Python scripts, with NC examples, and where the two differ |
 | [Shortcuts](shortcuts.md) | The keyboard |
 
 ---
@@ -32,10 +33,10 @@ Across the top is the **ribbon**, with five tabs:
 
 | Tab | What it holds |
 |---|---|
-| **Home** | New, Open, Save, Save As, Save All, Close · the recent-files list · **Program Header** (Fanuc mill and Klartext only) · undo, redo, find, replace, comment, duplicate, move, delete line, select all, upper and lower case (plain text commands; on a program use **Convert Case…** on the NC tab) |
+| **Home** | New, Open, Save, Save As, Save All, Close · the recent-files list · **Program Header** (Fanuc mill and Klartext only) · undo, redo, find, replace, **Find All…**, **Replace All…**, **Find Whole Address…** ([Searching](#searching)), comment, duplicate, move, delete line, select all, upper and lower case (plain text commands; on a program use **Convert Case…** on the NC tab) |
 | **Insert** | The ready-made blocks of the active dialect — Fanuc mill and Klartext only in this version; on a Fanuc lathe, Okuma or Sinumerik program the tab shows no blocks |
 | **NC** | Renumbering, removing block numbers, the cleanups, block skip and selecting a tool segment — see [Transformations](transformations.md) |
-| **Tools** | Compare, and the scripts — see [Scripts](scripts.md) |
+| **Tools** | Compare ([Comparing two programs](#comparing-two-programs)), and the scripts — see [Scripts](scripts.md) |
 | **View** | The command palette, the panels, folding, display switches, zoom, theme, settings, the shortcut list and About |
 
 Below it are the **tabs**, one per open program, then the editor, and at the bottom the
@@ -447,6 +448,7 @@ is that program.
 | The structure of the program | The Program Map panel |
 | A place you keep coming back to | A bookmark: `Cmd/Ctrl+F2` to set or clear it, `F2` and `Shift+F2` to step through them |
 | Text | `Cmd/Ctrl+F`, the editor's own find and replace |
+| Every hit of an address, a value or some text, in a list | `Cmd/Ctrl+Shift+F` (Find All…) — see [Searching](#searching) |
 | A section, collapsed | `View ▸ Fold All` / `Unfold All`, and the sticky heading at the top of the editor |
 | All the lines of one tool | `Cmd/Ctrl+F7` (Select Tool Segment): the segment the cursor is in, or the tool you pick — see [Tool segments](transformations.md#tool-segments) |
 
@@ -462,6 +464,99 @@ the program end. Click an entry to jump to it. It follows the program as you typ
 Bookmarks live in gEdit, not in the program — see
 [Coming back where you left off](#coming-back-where-you-left-off), which is also where you
 turn that off.
+
+## Searching
+
+| What you want | Command |
+|---|---|
+| Find text, one hit at a time, and replace it | `Cmd/Ctrl+F`, the editor's own find and replace (see [Shortcuts](shortcuts.md)) |
+| Every hit in a list, in one program or in all open ones | **Find All…**, `Cmd/Ctrl+Shift+F` (Home tab, *Search*) |
+| Change what a search finds, in place or into a new tab | **Replace All…** (Home tab, *Search*) |
+| One address in the editor's own find box, so you can step through it | **Find Whole Address…** (Home tab, *Search*) |
+
+Find All and Replace All share one form. It reads each line the way the dialect does, so it
+knows a comment from a block.
+
+### What you type
+
+**An address word** — tick *Whole address*. Type an address, with a value or a condition if
+you like:
+
+| Query | Finds |
+|---|---|
+| `G1` | `G1`, `G01` and `G1.`; not `G10`, `G100` or `G1.5` |
+| `T01` | `T01` and `T1`, not `T10` |
+| `S>12000` | every `S` above 12000 |
+| `X<=-5.5` | every `X` at or below -5.5 |
+| `SB=500` | the Okuma speed word `SB` set to 500 |
+| `S1=` | `S1=` with any value; a bare `S1` finds `S1=500` as well |
+| `Q206` | a variable or assignment name (`Q206=5`) |
+| `FMAX`, `N10` | a keyword without a value, a block number |
+| `O2000` | the program, and every call to it (below) |
+
+The conditions are `=`, `!=`, `<`, `<=`, `>` and `>=`; all but `=` need a number. Anything
+that is not an address with a value (blanks, a string) is not a word: untick *Whole
+address* and search for it as text. A word is never found in a comment or a string;
+*Also in comments* applies to text searches only. The letters of the address follow the
+dialect, not *Match case*.
+
+**A value is compared as written.** `X>50` finds `X60` and `X60.` alike, and `G1` finds
+`G01`. gEdit does not apply your machine's number reading here: whether `X60` is 60 mm or
+0.060 mm is decided on the machine, and a search that guessed would hide hits. To judge a
+value by what it is worth, use [Program checks or Extents](scripts.md).
+
+**A program number** finds the program's own line and the calls that name it. `O2000`
+finds `O2000`, `M98 P2000`, `G65 P2000` and the macro calls `G66` and `G66.1`. On Fanuc
+`M98 P52000` means five calls of `O2000`, so it is found under both `O2000` and `O52000`.
+This works for `=` only, and only in the programs you search: a call in a file that is not
+open is not seen. Replace never follows a call: renaming `O2000` does not touch
+`M98 P2000`.
+
+**Text** — leave *Whole address* unticked. The text is searched in the line as written.
+Tick *Match case* to tell `Home` from `HOME`. A hit that falls in a comment is dropped
+unless you tick *Also in comments* (this box is for text searches only); a Fanuc program name in `<…>` is not a comment. Tick
+*Regular expression* for a pattern: see [Regular expressions](regex.md). If you tick both
+*Whole address* and *Regular expression*, the word wins. A pattern that can only match
+nothing (`$`, `^`) changes nothing: empty matches are skipped. gEdit cannot stop a
+pattern that runs away (see [When a pattern is slow](regex.md#when-a-pattern-is-slow)), so
+save your work first.
+
+### Where it looks, and what you get
+
+*Look in* is the active document or all open documents. Find All writes the hits into the
+Results panel: the line, the text and, over several documents, the document; a click jumps
+to the line. The heading holds the full count ("37 hits for G1"), and the status bar
+repeats it. At most 10,000 rows are listed; if there are more, the panel says how many are
+not shown.
+
+### Replace All…
+
+*Replace with* is the new text, and *Put the result* chooses **in place of the text** or **in a
+new tab**. Into a new tab the program stays as it is.
+
+- A word is replaced whole: replacing `G1` with `G0` turns `G01` into `G0`, not `G00`.
+  A word typed **without a value** replaces only the address and keeps the value: replacing
+  `S` with `SB` turns `S1000` into `SB1000`, and `X` with `Y` turns `X10.` into `Y10.`.
+- With *Regular expression*, `$1` is the first group, `$&` the whole match and `$$` a dollar
+  sign.
+- It is a transformation like the ones on the NC tab
+  ([the four rules](transformations.md#four-rules-that-hold-for-all-of-them)): it runs on
+  the selection, or on the whole program when nothing is selected; it is one undo step; the
+  count goes to the status bar; and a locked program refuses an in-place change. When
+  the form starts from a word you had selected on one line and you keep that word as the
+  query, the replace runs on the whole program, not on that line.
+
+### Find Whole Address…
+
+A pattern that matches an address as a whole, handed to the editor's find box, so `F3`
+steps through the hits and its replace works as usual. It takes an address, or an address
+with a number (`G`, `G1`, `T1`, `S12000`), not a condition like `S>12000`; Find All takes
+those. It is **not** the word query: the find box knows nothing about NC code, so it also
+finds the address inside a comment or a string, which Find All never does. The pattern
+accepts a `+` sign on a positive number (`L X+10` on Klartext) and does not match behind a
+letter or an underscore, so `G1` is not found in `MY_G1`.
+
+For the patterns themselves see [Regular expressions](regex.md).
 
 ## Code help
 
@@ -513,10 +608,143 @@ or any file you pick. The comparison opens over the editor, side by side or inli
 buttons for the next and previous difference.
 
 The current document stays editable in the comparison, unless it is locked; the other side
-is read-only. Files
-above 50 MB are refused. **Ignore whitespace** (off by default) leaves out differences in
-the blanks at the start and the end of a line — not the spaces between words, so after
-Remove Spaces every line whose inner spaces went still shows as changed.
+is read-only. Files above 50 MB are refused.
+
+A comparison has two modes.
+
+- **Raw** shows every difference in the text. **Ignore whitespace**
+  (off by default) leaves out differences in the blanks at the start and the end of a line,
+  not the spaces between words.
+- **Review** is for a program the CAM system posted again. It leaves out what only looks
+  different and shows what the machine would read differently. The **Raw** and **Review**
+  buttons in the comparison switch between the two; the command **Review Mode** (command
+  palette) does the same.
+
+Without a choice from you, a comparison opens in raw mode the first time. gEdit remembers
+the mode afterwards, also after a restart.
+
+### Review mode
+
+Review mode tidies both sides line by line, then compares the tidied text. Five options say
+how:
+
+| Option | What it leaves out |
+|---|---|
+| Block numbers | The `N` numbers (Sinumerik `:10`, the number at the start of a Klartext block) |
+| Whitespace | Blanks at the ends of a line, runs of blanks (one counts as many), empty lines |
+| Comments | Comments; a line that holds only a comment disappears |
+| Case | The difference between `G1X10` and `g1x10`, outside strings |
+| Number format | `X+05.500` against `X5.5`, `G01` against `G1`, a decimal comma against a point |
+
+**What each option never does.** Review mode never hides a difference the machine would see.
+So, whatever you switch on:
+
+- **A block number a jump points at stays** (`GOTO 100`, `G70 P100 Q200`, `M98 Q50`), and in
+  a program with a jump to a computed target (`GOTO #1`) every block number stays; the
+  bar says so. A jump written in another file, such as `M99 P` returning to a number in the
+  main program, cannot be seen: compare raw where a subprogram returns by number.
+- **Labels stay**: Okuma `NLAP1`, Sinumerik `LOOP_A:`, Klartext `LBL`. A block number
+  glued to a name (`N30XNOW=62` on Sinumerik or Okuma) stays too, since the control
+  may read the two as one name.
+- **Whitespace** never joins two words or splits one: `G1X10` and `G1 X10` are different
+  lines. Text inside strings is never touched.
+- **The decimal point stays** where a reading of the machine counts it: with a machine
+  that takes increment input `X10` and `X10.` are different. With **no machine** chosen,
+  they are different wherever the dialect declares such a reading, which is Fanuc; the
+  bar says so. Setting the machine ([Machines](machines.md)) makes this exact.
+- **A number with no point on an address that is not an axis compares as written**:
+  `H01` and `H1`, `T01` and `T1`, `P0010` and `P10` are different. A turning program's `T`
+  word is never reformatted (`T001` is not `T1`). Program numbers, names, variable names,
+  strings and comments the control reads are never reformatted. A `G84.2` keeps its
+  fraction.
+- **Comments the control reads stay** even with *Comments* on: see the table below.
+- There is no tolerance: `X10.0001` and `X10.` are two different values.
+
+**What is on to begin with.** When you open a review, the options start from your dialect's
+defaults. Block numbers, whitespace, comments and number format are on for every dialect;
+case is on only for Sinumerik.
+
+| Dialect | Case | Comments the control reads, which stay |
+|---|---|---|
+| Fanuc mill and lathe | off: the control has no lower case and drops it on input | The program title in the first block (`O1001 (BRACKET)`, `:1001`, `<NAME>`); an alarm or stop message (`#3000=`, `#3006=`); a `%` inside a comment, which ends the program on input |
+| Heidenhain Klartext | off | None. The `;` labels of the cycle parameters and the `*` structure blocks go with comments |
+| Okuma OSP | off | A `%` inside a comment (kept to be safe) |
+| Sinumerik (turning and milling) | on: the control does not tell case apart, except in tool names, which are strings | The `;$PATH=` header, which files the program on import; the cycle-screen markers `*RO*` and `*HD*` |
+
+On Okuma, a block number that stays is compared as text: `N0123` is not `N123`.
+
+**Not ignored: the Klartext cycle name.** The words after `CYCL DEF <n>` (and the label
+words of the old numbered cycles, `CYCL DEF 9.1 DWELL 1.5`) are text in the control's
+dialog language, not comments. A program posted again in another language shows each cycle
+header as changed, one line per cycle, with its number visible. There is no option for
+this yet.
+
+**A trailing comment on a Sinumerik cycle call is ignored**, though it changes how the
+control's own editor shows that call. It does not change what the call runs.
+
+**A block that holds only a number or a comment is not shown** in review mode (`N100`
+alone, `(CHANGE INSERT)` alone). Such a block can matter, for example under cutter
+compensation, which looks ahead over blocks without a move. Compare in raw mode to see
+them.
+
+### Setting the options
+
+The five options are buttons in the **review bar**, the second row of buttons that appears
+under the toolbar in review mode; each one switches on or off. Each side
+uses the settings of **its own** program: its dialect and its machine. When the two programs
+use different machines, a note in the review bar says so, and the decimal point is read for
+each side by its own machine. When the two programs are **different dialects** (a Fanuc
+program against a Sinumerik one), a note says that too, and each side is read as its own
+dialect. A file compared by name, which is not open as a program, has no machine; the note
+says that too.
+
+gEdit keeps the options **per dialect**, also after a restart: what you switched away from the
+dialect's defaults is remembered, and the rest keeps following the defaults. The **Profile defaults** button in the review bar
+sets the options back to what the dialect starts with (the button says "profile" where this
+guide says "dialect": it is the same thing).
+
+### Merging
+
+In raw mode a difference can be copied from one side to the other:
+
+| Command | Key | Does |
+|---|---|---|
+| **Copy Change to Current Document** | `Cmd/Ctrl+Alt+Right` | Puts the other side's version of the difference into your document |
+| **Copy Change to Original** | `Cmd/Ctrl+Alt+Left` | Puts your version into the other side |
+
+Both are on while a comparison is open. The **←** and **→** buttons in the comparison do the
+same (← copies into the original, → into the current document). A click on a button, like
+the key, copies the whole difference at the cursor and then moves to the next difference;
+**Shift+click** copies only the line at the cursor and stays where it is. Right after an
+edit the comparison needs a moment to find the differences again; a copy asked for in that
+moment is refused with a message ("still updating"), so a held key never copies twice.
+A copy is one undo step in the document that received it. Copying into the other side is possible only when that side is an open
+document; the version on disk is not edited this way, and a locked document refuses a
+copy like any other change. Review mode is for reading: switch back to raw to merge.
+
+### Exporting the differences
+
+**Export Differences…** writes the differences as a standard unified diff, with three lines
+of context, into a new untitled tab. The button follows the mode you are in: in raw mode it
+writes the raw text, in review mode the tidied text. If nothing differs, gEdit says so instead of opening an empty tab. A
+diff over a very long run of changes may show it as one large block, which is right but
+not minimal.
+
+### Two files on disk
+
+**Compare Two Files…** (Tools tab) asks for two files, opens both as programs and compares
+them. The first file you pick is the **original** (the read-only left side); the second
+becomes the current, editable document. Because both are open programs, you can merge in
+either direction and save them as usual. If the second file cannot be opened (it is binary
+or too large, say), gEdit says why and stops; the first file stays open as a program.
+
+### Going to a line
+
+The number box in the comparison's toolbar takes you to a line: `Enter` goes to it in the
+current document, `Shift+Enter` in the original. In review mode the number is the line of
+the file as it was before the review tidied it, so the line you read in the editor is the
+line you get. A line that is not in the comparison (past the end, or a line review left
+out) gets a message instead.
 
 ## Checking gEdit against your own programs
 

@@ -81,7 +81,7 @@ tests/runtime/suite.sh tests/runtime/suites/m0.txt   # run a suite and print the
 
 ## On a hosted runner
 
-`harness.yml` runs `sync.sh` and then `suite.sh tests/runtime/suites/m{0..10}.txt` on `macos-14`
+`harness.yml` runs `sync.sh` and then `suite.sh tests/runtime/suites/m{0..11}.txt` on `macos-14`
 (45 minute limit), always uploads `$GEDIT_RH_DIR/out`, the app logs and the sync logs, and
 caches the build directory. What differs from the owner's Mac, and how the scenarios deal with it:
 
@@ -107,11 +107,11 @@ caches the build directory. What differs from the owner's Mac, and how the scena
 
 ## Suites
 
-One file per milestone, `suites/m0.txt` … `suites/m10.txt`: one scenario name per line, `#`
+One file per milestone, `suites/m0.txt` … `suites/m11.txt`: one scenario name per line, `#`
 starts a comment. A cumulative run is all of them in order:
 
 ```sh
-tests/runtime/suite.sh tests/runtime/suites/m{0,1,2,3,4,5,6,7,8,9,10}.txt
+tests/runtime/suite.sh tests/runtime/suites/m{0,1,2,3,4,5,6,7,8,9,10,11}.txt
 ```
 
 ## PASS, FLAKY, FAIL, BLOCKED
@@ -194,7 +194,7 @@ scenario('m1-example', { timeout: 90 }, async (h) => {
   `m7-common.js` changes file modes and flags (`osOp`), ages a heartbeat (`makeStale`),
   finds backups (`backupsRoot`, `historyOf`) and quits cleanly (`quitCleanly`), and
   `m8-common.js` walks the fixture goldens (`detectGolden`, `outlineGolden`, `scriptCase`), `m9-common.js`
-  opens probe programs and walks number classes (`openProbe`, `numberWalk`), and `m10-common.js` runs
+  opens probe programs and walks number classes (`openProbe`, `numberWalk`), and `m11-common.js` reads Monaco's registries and the diff editor (`monacoRegistry`, `lineChanges`, `paneText`), opens and closes a comparison (`openCompare`, `closeCompare`, `setMode`) and runs the search forms (`runForm`), and `m10-common.js` runs
   the M10 scripts (`runFromTools` from the Tools tab, `runReplace` for an envelope), fills a script's form
   (`fillForm`, `pick`), makes machines from a profile's own presets (`machineMaker`) and compares a shifted
   program with the one it should be (`bump`, `differences`, `outcomeOf`).

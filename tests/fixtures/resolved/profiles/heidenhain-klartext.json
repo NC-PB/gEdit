@@ -25,6 +25,13 @@
     "spindle": "S"
   },
   "codes": "heidenhain",
+  "compare": {
+    "ignoreBlockNumbers": true,
+    "ignoreCase": false,
+    "ignoreComments": true,
+    "ignoreNumberFormat": true,
+    "ignoreWhitespace": true
+  },
   "detect": {
     "content": [
       {

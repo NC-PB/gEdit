@@ -206,7 +206,7 @@
     "skipStartingWith": ["%", ";", "PROC", "DEF", "EXTERN"],
     "skipEmpty": true,
     "restartAtProgramStart": true,
-    "references": [{ "trigger": "(?<![A-Z_])GOTO[FBC]?(?![A-Z0-9_])", "addresses": ["N"] }]
+    "references": [{ "trigger": "(?<![A-Z_])GOTO[FBC]?(?![A-Z0-9_])", "addresses": ["N", "GOTO", "GOTOF", "GOTOB", "GOTOC"] }]
   },
   "modal": { "initial": { "plane": "G18", "feedmode": "G95" } },
   "machineParams": {
@@ -230,6 +230,14 @@
     "units": "mm",
     "diameter": "on",
     "modalGroups": ["feedmode", "plane", "distance"]
+  },
+  "compare": {
+    "ignoreBlockNumbers": true,
+    "ignoreWhitespace": true,
+    "ignoreComments": true,
+    "ignoreCase": true,
+    "ignoreNumberFormat": true,
+    "keepComments": ["^\\s*;\\s*\\$PATH\\s*=", ";.*\\*(?:RO|HD)\\*"]
   },
   "toolList": { "description": "auto", "commentFilter": "^[-*=_\\s]*$", "dropLeadingZeros": true }
 }

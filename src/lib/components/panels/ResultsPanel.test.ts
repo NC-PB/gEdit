@@ -353,6 +353,34 @@ describe('ResultsPanel markup', () => {
     expect(html).toContain(`data-doc-id="${other}"`);
     expect(html).not.toContain(`data-doc-id="${active}"`);
   });
+
+  // Find-all over several documents (§7.16 #139): two of them can have the same name, so a
+  // row names its document by id, and that wins over the name and over the report's.
+  it('points a row at its own document, whatever the name or the report say', () => {
+    const first = docs.add(newDoc({ path: '/a/part.nc', untitledIndex: null }));
+    const second = docs.add(newDoc({ path: '/b/part.nc', untitledIndex: null }));
+    results.show({
+      title: 'Find',
+      columns: [
+        { key: 'document', label: 'Document' },
+        { key: 'line', label: 'Line' },
+      ],
+      rows: [
+        { document: 'part.nc', docId: second, line: 4 },
+        { document: 'part.nc', docId: first, line: 9 },
+        { document: 'part.nc', docId: 'gone', line: 2 },
+      ],
+      docId: first,
+    });
+    const html = render(ResultsPanel).body;
+    expect(html).toContain(`data-line="4"`);
+    expect(html.match(new RegExp(`data-line="4"[^>]*data-doc-id="${second}"`))).not.toBeNull();
+    expect(html.match(new RegExp(`data-line="9"[^>]*data-doc-id="${first}"`))).not.toBeNull();
+    // CODE-15: a document that is no longer open leaves its row inert; it must not open the
+    // other tab with the same name (or the report's document).
+    expect(html).not.toContain('data-line="2"');
+    expect(html).toContain('data-line=""');
+  });
 });
 
 // ---------------------------------------------------------------------------

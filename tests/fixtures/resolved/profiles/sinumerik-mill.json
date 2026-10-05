@@ -33,6 +33,17 @@
     "tool": "T"
   },
   "codes": "sinumerik",
+  "compare": {
+    "ignoreBlockNumbers": true,
+    "ignoreCase": true,
+    "ignoreComments": true,
+    "ignoreNumberFormat": true,
+    "ignoreWhitespace": true,
+    "keepComments": [
+      "^\\s*;\\s*\\$PATH\\s*=",
+      ";.*\\*(?:RO|HD)\\*"
+    ]
+  },
   "detect": {
     "content": [
       {
@@ -177,7 +188,11 @@
     "references": [
       {
         "addresses": [
-          "N"
+          "N",
+          "GOTO",
+          "GOTOF",
+          "GOTOB",
+          "GOTOC"
         ],
         "trigger": "(?<![A-Z_])GOTO[FBC]?(?![A-Z0-9_])"
       }

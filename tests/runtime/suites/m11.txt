@@ -1,0 +1,33 @@
+# M11: search and compare - NC-aware find-all and replace, the editor's find widget on the whole-address
+# regex, compare review mode, merge in both directions, export of the differences, two files on disk, and
+# their budgets.
+# Run with: tests/runtime/suite.sh tests/runtime/suites/m0.txt tests/runtime/suites/m1.txt tests/runtime/suites/m2.txt tests/runtime/suites/m3.txt tests/runtime/suites/m4.txt tests/runtime/suites/m5.txt tests/runtime/suites/m6.txt tests/runtime/suites/m7.txt tests/runtime/suites/m8.txt tests/runtime/suites/m9.txt tests/runtime/suites/m10.txt tests/runtime/suites/m11.txt
+#
+# Every expected row, text and count is written out in the scenario from the programs themselves (and
+# from `tests/fixtures/compare/x5-repost/` for X5), never read from what the search or the comparison
+# answers.
+
+# X6: find-all of a word (T1, no T10, no hit in a comment) and a condition (S>2000) over three open
+# documents, the text and regex searches, the scope, replace M8 -> M88 with its count, one undo and the
+# "new tab" output, and Find Whole Address opening the editor's find widget on the regex.
+m11-search
+
+# X5: Raw and Review, the five toggles and the profile defaults, exactly two changed lines on the re-post
+# pair, go to line on the original lines, the bar's notes, and the options saved in state.json.
+m11-compare-review
+
+# X5: copy a change left to right and right to left (Mod+Alt+Right / Mod+Alt+Left), each one undo step in
+# its target; one line only; refused in review mode and with a file as the original.
+m11-compare-merge
+
+# X5: Export Differences - raw (a well-formed unified diff of the texts), review (the golden
+# expected.diff byte for byte), the command argument, and nothing opens when there is no difference.
+m11-compare-export
+
+# X5: Compare Two Files - two picks, both opened and compared, cancelling either, one file twice, tabs
+# that are already open are reused.
+m11-compare-files
+
+# G7: find-all on 300,000 lines, review-mode normalization on 100,000 lines, and a merge within 100 ms,
+# every budget through h.checkTime.
+m11-perf

@@ -137,5 +137,12 @@
     { "kind": "end", "pattern": "\\bEND\\s+PGM\\b|\\bM(?:30|2)\\b" }
   ],
   "numbering": { "mode": "consecutive", "start": 0, "step": 1 },
-  "editing": { "forceUppercase": false, "preventLineJoin": true }
+  "editing": { "forceUppercase": false, "preventLineJoin": true },
+  "compare": {
+    "ignoreBlockNumbers": true,
+    "ignoreWhitespace": true,
+    "ignoreComments": true,
+    "ignoreCase": false,
+    "ignoreNumberFormat": true
+  }
 }

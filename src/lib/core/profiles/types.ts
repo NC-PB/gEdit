@@ -22,6 +22,7 @@
 
 import type { Eol } from '$lib/app/types';
 import type { NumberInput, ParamSource } from '$lib/core/machines/types';
+import type { ProfileCompare } from '$lib/core/compare/types';
 
 /** A regular expression as ECMAScript source, without delimiters and without flags. */
 export type Pattern = string;
@@ -81,7 +82,7 @@ export interface NumberFormatOptions {
 /**
  * One dialect profile, as it is stored in JSON.
  *
- * P1 uses the subset below. Fields of later phases (`editing`, `onSave`, `compare`,
+ * P1 uses the subset below. Fields of later phases (`editing`, `onSave`,
  * `highlight`, `colors`, `extends`, …) are kept as written by the index signature, so a
  * profile file survives a round trip through the app untouched.
  */
@@ -428,6 +429,12 @@ export interface Profile {
     dropLeadingZeros?: boolean;
     collapseOffsetDigits?: boolean;
   };
+  /**
+   * P11 (§7.1, §7.7, AD-26). The review-mode defaults of a comparison and the comments the
+   * control reads (`keepComments`). Read through `compareDefaults` (`core/compare`); the
+   * built-in values are the G10 table of §8.11. A carried `tolerance` is ignored (§2.1).
+   */
+  compare?: ProfileCompare;
   /** Fields of later phases are preserved, not interpreted (see the note above). */
   [p2Field: string]: unknown;
 }

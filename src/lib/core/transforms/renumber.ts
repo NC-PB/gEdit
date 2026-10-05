@@ -89,7 +89,9 @@ import { tokenizeLine } from '$lib/core/nc/tokenizer';
 import { compileProfile } from '$lib/core/profiles/compile';
 import { t } from '$lib/i18n';
 import { continuationRisk, stateBefore } from './fragment';
-import { maskedOf, referencePreflight, scanProgram } from './references';
+import { mainKeyOf, mainPrefixOf, mainReferencesOn, maskedOf, referencePreflight, scanProgram } from './references';
+
+export { mainKeyOf, mainPrefixOf } from './references';
 import type { Located, Msg } from '$lib/app/types';
 import type { FieldSpec } from '$lib/core/forms/types';
 import type { LineState, NcToken } from '$lib/core/nc/types';
@@ -440,62 +442,12 @@ function labelIsBlockName(
 // added as references. A dialect without the field, or a program without the prefix in any
 // line, keeps the scan exactly as it was and pays nothing for this. The three helpers are
 // exported for Remove Block Numbers, which has to keep a main block a jump names (hand-off
-// note of WP9.5b); their home is `references.ts` once that module is someone's again.
-
-/** `syntax.blockNumber.mainPrefix` (Sinumerik `:`), or null where the dialect has no main blocks. */
-export function mainPrefixOf(cp: CompiledProfile): string | null {
-  const blockNumber = cp.profile.syntax.blockNumber;
-  if (blockNumber.mode === 'leading-integer') return null;
-  const main = blockNumber.mainPrefix;
-  return typeof main === 'string' && main !== '' ? main : null;
-}
-
-/** The key of a main block (`':20'`): the prefix in front of the key its number would have. */
-export function mainKeyOf(main: string, digits: string, byText: boolean): BlockKey {
-  return main + (byText ? digits : String(Number(digits)));
-}
+// note of WP9.5b); they live in `references.ts` since the M11 review (NC-3), which reads
+// main-block jumps for review mode too, and are re-exported here.
 
 /** True for a key [`mainKeyOf`] made. */
 function isMainKey(key: BlockKey | null | undefined, main: string | null): boolean {
   return main !== null && typeof key === 'string' && key.startsWith(main);
-}
-
-/** True when `text` is a block number this run will name: digits only, as `references.ts` reads them. */
-function isDigits(text: string): boolean {
-  if (text.length === 0 || text.length > 9) return false;
-  for (let i = 0; i < text.length; i++) {
-    const code = text.charCodeAt(i);
-    if (code < 0x30 || code > 0x39) return false;
-  }
-  return true;
-}
-
-/**
- * Every `<main prefix><number>` behind the head of the block: `GOTOF :20` gives the `20`.
- *
- * Written without the blank, `GOTOB:20` is not an operator and a word: the tokenizer reads
- * a name and a colon at the start of a block as a jump **label** (`GOTOB:`) and the digits
- * behind it as a word of no address. A label whose name is a jump (`isJump`, the reference
- * rules' own triggers) cannot be a label, so its colon is the main prefix and the digits
- * name a main block, exactly as with the blank (M9 NC review F2: renumbering moved `:20`
- * and left `GOTOB:20` pointing at nothing, and Remove Block Numbers dropped the `:20`).
- */
-function mainJumpsOn(tokens: NcToken[], main: string, isJump: (name: string) => boolean): NcToken[] {
-  const out: NcToken[] = [];
-  for (let i = 0; i + 1 < tokens.length; i++) {
-    const mark = tokens[i];
-    if (mark.kind === 'operator') {
-      if (mark.text !== main) continue;
-    } else if (mark.kind === 'label') {
-      const name = mark.address ?? '';
-      if (name === '' || mark.text !== name + main || !isJump(name)) continue;
-    } else continue;
-    const value = tokens[i + 1];
-    if (value.kind !== 'word' || value.address !== undefined || value.valueText === undefined) continue;
-    if (value.start !== mark.end) continue;
-    out.push(value);
-  }
-  return out;
 }
 
 /** The scan with main blocks keyed by their own prefix and their jumps added (see above). */
@@ -503,18 +455,6 @@ export function withMainBlocks(scan: ProgramScan, cp: CompiledProfile): ProgramS
   const main = mainPrefixOf(cp);
   if (main === null || cp.re.references.length === 0 || scan.scanned.length === 0) return scan;
   if (!scan.scanned.some((line) => line.includes(main))) return scan;
-
-  // The rules that name ordinary blocks by their prefix (`GOTOF N20`) are the rules that
-  // name main blocks by theirs (`GOTOF :20`).
-  const blockPrefix = cp.profile.syntax.blockNumber.prefix ?? 'N';
-  const rules: { trigger: RegExp; rewrite: boolean }[] = [];
-  cp.re.references.forEach((rule, index) => {
-    if (!rule.addresses.includes(blockPrefix)) return;
-    rules.push({ trigger: rule.trigger, rewrite: cp.profile.numbering?.references?.[index]?.rewrite !== false });
-  });
-
-  // A name one of those rules fires on (`GOTOB`), for the label form `GOTOB:20`.
-  const isJump = (name: string): boolean => rules.some((rule) => rule.trigger.test(name));
 
   const keys = scan.keys.slice();
   const added: FoundReference[] = [];
@@ -533,36 +473,7 @@ export function withMainBlocks(scan: ProgramScan, cp: CompiledProfile): ProgramS
       break;
     }
 
-    if (rules.length === 0) continue;
-    const jumps = mainJumpsOn(tokens, main, isJump);
-    if (jumps.length === 0) continue;
-    const masked = maskedOf(line, tokens);
-    let fired = false;
-    let rewrite = true;
-    for (const rule of rules) {
-      if (!rule.trigger.test(masked)) continue;
-      fired = true;
-      if (!rule.rewrite) rewrite = false;
-    }
-    if (!fired) continue;
-    for (const value of jumps) {
-      const text = value.valueText ?? '';
-      const named = isDigits(text);
-      added.push({
-        row,
-        word: {
-          address: main,
-          start: value.end - text.length,
-          end: value.end,
-          text,
-          target: named ? Number(text) : null,
-          key: named ? mainKeyOf(main, text, scan.byText) : null,
-          rewrite,
-          // Two of them on one line: which one the rule is about cannot be told (G8 M6).
-          ambiguous: jumps.length > 1,
-        },
-      });
-    }
+    for (const word of mainReferencesOn(tokens, line, cp)) added.push({ row, word });
   }
 
   const segments: Map<BlockKey, NumberSite>[] = scan.segments.map(() => new Map());

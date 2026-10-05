@@ -636,7 +636,8 @@ describe('renumbering', () => {
 
   it('treats a jump to a block number as a reference', () => {
     expect(sinumerik.profile.numbering.references).toEqual([
-      { trigger: '(?<![A-Z_])GOTO[FBC]?(?![A-Z0-9_])', addresses: ['N'] },
+      // Review NC-3: the jump keyword itself carries a bare block number (`GOTOF 200`).
+      { trigger: '(?<![A-Z_])GOTO[FBC]?(?![A-Z0-9_])', addresses: ['N', 'GOTO', 'GOTOF', 'GOTOB', 'GOTOC'] },
     ]);
   });
 });

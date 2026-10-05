@@ -753,6 +753,7 @@
         {
           "address": "P",
           "label": "Macro program number",
+          "programNumber": "plain",
           "required": true
         },
         {
@@ -773,6 +774,7 @@
         {
           "address": "P",
           "label": "Macro program number",
+          "programNumber": "plain",
           "required": true
         },
         {
@@ -793,6 +795,7 @@
         {
           "address": "P",
           "label": "Macro program number",
+          "programNumber": "plain",
           "required": true
         },
         {
@@ -1991,6 +1994,7 @@
           "address": "P",
           "label": "Subprogram number",
           "min": 0,
+          "programNumber": "packed",
           "required": true,
           "unit": "count"
         },
@@ -2012,6 +2016,26 @@
           "address": "P",
           "label": "Block number to return to",
           "min": 0
+        }
+      ]
+    },
+    {
+      "code": "M198",
+      "description": "Runs the program whose number P gives from an external device or a data server and continues after it returns.",
+      "group": "program",
+      "label": "External subprogram call",
+      "params": [
+        {
+          "address": "P",
+          "label": "Program number",
+          "min": 0,
+          "programNumber": "plain",
+          "required": true
+        },
+        {
+          "address": "L",
+          "label": "Repeat count",
+          "min": 1
         }
       ]
     },

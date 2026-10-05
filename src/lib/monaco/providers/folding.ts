@@ -6,17 +6,19 @@
 // ends on its own line, and Monaco would draw a fold arrow that folds nothing.
 
 import { outline } from '$lib/app/outlineService';
-import { docIdOf, flatten } from './symbols';
+import { docIdOf, flatten, stillAsked } from './symbols';
 import type { Monaco } from '$lib/monaco/setup';
 import type { Disposable } from '$lib/app/types';
 
 /** Registers the folding-range provider for one profile (Monaco language id). */
 export function registerFolding(monaco: Monaco, profileId: string): Disposable {
   const registration = monaco.languages.registerFoldingRangeProvider(profileId, {
-    async provideFoldingRanges(model) {
+    async provideFoldingRanges(model, _context, token) {
       const id = docIdOf(model);
       if (id === null) return [];
       await outline.whenReady(id);
+      // The document may have closed, or its model been replaced, while this waited.
+      if (!stillAsked(model, token)) return [];
       const lines = model.getLineCount();
       const ranges: import('monaco-editor/esm/vs/editor/editor.api.js').languages.FoldingRange[] = [];
       for (const item of flatten(outline.snapshot(id))) {

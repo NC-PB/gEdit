@@ -7,11 +7,18 @@
 // binding either — `CompareView` handles it itself, so Monaco's find widget still gets
 // the first Esc.
 //
+// M11 (AD-26): the review mode and the merge. `compare.copyToModified` and
+// `compare.copyToOriginal` take `Mod+Alt+Right` / `Mod+Alt+Left` and are enabled only while a
+// comparison is open (§7.13); they copy the change block at the cursor and go on to the next
+// one, and an argument `{ lineOnly: true }` copies the one line. `compare.exportDiff` takes
+// `{ normalized }` (default: review mode's). `compare.files` needs no document.
+//
 // `compare.withSaved` takes `{ docId }`, which is how the external-change banner (WP2.3)
 // reaches it for the document the banner belongs to.
 
 import FileDiff from 'lucide-svelte/icons/file-diff';
 import { asIcon } from '$lib/app/icons';
+import { get } from 'svelte/store';
 import { compareController, autoTarget, availableSources, documentTargets } from '$lib/app/compare';
 import CompareView from '$lib/components/editor/CompareView.svelte';
 import { currentDiff } from '$lib/monaco/diff';
@@ -96,6 +103,13 @@ async function withFile(docId: DocId): Promise<void> {
 
 async function withSaved(docId: DocId): Promise<void> {
   await compareController.open(docId, { kind: 'saved' });
+}
+
+/** `{ lineOnly, thenNext }` from a command argument; the keys go on to the next change. */
+function copyOptions(arg: unknown): { lineOnly: boolean; thenNext: boolean } {
+  const given = arg && typeof arg === 'object' ? (arg as { lineOnly?: unknown; thenNext?: unknown }) : {};
+  const lineOnly = given.lineOnly === true;
+  return { lineOnly, thenNext: typeof given.thenNext === 'boolean' ? given.thenNext : !lineOnly };
 }
 
 async function withAny(docId: DocId): Promise<void> {
@@ -205,6 +219,55 @@ export default {
       enabled: (context) => context.compareOpen,
       run: () => compareController.toggleInline(),
     },
+    {
+      id: 'compare.toggleReview',
+      title: 'compare.toggleReview',
+      category: 'compare.category',
+      global: true,
+      enabled: (context) => context.compareOpen,
+      run: () => compareController.toggleMode(),
+    },
+    {
+      id: 'compare.copyToModified',
+      title: 'compare.copyToModified',
+      category: 'compare.category',
+      keys: 'Mod+Alt+Right',
+      global: true,
+      enabled: (context) => context.compareOpen,
+      run: (_context, arg) => compareController.copyChange('toModified', copyOptions(arg)),
+    },
+    {
+      id: 'compare.copyToOriginal',
+      title: 'compare.copyToOriginal',
+      category: 'compare.category',
+      keys: 'Mod+Alt+Left',
+      global: true,
+      enabled: (context) => context.compareOpen,
+      run: (_context, arg) => compareController.copyChange('toOriginal', copyOptions(arg)),
+    },
+    {
+      id: 'compare.exportDiff',
+      title: 'compare.exportDiff',
+      category: 'compare.category',
+      global: true,
+      enabled: (context) => context.compareOpen,
+      run: (_context, arg) => {
+        const given = arg && typeof arg === 'object' ? (arg as { normalized?: unknown }) : {};
+        const normalized =
+          typeof given.normalized === 'boolean' ? given.normalized : get(compareController.mode) === 'review';
+        return compareController.exportDiff({ normalized });
+      },
+    },
+    {
+      id: 'compare.files',
+      title: 'compare.files',
+      category: 'compare.category',
+      global: true,
+      run: () => compareController.openFiles(),
+    },
   ],
-  ribbon: [{ tab: 'tools', group: 'compare.group', command: 'compare.with', order: 10 }],
+  ribbon: [
+    { tab: 'tools', group: 'compare.group', command: 'compare.with', order: 10 },
+    { tab: 'tools', group: 'compare.group', command: 'compare.files', order: 11 },
+  ],
 } satisfies Contribution;

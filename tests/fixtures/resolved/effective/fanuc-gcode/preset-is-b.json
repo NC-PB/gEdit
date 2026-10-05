@@ -70,11 +70,15 @@
     "codes": "fanuc",
     "compare": {
       "ignoreBlockNumbers": true,
-      "ignoreCase": true,
-      "ignoreComments": false,
+      "ignoreCase": false,
+      "ignoreComments": true,
       "ignoreNumberFormat": true,
       "ignoreWhitespace": true,
-      "tolerance": 0
+      "keepComments": [
+        "^\\s*(?:[O:]\\d+|<[^>]*>)",
+        "#\\s*30(?:00|06)\\s*=",
+        "\\([^)]*%"
+      ]
     },
     "detect": {
       "content": [
@@ -264,7 +268,7 @@
             "Q"
           ],
           "rewrite": false,
-          "trigger": "^(?=[^(]*P\\s*\\d)(?=[^(]*Q\\s*\\d)[^(]*(?<![A-Z])G\\s*0*7[0-3](?![\\d.])"
+          "trigger": "^(?=[^(]*P\\s*\\d)(?=[^(]*Q\\s*\\d)[^(]*(?<![A-Z])G\\s*0*7[0-3](?:\\.7)?(?![\\d.])"
         },
         {
           "addresses": [

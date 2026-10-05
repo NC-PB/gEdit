@@ -405,3 +405,4 @@ mill, the `T` word on a lathe, `TOOL CALL` in Klartext.
 | Adding to, subtracting from, multiplying or dividing the values of chosen addresses (a Z shift, say) | A bundled script — [Address arithmetic](scripts.md#address-arithmetic) |
 | Mirroring, splitting by tool, joining programs | Not in this version; write a script, or wait for the bundled library to grow |
 | Find and replace | The editor's own: `Cmd/Ctrl+F` to find, `Ctrl+H` on Windows and Linux or `Cmd+Alt+F` on macOS to replace |
+| Find an address or a value everywhere (`G1`, `S>12000`), list the hits, or replace them in place or into a new tab | **Find All…** and **Replace All…** on the Home tab, which follow the four rules above — [Searching](README.md#searching), and [Regular expressions](regex.md) for patterns |

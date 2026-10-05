@@ -612,7 +612,7 @@
       "label": "Macro call",
       "description": "Runs the macro program P once. The other words of the block are its arguments, handed over as local variables, not moves, feeds or speeds of this program.",
       "params": [
-        { "address": "P", "label": "Macro program number", "required": true },
+        { "address": "P", "label": "Macro program number", "required": true, "programNumber": "plain" },
         { "address": "L", "label": "Repeat count", "min": 1 }
       ]
     },
@@ -624,7 +624,7 @@
       "label": "Modal macro call",
       "description": "Runs the macro program P after every following move until G67. The other words of this block are its arguments, not moves, feeds or speeds of this program.",
       "params": [
-        { "address": "P", "label": "Macro program number", "required": true },
+        { "address": "P", "label": "Macro program number", "required": true, "programNumber": "plain" },
         { "address": "L", "label": "Repeat count", "min": 1 }
       ]
     },
@@ -636,7 +636,7 @@
       "label": "Modal macro call in every block",
       "description": "Runs the macro program P after every following block, not only after moves, until G67. The other words of this block are its arguments, not moves, feeds or speeds of this program.",
       "params": [
-        { "address": "P", "label": "Macro program number", "required": true },
+        { "address": "P", "label": "Macro program number", "required": true, "programNumber": "plain" },
         { "address": "L", "label": "Repeat count", "min": 1 }
       ]
     },
@@ -1574,7 +1574,8 @@
           "label": "Subprogram number",
           "required": true,
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "programNumber": "packed"
         },
         {
           "address": "L",
@@ -1594,6 +1595,26 @@
           "address": "P",
           "label": "Block number to return to",
           "min": 0
+        }
+      ]
+    },
+    {
+      "code": "M198",
+      "group": "program",
+      "label": "External subprogram call",
+      "description": "Runs the program whose number P gives from an external device or a data server and continues after it returns.",
+      "params": [
+        {
+          "address": "P",
+          "label": "Program number",
+          "required": true,
+          "min": 0,
+          "programNumber": "plain"
+        },
+        {
+          "address": "L",
+          "label": "Repeat count",
+          "min": 1
         }
       ]
     },

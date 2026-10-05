@@ -118,6 +118,7 @@ Each row names the owning work package and the feature.
 | `recovery.ts` | WP7.4 | crash-recovery snapshots, the restore dialog, `recovery.showPending` |
 | `results.ts` | WP4.1 | the Results panel (bottom region) |
 | `scripts.ts` | WP5.2 | the script UI: Tools group, `script.*` commands, Output panel, status item |
+| `search.ts` | WP11.1 | Home tab "Search": `search.findAll` (Mod+Shift+F), `search.replace`, `search.wholeAddressInFind` |
 | `segments.ts` | WP10.1 | `nav.selectToolSegment` (Mod+F7): select from one tool change to the next |
 | `session.ts` | WP7.5 | session restore at start, and the per-file memory that follows the tabs |
 | `settings.ts` | WP2.7 | the settings dialog, `settings.open` (Mod+,), reload on save |

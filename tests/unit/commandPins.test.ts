@@ -10,7 +10,10 @@
 //
 // Two ties keep the plan and the code from drifting:
 //   - each pinned row must be declared by its owner, once, with the pinned key and title
-//     (a command that is deleted or re-keyed fails here, not only in a hosted run);
+//     (a command that is deleted or re-keyed fails here, not only in a hosted run). A row
+//     marked `pending` is pinned by a prelude before its work package registers it: it may
+//     be missing, but once declared it must match, and the work package that registers it
+//     deletes the mark (and adds its key to `tests/runtime/lib/shortcuts.js`);
 //   - the table the runtime scenario `m1-keys` compares the registry with
 //     (`tests/runtime/lib/shortcuts.js`) must be exactly the keys the sources declare, so
 //     a new default binding that is not in the table fails `npm test` and not a run that
@@ -80,19 +83,35 @@ const SHIPPED: Declared[] = readdirSync(CONTRIB)
   .sort()
   .flatMap(declaredIn);
 
-/** Plan §7.13, the rows of WP10.1 (M10), with the i18n keys P10 pinned for their titles. */
-const PINNED: { id: string; keys?: Keys; title: string; owner: string }[] = [
+/**
+ * Plan §7.13: the rows of WP10.1 (M10, pinned by P10) and of WP11.1 and WP11.3 (M11, pinned
+ * by P11), with the i18n keys of their titles.
+ */
+const PINNED: { id: string; keys?: Keys; title: string; owner: string; pending?: true }[] = [
   { id: 'nc.blockSkip.add', title: 'ncBlockSkip.add', owner: 'ncBlockSkip.ts' },
   { id: 'nc.blockSkip.remove', title: 'ncBlockSkip.remove', owner: 'ncBlockSkip.ts' },
   { id: 'nav.selectToolSegment', keys: 'Mod+F7', title: 'segments.selectToolSegment', owner: 'segments.ts' },
+  // M11, WP11.1 (Home tab, group `search.group`)
+  { id: 'search.findAll', keys: 'Mod+Shift+F', title: 'search.findAll', owner: 'search.ts' },
+  { id: 'search.replace', title: 'search.replace', owner: 'search.ts' },
+  { id: 'search.wholeAddressInFind', title: 'search.wholeAddressInFind', owner: 'search.ts' },
+  // M11, WP11.3 (the two copy keys only while a comparison is open: `enabled` reads
+  // `compareOpen`; `compare.files` on the Tools tab, group `compare.group`)
+  { id: 'compare.copyToModified', keys: 'Mod+Alt+Right', title: 'compare.copyToModified', owner: 'compare.ts' },
+  { id: 'compare.copyToOriginal', keys: 'Mod+Alt+Left', title: 'compare.copyToOriginal', owner: 'compare.ts' },
+  { id: 'compare.exportDiff', title: 'compare.exportDiff', owner: 'compare.ts' },
+  { id: 'compare.files', title: 'compare.files', owner: 'compare.ts' },
+  { id: 'compare.toggleReview', title: 'compare.toggleReview', owner: 'compare.ts' },
 ];
-/** The ribbon groups of those entries, on the NC tab. */
-const PINNED_GROUPS = ['ncBlockSkip.group', 'segments.group'];
+/** The ribbon groups of those entries: NC tab (M10), Home tab (search), Tools tab (compare). */
+const PINNED_GROUPS = ['ncBlockSkip.group', 'segments.group', 'search.group', 'compare.group'];
+/** The palette categories of those entries. */
+const PINNED_CATEGORIES = ['ncBlockSkip.category', 'segments.category', 'search.category', 'compare.category'];
 
 const asDefs = (rows: { id: string; keys?: Keys }[]): CommandDef[] =>
   rows.map((row): CommandDef => ({ id: row.id, keys: row.keys, title: row.id, run: () => {} }));
 
-describe('the commands M10 pins (plan §7.13, P10 item 2)', () => {
+describe('the commands M10 and M11 pin (plan §7.13; P10 item 2, P11 item 4)', () => {
   it('reads the shipped shortcuts it checks against', () => {
     // A sanity floor: F7 and Shift+F7 (navigation), Mod+S (files), F9 (scripts) are there.
     const keys = SHIPPED.map((d) => d.keys).filter((k): k is KeySpec => typeof k === 'string');
@@ -109,6 +128,7 @@ describe('the commands M10 pins (plan §7.13, P10 item 2)', () => {
   it('is declared by its owner, once, with the pinned key and title', () => {
     for (const pin of PINNED) {
       const found = SHIPPED.filter((d) => d.id === pin.id);
+      if (pin.pending && found.length === 0) continue;
       expect(found, `${pin.id} is declared once, by ${pin.owner}`).toHaveLength(1);
       for (const d of found) {
         expect(d.file, pin.id).toBe(pin.owner);
@@ -119,7 +139,7 @@ describe('the commands M10 pins (plan §7.13, P10 item 2)', () => {
   });
 
   it('has a message for every pinned title and ribbon group', () => {
-    for (const key of [...PINNED.map((p) => p.title), ...PINNED_GROUPS, 'ncBlockSkip.category', 'segments.category']) {
+    for (const key of [...PINNED.map((p) => p.title), ...PINNED_GROUPS, ...PINNED_CATEGORIES]) {
       expect(hasKey(key), key).toBe(true);
     }
   });
@@ -132,8 +152,11 @@ describe('the commands M10 pins (plan §7.13, P10 item 2)', () => {
       .map((row): [string, string] => [row[0], row[1]])
       .sort((a, b) => a[0].localeCompare(b[0]));
     expect(declared).toEqual(table);
-    // and every pinned key is in it
-    for (const pin of PINNED) if (pin.keys !== undefined) expect(table, pin.id).toContainEqual([pin.id, pin.keys]);
+    // and every pinned key whose command is registered is in it
+    for (const pin of PINNED) {
+      if (pin.keys === undefined || (pin.pending && !SHIPPED.some((d) => d.id === pin.id))) continue;
+      expect(table, pin.id).toContainEqual([pin.id, pin.keys]);
+    }
   });
 
   it('has a row in the contributions README for every contribution file', () => {

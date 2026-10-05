@@ -217,5 +217,13 @@
       }
     ]
   },
+  "compare": {
+    "ignoreBlockNumbers": true,
+    "ignoreWhitespace": true,
+    "ignoreComments": true,
+    "ignoreCase": false,
+    "ignoreNumberFormat": true,
+    "keepComments": ["\\([^)]*%", "(?<![A-Z])(?:MSG|G0*215)(?![A-Z0-9])"]
+  },
   "toolList": { "description": "auto", "commentFilter": "^[-*=_\\s]*$", "dropLeadingZeros": true }
 }

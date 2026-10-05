@@ -175,6 +175,25 @@ function targetOf(text: string): number | null {
   return Number(text);
 }
 
+/** A name a jump can go to (`LOOP_A`), as the tokenizer leaves it when it reads no more into it. */
+const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * The jump labels a file defines (Sinumerik `LOOP_A:`), upper case, as the tokenizer reads
+ * them. Only lines with a colon can hold one, so only those are tokenized; a jump to a name
+ * in this set is a jump to a label and names no block number (review NC-3).
+ */
+export function labelsOf(lines: readonly string[], cp: CompiledProfile): Set<string> {
+  const labels = new Set<string>();
+  for (const line of lines) {
+    if (!line.includes(':')) continue;
+    for (const token of tokenizeLine(line, cp).tokens) {
+      if (token.kind === 'label' && token.address !== undefined) labels.add(token.address.toUpperCase());
+    }
+  }
+  return labels;
+}
+
 /**
  * Every word on this line whose value is a block number.
  *
@@ -185,8 +204,20 @@ function targetOf(text: string): number | null {
  *
  * A word without a value is not a reference: a bare `GOTO` at the end of a line names no
  * block, and there is nothing to rewrite.
+ *
+ * A jump keyword followed by a string or by a name is a computed reference (`target`
+ * null): Sinumerik `GOTOF "N"<<R10` builds its target, and `GOTOF DEST` jumps to what a
+ * `STRING` variable holds (review NC-3). A name in `labels` (the file's own `NAME:`
+ * labels, [`labelsOf`]) is a jump to that label and no reference at all; without
+ * `labels` every name counts as computed, which reports rather than hides.
  */
-export function referencesOn(tokens: NcToken[], line: string, cp: CompiledProfile, addresses: Set<string>): ReferenceWord[] {
+export function referencesOn(
+  tokens: NcToken[],
+  line: string,
+  cp: CompiledProfile,
+  addresses: Set<string>,
+  labels?: ReadonlySet<string>,
+): ReferenceWord[] {
   let carried: { address: string; start: number; end: number; text: string }[] | null = null;
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
@@ -205,7 +236,13 @@ export function referencesOn(tokens: NcToken[], line: string, cp: CompiledProfil
     // can neither follow nor leave working, so they have to be reported rather than
     // overlooked.
     const next = tokens[i + 1]?.kind === 'whitespace' ? tokens[i + 2] : tokens[i + 1];
-    if (next === undefined || (next.kind !== 'variable' && next.kind !== 'expression')) continue;
+    if (next === undefined) continue;
+    const computed =
+      next.kind === 'variable' ||
+      next.kind === 'expression' ||
+      (token.kind === 'keyword' && next.kind === 'string') ||
+      (token.kind === 'keyword' && next.kind === 'unknown' && IDENTIFIER.test(next.text) && !labels?.has(next.text.toUpperCase()));
+    if (!computed) continue;
     (carried ??= []).push({ address: token.address, start: next.start, end: next.end, text: next.text });
   }
   if (carried === null) return [];
@@ -244,6 +281,123 @@ export function referencesOn(tokens: NcToken[], line: string, cp: CompiledProfil
     });
   }
   return found;
+}
+
+// ---------------------------------------------------------------------------
+// Main blocks (M9 WP9.5b; moved here from `renumber.ts` for review NC-3)
+// ---------------------------------------------------------------------------
+//
+// A Sinumerik program has two kinds of block number: `N20` numbers a block, `:20` numbers
+// a **main block** (`syntax.blockNumber.mainPrefix`, §7.1, §7.16 #50). A jump names a main
+// block by its own prefix (`GOTOF :20`), which the tokenizer reads as an operator and a
+// word of no address, so [`referencesOn`] never sees it. [`mainReferencesOn`] does, under
+// the reference rules that name ordinary blocks (`numbering.references` with the block
+// prefix among the addresses), with keys of their own ([`mainKeyOf`]). Renumber and Remove
+// Block Numbers read it through `withMainBlocks`, review mode through `keptNumbers`.
+
+/** `syntax.blockNumber.mainPrefix` (Sinumerik `:`), or null where the dialect has no main blocks. */
+export function mainPrefixOf(cp: CompiledProfile): string | null {
+  const blockNumber = cp.profile.syntax.blockNumber;
+  if (blockNumber.mode === 'leading-integer') return null;
+  const main = blockNumber.mainPrefix;
+  return typeof main === 'string' && main !== '' ? main : null;
+}
+
+/** The key of a main block (`':20'`): the prefix in front of the key its number would have. */
+export function mainKeyOf(main: string, digits: string, byText: boolean): BlockKey {
+  return main + (byText ? digits : String(Number(digits)));
+}
+
+/**
+ * Every `<main prefix><number>` behind the head of the block: `GOTOF :20` gives the `20`.
+ *
+ * Written without the blank, `GOTOB:20` is not an operator and a word: the tokenizer reads
+ * a name and a colon at the start of a block as a jump **label** (`GOTOB:`) and the digits
+ * behind it as a word of no address. A label whose name is a jump (`isJump`, the reference
+ * rules' own triggers) cannot be a label, so its colon is the main prefix and the digits
+ * name a main block, exactly as with the blank (M9 NC review F2: renumbering moved `:20`
+ * and left `GOTOB:20` pointing at nothing, and Remove Block Numbers dropped the `:20`).
+ */
+function mainJumpsOn(tokens: NcToken[], main: string, isJump: (name: string) => boolean): NcToken[] {
+  const out: NcToken[] = [];
+  for (let i = 0; i + 1 < tokens.length; i++) {
+    const mark = tokens[i];
+    if (mark.kind === 'operator') {
+      if (mark.text !== main) continue;
+    } else if (mark.kind === 'label') {
+      const name = mark.address ?? '';
+      if (name === '' || mark.text !== name + main || !isJump(name)) continue;
+    } else continue;
+    const value = tokens[i + 1];
+    if (value.kind !== 'word' || value.address !== undefined || value.valueText === undefined) continue;
+    if (value.start !== mark.end) continue;
+    out.push(value);
+  }
+  return out;
+}
+
+/** The reference rules that name ordinary blocks, which are the ones that name main blocks. */
+interface MainRules {
+  main: string;
+  rules: { trigger: RegExp; rewrite: boolean }[];
+}
+
+const MAIN_RULES = new WeakMap<CompiledProfile, MainRules | null>();
+
+function mainRulesOf(cp: CompiledProfile): MainRules | null {
+  const cached = MAIN_RULES.get(cp);
+  if (cached !== undefined) return cached;
+  const main = mainPrefixOf(cp);
+  let result: MainRules | null = null;
+  if (main !== null) {
+    const blockPrefix = cp.profile.syntax.blockNumber.prefix ?? 'N';
+    const rules: MainRules['rules'] = [];
+    cp.re.references.forEach((rule, index) => {
+      if (!rule.addresses.includes(blockPrefix)) return;
+      rules.push({ trigger: rule.trigger, rewrite: ruleRewrites(cp, index) });
+    });
+    if (rules.length > 0) result = { main, rules };
+  }
+  MAIN_RULES.set(cp, result);
+  return result;
+}
+
+/**
+ * The main-block jumps on this line (`GOTOF :20`, `GOTOB:20`) as reference words: address
+ * the main prefix, key [`mainKeyOf`]. Empty on a dialect without main blocks or a line
+ * without the prefix.
+ */
+export function mainReferencesOn(tokens: NcToken[], line: string, cp: CompiledProfile): ReferenceWord[] {
+  const found = mainRulesOf(cp);
+  if (found === null || !line.includes(found.main)) return [];
+  const { main, rules } = found;
+  const jumps = mainJumpsOn(tokens, main, (name) => rules.some((rule) => rule.trigger.test(name)));
+  if (jumps.length === 0) return [];
+  const masked = maskedOf(line, tokens);
+  let fired = false;
+  let rewrite = true;
+  for (const rule of rules) {
+    if (!rule.trigger.test(masked)) continue;
+    fired = true;
+    if (!rule.rewrite) rewrite = false;
+  }
+  if (!fired) return [];
+  const byText = comparesByText(cp);
+  return jumps.map((value) => {
+    const text = value.valueText ?? '';
+    const target = targetOf(text);
+    return {
+      address: main,
+      start: value.end - text.length,
+      end: value.end,
+      text,
+      target,
+      key: target === null ? null : mainKeyOf(main, text, byText),
+      rewrite,
+      // Two of them on one line: which one the rule is about cannot be told (G8 M6).
+      ambiguous: jumps.length > 1,
+    };
+  });
 }
 
 /** Where a block number stands, and how often that number occurs in its program. */
@@ -349,6 +503,7 @@ export function scanProgram(lines: readonly string[], ctx: TransformContext): Pr
   const unchecked = document === null && ctx.firstLine > 1;
 
   const addresses = referenceAddresses(cp);
+  const labels = labelsOf(scanned, cp);
   const byText = comparesByText(cp);
   const segmentOf = new Int32Array(scanned.length);
   const keys: (BlockKey | null)[] = new Array<BlockKey | null>(scanned.length).fill(null);
@@ -384,7 +539,7 @@ export function scanProgram(lines: readonly string[], ctx: TransformContext): Pr
       }
     }
 
-    const words = referencesOn(tokens, line, cp, addresses);
+    const words = referencesOn(tokens, line, cp, addresses, labels);
     if (words.length === 0) continue;
     for (const word of words) found.push({ row, word });
     count++;

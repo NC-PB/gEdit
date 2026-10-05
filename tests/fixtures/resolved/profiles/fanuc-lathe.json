@@ -27,11 +27,15 @@
   "codes": "fanuc-lathe",
   "compare": {
     "ignoreBlockNumbers": true,
-    "ignoreCase": true,
-    "ignoreComments": false,
+    "ignoreCase": false,
+    "ignoreComments": true,
     "ignoreNumberFormat": true,
     "ignoreWhitespace": true,
-    "tolerance": 0
+    "keepComments": [
+      "^\\s*(?:[O:]\\d+|<[^>]*>)",
+      "#\\s*30(?:00|06)\\s*=",
+      "\\([^)]*%"
+    ]
   },
   "detect": {
     "content": [

@@ -69,6 +69,9 @@ const PARAM_UNITS: readonly (NumberClass | 'increment' | 'count')[] = [
 /** P10 (R8, §7.2, §7.16 #106). What a parameter is to a program shift. */
 const POSITIONS = ['tool-axis', 'none', 'other', 'mode'] as const;
 
+/** P11 (§7.6). How a parameter's value names a program. */
+const PROGRAM_NUMBERS = ['plain', 'packed'] as const;
+
 /** P9 (R3, §7.2). What the axis words of a block are, where they are not a position. */
 const AXIS_WORDS = ['data', 'machine'] as const;
 /** P9 (R3, §7.2). Whether a code opens or closes a coordinate frame. */
@@ -215,6 +218,9 @@ function readParams(
       if (axis !== undefined && /^[A-Za-z]$/.test(axis)) param.axis = axis.toUpperCase();
       else report({ path: `${at}.axis`, message: 'axis has to be one axis letter' });
     }
+    // P11: a parameter whose value names a program, for search; unknown values are dropped.
+    const programNumber = oneOf(item.programNumber, PROGRAM_NUMBERS, `${at}.programNumber`, report);
+    if (programNumber !== undefined) param.programNumber = programNumber;
     out.push(param);
   });
   return out.length > 0 ? out : undefined;

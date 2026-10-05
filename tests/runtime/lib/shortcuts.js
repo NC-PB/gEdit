@@ -17,7 +17,7 @@
  *
  * Phase 1 (§7.11): M1 and M2 registered most of them; M3 the three `nav.*` ones; M4 the three
  * `bookmark.*` ones; M5 `script.runPicker` (F9) and `script.runLast` (Mod+F9).
- * Phase 2 (§7.13): M10 (WP10.1) added `nav.selectToolSegment` (Mod+F7).
+ * Phase 2 (§7.13): M10 (WP10.1) added `nav.selectToolSegment` (Mod+F7); M11 (WP11.1) `search.findAll` (Mod+Shift+F).
  *
  * @type {ReadonlyArray<readonly [string, string]>}
  */
@@ -34,6 +34,8 @@ export const SHORTCUTS = [
   ['view.switchTab', 'Mod+Alt+O'],
   ['view.commandPalette', 'F1'],
   ['compare.with', 'Mod+Alt+C'],
+  ['compare.copyToModified', 'Mod+Alt+Right'],
+  ['compare.copyToOriginal', 'Mod+Alt+Left'],
   ['settings.open', 'Mod+,'],
   ['nav.goto', 'Ctrl+G'],
   ['nav.nextTool', 'F7'],
@@ -44,4 +46,5 @@ export const SHORTCUTS = [
   ['bookmark.prev', 'Shift+F2'],
   ['script.runPicker', 'F9'],
   ['script.runLast', 'Mod+F9'],
+  ['search.findAll', 'Mod+Shift+F'],
 ]

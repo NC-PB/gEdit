@@ -267,3 +267,20 @@ describe('performance', () => {
     expect(ms, `${Math.round(ms)} ms for 100k lines`).toBeLessThan(3000);
   });
 });
+
+describe('Sinumerik jump targets (M11 review NC-3)', () => {
+  const cp = compiled('sinumerik');
+
+  it('keeps the block a jump names by a bare number', () => {
+    const result = removeBlockNumbers.run(['N10 GOTOF 30', 'N20 G0 X0', 'N30 M30'], context(cp));
+    expect(result.lines).toEqual(['GOTOF 30', 'G0 X0', 'N30 M30']);
+  });
+
+  it('lists a jump through a name that is no label, and not one to a label of the program', () => {
+    const computed = removeBlockNumbers.run(['N10 GOTOF DEST', 'N20 M30'], context(cp));
+    expect(computed.skipped.map((s) => [s.line, s.severity])).toEqual([[1, 'warning']]);
+    const label = removeBlockNumbers.run(['N10 LOOP_A: G0 X0', 'N20 GOTOB LOOP_A'], context(cp));
+    expect(label.lines).toEqual(['LOOP_A: G0 X0', 'GOTOB LOOP_A']);
+    expect(label.skipped).toEqual([]);
+  });
+});

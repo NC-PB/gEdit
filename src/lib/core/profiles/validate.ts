@@ -989,6 +989,21 @@ function checkToolList(value: unknown, p: Problems): void {
   optBool(toolList.collapseOffsetDigits, 'toolList.collapseOffsetDigits', p);
 }
 
+/**
+ * P11 (§7.1, §7.7). The five review-mode toggles are optional booleans and `keepComments`
+ * an optional list of patterns. `tolerance` is accepted with any value and ignored: Phase 1
+ * carried it, and the cut (§2.1, D41) must not turn a user profile that still has it into
+ * a broken one.
+ */
+function checkCompare(value: unknown, p: Problems): void {
+  const compare = optObj(value, 'compare', p);
+  if (!compare) return;
+  for (const key of ['ignoreBlockNumbers', 'ignoreWhitespace', 'ignoreComments', 'ignoreCase', 'ignoreNumberFormat']) {
+    optBool(compare[key], `compare.${key}`, p);
+  }
+  if (compare.keepComments !== undefined) patternList(compare.keepComments, 'compare.keepComments', p);
+}
+
 // ---------------------------------------------------------------------------
 // The entry point
 // ---------------------------------------------------------------------------
@@ -1038,6 +1053,7 @@ export function validateProfile(raw: unknown, o: ProfileValidationOptions = {}):
   if (onLoad) optBool(onLoad.stripNul, 'onLoad.stripNul', p);
 
   checkToolList(root.toolList, p);
+  checkCompare(root.compare, p);
 
   return p.list.length === 0 ? { ok: true, profile: raw as Profile } : { ok: false, errors: p.list };
 }

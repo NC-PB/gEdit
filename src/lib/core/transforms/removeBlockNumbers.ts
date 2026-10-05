@@ -48,8 +48,8 @@
 
 import { tokenizeLine } from '$lib/core/nc/tokenizer';
 import { t } from '$lib/i18n';
-import { continuationRisk, stateBefore } from './fragment';
-import { referenceAddresses, referencePreflight, referencesOn, scanProgram } from './references';
+import { continuationRisk, documentOf, stateBefore } from './fragment';
+import { labelsOf, referenceAddresses, referencePreflight, referencesOn, scanProgram } from './references';
 import { mainKeyOf, mainPrefixOf, withMainBlocks } from './renumber';
 import type { BlockKey } from './references';
 import type { Located, Msg } from '$lib/app/types';
@@ -171,6 +171,8 @@ function runRemove(lines: string[], ctx: TransformContext): TransformResult {
   const computedRow = t('ncNumbering.removeBlockNumbers.computedRow');
   const keptRow = t('ncNumbering.removeBlockNumbers.keptReferencedRow');
   const addresses = referenceAddresses(cp);
+  // A jump to one of the program's own labels (`GOTOF LOOP_A`) names no block number.
+  const labels = addresses.size > 0 ? labelsOf(documentOf(ctx, lines) ?? lines, cp) : undefined;
 
   // Which numbers a jump, a return or a cycle points at. Read from the document when
   // there is one: a `GOTO 100` above the selection needs the `N100` inside it just as
@@ -215,7 +217,7 @@ function runRemove(lines: string[], ctx: TransformContext): TransformResult {
     // number the program no longer has. With `keepReferenced` the number stays and the
     // line is not a finding — **unless** the reference is a computed one, because then
     // there is no number to keep and the target goes with the rest (G8 M6).
-    const words = addresses.size > 0 ? referencesOn(tokens, line, cp, addresses) : [];
+    const words = addresses.size > 0 ? referencesOn(tokens, line, cp, addresses, labels) : [];
     if (!keep && words.length > 0) {
       references++;
       note(i, referenceRow);

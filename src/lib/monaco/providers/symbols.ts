@@ -19,6 +19,22 @@ export interface ModelLike {
 }
 
 /**
+ * Whether a provider may still read `model` after awaiting the outline index.
+ *
+ * `outline.whenReady` resolves when the document closes too (nothing would build it any
+ * more, and a waiter must not hang), and a rebuild for a model that replaced this one
+ * resolves the promise this one's request is waiting on. Either way the model Monaco
+ * asked about is disposed by then and every read of it throws "Model is disposed!"
+ * (seen in `m9-detect`, which opens and closes 67 programs in a row). Monaco ignores the
+ * answer to a cancelled request, so there is nothing to answer.
+ *
+ * @internal Shared with `folding.ts`; not a §7 contract.
+ */
+export function stillAsked(model: { isDisposed(): boolean }, token: { isCancellationRequested: boolean }): boolean {
+  return !token.isCancellationRequested && !model.isDisposed();
+}
+
+/**
  * The document a Monaco model belongs to, or null.
  *
  * `EditorService` creates every document model as `inmemory://doc/<encoded id>`, so the
@@ -86,10 +102,11 @@ export function registerSymbols(monaco: Monaco, profileId: string): Disposable {
 
   const registration = monaco.languages.registerDocumentSymbolProvider(profileId, {
     displayName: 'gEdit program map',
-    async provideDocumentSymbols(model) {
+    async provideDocumentSymbols(model, token) {
       const id = docIdOf(model);
       if (id === null) return [];
       await outline.whenReady(id);
+      if (!stillAsked(model, token)) return [];
       return outline.snapshot(id).map((item) => symbolOf(item, model));
     },
   });
