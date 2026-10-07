@@ -576,6 +576,53 @@ describe('budget', () => {
     expect(left.text).toBe(right.text);
     expectWithin(ms, 1000, `two 100k-line sides: ${ms.toFixed(0)} ms`);
   });
+
+  it('normalizes two 100k-line Klartext sides with the cycle names ignored in a second (#148)', () => {
+    const block = [
+      'CYCL DEF 200 BOHREN ~',
+      '    Q200=2 ;SICHERHEITS-ABST. ~',
+      '    Q201=-20 ;TIEFE',
+      'CYCL DEF 9.1 V.ZEIT 1.5',
+      'CYCL DEF 7.1 X+10',
+      'L X+10 Y-5,5 R0 FMAX M99',
+      'TOOL CALL 3 Z S3000',
+      '* - ROUGH',
+    ];
+    const a = Array.from({ length: 100_000 }, (_, i) => `${i} ${block[i % block.length].trimStart()}`.replace(/^\d+ (Q)/, '    $1'));
+    const b = a.map((line) => line.replace('BOHREN', 'DRILLING').replace('V.ZEIT', 'DWELL'));
+    const cp = cpOf('klartext');
+    const o = { ...compareDefaults(PROFILES.klartext), ignoreCycleNames: true };
+    normalizeLines(a.slice(0, 1000), cp, o);
+    const started = performance.now();
+    const left = normalizeLines(a, cp, o);
+    const right = normalizeLines(b, cp, o);
+    const ms = performance.now() - started;
+    expect(left.text).toBe(right.text);
+    expectWithin(ms, 1000, `two 100k-line Klartext sides, cycle names ignored: ${ms.toFixed(0)} ms`);
+  });
+
+  it('matches a cycle-name pattern in linear time on lines built to make it backtrack (#148)', () => {
+    // Long runs of name-like words that end in something no name may hold (`=`, a digit
+    // word, a sign), with runs of blanks between them: the shapes that would make a
+    // nested-quantifier pattern backtrack. Each line has to stay cheap.
+    const words = Array.from({ length: 2000 }, (_, i) => `W${String.fromCharCode(65 + (i % 26))}X`);
+    const lines = [
+      `1 CYCL DEF 200 ${words.join(' ')} =`,
+      `2 CYCL DEF 200 ${words.join('   ')} Q200=2`,
+      `3 CYCL DEF 9.1 ${words.join(' ')} X`,
+      `4 CYCL DEF 9.1 ${words.join('  ')}+`,
+      `5 CYCL DEF 200 ${'A'.repeat(20_000)}=`,
+      `6 CYCL DEF 9.1 ${'A.'.repeat(10_000)}`,
+    ];
+    const cp = cpOf('klartext');
+    const o = { ...NONE, ignoreCycleNames: true };
+    normalizeLines(lines.slice(0, 1), cp, o);
+    const started = performance.now();
+    const out = normalizeLines(lines, cp, o).text.split('\n');
+    const ms = performance.now() - started;
+    expect(out).toEqual(lines); // none of them is only a name, so nothing goes
+    expectWithin(ms, 250, `six long cycle lines that cannot match: ${ms.toFixed(0)} ms`);
+  });
 });
 
 describe('unifiedDiff', () => {

@@ -13,7 +13,7 @@
 // program. A failure is a manifest index and a line number; the report is counts.
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, mkdtempSync, openSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -266,13 +266,25 @@ export function runScript(
     env.PYTHONIOENCODING = 'utf-8';
     env.PYTHONDONTWRITEBYTECODE = '1';
     env.GEDIT_CONTEXT = file;
-    const run = spawnSync(python.command, [join(SCRIPTS_DIR, script)], {
-      input: Buffer.from(text, 'utf8'),
-      cwd: SCRIPTS_DIR,
-      env,
-      timeout: SCRIPT_TIMEOUT_MS,
-      maxBuffer: 512 * 1024 * 1024,
-    });
+    // stdin is a file, not `input`: `spawnSync` piping more than the 64 KiB pipe buffer
+    // intermittently never delivers the end of input on macOS (Node 22), so the script waits
+    // in `read()` until the 120 s timeout (one local program of about 69 KB, about one run
+    // in two of this test, on `main` as on later branches). A file has no such race.
+    const stdinFile = join(dir, 'stdin.txt');
+    writeFileSync(stdinFile, text, 'utf8');
+    const stdin = openSync(stdinFile, 'r');
+    let run: ReturnType<typeof spawnSync>;
+    try {
+      run = spawnSync(python.command, [join(SCRIPTS_DIR, script)], {
+        stdio: [stdin, 'pipe', 'pipe'],
+        cwd: SCRIPTS_DIR,
+        env,
+        timeout: SCRIPT_TIMEOUT_MS,
+        maxBuffer: 512 * 1024 * 1024,
+      });
+    } finally {
+      closeSync(stdin);
+    }
     if (run.error) return { ok: false, reason: run.error.message.includes('ETIMEDOUT') ? 'timed out' : 'did not start' };
     if (run.status !== 0) return { ok: false, reason: `exit ${String(run.status)}` };
     try {
