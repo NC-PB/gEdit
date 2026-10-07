@@ -2,6 +2,12 @@
 
 What changed in each release of gEdit, written for the person who edits NC programs. The release workflow publishes the entry of a version as the notes of its draft release, so the top of each entry has to make sense on its own.
 
+## Unreleased
+
+### New
+
+- **Compare review mode, Cycle names** (Heidenhain Klartext only, off by default): leaves out the cycle name in the control's dialog language (`CYCL DEF 200 BOHREN` against `CYCL DEF 200 DRILLING`) and the label of an old numbered cycle (`V.ZEIT` against `DWELL` in `CYCL DEF 9.1 … 1.5`), so a program posted again in another language compares clean; the cycle number, the values and the parameter lines are still compared. Saved with the other review options.
+
 ## v0.5.0 (2026-10-05)
 
 Compare and search: this release makes a re-posted program comparable without numbering noise, merges the differences in both directions, and finds and replaces any word by its value. The installers are unsigned, as before; see "Installing an unsigned build" under v0.2.0.

@@ -39,7 +39,7 @@ import { createDocumentStore, docs as appDocs } from '$lib/stores/documents';
 import { createLayoutStore } from '$lib/stores/layout';
 import { hasKey, t } from '$lib/i18n';
 import { profiles as appProfiles } from '$lib/stores/profiles';
-import { COMPARE_FALLBACK, type CompareMemo } from '$lib/core/compare/types';
+import { COMPARE_FALLBACK, COMPARE_OPTION_KEYS, type CompareMemo } from '$lib/core/compare/types';
 import { compareDefaults } from '$lib/core/compare';
 import type { DiffCursor, DiffHandle, DiffLineChange, DiffSide } from '$lib/monaco/diff';
 import type { LineOperation } from '$lib/monaco/applyLines';
@@ -663,9 +663,10 @@ describe('compareMemoOf', () => {
       }),
     ).toEqual({});
     expect(compareMemoOf({ review: [] })).toEqual({});
+    expect(compareMemoOf({ review: { k: { ignoreCycleNames: true, ignoreCase: 'x' } } })).toEqual({ review: { k: { ignoreCycleNames: true } } });
   });
 
-  it('keeps only the five toggles of a profile entry', () => {
+  it('keeps only the review toggles of a profile entry', () => {
     expect(compareMemoOf({ review: { p: { ignoreCase: true, tolerance: true } } })).toEqual({
       review: { p: { ignoreCase: true } },
     });
@@ -1036,6 +1037,35 @@ describe('review mode and the saved options', () => {
     h.service.toggleInline();
     h.service.setIgnoreTrimWhitespace(true);
     expect(h.memory.value).toEqual({ mode: 'review', inline: true, ignoreTrimWhitespace: true });
+  });
+
+  it('offers the cycle names on Klartext only, off by default, and saves the toggle like the others (M11-1, #148)', async () => {
+    await h.service.open(a, { kind: 'document', docId: b });
+    expect(get(h.service.reviewInfo)?.offered).toEqual(COMPARE_OPTION_KEYS.filter((key) => key !== 'ignoreCycleNames'));
+    h.service.close();
+
+    const k = h.docs.add(newDoc({ path: '/nc/K.h', untitledIndex: null, profileId: 'heidenhain-klartext' }));
+    const g = h.docs.add(newDoc({ path: '/nc/G.h', untitledIndex: null, profileId: 'heidenhain-klartext' }));
+    h.docs.activate(k);
+    h.texts.set(k, '0 BEGIN PGM K MM\n1 CYCL DEF 200 BOHREN ~\n    Q200=2 ;SICHERHEITS-ABST.\n2 END PGM K MM');
+    h.texts.set(g, '0 BEGIN PGM K MM\n1 CYCL DEF 200 DRILLING ~\n    Q200=2 ;SET-UP CLEARANCE\n2 END PGM K MM');
+    await h.service.open(k, { kind: 'document', docId: g });
+    expect(get(h.service.reviewInfo)).toMatchObject({ profileId: 'heidenhain-klartext', offered: [...COMPARE_OPTION_KEYS] });
+    expect(get(h.service.options).ignoreCycleNames).toBe(false);
+    h.service.setMode('review');
+    expect(get(h.service.review)?.modified.text).not.toBe(get(h.service.review)?.original.text);
+
+    h.service.setOptions({ ignoreCycleNames: true });
+    expect(get(h.service.review)?.modified.text).toBe(get(h.service.review)?.original.text);
+    expect((h.memory.value as CompareMemo).review).toEqual({ 'heidenhain-klartext': { ignoreCycleNames: true } });
+    h.service.close();
+
+    // The next comparison of a Klartext document starts with it on, from the memory.
+    await h.service.open(k, { kind: 'document', docId: g });
+    expect(get(h.service.options).ignoreCycleNames).toBe(true);
+    h.service.resetOptions();
+    expect(get(h.service.options).ignoreCycleNames).toBe(false);
+    expect((h.memory.value as CompareMemo).review).toBeUndefined();
   });
 
   it('opens the next session the way the last one was left, from the saved memory', async () => {
@@ -1523,6 +1553,8 @@ describe('CompareView markup', () => {
     for (const option of ['ignoreBlockNumbers', 'ignoreWhitespace', 'ignoreComments', 'ignoreCase', 'ignoreNumberFormat']) {
       expect(review).toContain(`data-option="${option}"`);
     }
+    // The sixth toggle is Klartext's only (§7.16 #148).
+    expect(review).not.toContain('data-option="ignoreCycleNames"');
     expect(review).toContain('data-testid="compare-defaults"');
     expect(review).toContain('data-profile-id="fanuc-gcode"');
     // review mode copies nothing
@@ -1530,6 +1562,17 @@ describe('CompareView markup', () => {
     expect(review).toMatch(/data-direction="toModified"[^>]*aria-disabled="true"/); // CODE-18
     expect(review).toContain(t('compare.copyTitle', { action: t('compare.copyToModified') }));
     expect(review).toMatch(/data-normalized="true"/);
+  });
+
+  it('shows the cycle-name toggle, off, for a Klartext comparison (M11-1)', async () => {
+    const a = appDocs.add(newDoc({ path: '/nc/A.h', untitledIndex: null, profileId: 'heidenhain-klartext' }));
+    const b = appDocs.add(newDoc({ path: '/nc/B.h', untitledIndex: null, profileId: 'heidenhain-klartext' }));
+    await compare.open(a, { kind: 'document', docId: b });
+    compare.setMode('review');
+    const review = render(CompareView).body;
+    expect(review).toContain('data-profile-id="heidenhain-klartext"');
+    expect(review).toMatch(/data-option="ignoreCycleNames"[^>]*aria-pressed="false"/);
+    expect(review).toContain(`>${t('compare.optionIgnoreCycleNames')}<`);
   });
 
   it('says so instead of mounting a diff when there is no session', () => {

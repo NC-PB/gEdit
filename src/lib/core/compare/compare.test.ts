@@ -25,6 +25,7 @@ import {
   compareDefaults,
   normalizeLine,
   normalizeLines,
+  offeredOptions,
   pointSignificant,
   prepareNormalize,
   unifiedDiff,
@@ -64,13 +65,16 @@ const NONE: CompareOptions = {
   ignoreComments: false,
   ignoreCase: false,
   ignoreNumberFormat: false,
+  ignoreCycleNames: false,
 };
+/** Every toggle a built-in profile can turn on by default; the cycle names are off (M11-1). */
 const ALL: CompareOptions = {
   ignoreBlockNumbers: true,
   ignoreWhitespace: true,
   ignoreComments: true,
   ignoreCase: true,
   ignoreNumberFormat: true,
+  ignoreCycleNames: false,
 };
 
 /** The normalized lines of a side; `o` is laid over "nothing ignored". */
@@ -269,7 +273,7 @@ describe('ignoreComments alone', () => {
     ]);
   });
 
-  it('does not take the Klartext cycle name for a comment (P11, §10.2 M11-1)', () => {
+  it('does not take the Klartext cycle name for a comment (P11; M11-1: a toggle of its own, off by default)', () => {
     expect(same('klartext', '5 CYCL DEF 200 DRILLING ~', '5 CYCL DEF 200 BOHREN ~', ALL)).toBe(false);
   });
 
@@ -690,6 +694,129 @@ describe('unifiedDiff', () => {
     const expected = unifiedDiff(side('a', a), side('b', b));
     expect(unifiedDiff(side('a', a), side('b', b), { context: -1 })).toBe(expected);
     expect(unifiedDiff(side('a', a), side('b', b), { context: Number.NaN })).toBe(expected);
+  });
+});
+
+describe('ignoreCycleNames (the owner\'s answer M11-1, 2026-10-07; §7.16 #148)', () => {
+  const NAMES: Partial<CompareOptions> = { ignoreCycleNames: true };
+
+  it('is off by default, offered for Klartext only', () => {
+    expect(compareDefaults(PROFILES.klartext).ignoreCycleNames).toBe(false);
+    for (const key of Object.keys(PROFILES) as ProfileKey[]) {
+      expect(offeredOptions(PROFILES[key]).includes('ignoreCycleNames'), key).toBe(key === 'klartext');
+    }
+  });
+
+  // Each shape on and off: the German and the English (or Swedish) spelling of one block.
+  const PAIRS: [string, string, string][] = [
+    // [German, other language, the name dropped]
+    ['5 CYCL DEF 200 BOHREN ~', '5 CYCL DEF 200 DRILLING ~', '5 CYCL DEF 200 ~'],
+    ['3 CYCL DEF 247 BEZUGSPUNKT SETZEN ~', '3 CYCL DEF 247 INIT. REF.PKT ~', '3 CYCL DEF 247 ~'],
+    ['8 CYCL DEF 209 GEWINDEBOHREN SPANBRECHEN. ~', '8 CYCL DEF 209 TAPPING W/ CHIP BRKG ~', '8 CYCL DEF 209 ~'],
+    ['9 CYCL DEF 241 EINLIPPEN-TIEFBOHREN ~', '9 CYCL DEF 241 SINGLE-LIP D.H.DRLNG ~', '9 CYCL DEF 241 ~'],
+    ['4 CYCL DEF 7.0 NULLPUNKT', '4 CYCL DEF 7.0 NOLLPUNKT', '4 CYCL DEF 7.0'],
+    ['6 CYCL DEF 19.0 BEARBEITUNGSEBENE', '6 CYCL DEF 19.0 WORKING PLANE', '6 CYCL DEF 19.0'],
+    ['7 CYCL DEF 32.0 TOLERANZ', '7 CYCL DEF 32.0 TOLERANCE', '7 CYCL DEF 32.0'],
+    ['10 CYCL DEF 200 BOHREN ;OP 10', '10 CYCL DEF 200 DRILLING ;OP 10', '10 CYCL DEF 200 ;OP 10'],
+    ['11 / CYCL DEF 200 BOHREN ~', '11 / CYCL DEF 200 DRILLING ~', '11 / CYCL DEF 200 ~'],
+    ['12 cycl def 200 bohren ~', '12 cycl def 200 drilling ~', '12 cycl def 200 ~'],
+    // The label words of an old numbered cycle's sub-block: the label goes, the value stays.
+    ['16 CYCL DEF 9.1 V.ZEIT 1.5', '16 CYCL DEF 9.1 DWELL 1.5', '16 CYCL DEF 9.1 1.5'],
+    ['21 CYCL DEF 1.1 ABST 2', '21 CYCL DEF 1.1 SET UP 2', '21 CYCL DEF 1.1 2'],
+    ['22 CYCL DEF 1.2 TIEFE -10', '22 CYCL DEF 1.2 DEPTH -10', '22 CYCL DEF 1.2 -10'],
+    ['23 CYCL DEF 1.3 ZUSTLG 5 F80', '23 CYCL DEF 1.3 PECKG 5 F80', '23 CYCL DEF 1.3 5 F80'],
+    ['24 CYCL DEF 13.1 WINKEL 180', '24 CYCL DEF 13.1 ANGLE 180', '24 CYCL DEF 13.1 180'],
+  ];
+
+  it.each(PAIRS)('%s = %s with the option, and not without it', (german, other, dropped) => {
+    expect(norm('klartext', [german], NAMES)).toEqual([dropped]);
+    expect(norm('klartext', [other], NAMES)).toEqual([dropped]);
+    expect(same('klartext', german, other, { ...NONE, ...NAMES })).toBe(true);
+    expect(same('klartext', german, other, NONE)).toBe(false);
+    expect(same('klartext', german, other, compareDefaults(PROFILES.klartext))).toBe(false);
+  });
+
+  it('never hides a cycle number, a value, an axis word, a Q parameter or a continuation line', () => {
+    const on = { ...ALL, ignoreCycleNames: true };
+    // The cycle number and the sub-block number.
+    expect(same('klartext', '5 CYCL DEF 200 BOHREN ~', '5 CYCL DEF 203 BOHREN ~', on)).toBe(false);
+    expect(same('klartext', '5 CYCL DEF 9.1 V.ZEIT 1.5', '5 CYCL DEF 9.2 DWELL 1.5', on)).toBe(false);
+    expect(same('klartext', '5 CYCL DEF 7.0 NULLPUNKT', '5 CYCL DEF 7.1 NULLPUNKT', on)).toBe(false);
+    // The value behind a label.
+    expect(same('klartext', '16 CYCL DEF 9.1 V.ZEIT 1.5', '16 CYCL DEF 9.1 DWELL 2', on)).toBe(false);
+    expect(same('klartext', '22 CYCL DEF 1.2 TIEFE -10', '22 CYCL DEF 1.2 DEPTH 10', on)).toBe(false);
+    // Lines with nothing that is only a name are compared as written.
+    const kept = [
+      '8 CYCL DEF 7.1 X+10',
+      '8 CYCL DEF 7.1 IX+10',
+      '8 CYCL DEF 7.1 #5',
+      '9 CYCL DEF 8.1 X Y',
+      '9 CYCL DEF 8.1 X 10',
+      '9 CYCL DEF 8.1 IX 10',
+      '10 CYCL DEF 19.1 A+0 B+45 C+0',
+      '10 CYCL DEF 19.1 A0, B0, C0,',
+      '11 CYCL DEF 10.1 ROT+45',
+      '12 CYCL DEF 32.1 T0.02',
+      '13 CYCL DEF 32.2 HSC-MODE:0 TA0.5',
+      '14 CYCL DEF 4.6 F100 DR- RADIUS 5',
+      '15 CYCL DEF 200 Q200=2',
+      '15 CYCL DEF 200 BOHREN Q200=2',
+      '15 CYCL DEF 200 BOHREN Q200=2 ~',
+      '15 CYCL DEF 200 3D ~',
+      '17 CYCL CALL',
+      '18 L X+10 Y+5 R0 FMAX M99',
+      '19 TOOL CALL 3 Z S3000',
+    ];
+    for (const line of kept) expect(norm('klartext', [line], NAMES), line).toEqual([line]);
+    // A continuation line keeps everything, its `;` label included (that one is a comment).
+    const block = ['5 CYCL DEF 200 BOHREN ~', '    Q200=2 ;SICHERHEITS-ABST. ~', '    Q201=-20 ;TIEFE ~', '    Q206=150 ;VORSCHUB TIEFENZ.'];
+    expect(norm('klartext', block, NAMES)).toEqual(['5 CYCL DEF 200 ~', ...block.slice(1)]);
+    expect(same('klartext', '    Q201=-20 ;TIEFE', '    Q201=-25 ;TIEFE', on)).toBe(false);
+  });
+
+  it('makes a re-post in another dialog language equal with the comments ignored too', () => {
+    const german = ['5 CYCL DEF 200 BOHREN ~', '    Q200=2 ;SICHERHEITS-ABST. ~', '    Q201=-20 ;TIEFE', '6 CYCL DEF 9.0 VERWEILZEIT', '7 CYCL DEF 9.1 V.ZEIT 1.5'];
+    const english = ['5 CYCL DEF 200 DRILLING ~', '    Q200=2 ;SET-UP CLEARANCE ~', '    Q201=-20 ;DEPTH', '6 CYCL DEF 9.0 DWELL TIME', '7 CYCL DEF 9.1 DWELL 1.5'];
+    const cp = cpOf('klartext');
+    const read = (lines: string[], o: CompareOptions) => normalizeLines(lines, cp, o).text;
+    expect(read(german, { ...ALL, ignoreCycleNames: true })).toBe(read(english, { ...ALL, ignoreCycleNames: true }));
+    expect(read(german, { ...ALL, ignoreCycleNames: true })).toBe('CYCL DEF 200 ~\nQ200=2 ~\nQ201=-20\nCYCL DEF 9.0\nCYCL DEF 9.1 1.5');
+    // The default leaves the three cycle lines apart.
+    const edits = diffLines(read(german, ALL).split('\n'), read(english, ALL).split('\n'));
+    expect(edits.reduce((n, e) => n + (e.oldEnd - e.oldStart), 0)).toBe(3);
+  });
+
+  it('changes nothing on a profile that declares no cycle names', () => {
+    const lines = ['N10 G81 X1. Y2. Z-3. R1. F100 (BOHREN)', 'CYCLE81(10,0,2,-12) ;BOHREN'];
+    expect(norm('fanuc', [lines[0]], NAMES)).toEqual([lines[0]]);
+    expect(norm('sinumerik', [lines[1]], NAMES)).toEqual([lines[1]]);
+  });
+
+  it('drops nothing where a declared span cuts a token or takes more than names', () => {
+    const klartext = PROFILES.klartext;
+    const custom = (cycleNames: string[]): CompiledProfile =>
+      compileProfile({ ...klartext, compare: { ...klartext.compare, cycleNames } });
+    const o = { ...NONE, ...NAMES };
+    const text = (cp: CompiledProfile, line: string): string => normalizeLines([line], cp, o).text;
+    expect(text(custom(['CYCL DEF \\d+ (?<name>BOH)']), '5 CYCL DEF 200 BOHREN ~')).toBe('5 CYCL DEF 200 BOHREN ~');
+    expect(text(custom(['CYCL DEF (?<name>\\d+ BOHREN)']), '5 CYCL DEF 200 BOHREN ~')).toBe('5 CYCL DEF 200 BOHREN ~');
+    expect(text(custom(['CYCL DEF \\d+ (?<name>BOHREN ~)']), '5 CYCL DEF 200 BOHREN ~')).toBe('5 CYCL DEF 200 BOHREN ~');
+    expect(text(custom(['CYCL DEF \\d+ (?<name>BOHREN)']), '5 CYCL DEF 200 BOHREN ~')).toBe('5 CYCL DEF 200 ~');
+  });
+});
+
+describe('the owner\'s answers M11-3 and M11-4 (2026-10-07), as built', () => {
+  it('M11-3: the TNC loads `L X10` as `L X+10`, so the number format makes them equal', () => {
+    const NUM = { ...NONE, ignoreNumberFormat: true };
+    expect(same('klartext', '12 L X10 Y-5 R0 FMAX', '12 L X+10 Y-5 R0 FMAX', NUM)).toBe(true);
+    expect(same('klartext', '12 L X10', '12 L X-10', NUM)).toBe(false);
+    expect(same('klartext', '12 L X10', '12 L X+10', NONE)).toBe(false);
+  });
+
+  it('M11-4: `K` keeps no point under calculator input (it stays a value address)', () => {
+    const mill = machineWith('fanuc', presetOf('fanuc', 'calculator'));
+    const read = (line: string): string => normalizeLines([line], mill.cp, ALL, mill.machine).text;
+    expect(read('G2 X10. Y0 I5. K5')).toBe(read('G2 X10. Y0 I5. K5.'));
   });
 });
 

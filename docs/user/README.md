@@ -626,7 +626,7 @@ the mode afterwards, also after a restart.
 ### Review mode
 
 Review mode tidies both sides line by line, then compares the tidied text. Five options say
-how:
+how, and a sixth on Heidenhain Klartext:
 
 | Option | What it leaves out |
 |---|---|
@@ -635,6 +635,7 @@ how:
 | Comments | Comments; a line that holds only a comment disappears |
 | Case | The difference between `G1X10` and `g1x10`, outside strings |
 | Number format | `X+05.500` against `X5.5`, `G01` against `G1`, a decimal comma against a point |
+| Cycle names (Klartext only) | The cycle name in the control's dialog language: `CYCL DEF 200 BOHREN` against `CYCL DEF 200 DRILLING`, and the label of an old numbered cycle, `CYCL DEF 9.1 V.ZEIT 1.5` against `CYCL DEF 9.1 DWELL 1.5` |
 
 **What each option never does.** Review mode never hides a difference the machine would see.
 So, whatever you switch on:
@@ -662,22 +663,28 @@ So, whatever you switch on:
 
 **What is on to begin with.** When you open a review, the options start from your dialect's
 defaults. Block numbers, whitespace, comments and number format are on for every dialect;
-case is on only for Sinumerik.
+case is on only for Sinumerik; cycle names are off.
 
 | Dialect | Case | Comments the control reads, which stay |
 |---|---|---|
 | Fanuc mill and lathe | off: the control has no lower case and drops it on input | The program title in the first block (`O1001 (BRACKET)`, `:1001`, `<NAME>`); an alarm or stop message (`#3000=`, `#3006=`); a `%` inside a comment, which ends the program on input |
-| Heidenhain Klartext | off | None. The `;` labels of the cycle parameters and the `*` structure blocks go with comments |
+| Heidenhain Klartext | off (switch it on if your control takes lower case; modern controls convert it to upper case when they load a program) | None. The `;` labels of the cycle parameters and the `*` structure blocks go with comments |
 | Okuma OSP | off | A `%` inside a comment (kept to be safe) |
 | Sinumerik (turning and milling) | on: the control does not tell case apart, except in tool names, which are strings | The `;$PATH=` header, which files the program on import; the cycle-screen markers `*RO*` and `*HD*` |
 
 On Okuma, a block number that stays is compared as text: `N0123` is not `N123`.
 
-**Not ignored: the Klartext cycle name.** The words after `CYCL DEF <n>` (and the label
+**Cycle names are off to begin with.** The words after `CYCL DEF <n>` (and the label
 words of the old numbered cycles, `CYCL DEF 9.1 DWELL 1.5`) are text in the control's
-dialog language, not comments. A program posted again in another language shows each cycle
-header as changed, one line per cycle, with its number visible. There is no option for
-this yet.
+dialog language, not comments, and whether your control ignores them when it loads a
+program is not known. So a program posted again in another language shows each cycle
+header as changed, one line per cycle, with its number visible. Switch **Cycle names** on
+to leave out exactly those words: the name after `CYCL DEF 200` or `CYCL DEF 7.0`, and the
+label in front of a value (`V.ZEIT` in `CYCL DEF 9.1 V.ZEIT 1.5`; the `1.5` is still
+compared). The cycle number, every value, axis word and `Q` parameter, and the parameter
+lines below the header stay; the `;` labels of the parameter lines are comments and go with
+*Comments*. A line where the name cannot be told apart from the rest (`CYCL DEF 7.1 X+10`,
+`CYCL DEF 32.2 HSC-MODE:0 TA0.5`) is compared as written.
 
 **A trailing comment on a Sinumerik cycle call is ignored**, though it changes how the
 control's own editor shows that call. It does not change what the call runs.
@@ -689,7 +696,8 @@ them.
 
 ### Setting the options
 
-The five options are buttons in the **review bar**, the second row of buttons that appears
+The options are buttons in the **review bar** (the sixth, *Cycle names*, only for a
+Klartext program), the second row of buttons that appears
 under the toolbar in review mode; each one switches on or off. Each side
 uses the settings of **its own** program: its dialect and its machine. When the two programs
 use different machines, a note in the review bar says so, and the decimal point is read for

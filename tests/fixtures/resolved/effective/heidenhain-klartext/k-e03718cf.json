@@ -47,9 +47,14 @@
     },
     "codes": "heidenhain",
     "compare": {
+      "cycleNames": [
+        "^\\s*(?:/\\s*)?\\d+\\s+(?:/\\s*)?CYCL\\s+DEF\\s+\\d+(?:\\.0+)?\\s+(?<name>(?![+\\-.\\d#\"(]|[A-Z]{1,2}[+\\-]?\\d|[A-Z](?![^\\s~;=]))[^\\s~;=]+(?:\\s+(?![+\\-.\\d#\"(]|[A-Z]{1,2}[+\\-]?\\d|[A-Z](?![^\\s~;=]))[^\\s~;=]+)*)\\s*(?:[~;]|$)",
+        "^\\s*(?:/\\s*)?\\d+\\s+(?:/\\s*)?CYCL\\s+DEF\\s+\\d+\\.\\d*[1-9]\\d*\\s+(?<name>(?![+\\-.#\"(]|[A-Z](?![^\\s~;=\\d]))[^\\s~;=\\d]+(?:\\s+(?![+\\-.#\"(]|[A-Z](?![^\\s~;=\\d]))[^\\s~;=\\d]+)*)(?=\\s+[+\\-]?\\.?\\d)"
+      ],
       "ignoreBlockNumbers": true,
       "ignoreCase": false,
       "ignoreComments": true,
+      "ignoreCycleNames": false,
       "ignoreNumberFormat": true,
       "ignoreWhitespace": true
     },

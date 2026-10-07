@@ -53,6 +53,8 @@ export default {
   optionIgnoreComments: 'Comments',
   optionIgnoreCase: 'Case',
   optionIgnoreNumberFormat: 'Number format',
+  /** §7.16 #148: the Klartext cycle names (`CYCL DEF 200 BOHREN`), offered only where a profile declares them. */
+  optionIgnoreCycleNames: 'Cycle names',
   optionHint: 'Ignore differences in: {what}',
   profileDefaults: 'Profile defaults',
   profileDefaultsHint: 'Back to what the {profile} profile ignores',

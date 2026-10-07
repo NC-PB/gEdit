@@ -69,6 +69,7 @@ import {
   COMPARE_NOTE_KEYS,
   COMPARE_OPTION_KEYS,
   normalizeLines,
+  offeredOptions,
   pointSignificant,
   unifiedDiff,
   type CompareMemo,
@@ -143,6 +144,8 @@ export interface ReviewView {
 export interface ReviewInfo {
   profileId: string;
   defaults: CompareOptions;
+  /** The toggles the bar shows for this profile, in toolbar order (`offeredOptions`, §7.16 #148). */
+  offered: readonly (keyof CompareOptions)[];
 }
 
 /** The §7.3 service plus what the view and the contribution need. Not part of §7.3. */
@@ -262,7 +265,7 @@ function fileName(path: string): string {
 /**
  * `ui.lastParams.compare` as it may be read from a hand-edited file: member by member, and
  * anything that is not the declared type is dropped, so a bad file can only bring the
- * defaults back (§7.11). Profile entries keep only the five toggles, as booleans.
+ * defaults back (§7.11). Profile entries keep only the review toggles, as booleans.
  */
 export function compareMemoOf(raw: unknown): CompareMemo {
   const out: CompareMemo = {};
@@ -682,7 +685,7 @@ export function createCompareService(deps: CompareDeps): CompareController {
   function applyProfile(docId: DocId): void {
     const profile = deps.effectiveOf(docId).profile;
     const defaults = compareDefaults(profile);
-    info.set({ profileId: profile.id, defaults });
+    info.set({ profileId: profile.id, defaults, offered: offeredOptions(profile) });
     reviewOptions.set({ ...defaults, ...savedReview[profile.id] });
   }
 

@@ -115,6 +115,8 @@
         return t('compare.optionIgnoreCase');
       case 'ignoreNumberFormat':
         return t('compare.optionIgnoreNumberFormat');
+      case 'ignoreCycleNames':
+        return t('compare.optionIgnoreCycleNames');
     }
   }
 
@@ -253,7 +255,8 @@
 
   {#if $mode === 'review' && $content}
     <div class="review-bar" role="group" aria-label={t('compare.reviewBar')}>
-      {#each COMPARE_OPTION_KEYS as key (key)}
+      <!-- The toggles the compared profile offers (§7.16 #148: cycle names only where it declares them). -->
+      {#each $reviewInfo?.offered ?? COMPARE_OPTION_KEYS.filter((key) => key !== 'ignoreCycleNames') as key (key)}
         <button
           type="button"
           class="tool"

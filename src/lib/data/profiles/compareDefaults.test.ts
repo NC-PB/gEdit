@@ -9,10 +9,14 @@
 //   - comments go everywhere, except the comments a control reads (`keepComments`);
 //   - case only on Sinumerik, the one control that does not tell case apart in code (its
 //     tool names are strings, which keep their case). The Fanuc code table has no lower
-//     case and drops it on input; Okuma and Klartext leave it open (verify).
+//     case and drops it on input; Okuma and Klartext leave it open (the owner knows of no
+//     control that refuses lower case, M11-2, 2026-10-07: the default stays);
+//   - the Klartext cycle names are off, and offered only where `compare.cycleNames` says
+//     where they stand (the owner's answer M11-1, 2026-10-07: "default no, but make it a
+//     setting"; §7.16 #148).
 
 import { describe, expect, it } from 'vitest';
-import { compareDefaults, COMPARE_FALLBACK, COMPARE_OPTION_KEYS, type CompareOptions } from '$lib/core/compare';
+import { compareDefaults, COMPARE_FALLBACK, COMPARE_OPTION_KEYS, offeredOptions, type CompareOptions } from '$lib/core/compare';
 import { compileProfile } from '$lib/core/profiles/compile';
 import { validateProfile } from '$lib/core/profiles/validate';
 import type { Profile } from '$lib/core/profiles/types';
@@ -28,14 +32,24 @@ function resolved(id: string): Profile {
 const ON = true;
 const OFF = false;
 
-/** §8.11: profile → [block numbers, whitespace, comments, case, number format]. */
-const GOLDEN: Record<string, [boolean, boolean, boolean, boolean, boolean]> = {
-  'fanuc-gcode': [ON, ON, ON, OFF, ON],
-  'fanuc-lathe': [ON, ON, ON, OFF, ON], // inherited from fanuc-gcode
-  'heidenhain-klartext': [ON, ON, ON, OFF, ON],
-  'okuma-osp': [ON, ON, ON, OFF, ON],
-  sinumerik: [ON, ON, ON, ON, ON],
-  'sinumerik-mill': [ON, ON, ON, ON, ON], // inherited from sinumerik
+/** §8.11: profile → [block numbers, whitespace, comments, case, number format, cycle names]. */
+const GOLDEN: Record<string, [boolean, boolean, boolean, boolean, boolean, boolean]> = {
+  'fanuc-gcode': [ON, ON, ON, OFF, ON, OFF],
+  'fanuc-lathe': [ON, ON, ON, OFF, ON, OFF], // inherited from fanuc-gcode
+  'heidenhain-klartext': [ON, ON, ON, OFF, ON, OFF],
+  'okuma-osp': [ON, ON, ON, OFF, ON, OFF],
+  sinumerik: [ON, ON, ON, ON, ON, OFF],
+  'sinumerik-mill': [ON, ON, ON, ON, ON, OFF], // inherited from sinumerik
+};
+
+/** §7.16 #148: the profiles that declare cycle names, and so offer the sixth toggle. */
+const CYCLE_NAMES: Record<string, boolean> = {
+  'fanuc-gcode': false,
+  'fanuc-lathe': false,
+  'heidenhain-klartext': true,
+  'okuma-osp': false,
+  sinumerik: false,
+  'sinumerik-mill': false,
 };
 
 /** §8.11: the comments each profile keeps under `ignoreComments`, as written. */
@@ -79,8 +93,12 @@ describe('the review-mode defaults of the built-in profiles (§8.11)', () => {
     const profile = resolved(id);
     const expected = Object.fromEntries(COMPARE_OPTION_KEYS.map((key, i) => [key, row[i]])) as unknown as CompareOptions;
     expect(compareDefaults(profile)).toEqual(expected);
-    // Every toggle is written down (or inherited), so no built-in leans on the fallback.
-    for (const key of COMPARE_OPTION_KEYS) expect(typeof profile.compare?.[key], `${id} ${key}`).toBe('boolean');
+    // Every toggle the profile offers is written down (or inherited), so no built-in leans
+    // on the fallback; the cycle-name toggle is offered only where cycle names are declared.
+    const offered = offeredOptions(profile);
+    expect(offered).toEqual(COMPARE_OPTION_KEYS.filter((key) => key !== 'ignoreCycleNames' || CYCLE_NAMES[id]));
+    for (const key of offered) expect(typeof profile.compare?.[key], `${id} ${key}`).toBe('boolean');
+    expect(Array.isArray(profile.compare?.cycleNames), `${id} cycleNames`).toBe(CYCLE_NAMES[id]);
     expect(profile.compare?.keepComments).toEqual(KEEP[id]);
     // The tolerance was cut (§2.1, D41); no built-in carries it any more.
     expect(profile.compare && 'tolerance' in profile.compare).toBe(false);
@@ -113,6 +131,25 @@ describe('compareDefaults and the validator', () => {
       const result = validateProfile({ ...base, compare: { ignoreCase: true, tolerance } });
       expect(result.ok ? [] : result.errors, String(tolerance)).toEqual([]);
     }
+  });
+
+  it('reports a cycle-name pattern without its name group, and a cycle-name toggle that is no boolean (§7.16 #148)', () => {
+    const result = validateProfile({
+      ...base,
+      compare: { ignoreCycleNames: 'no', cycleNames: ['^CYCL DEF \\d+ (?<name>\\S+)', 'CYCL DEF', '(unclosed'] },
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.map((e) => e.split(':')[0])).toEqual([
+      'compare.ignoreCycleNames',
+      'compare.cycleNames[1]',
+      'compare.cycleNames[2]',
+    ]);
+    expect(validateProfile({ ...base, compare: { cycleNames: ['^\\d+ CYCL DEF \\d+ (?<name>\\S+)'] } }).ok).toBe(true);
+    // A profile that declares none is not offered the toggle; one that does, is.
+    expect(offeredOptions(base)).not.toContain('ignoreCycleNames');
+    expect(offeredOptions({ ...base, compare: { cycleNames: ['(?<name>X)'] } })).toContain('ignoreCycleNames');
+    expect(offeredOptions({ ...base, compare: { cycleNames: [] } })).not.toContain('ignoreCycleNames');
   });
 
   it('reports a toggle that is not true or false and a keep pattern that is not one', () => {

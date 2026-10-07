@@ -40,6 +40,7 @@
 //     hand passes them, and a caller that does not simply does not get those two checks.
 
 import { normalizeCode } from '$lib/core/codes/lookup';
+import { COMPARE_OPTION_KEYS } from '$lib/core/compare/types';
 import type { Eol } from '$lib/app/types';
 import type { NumberClass, NumberReading, ParamSource } from '$lib/core/machines/types';
 import type { OutlineKind, Profile, ProfileValidation } from './types';
@@ -990,18 +991,28 @@ function checkToolList(value: unknown, p: Problems): void {
 }
 
 /**
- * P11 (§7.1, §7.7). The five review-mode toggles are optional booleans and `keepComments`
+ * P11 (§7.1, §7.7). The review-mode toggles are optional booleans and `keepComments`
  * an optional list of patterns. `tolerance` is accepted with any value and ignored: Phase 1
  * carried it, and the cut (§2.1, D41) must not turn a user profile that still has it into
- * a broken one.
+ * a broken one. §7.16 #148: `cycleNames` is an optional list of patterns, each with the
+ * named group `(?<name>…)` whose span `ignoreCycleNames` drops.
  */
 function checkCompare(value: unknown, p: Problems): void {
   const compare = optObj(value, 'compare', p);
   if (!compare) return;
-  for (const key of ['ignoreBlockNumbers', 'ignoreWhitespace', 'ignoreComments', 'ignoreCase', 'ignoreNumberFormat']) {
-    optBool(compare[key], `compare.${key}`, p);
-  }
+  for (const key of COMPARE_OPTION_KEYS) optBool(compare[key], `compare.${key}`, p);
   if (compare.keepComments !== undefined) patternList(compare.keepComments, 'compare.keepComments', p);
+  if (compare.cycleNames !== undefined) {
+    const list = arr(compare.cycleNames, 'compare.cycleNames', p);
+    list?.forEach((entry, i) => {
+      const before = p.list.length;
+      pattern(entry, `compare.cycleNames[${i}]`, p);
+      // Review mode drops the span of this group and nothing else.
+      if (p.list.length === before && typeof entry === 'string' && !entry.includes('(?<name>')) {
+        p.add(`compare.cycleNames[${i}]`, 'has to carry the named group (?<name>…)');
+      }
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------

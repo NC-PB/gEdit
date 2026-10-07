@@ -127,7 +127,7 @@ On a real control, the words after the cycle number (`BOHREN`) and after `;` in 
 - **A structure block (`*`) or `;` comment may carry the block skip the same way** (`/N *`): `syntax.sectionHeading` and the outline's `section`/`comment` rules read the skip before or after the number (NC4, the M8 re-review's fix, `dec/int`); before this fix such a line was read as a plain heading and lost the mark.
 - **Whitespace** separates words. Most words have **no** space between letter and value (`X+10`, `S3200`, `F900`, `R0`, `Q200=2`, `SPB+30`, `DIST50`). A few need a space: `MB 50` / `MB MAX` (after `M140`), `REP 4` (verify), `FN 0:`.
 - **Multi-word function names** are separated by single spaces: `BEGIN PGM`, `END PGM`, `BLK FORM`, `TOOL CALL`, `TOOL DEF`, `CYCL DEF`, `CYCL CALL [PAT|POS]`, `CALL LBL`, `CALL PGM`, `SEL PGM`, `CALL SELECTED PGM`, `PLANE SPATIAL` (etc.), `PLANE RESET`, `FUNCTION TCPM`, `FUNCTION RESET TCPM`, `TRANS DATUM AXIS|TABLE|RESET`, `DECLARE STRING`, `FUNCTION DWELL`, `PATTERN DEF`, `APPR LT|LN|CT|LCT`, `DEP LT|LN|CT|LCT` (plus polar `APPR PLT|PLN|PCT|PLCT`, `DEP PLCT`, …). The tokenizer should allow `\s+` between the parts.
-- **Case:** the control writes upper case, and tool and label names are upper-cased on save. Tokenize case-insensitively (keep `ignoreCase: true`), but lint lower case as a warning (verify: whether the control accepts lower case on import).
+- **Case:** the control writes upper case, and tool and label names are upper-cased on save. Tokenize case-insensitively (keep `ignoreCase: true`), but lint lower case as a warning (verify: whether the control accepts lower case on import; the owner knows of no control that refuses it and thinks modern ones convert it to upper case on loading, 2026-10-07).
 
 ### 3.2 Token classes
 
@@ -159,7 +159,7 @@ On a real control, the words after the cycle number (`BOHREN`) and after `;` in 
 | Program call | `CALL PGM <path>` | `<path>` is a bare name or `TNC:\dir\file.H`, which may include `.I` (verify: quoting of paths with spaces). |
 | PLANE words | `SPATIAL PROJECTED EULER VECTOR POINTS RELATIV AXIAL RESET`, `SPA SPB SPC`, `MOVE TURN STAY`, `DIST`, `MB`, `SEQ[+-]`, `TABLE ROT`, `COORD ROT` | |
 | TCPM words | `FUNCTION TCPM`, `F TCP`, `F CONT`, `AXIS POS`, `AXIS SPAT`, `PATHCTRL AXIS`, `PATHCTRL VECTOR`, `REFPNT TIP-TIP` (the default), `REFPNT TIP-CENTER`, `REFPNT CENTER-CENTER`, `FUNCTION RESET TCPM` | `CENTER-CENTER` is for CAM output on cutter-centre paths with a tool measured to the tip. The `REFPNT` words are keywords in the profile since M9 (`syntax.keywords`), as are the `PLANE` forms and their words. |
-| Numbers | `[+-]?(\d+\.?\d*\|\.\d+)` | Positions are written with an explicit sign by the control (`X+10`). CAM posts do the same. Unsigned is probably accepted (verify). The manual's own examples use the decimal point; a value written with a comma instead (`X241,781`, real CAM output — see the note at the top) is also read now, and kept when the value is written back. |
+| Numbers | `[+-]?(\d+\.?\d*\|\.\d+)` | Positions are written with an explicit sign by the control (`X+10`). CAM posts do the same. Unsigned is accepted: the owner's TNC loads `L X10` as `L X+10` (2026-10-07). The manual's own examples use the decimal point; a value written with a comma instead (`X241,781`, real CAM output — see the note at the top) is also read now, and kept when the value is written back. |
 | Unknown | — | Use a neutral default token (e.g. `''` or `source`), **not** `invalid`. Leave error marking to the linter. |
 
 Numeric formats seen from CAM:
@@ -540,8 +540,8 @@ Lines to surface. In CAM files, most of them carry a block-number prefix.
 4. Import behaviour when block numbers are missing, duplicated or have gaps (renumbered? rejected?).
 5. Does the name after `BEGIN PGM` have to match the file name? What happens on a mismatch?
 6. File encoding (UTF-8 vs ISO-8859-1) and line endings as written by the control and by typical transfer tools. Are umlauts allowed in comments?
-7. ~~Is a decimal comma ever accepted?~~ Yes: CAM output writes it (see the note at the top), and gEdit reads and writes it now (`dec/klartext`). Open: unsigned coordinates (`X10`) and lower-case words.
-8. Does the control ignore the language-dependent cycle names and `;` parameter labels on import (for example, does a German program load on an English control)?
+7. ~~Is a decimal comma ever accepted?~~ Yes: CAM output writes it (see the note at the top), and gEdit reads and writes it now (`dec/klartext`). Unsigned coordinates load as signed (`X10` = `X+10`, the owner, 2026-10-07). Lower-case words: the owner knows of no control that refuses them and thinks modern ones convert them on loading (not verified).
+8. Does the control ignore the language-dependent cycle names and `;` parameter labels on import (for example, does a German program load on an English control)? Still open; the owner chose (2026-10-07) that review mode does not ignore the cycle names by default and offers an option to (*Cycle names*, `compare.cycleNames` in the profile).
 9. File syntax of `VC` and `TOOL CALL QSn`, and the modality of FU/FZ. (The manual writes both `F MAX`/`F AUTO` and `FMAX`/`FAUTO`; both are aliases already. Where FU/FZ are allowed: §4.4.)
 10. ~~Word order in `PLANE …`.~~ Settled (§4.6).
 11. ~~`FUNCTION TCPM` reference-point options.~~ Settled (§3.2).

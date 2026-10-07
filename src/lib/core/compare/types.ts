@@ -49,24 +49,36 @@
 //
 // There is no numeric tolerance (§2.1, D41): a carried `compare.tolerance` is ignored.
 //
-// Not ignored, by decision (P11; §8.11): the Klartext cycle name after `CYCL DEF <n>` and
-// the label words of the old numbered cycles. They are dialog-language text, not
-// comments, and whether a control ignores them on import is open (§10.2 M11-1). A
-// re-post in another dialog language therefore shows every cycle header as changed; the
-// `;` labels of the parameter lines are comments and go with `ignoreComments`.
+//  - `ignoreCycleNames` (the owner's answer M11-1, 2026-10-07; §7.16 #148) — **off by
+//    default**, and offered only by a profile that declares where its cycle names stand
+//    (`compare.cycleNames`; Klartext). It drops exactly the dialog-language words those
+//    patterns' `(?<name>…)` group spans: the cycle name after `CYCL DEF <n>` /
+//    `CYCL DEF <n>.0` (`BOHREN` vs `DRILLING`) and the label words of an old numbered
+//    cycle's sub-block where a value follows (`CYCL DEF 9.1 V.ZEIT 1.5` vs `DWELL 1.5`: the
+//    label goes, `1.5` stays and is compared). **Kept**: the cycle number, every value,
+//    axis word, `Q` parameter, comment and continuation mark, and every continuation line;
+//    a span that would take one of those drops nothing. Whether a control ignores the
+//    names on import is still not known, which is why the default is off: a re-post in
+//    another dialog language shows every cycle header as changed until the user turns the
+//    option on. The `;` labels of the parameter lines are comments and go with
+//    `ignoreComments`.
 
 import type { LineState } from '$lib/core/nc/types';
 import type { EffectiveMachine } from '$lib/core/machines/types';
 import type { Msg } from '$lib/app/types';
 import type { BlockKey } from '$lib/core/transforms/references';
 
-/** The five review-mode toggles (§7.7). Each one is a button in the compare toolbar. */
+/**
+ * The review-mode toggles (§7.7). Each one is a button in the compare toolbar; the sixth,
+ * `ignoreCycleNames` (§7.16 #148), only for a profile that declares `compare.cycleNames`.
+ */
 export interface CompareOptions {
   ignoreBlockNumbers: boolean;
   ignoreWhitespace: boolean;
   ignoreComments: boolean;
   ignoreCase: boolean;
   ignoreNumberFormat: boolean;
+  ignoreCycleNames: boolean;
 }
 
 /** The toggles in toolbar order; the `data-option` values of `compare-option` (§7.12). */
@@ -76,12 +88,13 @@ export const COMPARE_OPTION_KEYS = [
   'ignoreComments',
   'ignoreCase',
   'ignoreNumberFormat',
+  'ignoreCycleNames',
 ] as const satisfies readonly (keyof CompareOptions)[];
 
 /**
  * What `compareDefaults` answers for a profile that writes no `compare` block, or leaves
  * a toggle out: the three options that are safe on every dialect by construction are on,
- * the two that depend on what the control reads are off.
+ * the three that depend on what the control reads are off.
  */
 export const COMPARE_FALLBACK: Readonly<CompareOptions> = Object.freeze({
   ignoreBlockNumbers: true,
@@ -89,6 +102,7 @@ export const COMPARE_FALLBACK: Readonly<CompareOptions> = Object.freeze({
   ignoreComments: false,
   ignoreCase: false,
   ignoreNumberFormat: true,
+  ignoreCycleNames: false,
 });
 
 /**
@@ -106,6 +120,13 @@ export interface ProfileCompare extends Partial<CompareOptions> {
    * whole).
    */
   keepComments?: string[];
+  /**
+   * §7.16 #148 (the owner's answer M11-1). Patterns (§7.4 subset, the profile's case rule)
+   * tested against the line as written, each with a named group `(?<name>…)`: the span of
+   * that group is the dialog-language text `ignoreCycleNames` drops. A profile that
+   * declares none is not offered the toggle. Inherited through `extends` (replaced whole).
+   */
+  cycleNames?: string[];
   /** Ignored (§2.1, D41). */
   tolerance?: unknown;
 }
@@ -135,6 +156,8 @@ export interface NormalizeContext {
   keepBlockNumbers: 'all' | ReadonlySet<BlockKey>;
   /** `profile.compare.keepComments`, compiled with the profile's flags. */
   keepComments: readonly RegExp[];
+  /** `profile.compare.cycleNames`, compiled with the profile's flags and `d` (§7.16 #148). */
+  cycleNames: readonly RegExp[];
 }
 
 /**

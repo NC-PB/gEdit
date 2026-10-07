@@ -37,6 +37,13 @@
 //    (`keepComments`): the case of a Sinumerik `;$PATH=` folder is the control's business.
 //  - **Block numbers** are kept per file, not per program: a number one program of the
 //    file jumps to is kept in every program of it. Stricter than the control, never looser.
+//  - **Cycle names** (`ignoreCycleNames`, §7.16 #148) go by the span of the `(?<name>…)`
+//    group of a `compare.cycleNames` pattern, and only when every token in that span is a
+//    name: an unknown word or a word without a value that is no value address of the
+//    profile. A span that cuts a token, or holds a value, an axis word (`X`, `IX`), a
+//    variable, an operator, a comment, a string or a continuation mark, drops nothing:
+//    the line is compared with its name. A dropped name leaves its blanks as a dropped
+//    comment does (`CYCL DEF 200 BOHREN ~` → `CYCL DEF 200 ~`).
 
 import { tokenizeLine } from '$lib/core/nc/tokenizer';
 import type { LineState, NcToken, NumericLiteral } from '$lib/core/nc/types';
@@ -103,6 +110,23 @@ export function compareDefaults(p: Profile): CompareOptions {
     if (typeof value === 'boolean') out[key] = value;
   }
   return out;
+}
+
+/** True when the profile declares where its cycle names stand (`compare.cycleNames`). */
+function declaresCycleNames(p: Profile): boolean {
+  const patterns = p?.compare?.cycleNames;
+  return Array.isArray(patterns) && patterns.some((pattern) => typeof pattern === 'string' && pattern !== '');
+}
+
+/**
+ * The review-mode toggles the compare toolbar offers for this profile, in toolbar order:
+ * every one of `COMPARE_OPTION_KEYS`, except `ignoreCycleNames` where the profile declares
+ * no `compare.cycleNames` (§7.16 #148). A toggle that is not offered keeps its default and
+ * changes nothing on that profile's sides.
+ */
+export function offeredOptions(p: Profile): (keyof CompareOptions)[] {
+  const names = declaresCycleNames(p);
+  return COMPARE_OPTION_KEYS.filter((key) => key !== 'ignoreCycleNames' || names);
 }
 
 // ---------------------------------------------------------------------------
@@ -211,21 +235,30 @@ function keptNumbers(lines: readonly string[], cp: CompiledProfile): KeptNumbers
   return { keep, computedAt: 0 };
 }
 
-/** `profile.compare.keepComments`, compiled with the profile's flags; a broken one is skipped. */
-function keepCommentPatterns(cp: CompiledProfile): RegExp[] {
-  const patterns = cp.profile.compare?.keepComments;
+/** A list of profile patterns compiled with the profile's flags (and `extra`); a broken one is skipped. */
+function compiledList(patterns: unknown, cp: CompiledProfile, extra = ''): RegExp[] {
   if (!Array.isArray(patterns)) return [];
   const out: RegExp[] = [];
   for (const pattern of patterns) {
     if (typeof pattern !== 'string') continue;
     try {
-      out.push(new RegExp(pattern, cp.flags));
+      out.push(new RegExp(pattern, cp.flags + extra));
     } catch {
       // The validator refuses a pattern that does not compile; a hand-built profile that
       // slipped one past it keeps the other patterns rather than failing the comparison.
     }
   }
   return out;
+}
+
+/** `profile.compare.keepComments`, compiled with the profile's flags. */
+function keepCommentPatterns(cp: CompiledProfile): RegExp[] {
+  return compiledList(cp.profile.compare?.keepComments, cp);
+}
+
+/** `profile.compare.cycleNames` with `d`, so the span of `(?<name>…)` is known (§7.16 #148). */
+function cycleNamePatterns(cp: CompiledProfile): RegExp[] {
+  return compiledList(cp.profile.compare?.cycleNames, cp, 'd');
 }
 
 /**
@@ -248,6 +281,7 @@ function contextOf(cp: CompiledProfile, machine: SideMachine, kept: KeptNumbers,
     pointSignificant: typeof over?.pointSignificant === 'boolean' ? over.pointSignificant : own,
     keepBlockNumbers: kept.keep,
     keepComments: keepCommentPatterns(cp),
+    cycleNames: cycleNamePatterns(cp),
   };
 }
 
@@ -261,6 +295,8 @@ interface NumberRules {
   values: ReadonlySet<string>;
   /** The tool word that is never reformatted (a turning profile's `T`), or null. */
   tool: string | null;
+  /** `syntax.incrementalPrefix` (Klartext `I`), upper case, or null. */
+  incremental: string | null;
   /** The profile has `"…"` strings, whose case and blanks are never touched. */
   strings: boolean;
   /** The profile reads names (`syntax.names`), so letters written together may be one. */
@@ -300,6 +336,7 @@ function rulesOf(cp: CompiledProfile): NumberRules {
   const rules: NumberRules = {
     values,
     tool: p.machineType === 'lathe' ? upper(a.tool) : null,
+    incremental: upper(p.syntax?.incrementalPrefix),
     strings: p.syntax?.strings === true,
     names: cp.re.names !== undefined,
     byText: comparesByText(cp),
@@ -441,6 +478,47 @@ function gluesNames(tokens: NcToken[], index: number, rules: NumberRules): boole
   return /[A-Za-z0-9_]$/.test(left.text) && /^[A-Za-z_]/.test(right.text);
 }
 
+/** True when `token` may be dropped as part of a cycle name: a name, never a value or an address. */
+function isNameToken(token: NcToken, rules: NumberRules): boolean {
+  if (token.kind === 'unknown') return true;
+  if (token.kind !== 'word' || token.incremental === true) return false;
+  if ((token.valueText ?? '') !== '' || (token.value !== undefined && token.value !== null)) return false;
+  const address = token.address?.toUpperCase();
+  if (address === undefined || rules.values.has(address) || address === rules.tool) return false;
+  // `IX` written apart from its value is still an axis word.
+  const prefix = rules.incremental;
+  return !(prefix !== null && address.startsWith(prefix) && rules.values.has(address.slice(prefix.length)));
+}
+
+/**
+ * The indexes of the tokens `ignoreCycleNames` drops on this line (§7.16 #148): those inside
+ * the `(?<name>…)` span of a `compare.cycleNames` pattern that matches. A span that cuts a
+ * token or holds anything but names (`isNameToken`) drops nothing.
+ */
+function cycleNameTokens(line: string, tokens: NcToken[], ctx: NormalizeContext, rules: NumberRules): Set<number> | null {
+  let out: Set<number> | null = null;
+  for (const re of ctx.cycleNames) {
+    const span = re.exec(line)?.indices?.groups?.name;
+    if (span === undefined || span[1] <= span[0]) continue;
+    const [from, to] = span;
+    const inside: number[] = [];
+    let clean = true;
+    for (let i = 0; i < tokens.length && clean; i++) {
+      const token = tokens[i];
+      if (token.end <= from || token.start >= to) continue;
+      if (token.start < from || token.end > to) clean = false;
+      else if (token.kind !== 'whitespace') {
+        if (isNameToken(token, rules)) inside.push(i);
+        else clean = false;
+      }
+    }
+    if (!clean || inside.length === 0) continue;
+    out ??= new Set();
+    for (const i of inside) out.add(i);
+  }
+  return out;
+}
+
 /** Writes one tokenized line the way the options read it; null = the line disappears. */
 function renderLine(
   line: string,
@@ -454,6 +532,7 @@ function renderLine(
   // nor a word a reference could point with.
   let readComments: boolean | undefined;
   let references: Set<number> | undefined;
+  const names = o.ignoreCycleNames && ctx.cycleNames.length > 0 ? cycleNameTokens(line, tokens, ctx, rules) : null;
 
   let out = '';
   // Where the run of blanks at the end of `out` starts; -1 when `out` ends in a token.
@@ -486,6 +565,9 @@ function renderLine(
         continue;
       }
     } else if (kind === 'blockNumber' && dropsBlockNumber(token, tokens[index + 1], o, ctx, rules)) {
+      dropped = droppedLast = true;
+      continue;
+    } else if (names?.has(index)) {
       dropped = droppedLast = true;
       continue;
     }

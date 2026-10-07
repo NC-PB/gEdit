@@ -433,6 +433,8 @@ export interface Profile {
    * P11 (§7.1, §7.7, AD-26). The review-mode defaults of a comparison and the comments the
    * control reads (`keepComments`). Read through `compareDefaults` (`core/compare`); the
    * built-in values are the G10 table of §8.11. A carried `tolerance` is ignored (§2.1).
+   * §7.16 #148: `cycleNames` declares where the dialog-language cycle names stand, and
+   * only a profile that declares them offers `ignoreCycleNames` (Klartext, off by default).
    */
   compare?: ProfileCompare;
   /** Fields of later phases are preserved, not interpreted (see the note above). */
