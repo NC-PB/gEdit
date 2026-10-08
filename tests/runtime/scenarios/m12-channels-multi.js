@@ -24,7 +24,7 @@
 import { scenario } from '../lib/index.js'
 import { runFromTools } from './m10-common.js'
 import { removeFile } from './m2-common.js'
-import { otherRun, quitCleanly, requireFirstRun } from './m7-common.js'
+import { osOp, otherRun, quitCleanly, requireFirstRun } from './m7-common.js'
 import { pickEntry } from './m6-common.js'
 import {
   NC_DIR,
@@ -116,6 +116,23 @@ scenario('m12-channels-multi-1', { timeout: 300, files: REPO_FILE, vars: { HOME:
   await running
   const gone = await waitChannel(h, (s) => s.missing === '2')
   h.check('with channel 2\'s file gone from the folder the item reads "not found"', gone.missing === '2' && /not found/.test(gone.text), gone)
+
+  // A folder the OS will not let the app read is not "not found": the sibling may well be there
+  // (owner answer 2026-10-08). The folder is made unreadable (mode 000) and restored at once.
+  // The program is already open, so the item has nothing to read the folder with but the call.
+  await osOp(h, 'chmod', dir, { mode: '000' })
+  let denied
+  try {
+    const asking = ctx.commands.run('channels.select')
+    await h.waitFor(() => h.q('quick-pick'), { timeout: 8000 })
+    await h.nativeKeys([{ key: 'Escape' }])
+    await asking
+    denied = await waitChannel(h, (s) => /could not be checked/.test(s.text))
+  } finally {
+    await osOp(h, 'chmod', dir, { mode: '755' })
+  }
+  h.check('with the folder unreadable the item reads "could not be checked", not "not found"', /could not be checked/.test(denied.text) && !/not found/.test(denied.text), denied)
+
   await ctx.commands.run('file.close')
   await h.waitFor(() => !ctx.docs.get(one), { timeout: 8000 })
 

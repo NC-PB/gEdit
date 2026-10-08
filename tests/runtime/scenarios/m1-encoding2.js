@@ -10,6 +10,7 @@
 // which the next open takes the place of.
 
 import { scenario } from '../lib/index.js'
+import { checkBinaryOpensReadOnly } from './m0-common.js'
 
 /**
  * Every fixture that must round trip. `at` is the byte offset the encoded `X` lands at
@@ -38,7 +39,6 @@ function utf8Hex(text) {
 }
 
 scenario('m1-encoding2', { timeout: 240 }, async (h) => {
-  h.allowErrors(/Could not open/)
   const item = (/** @type {string} */ name) => h.q('status-item', { item: name })?.textContent?.trim()
   const dirty = () => h.q('doc-tab', { active: '1' })?.dataset.dirty
 
@@ -146,25 +146,64 @@ scenario('m1-encoding2', { timeout: 240 }, async (h) => {
   await close(false)
 
   // ------------------------------------------------------------ data, not a program
+  // Opens read-only (owner answer 2026-10-08), with the NUL share as the reason; the full
+  // contract (typing, transform, unlock, Save As) is checked in the shared helper.
   const binary = await h.fixture('nc/encoding/nul-heavy.bin')
   const binaryHex = await h.disk.hex(binary)
-  const before = { tabs: h.qa('doc-tab').length, title: await h.title() }
-  await h.dialogs.queue('open', binary)
-  await h.nativeKeys([{ key: 'o', mods: ['cmd'] }])
-  const refusal = await h.alert.wait()
-  const reported = (refusal?.texts ?? []).join('\n')
-  h.check(
-    'nul-heavy.bin: the open is refused, with the NUL share as the reason',
-    !!refusal && reported.includes('Could not open nul-heavy.bin') && /% NUL bytes/.test(reported) && /data rather than a program/.test(reported),
-    refusal,
-  )
-  await h.alert.click('OK|Ok')
+  await checkBinaryOpensReadOnly(h, binary, 'nul-heavy.bin')
+  h.check('nul-heavy.bin: the status bar names the encoding it was read as, and the NULs are kept in the text', !!item('encoding') && h.app.text().includes(String.fromCharCode(0)), item('encoding'))
+  await close(false)
+  h.check('nul-heavy.bin: closing it asked nothing and the file is as it was', (await h.disk.hex(binary)) === binaryHex)
+
+  // ------------------------------------------------------------ plain ASCII gains a character
+  // Owner answer 2026-10-08: the first save that adds a character outside ASCII to a file
+  // that was plain ASCII asks once - UTF-8, Windows-1252 or Cancel - and the answer is kept
+  // for the document. Opening and saving a file unchanged asks nothing.
+  const plain = await h.fixture('nc/encoding/mixed-eol.nc')
+  const asciiHex = await h.disk.hex(plain)
+  await open(plain)
+  const plainCalls = h.dialogs.calls().length
+  await save()
   await h.sleep(500)
-  h.check(
-    'nul-heavy.bin: nothing was opened and the file was not touched',
-    h.qa('doc-tab').length === before.tabs && (await h.title()) === before.title && (await h.disk.hex(binary)) === binaryHex && !!h.q('status-message', { error: '1' }),
-    { tabs: h.qa('doc-tab').length, title: await h.title(), status: h.q('status-message')?.textContent },
-  )
+  h.check('plain ASCII: opening and saving it unchanged asks nothing and writes nothing', (await h.alert.visible()) === null && (await h.disk.hex(plain)) === asciiHex && h.dialogs.calls().length === plainCalls)
+  await close(false)
+
+  const asked = async (/** @type {string} */ answer) => {
+    const path = await h.fixture('nc/fanuc/f01-mill-3tools.nc')
+    const hex = await h.disk.hex(path)
+    await open(path)
+    h.focusEditor()
+    h.insertText('\u00d8')
+    await h.waitFor(() => dirty() === '1', { timeout: 4000 })
+    await save()
+    const alert = await h.alert.wait()
+    const buttons = alert?.buttons ?? []
+    const offered = ['Save as UTF-8', 'Save as Windows-1252', 'Cancel'].every((b) => buttons.includes(b)) && buttons.length === 3
+    await h.alert.click(answer)
+    return { path, hex, offered, alert }
+  }
+
+  const utf8 = await asked('Save as UTF-8')
+  h.check('plain ASCII + Ø: the first save asks, with UTF-8, Windows-1252 and Cancel, naming the character', utf8.offered && /\u00d8/.test((utf8.alert?.texts ?? []).join('\n')) && /plain ASCII/.test((utf8.alert?.texts ?? []).join('\n')), utf8.alert)
+  await h.waitFor(() => dirty() === '0', { timeout: 6000 })
+  h.check('answer UTF-8: Ø is written as c3 98 and the file is UTF-8', (await h.disk.hex(utf8.path)).includes('c3 98') && item('encoding') === 'UTF-8', { encoding: item('encoding'), head: (await h.disk.hex(utf8.path)).slice(0, 30) })
+  h.focusEditor()
+  await h.nativeType('X')
+  await h.waitFor(() => dirty() === '1', { timeout: 4000 })
+  await save()
+  await h.waitFor(() => dirty() === '0', { timeout: 6000 })
+  h.check('answer UTF-8: the second save of the same document does not ask again', (await h.alert.visible()) === null)
+  await close(false)
+
+  const win = await asked('Save as Windows-1252')
+  await h.waitFor(() => dirty() === '0', { timeout: 6000 })
+  h.check('answer Windows-1252: Ø is written as the single byte d8 and the item reads Windows-1252', (await h.disk.hex(win.path)).includes('d8') && !(await h.disk.hex(win.path)).includes('c3 98') && item('encoding') === 'Windows-1252', { encoding: item('encoding'), head: (await h.disk.hex(win.path)).slice(0, 30) })
+  await close(false)
+
+  const cancelled = await asked('Cancel')
+  await h.sleep(600)
+  h.check('answer Cancel: nothing is written and the document stays modified', (await h.disk.hex(cancelled.path)) === cancelled.hex && dirty() === '1', { dirty: dirty() })
+  await close(true)
 
   h.expectExit({ within: 15000 })
   await h.nativeKeys([{ key: 'w', mods: ['cmd', 'shift'] }])

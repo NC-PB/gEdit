@@ -36,6 +36,7 @@ import {
   machineText,
   openFixture,
   pickMachine,
+  pickerRows,
   readPicker,
   ready,
   tooltipLine,
@@ -240,42 +241,93 @@ scenario('m6-machines-select', { timeout: 420 }, async (h) => {
   const backToNone = await report()
   h.check('and a script is handed the dialect defaults again, now as this document’s own choice', JSON.stringify(backToNone) === JSON.stringify(NONE_CHOSEN), { got: backToNone, want: NONE_CHOSEN })
 
-  // ==================================================================== F. another dialect
-  // A lathe machine is **not** in a mill document's profile chain — the inheritance only
-  // runs one way — so on a mill document the lathe machines are behind "Other machines…",
-  // and picking one moves the document to the lathe dialect as well. The two choices can
-  // then never contradict each other.
+  // ==================================================================== F. another type, another control
+  // Owner answer 2026-10-08: every machine of the same control is offered whatever its
+  // machine type (a lathe machine on a mill program and the reverse), with a warning that the
+  // type differs - in the picker, in the status message after picking (sticky) and on the
+  // status-bar item. A machine of another control still goes through "Other machines...",
+  // and picking one moves the document to that dialect as well.
+  const okumaProfile = ctx.profiles.profile('okuma-osp')
+  const okumaRules = okumaProfile.machineParams?.numberInput?.presets?.find((/** @type {any} */ p) => p.id === 'okuma-1mm')?.value
+  const okuma = await machines.add({ name: 'Okuma 1', profile: 'okuma-osp', notes: '', params: { numberInput: okumaRules, units: 'mm', diameter: 'on' } })
+  await h.idle()
+
   const mill = await openFixture(h, 'nc/fanuc/f01-mill-3tools.nc')
   h.check('the mill document starts on the mill dialect, with no machine', ctx.docs.get(mill.id)?.profileId === MILL && machineText(h) === 'Machine: none (assumed)', {
     profile: ctx.docs.get(mill.id)?.profileId,
     item: machineText(h),
   })
+  h.check('and the item shows no type warning', machineItem(h)?.dataset.typeMismatch === '0', machineItem(h)?.dataset.typeMismatch)
 
   const running = ctx.commands.run('file.setMachine')
   await h.waitFor(() => h.q('quick-pick'), { timeout: 8000 })
-  const labelsHere = h.qa('quick-pick-item').map((row) => row.querySelector('.label')?.textContent?.trim())
-  h.check('here the lathe machines are not offered directly, and "Other machines…" is', JSON.stringify(labelsHere) === JSON.stringify(['None (dialect defaults)', 'Mill 1', 'Other machines…', 'Manage machines…']), labelsHere)
-  const other = h.qa('quick-pick-item').find((row) => row.querySelector('.label')?.textContent?.trim() === 'Other machines…')
-  h.click(/** @type {HTMLElement} */ (other))
-  await h.waitFor(() => h.qa('quick-pick-item').some((row) => row.querySelector('.label')?.textContent?.trim() === 'Lathe IS-B'), { timeout: 8000 })
-  const latheMachine = h.qa('quick-pick-item').find((row) => row.querySelector('.label')?.textContent?.trim() === 'Lathe IS-B')
-  h.check('the second list names the dialect each of them runs', latheMachine?.querySelector('.detail')?.textContent?.trim() === ctx.profiles.get(LATHE)?.name, {
-    rows: h.qa('quick-pick-item').map((r) => `${r.querySelector('.label')?.textContent?.trim()}|${r.querySelector('.detail')?.textContent?.trim()}`),
-  })
-  h.click(/** @type {HTMLElement} */ (latheMachine))
+  const rowsHere = pickerRows(h)
+  h.check(
+    'here the lathe machines of the same control are offered directly, and "Other machines..." is still there for the other control',
+    JSON.stringify(rowsHere.map((r) => r.label)) === JSON.stringify(['None (dialect defaults)', 'Lathe calc', 'Lathe IS-B', 'Mill 1', 'Other machines…', 'Manage machines…']),
+    rowsHere.map((r) => r.label),
+  )
+  h.check('the Okuma machine is not among the machines offered directly', !rowsHere.some((r) => r.label === 'Okuma 1'))
+  const detailOf = (/** @type {string} */ label) => rowsHere.find((r) => r.label === label)?.detail ?? ''
+  h.check(
+    'a lathe machine carries the warning in the picker, the mill machine does not',
+    detailOf('Lathe IS-B').includes('Machine type differs') && detailOf('Lathe calc').includes('Machine type differs') && !detailOf('Mill 1').includes('Machine type differs'),
+    rowsHere.map((r) => `${r.label}|${r.detail}`),
+  )
+  h.click(/** @type {HTMLElement} */ (rowsHere.find((r) => r.label === 'Lathe IS-B')?.element))
   await h.waitFor(() => !h.q('quick-pick'), { timeout: 8000 })
   await running
   await waitForMachine(h, 'lathe-is-b')
-  h.check('picking it moved the document to that machine’s dialect as well', ctx.docs.get(mill.id)?.profileId === LATHE && machineText(h) === 'Machine: Lathe IS-B', {
+  h.check('picking it keeps the document on the mill dialect', ctx.docs.get(mill.id)?.profileId === MILL && machineText(h).startsWith('Machine: Lathe IS-B'), {
     profile: ctx.docs.get(mill.id)?.profileId,
     item: machineText(h),
   })
-  h.check('the status bar says both halves of what just happened', /Lathe IS-B/.test(h.q('status-message')?.textContent ?? '') && new RegExp(ctx.profiles.get(LATHE)?.shortName ?? 'Fanuc T').test(h.q('status-message')?.textContent ?? ''), h.q('status-message')?.textContent?.trim())
-  h.check('and the G-code system is in the tooltip now, set by that machine', tooltipLine(h, 'G-code system') === 'G-code system: G-code system A — set by the machine', tooltipLine(h, 'G-code system'))
+  const stuck = h.q('status-message')?.textContent?.trim() ?? ''
+  h.check('the status message says the type differs, naming both', /Lathe IS-B/.test(stuck) && /is for a lathe, this program is for a mill/.test(stuck), stuck)
+  await h.idle()
+  await h.sleep(1500)
+  h.check('and it is sticky: it is still there a moment later', (h.q('status-message')?.textContent?.trim() ?? '') === stuck, h.q('status-message')?.textContent?.trim())
+  h.check('the status-bar item carries the warning sign', machineItem(h)?.dataset.typeMismatch === '1' && /⚠/.test(machineItem(h)?.textContent ?? ''), machineItem(h)?.textContent)
+  h.check('and its hover text repeats the warning', (machineItem(h)?.getAttribute('title') ?? '').includes('is for a lathe, this program is for a mill'), machineItem(h)?.getAttribute('title'))
+
+  // The reverse: a mill machine on the lathe program.
+  ctx.docs.activate(lathe.id)
+  await h.waitFor(() => h.q('editor-host')?.dataset.docId === lathe.id, { timeout: 8000 })
+  await pickMachine(h, 'Mill 1')
+  await waitForMachine(h, 'mill-1')
+  h.check('a mill machine on the turning program warns the same way', machineItem(h)?.dataset.typeMismatch === '1' && /is for a mill, this program is for a lathe/.test(h.q('status-message')?.textContent ?? ''), h.q('status-message')?.textContent)
+  await pickMachine(h, 'Lathe IS-B')
+  await waitForMachine(h, 'lathe-is-b')
+  h.check('and the matching machine does not', machineItem(h)?.dataset.typeMismatch === '0', machineItem(h)?.dataset.typeMismatch)
+  ctx.docs.activate(mill.id)
+  await h.waitFor(() => h.q('editor-host')?.dataset.docId === mill.id, { timeout: 8000 })
+
+  // (With a machine of this control still chosen, the status line ends on the transient
+  // "not for this profile" notice of the profile switch instead of the message below:
+  // recorded in the hand-off. The document goes back to None first.)
+  await pickMachine(h, 'None (dialect defaults)')
+  await waitForMachine(h, '')
+
+  // A machine of another control: still behind "Other machines...", and it brings its dialect.
+  const running2 = ctx.commands.run('file.setMachine')
+  await h.waitFor(() => h.q('quick-pick'), { timeout: 8000 })
+  h.click(/** @type {HTMLElement} */ (h.qa('quick-pick-item').find((row) => row.querySelector('.label')?.textContent?.trim() === 'Other machines…')))
+  await h.waitFor(() => h.qa('quick-pick-item').some((row) => row.querySelector('.label')?.textContent?.trim() === 'Okuma 1'), { timeout: 8000 })
+  const second = pickerRows(h)
+  h.check('the second list holds only the machine of the other control, naming its dialect', second.length === 1 && second[0].label === 'Okuma 1' && second[0].detail === ctx.profiles.get('okuma-osp')?.name, second.map((r) => `${r.label}|${r.detail}`))
+  h.click(second[0].element)
+  await h.waitFor(() => !h.q('quick-pick'), { timeout: 8000 })
+  await running2
+  await waitForMachine(h, okuma)
+  h.check('picking it moved the document to that machine’s dialect as well', ctx.docs.get(mill.id)?.profileId === 'okuma-osp' && machineText(h) === 'Machine: Okuma 1', {
+    profile: ctx.docs.get(mill.id)?.profileId,
+    item: machineText(h),
+  })
+  h.check('the status bar says both halves of what just happened', /Okuma 1/.test(h.q('status-message')?.textContent ?? '') && new RegExp(okumaProfile.shortName).test(h.q('status-message')?.textContent ?? ''), h.q('status-message')?.textContent?.trim())
 
   // ==================================================================== G. nothing was written
   h.check('no document was modified by any of this', ctx.docs.all().filter((d) => d.path !== null).every((d) => !d.dirty), ctx.docs.all().map((d) => `${d.title}:${d.dirty}`))
-  h.check('and the machines are the three that were added', read(machines.list).length === 3, read(machines.list).map((/** @type {any} */ m) => m.id))
+  h.check('and the machines are the four that were added', read(machines.list).length === 4, read(machines.list).map((/** @type {any} */ m) => m.id))
 
   // ==================================================================== H. the mismatch
   // `l05-system-b.nc` is written for G-code system B (`G92 S` clamp, `G95`, `G77`/`G78`).

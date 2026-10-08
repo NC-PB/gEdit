@@ -189,7 +189,8 @@ scenario('m1-example', { timeout: 90 }, async (h) => {
 - One file per topic under `scenarios/`; a file may register several scenarios, and
   `run.sh` selects by name, so names are unique across all files.
 - Helpers several scenarios need live in `scenarios/m<N>-common.js`, which register no
-  scenario of their own: `m3-common.js` opens files through the dialog (`openPath`,
+  scenario of their own: `m0-common.js` checks that a NUL-heavy file opens read-only
+  (`checkBinaryOpensReadOnly`), `m3-common.js` opens files through the dialog (`openPath`,
   `openFixture`), `m6-common.js` drives the machine picker and the Machines page,
   `m7-common.js` changes file modes and flags (`osOp`), ages a heartbeat (`makeStale`),
   finds backups (`backupsRoot`, `historyOf`) and quits cleanly (`quitCleanly`), and

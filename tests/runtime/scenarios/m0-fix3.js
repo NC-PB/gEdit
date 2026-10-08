@@ -6,16 +6,16 @@
 // written back (§7.2), and so is a punched-tape program with NUL bytes inside it — those
 // are stripped with a count and the document is marked modified. What is left is the
 // AD-7 rule: a file whose NUL share between leader and trailer is above 10 % is data,
-// not a program. `m1-encoding2` covers the files that now open; this scenario keeps the
-// refusal and the "a save must not touch the file" half.
+// not a program. Since the owner's answers of 2026-10-08 it opens read-only (reason
+// "binary") instead of being refused; this scenario checks that lock and the "a save
+// must not touch the file" half.
 //
 // NEEDS A FREE SCREEN, for the undo check near the end: Cmd+Z is a key equivalent of the
 // macOS Edit menu, so the event only reaches Monaco while the app is the active
 // application. It fails the same way on M0 (see the H1 hand-off note).
 
 import { scenario } from '../lib/index.js'
-
-const REFUSED = [{ file: 'nul-heavy.bin', why: /% NUL bytes/ }]
+import { checkBinaryOpensReadOnly } from './m0-common.js'
 
 /** Files M0 refused and M1 reads. Their round trip belongs to `m1-encoding2`. */
 const NO_LONGER_REFUSED = [
@@ -27,7 +27,6 @@ const NO_LONGER_REFUSED = [
 
 scenario('m0-fix3', { timeout: 180 }, async (h) => {
   const run = h.cfg.run
-  h.allowErrors(/Could not open/)
   const encodingLabel = () => h.q('status-item', { item: 'encoding' })?.textContent
   const state = async () => ({
     title: await h.title(),
@@ -70,32 +69,18 @@ scenario('m0-fix3', { timeout: 180 }, async (h) => {
   await h.waitFor(async () => (await h.title()) === 'utf8-lf.nc — gEdit')
   const baselineHex = await h.disk.hex(baseline)
 
-  for (const bad of REFUSED) {
-    const path = await h.fixture(`nc/encoding/${bad.file}`)
-    const before = await state()
+  // AD-7 / owner answer 2026-10-08: data (more than 10 % NUL bytes) is not refused any
+  // more. It opens read-only, bytes unchanged, with the reason on the lock.
+  {
+    const path = await h.fixture('nc/encoding/nul-heavy.bin')
+    const tabs = h.qa('doc-tab').length
     const hexBefore = await h.disk.hex(path)
-    const statBefore = await h.disk.stat(path)
-    calls = h.dialogs.calls().length
-    await h.dialogs.queue('open', path)
-    await h.nativeKeys([{ key: 'o', mods: ['cmd'] }])
-    const alert = await h.alert.wait()
-    const reported = (alert?.texts ?? []).join('\n')
-    await h.alert.click('OK|Ok')
-    await h.sleep(400)
-    const after = await state()
-    h.check(
-      `${bad.file}: the open is refused with a reason and changes nothing`,
-      !!alert &&
-        reported.includes(`Could not open ${bad.file}`) &&
-        bad.why.test(reported) &&
-        JSON.stringify(after) === JSON.stringify(before) &&
-        !!h.q('status-message', { error: '1' }) &&
-        (await h.disk.hex(path)) === hexBefore &&
-        (await h.disk.stat(path))?.mtimeMs === statBefore?.mtimeMs &&
-        (await h.disk.hex(baseline)) === baselineHex,
-      { alert, before, after, status: h.q('status-message')?.textContent, dialogs: h.dialogs.calls().slice(calls).map((c) => c.kind) },
-    )
-    h.check(`${bad.file}: the open document is still the one from before`, (await currentPath()) === baseline)
+    await checkBinaryOpensReadOnly(h, path, 'nul-heavy.bin')
+    h.check('nul-heavy.bin: the document that was open before keeps its tab', !!h.q('doc-tab', { path: baseline }) && h.qa('doc-tab').length === tabs + 1)
+    await h.nativeKeys([{ key: 'w', mods: ['cmd'] }])
+    await h.waitFor(() => h.q('doc-tab', { path }) === null, { timeout: 4000 })
+    h.check(`nul-heavy.bin: closing it needs no question and writes nothing`, (await h.alert.visible()) === null && (await h.disk.hex(path)) === hexBefore)
+    h.check('the open document is the one from before', (await currentPath()) === baseline)
   }
 
   // M1: the three files M0 refused are read now. They open in their own tab, keep the
@@ -124,23 +109,30 @@ scenario('m0-fix3', { timeout: 180 }, async (h) => {
     h.check(`${good.file}: closing it wrote nothing`, (await h.disk.hex(path)) === hexBefore)
   }
 
-  // A refused file must not throw away the edits of the document that stays open.
+  // Opening data must not throw away the edits of another document either.
   h.click(h.q('doc-tab', { path: baseline }))
   await h.waitFor(async () => (await h.title()) === 'utf8-lf.nc — gEdit')
   h.focusEditor()
   await h.nativeType('(EDIT A)\n')
   await h.waitFor(async () => (await h.title()) === '● utf8-lf.nc — gEdit')
   const edited = await state()
-  const tabsBeforeRefusal = h.qa('doc-tab').length
-  await h.dialogs.queue('open', `${run}/fixtures/nc/encoding/nul-heavy.bin`)
+  const tabsBefore = h.qa('doc-tab').length
+  const dataPath = `${run}/fixtures/nc/encoding/nul-heavy.bin`
+  await h.dialogs.queue('open', dataPath)
   await h.nativeKeys([{ key: 'o', mods: ['cmd'] }])
-  await h.alert.click('OK|Ok')
-  await h.sleep(400)
+  await h.waitFor(() => h.q('doc-tab', { path: dataPath, active: '1' }), { timeout: 10000 })
+  h.click(h.q('doc-tab', { path: baseline }))
+  await h.waitFor(async () => (await h.title()) === '● utf8-lf.nc — gEdit')
   h.check(
-    'a refused file leaves the edited buffer as it was and opens no tab',
-    JSON.stringify(await state()) === JSON.stringify(edited) && h.app.text().startsWith('(EDIT A)') && h.qa('doc-tab').length === tabsBeforeRefusal,
+    'opening data leaves the edited buffer as it was, in its own tab',
+    JSON.stringify(await state()) === JSON.stringify(edited) && h.app.text().startsWith('(EDIT A)') && h.qa('doc-tab').length === tabsBefore + 1,
     { edited, now: await state(), tabs: h.qa('doc-tab').length },
   )
+  h.click(h.q('doc-tab', { path: dataPath }))
+  await h.waitFor(() => h.q('doc-tab', { path: dataPath, active: '1' }))
+  await h.nativeKeys([{ key: 'w', mods: ['cmd'] }])
+  await h.waitFor(() => h.q('doc-tab', { path: dataPath }) === null, { timeout: 4000 })
+  await h.waitFor(async () => (await h.title()) === '● utf8-lf.nc — gEdit')
 
   // Drop the edit again, so exactly one document is unsaved when the run quits below.
   await h.nativeKeys([{ key: 'w', mods: ['cmd'] }])
