@@ -4,9 +4,34 @@ What changed in each release of gEdit, written for the person who edits NC progr
 
 ## Unreleased
 
+Multi-channel programs: this change set lets gEdit know the channels of a twin-turret lathe or a multi-path control, shows the map and the tool list for each channel, and checks that the wait codes of the channels fit each other. It runs nothing and synchronizes nothing. See the new [Channels](docs/user/channels.md) page.
+
 ### New
 
 - **Compare review mode, Cycle names** (Heidenhain Klartext only, off by default): leaves out the cycle name in the control's dialog language (`CYCL DEF 200 BOHREN` against `CYCL DEF 200 DRILLING`) and the label of an old numbered cycle (`V.ZEIT` against `DWELL` in `CYCL DEF 9.1 … 1.5`), so a program posted again in another language compares clean; the cycle number, the values and the parameter lines are still compared. Saved with the other review options.
+- **Channels, set up for each machine** (Settings, Machines, a new *Channels* step): say whether the channels are sections of one program or one program for each channel, name them, and say which codes are the waits. You write the waits as a plain list, such as `M900-M999, M300`, and a live preview shows the codes you meant. A mistake gets a plain message that quotes the item. Nothing is switched on for a machine you did not set up.
+- **The `P` word of a wait** is a dropdown with an example for each choice: path numbers (`P12`), a bit sum (`P3`), or no `P`, with what a wait without `P` means. A checkbox makes stops and ends (`M00`, `M01`, `M02`, `M30`) count as waits. **Advanced patterns** (regular expressions, with a link to the regex help page) stay closed unless you open them.
+- **Presets, all marked *verify*:** Fanuc lathe with two or three paths (one file for each path, `P` as a bit sum or as path numbers), Okuma with two turrets in one program (`G13`/`G14`), and Sinumerik with two channels (`WAITM`, `WAITMC`, `SETM`, `CLEARM`). A preset is offered on the Channels step and applied only when you press *Use this preset*. They are starting points from the manuals; check them on a program of your machine that runs.
+- **Try these settings on a program** (on the Channels step, and *Test Channel Rules on Document* in the palette): shows the sections, the waits and their partners that your settings find, before you save.
+- **Channel item in the status bar:** the channel of the cursor, which file of a set you are in, and when the other file is open, not open, not found or could not be checked. Click it to jump to a channel, open the other channels, or assign a program to a channel by hand.
+- **Program map for each channel:** each channel lists its tools and its wait codes, all its sections together in program order; lines that belong to no channel are under *Outside the channels*. A channel with more than 250 waits shows them as one entry with their number, so a huge program stays fast. A program without channels shows the map as before.
+- **Next Sync Point and Previous Sync Point** (`Alt+F7`, `Shift+Alt+F7`) step through the waits of the channel the cursor is in, and start over with a message at the end.
+- **Go to the Matching Mark** (`Mod+Alt+P`) jumps from a wait to the wait that answers it in the other channel, in the other tab when each channel is its own file. On macOS this key replaces the editor's *Preserve Case* key in the find box; the button still works.
+- **Check Wait Codes** (Tools tab): lists the waits that do not fit: no answer in the other channel, a different count, a different order, a wait that names a path that does not exist, a Fanuc wait whose paths name different sets, and a wait outside every channel. Each row jumps to its line. A wait inside a loop is judged only as information, and what could not be checked is said so.
+- **Tool list per channel:** on a program with channels the rows are grouped by channel and the list has a *Channel* column; with one file for each channel the list is for the file in front of you.
+- **Split into Channel Documents** (NC tab): one new untitled document for each channel of a one-file program, for reading or printing. It is a one-way copy and writes no file.
+- **Channels in scripts:** a script on a machine with channels sees `channels` in its context: the layout, the line ranges of every channel, the lines outside them and the waits. `gedit_nc` has helpers for it. A script on a program without channels runs unchanged.
+
+### Fixed
+
+- A pattern in a machine's channel settings that could make gEdit hang on a long line is refused when you save it, with a plain message; lines over 1,000 characters are not read for channels and are counted in a problem.
+- A very large program with thousands of waits no longer makes the program map, typing or the first reading of the channels slow: the map froze for seconds on every edit before, and now answers in a fraction of a second.
+- When gEdit cannot read the channels in time, the status bar says *Channels: too slow to read* and Check Wait Codes says it did not check, instead of showing nothing.
+- A machine whose channel settings are broken, or were edited by hand and are missing a part, no longer breaks the Machines page: it lists the problem, keeps the other machines usable, and leaves the broken record as it was.
+- A Sinumerik `SETM` now answers a `WAITM` of its mark, a variable mark such as `WAITM(_M,1,2)` is read, and a Fanuc wait that is written with different paths in the two channels is reported.
+- A wait in a loop, even with the label on the same line, is no longer reported as a count error.
+- Go to the Matching Mark goes only to the channels a wait names, so on three paths `M901 P12` and `M901 P13` find their own partners.
+- A wait list written as `M 900` or `M900 to M999` gets a plain message ("write a range with a dash") instead of a wrong reading.
 
 ## v0.5.0 (2026-10-05)
 

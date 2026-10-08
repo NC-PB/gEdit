@@ -1,0 +1,53 @@
+{
+  "input": "../nc/fanuc-lathe/c09-notachannel.nc",
+  "profile": "fanuc-lathe",
+  "machine": {
+    "channels": {
+      "layout": "multi-file",
+      "list": [
+        {
+          "id": "1",
+          "name": "Channel 1"
+        },
+        {
+          "id": "2",
+          "name": "Channel 2"
+        }
+      ],
+      "fileName": "^(?<stem>.+)_CH(?<channel>\\d+)\\.nc$",
+      "syncMarks": [
+        {
+          "id": "wait",
+          "label": "Wait M900-M999, P = bit sum, no P = paths 1 and 2",
+          "match": {
+            "kind": "codes",
+            "codes": "M900-M999"
+          },
+          "partners": {
+            "kind": "word",
+            "address": "P",
+            "decode": "bitmask",
+            "whenAbsent": {
+              "kind": "fixed",
+              "channels": [
+                "1",
+                "2"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  "assigned": "1",
+  "expect": {
+    "layout": "multi-file",
+    "self": "1",
+    "by": "assigned",
+    "marks": [
+      {"ruleId":"wait","mark":"M901","line":8,"channel":"1","partners":["1","2"],"blocking":true}
+    ],
+    "problems": [],
+    "siblings": null
+  }
+}

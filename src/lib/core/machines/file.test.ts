@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { emptyMachinesFile, keepPosition, parseMachinesFile, serializeMachinesFile } from './file';
 import { MACHINES_VERSION } from './types';
-import { MAX_MACHINES } from './validate';
+import { MAX_MACHINES, channelBlock } from './validate';
 import type { MachineConfig } from './types';
 
 const FILES = fileURLToPath(new URL('../../../../tests/fixtures/machines/files/', import.meta.url));
@@ -170,5 +170,48 @@ describe('writing', () => {
 
   it('writes an empty file as an empty list and no defaults', () => {
     expect(serializeMachinesFile(emptyMachinesFile())).toEqual({ machines: [], defaults: {} });
+  });
+});
+
+describe('machines with channel settings (M12)', () => {
+  // Four samples: good, a pattern that does not compile, a rule naming a channel nobody
+  // declared, and a hand-edited block with a member this build does not know. Every one is a
+  // usable machine; a broken block costs only the channels (X12 d), and a save never loses it.
+  const NAMES = ['channels-valid', 'channels-bad-pattern', 'channels-unknown-channel', 'channels-custom'];
+
+  it('keeps every record and writes every block back exactly', () => {
+    for (const name of NAMES) {
+      const raw = sample(name);
+      const file = parseMachinesFile(raw);
+      expect(file.invalid, name).toEqual([]);
+      expect(serializeMachinesFile(file), name).toEqual(withoutVersion(raw));
+    }
+  });
+
+  it('reads the good block as valid', () => {
+    const file = parseMachinesFile(sample('channels-valid'));
+    for (const m of file.machines) expect(channelBlock(m, 'machines').state, m.id).toBe('valid');
+  });
+
+  it('reports a pattern that does not compile with its path, and keeps the machine', () => {
+    const file = parseMachinesFile(sample('channels-bad-pattern'));
+    expect(file.machines.map((m) => m.id)).toEqual(['okuma-bad', 'lathe-ok']);
+    const block = channelBlock(file.machines[0], 'machines[0]');
+    expect(block.state).toBe('invalid');
+    if (block.state === 'invalid') expect(block.problems.map((p) => p.path)).toEqual(['machines[0].params.channels.sectionStart']);
+    expect(file.machines[0].params.units).toBe('inch');
+    expect(channelBlock(file.machines[1], 'machines[1]').state).toBe('valid');
+  });
+
+  it('reports a rule that names a channel the machine does not declare', () => {
+    const block = channelBlock(parseMachinesFile(sample('channels-unknown-channel')).machines[0], 'machines[0]');
+    expect(block.state).toBe('invalid');
+    if (block.state === 'invalid') expect(block.problems[0].path).toContain('syncMarks[0]');
+  });
+
+  it('keeps a member it does not know, and a pattern rule, in a valid block', () => {
+    const m = parseMachinesFile(sample('channels-custom')).machines[0];
+    expect(channelBlock(m, 'machines[0]').state).toBe('valid');
+    expect((m.params.channels as unknown as Record<string, unknown>).futureOption).toEqual({ note: 'written by a later gEdit; kept as it is' });
   });
 });

@@ -1,0 +1,108 @@
+{
+  "$version": 1,
+  "machines": [
+    {
+      "id": "lathe-2path",
+      "name": "Lathe, two paths",
+      "profile": "fanuc-lathe",
+      "params": {
+        "units": "mm",
+        "channels": {
+          "layout": "multi-file",
+          "list": [
+            {
+              "id": "1",
+              "name": "Path 1"
+            },
+            {
+              "id": "2",
+              "name": "Path 2"
+            }
+          ],
+          "fileName": "^(?<stem>.+)\\.[A-Za-z]*-?(?<channel>\\d{1,2})$",
+          "syncMarks": [
+            {
+              "id": "wait",
+              "label": "Waiting M-code: the range is parameters 8110/8111, the P word names the paths",
+              "match": {
+                "kind": "codes",
+                "codes": "M900-M999"
+              },
+              "partners": {
+                "kind": "word",
+                "address": "P",
+                "decode": "bitmask",
+                "whenAbsent": {
+                  "kind": "fixed",
+                  "channels": [
+                    "1",
+                    "2"
+                  ]
+                }
+              }
+            }
+          ],
+          "stopsAndEndsWait": false
+        }
+      }
+    },
+    {
+      "id": "okuma-2turret",
+      "name": "Okuma, two turrets",
+      "profile": "okuma-osp",
+      "params": {
+        "units": "mm",
+        "channels": {
+          "layout": "single-file",
+          "list": [
+            {
+              "id": "a",
+              "name": "Turret A",
+              "aliases": [
+                "G13"
+              ]
+            },
+            {
+              "id": "b",
+              "name": "Turret B",
+              "aliases": [
+                "G14"
+              ]
+            }
+          ],
+          "sectionStart": "(?<![A-Z0-9.])(?<channel>G1[34])(?![\\d.])",
+          "syncMarks": [
+            {
+              "id": "p-code",
+              "label": "P sync code: an order, the smaller number runs first, a number may stand on one side only",
+              "semantics": "ordered",
+              "match": {
+                "kind": "codes",
+                "codes": "P1-P9999"
+              },
+              "partners": {
+                "kind": "all"
+              }
+            },
+            {
+              "id": "m100",
+              "label": "M100: a wait without a number; both sides need the same count",
+              "semantics": "count",
+              "match": {
+                "kind": "codes",
+                "codes": "M100"
+              },
+              "partners": {
+                "kind": "all"
+              }
+            }
+          ],
+          "stopsAndEndsWait": false
+        }
+      }
+    }
+  ],
+  "defaults": {
+    "fanuc-lathe": "lathe-2path"
+  }
+}

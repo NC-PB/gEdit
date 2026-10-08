@@ -1,0 +1,56 @@
+{
+  "input": "../nc/fanuc-lathe/c12-main.nc",
+  "profile": "fanuc-lathe",
+  "machine": {
+    "channels": {
+      "layout": "multi-file",
+      "list": [
+        {
+          "id": "main",
+          "name": "Main spindle",
+          "fileName": "{{stem}}.nc",
+          "aliases": [
+            "1"
+          ]
+        },
+        {
+          "id": "gs",
+          "name": "Counter spindle",
+          "fileName": "{{stem}}_GS.nc",
+          "aliases": [
+            "2"
+          ]
+        }
+      ],
+      "syncMarks": [
+        {
+          "id": "wait",
+          "label": "Wait M900-M999, P = path numbers",
+          "match": {
+            "kind": "codes",
+            "codes": "M900-M999"
+          },
+          "partners": {
+            "kind": "word",
+            "address": "P",
+            "decode": "digits",
+            "whenAbsent": {
+              "kind": "none"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "expect": {
+    "layout": "multi-file",
+    "self": "main",
+    "by": "fileName",
+    "marks": [
+      {"ruleId":"wait","mark":"M901","line":13,"channel":"main","partners":["main","gs"],"blocking":true},
+      {"ruleId":"wait","mark":"M902","line":15,"channel":"main","partners":["main","gs"],"blocking":true}
+    ],
+    "problems": [],
+    "siblings": [{"channel":"gs","name":"c12-main_GS.nc"}]
+  }
+}

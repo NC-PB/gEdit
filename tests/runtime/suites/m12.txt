@@ -1,0 +1,48 @@
+# M12: multi-channel programs - the Channels step and the tester on the Machines page, the channel item
+# and the program map per channel, the tool list and the scripts' channel context, Split into Channel
+# Documents, one file per channel, the wait-code check with its report, Alt+F7 / Shift+Alt+F7 /
+# Mod+Alt+P, the same programs with no channels, and the budgets.
+# Run with: tests/runtime/suites/m0.txt tests/runtime/suites/m1.txt tests/runtime/suites/m2.txt tests/runtime/suites/m3.txt tests/runtime/suites/m4.txt tests/runtime/suites/m5.txt tests/runtime/suites/m6.txt tests/runtime/suites/m7.txt tests/runtime/suites/m8.txt tests/runtime/suites/m9.txt tests/runtime/suites/m10.txt tests/runtime/suites/m11.txt tests/runtime/suites/m12.txt
+#
+# Every expected range, line and finding is written out in the scenario from the programs themselves
+# and from tests/fixtures/channels/ (its README and the golden machines), never read from what the
+# app answers. The Channels step on a Fanuc lathe machine form is the one intentional change of an
+# earlier scenario (m6-machines-manage-1 lists one more field of the form).
+
+# X12 d: the Channels step (layout, two channels with aliases, one wait rule, the live preview, a bad
+# item, Advanced closed, a bad pattern), the tester on a program with four sections, Save and
+# machines.json as the golden, a preset only on its button (a second press when there is a block), and
+# a block broken by hand: reported on the page, the machine still usable, byte-stable after a save.
+m12-channels-config
+
+# One program, two channels with two sections each: the channel item follows the cursor, the map has a
+# row per channel with its tools and wait codes and an "Outside the channels" group, the tool list has a
+# Channel column, a script is told the channels, and Split into Channel Documents (a one-way copy that
+# warns once and writes nothing).
+m12-channels-single
+
+# One file per channel: the sibling not found / not open, the pick that opens it through the dialog in
+# the document's own folder, both open, the sibling removed from the folder, a name no pattern fits tied
+# to a channel by hand, the tool list of one channel's file; and the assignment after a restart.
+m12-channels-multi-1
+m12-channels-multi-2
+
+# Check Wait Codes into the Results panel: five defects of a one-program pair on their lines, a clean
+# program with a label on every wait and ids repeated, a jump the check will not judge across, a pair of
+# files with a row that jumps into the right document, the channel not checked, the sibling on another
+# machine and the offer to use one, and the count and ordered semantics.
+m12-channels-check
+
+# Alt+F7, Shift+Alt+F7 and Mod+Alt+P through real key presses: across the sections of a channel, over the
+# document in one file per channel, with the partner closed; Monaco's preserve-case binding is gone.
+m12-channels-nav
+
+# The same programs with no machine, with a machine without channels and with a broken channel block:
+# no channel item (or only the broken notice), the Phase 1 map, the keys and the check say "no channels",
+# and the machine's other settings read the same.
+m12-channels-off
+
+# G7: a generated 300,000-line program with two sections and 20,000 waits (the cap): open, first
+# resolution, typing, the grouped map after an edit and the wait-code check, every budget through
+# h.checkTime.
+m12-perf

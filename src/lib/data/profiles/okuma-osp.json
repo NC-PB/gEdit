@@ -215,7 +215,70 @@
           }
         ]
       }
-    ]
+    ],
+    "channels": {
+      "waitLetters": [
+        "M",
+        "P"
+      ],
+      "presets": [
+        {
+          "id": "okuma-2turret",
+          "label": "Two turrets in one program: G13 (or G013) starts turret A, G14 (or G014) turret B (as often as needed); P codes order the two sides (smaller number first); M100 waits by count",
+          "source": "syntax-okuma.md §11.7a; OSP-P200L programming manual, programming for simultaneous 4-axis cuts (turret selection, P codes, M100)",
+          "verify": true,
+          "value": {
+            "layout": "single-file",
+            "list": [
+              {
+                "id": "a",
+                "name": "Turret A",
+                "aliases": [
+                  "G13",
+                  "G013"
+                ]
+              },
+              {
+                "id": "b",
+                "name": "Turret B",
+                "aliases": [
+                  "G14",
+                  "G014"
+                ]
+              }
+            ],
+            "sectionStart": "(?<![A-Z0-9.])(?<channel>G0?1[34])(?![\\d.])",
+            "syncMarks": [
+              {
+                "id": "p-code",
+                "label": "P sync code: an order, the smaller number runs first, a number may stand on one side only",
+                "semantics": "ordered",
+                "match": {
+                  "kind": "codes",
+                  "codes": "P1-P9999"
+                },
+                "partners": {
+                  "kind": "all"
+                }
+              },
+              {
+                "id": "m100",
+                "label": "M100: a wait without a number; both sides need the same count",
+                "semantics": "count",
+                "match": {
+                  "kind": "codes",
+                  "codes": "M100"
+                },
+                "partners": {
+                  "kind": "all"
+                }
+              }
+            ],
+            "stopsAndEndsWait": false
+          }
+        }
+      ]
+    }
   },
   "compare": {
     "ignoreBlockNumbers": true,

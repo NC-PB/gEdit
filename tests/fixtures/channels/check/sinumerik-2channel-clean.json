@@ -1,0 +1,46 @@
+{
+  "comment": "Written for gEdit (synthetic, not for a machine); see README.md here.",
+  "description": "Siemens two channels in the shape of a real program: a label on every wait line, mark 10 twice and mark 20 three times in BOTH channels in the same order, the own channel listed or not, WAITMC, a WAITM inside a string and a comment (no mark), SETM in one channel only (not blocking, never checked), WAITE (not a mark). Correct: no finding.",
+  "profile": "sinumerik",
+  "preset": "sinumerik-2channel",
+  "program": {
+    "1": [
+      "%_N_TWIN1_MPF",
+      "; WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE",
+      ";$PATH=/_N_WKS_DIR/_N_TWIN_WPD",
+      "N10 G0 X100 Z100",
+      "NN8010: WAITM(10,1,2)",
+      "N20 G1 X50 F0.2",
+      "NN8020: WAITM(20,1,2)",
+      "MSG(\"WAITM(99,1,2)\")",
+      "; WAITM(98,1,2) IN A COMMENT",
+      "NN8030: WAITM(10,2)",
+      "N30 G0 X120",
+      "NN8040: WAITM(20,1,2)",
+      "SETM(5)",
+      "NN8050: WAITMC(30,1,2)",
+      "N40 G1 X60",
+      "NN8060: WAITM(20,1,2)",
+      "WAITE(2)",
+      "M30"
+    ],
+    "2": [
+      "%_N_TWIN2_MPF",
+      "; WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE",
+      ";$PATH=/_N_WKS_DIR/_N_TWIN_WPD",
+      "N10 G0 X100 Z100",
+      "NN9010: WAITM(10,1,2)",
+      "NN9020: WAITM(20,1)",
+      "N20 G1 X40 F0.1",
+      "NN9030: WAITM(10,1,2)",
+      "NN9040: WAITM(20,1,2)",
+      "NN9050: WAITMC(30,1)",
+      "N30 G0 X120",
+      "NN9060: WAITM(20,1,2)",
+      "M30"
+    ]
+  },
+  "expect": {
+    "findings": []
+  }
+}

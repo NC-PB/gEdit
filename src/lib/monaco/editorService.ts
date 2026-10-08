@@ -534,6 +534,9 @@ export function createEditorService(deps: EditorServiceDeps): EditorService {
       const last = entry.model.getLineCount();
       const from = Math.max(1, startLine);
       const to = Math.min(last, endLine);
+      // The whole document (the channel resolution, a split, a check) in one pass over the
+      // text instead of one tree walk per line.
+      if (from === 1 && to === last) return entry.model.getLinesContent();
       const lines: string[] = [];
       for (let line = from; line <= to; line++) lines.push(entry.model.getLineContent(line));
       return lines;

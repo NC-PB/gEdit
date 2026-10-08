@@ -1,0 +1,837 @@
+{
+  "channels": {
+    "layout": "single-file",
+    "list": [
+      {
+        "id": "1",
+        "name": "Channel 1",
+        "ranges": [
+          {
+            "endLine": 12,
+            "startLine": 5
+          },
+          {
+            "endLine": 27,
+            "startLine": 21
+          }
+        ]
+      },
+      {
+        "id": "2",
+        "name": "Channel 2",
+        "ranges": [
+          {
+            "endLine": 20,
+            "startLine": 13
+          },
+          {
+            "endLine": 34,
+            "startLine": 28
+          }
+        ]
+      }
+    ],
+    "marks": [
+      {
+        "blocking": true,
+        "channel": "1",
+        "id": "M901",
+        "line": 11,
+        "partners": [
+          "1",
+          "2"
+        ]
+      },
+      {
+        "blocking": true,
+        "channel": "2",
+        "id": "M901",
+        "line": 19,
+        "partners": [
+          "1",
+          "2"
+        ]
+      },
+      {
+        "blocking": true,
+        "channel": "1",
+        "id": "M902",
+        "line": 26,
+        "partners": [
+          "1",
+          "2"
+        ]
+      },
+      {
+        "blocking": true,
+        "channel": "2",
+        "id": "M902",
+        "line": 33,
+        "partners": [
+          "1",
+          "2"
+        ]
+      }
+    ],
+    "outside": [
+      {
+        "endLine": 4,
+        "startLine": 1
+      },
+      {
+        "endLine": 41,
+        "startLine": 35
+      }
+    ],
+    "self": null
+  },
+  "codes": "fanuc-lathe",
+  "machine": {
+    "choice": "none",
+    "id": null,
+    "name": null,
+    "params": {
+      "diameter": "on",
+      "modalInitial": {},
+      "numberInput": {
+        "incrementMm": "0.001",
+        "mode": "calculator"
+      },
+      "units": "mm",
+      "variants": {
+        "gcodeSystem": "A",
+        "incrementalAddresses": "uw",
+        "toolWord": "offset2"
+      }
+    },
+    "source": {
+      "diameter": "profile",
+      "modalInitial": {
+        "feedmode": "profile",
+        "plane": "profile",
+        "spindlemode": "profile"
+      },
+      "numberInput": "profile",
+      "units": "profile",
+      "variants": {
+        "gcodeSystem": "profile",
+        "incrementalAddresses": "profile",
+        "toolWord": "profile"
+      }
+    }
+  },
+  "profile": {
+    "addresses": {
+      "angular": [
+        "C"
+      ],
+      "arcCenter": [
+        "I",
+        "K"
+      ],
+      "arcCenterMode": "incremental",
+      "axes": [
+        "X",
+        "Z",
+        "C",
+        "Y",
+        "U",
+        "W"
+      ],
+      "diameter": [
+        "X",
+        "U"
+      ],
+      "feed": "F",
+      "incremental": {
+        "U": "X",
+        "W": "Z"
+      },
+      "spindle": "S",
+      "tool": "T"
+    },
+    "codes": "fanuc-lathe",
+    "compare": {
+      "ignoreBlockNumbers": true,
+      "ignoreCase": false,
+      "ignoreComments": true,
+      "ignoreNumberFormat": true,
+      "ignoreWhitespace": true,
+      "keepComments": [
+        "^\\s*(?:[O:]\\d+|<[^>]*>)",
+        "#\\s*30(?:00|06)\\s*=",
+        "\\([^)]*%"
+      ]
+    },
+    "detect": {
+      "content": [
+        {
+          "pattern": "^\\s*%\\s*$",
+          "weight": 5
+        },
+        {
+          "pattern": "^\\s*[O:]\\d{1,8}(?!\\d)",
+          "weight": 5
+        },
+        {
+          "pattern": "^\\s*N\\d+",
+          "weight": 1
+        },
+        {
+          "pattern": "^\\s*(N\\d+\\s*)?[GM]\\d{1,3}(\\.\\d)?(?![\\d.])",
+          "weight": 1
+        },
+        {
+          "pattern": "^\\s*\\([^)]*\\)\\s*$",
+          "weight": 1
+        },
+        {
+          "pattern": "(?<![A-Z])T\\d{4,5}(?!\\d)",
+          "weight": 3
+        },
+        {
+          "pattern": "(?<![A-Z])G0*50\\s*S\\d",
+          "weight": 4
+        },
+        {
+          "pattern": "(?<![A-Z])G0*92\\s*S\\d",
+          "weight": 4
+        },
+        {
+          "pattern": "(?<![A-Z])G0*9[67](?![\\d.])",
+          "weight": 4
+        },
+        {
+          "pattern": "(?<![A-Z])G0*7[0-3](?![\\d.])(?=[^(]*P\\s*\\d)(?=[^(]*Q\\s*\\d)",
+          "weight": 6
+        },
+        {
+          "pattern": "(?<![A-Z])G0*7[12]\\s*U[\\d.]+\\s*R",
+          "weight": 6
+        },
+        {
+          "pattern": "^(?![^(]*(?<![A-Z])G0*91(?![\\d.]))[^(]*?(?<![A-Z])G0*(?:28|30)(?![\\d.])[ \\t]*(?:(?:P\\d[ \\t]*)?(?:W[-+]?[.\\d]+[ \\t]*)?[UVH]|W)[-+]?[.\\d]",
+          "weight": 4
+        },
+        {
+          "pattern": "(?<![A-Z])[UW][-+]?\\.?\\d",
+          "weight": 1
+        }
+      ],
+      "extensions": {
+        "cnc": 2,
+        "eia": 2,
+        "iso": 2,
+        "nc": 3,
+        "tap": 3
+      },
+      "priority": 0
+    },
+    "editing": {
+      "forceUppercase": true,
+      "preventLineJoin": true,
+      "tabWidth": 4
+    },
+    "extends": "fanuc-gcode",
+    "files": {
+      "defaultExtension": "nc",
+      "encoding": "keep",
+      "extensions": [
+        "nc",
+        "tap",
+        "cnc",
+        "eia",
+        "iso",
+        "ncc",
+        "ptp",
+        "txt"
+      ],
+      "filterName": "Fanuc lathe G-Code",
+      "lineEnding": "keep",
+      "newFileLineEnding": "crlf"
+    },
+    "grammar": "iso",
+    "id": "fanuc-lathe",
+    "machineParams": {
+      "channels": {
+        "presets": [
+          {
+            "id": "fanuc-2path",
+            "label": "Two paths, one file per path (path number at the end of the extension); waits M900-M999; P as a bit sum (the control's default, P3 = paths 1 and 2); no P = paths 1 and 2",
+            "source": "Fanuc 30i/31i user manual, multi-path waiting function (parameters 8110, 8111, 8103 bit 1); the range M900-M999 from the owner's local multi-path set (aggregate)",
+            "value": {
+              "fileName": "^(?<stem>.+)\\.[A-Za-z]*-?(?<channel>\\d{1,2})$",
+              "layout": "multi-file",
+              "list": [
+                {
+                  "id": "1",
+                  "name": "Path 1"
+                },
+                {
+                  "id": "2",
+                  "name": "Path 2"
+                }
+              ],
+              "stopsAndEndsWait": false,
+              "syncMarks": [
+                {
+                  "id": "wait",
+                  "label": "Waiting M-code: the range is parameters 8110/8111, the P word names the paths",
+                  "match": {
+                    "codes": "M900-M999",
+                    "kind": "codes"
+                  },
+                  "partners": {
+                    "address": "P",
+                    "decode": "bitmask",
+                    "kind": "word",
+                    "whenAbsent": {
+                      "channels": [
+                        "1",
+                        "2"
+                      ],
+                      "kind": "fixed"
+                    }
+                  },
+                  "samePartners": true
+                }
+              ]
+            },
+            "verify": true
+          },
+          {
+            "id": "fanuc-2path-digits",
+            "label": "Two paths, one file per path (path number at the end of the extension); waits M900-M999; P as path numbers (parameter 8103 bit 1 = 1, P12 = paths 1 and 2); no P = paths 1 and 2",
+            "source": "Fanuc 30i/31i user manual, multi-path waiting function (parameters 8110, 8111; 8103 bit 1 = 1: P as path numbers; without P, paths 1 and 2 wait)",
+            "value": {
+              "fileName": "^(?<stem>.+)\\.[A-Za-z]*-?(?<channel>\\d{1,2})$",
+              "layout": "multi-file",
+              "list": [
+                {
+                  "id": "1",
+                  "name": "Path 1"
+                },
+                {
+                  "id": "2",
+                  "name": "Path 2"
+                }
+              ],
+              "stopsAndEndsWait": false,
+              "syncMarks": [
+                {
+                  "id": "wait",
+                  "label": "Waiting M-code: the range is parameters 8110/8111, the P word names the paths",
+                  "match": {
+                    "codes": "M900-M999",
+                    "kind": "codes"
+                  },
+                  "partners": {
+                    "address": "P",
+                    "decode": "digits",
+                    "kind": "word",
+                    "whenAbsent": {
+                      "channels": [
+                        "1",
+                        "2"
+                      ],
+                      "kind": "fixed"
+                    }
+                  },
+                  "samePartners": true
+                }
+              ]
+            },
+            "verify": true
+          },
+          {
+            "id": "fanuc-3path-digits",
+            "label": "Three paths, one file per path (path number at the end of the extension); waits M900-M999; P as path numbers (P12 = paths 1 and 2, 0 = path 10); a wait without P is an error",
+            "source": "Fanuc 30i/31i user manual, multi-path waiting function (parameter 8103 bit 1 = 1; without P only two-path systems wait); the owner's local three-path set writes digit P words (aggregate)",
+            "value": {
+              "fileName": "^(?<stem>.+)\\.[A-Za-z]*-?(?<channel>\\d{1,2})$",
+              "layout": "multi-file",
+              "list": [
+                {
+                  "id": "1",
+                  "name": "Path 1"
+                },
+                {
+                  "id": "2",
+                  "name": "Path 2"
+                },
+                {
+                  "id": "3",
+                  "name": "Path 3"
+                }
+              ],
+              "stopsAndEndsWait": false,
+              "syncMarks": [
+                {
+                  "id": "wait",
+                  "label": "Waiting M-code: the range is parameters 8110/8111, the P word names the paths",
+                  "match": {
+                    "codes": "M900-M999",
+                    "kind": "codes"
+                  },
+                  "partners": {
+                    "address": "P",
+                    "decode": "digits",
+                    "kind": "word",
+                    "whenAbsent": {
+                      "kind": "none"
+                    }
+                  },
+                  "samePartners": true
+                }
+              ]
+            },
+            "verify": true
+          },
+          {
+            "id": "fanuc-3path-bitmask",
+            "label": "Three paths, one file per path (path number at the end of the extension); waits M900-M999; P as a bit sum (P7 = paths 1, 2 and 3); a wait without P is an error",
+            "source": "Fanuc 30i/31i user manual, multi-path waiting function (parameter 8103 bit 1 = 0)",
+            "value": {
+              "fileName": "^(?<stem>.+)\\.[A-Za-z]*-?(?<channel>\\d{1,2})$",
+              "layout": "multi-file",
+              "list": [
+                {
+                  "id": "1",
+                  "name": "Path 1"
+                },
+                {
+                  "id": "2",
+                  "name": "Path 2"
+                },
+                {
+                  "id": "3",
+                  "name": "Path 3"
+                }
+              ],
+              "stopsAndEndsWait": false,
+              "syncMarks": [
+                {
+                  "id": "wait",
+                  "label": "Waiting M-code: the range is parameters 8110/8111, the P word names the paths",
+                  "match": {
+                    "codes": "M900-M999",
+                    "kind": "codes"
+                  },
+                  "partners": {
+                    "address": "P",
+                    "decode": "bitmask",
+                    "kind": "word",
+                    "whenAbsent": {
+                      "kind": "none"
+                    }
+                  },
+                  "samePartners": true
+                }
+              ]
+            },
+            "verify": true
+          }
+        ],
+        "waitLetters": [
+          "M"
+        ]
+      },
+      "diameter": "on",
+      "modalGroups": [
+        "feedmode",
+        "spindlemode",
+        "plane"
+      ],
+      "numberInput": {
+        "default": "calculator",
+        "presets": [
+          {
+            "id": "is-b",
+            "label": "Increments of 0.001 mm (IS-B): X50 is 0.050 mm, X50. is 50 mm, C90000 is 90°; a point-less feed per minute in 1 mm/min (F200 is 200), per revolution in 0.01 mm/rev (F25 is 0.25 mm/rev)",
+            "source": "syntax-fanuc.md §3.2",
+            "value": {
+              "classes": {
+                "feedPerMin": {
+                  "increment": "1",
+                  "incrementInch": "0.01",
+                  "mode": "increment"
+                },
+                "feedPerRev": {
+                  "increment": "0.01",
+                  "incrementInch": "0.0001",
+                  "mode": "increment"
+                }
+              },
+              "incrementDeg": "0.001",
+              "incrementInch": "0.0001",
+              "incrementMm": "0.001",
+              "incrementSec": "0.001",
+              "mode": "increment"
+            },
+            "verify": true
+          },
+          {
+            "id": "is-c",
+            "label": "Increments of 0.0001 mm (IS-C): X50 is 0.0050 mm, X50. is 50 mm; a point-less feed per minute in 1 mm/min (F200 is 200), per revolution in 0.01 mm/rev (F25 is 0.25 mm/rev)",
+            "source": "syntax-fanuc.md §3.2",
+            "value": {
+              "classes": {
+                "feedPerMin": {
+                  "increment": "1",
+                  "incrementInch": "0.01",
+                  "mode": "increment"
+                },
+                "feedPerRev": {
+                  "increment": "0.01",
+                  "incrementInch": "0.0001",
+                  "mode": "increment"
+                }
+              },
+              "incrementDeg": "0.0001",
+              "incrementInch": "0.00001",
+              "incrementMm": "0.0001",
+              "incrementSec": "0.0001",
+              "mode": "increment"
+            },
+            "verify": true
+          },
+          {
+            "id": "calculator",
+            "label": "As written: X50 and X50. are both 50 mm; G74/G75 P and Q, G76 Q and G83/G87 Q are in microns (Q6000 is 6 mm)",
+            "source": "syntax-fanuc.md §3.2",
+            "value": {
+              "incrementMm": "0.001",
+              "mode": "calculator"
+            },
+            "verify": true
+          }
+        ]
+      },
+      "units": "mm",
+      "variants": [
+        {
+          "choices": [
+            {
+              "codes": "fanuc-lathe",
+              "detect": [
+                {
+                  "pattern": "(?<![A-Z])G0*50\\s*S\\d",
+                  "weight": 4
+                },
+                {
+                  "pattern": "(?<![A-Z])G0*9[89](?![\\d.])",
+                  "weight": 2
+                }
+              ],
+              "label": "G-code system A",
+              "value": "A"
+            },
+            {
+              "codes": "fanuc-lathe-b",
+              "detect": [
+                {
+                  "pattern": "(?<![A-Z])G0*92\\s*S\\d",
+                  "weight": 5
+                },
+                {
+                  "pattern": "(?<![A-Z])G0*7[789](?![\\d.])",
+                  "weight": 5
+                },
+                {
+                  "pattern": "(?<![A-Z])G0*9[45](?![\\d.])",
+                  "weight": 2
+                }
+              ],
+              "label": "G-code system B",
+              "overlay": {
+                "modal": {
+                  "initial": {
+                    "feedmode": "G95"
+                  }
+                }
+              },
+              "value": "B"
+            }
+          ],
+          "default": "A",
+          "id": "gcodeSystem",
+          "label": "G-code system"
+        },
+        {
+          "choices": [
+            {
+              "label": "U and W are incremental X and Z (default, verify)",
+              "overlay": {
+                "addresses": {
+                  "incremental": {
+                    "U": "X",
+                    "W": "Z"
+                  }
+                }
+              },
+              "value": "uw"
+            },
+            {
+              "label": "U, W, V and H are incremental X, Z, Y and C",
+              "overlay": {
+                "addresses": {
+                  "incremental": {
+                    "H": "C",
+                    "U": "X",
+                    "V": "Y",
+                    "W": "Z"
+                  }
+                }
+              },
+              "value": "uwvh"
+            },
+            {
+              "label": "None of them: G91 is the only incremental mode",
+              "overlay": {
+                "addresses": {
+                  "diameter": [
+                    "X"
+                  ]
+                }
+              },
+              "value": "none"
+            }
+          ],
+          "default": "uw",
+          "id": "incrementalAddresses",
+          "label": "U, W, V and H move incrementally"
+        },
+        {
+          "choices": [
+            {
+              "label": "The last two digits are the offset: T0101 (default, verify)",
+              "overlay": {
+                "toolCall": {
+                  "ignore": "(?<![A-Z])T(?:\\d{0,3}00|0+)(?!\\d)",
+                  "tool": "(?<![A-Z])T(?<tool>\\d{1,3}?)(?:\\d{2})?(?!\\d)",
+                  "trigger": "(?<![A-Z])T\\d{1,5}(?!\\d)"
+                }
+              },
+              "value": "offset2"
+            },
+            {
+              "label": "The last digit is the offset: T11",
+              "overlay": {
+                "toolCall": {
+                  "ignore": "(?<![A-Z])T(?:\\d{0,3}0|0+)(?!\\d)",
+                  "tool": "(?<![A-Z])T(?<tool>\\d{1,3}?)\\d?(?!\\d)",
+                  "trigger": "(?<![A-Z])T\\d{1,4}(?!\\d)"
+                }
+              },
+              "value": "offset1"
+            },
+            {
+              "label": "The last three digits are the offset: T1001",
+              "overlay": {
+                "toolCall": {
+                  "ignore": "(?<![A-Z])T(?:\\d{0,3}000|0+)(?!\\d)",
+                  "tool": "(?<![A-Z])T(?<tool>\\d{1,3}?)(?:\\d{3})?(?!\\d)",
+                  "trigger": "(?<![A-Z])T\\d{1,6}(?!\\d)"
+                }
+              },
+              "value": "offset3"
+            }
+          ],
+          "default": "offset2",
+          "id": "toolWord",
+          "label": "Tool word: offset digits"
+        }
+      ]
+    },
+    "machineType": "lathe",
+    "modal": {
+      "diameter": "on",
+      "initial": {
+        "feedmode": "G99",
+        "plane": "G18",
+        "spindlemode": "G97"
+      },
+      "sources": {
+        "diameter": "profile",
+        "feedmode": "profile",
+        "plane": "profile",
+        "spindlemode": "profile",
+        "units": "profile"
+      },
+      "units": "mm"
+    },
+    "name": "Fanuc (ISO) lathe",
+    "numbering": {
+      "digits": 0,
+      "max": 99999,
+      "onOverflow": "wrap",
+      "references": [
+        {
+          "addresses": [
+            "P"
+          ],
+          "rewrite": false,
+          "trigger": "(?<![A-Z])M\\s*0*99(?!\\d)"
+        },
+        {
+          "addresses": [
+            "Q"
+          ],
+          "trigger": "^(?=[^(]*Q\\s*\\d)[^(]*(?<![A-Z])M\\s*0*98(?!\\d)"
+        },
+        {
+          "addresses": [
+            "Q"
+          ],
+          "rewrite": false,
+          "trigger": "^(?=[^(]*P\\s*\\d)(?=[^(]*Q\\s*\\d)[^(]*(?<![A-Z])M\\s*0*98(?!\\d)"
+        },
+        {
+          "addresses": [
+            "P",
+            "Q"
+          ],
+          "trigger": "^(?=[^(]*P\\s*\\d)(?=[^(]*Q\\s*\\d)[^(]*(?<![A-Z])G\\s*0*7[0-3](?![\\d.])"
+        },
+        {
+          "addresses": [
+            "GOTO"
+          ],
+          "trigger": "(?<![A-Z])GOTO"
+        }
+      ],
+      "restartAtProgramStart": true,
+      "skipEmpty": true,
+      "skipStartingWith": [
+        "%",
+        "O",
+        "("
+      ],
+      "spacesAfter": 1,
+      "start": 10,
+      "step": 10
+    },
+    "onLoad": {
+      "stripNul": true
+    },
+    "outline": [
+      {
+        "kind": "program",
+        "pattern": "^\\s*[O:](?<name>\\d+)"
+      },
+      {
+        "kind": "program",
+        "pattern": "^\\s*<(?<name>[A-Za-z0-9+\\-_.]+)>"
+      },
+      {
+        "kind": "comment",
+        "pattern": "^\\s*\\((?<text>[^)]*)\\)\\s*$"
+      },
+      {
+        "kind": "stop",
+        "pattern": "(?<![A-Z])M0*[01](?!\\d)"
+      },
+      {
+        "kind": "subprogram-call",
+        "pattern": "(?<![A-Z])(?<text>M0*98\\s*(?:[PQ]\\d+|<[A-Za-z0-9+\\-_.]+>)(?:\\s*L\\d+)?|G0*65\\s*(?:P\\d+|<[A-Za-z0-9+\\-_.]+>))"
+      },
+      {
+        "kind": "end",
+        "pattern": "(?<![A-Z])M0*(?:30|2|99)(?!\\d)"
+      }
+    ],
+    "program": {
+      "end": [
+        "(?<![A-Z])M0*(30|2)(?!\\d)"
+      ],
+      "start": [
+        "^\\s*O(?<name>\\d+)",
+        "^\\s*:(?<name>\\d+)",
+        "^\\s*<(?<name>[A-Za-z0-9+\\-_.]+)>"
+      ]
+    },
+    "shortName": "Fanuc T",
+    "syntax": {
+      "blockNumber": {
+        "altPrefixes": [],
+        "mandatory": false,
+        "mode": "prefix",
+        "prefix": "N"
+      },
+      "blockSkip": {
+        "chars": "/",
+        "levels": true,
+        "plainLevel": "1",
+        "position": "either"
+      },
+      "comments": [
+        {
+          "end": ")",
+          "start": "("
+        }
+      ],
+      "decimalPointSignificant": false,
+      "decimalSeparator": ".",
+      "keywords": [
+        "GOTO",
+        "IF",
+        "THEN",
+        "WHILE",
+        "DO",
+        "END",
+        "EQ",
+        "NE",
+        "GT",
+        "LT",
+        "GE",
+        "LE",
+        "AND",
+        "OR",
+        "XOR",
+        "MOD",
+        "SIN",
+        "COS",
+        "TAN",
+        "ASIN",
+        "ACOS",
+        "ATAN",
+        "ATN",
+        "SQRT",
+        "SQR",
+        "ABS",
+        "BIN",
+        "BCD",
+        "ROUND",
+        "RND",
+        "FIX",
+        "FUP",
+        "LN",
+        "EXP",
+        "POW",
+        "ADP",
+        "AX",
+        "AXNUM",
+        "POPEN",
+        "PCLOS",
+        "DPRNT",
+        "BPRNT"
+      ],
+      "maxWordDigits": 8,
+      "programNames": "<[A-Za-z0-9+\\-_.]+>",
+      "variables": "#\\d+",
+      "wordSeparatorRequired": false
+    },
+    "toolCall": {
+      "ignore": "(?<![A-Z])T(?:\\d{0,3}00|0+)(?!\\d)",
+      "tool": "(?<![A-Z])T(?<tool>\\d{1,3}?)(?:\\d{2})?(?!\\d)",
+      "toolFrom": "same-line",
+      "trigger": "(?<![A-Z])T\\d{1,5}(?!\\d)"
+    },
+    "toolList": {
+      "commentFilter": "^[-*=_\\s]*$",
+      "description": "auto",
+      "dropLeadingZeros": true
+    },
+    "version": 1
+  }
+}

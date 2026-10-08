@@ -1,0 +1,46 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "offsets",
+      "label": "Offsets"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [
+    {
+      "tool": "T2",
+      "offsets": "02",
+      "description": "DRILL",
+      "line": 5,
+      "calls": 1,
+      "feed": "0.08 /rev",
+      "speed": ""
+    }
+  ],
+  "message": "1 tool. This document is Channel 2; the other channels are separate runs.",
+  "findings": []
+}

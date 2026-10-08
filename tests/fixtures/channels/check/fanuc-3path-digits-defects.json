@@ -1,0 +1,66 @@
+{
+  "comment": "Written for gEdit (synthetic, not for a machine); see README.md here.",
+  "description": "Fanuc three-path, P as path numbers: M905 without P (the control alarms with three paths; the preset reads no partner) is unmatched; M906 P4 names a path the machine does not have (unknown channel, not also unmatched); M907 P123 is missing in path 3, reported in each path that waits for it.",
+  "profile": "fanuc-lathe",
+  "preset": "fanuc-3path-digits",
+  "program": {
+    "1": [
+      "%",
+      "O3002 (PATH 1)",
+      "(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)",
+      "N10 M901 P123",
+      "N20 M905",
+      "N30 M907 P123",
+      "N40 M30",
+      "%"
+    ],
+    "2": [
+      "%",
+      "O3002 (PATH 2)",
+      "(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)",
+      "N10 M901 P123",
+      "N20 M906 P4",
+      "N30 M907 P123",
+      "N40 M30",
+      "%"
+    ],
+    "3": [
+      "%",
+      "O3002 (PATH 3)",
+      "(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)",
+      "N10 M901 P123",
+      "N20 M30",
+      "%"
+    ]
+  },
+  "expect": {
+    "findings": [
+      {
+        "kind": "unmatched",
+        "channel": "1",
+        "line": 5,
+        "mark": "M905"
+      },
+      {
+        "kind": "missing",
+        "channel": "1",
+        "line": 6,
+        "mark": "M907",
+        "other": "3"
+      },
+      {
+        "kind": "unknown-channel",
+        "channel": "2",
+        "line": 5,
+        "mark": "M906"
+      },
+      {
+        "kind": "missing",
+        "channel": "2",
+        "line": 6,
+        "mark": "M907",
+        "other": "3"
+      }
+    ]
+  }
+}

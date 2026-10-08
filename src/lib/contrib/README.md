@@ -96,6 +96,7 @@ Each row names the owning work package and the feature.
 | `assistant.ts` | WP3.6 | hover and completion providers over the code database |
 | `blocks.ts` | WP1.5 | Insert tab, built from the blocks JSON |
 | `bookmarks.ts` | WP4.4 | `bookmark.toggle` / `next` / `prev` / `clear` and the F2 removals |
+| `channels.ts` | WP12.5 | multi-channel programs: channel status item, sync-point navigation (`Alt+F7`, `Shift+Alt+F7`, `Mod+Alt+P`), `channels.checkSync`, `channels.assign`, `channels.splitToDocuments`, the `togglePreserveCase` removal |
 | `compare.ts` | WP2.5 | compare with a document, a file or the saved version (overlay) |
 | `cursor.ts` | WP1.2 | cursor status item |
 | `editing.ts` | WP4.4 | Home "Edit" and View-tab wrappers around Monaco actions |

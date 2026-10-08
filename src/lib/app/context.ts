@@ -28,6 +28,7 @@ import { status } from '$lib/app/status';
 import { transforms } from '$lib/app/transforms';
 import { bookmarks } from '$lib/monaco/bookmarks';
 import { editor } from '$lib/monaco/editorService';
+import { channels } from '$lib/stores/channels';
 import { codes } from '$lib/stores/codes';
 import { docs } from '$lib/stores/documents';
 import { fileMemory } from '$lib/stores/fileMemory';
@@ -70,4 +71,5 @@ export const ctx: AppContext = {
   fileMemory,
   session,
   recovery,
+  channels,
 };

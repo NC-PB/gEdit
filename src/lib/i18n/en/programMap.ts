@@ -20,5 +20,8 @@ export default {
     stop: 'Program stop',
     end: 'Program end',
     subprogramCall: 'Subprogram call',
+    /** M12 (P12): a channel group row and a wait mark, made by the channel service. */
+    channel: 'Channel',
+    sync: 'Wait mark',
   },
 } as const satisfies Messages;

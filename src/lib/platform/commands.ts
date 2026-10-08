@@ -349,6 +349,33 @@ export function recoveryDiscard(session: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// M12: the sibling lookup (src-tauri/src/channels.rs; plan §7.10, §4, AD-32)
+//
+// `path` is the open document's own path, which the fs scope must already allow; each
+// name is a plain file name resolved against that path's PARENT. The answer is metadata
+// only — nothing is read, nothing is listed, nothing is granted (standing rule 14). A
+// sibling is opened by the user, through the dialog (P1 F3) or a drop.
+// ---------------------------------------------------------------------------
+
+/** One sibling's answer. `error` (§7.16 #152): why this name was refused; then `exists` is false. */
+export interface SiblingInfo {
+  name: string;
+  exists: boolean;
+  bytes: number;
+  /** ms since the epoch; null when unknown. */
+  modified: number | null;
+  error: string | null;
+}
+
+/**
+ * Whether the files `names` exist next to `path`. Rejects when `path` is not in the fs
+ * scope or when more than 32 names are asked; a single bad name is answered on its own.
+ */
+export function channelSiblings(path: string, names: string[]): Promise<SiblingInfo[]> {
+  return invoke<SiblingInfo[]>('channel_siblings', { path, names });
+}
+
+// ---------------------------------------------------------------------------
 // M4: scripting (src-tauri/src/scripts/*)
 //
 // The webview sends a script **id** and never a path, never an interpreter and never a

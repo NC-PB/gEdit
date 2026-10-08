@@ -19,6 +19,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createScriptService, formKey, SCRIPT_OUTPUT_PANEL, SCRIPT_STATUS_KEYS } from './scripts';
 import { createDocumentStore } from '$lib/stores/documents';
 import { noMachine } from '$lib/core/machines/effective';
+import type { ChannelSet } from '$lib/core/channels/types';
 import { profiles } from '$lib/stores/profiles';
 import { results } from '$lib/stores/results';
 import {
@@ -174,6 +175,12 @@ interface Harness {
   probeError: unknown;
   ui: Writable<UiState>;
   desktop: boolean;
+  /** What the fake channel service answers for the document (M12); null = `layout: 'none'`. */
+  channelSet: ChannelSet | null;
+}
+
+function noChannelSet(): ChannelSet {
+  return { layout: 'none', self: null, members: [], missing: [], outside: [], marks: [], problems: [], truncated: false };
 }
 
 function harness(o: { profileId?: string; entries?: ScriptEntry[] } = {}): Harness {
@@ -212,6 +219,7 @@ function harness(o: { profileId?: string; entries?: ScriptEntry[] } = {}): Harne
     probeError: null,
     ui: uiStore,
     desktop: true,
+    channelSet: null,
   };
 
   h.service = createScriptService({
@@ -242,6 +250,7 @@ function harness(o: { profileId?: string; entries?: ScriptEntry[] } = {}): Harne
         };
       },
     },
+    channels: { fresh: () => h.channelSet ?? noChannelSet() },
     modals: {
       form: (request) => {
         h.forms.push(request);
@@ -656,6 +665,35 @@ describe('ScriptService.run: the input scope', () => {
     expect(context.cursor).toEqual({ line: 4, column: 12 });
     expect(context.profile.id).toBe('fanuc-gcode');
     expect(context.codes).toHaveLength(1);
+  });
+
+  it('has no channels member for a document without channels, so no script changes', async () => {
+    const h = await ready();
+    await h.service.run('bundled:scale_feed.py');
+    expect('channels' in (h.requests[0].context as ScriptContextV2)).toBe(false);
+  });
+
+  it('hands the service channel set over as the channels member (M12)', async () => {
+    const h = await ready();
+    h.channelSet = {
+      ...noChannelSet(),
+      layout: 'single-file',
+      members: [
+        { kind: 'section', channel: { id: '1', name: 'Channel 1', index: 0 }, docId: h.docId, ranges: [{ startLine: 2, endLine: 3 }] },
+      ],
+      outside: [{ startLine: 1, endLine: 1 }],
+      marks: [{ ruleId: 'r', mark: 'M901', line: 3, channel: '1', partners: ['2'], blocking: true }],
+    };
+    await h.service.run('bundled:scale_feed.py');
+    const context = h.requests[0].context as ScriptContextV2;
+    expect(context.contract).toBe(2);
+    expect(context.channels).toEqual({
+      layout: 'single-file',
+      self: null,
+      list: [{ id: '1', name: 'Channel 1', ranges: [{ startLine: 2, endLine: 3 }] }],
+      outside: [{ startLine: 1, endLine: 1 }],
+      marks: [{ id: 'M901', line: 3, channel: '1', partners: ['2'], blocking: true }],
+    });
   });
 
   it('leaves the timeout to Rust', async () => {

@@ -1,0 +1,61 @@
+{
+  "input": "../nc/fanuc-lathe/c08-marker_B.nc",
+  "profile": "fanuc-lathe",
+  "machine": {
+    "channels": {
+      "layout": "multi-file",
+      "list": [
+        {
+          "id": "1",
+          "name": "Channel 1",
+          "aliases": [
+            "B"
+          ]
+        },
+        {
+          "id": "2",
+          "name": "Channel 2",
+          "aliases": [
+            "A"
+          ]
+        }
+      ],
+      "fileName": "^(?<stem>.+)_(?<channel>[A-Z])\\.nc$",
+      "syncMarks": [
+        {
+          "id": "wait",
+          "label": "Wait M900-M999, P = bit sum, no P = paths 1 and 2",
+          "match": {
+            "kind": "codes",
+            "codes": "M900-M999"
+          },
+          "partners": {
+            "kind": "word",
+            "address": "P",
+            "decode": "bitmask",
+            "whenAbsent": {
+              "kind": "fixed",
+              "channels": [
+                "1",
+                "2"
+              ]
+            }
+          }
+        }
+      ],
+      "marker": "^\\(PATH (?<channel>\\d+)\\)"
+    }
+  },
+  "expect": {
+    "layout": "multi-file",
+    "self": "2",
+    "by": "marker",
+    "marks": [
+      {"ruleId":"wait","mark":"M901","line":8,"channel":"2","partners":["1","2"],"blocking":true}
+    ],
+    "problems": [
+      {"path":"line:2","key":"channels.problems.markerDisagrees","params":{"line":2,"marker":"Channel 2","fileName":"Channel 1"}}
+    ],
+    "siblings": [{"channel":"1","name":null}]
+  }
+}

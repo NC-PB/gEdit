@@ -23,6 +23,7 @@
 // (AD-1). The pure functions live next to it in `effective.ts` (P6, owned by WP6.8 from
 // Wave A on) and `numbers.ts` (WP6.9), and `stores/machines.ts` holds the service.
 
+import type { ChannelParams } from '$lib/core/channels/types';
 import type { CodeDb } from '$lib/core/codes/types';
 import type { CompiledProfile, MachineParamsDecl, Profile } from '$lib/core/profiles/types';
 
@@ -102,6 +103,16 @@ export interface MachineParams {
   variants: Record<string, string>;
   /** Modal group → canonical code, over the profile's `modal.initial`. */
   modalInitial: Record<string, string>;
+  /**
+   * M12 (P12, AD-32, §7.17): how this machine's channels are laid out and which codes are its
+   * waits. Additive; `MACHINES_VERSION` stays 1 (D59). **Stored in `MachineConfig.params`
+   * only and never carried into `EffectiveMachine.params`** (§7.16 #149): it does not change
+   * how a program is read, so it stays out of `effectiveKey` and `applyMachine`, and the
+   * channel service reads it from the record (`machines.get(eff.machine.id)`) through
+   * `channelBlock` (`core/machines/validate.ts`). A broken block costs the channels, never the
+   * record (X12 d).
+   */
+  channels?: ChannelParams;
 }
 
 /** Where one effective parameter came from. Shown next to every assumed value (AD-31). */

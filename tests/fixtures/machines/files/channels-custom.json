@@ -1,0 +1,70 @@
+{
+  "$version": 1,
+  "machines": [
+    {
+      "id": "lathe-custom",
+      "name": "Lathe, hand-edited",
+      "profile": "fanuc-lathe",
+      "params": {
+        "units": "mm",
+        "channels": {
+          "layout": "multi-file",
+          "list": [
+            {
+              "id": "1",
+              "name": "Path 1",
+              "aliases": [
+                "A"
+              ]
+            },
+            {
+              "id": "2",
+              "name": "Path 2"
+            },
+            {
+              "id": "3",
+              "name": "Path 3"
+            }
+          ],
+          "fileName": "^(?<stem>.+)\\.[A-Za-z]*-?(?<channel>\\d{1,2})$",
+          "syncMarks": [
+            {
+              "id": "wait",
+              "label": "Waiting M-code: the range is parameters 8110/8111, the P word names the paths",
+              "match": {
+                "kind": "codes",
+                "codes": "M900-M999"
+              },
+              "partners": {
+                "kind": "word",
+                "address": "P",
+                "decode": "digits",
+                "whenAbsent": {
+                  "kind": "none"
+                }
+              }
+            },
+            {
+              "id": "by-pattern",
+              "label": "Waits found by a pattern",
+              "semantics": "count",
+              "match": {
+                "kind": "regex",
+                "pattern": "^\\s*M(?:30|99)\\b"
+              },
+              "partners": {
+                "kind": "all"
+              }
+            }
+          ],
+          "stopsAndEndsWait": true,
+          "futureOption": {
+            "note": "written by a later gEdit; kept as it is"
+          }
+        }
+      },
+      "notes": "Three paths; edited in the file."
+    }
+  ],
+  "defaults": {}
+}

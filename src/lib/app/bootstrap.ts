@@ -10,6 +10,8 @@
 //      without them and every consumer would have to re-evaluate. None of the three may
 //      throw — a broken file falls back to the defaults and the store shows the notice —
 //      so a failure here is logged and startup continues.
+//   2b. start the channel service (P12, §7.17): after the machines, before the first
+//      document, so its first resolution already sees the machine set
 //   3. load the contributions (this is where the initial untitled document appears, WP1.6)
 //   4. install the window key dispatcher
 //   5. watch the state behind the context, so the ribbon re-evaluates enablement
@@ -43,6 +45,7 @@ import { editor } from '$lib/monaco/editorService';
 import { getMonaco, type Monaco } from '$lib/monaco/setup';
 import { docs } from '$lib/stores/documents';
 import { layout } from '$lib/stores/layout';
+import { channels } from '$lib/stores/channels';
 import { machines } from '$lib/stores/machines';
 import { profiles } from '$lib/stores/profiles';
 import { settings } from '$lib/stores/settings';
@@ -143,6 +146,8 @@ export interface BootstrapDeps {
   loadUiState: () => Promise<unknown>;
   /** `machines.load(configLoad)` (P6, §7.15): the same round trip, no second read. */
   loadMachines: () => Promise<unknown>;
+  /** `channels.start()` (P12, §7.17): right after the machines; never throws. */
+  startChannels: () => Disposable;
   loadContributions: () => Promise<Disposable>;
   installDispatcher: () => Disposable;
   watchContext: (notify: () => void) => Disposable;
@@ -212,6 +217,7 @@ export function createStartApp(deps: BootstrapDeps): () => Promise<Disposable> {
     // `activate()`. Both loaders own their own error reporting and are contracted not to
     // throw; a broken one must still leave a usable editor behind.
     await loadPersisted(deps);
+    add(deps.startChannels());
 
     add(await deps.loadContributions());
     add(deps.installDispatcher());
@@ -277,6 +283,7 @@ export const startApp: () => Promise<Disposable> = createStartApp({
     if (!isTauriRuntime()) return;
     machines.load(await loadConfigOnce());
   },
+  startChannels: () => channels.start(),
   loadContributions,
   installDispatcher,
   watchContext,

@@ -1,0 +1,57 @@
+{
+  "input": "../nc/fanuc-lathe/c03-jump.nc",
+  "profile": "fanuc-lathe",
+  "machine": {
+    "channels": {
+      "layout": "single-file",
+      "list": [
+        {
+          "id": "1",
+          "name": "Channel 1"
+        },
+        {
+          "id": "2",
+          "name": "Channel 2"
+        }
+      ],
+      "sectionStart": "^O21\\d\\d(?![\\d.])",
+      "syncMarks": [
+        {
+          "id": "wait",
+          "label": "Wait M900-M999, P = path numbers",
+          "match": {
+            "kind": "codes",
+            "codes": "M900-M999"
+          },
+          "partners": {
+            "kind": "word",
+            "address": "P",
+            "decode": "digits",
+            "whenAbsent": {
+              "kind": "none"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "expect": {
+    "layout": "single-file",
+    "sections": [
+      {"channel":"1","ranges":[{"startLine":4,"endLine":22}]},
+      {"channel":"2","ranges":[{"startLine":23,"endLine":38}]}
+    ],
+    "outside": [{"startLine":1,"endLine":3}],
+    "marks": [
+      {"ruleId":"wait","mark":"M901","line":9,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M902","line":11,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M903","line":13,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M904","line":19,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M902","line":28,"channel":"2","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M901","line":30,"channel":"2","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M904","line":32,"channel":"2","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M903","line":34,"channel":"2","partners":["1","2"],"blocking":true}
+    ],
+    "problems": []
+  }
+}

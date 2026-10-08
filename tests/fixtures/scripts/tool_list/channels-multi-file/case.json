@@ -1,0 +1,12 @@
+{
+  "profile": "fanuc-lathe",
+  "channels": {
+    "layout": "multi-file",
+    "self": "2",
+    "list": [
+      { "id": "1", "name": "Channel 1", "open": false },
+      { "id": "2", "name": "Channel 2", "file": "part_CH2.nc", "path": "/jobs/part_CH2.nc", "open": true }
+    ],
+    "marks": []
+  }
+}

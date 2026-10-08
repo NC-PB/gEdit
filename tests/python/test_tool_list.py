@@ -94,6 +94,11 @@ REQUIRED_CASES = [
     "lathe-inch-surface",
     # The M9 review (F1): indexed spindle words are another spindle's.
     "sinumerik-indexed-spindles",
+    # M12 (WP12.6): the list per channel.
+    "channels-alternating",
+    "channels-multi-file",
+    "channels-selection",
+    "channels-two-section",
 ]
 
 
@@ -789,3 +794,100 @@ class TestSurfaceSpeedTag(unittest.TestCase):
         program = "\n".join(line for line in case.input_text().split("\n") if not line.startswith("G21"))
         result = helpers.run_script(SCRIPT, stdin=program, context=context)
         self.assertEqual(result.json()["rows"][0]["speed"], "220 ft/min (G96)")
+
+
+class TestChannels(unittest.TestCase):
+    """M12 (WP12.6, AD-32): a turret's tools are that turret's."""
+
+    def report_of(self, name):
+        case = next(case for case in helpers.script_cases("tool_list") if case.name == name)
+        result = run_case(case)
+        self.assertTrue(result.ok, result.stderr)
+        return result.json()
+
+    def run_golden(self, golden, program):
+        """The tool list of a channel program with the context the app builds for it."""
+        base = helpers.FIXTURES_DIR / "channels"
+        context = helpers.channel_context(base / "resolve" / golden)
+        result = helpers.run_script(SCRIPT, stdin=helpers.read_text(base / "nc" / "fanuc-lathe" / program), context=context)
+        self.assertTrue(result.ok, result.stderr)
+        return result.json(), context
+
+    def test_a_channel_column_comes_first_and_the_rows_are_grouped_by_channel(self):
+        report = self.report_of("channels-alternating")
+        self.assertEqual([column["key"] for column in report["columns"]][:2], ["channel", "tool"])
+        self.assertEqual(
+            [(row["channel"], row["tool"]) for row in report["rows"]],
+            [("Channel 1", "T1"), ("Channel 1", "T3"), ("Channel 2", "T2"), ("Outside the channels", "T9")],
+        )
+
+    def test_a_channels_rows_come_from_all_of_its_ranges_in_document_order(self):
+        rows = self.report_of("channels-alternating")["rows"]
+        # T1 is called in both sections of channel 1: one row, two calls, first call in the first.
+        t1 = next(row for row in rows if row["tool"] == "T1")
+        self.assertEqual((t1["calls"], t1["line"]), (2, 5))
+        self.assertEqual(t1["feed"], "0.25-0.3 /rev")
+        t2 = next(row for row in rows if row["tool"] == "T2")
+        self.assertEqual((t2["calls"], t2["line"], t2["feed"]), (2, 9, "0.08-0.1 /rev"))
+
+    def test_the_summary_names_the_channels(self):
+        self.assertEqual(self.report_of("channels-two-section")["message"], "Channel 1: 1 tool; Channel 2: 1 tool")
+        self.assertEqual(
+            self.report_of("channels-alternating")["message"],
+            "Channel 1: 2 tools; Channel 2: 1 tool; Outside the channels: 1 tool",
+        )
+
+    def test_the_header_tool_list_describes_a_tool_called_in_a_section(self):
+        rows = self.report_of("channels-two-section")["rows"]
+        self.assertEqual(rows[1]["description"], "CENTRE DRILL")
+
+    def test_a_row_names_the_document_line_not_the_index_in_the_channel(self):
+        rows = self.report_of("channels-alternating")["rows"]
+        self.assertEqual([row["line"] for row in rows if row["channel"] == "Channel 2"], [9])
+
+    def test_a_selection_lists_the_tools_of_each_channel_inside_it(self):
+        report = self.report_of("channels-selection")
+        self.assertEqual(
+            [(row["channel"], row["tool"], row["line"]) for row in report["rows"]],
+            [("Channel 1", "T1", 14), ("Channel 1", "T3", 16), ("Channel 2", "T2", 9)],
+        )
+
+    def test_a_one_file_per_channel_document_says_which_channel_it_is(self):
+        report = self.report_of("channels-multi-file")
+        self.assertEqual([column["key"] for column in report["columns"]][0], "tool")
+        self.assertNotIn("channel", report["rows"][0])
+        self.assertEqual(report["message"], "1 tool. This document is Channel 2; the other channels are separate runs.")
+
+    def test_the_generated_context_of_the_alternating_program_groups_it_too(self):
+        report, _ = self.run_golden("c10-alternating.json", "c10-alternating.nc")
+        self.assertEqual(
+            [(row["channel"], row["tool"], row["line"]) for row in report["rows"]],
+            [("Channel 1", "T1", 7), ("Channel 1", "T3", 22), ("Channel 2", "T2", 15), ("Channel 2", "T4", 29)],
+        )
+        self.assertEqual(report["message"], "Channel 1: 2 tools; Channel 2: 2 tools")
+
+    def test_the_generated_context_of_a_channel_file_names_the_channel(self):
+        report, _ = self.run_golden("c06-part_CH1.json", "c06-part_CH1.nc")
+        self.assertTrue(report["message"].endswith("This document is Channel 1; the other channels are separate runs."))
+        self.assertNotIn("channel", report["rows"][0])
+
+    def test_a_program_without_channels_is_listed_exactly_as_before(self):
+        # c05 is read with a channel machine and has no section: the context carries no member,
+        # and the report is the one the same run without any channel context gives.
+        listed, context = self.run_golden("c05-one-channel.json", "c05-one-channel.nc")
+        self.assertNotIn("channels", context)
+        text = helpers.read_text(helpers.FIXTURES_DIR / "channels" / "nc" / "fanuc-lathe" / "c05-one-channel.nc")
+        again = helpers.run_script(SCRIPT, stdin=text, context=dict(context))
+        self.assertEqual(listed, again.json())
+        self.assertEqual([column["key"] for column in listed["columns"]][0], "tool")
+        self.assertNotIn("channel", listed["rows"][0])
+
+    def test_a_context_that_says_none_changes_nothing(self):
+        for case in helpers.script_cases("tool_list"):
+            if case.name.startswith("channels-"):
+                continue
+            with self.subTest(case=case.name):
+                context = context_of(case)
+                context["channels"] = {"layout": "none", "list": [], "marks": []}
+                result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context)
+                self.assertEqual(result.json(), case.expected_json())

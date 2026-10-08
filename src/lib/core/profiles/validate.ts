@@ -43,6 +43,7 @@ import { normalizeCode } from '$lib/core/codes/lookup';
 import { COMPARE_OPTION_KEYS } from '$lib/core/compare/types';
 import type { Eol } from '$lib/app/types';
 import type { NumberClass, NumberReading, ParamSource } from '$lib/core/machines/types';
+import { validateChannels } from '$lib/core/machines/validate';
 import type { OutlineKind, Profile, ProfileValidation } from './types';
 
 /** What `validateProfile` cannot see in the profile itself (see the header). */
@@ -712,7 +713,10 @@ function checkOutline(value: unknown, p: Problems): void {
   outline.forEach((entry, i) => {
     const rule = obj(entry, `outline[${i}]`, p);
     if (!rule) return;
-    enumOf(rule.kind, `outline[${i}].kind`, p, OUTLINE_KINDS);
+    // M12 (P12, §7.14): channel groups and wait marks come from the channel service only.
+    if (rule.kind === 'channel' || rule.kind === 'sync') {
+      p.add(`outline[${i}].kind`, `"${rule.kind}" rows are made by the channel service, not by a profile's outline rules`);
+    } else enumOf(rule.kind, `outline[${i}].kind`, p, OUTLINE_KINDS);
     pattern(rule.pattern, `outline[${i}].pattern`, p);
   });
 }
@@ -925,6 +929,8 @@ function checkMachineParams(root: Record<string, unknown>, p: Problems, o: Profi
     });
   }
 
+  checkChannelPresets(decl.channels, p);
+
   const numberInput = optObj(decl.numberInput, 'machineParams.numberInput', p);
   if (!numberInput) return;
 
@@ -970,6 +976,39 @@ function checkMachineParams(root: Record<string, unknown>, p: Problems, o: Profi
       }`,
     );
   }
+}
+
+/**
+ * M12 (P12, §8.9): `machineParams.channels` — the wait letters and the channel presets a
+ * machine may start from. The shape is checked here; each preset's `value` goes through the
+ * same `validateChannels` a stored machine does (WP12.3), so a built-in preset can never be
+ * a block the Machines page would refuse.
+ */
+function checkChannelPresets(value: unknown, p: Problems): void {
+  const decl = optObj(value, 'machineParams.channels', p);
+  if (!decl) return;
+  if (decl.waitLetters !== undefined) strArr(decl.waitLetters, 'machineParams.channels.waitLetters', p, { allow: /^[A-Z]$/ });
+  const letters = Array.isArray(decl.waitLetters) ? decl.waitLetters.filter((l): l is string => typeof l === 'string') : undefined;
+  const presets = arr(decl.presets, 'machineParams.channels.presets', p);
+  const ids = new Set<string>();
+  presets?.forEach((entry, i) => {
+    const at = `machineParams.channels.presets[${i}]`;
+    const preset = obj(entry, at, p);
+    if (!preset) return;
+    const id = str(preset.id, `${at}.id`, p, PRESET_ID);
+    if (id !== null) {
+      if (ids.has(id)) p.add(`${at}.id`, `"${id}" is already taken`);
+      ids.add(id);
+    }
+    str(preset.label, `${at}.label`, p);
+    optStr(preset.source, `${at}.source`, p);
+    optBool(preset.verify, `${at}.verify`, p);
+    if (obj(preset.value, `${at}.value`, p)) {
+      for (const problem of validateChannels(preset.value, `${at}.value`, null, { waitLetters: letters })) {
+        p.add(problem.path, problem.message);
+      }
+    }
+  });
 }
 
 function checkNumberFormat(value: unknown, p: Problems): void {

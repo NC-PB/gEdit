@@ -1,0 +1,34 @@
+{
+  "comment": "Written for gEdit (synthetic, not for a machine); see README.md here.",
+  "description": "As fanuc-2path-stops-and-ends, both paths with M01 and M30: no finding.",
+  "profile": "fanuc-lathe",
+  "preset": "fanuc-2path",
+  "machine": {
+    "stopsAndEndsWait": true
+  },
+  "program": {
+    "1": [
+      "%",
+      "O2003 (PATH 1)",
+      "(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)",
+      "N10 M901 P3",
+      "N20 M01",
+      "N30 M902",
+      "N40 M30",
+      "%"
+    ],
+    "2": [
+      "%",
+      "O2003 (PATH 2)",
+      "(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)",
+      "N10 M901 P3",
+      "N20 M01",
+      "N30 M902",
+      "N40 M30",
+      "%"
+    ]
+  },
+  "expect": {
+    "findings": []
+  }
+}

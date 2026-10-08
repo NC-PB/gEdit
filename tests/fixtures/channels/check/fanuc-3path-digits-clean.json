@@ -1,0 +1,47 @@
+{
+  "comment": "Written for gEdit (synthetic, not for a machine); see README.md here.",
+  "description": "Fanuc three-path, P as path numbers (parameter 8103#1 = 1): P123, P321 (order free), P12 between paths 1 and 2 only, P13 between 1 and 3 only, M0901 written with a leading zero (the control reads M901). Correct: no finding.",
+  "profile": "fanuc-lathe",
+  "preset": "fanuc-3path-digits",
+  "program": {
+    "1": [
+      "%",
+      "O3001 (PATH 1)",
+      "(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)",
+      "N10 T0101",
+      "N20 M901 P123",
+      "N30 G0 X50. Z2.",
+      "N40M902P12",
+      "N50 M903 P13",
+      "N60 M904 P123",
+      "N70 M30",
+      "%"
+    ],
+    "2": [
+      "%",
+      "O3001 (PATH 2)",
+      "(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)",
+      "N10 T0202",
+      "N20 M901 P321",
+      "N30 M902 P21",
+      "N40 G1 Z-10. F0.1",
+      "N50 M904 P123",
+      "N60 M30",
+      "%"
+    ],
+    "3": [
+      "%",
+      "O3001 (PATH 3)",
+      "(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)",
+      "N10 T0303",
+      "N20 M0901 P123",
+      "N30 M903 P31",
+      "N40 M904P123",
+      "N50 M30",
+      "%"
+    ]
+  },
+  "expect": {
+    "findings": []
+  }
+}

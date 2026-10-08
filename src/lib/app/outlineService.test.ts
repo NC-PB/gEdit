@@ -5,14 +5,17 @@
 // The document store is the real one (a plain svelte/store module); Monaco is replaced by
 // a fake that only holds lines and fires the two events the service listens to.
 
-import { get } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { describe, expect, it } from 'vitest';
 import { BUILTIN_PROFILE_JSON } from '$lib/data/profiles';
 import { compileProfile } from '$lib/core/profiles/compile';
 import { validateProfile } from '$lib/core/profiles/validate';
 import { createDocumentStore } from '$lib/stores/documents';
-import { createOutlineService, type OutlineServiceDeps, type OutlineServiceInternals } from './outlineService';
+import { cpOf } from '../../../tests/unit/helpers/profiles';
+import { computeJumpLines, createOutlineService, groupByChannel, reuseRows, SYNC_ROWS_MAX, type OutlineServiceDeps, type OutlineServiceInternals } from './outlineService';
+import { expectWithin, fastest } from '../../../tests/unit/helpers/budget';
 import type { CompiledProfile } from '$lib/core/profiles/types';
+import type { ChannelSet } from '$lib/core/channels/types';
 import type { ContentChange, Disposable, DocId, DocumentStore, Eol, FileEncoding, NewDocMeta } from '$lib/app/types';
 
 const FANUC = 'fanuc-gcode';
@@ -419,5 +422,222 @@ describe('itemAt', () => {
 
     h.edit(id, 4, '(FINISH)');
     expect(h.outline.itemAt(id, 4)?.kind).toBe('comment');
+  });
+});
+
+// --- M12: the grouped program map, the channel's tool lines, the jump lines --------------
+
+const SECTIONS: ChannelSet = {
+  layout: 'single-file',
+  self: null,
+  members: [
+    { kind: 'section', channel: { id: '1', name: 'Turret A', index: 0 }, docId: 'd1', ranges: [{ startLine: 3, endLine: 6 }] },
+    { kind: 'section', channel: { id: '2', name: 'Turret B', index: 1 }, docId: 'd1', ranges: [{ startLine: 7, endLine: 9 }, { startLine: 11, endLine: 12 }] },
+  ],
+  missing: [],
+  outside: [{ startLine: 1, endLine: 2 }, { startLine: 10, endLine: 10 }],
+  marks: [
+    { ruleId: 'w', mark: 'M901', line: 5, channel: '1', partners: ['2'], blocking: true },
+    { ruleId: 'w', mark: 'M902', line: 8, channel: '2', partners: ['1'], blocking: false },
+    { ruleId: 'w', mark: 'M903', line: 12, channel: '2', partners: ['1'], blocking: true },
+    { ruleId: 'stops-and-ends', mark: '', line: 12, channel: '2', partners: ['1'], blocking: true },
+  ],
+  problems: [],
+  truncated: false,
+};
+
+describe('the program map with channels', () => {
+  const lines = ['O1000 (MAIN)', '(HEAD)', 'G13', 'T1 M6', 'M901', 'X1.', 'G14', 'T2 M6', 'M902', '(SHARED)', 'G14', 'M903'].join('\n');
+
+  it('groups the items by channel, from every range, with the blocking marks as sync rows', () => {
+    const h = harness({
+      channels: { forDoc: () => SECTIONS, revision: writable(0), ruleLabel: () => 'Waits' },
+    });
+    const id = h.add(lines);
+    h.flush();
+    const rows = get(h.outline.items(id));
+    expect(rows.map((r) => [r.kind, r.text])).toEqual([
+      ['channel', 'Turret A'],
+      ['channel', 'Turret B'],
+      ['channel', 'Outside the channels'],
+    ]);
+    const kids = (n: number): string[] => (rows[n].children ?? []).map((c) => `${c.kind}:${c.line}`);
+    expect(kids(0)).toEqual(['tool:4', 'sync:5']);
+    expect(kids(1)).toEqual(['tool:8', 'sync:12']);
+    expect(kids(2)).toContain('program:1');
+    expect((rows[2] as { channelId?: string }).channelId).toBe('');
+    // The stops-and-ends mark is the program-end row already; the non-blocking mark is not a row.
+    expect(groupByChannel([], SECTIONS, (m) => m.mark)[1].children?.map((c) => c.text)).toEqual(['M903']);
+  });
+
+  it('is the P1 tree for a document without channels, and republishes when the channels change', () => {
+    const revision = writable(0);
+    let set: ChannelSet = { ...SECTIONS, layout: 'none', members: [] };
+    const h = harness({ channels: { forDoc: () => set, revision, ruleLabel: () => '' } });
+    const id = h.add(lines);
+    h.flush();
+    expect(get(h.outline.items(id))[0].kind).toBe('program');
+    set = SECTIONS;
+    revision.update((n) => n + 1);
+    h.flush();
+    expect(get(h.outline.items(id))[0].kind).toBe('channel');
+  });
+
+  it('toolLines(id) is the P1 list and toolLines(id, channel) the lines inside that channel', () => {
+    const plain = harness();
+    const a = plain.add(lines);
+    plain.flush();
+    const h = harness({ channels: { forDoc: () => SECTIONS, revision: writable(0), ruleLabel: () => '' } });
+    const id = h.add(lines);
+    h.flush();
+    expect(h.outline.toolLines(id)).toEqual(plain.outline.toolLines(a));
+    expect(h.outline.toolLines(id)).toEqual([4, 8]);
+    expect(h.outline.toolLines(id, '1')).toEqual([4]);
+    expect(h.outline.toolLines(id, '2')).toEqual([8]);
+  });
+});
+
+describe('the program map of a big program with channels (M12 performance fix F1)', () => {
+  /** Two sections of `perChannel` lines each, a wait every 15th line, a tool every 3,000th. */
+  function big(perChannel: number): { lines: string[]; set: ChannelSet } {
+    const lines = ['%'];
+    const marks: ChannelSet['marks'] = [];
+    const ranges: { startLine: number; endLine: number }[] = [];
+    for (const channel of ['1', '2']) {
+      const start = lines.length + 1;
+      lines.push(`O210${channel}`);
+      for (let i = 1; i <= perChannel; i++) {
+        if (i % 3000 === 1) lines.push(`T0${channel}01 M6`);
+        else if (i % 15 === 0) {
+          lines.push(`M${900 + (i % 100)} P12`);
+          marks.push({ ruleId: 'w', mark: `M${900 + (i % 100)}`, line: lines.length, channel, partners: [channel === '1' ? '2' : '1'], blocking: true });
+        } else lines.push(`G01 X${i % 80}.25 Z-1. F0.2`);
+      }
+      ranges.push({ startLine: start, endLine: lines.length });
+    }
+    const set: ChannelSet = {
+      layout: 'single-file',
+      self: null,
+      members: [
+        { kind: 'section', channel: { id: '1', name: 'Channel 1', index: 0 }, docId: 'd', ranges: [ranges[0]] },
+        { kind: 'section', channel: { id: '2', name: 'Channel 2', index: 1 }, docId: 'd', ranges: [ranges[1]] },
+      ],
+      missing: [],
+      outside: [{ startLine: 1, endLine: 1 }],
+      marks,
+      problems: [],
+      truncated: false,
+    };
+    return { lines, set };
+  }
+
+  it('lists a channel’s waits up to the cap, and past it one row with their number on the first wait', () => {
+    const few = big(SYNC_ROWS_MAX * 15);
+    const rows = groupByChannel([], few.set, (m) => m.mark);
+    expect(rows[0].children?.filter((c) => c.kind === 'sync')).toHaveLength(SYNC_ROWS_MAX);
+    const many = big(150_000);
+    const grouped = groupByChannel([], many.set, (m) => m.mark);
+    for (const [n, channel] of [[0, '1'], [1, '2']] as const) {
+      const sync = (grouped[n].children ?? []).filter((c) => c.kind === 'sync');
+      const first = many.set.marks.find((m) => m.channel === channel);
+      expect(sync).toEqual([{ kind: 'sync', line: first?.line, text: '10000 wait codes (Alt+F7 steps through them)', count: 10_000 }]);
+    }
+  });
+
+  it('keeps the rows an edit did not change, so the panel redraws only the changed ones', () => {
+    const { lines, set } = big(150_000);
+    const h = harness({ channels: { forDoc: () => set, revision: writable(0), ruleLabel: () => '' }, chunkLines: 20_000 });
+    const id = h.add(lines.join('\n'));
+    h.flush();
+    const before = get(h.outline.items(id));
+    expect(before[0].children?.length).toBeLessThan(SYNC_ROWS_MAX);
+    // A tool written over a motion line of channel 1 (no line moves).
+    h.edit(id, 20_000, 'T09 M6');
+    h.flush();
+    const after = get(h.outline.items(id));
+    const tools = (n: number, rows: typeof after) => (rows[n].children ?? []).filter((c) => c.kind === 'tool').map((c) => c.line);
+    expect(tools(0, after)).toContain(20_000);
+    expect(after[1]).toBe(before[1]); // channel 2 untouched: the same object
+    expect(after[0].children?.[0]).toBe(before[0].children?.[0]); // the rows before the edit too
+    expect(reuseRows(after, groupByChannel([], set, (m) => m.mark))).not.toBe(after);
+  });
+
+  it('does not push an edit’s publish back when the channels change while it waits', () => {
+    const revision = writable(0);
+    const queue: { fn: () => void; ms: number; cancelled: boolean }[] = [];
+    const schedule = (fn: () => void, ms: number) => {
+      const task = { fn, ms, cancelled: false };
+      queue.push(task);
+      return () => {
+        task.cancelled = true;
+      };
+    };
+    const drain = (): void => {
+      for (let task = queue.find((t) => !t.cancelled); task !== undefined; task = queue.find((t) => !t.cancelled)) {
+        queue.splice(queue.indexOf(task), 1);
+        task.fn();
+      }
+    };
+    const h = harness({ schedule, channels: { forDoc: () => SECTIONS, revision, ruleLabel: () => '' } });
+    const id = h.add(['O1000 (MAIN)', 'G13', 'T1 M6', 'M901', 'X1.'].join('\n'));
+    drain();
+    h.edit(id, 5, 'T3 M6');
+    const waiting = queue.filter((t) => !t.cancelled && t.ms === 150);
+    expect(waiting).toHaveLength(1);
+    // The channels re-resolve on their own 150 ms, just before the map's publish runs.
+    revision.update((n) => n + 1);
+    expect(waiting[0].cancelled).toBe(false);
+    expect(queue.filter((t) => !t.cancelled && t.ms === 150)).toEqual(waiting);
+  });
+
+  it('publishes the grouped map of 300k lines with 20,000 waits after an edit within the outline budget (G7)', () => {
+    const { lines, set } = big(150_000);
+    const h = harness({ channels: { forDoc: () => set, revision: writable(0), ruleLabel: () => '' }, chunkLines: 20_000 });
+    const id = h.add(lines.join('\n'));
+    h.flush();
+    let n = 0;
+    const ms = fastest(3, () => {
+      h.edit(id, 20_000 + (n++ % 2), n % 2 === 0 ? 'T09 M6' : 'G01 X1.');
+      h.flush();
+    });
+    // The index's own aggregation is P1's; the grouping and the row reuse add little to it.
+    expectWithin(ms, 200, 'grouped map after an edit, 300k lines, 20,000 waits');
+  });
+});
+
+describe('computeJumpLines', () => {
+  const lathe = cpOf('fanuc-lathe');
+  const channelOf = (line: number): string => (line <= 6 ? 'a' : 'b');
+
+  it('names a targeted block number and a backward jump, and not a plain number', () => {
+    const lines = ['N10 G0 X1.', 'N20 M901 P12', 'N30 G1 X2.', 'GOTO 10', 'N40 M902 P12', 'N50 G0'];
+    expect(computeJumpLines(lines, lathe, () => 'a')).toEqual({ a: [1, 4] });
+  });
+
+  it('keeps a jump inside its own channel', () => {
+    const lines = ['N10 G0', 'M901', 'GOTO 10', 'M902', 'G0', 'M903', 'N10 G1', 'M904'];
+    expect(computeJumpLines(lines, lathe, channelOf)).toEqual({ a: [1, 3] });
+  });
+
+  it('counts a line of a shared section in each of its channels', () => {
+    const lines = ['N10 G0', 'M901', 'GOTO 10', 'M902'];
+    expect(computeJumpLines(lines, lathe, () => ['a', 'b'])).toEqual({ a: [1, 3], b: [1, 3] });
+    // An empty list is "outside every section".
+    expect(computeJumpLines(lines, lathe, () => [])).toEqual({ '': [1, 3] });
+  });
+
+  it('is empty for a program with no jump', () => {
+    expect(computeJumpLines(['N10 M901', 'N20 M902'], lathe, () => 'a')).toEqual({});
+  });
+
+  it('names the first and the last line of a Fanuc WHILE/DO/END loop (NC-04)', () => {
+    const lines = ['G0 X1.', 'WHILE[#1LT2]DO1', 'M901', '#1=#1+1', 'END1', 'M902'];
+    expect(computeJumpLines(lines, lathe, () => 'a')).toEqual({ a: [2, 5] });
+  });
+
+  it('names the loop lines of a Sinumerik REPEAT, WHILE, FOR and LOOP, per channel', () => {
+    const sinu = cpOf('sinumerik');
+    const lines = ['REPEAT', 'WAITM(1,1,2)', 'UNTIL R1>3', 'N10 WHILE R1<3', 'R1=R1+1', 'ENDWHILE', 'LOOP', 'ENDLOOP', 'FOR R1=1 TO 3', 'ENDFOR', '; WHILE in a comment'];
+    expect(computeJumpLines(lines, sinu, (line) => (line <= 6 ? 'a' : 'b'))).toEqual({ a: [1, 3, 4, 6], b: [7, 8, 9, 10] });
   });
 });

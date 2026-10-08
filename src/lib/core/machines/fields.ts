@@ -24,6 +24,7 @@
 // labels, code labels and machine names are **data** and stay as the JSON has them (AD-14).
 
 import { hasKey, t } from '$lib/i18n';
+import type { ChannelParams } from '$lib/core/channels/types';
 import type { CodeDb, CodeEntry } from '$lib/core/codes/types';
 import type { FieldChoice, FieldSpec } from '$lib/core/forms/types';
 import type { MachineParamsDecl, NumberInputPreset, VariantDecl } from '$lib/core/profiles/types';
@@ -273,8 +274,17 @@ export function machineFromValues(
   decl: MachineParamsDecl,
   values: Record<string, unknown>,
   current?: MachineConfig,
+  o: { channels?: ChannelParams } = {},
 ): { name: string; notes: string; params: Partial<MachineParams> } {
   const params: Partial<MachineParams> = current?.params ? clone(current.params) : {};
+
+  // The Channels step edits a block of its own (outside the `FieldSpec` values): when the
+  // caller passes `channels` the block is replaced by it, and removed when it is `undefined`
+  // ("No channels"). Without the option the stored block is kept as it is.
+  if ('channels' in o) {
+    if (o.channels === undefined) delete params.channels;
+    else params.channels = clone(o.channels);
+  }
 
   const presetId = values[FIELD_NUMBER_INPUT];
   if (typeof presetId === 'string' && presetId !== '' && presetId !== CUSTOM_PRESET) {

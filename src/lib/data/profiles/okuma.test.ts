@@ -718,8 +718,9 @@ describe('the machine parameters', () => {
     expect(decl?.variants?.map((v) => v.id)).toEqual(['toolWord']);
     expect(okuma.profile.modal?.initial).toEqual({ feedmode: 'G95', distance: 'G90' });
     expect(okuma.profile.machineType).toBe('lathe');
-    // No built-in ships a channel preset in Phase 2 (§8.9, D58).
-    expect((decl as Record<string, unknown> | undefined)?.channels).toBeUndefined();
+    // M12 (P12, §8.9): channel presets are offered, never applied, all `verify`;
+    // `channelPresets.test.ts` pins them.
+    for (const preset of decl?.channels?.presets ?? []) expect(preset.verify, preset.id).toBe(true);
     // Every offered group is a modal group of the profile's own database.
     const groups = modalGroupsOf(BUILTIN_CODE_DB_JSON as Record<string, unknown>, okuma.profile.codes);
     for (const group of decl?.modalGroups ?? []) expect(groups, group).toContain(group);

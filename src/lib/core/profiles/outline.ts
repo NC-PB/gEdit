@@ -54,6 +54,14 @@ export interface OutlineItem {
   text: string;
   /** Tool number of a `tool` item, as written in the program. */
   tool?: string;
+  /** `channel` rows of a program with channels: the channel's id, `''` for "Outside the channels". */
+  channelId?: string;
+  /**
+   * A `sync` row that stands for all of its channel's waits (M12 performance fix F1): the map
+   * lists a channel's waits one by one up to `SYNC_ROWS_MAX` and past it shows this one row,
+   * on the first wait's line, with their number.
+   */
+  count?: number;
   children?: OutlineItem[];
 }
 

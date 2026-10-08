@@ -764,6 +764,8 @@ def build(
     codes: Sequence[Dict[str, Any]],
     base_line: int,
     preceding: Optional[Sequence[str]] = None,
+    line_numbers: Optional[Sequence[int]] = None,
+    listed_in: Optional[Sequence[str]] = None,
 ) -> Tuple[List[Row], List[Dict[str, Any]], int, int]:
     """Walks the program once.
 
@@ -777,6 +779,12 @@ def build(
     range and the rpm range instead of quietly widening them. They are **not** scanned for
     tool calls: a tool changed above the selection is not called inside it, and inventing a
     row for it would report a tool the user did not select.
+
+    ``line_numbers`` (M12) are the document line numbers of ``lines`` when they are not
+    consecutive: the lines of one channel of a ``single-file`` program, which may lie in
+    several sections (``gedit_nc.channel_line_numbers``). Without them line ``i`` is
+    ``base_line + i``. ``listed_in`` are lines whose ``(T5  D12 ...)`` comments describe
+    tools without being walked, the header of a program whose tools are called in sections.
     """
     marks: List[Optional[Mark]] = [classify(line, cp, spec) for line in lines]
 
@@ -784,6 +792,12 @@ def build(
     by_key: Dict[str, Row] = {}
     findings: List[Dict[str, Any]] = []
     from_list: Dict[str, str] = {}
+    for text in listed_in or ():
+        header = classify(text, cp, spec)
+        if header is not None and header.kind in ("comment", "section"):
+            listed = tool_list_entry(header.description)
+            if listed is not None and listed[0] not in from_list:
+                from_list[listed[0]] = listed[1]
     last_tool: Optional[str] = None
     #: That `T` word unloads the spindle (`T0`, `Mark.unload`).
     last_unload = False
@@ -822,7 +836,7 @@ def build(
         tracker.update(tokens, continued=gedit_nc.continues_block(line, cp))
         surface.read(tracker.written)
         mark = marks[i]
-        number_line = base_line + i
+        number_line = line_numbers[i] if line_numbers is not None else base_line + i
 
         if mark is not None:
             # The tool in the spindle before this line, for `is_speed_only` — a Klartext
@@ -1140,6 +1154,101 @@ def summary(rows: Sequence[Row], unnamed: int, tool_words: int = 0, lathe: bool 
     return "%s, %d without a description" % (count, without)
 
 
+class Group:
+    """The lines of one channel (or of the lines no channel owns), ready for :func:`build`."""
+
+    __slots__ = ("channel", "name", "lines", "numbers", "preceding")
+
+    def __init__(
+        self,
+        channel: Optional[str],
+        name: str,
+        lines: List[str],
+        numbers: List[int],
+        preceding: Optional[List[str]],
+    ) -> None:
+        #: The channel id; ``None`` for the lines outside every channel.
+        self.channel = channel
+        self.name = name
+        self.lines = lines
+        #: The document line number of each of ``lines``.
+        self.numbers = numbers
+        self.preceding = preceding
+
+
+OUTSIDE_NAME = "Outside the channels"
+
+
+def channel_groups(
+    context: Dict[str, Any],
+    lines: Sequence[str],
+    base_line: int,
+    preceding: Sequence[str],
+) -> Optional[List[Group]]:
+    """One :class:`Group` per channel of a ``single-file`` document, plus the outside lines.
+
+    ``None`` when the context has no sections to group by (no ``channels`` member, or the
+    ``multi-file`` layout, whose document is one channel already): the caller then walks the
+    whole input as it always did. A channel with no line inside the input (a selection that
+    does not touch it) is left out. Lines outside every channel are a group of their own,
+    last, and are listed only if a tool is called there — a shared subprogram, say.
+    """
+    member = gedit_nc.channels(context)
+    if member["layout"] != "single-file":
+        return None
+    # The lines above a selection, cut to each channel the same way as the input is.
+    above_context = {"channels": context.get("channels"), "input": {"scope": "document", "startLine": 1, "endLine": 0}}
+    groups: List[Group] = []
+    for entry in member["list"]:
+        channel_id = entry.get("id")
+        if not isinstance(channel_id, str):
+            continue
+        numbers = gedit_nc.channel_line_numbers(context, lines, channel_id)
+        if not numbers:
+            continue
+        name = entry.get("name") if isinstance(entry.get("name"), str) and entry.get("name") else channel_id
+        primed = None
+        if preceding:
+            kept = gedit_nc.channel_line_numbers(above_context, preceding, channel_id)
+            primed = [preceding[number - 1] for number in kept] or None
+        groups.append(Group(channel_id, name, [lines[n - base_line] for n in numbers], numbers, primed))
+    if not groups:
+        return None
+    numbers = gedit_nc.outside_line_numbers(context, lines)
+    if numbers:
+        groups.append(Group(None, OUTSIDE_NAME, [lines[n - base_line] for n in numbers], numbers, None))
+    return groups
+
+
+def own_channel(context: Dict[str, Any]) -> Optional[str]:
+    """The name of the channel this document is, for a one-file-per-channel machine."""
+    member = gedit_nc.channels(context)
+    if member["layout"] != "multi-file" or not isinstance(member["self"], str):
+        return None
+    for entry in member["list"]:
+        if entry.get("id") == member["self"]:
+            name = entry.get("name")
+            return name if isinstance(name, str) and name else member["self"]
+    return member["self"]
+
+
+def grouped_summary(
+    grouped: Sequence[Tuple[Optional[Group], List[Row]]], unnamed: int, tool_words: int, lathe: bool
+) -> str:
+    """``Channel 1: 3 tools; Channel 2: 2 tools, 1 without a description`` for the table above."""
+    if not any(rows for _, rows in grouped):
+        return summary([], unnamed, tool_words, lathe)
+    parts: List[str] = []
+    for group, rows in grouped:
+        if group is None:
+            continue
+        if group.channel is None and not rows:
+            continue
+        label = group.name
+        parts.append("%s: %s" % (label, summary(rows, 0).rstrip(".").replace("No tool changes found", "no tool changes")))
+    return "; ".join(parts)
+
+
 def main() -> int:
     """Reads the context and stdin, writes the report to stdout, and answers the exit code."""
     context = gedit_nc.load_context()
@@ -1171,13 +1280,40 @@ def main() -> int:
     # The lines above a selection, when the context carries all of them; they prime the
     # feed-mode tracker and are not scanned for tool calls. See `build`.
     preceding = gedit_nc.preceding_lines(context)
-    rows, findings, unnamed, tool_words = build(lines, cp, spec, codes, base_line, preceding)
+
+    # M12 (AD-32): a program whose channels are sections of one file is listed per channel,
+    # because a turret's tools are that turret's. A program without channels, and the
+    # document of a one-file-per-channel machine, walk the whole input exactly as before.
+    groups = channel_groups(context, lines, base_line, preceding)
+    grouped: List[Tuple[Optional[Group], List[Row]]] = []
+    findings: List[Dict[str, Any]] = []
+    unnamed = tool_words = 0
+    if groups is None:
+        rows, findings, unnamed, tool_words = build(lines, cp, spec, codes, base_line, preceding)
+        grouped.append((None, rows))
+    else:
+        outside = gedit_nc.outside_lines(context, lines)
+        for group in groups:
+            g_rows, g_findings, g_unnamed, g_words = build(
+                group.lines, cp, spec, codes, base_line, group.preceding, group.numbers,
+                outside if group.channel is not None else None,
+            )
+            grouped.append((group, g_rows))
+            prefix = "%s: " % group.name
+            findings.extend(dict(f, message=prefix + f["message"]) for f in g_findings)
+            unnamed += g_unnamed
+            tool_words += g_words
+        findings.sort(key=lambda finding: finding["line"])
+    rows = [row for _, g_rows in grouped for row in g_rows]
 
     # The offsets are a turret's, and a milling program has none: the column appears only
     # when a call carried one, so a mill report is exactly what it always was.
     offsets = any(row.offsets for row in rows)
 
-    columns = [{"key": "tool", "label": "Tool"}]
+    columns: List[Dict[str, str]] = []
+    if groups is not None:
+        columns.append({"key": "channel", "label": "Channel"})
+    columns.append({"key": "tool", "label": "Tool"})
     if offsets:
         columns.append({"key": "offsets", "label": "Offsets"})
     columns.append({"key": "description", "label": "Description"})
@@ -1188,23 +1324,36 @@ def main() -> int:
         columns.append({"key": "speed", "label": "Speed"})
 
     table: List[Dict[str, Any]] = []
-    for row in rows:
-        entry: Dict[str, Any] = {"tool": row.label}
-        if offsets:
-            entry["offsets"] = ", ".join(row.offsets)
-        entry["description"] = row.description or ""
-        entry["line"] = row.line
-        entry["calls"] = row.calls
-        if spec.feed_speed:
-            entry["feed"] = range_text(row.feeds, row.feed_unit)
-            entry["speed"] = range_text(
-                row.speeds, row.speed_unit, row.surface_tag() if row.speed_unit == "surface" else None
-            )
-        table.append(entry)
+    for group, g_rows in grouped:
+        for row in g_rows:
+            entry: Dict[str, Any] = {}
+            if group is not None:
+                entry["channel"] = group.name
+            entry["tool"] = row.label
+            if offsets:
+                entry["offsets"] = ", ".join(row.offsets)
+            entry["description"] = row.description or ""
+            entry["line"] = row.line
+            entry["calls"] = row.calls
+            if spec.feed_speed:
+                entry["feed"] = range_text(row.feeds, row.feed_unit)
+                entry["speed"] = range_text(
+                    row.speeds, row.speed_unit, row.surface_tag() if row.speed_unit == "surface" else None
+                )
+            table.append(entry)
 
-    gedit_nc.report(
-        "Tool list", columns, table, summary(rows, unnamed, tool_words, spec.lathe), findings
-    )
+    if groups is None:
+        message = summary(rows, unnamed, tool_words, spec.lathe)
+        own = own_channel(context)
+        if own is not None:
+            message = "%s. This document is %s; the other channels are separate runs." % (
+                message.rstrip("."),
+                own,
+            )
+    else:
+        message = grouped_summary(grouped, unnamed, tool_words, spec.lathe)
+
+    gedit_nc.report("Tool list", columns, table, message, findings)
     return 0
 
 

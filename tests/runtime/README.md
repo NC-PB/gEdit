@@ -81,7 +81,7 @@ tests/runtime/suite.sh tests/runtime/suites/m0.txt   # run a suite and print the
 
 ## On a hosted runner
 
-`harness.yml` runs `sync.sh` and then `suite.sh tests/runtime/suites/m{0..11}.txt` on `macos-14`
+`harness.yml` runs `sync.sh` and then `suite.sh tests/runtime/suites/m{0..12}.txt` on `macos-14`
 (45 minute limit), always uploads `$GEDIT_RH_DIR/out`, the app logs and the sync logs, and
 caches the build directory. What differs from the owner's Mac, and how the scenarios deal with it:
 
@@ -107,11 +107,11 @@ caches the build directory. What differs from the owner's Mac, and how the scena
 
 ## Suites
 
-One file per milestone, `suites/m0.txt` … `suites/m11.txt`: one scenario name per line, `#`
+One file per milestone, `suites/m0.txt` … `suites/m12.txt`: one scenario name per line, `#`
 starts a comment. A cumulative run is all of them in order:
 
 ```sh
-tests/runtime/suite.sh tests/runtime/suites/m{0,1,2,3,4,5,6,7,8,9,10,11}.txt
+tests/runtime/suite.sh tests/runtime/suites/m{0,1,2,3,4,5,6,7,8,9,10,11,12}.txt
 ```
 
 ## PASS, FLAKY, FAIL, BLOCKED
@@ -198,6 +198,9 @@ scenario('m1-example', { timeout: 90 }, async (h) => {
   the M10 scripts (`runFromTools` from the Tools tab, `runReplace` for an envelope), fills a script's form
   (`fillForm`, `pick`), makes machines from a profile's own presets (`machineMaker`) and compares a shifted
   program with the one it should be (`bump`, `differences`, `outcomeOf`).
+  `m12-common.js` reads a channel golden and a preset's block (`golden`, `blockOf`, `presetBlock`), makes channel
+  machines (`channelMachines`), and reads the channel item, the program map by channel and the check's rows
+  (`channelState`, `waitChannel`, `mapRows`, `mapByChannel`, `resultRows`).
 - Find elements with `h.q('<test id>', { attr: 'value' })`. The test ids are a contract:
   §7.9 of `docs/planning/phase-1-implementation.md` (Phase 1) and §7.12 of
   `docs/planning/phase-2-implementation.md` (from M6 on). A new one goes into the Phase 2

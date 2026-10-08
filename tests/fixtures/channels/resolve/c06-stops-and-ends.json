@@ -1,0 +1,57 @@
+{
+  "input": "../nc/fanuc-lathe/c06-part_CH1.nc",
+  "profile": "fanuc-lathe",
+  "machine": {
+    "channels": {
+      "layout": "multi-file",
+      "list": [
+        {
+          "id": "1",
+          "name": "Channel 1"
+        },
+        {
+          "id": "2",
+          "name": "Channel 2"
+        }
+      ],
+      "fileName": "^(?<stem>.+)_CH(?<channel>\\d+)\\.nc$",
+      "syncMarks": [
+        {
+          "id": "wait",
+          "label": "Wait M900-M999, P = bit sum, no P = paths 1 and 2",
+          "match": {
+            "kind": "codes",
+            "codes": "M900-M999"
+          },
+          "partners": {
+            "kind": "word",
+            "address": "P",
+            "decode": "bitmask",
+            "whenAbsent": {
+              "kind": "fixed",
+              "channels": [
+                "1",
+                "2"
+              ]
+            }
+          }
+        }
+      ],
+      "stopsAndEndsWait": true
+    }
+  },
+  "expect": {
+    "layout": "multi-file",
+    "self": "1",
+    "by": "fileName",
+    "marks": [
+      {"ruleId":"wait","mark":"M901","line":10,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M902","line":14,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"stops-and-ends","mark":"","line":15,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M903","line":21,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"stops-and-ends","mark":"","line":22,"channel":"1","partners":["1","2"],"blocking":true}
+    ],
+    "problems": [],
+    "siblings": [{"channel":"2","name":"c06-part_CH2.nc"}]
+  }
+}

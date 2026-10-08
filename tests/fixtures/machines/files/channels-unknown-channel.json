@@ -1,0 +1,45 @@
+{
+  "$version": 1,
+  "machines": [
+    {
+      "id": "lathe-unknown",
+      "name": "Lathe, rule names path 3",
+      "profile": "fanuc-lathe",
+      "params": {
+        "units": "mm",
+        "channels": {
+          "layout": "multi-file",
+          "list": [
+            {
+              "id": "1",
+              "name": "Path 1"
+            },
+            {
+              "id": "2",
+              "name": "Path 2"
+            }
+          ],
+          "fileName": "^(?<stem>.+)\\.[A-Za-z]*-?(?<channel>\\d{1,2})$",
+          "syncMarks": [
+            {
+              "id": "wait",
+              "label": "Waits to path 3",
+              "match": {
+                "kind": "codes",
+                "codes": "M900-M999"
+              },
+              "partners": {
+                "kind": "fixed",
+                "channels": [
+                  "3"
+                ]
+              }
+            }
+          ],
+          "stopsAndEndsWait": false
+        }
+      }
+    }
+  ],
+  "defaults": {}
+}

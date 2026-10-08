@@ -21,7 +21,7 @@
 
 import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BUILTIN_CODE_DB_JSON } from '$lib/data/codes';
 import { BUILTIN_PROFILE_SOURCES } from '$lib/data/profiles';
 import { resolveCodeDbFiles } from '$lib/core/codes/resolve';
@@ -29,9 +29,24 @@ import { resolveProfiles } from '$lib/core/profiles/resolve';
 import { validateProfile } from '$lib/core/profiles/validate';
 import { applyMachine, effectiveMachine, noMachine } from '$lib/core/machines/effective';
 import { fnv1a32 } from '$lib/core/text/hash';
+import { compileProfile } from '$lib/core/profiles/compile';
+import { channelsOf } from '$lib/core/scripting/context';
+import { channelBlock } from '$lib/core/machines/validate';
+import { decodeFile } from '$lib/core/text';
 import { FIXTURES_DIR } from './helpers/fixtures';
 import type { Profile } from '$lib/core/profiles/types';
 import type { EffectiveMachine, MachineConfig } from '$lib/core/machines/types';
+import type { ChannelParams } from '$lib/core/channels/types';
+
+// The channel entries (M12, WP12.6) are made by the channel SERVICE itself, with fakes for
+// its collaborators, so the `channels` member a Python test reads is what the app builds
+// from `resolveDocument` and never a second composition. These four modules reach for the
+// editor and Tauri when imported for real.
+vi.mock('$lib/monaco/editorService', () => ({ editor: {} }));
+vi.mock('$lib/stores/machines', () => ({ machines: {} }));
+vi.mock('$lib/stores/fileMemory', () => ({ fileMemory: {} }));
+vi.mock('$lib/stores/documents', () => ({ docs: {} }));
+const { createChannelService } = await import('$lib/stores/channels');
 
 const ROOT = join(FIXTURES_DIR, 'resolved');
 const UPDATE = process.env.UPDATE_RESOLVED === '1';
@@ -221,7 +236,90 @@ function buildAll(): Map<string, string> {
     index[path] = name;
   }
   emit('effective/index.json', index);
+  emitChannels();
   return new Map(produced);
+}
+
+// ---------------------------------------------------------------------------
+// Channels (M12, WP12.6): `tests/fixtures/channels/resolve/<case>.json`
+// ---------------------------------------------------------------------------
+
+interface ChannelGolden {
+  input: string;
+  profile: string;
+  machine?: { channels: ChannelParams };
+  preset?: string;
+  assigned?: string;
+}
+
+/**
+ * One file per channel golden (`channels/<case>.json`: the effective profile and database
+ * the golden is read with, and `channels`, the member of `ScriptContextV2`) and
+ * `channels/index.json` from the golden's path under `tests/fixtures/` to that file, which is
+ * what `tests/python/helpers.py` `channel_context` reads. A document the machine gives no
+ * channels to has no `channels` member (the same as in the app).
+ */
+function emitChannels(): void {
+  const dir = join(FIXTURES_DIR, 'channels', 'resolve');
+  let names: string[] = [];
+  try {
+    names = readdirSync(dir).filter((n) => n.endsWith('.json')).sort();
+  } catch {
+    return;
+  }
+  const index: Record<string, string> = {};
+  for (const file of names) {
+    const golden = JSON.parse(readFileSync(join(dir, file), 'utf8')) as ChannelGolden;
+    const profile = PROFILES.get(golden.profile);
+    if (!profile) throw new Error(`channels/resolve/${file}: unknown profile "${golden.profile}"`);
+    const effective = effectiveOf(profile, noMachine(profile));
+    const cp = compileProfile(applyMachine(profile, noMachine(profile)).profile);
+
+    let params = golden.machine?.channels;
+    if (params === undefined) {
+      const [profileId, presetId] = (golden.preset ?? '').split('/');
+      const preset = PROFILES.get(profileId)?.machineParams?.channels?.presets.find((p) => p.id === presetId);
+      if (!preset) throw new Error(`channels/resolve/${file}: no preset "${golden.preset}"`);
+      params = preset.value;
+    }
+    const config: MachineConfig = { id: 'm', name: 'Review', profile: profile.id, params: { channels: params } as MachineConfig['params'] };
+    const waitLetters = profile.machineParams?.channels?.waitLetters;
+    const block = channelBlock(config, 'machines', { waitLetters });
+    if (block.state !== 'valid') throw new Error(`channels/resolve/${file}: the machine block is not valid`);
+
+    const input = join(dir, golden.input);
+    const decoded = decodeFile(new Uint8Array(readFileSync(input)));
+    if (!decoded.ok) throw new Error(`${input} does not open`);
+    const lines = decoded.text.split('\n');
+    const base = input.split(/[\\/]/).pop() as string;
+    const doc = { id: 'd1', title: base, path: `/jobs/${base}` };
+    const memory = golden.assigned === undefined ? undefined : { channelId: golden.assigned };
+
+    const service = createChannelService({
+      docs: { get: () => doc, all: () => [doc], list: { subscribe: () => () => {} } } as never,
+      editor: {
+        hasModel: () => true,
+        getLineCount: () => lines.length,
+        getLines: (_id: string, a: number, b: number) => lines.slice(a - 1, b),
+        onDidChangeContent: () => () => {},
+      } as never,
+      effective: () => ({ cp, key: 'review', machineId: 'm', machineName: 'Review', waitLetters }),
+      machine: () => config,
+      block: () => block,
+      memory: { get: () => memory, remember: () => {} } as never,
+      siblingInfo: () => Promise.resolve([]),
+      schedule: () => () => {},
+      now: () => 0,
+      caseInsensitive: false,
+      delayMs: 150,
+    });
+    const channels = channelsOf(service.forDoc('d1'));
+
+    const name = `channels/${file}`;
+    emit(name, { ...effective, channels });
+    index[`channels/resolve/${file}`] = name;
+  }
+  emit('channels/index.json', index);
 }
 
 /**

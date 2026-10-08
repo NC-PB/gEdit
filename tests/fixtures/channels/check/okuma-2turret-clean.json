@@ -1,0 +1,30 @@
+{
+  "comment": "Written for gEdit (synthetic, not for a machine); see README.md here.",
+  "description": "Okuma two turrets in one program, sections G13/G14 alternating: P codes ascend per turret, P20 and P30 stand on one side only (legal: the manual's own P10/P20/P40 against P10/P30/P40), one M100 per side. Correct: no finding.",
+  "profile": "okuma-osp",
+  "preset": "okuma-2turret",
+  "program": [
+    "$TWIN.MIN%",
+    "(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)",
+    "G13",
+    "N1 G0 X200 Z200",
+    "N2 P10",
+    "N3 G1 X50 F0.2",
+    "N4 P20",
+    "G14",
+    "N11 G0 X200 Z200",
+    "N12 P10",
+    "N13 P30",
+    "G13",
+    "N5 M100",
+    "N6 P40",
+    "N7 G0 X200 Z200",
+    "G14",
+    "N14 M100",
+    "N15 P40",
+    "N16 M02"
+  ],
+  "expect": {
+    "findings": []
+  }
+}

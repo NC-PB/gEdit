@@ -14,8 +14,10 @@ yours to tell gEdit, once per machine.
 
 You do not have to. Everything in this editor works without a single machine configured:
 the highlighting, the program map, the code help, the renumbering, the cleanups, the tool
-list, the scaling scripts, the program checks, the extents and address arithmetic. What a machine buys you is that gEdit stops saying "I cannot
-know that" about the values in your program.
+list, the scaling scripts, the program checks, the extents and address arithmetic.
+What a machine buys you is that gEdit stops saying "I cannot
+know that" about the values in your program. A control that runs several programs at once, such as a
+twin-turret lathe, has [channel settings](#channels) as well; those are the one thing that needs a machine.
 
 ---
 
@@ -488,6 +490,62 @@ mode.
 is set up to manage its tools by name — a setup of the control, like the others here — but
 it is not a setting in gEdit, because gEdit reads both forms as a tool change (see
 [dialects.md](dialects.md#the-sinumerik-840d-turning-profile)).
+
+## Channels
+
+A control that runs more than one program at once — two turrets, two paths, two channels —
+needs a few more settings from you: where the channels are in the program, and which codes
+make one wait for another. What channels are, and what gEdit does with them, is in
+[Channels](channels.md). This section is the form.
+
+The **Channels** step sits under the other fields of a machine of the Fanuc lathe, Okuma or
+Sinumerik dialect (turning or milling). A Fanuc mill and Klartext have none. A machine
+with no channel settings, or with *No channels*, reads every program as one stream.
+
+| Part of the step | What it holds |
+|---|---|
+| **Start from a preset** | The documented defaults of the control, each marked *verify*. **Use this preset** copies it into this machine. On a machine that already has settings it asks first: *Replace the channel settings below with this preset?* with **Replace** and **Keep mine**. The preset is never applied without that button. See [the presets](channels.md#presets-and-what-to-check-on-your-machine) |
+| **How are the channels stored?** | *No channels*, *All in one program, one section for each …* or *One program for each …*. The word is the one your channels use: path, turret or channel |
+| **Stops and ends count as waits** | A tick, off by default. See [stops and ends](channels.md#stops-and-ends) |
+| **The channels** | A short name, a name for reports, and **Also written as** for the other spellings (`G13`). Two to 32 channels, in the order they are shown. For one program per channel, also the file name of each. **Add a path**, and the arrows and **Remove** on each row |
+| **Wait codes** | One block for each kind of wait: its name, **Wait codes** (a list like `M900-M999, M300` with a live preview), *What is checked*, *Paths named by* and *A wait without a P word means*, and a tick *These codes make a path wait* (untick it for a code that only sets a flag; it is shown but never checked). See [the wait codes](channels.md#the-wait-codes) and [what kind of wait it is](channels.md#what-kind-of-wait-it-is) |
+| **Advanced** | Closed unless the settings need it. The patterns that find a section start and end, the file names, a marker in the program, and, per rule, a start and digits or a pattern, and a pattern for the partners. **Help with patterns** says where [Regular expressions](regex.md) is |
+
+Everything a field needs is said under it in plain words, and a wrong entry is quoted back
+to you: “M3OO”: not a number. **Save** stays disabled while a field is wrong, and the
+step lists what to fix. That holds for the whole machine: you cannot save its unit or its
+name either until the channel settings are fixed or removed with *No channels*.
+
+### Try these settings on a program
+
+Under the step is **Try these settings on a program**. Paste some lines, or press **Take the
+active document**, and gEdit shows what the settings above make of them, without saving
+anything:
+
+- each channel with its sections and the number of lines in each (a channel with four
+  sections is shown as four sections, not as a problem),
+- the lines that belong to no channel,
+- every wait code found, with its line, the rule that found it, the channel it is in and the
+  channels it waits for,
+- the problems, such as a start line that names a channel the machine does not have,
+- how long each pattern took. A rule over 50 ms is marked *Slower than 50 ms; shorten the
+  pattern.*
+
+For one program per channel, type the **file name** of the file you pasted, so gEdit can say
+which channel it is.
+
+Use it until the sections and the waits are the ones you know are in that program. Then
+check a whole program with [Check Wait Codes](channels.md#check-wait-codes).
+
+### A broken pattern costs the channels, not the machine
+
+A pattern that is not valid, a wait rule for a channel that does not exist, and the like,
+are caught on the page. If such a mistake gets into the file anyway (you edited
+`machines.json` by hand), then **only the channel settings** are off. The machine stays
+selectable, the way it reads numbers and everything else about it keep working, and the page
+lists what is wrong in the channel block. The channel settings stay in the file untouched.
+They are fixed on the page, or removed with **Remove the channel settings** if they are not
+in a form the page can show.
 
 ## Where the file is, and how to back it up
 

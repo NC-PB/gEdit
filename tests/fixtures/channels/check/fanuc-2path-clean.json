@@ -1,0 +1,41 @@
+{
+  "comment": "Written for gEdit (synthetic, not for a machine); see README.md here.",
+  "description": "Fanuc two-path, the preset as shipped: bit-sum P (P3 = paths 1 and 2), a wait without P names paths 1 and 2, packed and spaced words, a wait inside a comment. Correct: no finding.",
+  "profile": "fanuc-lathe",
+  "preset": "fanuc-2path",
+  "program": {
+    "1": [
+      "%",
+      "O2001 (PATH 1)",
+      "(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)",
+      "N10 G50 S3000",
+      "N20 T0101",
+      "N30 M901 P3",
+      "N40 G0 X50. Z2.",
+      "N50 M902",
+      "(M904 P3 IS IN A COMMENT, NOT A WAIT)",
+      "N60 G1 Z-20. F0.2",
+      "N70M903P3",
+      "N80 G0 X100. Z100.",
+      "N90 M30",
+      "%"
+    ],
+    "2": [
+      "%",
+      "O2001 (PATH 2)",
+      "(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)",
+      "N10 T0202",
+      "N20 M901 P3",
+      "N30 G0 X80. Z2.",
+      "N40 M902",
+      "N50 G1 Z-10. F0.15",
+      "N60 M903 P3",
+      "N70 M01",
+      "N80 M30",
+      "%"
+    ]
+  },
+  "expect": {
+    "findings": []
+  }
+}

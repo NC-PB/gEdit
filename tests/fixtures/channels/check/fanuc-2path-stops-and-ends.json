@@ -1,0 +1,47 @@
+{
+  "comment": "Written for gEdit (synthetic, not for a machine); see README.md here.",
+  "description": "Fanuc two-path with \"stops and ends count as waits\" on: path 1 has an optional stop M01 that path 2 lacks, so the stops and ends differ in number (one finding, on the first stop or end path 2 has no counterpart for). The wait M-codes match.",
+  "profile": "fanuc-lathe",
+  "preset": "fanuc-2path",
+  "machine": {
+    "stopsAndEndsWait": true
+  },
+  "program": {
+    "1": [
+      "%",
+      "O2003 (PATH 1)",
+      "(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)",
+      "N10 M901 P3",
+      "N20 M01",
+      "N30 M902",
+      "N40 M30",
+      "%"
+    ],
+    "2": [
+      "%",
+      "O2003 (PATH 2)",
+      "(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)",
+      "N10 M901 P3",
+      "N20 M902",
+      "N30 M30",
+      "%"
+    ]
+  },
+  "expect": {
+    "findings": [
+      {
+        "kind": "count-mismatch",
+        "channel": "1",
+        "line": 7,
+        "mark": "",
+        "ruleId": "stops-and-ends",
+        "other": "2",
+        "otherLine": 6,
+        "counts": {
+          "channel": 2,
+          "other": 1
+        }
+      }
+    ]
+  }
+}

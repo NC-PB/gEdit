@@ -201,4 +201,204 @@ export default {
       'The power-on codes {codes} do not exist in what you just chose, so those groups follow the dialect again.',
     noProfiles: 'No dialect declares machine parameters, so no machine can be added.',
   },
+
+  // ---------------------------------------------------------------------------
+  // The Channels step of the machine form (WP12.3, plan §7.15, §7.17, AD-32).
+  //
+  // The owner's rule (2026-10-07): "something that makes sense but does not overwhelm the
+  // user. The average user will be a NC-Programmer and not a Software Engineer." So the
+  // plain controls come first and say what they do in the words of the shop floor; the
+  // regular expressions sit behind "Advanced". `{noun}` / `{nouns}` are the word this control
+  // uses for one stream of blocks ("channel", "path", "turret"), read from the channel
+  // names (`channelNoun`); `{address}` is the address letter (P). Codes, ids and presets'
+  // labels are data and are never translated.
+  // ---------------------------------------------------------------------------
+  channels: {
+    title: 'Channels',
+    intro:
+      'A channel is one stream of blocks the control runs on its own, for example the two turrets of a lathe. Tell gEdit how this machine lays them out and which codes make one wait for another, and it can show them apart and check the waits. gEdit never changes the program.',
+    none: 'No channels: programs for this machine are read as one stream.',
+    problemsTitle: 'To fix before saving',
+    unreadable:
+      'The channel settings stored for this machine are not in a form this page can show. They are listed below and kept in the file. Remove them to start again, or fix them in the machines file.',
+    removeUnreadable: 'Remove the channel settings',
+    regexHelpAt: 'Help with patterns: docs/user/regex.md in the gEdit folder, or {url}',
+    problemsKept:
+      'These channel settings cannot be used as they are written. They are kept in the file and the channels are off; everything else about the machine still works.',
+    assignOnly:
+      'Nothing here tells gEdit which file is which channel. Open the files and assign each one to its channel by hand.',
+
+    // Try the settings on a program
+    tester: {
+      title: 'Try these settings on a program',
+      help: 'Paste a program, or take the one open now, to see how the settings above read it. Nothing is changed or saved.',
+      take: 'Take the active document',
+      noDocument: 'No document is open.',
+      fileName: 'File name (to tell which channel a file is)',
+      paste: 'Paste a program here',
+      none: 'These settings find no channel in this program.',
+      channel: 'Channel',
+      sections: 'Sections',
+      lines: 'Lines',
+      noSection: 'no section found',
+      self: 'This program is {channel} (found {how}).',
+      byName: 'by its file name',
+      byMarker: 'by the marker in the program',
+      outside: 'Lines that belong to no channel: {lines}',
+      line: 'Line',
+      code: 'Code',
+      rule: 'Rule',
+      inChannel: 'In',
+      waitsFor: 'Waits for',
+      noMarks: 'No wait codes found.',
+      dropped: '{count} more wait codes were found and not listed.',
+      moreRows: '… {count} more',
+      found: 'Found',
+      time: 'Time',
+      slow: 'Slower than {ms} ms; shorten the pattern.',
+    },
+
+    // Start from a preset
+    preset: {
+      title: 'Start from a preset',
+      help: 'A starting point taken from the control’s documentation. It is copied into this machine only when you press the button, and you can change everything afterwards.',
+      choose: 'Choose a preset…',
+      use: 'Use this preset',
+      replaceAsk: 'Replace the channel settings below with this preset?',
+      replace: 'Replace',
+      keep: 'Keep mine',
+      verify: 'verify',
+      verifyNote: 'Check this against your own machine before relying on it.',
+      source: 'Source: {source}',
+      applied: 'The preset was copied. Check it against your machine.',
+    },
+
+    // The layout
+    layout: {
+      label: 'How are the channels stored?',
+      help: 'Either everything is in one program, one section per {noun}, or each {noun} has a program of its own.',
+      none: 'No channels',
+      singleFile: 'All in one program, one section for each {noun}',
+      multiFile: 'One program for each {noun}',
+    },
+    stopsAndEnds: {
+      label: 'Stops and ends count as waits',
+      help: 'Tick this if a program stop or end (M0, M1, M2, M30) makes a {noun} wait for the others. Leave it off when unsure.',
+    },
+
+    // The list of channels
+    list: {
+      title: 'The channels',
+      help: 'In the order they are shown.',
+      id: 'Short name',
+      idHelp: 'Letters, digits, - or _; the check and the scripts use it.',
+      name: 'Name',
+      aliases: 'Also written as',
+      aliasesHelp: 'Other spellings of this {noun} in programs, separated by commas, for example G13.',
+      fileName: 'File name',
+      fileNameHelp: 'The name of this {noun}’s program; {stem} is the part all programs share.',
+      add: 'Add a {noun}',
+      remove: 'Remove {name}',
+      up: 'Move {name} up',
+      down: 'Move {name} down',
+      newName: '{Noun} {number}',
+    },
+
+    // Wait rules
+    rules: {
+      title: 'Wait codes',
+      help: 'The codes that make one {noun} wait for another. gEdit compares them between the {nouns}.',
+      none: 'No wait codes yet.',
+      add: 'Add wait codes',
+      remove: 'Remove this rule',
+      up: 'Move this rule up',
+      down: 'Move this rule down',
+      newLabel: 'Wait codes {number}',
+      patternRule:
+        'This rule finds its codes with a pattern. It can be changed under Advanced.',
+      usePlain: 'Use a list of codes instead',
+    },
+    rule: {
+      label: 'Name of this rule',
+      labelHelp: 'Shown in reports, for example “Path wait”.',
+      codes: 'Wait codes',
+      codesHelp: 'Codes and ranges, separated by commas or blanks: M100-M199, M300.',
+      semantics: 'What is checked',
+      semanticsHelp: 'Pick the one that fits how these codes work.',
+      blocking: 'These codes make a {noun} wait',
+      blockingHelp: 'Untick for a code that only sets a flag. It is still shown, but never checked.',
+      partners: '{Noun}s named by',
+      partnersHelp: 'Which {nouns} a wait waits for.',
+      partnerChannels: 'Which {nouns}',
+      absent: 'A wait without a {address} word means',
+      absentHelp: 'What to assume when the line has no {address} word.',
+      absentChannels: 'Which {nouns} then',
+    },
+    semantics: {
+      rendezvous: 'Numbered waits: the same number must meet in the same order in the other {noun}',
+      count: 'Waits without a number: every {noun} needs the same number of them',
+      ordered: 'Order numbers: a number must not go down inside a {noun}, and may be missing on one side',
+    },
+    partners: {
+      all: 'Every {noun}',
+      fixed: 'These {nouns}',
+      digits: 'The {address} word as {noun} numbers: {address}12 = {nouns} 1 and 2, 0 = {noun} 10',
+      bitmask: 'The {address} word as a bit sum: {address}3 = {nouns} 1 and 2 (1 + 2)',
+      line: 'Found by a pattern on the line (Advanced)',
+    },
+    absent: {
+      none: 'No partner (reported as not matched)',
+      all: 'Every {noun}',
+      fixed: 'These {nouns}',
+    },
+
+    // The wait-code field's live preview
+    codes: {
+      matches: 'Matches {items}',
+      all: '{count} codes in all',
+      one: '1 code',
+      many: '{count} codes',
+      empty: 'Enter at least one code, for example M100-M199.',
+    },
+
+    // Advanced
+    advanced: {
+      title: 'Advanced',
+      help: 'Patterns for the cases the plain settings cannot describe. Most machines never need this.',
+      regexHelp: 'Help with patterns',
+      sectionStart: 'A section starts at the line matching',
+      sectionStartHelp: 'A pattern. Capture the {noun} as (?<channel>…); without it the first start is the first {noun}, and so on.',
+      sectionStartFromNames: 'Use the names above',
+      sectionEnd: 'A section ends at the line matching',
+      sectionEndHelp: 'Optional. Without it a section runs to the next start.',
+      sectionSeparator: 'Separator inside one start line',
+      sectionSeparatorHelp: 'Optional. One character, for example /, when one line starts several {nouns}.',
+      fileName: 'File names match',
+      fileNameHelp: 'A pattern for the name, with (?<stem>…) and (?<channel>…). Optional.',
+      fileNameFor: 'The other files are named',
+      fileNameForHelp: 'A template with {stem} and {channel}, for example {stem}_CH{channel}.nc. Optional.',
+      marker: 'A line in the program names its {noun}',
+      markerHelp: 'A pattern with (?<channel>…), looked for in the first 400 lines. Optional.',
+      matchKind: 'These codes are found by',
+      matchCodes: 'A list of codes',
+      matchPrefix: 'A start and some digits',
+      matchRegex: 'A pattern',
+      prefix: 'Starts with',
+      prefixHelp: 'For example M1.',
+      idMin: 'At least this many digits',
+      idMax: 'At most this many digits',
+      pattern: 'Pattern',
+      patternHelp: 'Capture the wait’s number as (?<mark>…); a rule that checks by count has none.',
+      address: 'Address letter',
+      addressHelp: 'The letter of the word that names the {nouns}, usually P.',
+      linePattern: 'Pattern for the {nouns} on the line',
+      linePatternHelp: 'Capture them as (?<channels>…).',
+      lineSeparator: 'Separator',
+      lineSeparatorHelp: 'Between {nouns} in the capture; a comma when empty.',
+      lineDecode: 'The capture is read as',
+      decodeSplit: 'A list of names',
+      decodeDigits: '{Noun} numbers, 0 = {noun} 10',
+      decodeBitmask: 'A bit sum',
+    },
+  },
 } as const satisfies Messages;

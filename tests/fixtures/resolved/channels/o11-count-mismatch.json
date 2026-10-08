@@ -1,0 +1,639 @@
+{
+  "channels": {
+    "layout": "single-file",
+    "list": [
+      {
+        "id": "a",
+        "name": "Turret A",
+        "ranges": [
+          {
+            "endLine": 16,
+            "startLine": 5
+          },
+          {
+            "endLine": 40,
+            "startLine": 27
+          }
+        ]
+      },
+      {
+        "id": "b",
+        "name": "Turret B",
+        "ranges": [
+          {
+            "endLine": 26,
+            "startLine": 17
+          },
+          {
+            "endLine": 53,
+            "startLine": 41
+          }
+        ]
+      }
+    ],
+    "marks": [
+      {
+        "blocking": true,
+        "channel": "a",
+        "id": "P5",
+        "line": 11,
+        "partners": [
+          "a",
+          "b"
+        ]
+      },
+      {
+        "blocking": true,
+        "channel": "a",
+        "id": "",
+        "line": 16,
+        "partners": [
+          "a",
+          "b"
+        ]
+      },
+      {
+        "blocking": true,
+        "channel": "b",
+        "id": "P5",
+        "line": 21,
+        "partners": [
+          "a",
+          "b"
+        ]
+      },
+      {
+        "blocking": true,
+        "channel": "b",
+        "id": "",
+        "line": 26,
+        "partners": [
+          "a",
+          "b"
+        ]
+      },
+      {
+        "blocking": true,
+        "channel": "a",
+        "id": "P15",
+        "line": 35,
+        "partners": [
+          "a",
+          "b"
+        ]
+      },
+      {
+        "blocking": true,
+        "channel": "a",
+        "id": "",
+        "line": 37,
+        "partners": [
+          "a",
+          "b"
+        ]
+      },
+      {
+        "blocking": true,
+        "channel": "a",
+        "id": "P35",
+        "line": 38,
+        "partners": [
+          "a",
+          "b"
+        ]
+      },
+      {
+        "blocking": true,
+        "channel": "b",
+        "id": "P25",
+        "line": 46,
+        "partners": [
+          "a",
+          "b"
+        ]
+      },
+      {
+        "blocking": true,
+        "channel": "b",
+        "id": "P35",
+        "line": 49,
+        "partners": [
+          "a",
+          "b"
+        ]
+      }
+    ],
+    "outside": [
+      {
+        "endLine": 4,
+        "startLine": 1
+      }
+    ],
+    "self": null
+  },
+  "codes": "okuma",
+  "machine": {
+    "choice": "none",
+    "id": null,
+    "name": null,
+    "params": {
+      "diameter": "on",
+      "modalInitial": {},
+      "numberInput": {
+        "incrementDeg": "1",
+        "incrementInch": "1",
+        "incrementMm": "1",
+        "incrementSec": "1",
+        "mode": "calculator"
+      },
+      "units": "mm",
+      "variants": {
+        "toolWord": "offset2"
+      }
+    },
+    "source": {
+      "diameter": "profile",
+      "modalInitial": {
+        "distance": "profile",
+        "feedmode": "profile"
+      },
+      "numberInput": "profile",
+      "units": "profile",
+      "variants": {
+        "toolWord": "profile"
+      }
+    }
+  },
+  "profile": {
+    "addresses": {
+      "angular": [
+        "C"
+      ],
+      "arcCenter": [
+        "I",
+        "K"
+      ],
+      "arcCenterMode": "incremental",
+      "axes": [
+        "X",
+        "Z",
+        "C",
+        "Y"
+      ],
+      "diameter": [
+        "X"
+      ],
+      "feed": "F",
+      "spindle": "S",
+      "tool": "T"
+    },
+    "codes": "okuma",
+    "compare": {
+      "ignoreBlockNumbers": true,
+      "ignoreCase": false,
+      "ignoreComments": true,
+      "ignoreNumberFormat": true,
+      "ignoreWhitespace": true,
+      "keepComments": [
+        "\\([^)]*%",
+        "(?<![A-Z])(?:MSG|G0*215)(?![A-Z0-9])"
+      ]
+    },
+    "detect": {
+      "content": [
+        {
+          "pattern": "^\\$[\\w-]+\\.(?:MIN|SUB|SSB|SDF)%",
+          "weight": 5000
+        },
+        {
+          "pattern": "^[^(]*(?<![A-Z])(?:CALL|MODIN)\\s+O[A-Z0-9]{1,4}(?![A-Z0-9_])",
+          "weight": 100
+        },
+        {
+          "pattern": "^\\s*(?:N\\w+\\s+)?(?:RTS|MODOUT)(?![A-Z0-9])",
+          "weight": 100
+        },
+        {
+          "pattern": "^[^(]*(?<![A-Z])G0*8[5-8][ \\t]*N[A-Z0-9]{1,4}(?![A-Z0-9])",
+          "weight": 100
+        },
+        {
+          "pattern": "^(?=[^(]*(?<![A-Z])H[-+]?[.\\d])(?=[^(]*(?<![A-Z])D[-+]?[.\\d])(?![^(]*(?<![A-Z])P[-+]?[.\\d])[^(]*(?<![A-Z])G0*7[12](?![\\d.])",
+          "weight": 100
+        },
+        {
+          "pattern": "^(?=[^(]*(?<![A-Z])K[-+]?[.\\d])[^(]*(?<![A-Z])G0*7[78](?![\\d.])",
+          "weight": 100
+        },
+        {
+          "pattern": "^\\$(?:[ \\t]+[A-Z]|[A-Z]{1,2}[-+.\\d= \\t])",
+          "weight": 100
+        },
+        {
+          "pattern": "^[^(]*(?<![A-Z])G0*1[56][ \\t]*H\\d",
+          "weight": 400
+        },
+        {
+          "pattern": "^(?![^(]*(?<![A-Z])G0*4[34](?![\\d.]))[^(]*(?<![A-Z])G0*56[ \\t]*H\\d",
+          "weight": 400
+        },
+        {
+          "pattern": "^[^(]*(?<![A-Z])SB\\s*=",
+          "weight": 20
+        },
+        {
+          "pattern": "^(?![^(]*(?<![A-Z])P[-+]?[.\\d])(?![^(]*(?<![A-Z])G(?!0*7[12](?![\\d.]))\\d)(?=[^(]*(?<![A-Z])[XZ][-+]?[.\\d])[^(]*(?<![A-Z])G0*7[12](?![\\d.])",
+          "weight": 20
+        },
+        {
+          "pattern": "^[^(]*(?<![A-Z])IF\\s*\\[[^\\]\\[]*\\]\\s*(?:GOTO\\s*)?N[A-Z0-9]{1,4}(?![A-Z0-9])",
+          "weight": 20
+        },
+        {
+          "pattern": "^[^(]*(?<![A-Z])T\\d{6}(?!\\d)",
+          "weight": 8
+        },
+        {
+          "pattern": "^[^(]*(?<![A-Z])V\\d+\\s*=",
+          "weight": 8
+        },
+        {
+          "pattern": "^\\s*(?:/\\s*)?N[A-Z][A-Z0-9]{0,3}(?=[ \\t]|$)",
+          "weight": 8
+        },
+        {
+          "pattern": "^\\s*%\\s*$",
+          "weight": 5
+        },
+        {
+          "pattern": "^\\s*O[A-Z0-9]{1,4}\\s*$",
+          "weight": 5
+        },
+        {
+          "pattern": "(?<![A-Z])G0*50\\s*S\\d",
+          "weight": 4
+        },
+        {
+          "pattern": "(?<![A-Z])G0*9[67](?![\\d.])",
+          "weight": 4
+        },
+        {
+          "pattern": "(?<![A-Z])T\\d{4}(?!\\d)",
+          "weight": 3
+        },
+        {
+          "pattern": "^[^(]*(?<![A-Z])G0*18\\d(?![\\d.])",
+          "weight": 3
+        },
+        {
+          "pattern": "^\\s*(N\\d+\\s*)?[GM]\\d{1,3}(\\.\\d)?(?![\\d.])",
+          "weight": 1
+        }
+      ],
+      "extensions": {
+        "min": 20,
+        "ssb": 20,
+        "sub": 20
+      },
+      "priority": -1
+    },
+    "files": {
+      "defaultExtension": "min",
+      "encoding": "keep",
+      "extensions": [
+        "min",
+        "sub",
+        "ssb"
+      ],
+      "filterName": "Okuma OSP",
+      "lineEnding": "keep",
+      "newFileLineEnding": "crlf"
+    },
+    "grammar": "okuma",
+    "id": "okuma-osp",
+    "machineParams": {
+      "channels": {
+        "presets": [
+          {
+            "id": "okuma-2turret",
+            "label": "Two turrets in one program: G13 (or G013) starts turret A, G14 (or G014) turret B (as often as needed); P codes order the two sides (smaller number first); M100 waits by count",
+            "source": "syntax-okuma.md §11.7a; OSP-P200L programming manual, programming for simultaneous 4-axis cuts (turret selection, P codes, M100)",
+            "value": {
+              "layout": "single-file",
+              "list": [
+                {
+                  "aliases": [
+                    "G13",
+                    "G013"
+                  ],
+                  "id": "a",
+                  "name": "Turret A"
+                },
+                {
+                  "aliases": [
+                    "G14",
+                    "G014"
+                  ],
+                  "id": "b",
+                  "name": "Turret B"
+                }
+              ],
+              "sectionStart": "(?<![A-Z0-9.])(?<channel>G0?1[34])(?![\\d.])",
+              "stopsAndEndsWait": false,
+              "syncMarks": [
+                {
+                  "id": "p-code",
+                  "label": "P sync code: an order, the smaller number runs first, a number may stand on one side only",
+                  "match": {
+                    "codes": "P1-P9999",
+                    "kind": "codes"
+                  },
+                  "partners": {
+                    "kind": "all"
+                  },
+                  "semantics": "ordered"
+                },
+                {
+                  "id": "m100",
+                  "label": "M100: a wait without a number; both sides need the same count",
+                  "match": {
+                    "codes": "M100",
+                    "kind": "codes"
+                  },
+                  "partners": {
+                    "kind": "all"
+                  },
+                  "semantics": "count"
+                }
+              ]
+            },
+            "verify": true
+          }
+        ],
+        "waitLetters": [
+          "M",
+          "P"
+        ]
+      },
+      "diameter": "on",
+      "modalGroups": [
+        "feedmode",
+        "distance",
+        "spindlemode"
+      ],
+      "numberInput": {
+        "default": "okuma-1mm",
+        "presets": [
+          {
+            "id": "okuma-1mm",
+            "label": "Unit 1 mm: every number as written, point or not: X50 and X50. are both 50 mm, F0.25 is 0.25 mm/rev, G04 F2 waits 2 s",
+            "source": "syntax-okuma.md §3.3",
+            "value": {
+              "incrementDeg": "1",
+              "incrementInch": "1",
+              "incrementMm": "1",
+              "incrementSec": "1",
+              "mode": "calculator"
+            },
+            "verify": true
+          },
+          {
+            "id": "okuma-1um",
+            "label": "Unit 1 µm: every number scaled, point or not: X50 and X50. are both 0.05 mm, X50000 is 50 mm, F250 is 0.25 mm/rev, G04 F200 waits 2 s",
+            "source": "syntax-okuma.md §3.3",
+            "value": {
+              "classes": {
+                "feedPerMin": {
+                  "increment": "0.1",
+                  "incrementInch": "0.01"
+                },
+                "feedPerRev": {
+                  "increment": "0.001",
+                  "incrementInch": "0.0001"
+                }
+              },
+              "incrementDeg": "0.001",
+              "incrementInch": "0.0001",
+              "incrementMm": "0.001",
+              "incrementSec": "0.01",
+              "mode": "scale"
+            }
+          },
+          {
+            "id": "okuma-10um",
+            "label": "Unit 10 µm, metric only: every number scaled, point or not: X50 and X50. are both 0.5 mm, X0.1 is 0.001 mm, F25 is 0.25 mm/rev, G04 F20 waits 2 s",
+            "source": "syntax-okuma.md §3.3",
+            "value": {
+              "classes": {
+                "feedPerMin": {
+                  "increment": "1"
+                },
+                "feedPerRev": {
+                  "increment": "0.01"
+                }
+              },
+              "incrementDeg": "0.01",
+              "incrementMm": "0.01",
+              "incrementSec": "0.1",
+              "mode": "scale"
+            },
+            "verify": true
+          }
+        ]
+      },
+      "units": "mm",
+      "variants": [
+        {
+          "choices": [
+            {
+              "label": "Two-digit offsets (up to 99): T0101 (default, verify)",
+              "overlay": {
+                "toolCall": {
+                  "ignore": "(?<![A-Z])(?:G0*(?:7[1-8]|18\\d)(?![\\d.])|T(?:\\d{2})?00\\d{2}(?!\\d))",
+                  "tool": "(?<![A-Z])T(?:\\d{2}(?=\\d{4}(?!\\d)))?(?<tool>\\d{2})(?=\\d{2}(?!\\d))",
+                  "trigger": "(?<![A-Z])T\\d{4}(?:\\d{2})?(?!\\d)"
+                }
+              },
+              "value": "offset2"
+            },
+            {
+              "label": "Three-digit offsets (200 or more on the machine): T2000",
+              "overlay": {
+                "toolCall": {
+                  "ignore": "(?<![A-Z])(?:G0*(?:7[1-8]|18\\d)(?![\\d.])|T(?:0\\d{2,3}|00\\d{3}|\\d{2}00\\d{3})(?!\\d))",
+                  "tool": "(?<![A-Z])T(?:\\d{2}(?=\\d{2}\\d{3}(?!\\d)))?(?<tool>\\d{2}(?=\\d{3}(?!\\d))|\\d(?=\\d{2,3}(?!\\d)))",
+                  "trigger": "(?<![A-Z])T(?:\\d{3,5}|\\d{7})(?!\\d)"
+                }
+              },
+              "value": "offset3"
+            }
+          ],
+          "default": "offset2",
+          "id": "toolWord",
+          "label": "Tool word: offset digits"
+        }
+      ]
+    },
+    "machineType": "lathe",
+    "modal": {
+      "diameter": "on",
+      "initial": {
+        "distance": "G90",
+        "feedmode": "G95"
+      },
+      "sources": {
+        "diameter": "profile",
+        "distance": "profile",
+        "feedmode": "profile",
+        "units": "profile"
+      },
+      "units": "mm"
+    },
+    "name": "Okuma OSP lathe",
+    "numbering": {
+      "digits": 0,
+      "max": 9999,
+      "mode": "free",
+      "onOverflow": "stop",
+      "references": [
+        {
+          "addresses": [
+            "N"
+          ],
+          "trigger": "(?<![A-Z])GOTO(?![A-Z0-9])"
+        },
+        {
+          "addresses": [
+            "N"
+          ],
+          "trigger": "(?<![A-Z])IF(?![A-Z0-9])"
+        },
+        {
+          "addresses": [
+            "N"
+          ],
+          "trigger": "(?<![A-Z])G0*8[5-8](?![\\d.])"
+        }
+      ],
+      "restartAtProgramStart": true,
+      "skipEmpty": true,
+      "skipStartingWith": [
+        "$",
+        "%",
+        "O",
+        "("
+      ],
+      "spacesAfter": 1,
+      "start": 10,
+      "step": 10
+    },
+    "outline": [
+      {
+        "kind": "program",
+        "pattern": "^\\s*O(?<name>[A-Z0-9]{1,4})\\s*$"
+      },
+      {
+        "kind": "comment",
+        "pattern": "^\\s*(?:N[A-Z0-9]{1,4}[ \\t]+)?\\((?<text>[^)]*)\\)\\s*$"
+      },
+      {
+        "kind": "end",
+        "pattern": "^\\s*(?:/\\s*)?(?<text>N[A-Z][A-Z0-9]{0,3}[ \\t].*?(?<![A-Z])(?:M0*(?:2|30)(?!\\d)|RTS(?![A-Z0-9])))"
+      },
+      {
+        "kind": "label",
+        "pattern": "^\\s*(?:/\\s*)?(?<text>N(?<name>[A-Z][A-Z0-9]{0,3}))(?=[ \\t]|$)"
+      },
+      {
+        "kind": "subprogram-call",
+        "pattern": "(?<![A-Z])(?<text>(?:CALL|MODIN)[ \\t]+O[A-Z0-9]{1,4}|G0*(?:16[1-9]|17[01]|20[5-9]|21[0-4])(?![\\d.]))"
+      },
+      {
+        "kind": "stop",
+        "pattern": "(?<![A-Z])M0*[01](?!\\d)"
+      },
+      {
+        "kind": "end",
+        "pattern": "(?<![A-Z])(?:M0*(?:2|30)(?!\\d)|RTS(?![A-Z0-9]))"
+      }
+    ],
+    "program": {
+      "end": [
+        "(?<![A-Z])M0*(?:2|30)(?!\\d)",
+        "(?<![A-Z])RTS(?![A-Z0-9])"
+      ],
+      "start": [
+        "^\\s*O(?<name>[A-Z0-9]{1,4})\\s*$"
+      ]
+    },
+    "shortName": "Okuma",
+    "syntax": {
+      "assignment": "[A-Z][A-Z0-9]{0,3}(?=\\s*=(?!=))",
+      "blockNumber": {
+        "altPrefixes": [],
+        "mandatory": false,
+        "mode": "prefix",
+        "prefix": "N"
+      },
+      "blockSkip": {
+        "chars": "/",
+        "levels": false,
+        "position": "either"
+      },
+      "comments": [
+        {
+          "end": ")",
+          "start": "("
+        }
+      ],
+      "continuationStart": "^[ \\t]*\\$(?![^\\r\\n]*%)",
+      "decimalPointSignificant": false,
+      "decimalSeparator": ".",
+      "extendedAddresses": "[ADFIKLRSTUWXZ][AB]|BC|BR|QA|CL|C[PQR]|S[XYZ]|T[LDS]",
+      "header": "^\\$[^%]*%",
+      "keywords": [
+        "GOTO",
+        "IF",
+        "CALL",
+        "RTS",
+        "MODIN",
+        "MODOUT",
+        "GET",
+        "PUT",
+        "READ",
+        "WRITE",
+        "PSELECT",
+        "END",
+        "EQ",
+        "NE",
+        "GT",
+        "GE",
+        "LT",
+        "LE",
+        "AND",
+        "OR",
+        "EOR",
+        "NOT"
+      ],
+      "maxLineLength": 158,
+      "maxMCodes": 8,
+      "names": "[A-Z]{2}[A-Z0-9]*",
+      "sequenceNames": true,
+      "systemVariables": "V[A-Z][A-Z0-9]{3}",
+      "variables": "V\\d+",
+      "wordSeparatorRequired": false
+    },
+    "toolCall": {
+      "ignore": "(?<![A-Z])(?:G0*(?:7[1-8]|18\\d)(?![\\d.])|T(?:\\d{2})?00\\d{2}(?!\\d))",
+      "tool": "(?<![A-Z])T(?:\\d{2}(?=\\d{4}(?!\\d)))?(?<tool>\\d{2})(?=\\d{2}(?!\\d))",
+      "toolFrom": "same-line",
+      "trigger": "(?<![A-Z])T\\d{4}(?:\\d{2})?(?!\\d)"
+    },
+    "toolList": {
+      "commentFilter": "^[-*=_\\s]*$",
+      "description": "auto",
+      "dropLeadingZeros": true
+    },
+    "version": 1
+  }
+}

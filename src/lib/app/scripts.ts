@@ -63,6 +63,7 @@ import {
 } from '$lib/platform/commands';
 import { docs as appDocs } from '$lib/stores/documents';
 import { layout as appLayout } from '$lib/stores/layout';
+import { channels } from '$lib/stores/channels';
 import { machines as appMachines } from '$lib/stores/machines';
 import { results as appResults } from '$lib/stores/results';
 import {
@@ -81,6 +82,7 @@ import { uiState as appUiState } from '$lib/stores/uiState';
 import { t as translate } from '$lib/i18n';
 import { isTauriRuntime } from '$lib/utils/platform';
 import type {
+  ChannelService,
   DocId,
   DocumentStore,
   EditorService,
@@ -97,6 +99,7 @@ import type {
   Translate,
   UiStateStore,
 } from '$lib/app/types';
+import type { ChannelSet } from '$lib/core/channels/types';
 import type { FieldSpec } from '$lib/core/forms/types';
 import type { EffectiveProfile } from '$lib/core/machines/types';
 import type { ScriptContextInput } from '$lib/core/scripting/types';
@@ -225,6 +228,12 @@ export interface ScriptDeps {
    * machines exist.
    */
   machines: Pick<MachineService, 'effective'>;
+  /**
+   * M12 (AD-32): the document's channel set, from the service that composes it with
+   * `resolveDocument` — a script gets the answer the status item and the map show, never a
+   * second resolution. Optional so a fake that predates M12 still builds.
+   */
+  channels?: Pick<ChannelService, 'fresh'>;
   modals: Pick<Modals, 'form'>;
   dialogs: Pick<NativeDialogs, 'confirm'>;
   status: Pick<StatusService, 'show'>;
@@ -420,6 +429,16 @@ export function createScriptService(deps: ScriptDeps): ScriptService {
     }
   }
 
+  /** The channel set of the document, or nothing when there is none or it cannot be had. */
+  function channelSetOf(docId: DocId): ChannelSet | undefined {
+    try {
+      const set = deps.channels?.fresh(docId);
+      return set !== undefined && set.layout !== 'none' ? set : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   /** `run` with the slot already claimed; every way out of it releases it. */
   async function runClaimed(
     scriptId: string,
@@ -517,6 +536,7 @@ export function createScriptService(deps: ScriptDeps): ScriptService {
       profile: effective.profile,
       codes: effective.codes.codes,
       machine: effective.machine,
+      channels: channelSetOf(docId),
       input: resolved.input,
       cursor: { line: cursor.line, column: cursor.column },
       params,
@@ -757,6 +777,7 @@ export const scripts: ScriptService = createScriptService({
   docs: appDocs,
   editor: appEditor,
   machines: appMachines,
+  channels,
   modals: appModals,
   dialogs: appDialogs,
   status: appStatus,

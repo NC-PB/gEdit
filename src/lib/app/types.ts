@@ -17,6 +17,7 @@
 
 import type { Component } from 'svelte';
 import type { Readable } from 'svelte/store';
+import type { ChannelMember, ChannelRef, ChannelSet, SyncFinding } from '$lib/core/channels/types';
 import type { CodeDb, CodeEntry, CodeLookup } from '$lib/core/codes/types';
 import type { CompareOptions } from '$lib/core/compare/types';
 import type { FieldSpec } from '$lib/core/forms/types';
@@ -393,8 +394,12 @@ export interface NativeDialogs {
     kind?: 'warning' | 'info';
   }): Promise<boolean>;
   error(summary: string, detail: unknown): Promise<void>;
-  /** Filters per AD-7: none on macOS. */
-  openFiles(o?: { multiple?: boolean }): Promise<string[]>;
+  /**
+   * Filters per AD-7: none on macOS. M12 (§7.14): `defaultPath` is the folder the dialog
+   * starts in, so "Open channel 2…" starts in the document's own folder (WP12.5 passes it
+   * through in `app/dialogs.ts`).
+   */
+  openFiles(o?: { multiple?: boolean; defaultPath?: string }): Promise<string[]>;
   saveFile(o: { defaultPath: string; profileId?: string }): Promise<string | null>;
   pickFolder(o?: { title?: string }): Promise<string | null>;
   pickFile(o?: { title?: string }): Promise<string | null>;
@@ -716,8 +721,12 @@ export interface CodeDbService {
 export interface OutlineService {
   /** The program map's rows for a document; empty until the first build finishes. */
   items(id: DocId): Readable<OutlineItem[]>;
-  /** The tool-change lines, ascending (F7 / Shift+F7). */
-  toolLines(id: DocId): number[];
+  /**
+   * The tool-change lines, ascending (F7 / Shift+F7). M12 (§7.14): with `channelId`, only
+   * the lines inside that channel's ranges ("next tool change in this channel"); without
+   * it, the P1 list, unchanged (WP12.5).
+   */
+  toolLines(id: DocId, channelId?: string): number[];
   /** The item that covers `line`, for the row the map highlights. */
   itemAt(id: DocId, line: number): OutlineItem | null;
   /** Resolves once the first full build for `id` is done (tests and the harness). */
@@ -1144,4 +1153,62 @@ export interface AppContext {
   fileMemory: FileMemoryStore;
   session: SessionService;
   recovery: RecoveryService;
+  // P12
+  channels: ChannelService;
+}
+
+// ---------------------------------------------------------------------------
+// §7.17 The channel service added in M12 (AD-32)
+// ---------------------------------------------------------------------------
+
+/**
+ * stores/channels.ts → `export const channels: ChannelService` (P12 stub; owner WP12.5)
+ *
+ * Which channel a document and a line are in, and the wait-code check over the open
+ * channels. The resolution order is AD-32's: the document's effective machine
+ * (`machines.effective(id).machine.id`) → that record's `params.channels` through
+ * `channelBlock` (`core/machines/validate.ts`) → `findSections` / `fileChannel` +
+ * `markerChannel` + the user's assignment → `findMarks`. No machine, no block, a broken
+ * block or no match: `layout: 'none'`, and nothing in the UI changes.
+ *
+ * Three rules it may not bend:
+ *  - **It never opens a file** (standing rule 14). Siblings are asked about through
+ *    `channelSiblings` (metadata only) and opened by the user through the dialog.
+ *  - **`forDoc` always answers**, synchronously, from its cache; re-resolution runs on a
+ *    content change (debounced with the outline's 150 ms), a machine change
+ *    (`machines.revision`), a sibling opening, closing or being assigned — never on the
+ *    keystroke path.
+ *  - **One machine decides a check**: every member is resolved with the initiating
+ *    document's effective machine (§7.17).
+ */
+export interface ChannelService {
+  readonly revision: Readable<number>;
+  /** Bootstrap, after `machines.load`. Never throws. */
+  start(): Disposable;
+  /** Always an answer; `layout: 'none'` when the document has no machine, the machine has no
+   *  channel block, the block is broken (then `problems` says why), or nothing matched. */
+  forDoc(id: DocId): ChannelSet;
+  /** `forDoc` after applying a content change that still waits for its debounce: for scripts, the split and the
+   *  navigation, which act on the lines of the moment. */
+  fresh(id: DocId): ChannelSet;
+  channelAt(id: DocId, line: number): ChannelRef | null;
+  /** `multi-file`: existence of the siblings, through `channelSiblings` — metadata only. */
+  siblings(id: DocId): Promise<ChannelMember[]>;
+  /** `multi-file`: tie an OPEN document to a channel by hand (M7's `FileMemo.channelId`);
+   *  `null` clears it. */
+  assign(id: DocId, channelId: string | null): void;
+  /** The check over the channels that are OPEN, resolved with this document's machine. */
+  check(id: DocId): {
+    findings: SyncFinding[];
+    /** The check, or the resolution of this document, was stopped by its time or size budget. */
+    truncated: boolean;
+    checked: string[];
+    notChecked: ChannelRef[];
+    otherMachines: { channel: string; docId: DocId; machineName: string | null }[];
+    /** Other open channels whose lines over the length cap were not read for wait codes. */
+    longLines?: { channel: string; count: number }[];
+    /** This document's own resolution ran out of its time, so nothing was checked (M12 fix F4;
+     *  `truncated` is set too). The command says so; it is never an empty "all match". */
+    abandoned?: boolean;
+  };
 }

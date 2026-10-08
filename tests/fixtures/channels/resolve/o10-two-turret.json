@@ -1,0 +1,26 @@
+{
+  "input": "../nc/okuma/o10-two-turret.MIN",
+  "profile": "okuma-osp",
+  "preset": "okuma-osp/okuma-2turret",
+  "expect": {
+    "layout": "single-file",
+    "sections": [
+      {"channel":"a","ranges":[{"startLine":5,"endLine":16},{"startLine":27,"endLine":40}]},
+      {"channel":"b","ranges":[{"startLine":17,"endLine":26},{"startLine":41,"endLine":54}]}
+    ],
+    "outside": [{"startLine":1,"endLine":4}],
+    "marks": [
+      {"ruleId":"p-code","mark":"P5","line":11,"channel":"a","partners":["a","b"],"blocking":true},
+      {"ruleId":"m100","mark":"","line":16,"channel":"a","partners":["a","b"],"blocking":true},
+      {"ruleId":"p-code","mark":"P5","line":21,"channel":"b","partners":["a","b"],"blocking":true},
+      {"ruleId":"m100","mark":"","line":26,"channel":"b","partners":["a","b"],"blocking":true},
+      {"ruleId":"p-code","mark":"P15","line":35,"channel":"a","partners":["a","b"],"blocking":true},
+      {"ruleId":"m100","mark":"","line":37,"channel":"a","partners":["a","b"],"blocking":true},
+      {"ruleId":"p-code","mark":"P35","line":38,"channel":"a","partners":["a","b"],"blocking":true},
+      {"ruleId":"p-code","mark":"P25","line":46,"channel":"b","partners":["a","b"],"blocking":true},
+      {"ruleId":"m100","mark":"","line":49,"channel":"b","partners":["a","b"],"blocking":true},
+      {"ruleId":"p-code","mark":"P35","line":50,"channel":"b","partners":["a","b"],"blocking":true}
+    ],
+    "problems": []
+  }
+}

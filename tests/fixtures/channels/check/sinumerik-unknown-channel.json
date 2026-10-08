@@ -1,0 +1,32 @@
+{
+  "comment": "Written for gEdit (synthetic, not for a machine); see README.md here.",
+  "description": "Siemens two channels: WAITM(2,2,WAIT_K9) names a channel the machine does not declare (unknown channel); its declared partner, channel 2, still answers with WAITM(2,1,2), so nothing else is reported.",
+  "profile": "sinumerik",
+  "preset": "sinumerik-2channel",
+  "program": {
+    "1": [
+      "%_N_UNK1_MPF",
+      "; WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE",
+      "NN100: WAITM(1,1,2)",
+      "NN200: WAITM(2,2,WAIT_K9)",
+      "M30"
+    ],
+    "2": [
+      "%_N_UNK2_MPF",
+      "; WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE",
+      "NN100: WAITM(1,1,2)",
+      "NN200: WAITM(2,1,2)",
+      "M30"
+    ]
+  },
+  "expect": {
+    "findings": [
+      {
+        "kind": "unknown-channel",
+        "channel": "1",
+        "line": 4,
+        "mark": "2"
+      }
+    ]
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "title": "Tool list",
+  "columns": [
+    {
+      "key": "channel",
+      "label": "Channel"
+    },
+    {
+      "key": "tool",
+      "label": "Tool"
+    },
+    {
+      "key": "offsets",
+      "label": "Offsets"
+    },
+    {
+      "key": "description",
+      "label": "Description"
+    },
+    {
+      "key": "line",
+      "label": "First call"
+    },
+    {
+      "key": "calls",
+      "label": "Calls"
+    },
+    {
+      "key": "feed",
+      "label": "Feed"
+    },
+    {
+      "key": "speed",
+      "label": "Speed"
+    }
+  ],
+  "rows": [
+    {
+      "channel": "Channel 1",
+      "tool": "T1",
+      "offsets": "01",
+      "description": "OD ROUGH",
+      "line": 6,
+      "calls": 1,
+      "feed": "0.25 /rev",
+      "speed": "200 m/min (G96)"
+    },
+    {
+      "channel": "Channel 2",
+      "tool": "T2",
+      "offsets": "02",
+      "description": "CENTRE DRILL",
+      "line": 11,
+      "calls": 1,
+      "feed": "0.08 /rev",
+      "speed": "1500"
+    }
+  ],
+  "message": "Channel 1: 1 tool; Channel 2: 1 tool",
+  "findings": []
+}

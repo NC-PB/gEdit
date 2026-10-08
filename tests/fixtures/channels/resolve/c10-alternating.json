@@ -1,0 +1,54 @@
+{
+  "input": "../nc/fanuc-lathe/c10-alternating.nc",
+  "profile": "fanuc-lathe",
+  "machine": {
+    "channels": {
+      "layout": "single-file",
+      "list": [
+        {
+          "id": "1",
+          "name": "Channel 1"
+        },
+        {
+          "id": "2",
+          "name": "Channel 2"
+        }
+      ],
+      "sectionStart": "^O(?<channel>[12])\\d{3}(?![\\d.])",
+      "sectionEnd": "(?<![A-Z])M(?:99|30)(?![\\d.])",
+      "syncMarks": [
+        {
+          "id": "wait",
+          "label": "Wait M900-M999, P = path numbers",
+          "match": {
+            "kind": "codes",
+            "codes": "M900-M999"
+          },
+          "partners": {
+            "kind": "word",
+            "address": "P",
+            "decode": "digits",
+            "whenAbsent": {
+              "kind": "none"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "expect": {
+    "layout": "single-file",
+    "sections": [
+      {"channel":"1","ranges":[{"startLine":5,"endLine":12},{"startLine":21,"endLine":27}]},
+      {"channel":"2","ranges":[{"startLine":13,"endLine":20},{"startLine":28,"endLine":34}]}
+    ],
+    "outside": [{"startLine":1,"endLine":4},{"startLine":35,"endLine":41}],
+    "marks": [
+      {"ruleId":"wait","mark":"M901","line":11,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M901","line":19,"channel":"2","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M902","line":26,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M902","line":33,"channel":"2","partners":["1","2"],"blocking":true}
+    ],
+    "problems": []
+  }
+}

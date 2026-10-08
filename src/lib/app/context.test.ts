@@ -42,6 +42,9 @@ const M6_SERVICES = ['machines'] as const;
 /** What P7 adds (plan §7.9). The singletons are stubs on `m7/base`; the keys are not. */
 const M7_SERVICES = ['fileMemory', 'session', 'recovery'] as const;
 
+/** What P12 adds (plan §7.17). The singleton is a stub on `m12/base`; the key is not. */
+const M12_SERVICES = ['channels'] as const;
+
 const SERVICES = [
   ...M1_SERVICES,
   ...M2_SERVICES,
@@ -50,10 +53,11 @@ const SERVICES = [
   ...M5_SERVICES,
   ...M6_SERVICES,
   ...M7_SERVICES,
+  ...M12_SERVICES,
 ];
 
 describe('app context', () => {
-  it('exposes every M1 to M7 service', () => {
+  it('exposes every M1 to M7 and M12 service', () => {
     expect(Object.keys(ctx).sort()).toEqual([...SERVICES].sort());
   });
 

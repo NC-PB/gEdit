@@ -1,0 +1,57 @@
+{
+  "comment": "Written for gEdit (synthetic, not for a machine); see README.md here.",
+  "description": "Siemens two channels, marks 2/3 and 4/5 swapped in channel 2. In channel 1 the label LOOP1 between marks 2 and 3 is the target of a GOTOB, so the order of that pair is not checked; the label PLAIN between marks 4 and 5 is no target, so that pair is out of order. jumpLines are what WP12.5 computes: the target label line and the backward jump line.",
+  "profile": "sinumerik",
+  "preset": "sinumerik-2channel",
+  "program": {
+    "1": [
+      "%_N_JUMP1_MPF",
+      "; WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE",
+      "NN100: WAITM(1,1,2)",
+      "NN200: WAITM(2,1,2)",
+      "LOOP1: G1 X50 F0.2",
+      "NN300: WAITM(3,1,2)",
+      "NN400: WAITM(4,1,2)",
+      "PLAIN: G0 X100",
+      "NN500: WAITM(5,1,2)",
+      "IF R1>0 GOTOB LOOP1",
+      "M30"
+    ],
+    "2": [
+      "%_N_JUMP2_MPF",
+      "; WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE",
+      "NN100: WAITM(1,1,2)",
+      "NN300: WAITM(3,1,2)",
+      "NN200: WAITM(2,1,2)",
+      "NN500: WAITM(5,1,2)",
+      "NN400: WAITM(4,1,2)",
+      "M30"
+    ]
+  },
+  "jumpLines": {
+    "1": [
+      5,
+      10
+    ]
+  },
+  "expect": {
+    "findings": [
+      {
+        "kind": "order-not-checked",
+        "channel": "1",
+        "line": 4,
+        "mark": "2",
+        "other": "2",
+        "otherLine": 5
+      },
+      {
+        "kind": "out-of-order",
+        "channel": "1",
+        "line": 7,
+        "mark": "4",
+        "other": "2",
+        "otherLine": 7
+      }
+    ]
+  }
+}

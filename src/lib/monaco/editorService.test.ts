@@ -200,6 +200,7 @@ interface FakeModel {
   getAlternativeVersionId(): number;
   getLineCount(): number;
   getLineContent(line: number): string;
+  getLinesContent(): string[];
   getFullModelRange(): Record<string, number>;
   getValueLengthInRange(range: unknown, preference?: number): number;
   getValueInRange(range: unknown, preference?: number): string;
@@ -268,6 +269,7 @@ function fakeMonaco(): { api: Monaco; state: FakeMonaco } {
       getAlternativeVersionId: () => version,
       getLineCount: () => model.value.split('\n').length,
       getLineContent: (line) => model.value.split('\n')[line - 1] ?? '',
+      getLinesContent: () => model.value.split('\n'),
       getFullModelRange: () => ({ startLineNumber: 1, startColumn: 1, endLineNumber: model.getLineCount(), endColumn: 1 }),
       getValueLengthInRange: () => 0,
       getValueInRange: () => '',
@@ -493,6 +495,9 @@ describe('createEditorService with a fake Monaco', () => {
     h.service.createModel(id, 'N10\r\nN20\rN30', 'fanuc-gcode', 'crlf');
     expect(h.service.getText(id)).toBe('N10\nN20\nN30');
     expect(h.service.getLines(id, 2, 3)).toEqual(['N20', 'N30']);
+    // The whole document is read in one pass (M12 F3), with the same answer.
+    expect(h.service.getLines(id, 1, 3)).toEqual(['N10', 'N20', 'N30']);
+    expect(h.service.getLines(id, 0, 99)).toEqual(['N10', 'N20', 'N30']);
     expect(h.service.getLineCount(id)).toBe(3);
     // The model itself keeps the CRLF sequence: that is what a save joins with.
     expect((h.state.created.at(-1) as FakeModel).eol).toBe('crlf');

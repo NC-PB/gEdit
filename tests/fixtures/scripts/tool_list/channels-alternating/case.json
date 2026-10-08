@@ -1,0 +1,13 @@
+{
+  "profile": "fanuc-lathe",
+  "channels": {
+    "layout": "single-file",
+    "self": null,
+    "list": [
+      { "id": "1", "name": "Channel 1", "ranges": [{ "startLine": 3, "endLine": 7 }, { "startLine": 13, "endLine": 19 }] },
+      { "id": "2", "name": "Channel 2", "ranges": [{ "startLine": 8, "endLine": 12 }, { "startLine": 20, "endLine": 23 }] }
+    ],
+    "outside": [{ "startLine": 1, "endLine": 2 }, { "startLine": 24, "endLine": 27 }],
+    "marks": []
+  }
+}

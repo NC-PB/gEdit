@@ -30,6 +30,7 @@
 
 mod atomic;
 mod backup;
+mod channels;
 mod config;
 mod files;
 mod machines;
@@ -117,6 +118,7 @@ pub fn run() {
             machines::machines_open_file,
             quit::quit_guard_set_dirty,
             backup::files_backup,
+            channels::channel_siblings,
             session::session_save,
             session::session_load,
             recovery::recovery_put,

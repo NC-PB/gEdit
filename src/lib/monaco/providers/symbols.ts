@@ -84,6 +84,9 @@ export function registerSymbols(monaco: Monaco, profileId: string): Disposable {
     stop: monaco.languages.SymbolKind.Event,
     end: monaco.languages.SymbolKind.Null,
     'subprogram-call': monaco.languages.SymbolKind.Function,
+    // M12 (P12): a channel group and a wait mark, made by the channel service (AD-32).
+    channel: monaco.languages.SymbolKind.Namespace,
+    sync: monaco.languages.SymbolKind.Event,
   };
 
   function symbolOf(item: OutlineItem, model: ModelLike): import('monaco-editor/esm/vs/editor/editor.api.js').languages.DocumentSymbol {

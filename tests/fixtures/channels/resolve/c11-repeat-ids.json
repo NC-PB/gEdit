@@ -1,0 +1,59 @@
+{
+  "input": "../nc/fanuc-lathe/c11-repeat-ids.nc",
+  "profile": "fanuc-lathe",
+  "machine": {
+    "channels": {
+      "layout": "single-file",
+      "list": [
+        {
+          "id": "1",
+          "name": "Channel 1"
+        },
+        {
+          "id": "2",
+          "name": "Channel 2"
+        }
+      ],
+      "sectionStart": "^O21\\d\\d(?![\\d.])",
+      "syncMarks": [
+        {
+          "id": "wait",
+          "label": "Wait M900-M999, P = path numbers",
+          "match": {
+            "kind": "codes",
+            "codes": "M900-M999"
+          },
+          "partners": {
+            "kind": "word",
+            "address": "P",
+            "decode": "digits",
+            "whenAbsent": {
+              "kind": "none"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "expect": {
+    "layout": "single-file",
+    "sections": [
+      {"channel":"1","ranges":[{"startLine":4,"endLine":18}]},
+      {"channel":"2","ranges":[{"startLine":19,"endLine":34}]}
+    ],
+    "outside": [{"startLine":1,"endLine":3}],
+    "marks": [
+      {"ruleId":"wait","mark":"M910","line":8,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M920","line":10,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M910","line":12,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M920","line":14,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M920","line":16,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M910","line":23,"channel":"2","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M920","line":25,"channel":"2","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M910","line":27,"channel":"2","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M920","line":29,"channel":"2","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M920","line":31,"channel":"2","partners":["1","2"],"blocking":true}
+    ],
+    "problems": []
+  }
+}

@@ -106,12 +106,15 @@ const MachinesPage = (await import('./MachinesPage.svelte')).default;
 const {
   FIELD_PROFILE,
   addDraft,
+  channelErrors,
   codeDbFor,
   draftErrors,
   duplicateDraft,
   editDraft,
   fieldsFor,
   fileProblems,
+  formReadable,
+  hasChannelsStep,
   openMachinesFile,
   profileChoices,
   profileField,
@@ -524,5 +527,84 @@ describe('the form values a draft starts from', () => {
   it('are the fields’ own defaults, which is what the renderer seeds itself with', () => {
     const draft = addDraft('fanuc-lathe', deps);
     expect(draft.values).toEqual(initialValues(fieldsFor(draft, deps)));
+  });
+});
+
+describe('the Channels step (M12)', () => {
+  const preset = () =>
+    structuredClone(
+      profiles.profile('fanuc-lathe').machineParams!.channels!.presets.find((p) => p.id === 'fanuc-2path')!.value,
+    );
+
+  it('is offered for a dialect that declares channels, never for Duplicate', () => {
+    expect(hasChannelsStep(addDraft('fanuc-lathe', deps), deps)).toBe(true);
+    expect(hasChannelsStep(addDraft('fanuc-gcode', deps), deps)).toBe(false);
+    expect(hasChannelsStep(duplicateDraft(LATHE_2, deps), deps)).toBe(false);
+  });
+
+  it('carries the draft’s block into the saved record', async () => {
+    const draft = addDraft('fanuc-lathe', deps);
+    const values = { ...draft.values, [FIELD_NAME]: 'Two paths' };
+    expect(await submitDraft({ ...draft, values, channels: preset() }, deps)).toBe(true);
+    const saved = fake.add.mock.calls[0][0] as unknown as MachineConfig;
+    expect(saved.params.channels).toEqual(preset());
+  });
+
+  it('removes the stored block when the step says "No channels"', async () => {
+    const stored = { ...LATHE_2, params: { ...LATHE_2.params, channels: preset() } };
+    fake.setList([stored]);
+    const draft = editDraft(stored, deps);
+    expect(draft.channels).toEqual(preset());
+    expect(await submitDraft({ ...draft, channels: undefined }, deps)).toBe(true);
+    const sent = fake.update.mock.calls[0] as unknown as [string, { params: Record<string, unknown> }];
+    expect(sent[1].params).not.toHaveProperty('channels');
+  });
+
+  it('keeps a stored block it was not asked to change', async () => {
+    const stored = { ...LATHE_2, params: { ...LATHE_2.params, channels: preset() } };
+    fake.setList([stored]);
+    const draft = editDraft(stored, deps);
+    await submitDraft({ ...draft, values: { ...draft.values, [FIELD_NAME]: 'Renamed' } }, deps);
+    const sent = fake.update.mock.calls[0] as unknown as [string, { params: { channels?: unknown } }];
+    expect(sent[1].params.channels).toEqual(preset());
+  });
+
+  it('refuses to save a block with problems, and lists them', async () => {
+    const bad = { ...preset(), sectionStart: undefined, layout: 'single-file' as const };
+    const draft = { ...addDraft('fanuc-lathe', deps), channels: bad };
+    expect(channelErrors(draft, deps).length).toBeGreaterThan(0);
+    const values = { ...draft.values, [FIELD_NAME]: 'Broken' };
+    expect(await submitDraft({ ...draft, values }, deps)).toBe(false);
+    expect(fake.add).not.toHaveBeenCalled();
+  });
+
+  it('lists the problems of a stored broken block on its row, with the machine still usable', () => {
+    const stored = { ...LATHE_2, params: { ...LATHE_2.params, channels: { ...preset(), layout: 'sideways' } } };
+    fake.setList([stored]);
+    const [row] = rowsOf([stored as unknown as MachineConfig], deps);
+    expect(row.usable).toBe(true);
+    expect(row.problems.length).toBeGreaterThan(0);
+    expect(row.problems[0]).toContain('machines[0].params.channels');
+  });
+
+  it('shows only the problems of a block that is not even a list of channels', () => {
+    expect(formReadable(preset())).toBe(true);
+    expect(formReadable(5)).toBe(false);
+    expect(formReadable({ layout: 'multi-file' })).toBe(false);
+  });
+
+  it('reads a block without syncMarks, and opens it for editing with an empty list of rules (CODE-2)', () => {
+    const { syncMarks: _omit, ...bare } = preset();
+    void _omit;
+    expect(formReadable(bare)).toBe(true);
+    const stored = { ...LATHE_2, params: { ...LATHE_2.params, channels: bare } } as unknown as MachineConfig;
+    expect(editDraft(stored, deps).channels?.syncMarks).toEqual([]);
+    expect(stored.params.channels).not.toHaveProperty('syncMarks'); // the stored record is left alone
+  });
+
+  it('does not hand a rule without match or partners to the form (CODE-2)', () => {
+    expect(formReadable({ ...preset(), syncMarks: [{ id: 'w', label: 'W' }] })).toBe(false);
+    expect(formReadable({ ...preset(), syncMarks: ['x'] })).toBe(false);
+    expect(formReadable({ ...preset(), list: ['x'] })).toBe(false);
   });
 });

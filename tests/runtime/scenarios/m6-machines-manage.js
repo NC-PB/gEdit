@@ -159,8 +159,11 @@ scenario('m6-machines-manage-1', { timeout: 420, vars: { HOME: HOME_1 } }, async
     kind: h.q('machine-form')?.dataset.kind,
   })
   const formFields = h.qa('form-field').map((e) => e.dataset.field)
+  // M12 (an intentional change, plan "Intentional behavior changes in M12"): a lathe machine's
+  // form ends with the Channels step, whose layout choice is a field of the same form engine.
+  // The step is the only addition; `m12-channels-config` drives it.
   h.check(
-    'it offers the name, the number rules, the units, diameter, the three variants (G-code system, which of U W V H are incremental, the tool word), the three power-on groups and the notes',
+    'it offers the name, the number rules, the units, diameter, the three variants (G-code system, which of U W V H are incremental, the tool word), the three power-on groups, the notes and, since M12, the Channels step with its layout choice',
     JSON.stringify(formFields) ===
       JSON.stringify([
         'name',
@@ -174,7 +177,8 @@ scenario('m6-machines-manage-1', { timeout: 420, vars: { HOME: HOME_1 } }, async
         'modal.spindlemode',
         'modal.plane',
         'notes',
-      ]),
+        'layout',
+      ]) && !!h.q('machine-channels-step'),
     formFields,
   )
   h.check('a machine with no name cannot be saved', /** @type {HTMLButtonElement} */ (machineAction(h, 'save')).disabled === true, machineAction(h, 'save')?.dataset.disabled)

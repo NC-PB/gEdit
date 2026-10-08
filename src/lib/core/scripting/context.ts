@@ -47,7 +47,8 @@
 // past it the warning is the better trade. They are TS-side caps and may be raised once a
 // measurement says so — see the WP5.1 hand-off.
 
-import type { BuildContextInput, ScriptContextInput, ScriptContextV2 } from '$lib/core/scripting/types';
+import type { ChannelSet } from '$lib/core/channels/types';
+import type { BuildContextInput, ScriptChannels, ScriptContextInput, ScriptContextV2 } from '$lib/core/scripting/types';
 
 /** At most this many lines above the selection are sent to prime the modal state. */
 export const MAX_PRECEDING_LINES = 50_000;
@@ -96,6 +97,47 @@ function inputOf(input: ScriptContextInput): ScriptContextInput {
 }
 
 /**
+ * The `channels` member of the context (§7.17, AD-32), or `undefined` for a document without
+ * channels (`layout: 'none'`, or no set at all): the member is then **absent**, so every M5–M11
+ * script and every user script sees the context it always saw.
+ *
+ * It maps the service's `ChannelSet` — which `resolveDocument` built, the one composition —
+ * and resolves nothing itself. Declared order is kept (`ChannelRef.index`); a declared
+ * channel that was not found is listed too (`ranges: []` / `open: false`), never dropped.
+ * The script gets this document's marks only, and no other document's text (F60).
+ */
+export function channelsOf(set: ChannelSet | undefined): ScriptChannels | undefined {
+  if (set === undefined || set.layout === 'none') return undefined;
+  const found = new Map<string, ScriptChannels['list'][number]>();
+  const order: { index: number; id: string }[] = [];
+  const single = set.layout === 'single-file';
+  for (const m of set.members) {
+    order.push({ index: m.channel.index, id: m.channel.id });
+    if (m.kind === 'section') {
+      found.set(m.channel.id, { id: m.channel.id, name: m.channel.name, ranges: m.ranges.map((r) => ({ startLine: r.startLine, endLine: r.endLine })) });
+    } else {
+      const entry: ScriptChannels['list'][number] = { id: m.channel.id, name: m.channel.name, file: m.name, open: m.docId !== null };
+      if (m.path !== null) entry.path = m.path;
+      found.set(m.channel.id, entry);
+    }
+  }
+  for (const ref of set.missing) {
+    if (found.has(ref.id)) continue;
+    order.push({ index: ref.index, id: ref.id });
+    found.set(ref.id, single ? { id: ref.id, name: ref.name, ranges: [] } : { id: ref.id, name: ref.name, open: false });
+  }
+  order.sort((a, b) => a.index - b.index);
+  const out: ScriptChannels = {
+    layout: set.layout,
+    self: set.self?.id ?? null,
+    list: order.map((o) => found.get(o.id)!),
+    marks: set.marks.map((h) => ({ id: h.mark, line: h.line, channel: h.channel, partners: [...h.partners], blocking: h.blocking })),
+  };
+  if (single) out.outside = set.outside.map((r) => ({ startLine: r.startLine, endLine: r.endLine }));
+  return out;
+}
+
+/**
  * The `GEDIT_CONTEXT` payload for one run (plan §7.5).
  *
  * Everything it cannot derive from `doc` is passed in: the resolved profile, the code
@@ -106,7 +148,8 @@ function inputOf(input: ScriptContextInput): ScriptContextInput {
  * changed underneath the run by whatever else holds those arrays.
  */
 export function buildContext(i: BuildContextInput): ScriptContextV2 {
-  return {
+  const channels = channelsOf(i.channels);
+  const context: ScriptContextV2 = {
     contract: 2,
     document: {
       path: i.doc.path,
@@ -133,4 +176,7 @@ export function buildContext(i: BuildContextInput): ScriptContextV2 {
       source: i.machine.source,
     },
   };
+  // M12: additive, `contract` stays 2 (F50); absent for a document without channels.
+  if (channels !== undefined) context.channels = channels;
+  return context;
 }

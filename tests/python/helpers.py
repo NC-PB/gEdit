@@ -202,6 +202,40 @@ def effective_context(
     return context
 
 
+def channel_context(golden: Any, **overrides: Any) -> Dict[str, Any]:
+    """The ``ScriptContextV2`` of one channel golden, ``channels`` member included (plan §7.17).
+
+    ``golden`` is a ``tests/fixtures/channels/**`` case. The context is read from the file
+    ``tests/unit/resolved.test.ts`` writes for it (``resolved/channels/index.json`` names it),
+    exactly as :func:`effective_context` reads a machine golden's: TypeScript resolved the
+    sections and marks once, and Python reads the result. **Python never resolves channels
+    itself.**
+
+    The entry is made by ``tests/unit/resolved.test.ts`` (WP12.6): the channel service builds
+    the set of the golden's program from ``resolveDocument`` and ``buildContext``'s
+    ``channelsOf`` turns it into the ``channels`` member, so the context here is what a script
+    run in the app receives. A document the machine gives no channels to has no member. A
+    missing entry fails with the command that regenerates it.
+    """
+    index = _resolved("channels", "index")
+    try:
+        key = Path(golden).relative_to(FIXTURES_DIR).as_posix()
+    except ValueError:
+        key = str(golden).replace("\\", "/")
+    name = index.get(key)
+    if not isinstance(name, str):
+        raise AssertionError("no channel context for golden %s; %s" % (key, UPDATE_RESOLVED))
+    path = RESOLVED_DIR / name
+    if not path.is_file():
+        raise AssertionError("%s is missing; %s" % (name, UPDATE_RESOLVED))
+    entry = load_json(path)
+    context = make_context(profile=entry["profile"], codes=resolved_codes(entry["codes"]), **overrides)
+    context["machine"] = entry["machine"]
+    if isinstance(entry.get("channels"), dict):
+        context["channels"] = entry["channels"]
+    return context
+
+
 @dataclass
 class ScriptCase:
     """One ``tests/fixtures/scripts/<script>/<case>/`` folder.

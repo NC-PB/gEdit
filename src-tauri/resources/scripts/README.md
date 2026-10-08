@@ -198,6 +198,30 @@ whose source is `"detected"`. Read it with `gedit_nc.machine_params(context)`; f
 without the member — from a gEdit older than machine configurations — it answers those
 defaults with every source `"profile"`.
 
+`channels` is the one optional member more, for a document of a machine that has channel
+settings (a control that runs several streams at once: two turrets, two paths). It is
+**absent** for any other document — no machine, a machine without channel settings, a
+program no section start matches — so a script written before channels existed runs
+unchanged and `contract` stays 2. When it is there:
+
+```jsonc
+"channels": {
+  "layout": "single-file",   // single-file: one program, a section for each channel | multi-file: a program for each channel
+  "self": null,              // multi-file: the id of the channel this document is
+  "list": [                  // every declared channel, in the machine's order
+    { "id": "1", "name": "Turret A", "ranges": [ { "startLine": 5, "endLine": 12 }, { "startLine": 21, "endLine": 27 } ] },
+    { "id": "2", "name": "Turret B", "ranges": [ { "startLine": 13, "endLine": 20 } ] }
+  ],                         // multi-file: file, path and open instead of ranges; a channel not found has no ranges
+  "outside": [ { "startLine": 1, "endLine": 4 } ],   // single-file: lines that belong to no channel
+  "marks": [ { "id": "M901", "line": 11, "channel": "1", "partners": ["1", "2"], "blocking": true } ]
+}
+```
+
+The line numbers are the document's own, also for a selection (the first line of stdin is
+`input.startLine` then). `marks` are the waits found in *this* document only; `id` is `""`
+for a rule that counts without a code, and `channel` is `""` outside every section. A script
+never receives the text of another file. `gedit_nc` reads the member for you (§7).
+
 ## 4. What your script hands back
 
 stdout is the **result**; anything you want to say to yourself goes to **stderr**. Exit 0
@@ -340,6 +364,12 @@ docstrings in the file are the detail.
 | `machine_params(context)` | the document's machine: `params` (how numbers are read, units, diameter, variants, power-on codes) and `source` for each of them — `"machine"`, `"detected"` or `"profile"` (§3) |
 | `number_class_of`, `value_of`, `readings_of`, `resolve_value`, `write_back` | what a word's number **is** on this machine, and how to write a value back into it — see [below](#why-your-script-needs-the-number-rules) |
 | `WRITE_BACK_ERRORS` | the message `write_back` answers with when it refuses, by code: `rounded`, `noReading`, `notANumber` |
+| `channels(context)` | the `channels` member as a copy — always with `layout`, `self`, `list`, `outside` and `marks` — or, for a document without channels, `{"layout": "none", "self": None, "list": [], "outside": [], "marks": []}` |
+| `channel_of(context, line)` | the id of the channel that holds the 1-based document line, or `None` (outside every section, or no channels). A section several channels share belongs to each; this answers the first. In `multi-file` every line is the document's own channel |
+| `channel_lines(context, lines, channel_id)` | the lines of one channel, all its sections joined in program order — what the control runs as one program. Never a line from outside the channels; `[]` for an unknown id |
+| `channel_line_numbers(context, lines, channel_id)` | the document line number of each line `channel_lines` returns |
+| `outside_lines(context, lines)`, `outside_line_numbers(context, lines)` | the lines that belong to no channel, and their document line numbers |
+| `sync_marks(context, channel_id=None)` | the waits found in this document, of one channel or of all, in line order (copies) |
 | `report(...)`, `envelope(...)` | the two JSON result shapes |
 
 `tokenize_line`, `parse_number` and `format_number` are ports of
@@ -351,6 +381,28 @@ with it and **both** sides are re-run.
 The number rules are a port of `src/lib/core/machines/numbers.ts` and are held to
 `tests/fixtures/machines/numbers.json` in both languages; the modal interpreter's goldens
 are `tests/fixtures/modal/<profile>/**`.
+
+### Channels
+
+On a machine with channel settings the context carries `channels` (§3). Each function above
+answers an empty result when the document has none, so **a script that uses them also runs
+on a single-channel program** and needs no second version. They read `lines` as your script
+got it: for a whole-document run line `i` is document line `i + 1`, for a selection the first
+line is `input.startLine`, and every function cuts the ranges to the lines given. A selection
+therefore sees the part of each channel inside it and never a line it was not handed.
+
+```python
+import gedit_nc
+
+ctx = gedit_nc.load_context()
+lines = gedit_nc.read_input()
+for ch in gedit_nc.channels(ctx)["list"]:
+    own = gedit_nc.channel_lines(ctx, lines, ch["id"])         # one program per turret
+    numbers = gedit_nc.channel_line_numbers(ctx, lines, ch["id"])  # where each came from
+```
+
+A shared section (a line that two channels run) is in the list of each of them. Python 3.9
+is enough; the module uses the standard library only.
 
 ### `ModalInterpreter(cp, codes)` — what is in force after a block
 

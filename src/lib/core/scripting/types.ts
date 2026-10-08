@@ -33,6 +33,7 @@
 // (AD-13). The rules above bound what the *editor* does with the answer, never what the
 // script may do while it runs.
 
+import type { ChannelSet } from '$lib/core/channels/types';
 import type { DocMeta, EncodingName, Eol, Located, Msg, ReportData } from '$lib/app/types';
 import type { CodeEntry } from '$lib/core/codes/types';
 import type { EffectiveMachine, MachineParams } from '$lib/core/machines/types';
@@ -138,6 +139,35 @@ export interface ScriptContextV2 {
     params: MachineParams;
     source: EffectiveMachine['source'];
   };
+  /**
+   * M12 (P12, §7.17, AD-32): the channel set of THIS document. **Absent** for a document
+   * with `layout: 'none'`, so every M5–M11 script is unaffected; `contract` stays 2 (F50).
+   * Filled by `buildContext` from `BuildContextInput.channels` (WP12.6). A script never
+   * receives another document's text (F60).
+   */
+  channels?: ScriptChannels;
+}
+
+/** `ScriptContextV2.channels` (§7.17). */
+export interface ScriptChannels {
+  layout: 'single-file' | 'multi-file';
+  /** Which channel this document is; null for a `single-file` document (it holds several). */
+  self: string | null;
+  list: {
+    id: string;
+    name: string;
+    /** `single-file`: every line range of this channel, in document order (empty for a
+     *  declared channel that was not found). */
+    ranges?: { startLine: number; endLine: number }[];
+    /** `multi-file` only. */
+    file?: string;
+    path?: string;
+    open?: boolean;
+  }[];
+  /** `single-file`: the ranges that belong to no channel (header, inter-section, trailing). */
+  outside?: { startLine: number; endLine: number }[];
+  /** The marks found in THIS document only. */
+  marks: { id: string; line: number; channel: string; partners: string[]; blocking: boolean }[];
 }
 
 /** What `buildContext` needs. Everything it cannot derive, the caller passes in. */
@@ -150,6 +180,9 @@ export interface BuildContextInput {
   params: Record<string, unknown>;
   /** M6: the document's effective machine; `buildContext` copies the §7.15 script member out of it. */
   machine: EffectiveMachine;
+  /** M12 (P12): the document's channel set (`channels.forDoc`); absent or `layout: 'none'` →
+   *  no `channels` member in the context (WP12.6). */
+  channels?: ChannelSet;
 }
 
 // ---------------------------------------------------------------------------

@@ -38,6 +38,8 @@
   } from '$lib/core/machines/fields';
   import { initialValues } from '$lib/core/forms/values';
   import { validateFields } from '$lib/core/forms/validate';
+  import { channelBlock, validateChannels } from '$lib/core/machines/validate';
+  import type { ChannelParams } from '$lib/core/channels/types';
   import type { CodeDb } from '$lib/core/codes/types';
   import type { FieldChoice, FieldSpec } from '$lib/core/forms/types';
   import type { MachineConfig, MachineParams, MachineProblem } from '$lib/core/machines/types';
@@ -86,6 +88,12 @@
     id: string | null;
     profileId: string;
     values: Record<string, unknown>;
+    /**
+     * The Channels step's block (M12). It is not a `FieldSpec` value: the step edits a block
+     * of its own. `undefined` = "No channels". For "edit" it starts as the stored block, valid
+     * or not (a broken one is listed and has to be fixed or removed before Save).
+     */
+    channels?: ChannelParams;
   }
 
   /** The field of the first Add step: which dialect this machine runs. */
@@ -119,19 +127,57 @@
   }
 
   /**
+   * A stored `channels` block that cannot be used (X12 d): the machine stays usable, only its
+   * channels are off, and each problem is listed with its JSON path.
+   */
+  export function channelProblemsOf(machine: MachineConfig, index: number, deps: MachinesDeps): string[] {
+    const waitLetters = deps.profiles.profile(machine.profile)?.machineParams?.channels?.waitLetters;
+    const block = channelBlock(machine, `machines[${index}]`, { waitLetters });
+    return block.state === 'invalid' ? block.problems.map((p) => problemText(deps, p)) : [];
+  }
+
+  /** What stops the Channels step from being saved: the block's problems, in plain words. */
+  export function channelErrors(draft: Draft, deps: MachinesDeps): string[] {
+    if (draft.channels === undefined || draft.kind === 'duplicate') return [];
+    const waitLetters = deps.profiles.profile(draft.profileId)?.machineParams?.channels?.waitLetters;
+    return validateChannels(draft.channels, 'channels', null, { waitLetters }).map((p) => problemText(deps, p));
+  }
+
+  /** The Channels step is offered for dialects that declare `machineParams.channels`. */
+  export function hasChannelsStep(draft: Draft, deps: MachinesDeps): boolean {
+    return draft.kind !== 'duplicate' && deps.profiles.profile(draft.profileId).machineParams?.channels !== undefined;
+  }
+
+  /**
+   * The block is safe to hand to the form: the shape the form reads. Anything else (a stored
+   * block that is not even a list of channels) is only listed, with a way to remove it.
+   */
+  export function formReadable(block: unknown): block is ChannelParams {
+    if (typeof block !== 'object' || block === null) return false;
+    const b = block as Record<string, unknown>;
+    const record = (x: unknown): boolean => typeof x === 'object' && x !== null && !Array.isArray(x);
+    if (!Array.isArray(b.list) || !b.list.every(record)) return false;
+    if (b.syncMarks === undefined) return true;
+    return Array.isArray(b.syncMarks) && b.syncMarks.every((r) => record(r) && record((r as Record<string, unknown>).match) && record((r as Record<string, unknown>).partners));
+  }
+
+  /**
    * The rows: every usable record, then every record the file kept but gEdit could not
    * read. A problem that names no record belongs to the file itself and is shown above the
    * list instead (`fileProblems`).
    */
   export function rowsOf(list: readonly MachineConfig[], deps: MachinesDeps): MachineRow[] {
     const problems = deps.machines.problems();
-    const rows: MachineRow[] = list.map((machine) => ({
+    const rows: MachineRow[] = list.map((machine, index) => ({
       id: machine.id,
       name: machine.name,
       profileId: machine.profile,
       profileName: deps.profiles.get(machine.profile)?.name ?? machine.profile,
       isDefault: deps.machines.defaultFor(machine.profile) === machine.id,
-      problems: problems.filter((p) => p.machineId === machine.id).map((p) => problemText(deps, p)),
+      problems: [
+        ...problems.filter((p) => p.machineId === machine.id).map((p) => problemText(deps, p)),
+        ...channelProblemsOf(machine, index, deps),
+      ],
       usable: true,
     }));
     const known = new Set(rows.map((row) => row.id));
@@ -245,7 +291,15 @@
   /** The draft for "Edit": the stored record, through the form's own defaults. */
   export function editDraft(machine: MachineConfig, deps: MachinesDeps): Draft {
     const draft: Draft = { kind: 'edit', id: machine.id, profileId: machine.profile, values: {} };
-    return { ...draft, values: initialValues(fieldsFor(draft, deps)) };
+    const stored = machine.params?.channels;
+    // A block without `syncMarks` is valid (no rules); the form works on a list.
+    const channels =
+      stored === undefined ? undefined : structuredClone(typeof stored === 'object' && stored !== null && !Array.isArray(stored) && stored.syncMarks === undefined ? { ...stored, syncMarks: [] } : stored);
+    return {
+      ...draft,
+      values: initialValues(fieldsFor(draft, deps)),
+      ...(channels === undefined ? {} : { channels }),
+    };
   }
 
   /** The draft for "Duplicate": one field, the new name. */
@@ -278,7 +332,11 @@
         deps.status.show(deps.t('machines.page.duplicated', { name }));
         return true;
       }
-      const built = machineFromValues(decl, draft.values, currentOf(draft, deps));
+      if (channelErrors(draft, deps).length > 0) {
+        deps.status.show(deps.t('machines.channels.problemsTitle'), { error: true });
+        return false;
+      }
+      const built = machineFromValues(decl, draft.values, currentOf(draft, deps), { channels: draft.channels });
       if (draft.kind === 'add') {
         await deps.machines.add({
           name: built.name,
@@ -387,6 +445,10 @@
 
 <script lang="ts">
   import FormRenderer from '$lib/components/forms/FormRenderer.svelte';
+  import ChannelsForm from '$lib/components/dialogs/ChannelsForm.svelte';
+  import ChannelsTester from '$lib/components/dialogs/ChannelsTester.svelte';
+  import { REPOSITORY_URL } from '$lib/components/dialogs/AboutDialog.svelte';
+  import { editor } from '$lib/monaco/editorService';
   import { dialogs } from '$lib/app/dialogs';
   import { status } from '$lib/app/status';
   import { docs } from '$lib/stores/documents';
@@ -394,6 +456,7 @@
   import { machines } from '$lib/stores/machines';
   import { profiles } from '$lib/stores/profiles';
   import { t } from '$lib/i18n';
+  import { baseName } from '$lib/utils/platform';
 
   const deps: MachinesDeps = { machines, profiles, codes, docs, dialogs, status, t };
 
@@ -419,7 +482,12 @@
   const profileFields = $derived(profileField(deps));
   const fields = $derived(draft ? fieldsFor(draft, deps) : []);
   const errors = $derived(draft ? draftErrors(fields, draft, $list) : {});
-  const blockedSave = $derived(Object.keys(errors).length > 0 || busy);
+  /** The Channels step (M12): only for dialects that declare `machineParams.channels`. */
+  const channelsDecl = $derived(
+    draft && hasChannelsStep(draft, deps) ? deps.profiles.profile(draft.profileId).machineParams?.channels : undefined,
+  );
+  const channelIssues = $derived(draft ? channelErrors(draft, deps) : []);
+  const blockedSave = $derived(Object.keys(errors).length > 0 || channelIssues.length > 0 || busy);
 
   const title = $derived.by(() => {
     if (!draft) return '';
@@ -471,6 +539,27 @@
       if (dropped.length > 0) status.show(t('machines.page.modalDropped', { codes: dropped.join(', ') }));
     }
     draft = { ...draft, values };
+  }
+
+  function setChannels(next: ChannelParams | undefined): void {
+    if (draft) draft = { ...draft, channels: next };
+  }
+
+  /**
+   * The app has no way to open a help page (About shows its addresses as text), so the link
+   * says where the page is: in the `docs/user` folder and on the repository.
+   */
+  function openRegexHelp(): void {
+    status.show(t('machines.channels.regexHelpAt', { url: `${REPOSITORY_URL}/blob/main/docs/user/regex.md` }));
+  }
+
+  /** "Take the active document" of the tester. */
+  function activeDocument(): { name: string; text: string } | null {
+    const id = docs.getActiveId();
+    const doc = id === null ? undefined : docs.get(id);
+    if (id === null || doc === undefined) return null;
+    const count = editor.getLineCount(id);
+    return { name: doc.path === null ? '' : baseName(doc.path), text: count < 1 ? '' : editor.getLines(id, 1, count).join('\n') };
   }
 
   function cancel(): void {
@@ -536,7 +625,7 @@
   {#if view.blocked}
     <p class="notice" data-testid="machines-notice">{t('machines.page.blocked')}</p>
   {/if}
-  {#each view.problems as problem (problem)}
+  {#each view.problems as problem, k (k)}
     <p class="notice" data-testid="machines-notice">{problem}</p>
   {/each}
 
@@ -576,6 +665,41 @@
     >
       <h3 class="form-title">{title}</h3>
       <FormRenderer {fields} values={draft.values} {errors} onChange={set} />
+      {#if channelsDecl}
+        <div class="channels-step" data-testid="machine-channels-step">
+          {#if draft.channels !== undefined && !formReadable(draft.channels)}
+            <h3 class="form-title">{t('machines.channels.title')}</h3>
+            <p class="notice" data-testid="channels-unreadable">{t('machines.channels.unreadable')}</p>
+            <ul class="problems" data-testid="channels-problems">
+              {#each channelIssues as problem, k (k)}
+                <li class="problem">{problem}</li>
+              {/each}
+            </ul>
+            <button
+              type="button"
+              class="action"
+              data-testid="channels-remove-unreadable"
+              onclick={() => setChannels(undefined)}>{t('machines.channels.removeUnreadable')}</button
+            >
+          {:else}
+            <ChannelsForm
+              value={draft.channels}
+              onChange={setChannels}
+              waitLetters={channelsDecl.waitLetters}
+              presets={channelsDecl.presets}
+              disabled={view.blocked}
+              onOpenRegexHelp={openRegexHelp}
+            />
+            {#if draft.channels !== undefined && channelIssues.length === 0}
+              <ChannelsTester
+                params={draft.channels}
+                cp={profiles.compiled(draft.profileId)}
+                takeDocument={activeDocument}
+              />
+            {/if}
+          {/if}
+        </div>
+      {/if}
       <div class="actions">
         <button
           type="button"
@@ -654,7 +778,7 @@
             </span>
             {#if row.problems.length > 0}
               <ul class="problems">
-                {#each row.problems as problem (problem)}
+                {#each row.problems as problem, k (k)}
                   <li class="problem">{problem}</li>
                 {/each}
               </ul>
@@ -713,6 +837,15 @@
     background: var(--bg-app);
     color: var(--danger-text);
     font-size: 12px;
+  }
+
+  .channels-step {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
   }
 
   .form-help {

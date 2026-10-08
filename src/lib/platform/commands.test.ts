@@ -34,6 +34,7 @@ const {
   recoveryList,
   recoveryRead,
   recoveryDiscard,
+  channelSiblings,
   RECOVERY_HEADER,
 } = await import('./commands');
 
@@ -303,5 +304,14 @@ describe('the M7 backup, session and recovery commands', () => {
     invoke.mockResolvedValue(bytes.buffer);
     await expect(recoveryRead('s-17', 'd7')).resolves.toBe('G0 X0\n');
     expect(invoke).toHaveBeenCalledWith('recovery_read', { session: 's-17', key: 'd7' });
+  });
+});
+
+describe('the M12 sibling lookup', () => {
+  it('sends the document path and the names, nothing else', async () => {
+    const answer = [{ name: 'part_CH2.nc', exists: true, bytes: 12, modified: 1, error: null }];
+    invoke.mockResolvedValue(answer);
+    await expect(channelSiblings('/jobs/part_CH1.nc', ['part_CH2.nc'])).resolves.toEqual(answer);
+    expect(invoke).toHaveBeenCalledWith('channel_siblings', { path: '/jobs/part_CH1.nc', names: ['part_CH2.nc'] });
   });
 });

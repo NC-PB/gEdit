@@ -145,6 +145,15 @@ from _nc_lex import (
     to_py_regex,
     tokenize_line,
 )
+from _nc_channels import (
+    channel_line_numbers,
+    channel_lines,
+    channel_of,
+    channels,
+    outside_line_numbers,
+    outside_lines,
+    sync_marks,
+)
 from _nc_machine import (
     WRITE_BACK_ERRORS,
     machine_params,
@@ -205,6 +214,15 @@ __all__ = [
     # Why `write_back` refused, by code. A script names the code instead of matching the
     # sentence, which is the same contract the TypeScript `WRITE_BACK_ERRORS` keeps.
     "WRITE_BACK_ERRORS",
+    # Section 7.17, the channels of this document (M12, AD-32). Each answers an empty
+    # result for a context without them.
+    "channels",
+    "channel_of",
+    "channel_lines",
+    "channel_line_numbers",
+    "outside_lines",
+    "outside_line_numbers",
+    "sync_marks",
     # Section 7.4 helpers over the effective profile (M6).
     "machine_type_of",
     "incremental_axes",

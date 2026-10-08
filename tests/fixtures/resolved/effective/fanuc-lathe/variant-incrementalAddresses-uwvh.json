@@ -169,6 +169,189 @@
     "grammar": "iso",
     "id": "fanuc-lathe",
     "machineParams": {
+      "channels": {
+        "presets": [
+          {
+            "id": "fanuc-2path",
+            "label": "Two paths, one file per path (path number at the end of the extension); waits M900-M999; P as a bit sum (the control's default, P3 = paths 1 and 2); no P = paths 1 and 2",
+            "source": "Fanuc 30i/31i user manual, multi-path waiting function (parameters 8110, 8111, 8103 bit 1); the range M900-M999 from the owner's local multi-path set (aggregate)",
+            "value": {
+              "fileName": "^(?<stem>.+)\\.[A-Za-z]*-?(?<channel>\\d{1,2})$",
+              "layout": "multi-file",
+              "list": [
+                {
+                  "id": "1",
+                  "name": "Path 1"
+                },
+                {
+                  "id": "2",
+                  "name": "Path 2"
+                }
+              ],
+              "stopsAndEndsWait": false,
+              "syncMarks": [
+                {
+                  "id": "wait",
+                  "label": "Waiting M-code: the range is parameters 8110/8111, the P word names the paths",
+                  "match": {
+                    "codes": "M900-M999",
+                    "kind": "codes"
+                  },
+                  "partners": {
+                    "address": "P",
+                    "decode": "bitmask",
+                    "kind": "word",
+                    "whenAbsent": {
+                      "channels": [
+                        "1",
+                        "2"
+                      ],
+                      "kind": "fixed"
+                    }
+                  },
+                  "samePartners": true
+                }
+              ]
+            },
+            "verify": true
+          },
+          {
+            "id": "fanuc-2path-digits",
+            "label": "Two paths, one file per path (path number at the end of the extension); waits M900-M999; P as path numbers (parameter 8103 bit 1 = 1, P12 = paths 1 and 2); no P = paths 1 and 2",
+            "source": "Fanuc 30i/31i user manual, multi-path waiting function (parameters 8110, 8111; 8103 bit 1 = 1: P as path numbers; without P, paths 1 and 2 wait)",
+            "value": {
+              "fileName": "^(?<stem>.+)\\.[A-Za-z]*-?(?<channel>\\d{1,2})$",
+              "layout": "multi-file",
+              "list": [
+                {
+                  "id": "1",
+                  "name": "Path 1"
+                },
+                {
+                  "id": "2",
+                  "name": "Path 2"
+                }
+              ],
+              "stopsAndEndsWait": false,
+              "syncMarks": [
+                {
+                  "id": "wait",
+                  "label": "Waiting M-code: the range is parameters 8110/8111, the P word names the paths",
+                  "match": {
+                    "codes": "M900-M999",
+                    "kind": "codes"
+                  },
+                  "partners": {
+                    "address": "P",
+                    "decode": "digits",
+                    "kind": "word",
+                    "whenAbsent": {
+                      "channels": [
+                        "1",
+                        "2"
+                      ],
+                      "kind": "fixed"
+                    }
+                  },
+                  "samePartners": true
+                }
+              ]
+            },
+            "verify": true
+          },
+          {
+            "id": "fanuc-3path-digits",
+            "label": "Three paths, one file per path (path number at the end of the extension); waits M900-M999; P as path numbers (P12 = paths 1 and 2, 0 = path 10); a wait without P is an error",
+            "source": "Fanuc 30i/31i user manual, multi-path waiting function (parameter 8103 bit 1 = 1; without P only two-path systems wait); the owner's local three-path set writes digit P words (aggregate)",
+            "value": {
+              "fileName": "^(?<stem>.+)\\.[A-Za-z]*-?(?<channel>\\d{1,2})$",
+              "layout": "multi-file",
+              "list": [
+                {
+                  "id": "1",
+                  "name": "Path 1"
+                },
+                {
+                  "id": "2",
+                  "name": "Path 2"
+                },
+                {
+                  "id": "3",
+                  "name": "Path 3"
+                }
+              ],
+              "stopsAndEndsWait": false,
+              "syncMarks": [
+                {
+                  "id": "wait",
+                  "label": "Waiting M-code: the range is parameters 8110/8111, the P word names the paths",
+                  "match": {
+                    "codes": "M900-M999",
+                    "kind": "codes"
+                  },
+                  "partners": {
+                    "address": "P",
+                    "decode": "digits",
+                    "kind": "word",
+                    "whenAbsent": {
+                      "kind": "none"
+                    }
+                  },
+                  "samePartners": true
+                }
+              ]
+            },
+            "verify": true
+          },
+          {
+            "id": "fanuc-3path-bitmask",
+            "label": "Three paths, one file per path (path number at the end of the extension); waits M900-M999; P as a bit sum (P7 = paths 1, 2 and 3); a wait without P is an error",
+            "source": "Fanuc 30i/31i user manual, multi-path waiting function (parameter 8103 bit 1 = 0)",
+            "value": {
+              "fileName": "^(?<stem>.+)\\.[A-Za-z]*-?(?<channel>\\d{1,2})$",
+              "layout": "multi-file",
+              "list": [
+                {
+                  "id": "1",
+                  "name": "Path 1"
+                },
+                {
+                  "id": "2",
+                  "name": "Path 2"
+                },
+                {
+                  "id": "3",
+                  "name": "Path 3"
+                }
+              ],
+              "stopsAndEndsWait": false,
+              "syncMarks": [
+                {
+                  "id": "wait",
+                  "label": "Waiting M-code: the range is parameters 8110/8111, the P word names the paths",
+                  "match": {
+                    "codes": "M900-M999",
+                    "kind": "codes"
+                  },
+                  "partners": {
+                    "address": "P",
+                    "decode": "bitmask",
+                    "kind": "word",
+                    "whenAbsent": {
+                      "kind": "none"
+                    }
+                  },
+                  "samePartners": true
+                }
+              ]
+            },
+            "verify": true
+          }
+        ],
+        "waitLetters": [
+          "M"
+        ]
+      },
       "diameter": "on",
       "modalGroups": [
         "feedmode",

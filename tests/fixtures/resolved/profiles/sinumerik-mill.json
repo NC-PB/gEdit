@@ -147,6 +147,74 @@
   "grammar": "sinumerik",
   "id": "sinumerik-mill",
   "machineParams": {
+    "channels": {
+      "presets": [
+        {
+          "id": "sinumerik-2channel",
+          "label": "Two channels, one program per channel (tie the files together by hand or add a file-name rule); WAITM/WAITMC wait with a mark number; SETM answers a WAITM, CLEARM does not; SETM and CLEARM are reached with Next/Previous Sync Point and not listed in the map; WAITE not counted",
+          "source": "syntax-sinumerik.md §7.2a (WAITM, WAITMC, WAITE, SETM, CLEARM)",
+          "value": {
+            "layout": "multi-file",
+            "list": [
+              {
+                "id": "1",
+                "name": "Channel 1"
+              },
+              {
+                "id": "2",
+                "name": "Channel 2"
+              }
+            ],
+            "stopsAndEndsWait": false,
+            "syncMarks": [
+              {
+                "id": "waitm",
+                "label": "WAITM / WAITMC: wait for a mark number in the channels listed",
+                "match": {
+                  "kind": "regex",
+                  "pattern": "\\bWAITMC?\\s*\\(\\s*(?<mark>[^,)\\s]+)"
+                },
+                "partners": {
+                  "decode": "split",
+                  "kind": "line",
+                  "pattern": "\\bWAITMC?\\s*\\(\\s*[^,)\\s]+\\s*,(?<channels>[^)]*)\\)",
+                  "separator": ","
+                }
+              },
+              {
+                "answers": true,
+                "blocking": false,
+                "id": "setm",
+                "label": "SETM: sets a mark without waiting; it answers a WAITM of that mark in another channel",
+                "match": {
+                  "kind": "regex",
+                  "pattern": "\\bSETM\\s*\\(\\s*(?<mark>[^,)\\s]+)"
+                },
+                "partners": {
+                  "kind": "all"
+                }
+              },
+              {
+                "blocking": false,
+                "id": "clearm",
+                "label": "CLEARM: clears a mark without waiting; it answers nothing",
+                "match": {
+                  "kind": "regex",
+                  "pattern": "\\bCLEARM\\s*\\(\\s*(?<mark>[^,)\\s]+)"
+                },
+                "partners": {
+                  "kind": "all"
+                }
+              }
+            ]
+          },
+          "verify": true
+        }
+      ],
+      "waitLetters": [
+        "M"
+      ]
+    },
     "diameter": "off",
     "modalGroups": [
       "feedmode",

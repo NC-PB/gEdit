@@ -84,8 +84,8 @@ const SHIPPED: Declared[] = readdirSync(CONTRIB)
   .flatMap(declaredIn);
 
 /**
- * Plan §7.13: the rows of WP10.1 (M10, pinned by P10) and of WP11.1 and WP11.3 (M11, pinned
- * by P11), with the i18n keys of their titles.
+ * Plan §7.13: the rows of WP10.1 (M10, pinned by P10), of WP11.1 and WP11.3 (M11, pinned by
+ * P11) and of WP12.5 (M12, pinned by P12), with the i18n keys of their titles.
  */
 const PINNED: { id: string; keys?: Keys; title: string; owner: string; pending?: true }[] = [
   { id: 'nc.blockSkip.add', title: 'ncBlockSkip.add', owner: 'ncBlockSkip.ts' },
@@ -102,16 +102,29 @@ const PINNED: { id: string; keys?: Keys; title: string; owner: string; pending?:
   { id: 'compare.exportDiff', title: 'compare.exportDiff', owner: 'compare.ts' },
   { id: 'compare.files', title: 'compare.files', owner: 'compare.ts' },
   { id: 'compare.toggleReview', title: 'compare.toggleReview', owner: 'compare.ts' },
+  // M12, WP12.5 (P12; registered by WP12.5). Navigation on the NC tab, group
+  // `channels.group`; the check on the Tools tab, group `channels.toolsGroup`. `Mod+Alt+P`
+  // collides with Monaco's own "toggle preserve case" on macOS (Cmd+Option+P, editor focus,
+  // no precondition), so WP12.5 also declares the keybinding removal
+  // `{ keys: 'Mod+Alt+P', command: 'togglePreserveCase' }` (§7.16 #153).
+  { id: 'channels.nextSyncPoint', keys: 'Alt+F7', title: 'channels.nextSyncPoint', owner: 'channels.ts' },
+  { id: 'channels.prevSyncPoint', keys: 'Shift+Alt+F7', title: 'channels.prevSyncPoint', owner: 'channels.ts' },
+  { id: 'channels.gotoPartner', keys: 'Mod+Alt+P', title: 'channels.gotoPartner', owner: 'channels.ts' },
+  { id: 'channels.select', title: 'channels.select', owner: 'channels.ts' },
+  { id: 'channels.assign', title: 'channels.assign', owner: 'channels.ts' },
+  { id: 'channels.checkSync', title: 'channels.checkSync', owner: 'channels.ts' },
+  { id: 'channels.splitToDocuments', title: 'channels.splitToDocuments', owner: 'channels.ts' },
+  { id: 'channels.testOnDocument', title: 'channels.testOnDocument', owner: 'channels.ts' },
 ];
-/** The ribbon groups of those entries: NC tab (M10), Home tab (search), Tools tab (compare). */
-const PINNED_GROUPS = ['ncBlockSkip.group', 'segments.group', 'search.group', 'compare.group'];
+/** The ribbon groups of those entries: NC tab (M10, M12 navigation), Home tab (search), Tools tab (compare, M12 check). */
+const PINNED_GROUPS = ['ncBlockSkip.group', 'segments.group', 'search.group', 'compare.group', 'channels.group', 'channels.toolsGroup'];
 /** The palette categories of those entries. */
-const PINNED_CATEGORIES = ['ncBlockSkip.category', 'segments.category', 'search.category', 'compare.category'];
+const PINNED_CATEGORIES = ['ncBlockSkip.category', 'segments.category', 'search.category', 'compare.category', 'channels.category'];
 
 const asDefs = (rows: { id: string; keys?: Keys }[]): CommandDef[] =>
   rows.map((row): CommandDef => ({ id: row.id, keys: row.keys, title: row.id, run: () => {} }));
 
-describe('the commands M10 and M11 pin (plan §7.13; P10 item 2, P11 item 4)', () => {
+describe('the commands M10, M11 and M12 pin (plan §7.13; P10 item 2, P11 item 4, P12 item 8)', () => {
   it('reads the shipped shortcuts it checks against', () => {
     // A sanity floor: F7 and Shift+F7 (navigation), Mod+S (files), F9 (scripts) are there.
     const keys = SHIPPED.map((d) => d.keys).filter((k): k is KeySpec => typeof k === 'string');

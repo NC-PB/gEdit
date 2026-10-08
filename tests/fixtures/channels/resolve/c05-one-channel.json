@@ -1,0 +1,45 @@
+{
+  "input": "../nc/fanuc-lathe/c05-one-channel.nc",
+  "profile": "fanuc-lathe",
+  "machine": {
+    "channels": {
+      "layout": "single-file",
+      "list": [
+        {
+          "id": "1",
+          "name": "Channel 1"
+        },
+        {
+          "id": "2",
+          "name": "Channel 2"
+        }
+      ],
+      "sectionStart": "^O21\\d\\d(?![\\d.])",
+      "syncMarks": [
+        {
+          "id": "wait",
+          "label": "Wait M900-M999, P = path numbers",
+          "match": {
+            "kind": "codes",
+            "codes": "M900-M999"
+          },
+          "partners": {
+            "kind": "word",
+            "address": "P",
+            "decode": "digits",
+            "whenAbsent": {
+              "kind": "none"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "expect": {
+    "layout": "none",
+    "sections": [],
+    "outside": [],
+    "marks": [],
+    "problems": []
+  }
+}

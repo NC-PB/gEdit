@@ -16,6 +16,7 @@ the machine, not for the person who builds the editor — the build and design n
 | [Dialects](dialects.md) | Dialect profiles: what they decide, which six ship, how the dialect is picked |
 | [Machines](machines.md) | Machine configurations: what `X50` is worth on **your** control, and how to tell gEdit |
 | [Transformations](transformations.md) | The NC tab: renumbering, removing block numbers, the five cleanups, block skip and selecting a tool's lines |
+| [Channels](channels.md) | Twin-turret and multi-path programs: finding the channels, the wait codes, and checking that the waits fit |
 | [Scripts](scripts.md) | Running Python scripts, the six that ship (feeds, speeds, tool list, program checks, extents, address arithmetic), and how to write one |
 | [Regular expressions](regex.md) | Patterns for the editor's find and for Python scripts, with NC examples, and where the two differ |
 | [Shortcuts](shortcuts.md) | The keyboard |
@@ -461,6 +462,10 @@ The **Program Map** lists what the dialect's profile says is worth listing: the 
 start, tool calls, section headings, comments, labels, program stops, subprogram calls and
 the program end. Click an entry to jump to it. It follows the program as you type.
 
+On a program of a machine with [channels](channels.md), the map groups its tools and wait
+codes by channel, the status bar says which channel the cursor is in, and `Alt+F7` /
+`Shift+Alt+F7` step through the wait codes of that channel.
+
 Bookmarks live in gEdit, not in the program — see
 [Coming back where you left off](#coming-back-where-you-left-off), which is also where you
 turn that off.
@@ -595,6 +600,9 @@ They are on the Tools tab and are described in [Scripts](scripts.md):
 | [Program checks](scripts.md#program-checks) | What the program does that the control or the machine will not like: a cut with the spindle stopped, a tool change inside a cycle, a jump to a block that is not there, a thread under constant surface speed, a number whose value depends on how your machine reads it, the stops |
 | [Extents](scripts.md#extents) | The smallest and largest value of every axis, for the program, each work offset and each tool, with the arcs counted, and how many positions could not be worked out |
 | [Address arithmetic](scripts.md#address-arithmetic) | Adds to, subtracts from, multiplies or divides chosen addresses. A Z shift moves the cycle positions that go with it, or refuses a block it cannot judge and lists it |
+
+For a control that runs several programs at once, **Check Wait Codes** on the Tools tab
+compares the wait codes of the channels. It is described in [Channels](channels.md#check-wait-codes).
 
 None of this is a backplot or a simulation: they read the text, and a result is only as
 good as what gEdit is told about the machine. With no machine chosen they say "assumed" or
@@ -803,6 +811,13 @@ Being clear about this saves disappointment on the shop floor.
   an Okuma milling program opens with the turning profile, which reads some of its codes
   wrongly — see [Dialects](dialects.md#milling-on-okuma-and-sinumerik). A program for any
   other control opens with the profile that fits best.
+- **Channels are read, not run.** For a control with several channels (two turrets, two
+  paths) gEdit can show the channels apart and check that the wait codes fit each other. It
+  does not know what a wait does at the machine, it reorders and synchronizes nothing, and a
+  clean check is no proof that the program runs. Showing two channels **side by side** is not
+  there; it is a Phase 4 item, and today you step between the channels. **Split into Channel
+  Documents** makes copies for reading: nothing you change in them comes back into the
+  program. See [Channels](channels.md).
 - **gEdit does not know your machine unless you tell it.** Whether `X50` is 50 mm or
   0.050 mm, which G-code system a lathe uses, what is modal at power-on: all of that is a
   machine setting, and with no machine configured gEdit says "assumed" and refuses to

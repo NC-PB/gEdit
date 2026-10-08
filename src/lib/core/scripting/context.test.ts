@@ -7,6 +7,7 @@
 // filled under exactly one condition and omitted, never truncated, when it does not fit.
 
 import { describe, expect, it } from 'vitest';
+import type { ChannelSet } from '$lib/core/channels/types';
 import { noMachine } from '$lib/core/machines/effective';
 import {
   buildContext,
@@ -193,5 +194,106 @@ describe('precedingLines', () => {
 
   it('absent by default keeps the M4 behaviour', () => {
     expect(build({ input: input({ startLine: 3, endLine: 9 }) }).input.precedingLines).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M12 (AD-32): the channels member
+// ---------------------------------------------------------------------------
+
+const REF = (id: string, index: number) => ({ id, name: `Channel ${id}`, index });
+
+function set(over: Partial<ChannelSet>): ChannelSet {
+  return { layout: 'none', self: null, members: [], missing: [], outside: [], marks: [], problems: [], truncated: false, ...over };
+}
+
+describe('buildContext: channels', () => {
+  it('has no member without a set, for layout none, and the M11 shape is untouched', () => {
+    expect('channels' in build()).toBe(false);
+    expect('channels' in build({ channels: set({}) })).toBe(false);
+    expect(Object.keys(build({ channels: set({}) })).sort()).toEqual(Object.keys(build()).sort());
+    expect(build({ channels: set({}) }).contract).toBe(2);
+  });
+
+  it('single-file: every range of every channel in declared order, outside, and the marks', () => {
+    const ctx = build({
+      channels: set({
+        layout: 'single-file',
+        members: [
+          { kind: 'section', channel: REF('2', 1), docId: 'd1', ranges: [{ startLine: 8, endLine: 9 }] },
+          {
+            kind: 'section',
+            channel: REF('1', 0),
+            docId: 'd1',
+            ranges: [{ startLine: 3, endLine: 4 }, { startLine: 10, endLine: 12 }],
+          },
+        ],
+        outside: [{ startLine: 1, endLine: 2 }, { startLine: 5, endLine: 7 }],
+        marks: [
+          { ruleId: 'w', mark: 'M901', line: 4, channel: '1', partners: ['1', '2'], blocking: true },
+          { ruleId: 's', mark: 'M31', line: 6, channel: '', partners: [], blocking: false },
+        ],
+      }),
+    });
+    expect(ctx.channels).toEqual({
+      layout: 'single-file',
+      self: null,
+      list: [
+        { id: '1', name: 'Channel 1', ranges: [{ startLine: 3, endLine: 4 }, { startLine: 10, endLine: 12 }] },
+        { id: '2', name: 'Channel 2', ranges: [{ startLine: 8, endLine: 9 }] },
+      ],
+      outside: [{ startLine: 1, endLine: 2 }, { startLine: 5, endLine: 7 }],
+      marks: [
+        { id: 'M901', line: 4, channel: '1', partners: ['1', '2'], blocking: true },
+        { id: 'M31', line: 6, channel: '', partners: [], blocking: false },
+      ],
+    });
+  });
+
+  it('lists a declared channel that was not found, empty, and never drops it', () => {
+    const ctx = build({
+      channels: set({
+        layout: 'single-file',
+        members: [{ kind: 'section', channel: REF('1', 0), docId: 'd1', ranges: [{ startLine: 1, endLine: 2 }] }],
+        missing: [REF('2', 1)],
+      }),
+    });
+    expect(ctx.channels?.list).toEqual([
+      { id: '1', name: 'Channel 1', ranges: [{ startLine: 1, endLine: 2 }] },
+      { id: '2', name: 'Channel 2', ranges: [] },
+    ]);
+  });
+
+  it('multi-file: this channel, the files, their paths and whether they are open; no ranges, no outside', () => {
+    const self = REF('1', 0);
+    const ctx = build({
+      channels: set({
+        layout: 'multi-file',
+        self,
+        members: [
+          { kind: 'file', channel: self, name: 'twin_CH1.nc', path: '/jobs/twin_CH1.nc', exists: true, docId: 'd1', by: 'fileName' },
+          { kind: 'file', channel: REF('2', 1), name: 'twin_CH2.nc', path: '/jobs/twin_CH2.nc', exists: true, docId: null, by: 'fileName' },
+        ],
+        missing: [REF('3', 2)],
+        marks: [{ ruleId: 'w', mark: 'M901', line: 7, channel: '1', partners: ['2'], blocking: true }],
+      }),
+    });
+    expect(ctx.channels).toEqual({
+      layout: 'multi-file',
+      self: '1',
+      list: [
+        { id: '1', name: 'Channel 1', file: 'twin_CH1.nc', path: '/jobs/twin_CH1.nc', open: true },
+        { id: '2', name: 'Channel 2', file: 'twin_CH2.nc', path: '/jobs/twin_CH2.nc', open: false },
+        { id: '3', name: 'Channel 3', open: false },
+      ],
+      marks: [{ id: 'M901', line: 7, channel: '1', partners: ['2'], blocking: true }],
+    });
+  });
+
+  it('copies: changing the set afterwards does not change the context', () => {
+    const marks = [{ ruleId: 'w', mark: 'M901', line: 4, channel: '1', partners: ['2'], blocking: true }];
+    const ctx = build({ channels: set({ layout: 'single-file', members: [{ kind: 'section', channel: REF('1', 0), docId: 'd1', ranges: [{ startLine: 1, endLine: 4 }] }], marks }) });
+    marks[0].partners.push('3');
+    expect(ctx.channels?.marks[0].partners).toEqual(['2']);
   });
 });

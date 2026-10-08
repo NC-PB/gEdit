@@ -372,6 +372,17 @@ If a program has `T` words but no tool change at all, the list says so rather th
 back silently empty. On a milling dialect that usually means the program is really a turning
 program opened with a mill profile — switch the dialect in the status bar.
 
+**On a program with channels** (a machine with [channel settings](channels.md)), and a
+program that holds several channels in one file, the rows are grouped by channel. A
+**Channel** column comes first, and the summary names the channels. A channel that has
+several sections gets its rows from all of them, in program order. A tool called on lines
+that belong to no channel (a shared subprogram, for instance) is listed last, under
+**Outside the channels**; with no such tool there is no such group. With **one file for each channel** the list is for the
+file in front of you. The summary names its channel and says that the others are separate
+runs. A single list over several channel files is not possible, because a script sees one
+document ([Channels in a script](#channels-in-a-script)). A program without channels gives
+the list described above, unchanged.
+
 ### Program checks
 
 Lists what a program does that the control or the machine will not like, before the
@@ -930,6 +941,57 @@ many more there were.
 script can hand back new text **and** a summary **and** warnings together —
 `gedit_nc.envelope(text, message, findings)`. This is how the bundled scale scripts report
 the feeds they refused to touch.
+
+### Channels in a script
+
+On a machine with [channel settings](channels.md), the context has one more member,
+`channels`. A document with no channels does not have it, so a script written before
+channels existed runs unchanged, and `contract` stays 2.
+
+```json
+"channels": {
+  "layout": "single-file",
+  "self": null,
+  "list": [ { "id": "a", "name": "Turret A", "ranges": [ { "startLine": 3, "endLine": 7 },
+                                                         { "startLine": 13, "endLine": 14 } ] },
+            { "id": "b", "name": "Turret B", "ranges": [ { "startLine": 8, "endLine": 12 } ] } ],
+  "outside": [ { "startLine": 1, "endLine": 2 } ],
+  "marks": [ { "id": "P10", "line": 5, "channel": "a", "partners": ["b"], "blocking": true } ]
+}
+```
+
+- `layout` is `"single-file"` (one program, a section for each channel) or `"multi-file"`
+  (one program for each channel).
+- `self` is the channel this document is, in `multi-file`. In `single-file` it is `null`,
+  because the document holds several.
+- `list` has every channel the machine declares. In `single-file` each has `ranges`: every
+  stretch of lines that belongs to it, in program order, empty if the channel was not found.
+  In `multi-file` each has `file`, `path` and `open`.
+- `outside` (`single-file`) holds the stretches that belong to no channel.
+- `marks` are the waits found in **this document** only: the line, the channel the wait is
+  in, the channels it waits for, and its number (`id`; `""` for a rule that only counts
+  and has no code). `channel` is `""` for a wait outside every section. A script never
+  receives the text of another file.
+
+Line numbers are the document's, as everywhere in the context. In a run on a selection, the
+`channels` member still describes the whole document, but the helpers below give only the
+part of each channel inside the selection.
+
+`gedit_nc` reads it for you. Each answers an empty result on a document without channels,
+so a script that uses them also runs on a plain program:
+
+| Call | Gives |
+|---|---|
+| `gedit_nc.channels(ctx)` | The member, or an empty one with the same keys (`"layout": "none"`, `"self": None`, and empty `list`, `outside` and `marks`), so any of them can be read without checking |
+| `gedit_nc.channel_of(ctx, line)` | The id of the channel a line belongs to, or `None` |
+| `gedit_nc.channel_lines(ctx, lines, channel_id)` | The lines of one channel: all of its sections joined in program order, which is what a control does when it splits a program into one program for each turret. Never a line from outside the channels |
+| `gedit_nc.channel_line_numbers(ctx, lines, channel_id)` | The program line number of each line `channel_lines` gives, in the same order |
+| `gedit_nc.outside_lines(ctx, lines)` | The lines that belong to no channel |
+| `gedit_nc.outside_line_numbers(ctx, lines)` | Their program line numbers |
+| `gedit_nc.sync_marks(ctx, channel_id=None)` | The waits found, of one channel or of all |
+
+A script that works per channel groups its results with `channel_of`. A script that does
+not care about channels needs no change.
 
 ### The library
 

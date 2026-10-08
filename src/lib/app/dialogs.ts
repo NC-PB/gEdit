@@ -130,11 +130,16 @@ export function createNativeDialogs(deps: NativeDialogsDeps): NativeDialogs {
       }
     },
 
-    async openFiles(o?: { multiple?: boolean }): Promise<string[]> {
+    async openFiles(o?: { multiple?: boolean; defaultPath?: string }): Promise<string[]> {
       if (!deps.isTauri()) return [];
       const picked = await backend.open(
         withFilters(
-          { title: t('files.openTitle'), multiple: o?.multiple ?? true, directory: false },
+          {
+            title: t('files.openTitle'),
+            multiple: o?.multiple ?? true,
+            directory: false,
+            ...(o?.defaultPath ? { defaultPath: o.defaultPath } : {}),
+          },
           deps.profiles.openFilters(),
         ),
       );

@@ -18,6 +18,8 @@
   import CornerDownRight from 'lucide-svelte/icons/corner-down-right';
   import FileCode from 'lucide-svelte/icons/file-code';
   import Flag from 'lucide-svelte/icons/flag';
+  import Columns2 from 'lucide-svelte/icons/columns-2';
+  import Hourglass from 'lucide-svelte/icons/hourglass';
   import Heading from 'lucide-svelte/icons/heading';
   import MessageSquare from 'lucide-svelte/icons/message-square';
   import Tag from 'lucide-svelte/icons/tag';
@@ -65,6 +67,21 @@
     return outline.itemAt(id, cursorLine)?.line ?? null;
   });
 
+  /**
+   * A wait mark is active on its own line; a channel group row never is, and neither is the
+   * one row that stands for a channel's many waits (`count`).
+   */
+  function isActive(item: OutlineItem): boolean {
+    if (item.kind === 'channel') return false;
+    if (item.kind === 'sync') return item.count === undefined && item.line === cursorLine;
+    return item.line === activeLine;
+  }
+
+  /** The row key: two channel rows can start on the same line (`+S1/S3`). */
+  function keyOf(item: OutlineItem): string {
+    return `${item.kind}:${item.line}:${item.channelId ?? ''}`;
+  }
+
   /** Written out per kind, so `i18n/keys.test.ts` sees every key. */
   function kindLabel(kind: OutlineKind): string {
     switch (kind) {
@@ -82,6 +99,10 @@
         return t('programMap.kinds.stop');
       case 'end':
         return t('programMap.kinds.end');
+      case 'channel':
+        return t('programMap.kinds.channel');
+      case 'sync':
+        return t('programMap.kinds.sync');
       default:
         return t('programMap.kinds.subprogramCall');
     }
@@ -105,7 +126,9 @@
     data-testid="program-map-item"
     data-line={item.line}
     data-kind={item.kind}
-    data-active={item.line === activeLine ? '1' : '0'}
+    data-channel-id={item.kind === 'channel' ? (item.channelId ?? '') : undefined}
+    data-count={item.count}
+    data-active={isActive(item) ? '1' : '0'}
     title={t('programMap.lineTooltip', { line: item.line })}
     onclick={() => reveal(item)}
   >
@@ -117,11 +140,26 @@
       {:else if item.kind === 'label'}<Tag size={13} />
       {:else if item.kind === 'stop'}<CirclePause size={13} />
       {:else if item.kind === 'end'}<Flag size={13} />
+      {:else if item.kind === 'channel'}<Columns2 size={13} />
+      {:else if item.kind === 'sync'}<Hourglass size={13} />
       {:else}<CornerDownRight size={13} />{/if}
     </span>
     <span class="kind">{kindLabel(item.kind)}</span>
     <span class="text">{item.text}</span>
   </button>
+{/snippet}
+
+{#snippet node(item: OutlineItem)}
+  <li>
+    {@render row(item)}
+    {#if item.children && item.children.length > 0}
+      <ul class="items children">
+        {#each item.children as child (keyOf(child))}
+          {@render node(child)}
+        {/each}
+      </ul>
+    {/if}
+  </li>
 {/snippet}
 
 <div class="program-map" data-testid="program-map">
@@ -131,17 +169,8 @@
     <p class="hint">{t('programMap.empty')}</p>
   {:else}
     <ul class="items">
-      {#each items as item (`${item.kind}:${item.line}`)}
-        <li>
-          {@render row(item)}
-          {#if item.children && item.children.length > 0}
-            <ul class="items children">
-              {#each item.children as child (`${child.kind}:${child.line}`)}
-                <li>{@render row(child)}</li>
-              {/each}
-            </ul>
-          {/if}
-        </li>
+      {#each items as item (keyOf(item))}
+        {@render node(item)}
       {/each}
     </ul>
   {/if}
@@ -200,6 +229,13 @@
     display: flex;
     flex: 0 0 auto;
     align-items: center;
+  }
+  .item.channel .icon,
+  .item.sync .icon {
+    color: var(--accent);
+  }
+  .item.channel .text {
+    font-weight: 600;
   }
   .item.tool .icon {
     color: var(--nc-tool);

@@ -49,6 +49,7 @@ function harness(over: Partial<BootstrapDeps> = {}): Harness {
     loadSettings: async () => log.push('loadSettings'),
     loadUiState: async () => log.push('loadUiState'),
     loadMachines: async () => log.push('loadMachines'),
+    startChannels: () => step('startChannels'),
     loadContributions: async () => step('loadContributions'),
     installDispatcher: () => step('installDispatcher'),
     watchContext: () => step('watchContext'),
@@ -80,6 +81,7 @@ describe('startApp', () => {
       'loadSettings',
       'loadUiState',
       'loadMachines',
+      'startChannels',
       'loadContributions',
       'installDispatcher',
       'watchContext',
@@ -185,6 +187,7 @@ describe('startApp', () => {
       'dispose watchContext',
       'dispose installDispatcher',
       'dispose loadContributions',
+      'dispose startChannels',
       'setContextProvider',
     ]);
   });

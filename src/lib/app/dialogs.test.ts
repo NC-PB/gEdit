@@ -170,6 +170,16 @@ describe('file pickers', () => {
     expect(recorded[0].options).not.toHaveProperty('filters');
   });
 
+  it('starts in the folder it is given (the other channels of a program)', async () => {
+    const { dialogs, recorded, answers } = setup();
+    answers.open.push([]);
+    await dialogs.openFiles({ defaultPath: '/jobs/part' });
+    expect(recorded[0].options).toMatchObject({ defaultPath: '/jobs/part', multiple: true });
+    answers.open.push([]);
+    await dialogs.openFiles();
+    expect(recorded[1].options).not.toHaveProperty('defaultPath');
+  });
+
   it('carries the profile filters on Windows and Linux', async () => {
     const { dialogs, recorded, answers } = setup({ filtersSupported: true });
     answers.open.push([]);

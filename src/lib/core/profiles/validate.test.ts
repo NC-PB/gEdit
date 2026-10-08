@@ -585,3 +585,51 @@ describe('M10 review: the plain skip level and the closing record', () => {
     expect(pathsOf((p) => (programOf(p).endRecord = 'yes'))).toEqual(['program.endRecord']);
   });
 });
+
+describe('M12 (P12): channel rows and channel presets', () => {
+  it('refuses channel and sync rows in a profile’s own outline rules', () => {
+    for (const kind of ['channel', 'sync']) {
+      const errors = errorsOf((p) => {
+        (p.outline as { kind: string; pattern: string }[])[1].kind = kind;
+      });
+      expect(errors, kind).toEqual([`outline[1].kind: "${kind}" rows are made by the channel service, not by a profile's outline rules`]);
+    }
+  });
+
+  it('checks the shape of machineParams.channels', () => {
+    const paths = lathePaths((p) => {
+      decl(p).channels = {
+        waitLetters: ['m'],
+        presets: [
+          {
+            id: 'a',
+            label: 'A',
+            value: {
+              layout: 'single-file',
+              list: [{ id: '1', name: 'One' }, { id: '2', name: 'Two' }],
+              sectionStart: '(?<channel>G1[34])',
+              syncMarks: [],
+            },
+          },
+          { id: 'a', label: 3, value: 'x' },
+        ],
+      };
+    });
+    expect(paths).toEqual([
+      'machineParams.channels.waitLetters[0]',
+      'machineParams.channels.presets[1].id',
+      'machineParams.channels.presets[1].label',
+      'machineParams.channels.presets[1].value',
+    ]);
+  });
+
+  it('runs every preset through validateChannels (WP12.3), so a preset the Machines page would refuse is refused here', () => {
+    const paths = lathePaths((p) => {
+      decl(p).channels = {
+        waitLetters: ['M'],
+        presets: [{ id: 'a', label: 'A', value: { layout: 'single-file', list: [], syncMarks: [] } }],
+      };
+    });
+    expect(paths).toEqual(['machineParams.channels.presets[0].value.list', 'machineParams.channels.presets[0].value.sectionStart']);
+  });
+});

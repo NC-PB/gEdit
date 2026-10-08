@@ -533,11 +533,13 @@ describe('what the lathe profile inherits and what it states', () => {
     expect(compiled(MILL).profile.machineParams?.variants).toBeUndefined();
     // Klartext declares no machine parameters at all, so it has no machine item (§8.8).
     expect(compiled(KLARTEXT).profile.machineParams).toBeUndefined();
-    // No built-in ships a channel preset in Phase 2 (§8.9, D58). `channels` is not a
-    // declared member until M10, so it is read here the way the G10 reviewer greps for it.
+    // M12 (P12, the owner's decision of 2026-10-07, §8.9): channel presets are offered,
+    // never applied, and every one is `verify`; `channelPresets.test.ts` pins which profile
+    // declares which. The mill and Klartext declare none.
     for (const cp of BUILTINS) {
-      const decl = cp.profile.machineParams as Record<string, unknown> | undefined;
-      expect(decl?.channels, cp.profile.id).toBeUndefined();
+      const decl = cp.profile.machineParams;
+      if (cp.profile.id === MILL || cp.profile.id === KLARTEXT) expect(decl?.channels, cp.profile.id).toBeUndefined();
+      for (const preset of decl?.channels?.presets ?? []) expect(preset.verify, `${cp.profile.id}/${preset.id}`).toBe(true);
     }
   });
 

@@ -1,0 +1,52 @@
+{
+  "comment": "Written for gEdit (synthetic, not for a machine); see README.md here.",
+  "description": "Okuma two turrets: P5 before the first G13 belongs to no turret (outside channels); turret A runs P30 before P20 (not increasing); turret A has two M100, turret B one (count mismatch). Turret B is correct.",
+  "profile": "okuma-osp",
+  "preset": "okuma-2turret",
+  "program": [
+    "$TWIN.MIN%",
+    "(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)",
+    "N1 P5",
+    "G13",
+    "N2 P10",
+    "N3 P30",
+    "N4 P20",
+    "N5 M100",
+    "N6 M100",
+    "G14",
+    "N11 P10",
+    "N12 P20",
+    "N13 M100",
+    "N14 P30",
+    "N15 M02"
+  ],
+  "expect": {
+    "findings": [
+      {
+        "kind": "outside-channels",
+        "channel": "",
+        "line": 3,
+        "mark": "P5"
+      },
+      {
+        "kind": "not-increasing",
+        "channel": "a",
+        "line": 7,
+        "mark": "P20"
+      },
+      {
+        "kind": "count-mismatch",
+        "channel": "a",
+        "line": 9,
+        "mark": "",
+        "ruleId": "m100",
+        "other": "b",
+        "otherLine": 13,
+        "counts": {
+          "channel": 2,
+          "other": 1
+        }
+      }
+    ]
+  }
+}

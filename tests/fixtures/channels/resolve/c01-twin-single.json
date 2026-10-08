@@ -1,0 +1,54 @@
+{
+  "input": "../nc/fanuc-lathe/c01-twin-single.nc",
+  "profile": "fanuc-lathe",
+  "machine": {
+    "channels": {
+      "layout": "single-file",
+      "list": [
+        {
+          "id": "1",
+          "name": "Channel 1"
+        },
+        {
+          "id": "2",
+          "name": "Channel 2"
+        }
+      ],
+      "sectionStart": "^O21\\d\\d(?![\\d.])",
+      "syncMarks": [
+        {
+          "id": "m1xx",
+          "label": "M1 and two digits",
+          "match": {
+            "kind": "prefix",
+            "prefix": "M1",
+            "idDigits": {
+              "min": 2,
+              "max": 2
+            }
+          },
+          "partners": {
+            "kind": "all"
+          }
+        }
+      ]
+    }
+  },
+  "expect": {
+    "layout": "single-file",
+    "sections": [
+      {"channel":"1","ranges":[{"startLine":4,"endLine":24}]},
+      {"channel":"2","ranges":[{"startLine":25,"endLine":44}]}
+    ],
+    "outside": [{"startLine":1,"endLine":3}],
+    "marks": [
+      {"ruleId":"m1xx","mark":"30","line":11,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"m1xx","mark":"31","line":15,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"m1xx","mark":"32","line":22,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"m1xx","mark":"30","line":31,"channel":"2","partners":["1","2"],"blocking":true},
+      {"ruleId":"m1xx","mark":"31","line":34,"channel":"2","partners":["1","2"],"blocking":true},
+      {"ruleId":"m1xx","mark":"32","line":40,"channel":"2","partners":["1","2"],"blocking":true}
+    ],
+    "problems": []
+  }
+}

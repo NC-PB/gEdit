@@ -1,0 +1,67 @@
+{
+  "input": "../nc/sinumerik/s11-two-channel_1.MPF",
+  "profile": "sinumerik",
+  "machine": {
+    "channels": {
+      "layout": "multi-file",
+      "list": [
+        {
+          "id": "1",
+          "name": "Channel 1",
+          "aliases": [
+            "TURN_MAIN"
+          ]
+        },
+        {
+          "id": "2",
+          "name": "Channel 2",
+          "aliases": [
+            "TURN_SUB"
+          ]
+        }
+      ],
+      "fileName": "^(?<stem>.+)_(?<channel>\\d)\\.MPF$",
+      "syncMarks": [
+        {
+          "id": "waitm",
+          "label": "WAITM / WAITMC with a mark number",
+          "match": {
+            "kind": "regex",
+            "pattern": "\\bWAITMC?\\s*\\(\\s*(?<mark>\\d+)"
+          },
+          "partners": {
+            "kind": "line",
+            "pattern": "\\bWAITMC?\\s*\\(\\s*\\d+\\s*,(?<channels>[^)]*)\\)",
+            "decode": "split",
+            "separator": ","
+          }
+        },
+        {
+          "id": "setm",
+          "label": "SETM / CLEARM, not a wait",
+          "blocking": false,
+          "match": {
+            "kind": "regex",
+            "pattern": "\\b(?:SETM|CLEARM)\\s*\\(\\s*(?<mark>\\d+)"
+          },
+          "partners": {
+            "kind": "all"
+          }
+        }
+      ]
+    }
+  },
+  "expect": {
+    "layout": "multi-file",
+    "self": "1",
+    "by": "fileName",
+    "marks": [
+      {"ruleId":"waitm","mark":"10","line":7,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"setm","mark":"30","line":14,"channel":"1","partners":["1","2"],"blocking":false},
+      {"ruleId":"waitm","mark":"20","line":15,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"waitm","mark":"40","line":23,"channel":"1","partners":["1","2"],"blocking":true}
+    ],
+    "problems": [],
+    "siblings": [{"channel":"2","name":"s11-two-channel_2.MPF"}]
+  }
+}

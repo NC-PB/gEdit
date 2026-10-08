@@ -1,0 +1,17 @@
+{
+  "input": "../nc/fanuc-lathe/c13-three-path.nc3",
+  "profile": "fanuc-lathe",
+  "preset": "fanuc-lathe/fanuc-3path-digits",
+  "expect": {
+    "layout": "multi-file",
+    "self": "3",
+    "by": "fileName",
+    "marks": [
+      {"ruleId":"wait","mark":"M901","line":6,"channel":"3","partners":["3","2","1"],"blocking":true},
+      {"ruleId":"wait","mark":"M903","line":11,"channel":"3","partners":["3","1"],"blocking":true},
+      {"ruleId":"wait","mark":"M904","line":14,"channel":"3","partners":["1","2","3"],"blocking":true}
+    ],
+    "problems": [],
+    "siblings": [{"channel":"1","name":"c13-three-path.nc1"},{"channel":"2","name":"c13-three-path.nc2"}]
+  }
+}

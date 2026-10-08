@@ -1,0 +1,73 @@
+{
+  "comment": "Written for gEdit (synthetic, not for a machine); see README.md here.",
+  "description": "Fanuc two-path with one defect of each kind: M904 only in path 1 (missing), M905 twice in path 1 and once in path 2 (count mismatch), M902/M903 swapped in path 2 (out of order), M906 P1 names only its own path (unmatched).",
+  "profile": "fanuc-lathe",
+  "preset": "fanuc-2path",
+  "program": {
+    "1": [
+      "%",
+      "O2002 (PATH 1)",
+      "(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)",
+      "N10 T0101",
+      "N20 M901 P3",
+      "N30 M902 P3",
+      "N40 M903 P3",
+      "N50 M904 P3",
+      "N60 M905 P3",
+      "N70 G1 Z-5. F0.1",
+      "N80 M905 P3",
+      "N90 M906 P1",
+      "N100 M30",
+      "%"
+    ],
+    "2": [
+      "%",
+      "O2002 (PATH 2)",
+      "(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)",
+      "N10 T0202",
+      "N20 M901 P3",
+      "N30 M903 P3",
+      "N40 M902 P3",
+      "N50 M905 P3",
+      "N60 M30",
+      "%"
+    ]
+  },
+  "expect": {
+    "findings": [
+      {
+        "kind": "out-of-order",
+        "channel": "1",
+        "line": 6,
+        "mark": "M902",
+        "other": "2",
+        "otherLine": 7
+      },
+      {
+        "kind": "missing",
+        "channel": "1",
+        "line": 8,
+        "mark": "M904",
+        "other": "2"
+      },
+      {
+        "kind": "count-mismatch",
+        "channel": "1",
+        "line": 11,
+        "mark": "M905",
+        "other": "2",
+        "otherLine": 8,
+        "counts": {
+          "channel": 2,
+          "other": 1
+        }
+      },
+      {
+        "kind": "unmatched",
+        "channel": "1",
+        "line": 12,
+        "mark": "M906"
+      }
+    ]
+  }
+}

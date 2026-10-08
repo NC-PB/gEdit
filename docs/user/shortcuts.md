@@ -103,6 +103,28 @@ under [Moving around the program](#moving-around-the-program). Renumbering, the 
 Insert and Remove Block Skip are deliberate, one-at-a-time operations and are reached from
 the ribbon or from `F1`. See [transformations.md](transformations.md).
 
+## Channels
+
+For a program of a machine with [channels](channels.md). On any other program these do
+nothing and say so.
+
+| Keys | |
+|---|---|
+| `Alt+F7` | Next sync point: the next wait code of the channel the cursor is in, wrapping around |
+| `Shift+Alt+F7` | Previous sync point |
+| `Cmd/Ctrl+Alt+P` | Go to the matching mark: from a wait code to the wait that answers it in the other channel, in the other tab when each channel has its own file |
+
+On a Mac, `Cmd+Alt+P` is the editor's own *Preserve Case* key in the find box; gEdit takes it
+over there, and the button in the find box still works. On Windows and Linux *Preserve Case*
+stays on `Alt+P` and `Ctrl+Alt+P` is only ever Go to the matching mark.
+
+Some Linux desktops (KDE and Xfce, for one) use `Alt+F7` to move a window and take the key
+before gEdit sees it. If that is your desktop, use the ribbon (NC tab, **Channels**) or the
+palette (`F1`, then *Next Sync Point*); they do the same.
+
+**Check Wait Codes**, **Split into Channel Documents**, **Channel…** and **Assign to
+Channel…** have no key; they are on the ribbon (NC and Tools tabs) and in the palette.
+
 ## Scripts
 
 | Keys | |

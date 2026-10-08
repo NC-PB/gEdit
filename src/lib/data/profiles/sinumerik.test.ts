@@ -658,8 +658,9 @@ describe('the machine parameters', () => {
     expect(decl?.variants).toBeUndefined();
     expect(sinumerik.profile.modal?.initial).toEqual({ plane: 'G18', feedmode: 'G95' });
     expect(sinumerik.profile.machineType).toBe('lathe');
-    // No built-in ships a channel preset in Phase 2 (§8.9, D58).
-    expect((decl as Record<string, unknown> | undefined)?.channels).toBeUndefined();
+    // M12 (P12, §8.9): channel presets are offered, never applied, all `verify`;
+    // `channelPresets.test.ts` pins them.
+    for (const preset of decl?.channels?.presets ?? []) expect(preset.verify, preset.id).toBe(true);
   });
 
   it('reads numbers as written, the only reading Siemens mode has', () => {

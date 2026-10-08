@@ -23,12 +23,30 @@
 import type { Eol } from '$lib/app/types';
 import type { NumberInput, ParamSource } from '$lib/core/machines/types';
 import type { ProfileCompare } from '$lib/core/compare/types';
+import type { ChannelParams } from '$lib/core/channels/types';
 
 /** A regular expression as ECMAScript source, without delimiters and without flags. */
 export type Pattern = string;
 
-/** What an outline rule marks a line as. The program map has one icon per kind. */
-export type OutlineKind = 'tool' | 'program' | 'section' | 'comment' | 'label' | 'stop' | 'end' | 'subprogram-call';
+/**
+ * What an outline rule marks a line as. The program map has one icon per kind.
+ *
+ * M12 (P12, §7.14): `channel` and `sync` are produced by the **channel service** only — a
+ * channel group row and a blocking wait mark (AD-32). `validateProfile` rejects them in a
+ * profile's own `outline` rules, so no profile can invent a channel row. A `switch` without
+ * a default must handle them.
+ */
+export type OutlineKind =
+  | 'tool'
+  | 'program'
+  | 'section'
+  | 'comment'
+  | 'label'
+  | 'stop'
+  | 'end'
+  | 'subprogram-call'
+  | 'channel'
+  | 'sync';
 
 /**
  * What kind of machine the profile describes (P6, §7.1). It is **not** a machine
@@ -514,6 +532,38 @@ export interface MachineParamsDecl {
   /** Modal groups whose power-on code a machine may set; the dialog offers their codes. */
   modalGroups?: string[];
   variants?: VariantDecl[];
+  /**
+   * M12 (P12, §8.9; the owner's decisions of 2026-10-07): starting points for a machine's
+   * channel block, offered on the machine page's Channels step and **never applied without a
+   * machine** — a document whose machine has no `channels` has no channels (AD-32). Each
+   * preset is a documented default from the control's manual, labelled with its source and
+   * `verify: true` until the owner confirms it for their machine (D64). A user's machine keeps
+   * its own copy; editing a preset later changes no machine.
+   */
+  channels?: ChannelPresetsDecl;
+}
+
+/** `machineParams.channels` (§8.9). */
+export interface ChannelPresetsDecl {
+  /**
+   * The address letters this control's wait codes may use, upper case (`["M"]` on Fanuc,
+   * `["M", "P"]` on Okuma). `parseWaitCodes` refuses an item with another letter in plain
+   * words ("`G4`: wait codes are M codes on this control"). Absent: any letter.
+   */
+  waitLetters?: string[];
+  presets: ChannelPreset[];
+}
+
+/** One channel preset: a whole `ChannelParams`, offered by name. */
+export interface ChannelPreset {
+  /** `^[a-z0-9][a-z0-9-]*$`, unique in the profile. */
+  id: string;
+  /** Display text; data, not a translation key. */
+  label: string;
+  value: ChannelParams;
+  /** Where the notes or the manual say so (`'syntax-okuma.md §11.7a'`). */
+  source?: string;
+  verify?: boolean;
 }
 
 /**
