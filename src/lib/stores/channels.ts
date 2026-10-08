@@ -484,7 +484,9 @@ export function createChannelService(deps: ChannelServiceDeps): ChannelServiceIn
         try {
           info = new Map((await deps.siblingInfo(asked, names)).map((i) => [i.name, i]));
         } catch {
-          // Out of scope or refused as a whole: every channel reads as not found.
+          // Refused as a whole (out of scope, a permission error): that is "could not be
+          // checked" (owner answer M12-5), never "not found" - the folder was not read.
+          info = new Map(names.map((name) => [name, { name, exists: false, bytes: 0, modified: null, error: 'unavailable' }]));
         }
       }
       siblingCache.set(id, { path: asked, info });

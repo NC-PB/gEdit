@@ -225,6 +225,15 @@ describe('the turning syntax fields', () => {
     expect(pathsOf((p) => (syntaxOf(p).exponentMarker = 'EX'))).toEqual([]);
   });
 
+  // M9-2 (2026-10-08): a mark that addresses the value behind it (Klartext `#5`).
+  it('take one non-letter character per symbol address that means nothing else yet', () => {
+    expect(pathsOf((p) => (syntaxOf(p).symbolAddresses = ['#']))).toEqual([]);
+    expect(pathsOf((p) => (syntaxOf(p).symbolAddresses = '#'))).toEqual(['syntax.symbolAddresses']);
+    for (const mark of ['X', '5', ' ', '##', '"', '+', '(', '/']) {
+      expect(pathsOf((p) => (syntaxOf(p).symbolAddresses = [mark])), mark).toEqual(['syntax.symbolAddresses[0]']);
+    }
+  });
+
   // Phase 2 (§7.16): the Fanuc program name, one token like a variable.
   it('refuse a program-name pattern that can match an empty string, or that does not compile', () => {
     const empty = 'can match an empty string, and a program name has to take at least one character';

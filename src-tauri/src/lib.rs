@@ -67,6 +67,8 @@ fn setup_app(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     // macOS only in effect: Dock -> Quit and a logout never reach the window, so the
     // answer to "may I terminate?" has to be ready before one is asked (AD-20).
     quit::install(handle);
+    // The menu exists by now; Shift+Cmd+W on its Close Window items (see `menu`).
+    quit::install_menu_shortcuts(handle);
     Ok(())
 }
 

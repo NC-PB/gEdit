@@ -229,6 +229,9 @@ class _LexSpec:
     exponent: str
     #: M8 integration ``syntax.names``: a name the program gives itself is one token.
     names: Optional[Any]
+    #: ``syntax.symbolAddresses`` (M9-2): marks that address the value packed behind them
+    #: (Klartext ``#``), as character codes.
+    symbol_addresses: frozenset
     #: Phase 2 ``syntax.programNames``: a program name (``<SHAFT_T12>``) is one token.
     program_names: Optional[Any]
     #: The literal first character of ``syntax.programNames`` (``<``), so it is tried only there.
@@ -675,6 +678,11 @@ def _build_spec(cp: CompiledProfile) -> _LexSpec:
             else ""
         ),
         names=cp.patterns.get("names"),
+        symbol_addresses=frozenset(
+            ord(mark)
+            for mark in (syntax.get("symbolAddresses") if isinstance(syntax.get("symbolAddresses"), list) else [])
+            if isinstance(mark, str) and len(mark) == 1
+        ),
         program_names=cp.patterns.get("program_names"),
         program_name_lead=program_name_lead,
         mask_lead_pattern=mask_lead_pattern,
@@ -1355,6 +1363,21 @@ def _describe_word(token: Token, address: str, spec: _LexSpec, value: Optional[_
         token.value = value.value
 
 
+#: Token kinds that may stand in front of a name that is alone in its block (M9-3).
+_BLOCK_HEAD_KINDS = frozenset(("whitespace", "blockNumber", "skip", "label"))
+
+
+def _name_alone_in_block(tokens: List[Token], line: str, end: int, limit: int, spec: _LexSpec) -> bool:
+    """True when the name ending at ``end`` is all its block writes (owner decision of
+    2026-10-08, M9-3): before it only a block number, skip marks, a label and blanks, behind
+    it only blanks and a comment. The twin of ``nameAloneInBlock`` in ``tokenizer.ts``."""
+    for token in tokens:
+        if token.kind not in _BLOCK_HEAD_KINDS:
+            return False
+    q = _skip_space(line, end, limit)
+    return q >= limit or (bool(spec.comments) and _comment_at(line, q, spec) is not None)
+
+
 def tokenize_line(
     line: str,
     cp: CompiledProfile,
@@ -1721,6 +1744,17 @@ def tokenize_line(
         if names is not None:
             end = _name_end_at(line, p, limit, spec)
             if end > p:
+                # Owner decision of 2026-10-08 (M9-3): on a profile with calls, a name that
+                # stands alone in its block (`HOME`, `N200 MYSUB`, `CYCLE800`) calls the
+                # subprogram or cycle of that name without arguments: the `call` token
+                # `CYCLE800()` would be, with no `value_text`. A name among other words
+                # (`G2 X10 Y10 CR15`) stays one `unknown` token.
+                if calls and _name_alone_in_block(tokens, line, end, limit, spec):
+                    token = _push(tokens, "call", line, p, end)
+                    name = line[p:end]
+                    token.address = name if spec.case_sensitive else name.upper()
+                    p = end
+                    continue
                 _push(tokens, "unknown", line, p, end)
                 p = end
                 continue
@@ -1740,6 +1774,17 @@ def tokenize_line(
                 token = _push(tokens, "word", line, p, value.end if value is not None else address_end)
                 _describe_word(token, line[p:address_end], spec, value)
                 p = token.end
+                continue
+        elif code in spec.symbol_addresses:
+            # `syntax.symbolAddresses` (M9-2): Klartext `CYCL DEF 7.1 #5` / `#Q5`, the row of
+            # the datum table (TNC 640 cycles, cycle 7). The mark is the address of the value
+            # packed behind it; anything else (`# 5`, a lone `#`) falls through unchanged.
+            chunk_end = chunk_from(p)
+            value = _read_value(line, p + 1, chunk_end, spec, False)
+            if value is not None and value.end == chunk_end:
+                token = _push(tokens, "word", line, p, chunk_end)
+                _describe_word(token, line[p : p + 1], spec, value)
+                p = chunk_end
                 continue
         elif _is_letter(code):
             chunk_end = chunk_from(p)

@@ -251,6 +251,18 @@ describe('NUL bytes', () => {
     expect(result.message.params?.percent).toBeGreaterThan(10);
   });
 
+  it('reads a NUL-heavy file as it is when asked to allow binary, and says so', () => {
+    const bytes = readFixture(encoding('nul-heavy.bin'));
+    const result = decodeFile(bytes, { allowBinary: true });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.binary?.percent).toBeGreaterThan(10);
+    expect(result.nul.stripped).toBe(0);
+    // The NULs are in the text; nothing was dropped.
+    expect(result.text.split('\0').length - 1).toBeGreaterThan(0);
+    expect(decodeFile(readFixture(encoding('utf8-lf.nc')), { allowBinary: true })).not.toHaveProperty('binary');
+  });
+
   it('draws the line at more than 10 %, leader and trailer not counted', () => {
     // A 100-byte program between a 40-byte leader and trailer, with `nuls` bytes of it
     // overwritten with NUL at odd positions, so the core keeps its length.

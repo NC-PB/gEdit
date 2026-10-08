@@ -29,6 +29,7 @@ export default {
   removeSpaces: {
     title: 'Remove Spaces',
     unavailable: '{profile} separates its words with spaces, so they cannot be removed.',
+    refused: '{profile} needs the spaces between many of its words (names, keywords, addresses of more than one letter), so gEdit does not remove them.',
     summary_one: 'Removed spaces in 1 line.',
     summary_other: 'Removed spaces in {count} lines.',
     summaryNone: 'Nothing to do: there is no space that may go.',

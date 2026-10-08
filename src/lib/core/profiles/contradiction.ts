@@ -22,8 +22,9 @@
 // - **Which profile of that dialect** (M9, WP9.6): Sinumerik has a turning and a milling
 //   profile on one grammar, so a Siemens contradiction names the milling one when the
 //   lines carry milling evidence (`M6`, `CYCLE800`, `CYCLE832`, a milling cycle) and no
-//   turning evidence (`DIAMON`, `LIMS=`, `G96`/`G97`, `TRANSMIT`/`TRACYL`, a spindle
-//   addressed as `S1=`/`M1=`), and the turning one otherwise — a mill-turn program is a
+//   turning evidence (the detection vetoes of the milling profile: `DIAMON`, `LIMS=`,
+//   `SETMS`, `TRANSMIT`/`TRACYL`, a spindle addressed as `S1=`/`M1=`; owner decision of
+//   2026-10-08), and the turning one otherwise — a mill-turn program is a
 //   turning program (R2), and so is one with no evidence either way, as in detection.
 //   It is a presence test, not a score.
 //
@@ -169,12 +170,16 @@ const EVIDENCE: readonly Evidence[] = [
 
 /**
  * Siemens turning evidence (any of it makes a program a turning one, mill-turn included):
- * diameter programming, the speed limit of constant cutting speed, the spindle modes, the
- * mill-turn transformations and a spindle addressed by number. The milling profile leaves
- * the same lines out of its detection (`sinumerik-mill.json`, WP9.1).
+ * exactly the `detect.vetoes` of `sinumerik-mill.json` (M9 NC review F3) — diameter
+ * programming on (`DIAMON`, `DIAM90`), the speed limit of constant cutting speed (`LIMS=`),
+ * `SETMS`, the mill-turn transformations and a spindle addressed by number. Owner decision
+ * of 2026-10-08 (§7.16 #101): the guard uses the same rules as detection, so `G96`/`G97`
+ * and `DIAMOF`, which a milling program may write too, no longer make it a turning one, and
+ * a Siemens mill that writes `G97 S…` is not suggested the turning profile.
+ * `contradiction.test.ts` holds the two to the same answers.
  */
 const SIEMENS_TURNING =
-  /(?<![A-Z0-9_$])(?:DIAM(?:ON|OF|90)(?![A-Z0-9_])|LIMS[ \t]*=|G0*9[67](?![\d.])|TRANSMIT(?![A-Z0-9_])|TRACYL(?![A-Z0-9_])|[MS]\d+[ \t]*=)/i;
+  /(?<![A-Z0-9_$])(?:DIAM(?:ON|90)(?![A-Z0-9_])|LIMS[ \t]*=|SETMS(?![A-Z0-9_])|TRANSMIT(?![A-Z0-9_])|TRACYL(?![A-Z0-9_])|[MS]\d+[ \t]*=)/i;
 
 /**
  * Siemens milling evidence: the `M6` tool change, the swivel and high-speed cycles and the

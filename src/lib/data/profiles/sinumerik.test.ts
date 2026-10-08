@@ -656,7 +656,8 @@ describe('the machine parameters', () => {
     // spindle mode of its own for a machine to start in.
     expect(decl?.modalGroups).toEqual(['feedmode', 'plane', 'distance']);
     expect(decl?.variants).toBeUndefined();
-    expect(sinumerik.profile.modal?.initial).toEqual({ plane: 'G18', feedmode: 'G95' });
+    // G90 since the owner decision of 2026-10-08 (M10-1); a machine can still override it.
+    expect(sinumerik.profile.modal?.initial).toEqual({ plane: 'G18', feedmode: 'G95', distance: 'G90' });
     expect(sinumerik.profile.machineType).toBe('lathe');
     // M12 (P12, §8.9): channel presets are offered, never applied, all `verify`;
     // `channelPresets.test.ts` pins them.
@@ -721,6 +722,21 @@ describe('what a written number is worth without a machine (AD-31, D57)', () => 
       {},
     );
     expect(valueFor('X', '50', [], machine)).toBe('50');
+  });
+});
+
+describe('the power-on distance mode (owner decision of 2026-10-08, M10-1)', () => {
+  it('is G90, assumed from the profile, and a machine can say otherwise', () => {
+    for (const id of [SINUMERIK, SINUMERIK_MILL]) {
+      const profile = compiled(id).profile;
+      const none = applyMachine(profile, noMachine(profile)).profile;
+      expect(none.modal?.initial?.distance, id).toBe('G90');
+      expect(none.modal?.sources?.distance, id).toBe('profile');
+      const machine = effectiveMachine(profile, { id: 'm', name: 'm', profile: id, params: { modalInitial: { distance: 'G91' } } }, 'document', {});
+      const applied = applyMachine(profile, machine).profile;
+      expect(applied.modal?.initial?.distance, id).toBe('G91');
+      expect(applied.modal?.sources?.distance, id).toBe('machine');
+    }
   });
 });
 

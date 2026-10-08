@@ -19,8 +19,8 @@
 //
 // Which entries carry `verify: true` follows one rule, written down here because G10
 // reads it: a meaning the notes tag [M] or [P] (the 840D sl programming manual, 06/2019), a
-// DIN 66025 meaning, or one the owner decided (D35) is shown in hover; what the manual
-// only lists (G942, G952), what the machine sets up (M6, M19) and the cycles whose
+// DIN 66025 meaning, or one the owner decided (D35; M6 on 2026-10-08) is shown in hover; what the manual
+// only lists (G942, G952), what the machine sets up (M19) and the cycles whose
 // parameters are not described (CYCLE93, CYCLE97) is not. The source review (2026-09) read
 // the cycles manual of 01/2008, which describes CYCLE87–CYCLE89.
 //
@@ -429,7 +429,10 @@ describe('what is confirmed and what is not', () => {
     // list and the language. What it only lists, what the machine sets up and the cycles
     // it does not describe stay out of hover (§8.7 items 3 and 6). The flags a script
     // reads — `pitchFeed`, `sets` — work regardless.
-    expect(codesWith((e) => e.verify === true)).toEqual(['CYCLE93', 'CYCLE97', 'G942', 'G952', 'M19', 'M6']);
+    // M6 left the list on the owner's answer of 2026-10-08 (M9-7): on a Siemens mill it is
+    // the tool change that loads the tool selected with T.
+    expect(codesWith((e) => e.verify === true)).toEqual(['CYCLE93', 'CYCLE97', 'G942', 'G952', 'M19']);
+    expect(entry('M6')?.description).toMatch(/loads the tool selected with T/);
   });
 
   it('shows what the notes tag [M], what DIN 66025 fixes and what the owner decided', () => {

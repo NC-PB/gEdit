@@ -88,8 +88,9 @@ class PowerOnTest(unittest.TestCase):
     def test_a_milling_program_starts_in_g17_per_minute_with_diameter_off(self) -> None:
         mill = helpers.resolved_profile(MILLING)
         turn = helpers.resolved_profile(TURNING)
-        self.assertEqual(mill["modal"]["initial"], {"plane": "G17", "feedmode": "G94"})
-        self.assertEqual(turn["modal"]["initial"], {"plane": "G18", "feedmode": "G95"})
+        # G90 on both since the owner decision of 2026-10-08 (M10-1); a machine can override it.
+        self.assertEqual(mill["modal"]["initial"], {"plane": "G17", "feedmode": "G94", "distance": "G90"})
+        self.assertEqual(turn["modal"]["initial"], {"plane": "G18", "feedmode": "G95", "distance": "G90"})
         self.assertEqual(mill["machineParams"]["diameter"], "off")
         self.assertEqual(turn["machineParams"]["diameter"], "on")
         self.assertEqual(helpers.effective_context(MILLING)["machine"]["params"]["diameter"], "off")

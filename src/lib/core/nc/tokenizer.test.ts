@@ -630,7 +630,10 @@ describe('an address that takes `=` and an expression (`assignment`)', () => {
   // it the C axis at `R15` — a value that is not a plain number needs the `=` (`C=R15`) —
   // so on a profile that declares `names` it is a name, one token (M8 integration).
   it('does not fire without an `=`, and not on `==`', () => {
-    expect(siemensTokens('CR15')).toEqual([expect.objectContaining({ kind: 'unknown', text: 'CR15' })]);
+    // Among other words `CR15` is no radius (that is `CR=15`) and stays a name. Alone in its
+    // block it calls the subprogram of that name, as any lone name does (M9-3, 2026-10-08).
+    expect(siemensTokens('G2 X10 CR15').at(-1)).toMatchObject({ kind: 'unknown', text: 'CR15' });
+    expect(siemensTokens('CR15')).toEqual([expect.objectContaining({ kind: 'call', text: 'CR15', address: 'CR15' })]);
     expect(siemensTokens('IF R1==1 GOTOF N10')[2]).toMatchObject({ kind: 'operator', text: '=' });
   });
 });
@@ -1233,6 +1236,53 @@ describe('the end of block `;` and a name that starts with digits', () => {
 // The `subprogram-call` rules of `sinumerik.json` (and so of `sinumerik-mill`) leave the
 // control's own commands out of the program map: a predefined procedure is a call of the
 // control, not a subprogram. One golden shared with `tests/python/test_gedit_nc.py`.
+describe('a name alone in its block is a call (owner decision of 2026-10-08, M9-3)', () => {
+  const shape = (line: string, cp: CompiledProfile): string[][] =>
+    code(tokenizeLine(line, cp).tokens).map((token) => [token.kind, token.text, token.address ?? '']);
+
+  it('reads a lone name as a call without arguments, behind a block number, a skip or a label', () => {
+    for (const cp of [sinumerik, sinumerikMill]) {
+      expect(shape('CYCLE800', cp)).toEqual([['call', 'CYCLE800', 'CYCLE800']]);
+      expect(shape('/1 N10 HOME ; BACK', cp)).toEqual([
+        ['skip', '/1', ''],
+        ['blockNumber', 'N10', 'N'],
+        ['call', 'HOME', 'HOME'],
+        ['comment', '; BACK', ''],
+      ]);
+      expect(shape('START_A: mysub', cp).at(-1)).toEqual(['call', 'mysub', 'MYSUB']);
+      expect(tokenizeLine('CYCLE800', cp).tokens[0].valueText).toBeUndefined();
+    }
+  });
+
+  it('keeps a name among other words, and every keyword, what it was', () => {
+    expect(kindsOf('N10 G2 X10 Y10 CR15', sinumerik).at(-1)).toBe('unknown');
+    expect(kindsOf('MYSUB P3', sinumerik)).toEqual(['unknown', 'word']);
+    expect(kindsOf('N20 TRAFOOF', sinumerik)).toEqual(['blockNumber', 'keyword']);
+    expect(kindsOf('GOTOF LOOP_A', sinumerik)).toEqual(['keyword', 'unknown']);
+    expect(kindsOf('LOOP_A:', sinumerik)).toEqual(['label']);
+    expect(kindsOf('XNOW=62', sinumerik)).toEqual(['word']);
+  });
+
+  it('needs `calls`: Okuma, which has names but no calls, keeps a lone name unknown', () => {
+    expect(kindsOf('DIA1', okuma)).toEqual(['unknown']);
+    expect(kindsOf('N10 HOME', without(sinumerik, (syntax) => delete syntax.calls))).toEqual(['blockNumber', 'unknown']);
+  });
+});
+
+describe('a mark that addresses the value behind it (`symbolAddresses`, M9-2)', () => {
+  it('reads Klartext `#5` and `#Q5` as one word with the address `#`', () => {
+    expect(code(tokenizeLine('13 CYCL DEF 7.1 #5', klartext).tokens).at(-1)).toMatchObject({ kind: 'word', address: '#', valueText: '5' });
+    expect(code(tokenizeLine('13 CYCL DEF 7.1 #Q5', klartext).tokens).at(-1)).toMatchObject({ kind: 'word', address: '#', valueText: 'Q5' });
+    expect(kindsOf('13 CYCL DEF 7.1 # 5', klartext).slice(-2)).toEqual(['unknown', 'word']);
+  });
+
+  it('is opt-in: without the field `#5` is what it was, and Fanuc `#101` stays a variable', () => {
+    expect(kindsOf('13 CYCL DEF 7.1 #5', without(klartext, (syntax) => delete syntax.symbolAddresses)).slice(-2)).toEqual(['unknown', 'word']);
+    expect(kindsOf('#101=5', fanuc)).toEqual(['variable', 'operator', 'word']);
+    expect(fanuc.profile.syntax.symbolAddresses).toBeUndefined();
+  });
+});
+
 describe('the Sinumerik call-rule exclusions', () => {
   interface CallCase {
     line: string;

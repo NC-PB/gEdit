@@ -24,9 +24,11 @@
     return {
       reason: doc.readOnlyReason ?? '',
       tooltip:
-        doc.readOnlyReason === 'attribute'
-          ? t('readOnly.itemAttribute', { name: doc.title })
-          : t('readOnly.itemUser', { name: doc.title }),
+        doc.readOnlyReason === 'binary'
+          ? t('readOnly.itemBinary', { name: doc.title })
+          : doc.readOnlyReason === 'attribute'
+            ? t('readOnly.itemAttribute', { name: doc.title })
+            : t('readOnly.itemUser', { name: doc.title }),
     };
   });
 </script>

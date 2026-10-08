@@ -121,4 +121,9 @@ export default {
   encodingFallback:
     '{name} uses the Windows-1252 encoding, which cannot store "{char}" ({code}, line {line}, column {column}).\n\nSave it as UTF-8 instead? Software that expects Windows-1252 may then show accented characters incorrectly.',
   saveAsUtf8Button: 'Save as UTF-8',
+  // The file was plain ASCII and now holds a character outside it (owner answer 2026-10-08)
+  asciiGainedMessage:
+    '{name} was plain ASCII, and now contains "{char}" ({code}, line {line}).\n\nUTF-8 is read by current software. Windows-1252 is read by older controls and programs. Cancel lets you take the character out first.',
+  saveAsWin1252Button: 'Save as Windows-1252',
+  savedAsWin1252: 'Saved {name} as Windows-1252',
 } as const satisfies Messages;

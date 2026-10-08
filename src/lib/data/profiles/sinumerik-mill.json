@@ -43,7 +43,7 @@
     "axes": ["X", "Y", "Z", "A", "B", "C"],
     "angular": ["A", "B", "C", "AR", "SF"]
   },
-  "modal": { "initial": { "plane": "G17", "feedmode": "G94" } },
+  "modal": { "initial": { "plane": "G17", "feedmode": "G94", "distance": "G90" } },
   "machineParams": {
     "diameter": "off"
   }

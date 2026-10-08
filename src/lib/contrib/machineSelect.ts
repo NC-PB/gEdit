@@ -41,6 +41,14 @@ function detailOf(err: unknown): string {
 
 // --- the picker -------------------------------------------------------------
 
+function differs(machine: 'mill' | 'lathe' | undefined, document: 'mill' | 'lathe' | undefined): boolean {
+  return machine !== undefined && document !== undefined && machine !== document;
+}
+
+function typeName(type: 'mill' | 'lathe' | undefined): string {
+  return t(type === 'lathe' ? 'machines.typeLathe' : 'machines.typeMill');
+}
+
 /**
  * The entries of `file.setMachine`: "None", the machines that fit this document's dialect,
  * a way to the machines of the other dialects, and a way to the Machines page.
@@ -53,6 +61,8 @@ export function pickItems(
   currentId: string | null,
   defaultId: string | null,
   hasOthers: boolean,
+  typeOf: (machine: MachineConfig) => 'mill' | 'lathe' | undefined = () => undefined,
+  documentType: 'mill' | 'lathe' | undefined = undefined,
 ): QuickPickItem<MachinePick>[] {
   const items: QuickPickItem<MachinePick>[] = [
     {
@@ -67,7 +77,12 @@ export function pickItems(
       // A machine's name is the user's own text.
       label: machine.name,
       description: machine.id === currentId ? t('machines.pick.current') : undefined,
-      detail: machine.id === defaultId ? t('machines.pick.default') : undefined,
+      detail: [
+        machine.id === defaultId ? t('machines.pick.default') : null,
+        differs(typeOf(machine), documentType) ? t('machines.typeDiffersShort', { machineType: typeName(typeOf(machine)) }) : null,
+      ]
+        .filter((part): part is string => part !== null)
+        .join(' - ') || undefined,
       value: { kind: 'machine', id: machine.id },
     });
   }
@@ -165,6 +180,8 @@ async function pickMachine(): Promise<void> {
     current.id,
     machines.defaultFor(doc.profileId),
     otherMachines(doc.profileId).length > 0,
+    (m) => profiles.get(m.profile)?.machineType,
+    info.machineType,
   );
   const picked = await modals.quickPick(items, {
     placeholder: t('machines.pick.placeholder'),
@@ -183,8 +200,13 @@ async function pickMachine(): Promise<void> {
     case 'machine': {
       if (picked.id === current.id) return;
       machines.setForDoc(doc.id, picked.id);
+      const warning = machines.typeMismatch(doc.id);
       status.show(
-        t('machines.changed', { name: doc.title, machine: machines.get(picked.id)?.name ?? picked.id }),
+        t('machines.changed', { name: doc.title, machine: machines.get(picked.id)?.name ?? picked.id }) +
+          (warning === null
+            ? ''
+            : ' ' + t('machines.typeDiffers', { name: warning.name, machineType: typeName(warning.machineType), documentType: typeName(warning.documentType) })),
+        warning === null ? undefined : { sticky: true },
       );
       return;
     }

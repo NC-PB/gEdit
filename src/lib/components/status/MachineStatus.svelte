@@ -35,6 +35,7 @@
     const eff = machines.effective(doc.id).machine;
     const profile = profiles.profile(doc.profileId);
     const assumed = eff.id === null;
+    const warning = machines.typeMismatch(doc.id);
     return {
       id: eff.id ?? '',
       choice: eff.choice,
@@ -42,7 +43,12 @@
       label: assumed ? t('machines.itemNone') : t('machines.item', { name: eff.name ?? '' }),
       // The dialect's own power-on state as well: without a machine it is every one of
       // those values, and it is the assumption that decides how an `F` is read (G8 M6).
-      tooltip: machineTooltip(eff, profile.machineParams, profile.modal?.initial, profile.addresses?.diameter),
+      tooltip:
+        machineTooltip(eff, profile.machineParams, profile.modal?.initial, profile.addresses?.diameter) +
+        (warning === null
+          ? ''
+          : '\n\n' + t('machines.typeDiffers', { name: warning.name, machineType: t(warning.machineType === 'lathe' ? 'machines.typeLathe' : 'machines.typeMill'), documentType: t(warning.documentType === 'lathe' ? 'machines.typeLathe' : 'machines.typeMill') })),
+      mismatch: warning !== null,
     };
   });
 </script>
@@ -58,8 +64,9 @@
     data-machine-id={view.id}
     data-choice={view.choice}
     data-assumed={view.assumed ? '1' : '0'}
+    data-type-mismatch={view.mismatch ? '1' : '0'}
   >
-    {view.label}{#if view.assumed}<span class="assumed">&nbsp;({t('machines.assumed')})</span>{/if}
+    {view.label}{#if view.mismatch}<span class="assumed">&nbsp;&#9888;</span>{/if}{#if view.assumed}<span class="assumed">&nbsp;({t('machines.assumed')})</span>{/if}
   </button>
 {/if}
 

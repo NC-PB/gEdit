@@ -249,6 +249,8 @@ interface LexSpec {
   exponent: string;
   /** M8 integration `syntax.names`, sticky: a name the program gives itself is one token. */
   names: RegExp | null;
+  /** `syntax.symbolAddresses` (M9-2): marks that address the value packed behind them (Klartext `#`). */
+  symbolAddresses: ReadonlySet<number>;
   /** Phase 2 `syntax.programNames`, sticky: a program name (`<SHAFT_T12>`) is one token. */
   programNames: RegExp | null;
   /** The literal first character of `syntax.programNames` (`<`), so it is tried only there. */
@@ -366,6 +368,11 @@ function buildSpec(cp: CompiledProfile): LexSpec {
     assignmentIndex: syntax.assignmentIndex === true,
     exponent: typeof syntax.exponentMarker === 'string' ? (caseSensitive ? syntax.exponentMarker : syntax.exponentMarker.toUpperCase()) : '',
     names: cp.re.names ? new RegExp(cp.re.names.source, `${cp.flags}y`) : null,
+    symbolAddresses: new Set(
+      (Array.isArray(syntax.symbolAddresses) ? syntax.symbolAddresses : [])
+        .filter((mark): mark is string => typeof mark === 'string' && mark.length === 1)
+        .map((mark) => mark.charCodeAt(0)),
+    ),
     programNames,
     programNameLead,
     maskLeadPattern,
@@ -1330,6 +1337,18 @@ export function tokenizeLine(line: string, cp: CompiledProfile, prev?: LineState
     if (spec.names) {
       const end = nameEndAt(line, p, limit, spec);
       if (end > p) {
+        // Owner decision of 2026-10-08 (M9-3): on a profile with calls, a name that stands
+        // alone in its block (`HOME`, `N200 MYSUB`, `CYCLE800`) calls the subprogram or
+        // cycle of that name without arguments, as the Siemens manual says a block of its
+        // own does. It is the `call` token `CYCLE800()` would be, with no `valueText`. A
+        // name among other words (`G2 X10 Y10 CR15`) stays one `unknown` token.
+        if (spec.calls && nameAloneInBlock(tokens, line, end, limit, spec)) {
+          const token = push(tokens, 'call', line, p, end);
+          const name = line.slice(p, end);
+          token.address = spec.caseSensitive ? name : name.toUpperCase();
+          p = end;
+          continue;
+        }
         push(tokens, 'unknown', line, p, end);
         p = end;
         continue;
@@ -1348,6 +1367,18 @@ export function tokenizeLine(line: string, cp: CompiledProfile, prev?: LineState
         const token = push(tokens, 'word', line, p, value ? value.end : addressEnd);
         describeWord(token, line.slice(p, addressEnd), spec, value);
         p = token.end;
+        continue;
+      }
+    } else if (spec.symbolAddresses.has(code)) {
+      // `syntax.symbolAddresses` (M9-2): Klartext `CYCL DEF 7.1 #5` / `#Q5`, the row of the
+      // datum table (TNC 640 cycles, cycle 7). The mark is the address of the value packed
+      // behind it; anything else (`# 5`, a lone `#`) falls through and stays what it was.
+      const chunkEnd = chunkFrom(p);
+      const value = readValue(line, p + 1, chunkEnd, spec, false);
+      if (value && value.end === chunkEnd) {
+        const token = push(tokens, 'word', line, p, chunkEnd);
+        describeWord(token, line.slice(p, p + 1), spec, value);
+        p = chunkEnd;
         continue;
       }
     } else if (isLetter(code)) {
@@ -1435,6 +1466,20 @@ export function tokenizeLine(line: string, cp: CompiledProfile, prev?: LineState
   }
 
   return { tokens, state: { continuation: continuationStart >= 0 } };
+}
+
+/** Token kinds that may stand in front of a name that is alone in its block (M9-3). */
+const BLOCK_HEAD_KINDS: ReadonlySet<string> = new Set(['whitespace', 'blockNumber', 'skip', 'label']);
+
+/**
+ * True when the name that ends at `end` is the only thing its block writes: nothing but a
+ * block number, skip marks, a label and blanks before it, nothing but blanks and a comment
+ * behind it (owner decision of 2026-10-08, M9-3).
+ */
+function nameAloneInBlock(tokens: NcToken[], line: string, end: number, limit: number, spec: LexSpec): boolean {
+  for (const token of tokens) if (!BLOCK_HEAD_KINDS.has(token.kind)) return false;
+  const q = skipSpace(line, end, limit);
+  return q >= limit || (spec.comments.length > 0 && commentAt(line, q, spec) !== null);
 }
 
 /**

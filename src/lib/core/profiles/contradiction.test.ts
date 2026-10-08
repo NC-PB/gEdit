@@ -157,6 +157,10 @@ describe('the evidence', () => {
     expect(guard(FANUC, '%_N_A_MPF\nN10 T="DRILL_D8"\nN20 M6\nN30 G96 S200 LIMS=3000\n')).toMatchObject({ likely: 'sinumerik' });
     expect(guard(FANUC, '%_N_A_MPF\nN10 DIAMON\nN20 T1 D1 M6\n')).toMatchObject({ likely: 'sinumerik' });
     expect(guard(FANUC, '%_N_A_MPF\nN10 G0 X10 Z2\n')).toMatchObject({ likely: 'sinumerik' });
+    // Owner decision of 2026-10-08 (§7.16 #101): the guard's turning evidence is the
+    // detection veto set, so a Siemens mill that writes G97 S… or DIAMOF stays milling.
+    expect(guard(FANUC, '%_N_A_MPF\nN10 T="EM10"\nN20 M6\nN30 G97 S3000 M3\n')).toMatchObject({ likely: 'sinumerik-mill' });
+    expect(guard(FANUC, '%_N_A_MPF\nN10 DIAMOF\nN20 T1 M6\n')).toMatchObject({ likely: 'sinumerik-mill' });
     // A comment or a string that mentions the tool change is not one.
     expect(guard(FANUC, '%_N_A_MPF\nN10 G0 X10 ; M6 BY HAND\nN20 MSG("NEXT: M6")\n')).toMatchObject({ likely: 'sinumerik' });
     expect(guard(FANUC, '%_N_A_MPF\nN10 M61\nN20 M6=3\n')).toMatchObject({ likely: 'sinumerik' });
@@ -164,6 +168,21 @@ describe('the evidence', () => {
     // with the right comment, string and number rules, so neither refuses it.
     expect(guard(SINUMERIK_MILL, textOf('nc/owner-public/sinumerik/TURN_1.mpf'))).toBeNull();
     expect(guard(SINUMERIK, textOf('nc/owner-public/sinumerik-mill/DRILLING.mpf'))).toBeNull();
+  });
+
+  it('takes a Siemens program for turning on exactly the lines the milling profile vetoes', () => {
+    const vetoes = (SINUMERIK_MILL.profile.detect?.vetoes ?? []).map((source) => new RegExp(source, 'i'));
+    expect(vetoes.length).toBeGreaterThan(0);
+    const probes = [
+      'N30 DIAMON', 'N30 DIAM90', 'N30 DIAMOF', 'N30 G96 S200 LIMS=3000', 'N30 G96 S200', 'N30 G97 S1200 M3',
+      'N30 SETMS(2)', 'N30 TRANSMIT', 'N30 TRACYL(40)', 'N30 S1=1200 M1=3', 'N30 M3=5', 'N30 G0 X10 Z2',
+      'N30 CYCLE800()', 'N30 G17 G94',
+    ];
+    for (const line of probes) {
+      const vetoed = vetoes.some((re) => re.test(line));
+      const found = guard(FANUC, `%_N_A_MPF\nN10 T="EM10"\nN20 M6\n${line}\n`);
+      expect(found?.likely, line).toBe(vetoed ? 'sinumerik' : 'sinumerik-mill');
+    }
   });
 
   it('finds the Okuma work coordinate system, the machining-centre length offset and the live-tool speed', () => {

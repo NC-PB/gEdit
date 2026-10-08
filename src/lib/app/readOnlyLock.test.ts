@@ -22,12 +22,21 @@ describe('lockRefusal', () => {
     );
   });
 
+  it('refuses a transform on a NUL-heavy file with its own wording', () => {
+    expect(lockRefusal({ readOnly: true, readOnlyReason: 'binary', title: 'a.bin' }, 'Renumber')).toEqual({
+      key: 'readOnly.refusedBinary',
+      params: { name: 'a.bin', action: 'Renumber' },
+    });
+  });
+
   it('has a message for both, each saying how to lift the lock', () => {
     for (const key of LOCK_REFUSAL_KEYS) {
       expect(hasKey(key)).toBe(true);
       const text = t(key, { name: 'a.nc', action: 'Renumber' });
       expect(text).toContain('a.nc');
       expect(text).toContain('Renumber');
+      // A NUL-heavy file cannot be unlocked, so its message names no way to do it.
+      if (key === 'readOnly.refusedBinary') continue;
       expect(text).toContain(t('readOnly.item'));
       expect(text).toContain(t('readOnly.toggle'));
     }

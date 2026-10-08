@@ -14,7 +14,7 @@
 import type { DocMeta, Msg } from '$lib/app/types';
 
 /** The two refusals, one per reason for the lock; the i18n test checks both exist. */
-export const LOCK_REFUSAL_KEYS = ['readOnly.refusedUser', 'readOnly.refusedAttribute'] as const;
+export const LOCK_REFUSAL_KEYS = ['readOnly.refusedUser', 'readOnly.refusedAttribute', 'readOnly.refusedBinary'] as const;
 
 /**
  * The refusal `action` gets on `doc`, or null when the document can be changed.
@@ -25,6 +25,11 @@ export const LOCK_REFUSAL_KEYS = ['readOnly.refusedUser', 'readOnly.refusedAttri
  */
 export function lockRefusal(doc: Pick<DocMeta, 'readOnly' | 'readOnlyReason' | 'title'>, action: string): Msg | null {
   if (!doc.readOnly) return null;
-  const key = doc.readOnlyReason === 'attribute' ? LOCK_REFUSAL_KEYS[1] : LOCK_REFUSAL_KEYS[0];
+  const key =
+    doc.readOnlyReason === 'binary'
+      ? LOCK_REFUSAL_KEYS[2]
+      : doc.readOnlyReason === 'attribute'
+        ? LOCK_REFUSAL_KEYS[1]
+        : LOCK_REFUSAL_KEYS[0];
   return { key, params: { name: doc.title, action } };
 }

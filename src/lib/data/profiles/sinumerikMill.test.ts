@@ -448,8 +448,9 @@ describe('the tool change', () => {
 
 describe('what a milling program starts with', () => {
   it('starts in G17 with feed per minute, where the turning profile starts in G18 per revolution', () => {
-    expect(mill.profile.modal?.initial).toEqual({ plane: 'G17', feedmode: 'G94' });
-    expect(turn.profile.modal?.initial).toEqual({ plane: 'G18', feedmode: 'G95' });
+    // G90 on both since the owner decision of 2026-10-08 (M10-1).
+    expect(mill.profile.modal?.initial).toEqual({ plane: 'G17', feedmode: 'G94', distance: 'G90' });
+    expect(turn.profile.modal?.initial).toEqual({ plane: 'G18', feedmode: 'G95', distance: 'G90' });
   });
 
   it('starts with diameter programming off, as an assumption a machine can change', () => {

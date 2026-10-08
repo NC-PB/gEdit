@@ -441,6 +441,17 @@ class TestModalStateOfASelection(unittest.TestCase):
         self.assertTrue(result.ok, result.stderr)
         self.assertEqual([row["tool"] for row in result.json()["rows"]], ["T4"])
 
+    def test_the_first_t_of_a_block_with_two_is_the_tool_loaded(self):
+        """Owner decision of 2026-10-08 (M9-1): `T01 T00 M6` loads tool 1; only a block
+        whose first `T` is zero is an unload. The program map reads the same rule
+        (`outline.test.ts`)."""
+        profile = helpers.load_profile("fanuc-gcode")
+        context = helpers.make_context(profile=profile, codes=helpers.load_codes(profile))
+        program = "T01 T00 M6\nG1 X1. F100.\nT00 T02 M6\nT2 T5 M6\n"
+        result = helpers.run_script(SCRIPT, stdin=program, context=context)
+        self.assertTrue(result.ok, result.stderr)
+        self.assertEqual([(row["tool"], row["line"]) for row in result.json()["rows"]], [("T1", 1), ("T2", 4)])
+
 
 class TestAmbiguousThreadingCodes(unittest.TestCase):
     """`pitchFeedAmbiguous` (G8 M4 finding 7) on the report side.

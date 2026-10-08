@@ -51,6 +51,25 @@ const rolesOf = (dialect: string, code: string): Record<string, Role> =>
 const withRole = (dialect: string, role: Role): string[] =>
   rowsOf(dialect).flatMap((row) => row.params.filter(([, r]) => r === role).map(([a]) => `${row.code} ${a}`));
 
+describe('the owner\'s answers of 2026-10-08 on Klartext M functions (M9-4, M98)', () => {
+  const heidenhain = resolveCodeDbs(BUILTIN_CODE_DB_JSON).heidenhain;
+  it('describes M89 as the modal cycle call it is, without a verify mark', () => {
+    const m89 = lookupCode(heidenhain, 'M89');
+    expect(m89?.verify).toBeUndefined();
+    expect(m89?.sets?.cycle).toBe('call-modal');
+    expect(m89?.description).toMatch(/every positioning block/);
+    expect(m89?.description).not.toMatch(/machine parameter/);
+  });
+
+  it('knows M98, the complete machining of open contour corners, for its own block only', () => {
+    const m98 = lookupCode(heidenhain, 'M98');
+    expect(m98?.label).toMatch(/open contour corners/i);
+    expect(m98?.modal).toBeUndefined();
+    expect(m98?.verify).toBeUndefined();
+    expect(m98?.description).toMatch(/only for the block it is written in/);
+  });
+});
+
 describe('the R8 roles of the shipped databases', () => {
   it('has one list per database file', () => {
     expect(Object.keys(GOLDEN.databases).sort()).toEqual([...DIALECTS].sort());

@@ -253,9 +253,10 @@ whatever the dialect — see [transformations.md](transformations.md#renumber-bl
 against the control's own documentation: the hover leaves it out and the completion list
 marks it (see [Code help](README.md#code-help)). On Okuma that is six entries: `G36`/`G37`,
 whose format no manual gives, `G107`/`G108`, and `G142`/`G143`, which only an older code
-table names; on Sinumerik it is six as well: `CYCLE93`, `CYCLE97`, `G942`, `G952`, `M6` and
-`M19`; on Klartext it is `M89`, the modal cycle call whose behaviour a machine parameter
-decides.
+table names; on Sinumerik it is five: `CYCLE93`, `CYCLE97`, `G942`, `G952` and `M19` (`M6`
+is the tool change that loads the tool selected with `T`); on Klartext there is none: `M89`
+is the modal cycle call, which calls the cycle defined last after every positioning block
+until `M99` or the next cycle definition.
 
 The decimal-point row says "by default" for the two Fanuc profiles because there it **is** a
 machine setting: choosing a machine changes it, in either direction. On Sinumerik it is
@@ -533,8 +534,10 @@ a name with arguments (`CONTOUR(1,2)`), `CALL "…"`, `PCALL/path/NAME(…)`, `E
 its target, `ISOCALL`, and a name standing alone in its block — `SUB_PROG`, or `RAHMEN P3`
 with a repeat count. The control's own commands are not calls and are left out: `CUT3DCC`,
 `ORIVIRT1`, and the procedures `ORIRESET(…)`, `FGROUP(…)`, `WAITS(…)`, `INIT(…)` and
-`START(…)`. A name standing alone that the map cannot tell from a user variable, such as a
-bare `CYCLE800` or `HOME` in a block of its own, is left as an unknown mark. A name of letters only and nothing else in the block is also how the
+`START(…)`. In the code itself a name that stands alone in its block — a bare `CYCLE800` or
+`HOME`, behind at most a block number and a label — is read as a call without arguments
+(`CYCLE800` alone is the same as `CYCLE800()`, which ends the swivel); a name among other
+words (`G2 X10 Y10 CR15`) stays an unknown mark. A name of letters only and nothing else in the block is also how the
 control's own commands are written (`DRIVE`, `CDON`), so such a name is listed only with a
 repeat count, or when it has a digit or an underscore in it. A program end on a line that
 also carries a label (`LOOP_END: M30`) is listed as the end, with the label in its text.
@@ -635,9 +638,8 @@ and keeps it. `GOTOF:20` and `GOTOB:20`, written without a blank, are followed l
 
 **Two cleanups to be careful with:**
 
-- **Remove Spaces** packs a program the way gEdit reads it, and whether the control reads it
-  the same way is not confirmed: **do not remove the spaces from a Sinumerik program that
-  goes to a machine** — see [transformations.md](transformations.md#remove-spaces).
+- **Remove Spaces** is not offered on Sinumerik: names, keywords and addresses of more than
+  one letter need their spaces — see [transformations.md](transformations.md#remove-spaces).
 - **Remove Comments** keeps the `;$PATH=…` line that the control's transfer format uses to
   file a program in its folder, with the `%_N_…` header, and lists it as kept
   ([transformations.md](transformations.md#remove-comments)).

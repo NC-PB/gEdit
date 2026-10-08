@@ -91,6 +91,16 @@ pub fn install(app: &AppHandle) {
     let _ = app;
 }
 
+/// Gives the Close Window items of the application menu their Shift+Cmd+W shortcut.
+/// Called from `setup_app` after the menu exists; a no-op off macOS. See
+/// [`macos::set_close_window_shortcut`] for why this cannot be a menu accelerator.
+pub fn install_menu_shortcuts(app: &AppHandle) {
+    #[cfg(target_os = "macos")]
+    macos::set_close_window_shortcut(app);
+    #[cfg(not(target_os = "macos"))]
+    let _ = app;
+}
+
 /// Tells the backend whether any document has unsaved changes (§7.10).
 #[tauri::command]
 pub fn quit_guard_set_dirty(guard: State<'_, QuitGuard>, dirty: bool) {
@@ -259,6 +269,80 @@ mod macos {
         }
     }
 
+    /// `NSEventModifierFlagCommand`.
+    const COMMAND_MASK: usize = 1 << 20;
+
+    /// Sets Shift+Cmd+W on every menu item titled `title` below `menu` (an `NSMenu`),
+    /// recursing into submenus. Returns how many items were changed.
+    ///
+    /// The key equivalent is the **uppercase** `W` with only Command in the mask:
+    /// AppKit takes Shift from the case of the key equivalent and ignores the Shift
+    /// bit of the mask, which is why muda's `CmdOrCtrl+Shift+W` ends up on Cmd+W.
+    /// The item stays the custom one, so a click or the key goes through
+    /// `menu::request_close_window`, i.e. the guarded `window.close()`.
+    pub(super) fn set_shortcut_in_menu(menu: *mut AnyObject, title: &CStr) -> usize {
+        if menu.is_null() {
+            return 0;
+        }
+        let mut changed = 0;
+        // SAFETY: `menu` is a non-null NSMenu; `itemArray` and the element getters
+        // return unowned objects that live as long as the menu, and every pointer
+        // taken from them is checked before use. Main thread only (callers).
+        unsafe {
+            let items: *mut AnyObject = msg_send![menu, itemArray];
+            if items.is_null() {
+                return 0;
+            }
+            let count: usize = msg_send![items, count];
+            for i in 0..count {
+                let item: *mut AnyObject = msg_send![items, objectAtIndex: i];
+                if item.is_null() {
+                    continue;
+                }
+                let sub: *mut AnyObject = msg_send![item, submenu];
+                changed += set_shortcut_in_menu(sub, title);
+                let t: *const std::ffi::c_char = {
+                    let ns: *mut AnyObject = msg_send![item, title];
+                    if ns.is_null() {
+                        std::ptr::null()
+                    } else {
+                        msg_send![ns, UTF8String]
+                    }
+                };
+                if t.is_null() || CStr::from_ptr(t) != title {
+                    continue;
+                }
+                let Some(ns_string) = AnyClass::get(c"NSString") else {
+                    continue;
+                };
+                let key: *mut AnyObject = msg_send![ns_string, stringWithUTF8String: c"W".as_ptr()];
+                if key.is_null() {
+                    continue;
+                }
+                let _: () = msg_send![item, setKeyEquivalent: key];
+                let _: () = msg_send![item, setKeyEquivalentModifierMask: COMMAND_MASK];
+                changed += 1;
+            }
+        }
+        changed
+    }
+
+    /// The Close Window items of the application's main menu get Shift+Cmd+W.
+    /// Best effort and logged: without it the webview's own Mod+Shift+W still closes
+    /// the window through the same guard, only the menu loses its shortcut text.
+    pub(super) fn set_close_window_shortcut(_app: &AppHandle) {
+        let Some(ns_app) = shared_application() else {
+            eprintln!("No NSApplication; Close Window keeps no menu shortcut.");
+            return;
+        };
+        // SAFETY: `mainMenu` returns an unowned NSMenu or nil.
+        let main: *mut AnyObject = unsafe { msg_send![ns_app, mainMenu] };
+        let n = set_shortcut_in_menu(main, c"Close Window");
+        if n == 0 {
+            eprintln!("The main menu has no Close Window item yet; no shortcut was set.");
+        }
+    }
+
     /// `[NSApplication sharedApplication]`, or `None` when there is no AppKit to ask.
     ///
     /// **Never call this before the event loop exists.** `+sharedApplication` creates
@@ -280,6 +364,52 @@ mod macos {
         use super::*;
         use objc2::runtime::{ClassBuilder, NSObject};
         use objc2::ClassType;
+
+        unsafe fn new_obj(cls: &CStr) -> *mut AnyObject {
+            let c = AnyClass::get(cls).expect("AppKit is linked");
+            let o: *mut AnyObject = msg_send![c, alloc];
+            msg_send![o, init]
+        }
+
+        unsafe fn ns(s: &CStr) -> *mut AnyObject {
+            let c = AnyClass::get(c"NSString").unwrap();
+            msg_send![c, stringWithUTF8String: s.as_ptr()]
+        }
+
+        /// A File and a Window submenu each hold a Close Window; both get an
+        /// uppercase W with Command only, and other items are left alone.
+        #[test]
+        fn close_window_items_get_shift_cmd_w() {
+            unsafe {
+                let root = new_obj(c"NSMenu");
+                let mut close_items = Vec::new();
+                for name in [c"File", c"Window"] {
+                    let top: *mut AnyObject = new_obj(c"NSMenuItem");
+                    let sub = new_obj(c"NSMenu");
+                    let close: *mut AnyObject = new_obj(c"NSMenuItem");
+                    let _: () = msg_send![close, setTitle: ns(c"Close Window")];
+                    let other: *mut AnyObject = new_obj(c"NSMenuItem");
+                    let _: () = msg_send![other, setTitle: ns(c"Minimize")];
+                    let _: () = msg_send![sub, addItem: other];
+                    let _: () = msg_send![sub, addItem: close];
+                    let _: () = msg_send![top, setTitle: ns(name)];
+                    let _: () = msg_send![top, setSubmenu: sub];
+                    let _: () = msg_send![root, addItem: top];
+                    close_items.push((close, other));
+                }
+                assert_eq!(set_shortcut_in_menu(root, c"Close Window"), 2);
+                for (close, other) in close_items {
+                    let key: *mut AnyObject = msg_send![close, keyEquivalent];
+                    let utf8: *const std::ffi::c_char = msg_send![key, UTF8String];
+                    assert_eq!(CStr::from_ptr(utf8), c"W");
+                    let mask: usize = msg_send![close, keyEquivalentModifierMask];
+                    assert_eq!(mask, COMMAND_MASK);
+                    let key: *mut AnyObject = msg_send![other, keyEquivalent];
+                    let utf8: *const std::ffi::c_char = msg_send![key, UTF8String];
+                    assert_eq!(CStr::from_ptr(utf8), c"");
+                }
+            }
+        }
 
         /// Stands in for a tao that grew its own answer. The value is distinctive so
         /// the test can tell it apart from [`super::should_terminate`].

@@ -261,7 +261,11 @@ The status bar, on the right, shows **Machine:** and the machine's name —
 A Fanuc lathe document is also offered the Fanuc mill machines, because the lathe profile is
 built on the mill one, and with no default of its own it takes the mill's default machine.
 A mill machine sets no diameter and no G-code system, so those stay what the lathe profile
-assumes.
+assumes. The other way round works too: a Fanuc lathe machine can be chosen for a Fanuc mill
+program. Every machine of the same control is offered, and when the machine is for a mill and
+the program is for a lathe (or the reverse), gEdit warns you: the picker marks it
+**Machine type differs**, the status bar item shows a warning sign, and its hover says that
+the machine's diameter and G-code system settings do not apply. Nothing is refused.
 
 Hover the status item and it lists every effective parameter with **where it came from**:
 "set by the machine", "detected in this program" or "dialect default, assumed". Nothing in

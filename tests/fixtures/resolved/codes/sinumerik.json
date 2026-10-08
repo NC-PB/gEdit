@@ -2361,10 +2361,9 @@
     },
     {
       "code": "M6",
-      "description": "Carries out the change on a machine with a magazine. Whether a turret changes on the T word alone or needs this code is set up on the machine.",
+      "description": "Changes the tool: loads the tool selected with T. A milling machine changes its tools this way; whether a turret changes on the T word alone or needs this code is set up on the machine.",
       "group": "tool",
-      "label": "Tool change",
-      "verify": true
+      "label": "Tool change"
     },
     {
       "code": "M8",

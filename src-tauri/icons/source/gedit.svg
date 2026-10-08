@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Placeholder gEdit app icon: a "G" with an NC program line motif. The owner may replace it. -->
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="#12303f"/>
+  <!-- G: an open ring with a crossbar, drawn as one thick stroke -->
+  <path d="M 745 330 L 650 245 L 395 245 L 275 365 L 275 545 L 395 665 L 650 665 L 745 570 L 745 495 L 530 495" fill="none" stroke="#f4f7f9" stroke-width="112" stroke-linecap="butt" stroke-linejoin="miter"/>
+  <!-- the NC motif: a tool-path line ending in a block -->
+  <rect x="270" y="800" width="300" height="52" rx="26" fill="#f2a33a"/>
+  <rect x="610" y="800" width="144" height="52" rx="26" fill="#f2a33a" opacity="0.55"/>
+</svg>

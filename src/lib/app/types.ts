@@ -263,7 +263,7 @@ export interface DocMeta {
    * Unlocking an `attribute` document makes the *buffer* editable; Save still goes to
    * Save As, because gEdit never changes a file's attributes.
    */
-  readOnlyReason: 'attribute' | 'user' | null;
+  readOnlyReason: 'attribute' | 'user' | 'binary' | null;
   /**
    * M7, AD-21 (**added by WP7.3**, see the hand-off note): a file this document was made
    * from but is **not** bound to — a restored crash snapshot whose path the fs scope does
@@ -275,6 +275,14 @@ export interface DocMeta {
    * native dialog. A successful Save As clears it.
    */
   proposedPath?: string | null;
+  /**
+   * Owner answer 2026-10-08: the file on disk was plain ASCII (UTF-8 without BOM, no byte
+   * above 127) when it was read. The first save that would add a non-ASCII character asks
+   * which encoding to write (`fileOps.write`).
+   */
+  asciiOnLoad?: boolean;
+  /** The user answered that question for this document; it is not asked again. */
+  encodingAsked?: boolean;
 }
 
 export type NewDocMeta = Omit<DocMeta, 'id' | 'title' | 'dirty'>;
@@ -363,6 +371,12 @@ export type DecodeResult =
       eol: Eol | null;
       eolMixed: boolean;
       nul: NulInfo;
+      /**
+       * Set only when `decodeFile` was asked to `allowBinary` and the file is more than 10 %
+       * NUL bytes: the text is the bytes as they are (NULs kept), and the document opens
+       * read-only (owner answer 2026-10-08).
+       */
+      binary?: { percent: number };
     }
   | { ok: false; reason: 'binary'; message: Msg };
 
@@ -942,8 +956,13 @@ export interface MachineService {
   /** The one path that moves an unusable file to `machines.json.bak`. */
   replaceWithEmpty(): Promise<void>;
   get(id: string): MachineConfig | undefined;
-  /** The machines whose base profile is in this profile's chain (AD-31 compatibility). */
+  /** The machines that can be chosen for this profile: its chain (AD-31) and its family (a mill and a lathe profile of one control). */
   compatibleWith(profileId: string): MachineConfig[];
+  /**
+   * Set when the document's chosen machine is of another type (mill or lathe) than its
+   * program. The machine stays in use; its diameter and G-code system do not apply.
+   */
+  typeMismatch(docId: DocId): { name: string; machineType: 'mill' | 'lathe'; documentType: 'mill' | 'lathe' } | null;
   defaultFor(profileId: string): string | null;
   /** The id comes from the name (slug, suffix on collision); saved at once. */
   add(m: Omit<MachineConfig, 'id'>): Promise<string>;

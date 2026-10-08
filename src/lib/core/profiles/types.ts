@@ -374,6 +374,22 @@ export interface Profile {
      * script reports it as a value it cannot read. Absent: no exponents (P1 reading).
      */
     exponentMarker?: string;
+    /**
+     * M9-2 (the owner's answers of 2026-10-08; syntax-heidenhain §6.4). One-character marks,
+     * none of them a letter, that are the address of the value packed directly behind them:
+     * Klartext `#` in `CYCL DEF 7.1 #5` / `#Q5`, the row of the datum table. Read only where
+     * words are separated (`wordSeparatorRequired`); `#5` and `#Q5` are one `word` with
+     * `address` `#`, while `# 5` and a lone `#` stay as before. Absent: no such mark.
+     */
+    symbolAddresses?: string[];
+    /**
+     * Owner decision of 2026-10-08. What *Remove Spaces* may do on this profile besides the
+     * general rules: `'refuse'` (Sinumerik: names, keywords and multi-letter addresses need
+     * their blanks, so the command is not offered) or `'keepAroundLongAddresses'` (Okuma: the
+     * blank on either side of a word whose address has more than one letter stays, `SB=1200`).
+     * Absent: the general rules only. Read by `transforms/removeSpaces.ts`; no tokenizer reads it.
+     */
+    removeSpaces?: 'refuse' | 'keepAroundLongAddresses';
   };
   addresses: {
     tool?: string;

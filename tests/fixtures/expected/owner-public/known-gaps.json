@@ -5,7 +5,7 @@
     "A file that is not listed has no unknown token outside comments, and its map equals its outline golden. Every one of the 20 programs detects as its folder says whichever document was open before, opens and saves back byte for byte, and scale feed and scale speed at 100 % give back every byte of each; tool_list gives one row per station of its map. Those checks have no entry because none of them fails.",
     "unknown: one entry per distinct token text, with how often it occurs and its first line. 'fix' names the work package expected to remove it, or 'allow' for a token that is legitimately not code, or not read as code by a decision, and stays listed with its reason.",
     "map: the program map differs from what the program means; the expected tools are in expected/outline/owner-public/_known-gaps.json, which outline.test.ts runs as expected failures. 'fix' as above.",
-    "Re-measured by WP9.6 on the M9 Wave A integration (m9/int), with both tokenizers. Relabelled since P9: the Fanuc lathe ';' end of block is read as an operator (WP9.3) and no longer listed; the Klartext program names are one token each now (WP9.3) and listed as 'allow'; the four Siemens milling programs moved to owner-public/sinumerik-mill/ (WP9.1), where their maps are right, so their map entries are gone; CYCLE800 alone and HOME stay unknown by the integrator's decision (I9) and are listed as 'allow'.",
+    "Re-measured by WP9.6 on the M9 Wave A integration (m9/int), with both tokenizers. Relabelled since P9: the Fanuc lathe ';' end of block is read as an operator (WP9.3) and no longer listed; the Klartext program names are one token each now (WP9.3) and listed as 'allow'; the four Siemens milling programs moved to owner-public/sinumerik-mill/ (WP9.1), where their maps are right, so their map entries are gone; CYCLE800 alone and HOME stay unknown by the integrator's decision (I9) and are listed as 'allow'. Since the owner's answer of 2026-10-08 (M9-3) a name alone in its block is a call, so CYCLE800 alone and HOME are no longer unknown and their entries are gone.",
     "An entry that no longer happens is removed, and a new one needs a reason: the tests fail on both.",
     "ownerReviewed stays false until the owner has read these reasons (plan section 9.2)."
   ],
@@ -162,52 +162,6 @@
         "why": "An Okuma machining-centre program read with the turning profile (R9 is not part of M9): T1 M6 is no tool change for the lathe's four- or six-digit tool rule, so the map shows no tool.",
         "fix": "R9 (Phase 4, or when a programming manual of the machining-centre control arrives)"
       }
-    },
-    "nc/owner-public/sinumerik-mill/2.5D_Milling.mpf": {
-      "profile": "sinumerik-mill",
-      "unknown": [
-        {
-          "text": "CYCLE800",
-          "count": 1,
-          "firstLine": 4,
-          "why": "CYCLE800 written alone, without brackets, which resets the swivelled plane. A name alone in a block is read as an unknown token: the Sinumerik call rule needs the brackets, and the tokenizer rule that would read a lone name as a call was declined at M9 integration (I9) because it changed two earlier goldens (N200 MYSUB, CR15). The name itself is described in the database; only this spelling is not read as a call.",
-          "fix": "allow"
-        }
-      ],
-      "map": null
-    },
-    "nc/owner-public/sinumerik-mill/5X_Milling.mpf": {
-      "profile": "sinumerik-mill",
-      "unknown": [
-        {
-          "text": "CYCLE800",
-          "count": 1,
-          "firstLine": 4,
-          "why": "CYCLE800 written alone, without brackets, which resets the swivelled plane. A name alone in a block is read as an unknown token: the Sinumerik call rule needs the brackets, and the tokenizer rule that would read a lone name as a call was declined at M9 integration (I9) because it changed two earlier goldens (N200 MYSUB, CR15). The name itself is described in the database; only this spelling is not read as a call.",
-          "fix": "allow"
-        }
-      ],
-      "map": null
-    },
-    "nc/owner-public/sinumerik-mill/Demo_1.mpf": {
-      "profile": "sinumerik-mill",
-      "unknown": [
-        {
-          "text": "CYCLE800",
-          "count": 6,
-          "firstLine": 16,
-          "why": "CYCLE800 written alone, without brackets, which resets the swivelled plane. A name alone in a block is read as an unknown token: the Sinumerik call rule needs the brackets, and the tokenizer rule that would read a lone name as a call was declined at M9 integration (I9) because it changed two earlier goldens (N200 MYSUB, CR15). The name itself is described in the database; only this spelling is not read as a call.",
-          "fix": "allow"
-        },
-        {
-          "text": "HOME",
-          "count": 1,
-          "firstLine": 186,
-          "why": "A subprogram called by its name alone (syntax-sinumerik section 7.1). A name alone in a block is read as an unknown token; the tokenizer rule that would read it as a call was declined at M9 integration (I9), see CYCLE800.",
-          "fix": "allow"
-        }
-      ],
-      "map": null
     }
   }
 }

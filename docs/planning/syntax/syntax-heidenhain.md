@@ -233,10 +233,11 @@ Working plane: the tool axis in `TOOL CALL` sets it (Z → XY, Y → ZX, X → Y
 | M6 | Tool change (machine-dependent). **Not** used for tool detection: `TOOL CALL` performs the change | end | – |
 | M8 / M9 | Coolant on / off | start / end | coolant group |
 | M13 / M14 | Spindle CW / CCW **and** coolant on | start | spindle+coolant |
-| M89 | Modal cycle call or a free M function, set by a machine parameter. As a call, it runs the cycle after every following positioning block until `M99` on the last position or the next `CYCL DEF` | – | – (gEdit reads it as a modal call, `verify`: the block that carries `M89` runs the cycle itself, the manual says to write the first call with it; hover says the database does not describe it yet) |
+| M89 | Modal cycle call (the manual: machine-dependent, set by a machine parameter; on the owner's controls it is this call, the owner, 2026-10-08): it runs the cycle defined last after every following positioning block until `M99` on the last position or the next `CYCL DEF` | – | – (gEdit reads it as a modal call: the block that carries `M89` runs the cycle itself, the manual says to write the first call with it; no longer `verify`, so hover describes it) |
 | M91 | Coordinates in this block refer to machine zero | start | block only. Tool length is not applied; incremental values refer to the last `M91` position |
 | M92 | Coordinates refer to a machine-builder reference position | start | block only. Tool length is not applied |
 | M94 | Reduce rotary-axis display below 360° | start | block |
+| M98 | Machine open contour corners completely: at an open corner the tool runs on past or into the corner, so every contour point is cut, instead of turning where the two tool paths meet (the owner, 2026-10-08; TNC 640 user's manual, Klartext, 10/2017, p.493) | end | block only (acts in its own block, at the block end) |
 | M99 | Call the last defined cycle once at this block's end position | end | block only |
 | M116 / M117 | Rotary feed in mm/min on/off | | modal |
 | M126 / M127 | Shortest-path rotary positioning on/off | | modal |
@@ -253,7 +254,7 @@ M functions that take effect at block start run before those at block end. Other
 |---|---|---|
 | `PLANE SPATIAL SPA… SPB… SPC… <MOVE\|TURN\|STAY> …` | Tilt the working plane by spatial angles (rotations about machine X, Y, Z) | All three angles are mandatory, even if 0, and one of `MOVE`/`TURN`/`STAY` is mandatory. `MOVE [DIST d] F…\|FMAX\|FAUTO` swivels with compensating motion. `TURN [MB n\|MB MAX] F…\|FMAX` swivels rotary axes only. `STAY` means the angles go to Q120–Q122 and a separate `L A+Q120 …` positions. Optional `SEQ+/-` (solution choice) and `COORD ROT` (the default) or `TABLE ROT`. The `F` of a `MOVE`/`TURN` is the swivel feed, not the path feed |
 | `PLANE PROJECTED / EULER / VECTOR / POINTS / RELATIV / AXIAL` | Other plane definitions | CAM mostly uses SPATIAL, sometimes VECTOR or AXIAL |
-| `PLANE RESET [MOVE\|TURN\|STAY …]` | Reset the tilted plane (also resets cycle 19) | Always reset with this; zero angles do not reset. It takes `MOVE`/`TURN`/`STAY` as well |
+| `PLANE RESET [MOVE\|TURN\|STAY …]` | Reset the tilted plane (also resets cycle 19) | The manual says to reset with this: zero angles reset only the angles, not the function. gEdit reads a `PLANE SPATIAL`, `PROJECTED` or `EULER` and a cycle 19 with every angle zero as no tilt all the same (the owner, 2026-10-08), since the plane is then the untilted one. It takes `MOVE`/`TURN`/`STAY` as well |
 | `CYCL DEF 19.0 … / 19.1 A… B… C… [F…] [distance]` | Older tilt cycle | The owner's older programs emit it. The feed and the safety distance are used when the control swivels by itself. Reset: define it again with all angles 0, then once more with no angle. Whether the angles are spatial or axis angles is a machine parameter |
 | `M128 [F…]` / `M129` | TCPM on/off (older form) | see §4.5. The `F` of `M128` is the feed of the compensating moves, not the path feed |
 | `FUNCTION TCPM F TCP\|F CONT AXIS POS\|AXIS SPAT PATHCTRL AXIS\|PATHCTRL VECTOR [REFPNT …]` | TCPM with explicit feed interpretation / rotary meaning / interpolation | Modal until `FUNCTION RESET TCPM`; reset automatically on program select. Like `M128`, it must be switched off before a `TOOL CALL` and before `M91`/`M92` |
@@ -289,7 +290,7 @@ Remaining `TOOL CALL` words (all optional, dialog order): tool axis `X|Y|Z`, `S<
 | Form | Meaning |
 |---|---|
 | `CYCL DEF 247 …` with `Q339=<n>` | Activate preset (datum) line n (0–65535) from the preset table |
-| `CYCL DEF 7.0 …` / `7.1 X…` / `7.2 Y…` / `7.3 Z…` | Datum shift by values (old-style cycle with numbered sub-blocks). `7.1 #n` = line n of the datum table |
+| `CYCL DEF 7.0 …` / `7.1 X…` / `7.2 Y…` / `7.3 Z…` | Datum shift by values (old-style cycle with numbered sub-blocks). `7.1 #n` = line n of the datum table (gEdit reads `#5` and `#Q5` as one word with the address `#`, `syntax.symbolAddresses`, since 2026-10-08) |
 | `TRANS DATUM AXIS X… Y… Z…` / `TRANS DATUM TABLE TABLINE n` / `TRANS DATUM RESET` | Newer datum-shift function |
 | `L … M91` / `M92` | Machine-coordinate moves (safe retract, tool-change position). These are not offsets but are useful to flag |
 
@@ -316,7 +317,7 @@ Remaining `TOOL CALL` words (all optional, dialog order): tool axis `X|Y|Z`, `S<
 | `CYCL CALL POS X… Y… Z…` | Run at the given position: all three axes, absolute positions, its `F` for the approach only, moved with `R0` |
 | `CYCL CALL PAT` | Run at every point of a preceding `PATTERN DEF` or point table |
 | `L X… Y… R0 FMAX M99` | Move there, then call once |
-| `M89` | Modal call, if the machine parameter makes it one: after every following positioning block, until `M99` or the next `CYCL DEF` |
+| `M89` | Modal call (the TNC manual: machine-dependent; on the owner's controls it is this call, 2026-10-08): the machining or drilling cycle defined last runs after every following positioning block, until `M99` or the next `CYCL DEF` |
 
 **Common CAM pattern:**
 

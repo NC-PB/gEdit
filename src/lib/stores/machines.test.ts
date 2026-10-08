@@ -211,6 +211,7 @@ describe('which machine a document uses (AD-31 order)', () => {
       { id: 'lathe-b', name: 'Lathe B', profile: 'fanuc-lathe', params: { variants: { gcodeSystem: 'B' } } },
       { id: 'lathe-a', name: 'Lathe A', profile: 'fanuc-lathe', params: { variants: { gcodeSystem: 'A' } } },
       { id: 'mill-1', name: 'Mill 1', profile: 'fanuc-gcode', params: { units: 'inch' } },
+      { id: 'okuma-1', name: 'Okuma 1', profile: 'okuma-osp', params: {} },
     ],
     defaults: { 'fanuc-lathe': 'lathe-a' },
   };
@@ -330,34 +331,52 @@ describe('which machine a document uses (AD-31 order)', () => {
       docs: [LATHE_DOC],
       file: { ...FILE, defaults: { 'fanuc-lathe': 'lathe-a', 'fanuc-gcode': 'mill-1' } },
     });
-    h.machines.setForDoc('d1', 'lathe-b');
-    expect(eff(h, 'd1')).toMatchObject({ id: 'lathe-b', choice: 'document' });
+    h.machines.setForDoc('d1', 'okuma-1');
+    expect(eff(h, 'd1')).toMatchObject({ id: 'lathe-a', choice: 'default' });
 
-    // The document becomes a mill program: a lathe machine is not in the mill's chain, so
-    // it is dropped for the mill's default rather than reading the file with lathe rules.
+    // An Okuma machine belongs to another control: it is dropped for the default rather
+    // than reading the file with foreign rules, with one message.
     h.setProfile('d1', 'fanuc-gcode');
     expect(eff(h, 'd1')).toMatchObject({ id: 'mill-1', choice: 'default' });
     await said();
     expect(h.notes.filter((note) => note.includes('not for this profile'))).toHaveLength(1);
   });
 
+  it('keeps a lathe machine on a mill program and says the machine type differs (owner 2026-10-08)', () => {
+    const h = harness({
+      docs: [LATHE_DOC],
+      file: { ...FILE, defaults: { 'fanuc-lathe': 'lathe-a', 'fanuc-gcode': 'mill-1' } },
+    });
+    h.machines.setForDoc('d1', 'lathe-b');
+    expect(h.machines.typeMismatch('d1')).toBeNull();
+    h.setProfile('d1', 'fanuc-gcode');
+    // Not dropped, and the lathe settings that the mill profile does not declare do not apply.
+    expect(eff(h, 'd1')).toMatchObject({ id: 'lathe-b', choice: 'document' });
+    expect(eff(h, 'd1').params.diameter).toBeNull();
+    expect(h.machines.typeMismatch('d1')).toEqual({ name: 'Lathe B', machineType: 'lathe', documentType: 'mill' });
+    // A mill machine on the lathe program: the same warning the other way round.
+    h.setProfile('d1', 'fanuc-lathe');
+    h.machines.setForDoc('d1', 'mill-1');
+    expect(h.machines.typeMismatch('d1')).toEqual({ name: 'Mill 1', machineType: 'mill', documentType: 'lathe' });
+  });
+
   it('offers a machine whose base profile is in the document profile\'s chain (AD-31)', () => {
     const h = harness({ file: FILE });
     // `fanuc-lathe` extends `fanuc-gcode`, so a lathe document may use a machine of either
     // — that is the same rule that lets a user profile (M12) use its parent's machines.
-    // A mill document may not use a lathe machine: the lathe is not in the mill's chain.
+    // A mill document may use a lathe machine too (same family; the picker warns about the type).
     expect(h.machines.compatibleWith('fanuc-lathe').map((m) => m.id)).toEqual([
       'lathe-a',
       'lathe-b',
       'mill-1',
     ]);
-    expect(h.machines.compatibleWith('fanuc-gcode').map((m) => m.id)).toEqual(['mill-1']);
+    expect(h.machines.compatibleWith('fanuc-gcode').map((m) => m.id)).toEqual(['lathe-a', 'lathe-b', 'mill-1']);
     expect(h.machines.compatibleWith('heidenhain-klartext')).toEqual([]);
   });
 
   it('lists the machines by name and finds one by id', () => {
     const h = harness({ file: FILE });
-    expect(get(h.machines.list).map((m) => m.name)).toEqual(['Lathe A', 'Lathe B', 'Mill 1']);
+    expect(get(h.machines.list).map((m) => m.name)).toEqual(['Lathe A', 'Lathe B', 'Mill 1', 'Okuma 1']);
     expect(h.machines.get('lathe-b')?.name).toBe('Lathe B');
     expect(h.machines.get('nope')).toBeUndefined();
   });

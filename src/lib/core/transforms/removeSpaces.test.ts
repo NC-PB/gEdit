@@ -87,6 +87,24 @@ describe('removeSpaces goldens', () => {
 describe('removeSpaces rules', () => {
   const run = (line: string, cp = fanuc): string => removeSpaces.run([line], context(cp)).lines[0];
 
+  // Owner decision of 2026-10-08: refused on Sinumerik (and its milling child), and on Okuma
+  // the blank around a multi-letter address stays.
+  it('is refused on Sinumerik, whose names and long addresses need their spaces', () => {
+    expect(removeSpaces.available(sinumerik)).toEqual({
+      key: 'ncCleanup.removeSpaces.refused',
+      params: { profile: sinumerik.profile.name },
+    });
+    expect(removeSpaces.available(okuma)).toBe(true);
+  });
+
+  it('keeps the blank around an Okuma word with a multi-letter address', () => {
+    expect(run('N100 G00 X80 SB=1200 M03', okuma)).toBe('N100 G00X80 SB=1200 M03');
+    expect(run('G00 X100 Z50 SB=800', okuma)).toBe('G00X100Z50 SB=800');
+    expect(run('CALL OSUB QA=1 QB=2', okuma)).toBe('CALL OSUB QA=1 QB=2');
+    // Fanuc has no such rule.
+    expect(run('N10 G0 X10. Y5.')).toBe('N10G0X10.Y5.');
+  });
+
   it('is not available where spaces separate the words', () => {
     expect(removeSpaces.available(fanuc)).toBe(true);
     expect(removeSpaces.available(klartext)).toEqual({

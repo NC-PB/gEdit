@@ -66,6 +66,8 @@ function declaredOf(entry: CodeEntry): Record<string, unknown> {
   if (entry.axisWords !== undefined) out.axisWords = entry.axisWords;
   if (entry.frame !== undefined) out.frame = entry.frame;
   if (entry.frameWithoutValues !== undefined) out.frameWithoutValues = entry.frameWithoutValues;
+  // Owner decision of 2026-10-08 (M10-2): the tilt that reads as none at all-zero angles.
+  if (entry.frameZeroWords !== undefined) out.frameZeroWords = entry.frameZeroWords;
   // M10 review: the pole (NC-2), a program call (NC-6) and a coordinate shift (NC-7).
   if (entry.pole !== undefined) out.pole = entry.pole;
   if (entry.call !== undefined) out.call = entry.call;
@@ -351,6 +353,17 @@ describe('what the flags decide (the reasons are in the entries and in the G10 t
     }
     for (const dialect of DIALECTS.filter((d) => d !== 'sinumerik')) {
       expect(codesWith(dialect, (e) => e.frameWithoutValues !== undefined), dialect).toEqual([]);
+    }
+  });
+
+  it('Klartext (owner decision of 2026-10-08, M10-2): the tilts that read as none at all-zero angles', () => {
+    expect(codesWith('heidenhain', (e) => e.frameZeroWords !== undefined)).toEqual(['CYCL DEF 19', 'PLANE SPATIAL', 'PLANE PROJECTED', 'PLANE EULER']);
+    expect(loadedEntry('heidenhain', 'CYCL DEF 19').frameZeroWords).toEqual(['A', 'B', 'C']);
+    expect(loadedEntry('heidenhain', 'PLANE SPATIAL').frameZeroWords).toEqual(['SPA', 'SPB', 'SPC']);
+    // PLANE AXIAL is left out on purpose: the manual says a zero axis angle does not end it.
+    expect(loadedEntry('heidenhain', 'PLANE AXIAL').frameZeroWords).toBeUndefined();
+    for (const dialect of DIALECTS.filter((d) => d !== 'heidenhain')) {
+      expect(codesWith(dialect, (e) => e.frameZeroWords !== undefined), dialect).toEqual([]);
     }
   });
 

@@ -419,8 +419,8 @@ On a program with channels, the status bar has a **Channel** item. It says:
 | **Channel: Turret A** | The cursor is in a section of Turret A |
 | **Outside the channels** | The cursor is in lines that belong to no channel |
 | **Path 1 (1 of 2), Path 2 not open** | One file for each channel; this is path 1; the other file exists but is not open |
-| **Path 2 not found** | The other file is not in the folder |
-| **Path 2 could not be checked** | The folder did not answer in time (a network share, say) |
+| **Path 2 not found** | gEdit looked in the folder and the other file is not there |
+| **Path 2 could not be checked** | gEdit could not look in the folder: the folder did not answer in time (a network share, say), or the computer did not allow it. It does not mean the file is missing |
 | **Channel: not set** | A program of a machine with one file per channel that no rule recognises. Click it to assign it |
 | **Channel rules are broken** | The channel settings of the machine have a mistake; see [Machines](machines.md#channels) |
 | **Channels: too slow to read** | gEdit could not read the program for channels in time (half a second), usually because the computer was busy. It tries once more a second later, and again after your next edit. Until then the program shows no channels, and Check Wait Codes says *not checked* |

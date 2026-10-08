@@ -25,7 +25,14 @@ export default {
   item: 'Read-only',
   itemAttribute: '{name} is marked read-only on disk. The text can be unlocked here, but saving it always asks where to put it: gEdit never changes a file’s attributes.',
   itemUser: '{name} is locked against editing in this tab. Nothing on disk was changed.',
+  itemBinary:
+    '{name} is more than 10 % NUL bytes, so it is data rather than a program. It is open to look at only: it cannot be edited or changed by a transform or script, and it cannot be unlocked.',
   tabTitle: 'Read-only',
+  /** The status message when such a file opens. */
+  openedBinary: '{name} is {percent} % NUL bytes: opened read-only, because it is data rather than a program',
+  /** Lock Against Editing on such a document. */
+  binaryStaysLocked: '{name} is mostly NUL bytes and stays read-only',
+  binarySaveAsSame: '{name} is read-only data. Choose another file name to save a copy.',
 
   // Status messages
   opened: '{name} is read-only and opened locked',
@@ -40,6 +47,8 @@ export default {
     '{name} is locked against editing, so {action} did not run. To unlock it, click Read-only in the status bar or use Lock Against Editing in the command palette (F1).',
   refusedAttribute:
     '{name} is read-only on disk and opened locked, so {action} did not run. To unlock the text, click Read-only in the status bar or use Lock Against Editing in the command palette (F1); saving it then asks where to put it.',
+  refusedBinary:
+    '{name} is mostly NUL bytes (data, not a program) and is open read-only, so {action} did not run.',
   insertBlock: 'Insert {block}',
   /** The document was locked while the script ran; its result goes nowhere without asking. */
   lockedDuringRunTitle: 'The program was locked while the script ran',

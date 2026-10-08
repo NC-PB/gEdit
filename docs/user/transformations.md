@@ -225,7 +225,8 @@ command changes nothing and says so ("Nothing to do: the words are already separ
 ### Remove Spaces
 
 The other direction, and the dangerous one, because a space that carried meaning cannot
-come back. Not available on Klartext, which needs its spaces.
+come back. Not available on Klartext, which needs its spaces, nor on Sinumerik (milling and
+turning), whose names, keywords and addresses of more than one letter need theirs.
 
 A space is removed only when joining the two sides gives back exactly the same words.
 `X10 5` would join into `X105`, so a line like `N10 G0 X10 5` is left exactly as written —
@@ -239,12 +240,12 @@ and expressions, a call such as `MSG("…")`, a label or a sequence name (`LAST_
 mark. Leading indentation and trailing blanks go — making the program compact is the point.
 
 On **Okuma** the space after a sequence number or name stays too, because the control
-requires one (`N100 G00X50`, never `N100G00X50`). Whether it accepts packed words anywhere
-else is not confirmed — check a packed Okuma program before it goes to a machine. On
-**Sinumerik** it is not confirmed that the control reads a packed block the way gEdit does,
-and a name written against a block number (`N30 XNOW=62` becomes `N30XNOW=62`) may be read
-as one longer name. Do not remove the spaces from a Sinumerik program that goes to a
-machine until that is confirmed.
+requires one (`N100 G00X50`, never `N100G00X50`), and so does the space on either side of a
+word whose address has more than one letter, as the manual always writes it:
+`N100 G00 X80 SB=1200 M03` becomes `N100 G00X80 SB=1200 M03`. Whether the control accepts
+packed words anywhere else is not confirmed — check a packed Okuma program before it goes to
+a machine. On **Sinumerik** the command is not offered: a name written against a block
+number (`N30 XNOW=62` would become `N30XNOW=62`) reads as one longer name.
 
 ### Remove Empty Lines
 

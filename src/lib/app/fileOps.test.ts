@@ -569,12 +569,22 @@ describe('open', () => {
     expect(h.status.last()).toContain('mixed line endings');
   });
 
-  it('refuses a binary file with an error dialog and opens no tab', async () => {
-    await h.files.open([h.put('/nc/bin.bin', 'nc/encoding/nul-heavy.bin')]);
-    expect(h.docs.all()).toHaveLength(0);
-    const error = h.dialogs.calls.find((c) => c.kind === 'error');
-    expect(error?.args.summary).toBe(t('files.openFailed', { name: 'bin.bin' }));
-    expect(String(error?.args.detail)).toContain('NUL bytes');
+  it('opens a file of more than 10 % NUL bytes read-only, and says why (owner 2026-10-08)', async () => {
+    const [id] = await h.files.open([h.put('/nc/bin.bin', 'nc/encoding/nul-heavy.bin')]);
+    expect(h.dialogs.calls.filter((c) => c.kind === 'error')).toHaveLength(0);
+    const doc = h.docs.get(id);
+    expect(doc).toMatchObject({ readOnly: true, readOnlyReason: 'binary' });
+    expect(doc?.nul.stripped).toBe(0);
+    expect(doc?.dirty).toBe(false);
+    expect(h.status.messages.at(-1)?.text).toContain('NUL bytes: opened read-only');
+  });
+
+  it('keeps a NUL-heavy file locked: it cannot be unlocked, and Save As cannot overwrite it', async () => {
+    const [id] = await h.files.open([h.put('/nc/bin.bin', 'nc/encoding/nul-heavy.bin')]);
+    h.files.setReadOnly(id, false);
+    expect(h.docs.get(id)?.readOnly).toBe(true);
+    h.dialogs.answers.saveFile.push('/nc/bin.bin');
+    expect(await h.files.saveAs(id)).toBe(false);
     expect(h.status.messages.at(-1)?.error).toBe(true);
   });
 
@@ -591,6 +601,9 @@ describe('open', () => {
   // the good programs were usable — and then suppressed the "Opened N files" summary.
   describe('a multi-file Open with refusals in it', () => {
     async function openThree(): Promise<void> {
+      // A NUL-heavy file opens read-only now; files that cannot be read are the refusals.
+      h.fs.readFailures.add('/nc/bad-a.bin');
+      h.fs.readFailures.add('/nc/bad-b.bin');
       await h.files.open([
         h.put('/nc/bad-a.bin', 'nc/encoding/nul-heavy.bin'),
         h.put('/nc/bad-b.bin', 'nc/encoding/nul-heavy.bin'),
@@ -610,7 +623,7 @@ describe('open', () => {
       const detail = String(h.dialogs.calls.find((c) => c.kind === 'error')?.args.detail);
       expect(detail).toContain('bad-a.bin');
       expect(detail).toContain('bad-b.bin');
-      expect(detail).toContain('NUL bytes');
+      expect(detail).toContain('cannot read');
       expect(detail.split('\n')).toHaveLength(2);
     });
 
@@ -628,6 +641,7 @@ describe('open', () => {
     });
 
     it('keeps the blocking box for a single file, which is what the user asked for', async () => {
+      h.fs.readFailures.add('/nc/only.bin');
       await h.files.open([h.put('/nc/only.bin', 'nc/encoding/nul-heavy.bin')]);
       const errors = h.dialogs.calls.filter((c) => c.kind === 'error');
       expect(errors).toHaveLength(1);
@@ -996,6 +1010,70 @@ describe('the Windows-1252 fallback', () => {
     expect(h.fs.writes).toEqual([]);
     expect(h.docs.get(id)?.encoding.encoding).toBe('windows-1252');
     expect(h.docs.get(id)?.dirty).toBe(true);
+  });
+});
+
+// Owner answer 2026-10-08: a file that was plain ASCII and gains a non-ASCII character asks
+// once which encoding to write.
+describe('a plain ASCII file that gains a non-ASCII character', () => {
+  async function asciiFile(): Promise<DocId> {
+    h.fs.files.set('/nc/plain.nc', new TextEncoder().encode('O1000\r\nG0 X0\r\n'));
+    const [id] = await h.files.open(['/nc/plain.nc']);
+    expect(h.docs.get(id)?.asciiOnLoad).toBe(true);
+    return id;
+  }
+
+  it('saves an unchanged-ASCII file byte for byte without a question', async () => {
+    const id = await asciiFile();
+    h.editor.type(id, 'O1000\nG0 X1\n');
+    expect(await h.files.save(id)).toBe(true);
+    expect(h.dialogs.calls.filter((c) => c.kind === 'ask3')).toHaveLength(0);
+  });
+
+  it('asks once and writes UTF-8 when the user says so', async () => {
+    const id = await asciiFile();
+    h.editor.type(id, 'O1000\nG0 X0 (Ø)\n');
+    h.dialogs.answers.ask3.push('yes');
+    expect(await h.files.save(id)).toBe(true);
+    const ask = h.dialogs.calls.find((c) => c.kind === 'ask3');
+    expect(ask?.args.yes).toBe(t('files.saveAsUtf8Button'));
+    expect(ask?.args.no).toBe(t('files.saveAsWin1252Button'));
+    expect(String(ask?.args.message)).toContain('U+00D8');
+    expect(Array.from(h.fs.files.get('/nc/plain.nc') as Uint8Array)).toContain(0xc3);
+    expect(h.docs.get(id)?.encoding.encoding).toBe('utf-8');
+    // Remembered for the document: a second save does not ask again.
+    h.editor.type(id, 'O1000\nG0 X0 (Ø°)\n');
+    expect(await h.files.save(id)).toBe(true);
+    expect(h.dialogs.calls.filter((c) => c.kind === 'ask3')).toHaveLength(1);
+  });
+
+  it('writes Windows-1252 when the user says so', async () => {
+    const id = await asciiFile();
+    h.editor.type(id, 'O1000\nG0 X0 (Ø)\n');
+    h.dialogs.answers.ask3.push('no');
+    expect(await h.files.save(id)).toBe(true);
+    expect(h.docs.get(id)?.encoding.encoding).toBe('windows-1252');
+    expect(Array.from(h.fs.files.get('/nc/plain.nc') as Uint8Array)).toContain(0xd8);
+    expect(h.status.last()).toBe(t('files.savedAsWin1252', { name: 'plain.nc' }));
+  });
+
+  it('writes nothing on Cancel, and asks again at the next save', async () => {
+    const id = await asciiFile();
+    h.editor.type(id, 'O1000\nG0 X0 (Ø)\n');
+    h.dialogs.answers.ask3.push('cancel');
+    expect(await h.files.save(id)).toBe(false);
+    expect(h.fs.writes).toEqual([]);
+    expect(h.docs.get(id)?.encodingAsked).toBeUndefined();
+    h.dialogs.answers.ask3.push('yes');
+    expect(await h.files.save(id)).toBe(true);
+    expect(h.dialogs.calls.filter((c) => c.kind === 'ask3')).toHaveLength(2);
+  });
+
+  it('does not ask of a file that was already Windows-1252', async () => {
+    const [id] = await h.files.open([h.put('/nc/cp.nc', 'nc/encoding/cp1252-crlf.nc')]);
+    h.editor.type(id, 'O1000\nG0 X0 (Ø)\n');
+    expect(await h.files.save(id)).toBe(true);
+    expect(h.dialogs.calls.filter((c) => c.kind === 'ask3')).toHaveLength(0);
   });
 });
 

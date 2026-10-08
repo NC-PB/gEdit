@@ -4,7 +4,8 @@
     "Read by tests/unit/syntaxPins.test.ts against the resolved built-ins. 'pinned' is the state of the P9 commit. 'deferred' are values P9 decided but could not write without changing an existing golden or snapshot (section 5.2 rule 2): WP9.3 writes exactly these into the profile JSON, with the golden changes they cause, and the test accepts either value until I9 folds them into 'pinned'.",
     "Any other change to a pinned member during M9 is a hand-off note to the integration (I9), which applies it and updates this file. A content work package never edits it.",
     "M10 review (NC-9): the block skip of the Fanuc and Sinumerik profiles gains plainLevel, the level the bare mark is (BDT1 on Fanuc, /0 on Sinumerik): a named pin change.",
-    "Integration I9 folded the three deferred values (Fanuc function and print names, Klartext PLANE and TCPM words, the short Sinumerik header) into 'pinned'; 'deferred' is empty. A later value that cannot be written without changing an existing golden goes into 'deferred' again."
+    "Integration I9 folded the three deferred values (Fanuc function and print names, Klartext PLANE and TCPM words, the short Sinumerik header) into 'pinned'; 'deferred' is empty. A later value that cannot be written without changing an existing golden goes into 'deferred' again.",
+    "Owner answers of 2026-10-08 (plan section 7.16 #172, #175): Klartext gains symbolAddresses ['#'] (the datum-table row of cycle 7), and removeSpaces is 'refuse' on the two Sinumerik profiles and 'keepAroundLongAddresses' on Okuma: named pin changes."
   ],
   "milestone": "M9",
   "pinned": {
@@ -253,7 +254,10 @@
         "sectionHeading": "^\\s*(?:/\\s*)?\\d+\\s+(?:/\\s*)?\\*",
         "strings": true,
         "variables": "Q[LRS]?\\d+",
-        "wordSeparatorRequired": true
+        "wordSeparatorRequired": true,
+        "symbolAddresses": [
+          "#"
+        ]
       },
       "callRules": [
         "\\b(?<text>(?:CALL\\s+(?:LBL|PGM)|SEL\\s+PGM)\\s+\\S+(?:\\s+REP\\s+\\S+)?)"
@@ -314,7 +318,8 @@
         "sequenceNames": true,
         "systemVariables": "V[A-Z][A-Z0-9]{3}",
         "variables": "V\\d+",
-        "wordSeparatorRequired": false
+        "wordSeparatorRequired": false,
+        "removeSpaces": "keepAroundLongAddresses"
       },
       "callRules": [
         "(?<![A-Z])(?<text>(?:CALL|MODIN)[ \\t]+O[A-Z0-9]{1,4}|G0*(?:16[1-9]|17[01]|20[5-9]|21[0-4])(?![\\d.]))"
@@ -445,7 +450,8 @@
         "strings": true,
         "systemVariables": "\\$[A-Z_][A-Z0-9_]*",
         "variables": "R\\d+",
-        "wordSeparatorRequired": false
+        "wordSeparatorRequired": false,
+        "removeSpaces": "refuse"
       },
       "callRules": [
         "^\\s*(?:/\\d?[ \\t]*)?(?:N\\d+[ \\t]+)?(?:MCALL[ \\t]+)?(?!(?:AC|IC|DC|ACP|ACN|MSG|IF|WHILE|FOR|CASE|UNTIL|REPEATB|REPEAT|LOOP|GOTOF|GOTOB|GOTOC|GOTO|DEF|SETMS|SETM|CLEARM|WAITMC|WAITM|WAITE|WAITS|INIT|START|ORIRESET|FGROUP|TRAORI|TRANSMIT|TRACYL|TRAANG|EXTCALL|CALLPATH)[ \\t]*\\()(?<text>[A-Z_][A-Z0-9_]*(?=\\()|[A-Z_]{2}[A-Z0-9_]*(?=[ \\t]+\\())[ \\t]*\\(",
@@ -578,7 +584,8 @@
         "strings": true,
         "systemVariables": "\\$[A-Z_][A-Z0-9_]*",
         "variables": "R\\d+",
-        "wordSeparatorRequired": false
+        "wordSeparatorRequired": false,
+        "removeSpaces": "refuse"
       },
       "callRules": [
         "^\\s*(?:/\\d?[ \\t]*)?(?:N\\d+[ \\t]+)?(?:MCALL[ \\t]+)?(?!(?:AC|IC|DC|ACP|ACN|MSG|IF|WHILE|FOR|CASE|UNTIL|REPEATB|REPEAT|LOOP|GOTOF|GOTOB|GOTOC|GOTO|DEF|SETMS|SETM|CLEARM|WAITMC|WAITM|WAITE|WAITS|INIT|START|ORIRESET|FGROUP|TRAORI|TRANSMIT|TRACYL|TRAANG|EXTCALL|CALLPATH)[ \\t]*\\()(?<text>[A-Z_][A-Z0-9_]*(?=\\()|[A-Z_]{2}[A-Z0-9_]*(?=[ \\t]+\\())[ \\t]*\\(",

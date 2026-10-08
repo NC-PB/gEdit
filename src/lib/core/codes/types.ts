@@ -312,6 +312,18 @@ export interface CodeEntry {
    */
   frameWithoutValues?: 'close';
   /**
+   * Owner decision of 2026-10-08 (M10-2; §7.4 rule 13). The angle words of a tilt that reads as
+   * **no tilt when every one of them is zero** (Klartext cycle 19's `A`, `B`, `C`; `PLANE
+   * SPATIAL`'s `SPA`, `SPB`, `SPC`). A block of this code that writes none of them changes no
+   * frame (`CYCL DEF 19.0` names the cycle, its `19.1` gives the angles); one that writes
+   * them opens the frame while any of them stands at a value other than zero, and closes the
+   * frames of its `group` once all of them are zero. A word the block does not write keeps
+   * its earlier value (the TNC manual: an angle that is not programmed stays unchanged), and
+   * a value that is not a plain number (`SPB+Q5`) counts as not zero, so a frame stays open
+   * when in doubt. Read by the modal interpreter (`_nc_modal.py`).
+   */
+  frameZeroWords?: string[];
+  /**
    * M10 (WP10.2, the program checks; plan §7.16). The states in which the control refuses
    * this code, each one of `tcp`, `radiusComp`, `lengthComp`, `cycle` (a modal cycle or call),
    * `surfaceSpeed`, `feedNotPerMinute`, or `frame:<group>` (an open frame of that group); a

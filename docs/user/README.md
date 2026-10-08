@@ -97,7 +97,7 @@ gEdit reads the file as bytes and works out three things for itself:
 trailer. They are kept out of the text, counted, and written back unchanged. NULs in the
 middle are removed, and the status bar says how many — save the file to write that change.
 A file whose NUL bytes *inside* the program — between the leader and the trailer — are more
-than 10 % of those bytes is data, not a program, and is refused. So is a file above 50 MB.
+than 10 % of those bytes is data, not a program. It opens **read-only**, exactly as it is, and the status bar says why. Transforms and scripts do not run on it, it cannot be unlocked, and Save As cannot write over the same file; choose another name to save a copy. A file above 50 MB is refused.
 
 **Save As** to a file you may not write goes back to the dialog before anything is copied or
 written. Saved under another extension, a file that had a name has its dialect detected
@@ -111,6 +111,8 @@ with. Before it writes, gEdit copies the version that is on disk aside — see
 If the text holds a character the file's encoding cannot store — Windows-1252 has no `⌀`,
 for example — the save stops and asks whether to write the file as UTF-8 instead
 (**Save as UTF-8** or **Cancel**), naming the character and where it is.
+
+A file that was plain ASCII and gets a character outside it (a typed `Ø` or `°`) asks once, at the first save that would write it: **Save as UTF-8**, **Save as Windows-1252** or **Cancel**. Cancel writes nothing, so you can take the character out first. gEdit remembers your answer for that document and does not ask again. A file you open and save unchanged is never asked.
 
 The title bar and the tab show a dot while a document has unsaved changes. Closing a tab,
 closing the window, or quitting asks about them first.
@@ -382,7 +384,7 @@ on brings it back.
 
 ### Read-only programs
 
-There are two different locks. The status bar shows **Read-only** while one of them is on;
+There are two different locks, and a third for data. The status bar shows **Read-only** while one of them is on;
 hover it to see which, and click it to unlock. The tab shows a lock as well.
 
 **The file is read-only on disk.** A program you may not write — one carrying the

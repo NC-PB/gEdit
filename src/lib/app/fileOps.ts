@@ -40,7 +40,7 @@
 // Nothing here imports Monaco: it goes through `EditorService`, whose Monaco import is
 // dynamic (`app/context.test.ts` is the tripwire).
 
-import { codePointLabel, decodeFile, encodeFile, fnv1a32, keepsNulLeader } from '$lib/core/text';
+import { codePointLabel, decodeFile, encodeFile, firstNonAscii, fnv1a32, isAscii, keepsNulLeader } from '$lib/core/text';
 import { dialogs as appDialogs, errorText } from '$lib/app/dialogs';
 import { status as appStatus } from '$lib/app/status';
 import { editor as appEditor } from '$lib/monaco/editorService';
@@ -114,6 +114,12 @@ export interface FileOpsQuit {
 
 /** A new document: UTF-8 without a byte order mark (AD-7). */
 const UTF8: FileEncoding = { encoding: 'utf-8', hasBom: false };
+const WIN1252: FileEncoding = { encoding: 'windows-1252', hasBom: false };
+
+/** Plain ASCII on disk: UTF-8 without BOM and not a byte above 127 (owner answer 2026-10-08). */
+function wasPlainAscii(encoding: FileEncoding, text: string): boolean {
+  return encoding.encoding === 'utf-8' && !encoding.hasBom && isAscii(text);
+}
 
 const NO_NUL: NulInfo = { leader: 0, trailer: 0, stripped: 0 };
 
@@ -384,9 +390,10 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
       return null;
     }
 
-    const decoded = decodeFile(bytes);
+    // More than 10 % inner NUL bytes is data, not a program: it opens to be looked at, read-only.
+    const decoded = decodeFile(bytes, { allowBinary: true });
     if (!decoded.ok) {
-      // AD-7: more than 10 % inner NUL bytes is data, not a program.
+      // Unreachable with `allowBinary`; kept so a refusal can never open a tab.
       await refuse(name, t(decoded.message.key, decoded.message.params));
       return null;
     }
@@ -409,7 +416,8 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
 
     // AD-23: the file carries the read-only attribute, so the buffer opens locked. The
     // answer comes from the stat that was taken above for the size guard and the stamp.
-    const readOnly = stat?.readonly === true;
+    const binary = decoded.binary !== undefined;
+    const readOnly = binary || stat?.readonly === true;
 
     const id = docs.add(
       {
@@ -421,13 +429,14 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
         eol,
         eolMixedOnLoad: decoded.eolMixed,
         nul: decoded.nul,
+        asciiOnLoad: wasPlainAscii(decoded.encoding, decoded.text),
         textDirty: false,
         // A stripped NUL means the buffer no longer matches the file (AD-7).
         metaDirty: decoded.nul.stripped > 0,
         disk: stampOf(bytes, stat),
         external: 'none',
         readOnly,
-        readOnlyReason: readOnly ? 'attribute' : null,
+        readOnlyReason: binary ? 'binary' : readOnly ? 'attribute' : null,
       },
       { activate: true },
     );
@@ -441,7 +450,8 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     }
     // Said once, when it happens: a lock that is only visible as a small padlock is
     // found by the first refused keystroke, which is the wrong moment to learn it.
-    if (readOnly) notices.push(t('readOnly.opened', { name }));
+    if (decoded.binary) notices.push(t('readOnly.openedBinary', { name, percent: decoded.binary.percent }));
+    else if (readOnly) notices.push(t('readOnly.opened', { name }));
     openEvent.fire(id, path);
     return id;
   }
@@ -673,7 +683,31 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
 
     let encoding = doc.encoding;
     let switchedToUtf8 = false;
+    let askedNow = false;
     let bytes: Uint8Array;
+    // A file that was plain ASCII gains a character outside it (a typed Ø or °): the bytes
+    // on disk are about to change meaning, so the user chooses once for this document.
+    if (doc.asciiOnLoad === true && doc.encodingAsked !== true && encoding.encoding === 'utf-8' && !encoding.hasBom) {
+      const gained = firstNonAscii(textLF);
+      if (gained !== null) {
+        const choice = await dialogs.ask3({
+          title: t('files.encodingTitle'),
+          message: t('files.asciiGainedMessage', {
+            name,
+            char: gained.char,
+            code: codePointLabel(gained.char),
+            line: gained.line,
+          }),
+          yes: t('files.saveAsUtf8Button'),
+          no: t('files.saveAsWin1252Button'),
+          cancel: t('common.cancel'),
+          kind: 'warning',
+        });
+        if (choice === 'cancel') return 'cancelled';
+        encoding = choice === 'yes' ? UTF8 : WIN1252;
+        askedNow = true;
+      }
+    }
     const encoded = encodeFile(textLF, { encoding, eol: doc.eol, nul: doc.nul });
     if (encoded.ok) {
       bytes = encoded.bytes;
@@ -717,6 +751,7 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
       // The document now owns a real file, so the name it only proposed is spent (AD-21).
       ...(doc.proposedPath ? { proposedPath: null } : {}),
       encoding,
+      ...(askedNow ? { encodingAsked: true } : {}),
       ...(nul ? { nul } : {}),
       // `encodeFile` wrote every line with `doc.eol`, so a file that arrived with mixed
       // endings is uniform now and the status bar must stop saying "(mixed)" (AD-7).
@@ -729,7 +764,11 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     // Before the save event, so whatever listens to it sees the document's new dialect.
     const redetected = redetectAfterSaveAs(id, doc.path, path, textLF);
     saveEvent.fire(id, path);
-    const saved = switchedToUtf8 ? t('files.savedAsUtf8', { name }) : t('files.saved', { name });
+    const saved = switchedToUtf8 || (askedNow && encoding.encoding === 'utf-8')
+      ? t('files.savedAsUtf8', { name })
+      : askedNow
+        ? t('files.savedAsWin1252', { name })
+        : t('files.saved', { name });
     // The dropped tape leader is a loss, not a footnote: `{ error: true }` gives it the
     // warning styling and the 8 s an error gets, because the 4 s a plain "Saved …" lives
     // for is not enough to notice that the punched-tape framing has just gone (G8 M5).
@@ -762,6 +801,12 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
       return 'failed';
     }
     if (!path) return 'cancelled';
+
+    // Data opened read-only is never written over its own file: the copy would not be the bytes.
+    if (doc.readOnlyReason === 'binary' && path === doc.path) {
+      status.show(t('readOnly.binarySaveAsSame', { name: doc.title }), { error: true });
+      return 'failed';
+    }
 
     // Two tabs on one file would each believe they own it.
     const other = docs.byPath(path);
@@ -1057,6 +1102,8 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
       eol: decoded.eol ?? doc.eol,
       eolMixedOnLoad: decoded.eolMixed,
       nul: decoded.nul,
+      asciiOnLoad: wasPlainAscii(decoded.encoding, decoded.text),
+      encodingAsked: false,
       textDirty: false,
       metaDirty: decoded.nul.stripped > 0,
       // The same rule as after a write: a stat that did not answer may not erase the
@@ -1197,6 +1244,7 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
   function setReadOnly(id: DocId, readOnly: boolean): void {
     const doc = docs.get(id);
     if (!doc || doc.readOnly === readOnly) return;
+    if (doc.readOnlyReason === 'binary') return; // data stays locked
     docs.update(id, { readOnly, readOnlyReason: readOnly ? 'user' : null });
   }
 

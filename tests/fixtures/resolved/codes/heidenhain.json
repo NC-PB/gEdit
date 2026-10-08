@@ -548,8 +548,13 @@
     {
       "axisWords": "data",
       "code": "CYCL DEF 19",
-      "description": "Tilts the working plane: sub-block 19.1 gives the angles of the swivel axes A, B and C, and with them the feed and the safety distance for the control's own positioning. Whether the angles are axis positions or solid angles depends on the machine. Define it again with all angles at 0 and then once more without an angle to end it; PLANE RESET ends it as well. It acts from its definition on and is never called.",
+      "description": "Tilts the working plane: sub-block 19.1 gives the angles of the swivel axes A, B and C, and with them the feed and the safety distance for the control's own positioning. Whether the angles are axis positions or solid angles depends on the machine. Define it again with all angles at 0 and then once more without an angle to end it; PLANE RESET ends it as well. gEdit reads the plane as untilted from the sub-block that sets every angle to 0; an angle that is not written keeps its value. It acts from its definition on and is never called.",
       "frame": "open",
+      "frameZeroWords": [
+        "A",
+        "B",
+        "C"
+      ],
       "group": "tilt",
       "label": "Working plane (older tilt cycle)"
     },
@@ -1411,8 +1416,13 @@
     },
     {
       "code": "PLANE SPATIAL",
-      "description": "Turns the working plane by three angles around the machine axes. All three are written even when one is zero, and a following word says whether the machine swivels with a compensating move, turns the rotary axes only, or stays put.",
+      "description": "Turns the working plane by three angles around the machine axes. All three are written even when one is zero, and a following word says whether the machine swivels with a compensating move, turns the rotary axes only, or stays put. With all three at 0 the plane is the untilted one: the control resets the angles but not the function, which PLANE RESET does.",
       "frame": "open",
+      "frameZeroWords": [
+        "SPA",
+        "SPB",
+        "SPC"
+      ],
       "group": "tilt",
       "label": "Tilt the working plane by spatial angles",
       "requires": [
@@ -1425,6 +1435,11 @@
       "code": "PLANE PROJECTED",
       "description": "Defines the plane by two angles found by projecting it onto the first and the second coordinate plane (PROPR, PROMIN) and a turn about the tilted tool axis (ROT). Only right for a plane that belongs to a rectangular block. A following word says whether the machine swivels with a compensating move, turns the rotary axes only, or stays put.",
       "frame": "open",
+      "frameZeroWords": [
+        "PROPR",
+        "PROMIN",
+        "ROT"
+      ],
       "group": "tilt",
       "label": "Tilt the working plane by projection angles",
       "requires": [
@@ -1437,6 +1452,11 @@
       "code": "PLANE EULER",
       "description": "Defines the plane by three turns of the coordinate system, each about the axis the earlier turn left: precession EULPR about Z, nutation EULNU about the turned X, and rotation EULROT about the new Z. A following word says whether the machine swivels with a compensating move, turns the rotary axes only, or stays put.",
       "frame": "open",
+      "frameZeroWords": [
+        "EULPR",
+        "EULNU",
+        "EULROT"
+      ],
       "group": "tilt",
       "label": "Tilt the working plane by Euler angles",
       "requires": [
@@ -1628,13 +1648,12 @@
     },
     {
       "code": "M89",
-      "description": "Runs the cycle that was defined last in this block and again after every positioning block that follows, until an M99 on the last position or the next cycle definition. A machine parameter decides whether M89 is this call or a free M function.",
+      "description": "Calls the machining or drilling cycle that was defined last as a modal call: it runs at the end of this block and again after every positioning block that follows, until an M99 on the last position or the next cycle definition.",
       "group": "cycle",
       "label": "Modal cycle call",
       "sets": {
         "cycle": "call-modal"
-      },
-      "verify": true
+      }
     },
     {
       "axisWords": "machine",
@@ -1661,6 +1680,12 @@
       "description": "Brings the displayed value of a rotary axis back below a full turn.",
       "group": "program",
       "label": "Reduce the rotary axis display"
+    },
+    {
+      "code": "M98",
+      "description": "Where the contour is open at a corner, the tool runs on past or into the corner so that every point of the contour is really machined, instead of turning where the two tool paths meet. It counts only for the block it is written in and takes effect at the end of that block.",
+      "group": "program",
+      "label": "Machine open contour corners completely"
     },
     {
       "axisWords": "data",

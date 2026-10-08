@@ -48,6 +48,7 @@
     "exponentMarker": "EX",
     "decimalPointSignificant": false,
     "wordSeparatorRequired": false,
+    "removeSpaces": "refuse",
     "variables": "R\\d+",
     "systemVariables": "\\$[A-Z_][A-Z0-9_]*",
     "assignment": "[A-Z_][A-Z0-9_]*(?=\\s*=(?!=))",
@@ -208,7 +209,7 @@
     "restartAtProgramStart": true,
     "references": [{ "trigger": "(?<![A-Z_])GOTO[FBC]?(?![A-Z0-9_])", "addresses": ["N", "GOTO", "GOTOF", "GOTOB", "GOTOC"] }]
   },
-  "modal": { "initial": { "plane": "G18", "feedmode": "G95" } },
+  "modal": { "initial": { "plane": "G18", "feedmode": "G95", "distance": "G90" } },
   "machineParams": {
     "numberInput": {
       "default": "calculator",

@@ -22,8 +22,16 @@
 //! milestone has to hand to the webview. Since tauri only takes the accelerator as a
 //! string, and parses it through `Accelerator`/`Code` (always lowercased), there is
 //! no way to ask for the uppercase key equivalent AppKit needs. The item is
-//! therefore click-only here, and the webview binds Cmd+Shift+W to the same guarded
-//! close (WP1.6, `contrib/files.ts`).
+//! therefore declared without an accelerator, and the webview binds Cmd+Shift+W to
+//! the same guarded close (WP1.6, `contrib/files.ts`).
+//!
+//! **The shortcut is set after the menu is built** (owner decision, 2026-10-08):
+//! `quit::install_menu_shortcuts` finds the Close Window items in the live
+//! `NSMenu` and gives them the uppercase key equivalent `W` with Command, which is
+//! what AppKit reads as Shift+Cmd+W. That is the only Objective-C involved and it
+//! lives in `quit.rs`. The item is still the custom one, so the key ends in
+//! [`request_close_window`] and the same guarded close; the webview's own binding
+//! stays as the fallback if the lookup fails.
 //!
 //! Measured with a probe build whose menu carried four extra items (gEdit 0.1.0,
 //! tauri 2.11.5, muda 0.19.3, macOS 15): `CmdOrCtrl+Shift+W` fired on Cmd+W,

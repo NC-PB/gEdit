@@ -444,6 +444,7 @@
     "maxLineLength": 158,
     "maxMCodes": 8,
     "names": "[A-Z]{2}[A-Z0-9]*",
+    "removeSpaces": "keepAroundLongAddresses",
     "sequenceNames": true,
     "systemVariables": "V[A-Z][A-Z0-9]{3}",
     "variables": "V\\d+",

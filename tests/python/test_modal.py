@@ -1034,7 +1034,9 @@ class TestDefinedCycle(ModalTestCase):
         self.assertEqual(sorted(code for code, value in cycle.items() if value == "call"),
                          ["CYCL CALL", "CYCL CALL PAT", "CYCL CALL POS", "M99"])
         self.assertEqual([code for code, value in cycle.items() if value == "call-modal"], ["M89"])
-        self.assertTrue(codes["M89"].get("verify"), "M89 is a call only where a machine parameter says so")
+        # Owner decision of 2026-10-08 (M9-4): on the owner's controls M89 is the modal cycle
+        # call, so the entry is no longer marked for verification.
+        self.assertIsNone(codes["M89"].get("verify"), "M89 is the modal cycle call (the owner, 2026-10-08)")
         for code in ("CYCL DEF", "CYCL DEF 7", "CYCL DEF 9", "CYCL DEF 19", "CYCL DEF 32", "CYCL DEF 247"):
             with self.subTest(code=code):
                 self.assertIsNone(cycle[code])
@@ -1197,8 +1199,39 @@ class TestFramesAndTcp(ModalTestCase):
         )
         self.assertEqual(
             self.frames(states),
-            ["CYCL DEF 8", "CYCL DEF 8", "PLANE SPATIAL", "PLANE VECTOR", "CYCL DEF 8", "CYCL DEF 19", "CYCL DEF 19", "CYCL DEF 8"],
+            # The 19.0 line only names the cycle; its angles, and with them the tilt, come with
+            # 19.1 (`frameZeroWords`, owner decision of 2026-10-08).
+            ["CYCL DEF 8", "CYCL DEF 8", "PLANE SPATIAL", "PLANE VECTOR", "CYCL DEF 8", "CYCL DEF 8", "CYCL DEF 19", "CYCL DEF 8"],
         )
+
+    def test_a_klartext_tilt_with_every_angle_zero_is_no_tilt(self) -> None:
+        # Owner decision of 2026-10-08 (M10-2): cycle 19 and PLANE SPATIAL / PROJECTED /
+        # EULER with every angle at zero close the tilt, as PLANE RESET does; any angle
+        # other than zero, or one that is not a plain number, keeps it open. The manual's
+        # reset of cycle 19 (all angles 0, then once more without an angle) ends closed.
+        states = self.run_lines(
+            "heidenhain-klartext",
+            [
+                "CYCL DEF 19.0 WORKING PLANE", "CYCL DEF 19.1 A+0 B+30 C+0", "L X0 Y0",
+                "CYCL DEF 19.0 WORKING PLANE", "CYCL DEF 19.1 A+0 B+0 C+0",
+                "CYCL DEF 19.0 WORKING PLANE", "CYCL DEF 19.1", "L X0 Y0",
+                "PLANE SPATIAL SPA+0 SPB+45 SPC+0 TURN MB MAX FMAX", "PLANE SPATIAL SPA+0 SPB-0.000 SPC+0 STAY",
+                "PLANE SPATIAL SPA+0 SPB+Q5 SPC+0 STAY", "PLANE PROJECTED PROPR+0 PROMIN+0 ROT+0 STAY",
+                "PLANE EULER EULPR+0 EULNU+20 EULROT+0 STAY", "PLANE EULER EULPR+0 EULNU+0 EULROT+0 STAY",
+            ],
+        )
+        self.assertEqual(
+            self.frames(states),
+            [None, "CYCL DEF 19", "CYCL DEF 19", "CYCL DEF 19", None, None, None, None,
+             "PLANE SPATIAL", None, "PLANE SPATIAL", None, "PLANE EULER", None],
+        )
+        # An angle the block leaves out keeps its value (cycle 19 in the TNC manual): B+0
+        # alone does not end a tilt that A opened.
+        states = self.run_lines("heidenhain-klartext", ["CYCL DEF 19.1 A+20 B+30", "CYCL DEF 19.1 B+0", "CYCL DEF 19.1 A+0"])
+        self.assertEqual(self.frames(states), ["CYCL DEF 19", "CYCL DEF 19", None])
+        # PLANE AXIAL is not flagged: the manual says a zero axis angle does not end it.
+        states = self.run_lines("heidenhain-klartext", ["PLANE AXIAL B+0 TURN"])
+        self.assertEqual(self.frames(states), ["PLANE AXIAL"])
 
     def test_the_values_of_a_block_are_read_only_for_a_database_that_has_a_bare_frame_code(self) -> None:
         # Rule 13 needs to know whether a block writes values only for the codes that close

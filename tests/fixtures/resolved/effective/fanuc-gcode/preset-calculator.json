@@ -384,7 +384,7 @@
       "wordSeparatorRequired": false
     },
     "toolCall": {
-      "ignore": "(?<![A-Z])T0+(?!\\d)",
+      "ignore": "^(?:(?!(?<![A-Z])T\\d).)*(?<![A-Z])T0+(?!\\d)",
       "tool": "(?<![A-Z])T(?<tool>\\d+)",
       "toolFrom": "same-line-or-last",
       "trigger": "(?<![A-Z])M0*6(?!\\d)"

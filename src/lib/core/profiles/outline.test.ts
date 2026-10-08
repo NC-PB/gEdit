@@ -346,6 +346,22 @@ describe('tool labels', () => {
     expect(tools('T0\nT3\nM6\n')).toEqual([[3, 'T3']]);
   });
 
+  // Owner decision of 2026-10-08 (M9-1): in a block with two `T` words and `M6` the first
+  // `T` is the tool loaded (`T01 T00 M6`); only a first `T0` makes the block an unload.
+  it('loads the first T of a block with two T words', () => {
+    const cp = compiled(FANUC);
+    const tools = (text: string) =>
+      index(text, cp)
+        .items()
+        .filter((item) => item.kind === 'tool')
+        .map((item) => [item.line, item.text]);
+    expect(tools('T01 T00 M6\nG1 X1 F100\nT2 T5 M6\n')).toEqual([
+      [1, 'T1'],
+      [3, 'T2'],
+    ]);
+    expect(tools('T00 T01 M6\nT1 M6\n')).toEqual([[2, 'T1']]);
+  });
+
   it('looks three lines up and two down, and no further', () => {
     const cp = compiled(FANUC);
     expect(index('(FAR)\n\n\nT1 M6\n', cp).items().at(-1)?.text).toBe('T1 — FAR');

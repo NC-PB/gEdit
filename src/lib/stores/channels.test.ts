@@ -381,12 +381,14 @@ describe('one file per channel', () => {
     expect(set.problems.map((p) => p.message.key)).toContain('channels.problems.siblingUnknown');
   });
 
-  it('reads a refused call as "not found"', async () => {
+  it('reads a refused call as "could not be checked", not "not found"', async () => {
     const id = w.open('part_CH1.nc', MARKS, '/jobs/part_CH1.nc');
     w.svc.forDoc(id);
     w.siblingAnswer = 'reject';
-    expect(await w.svc.siblings(id)).toEqual([]);
-    expect(w.svc.forDoc(id).missing.map((c) => c.id)).toEqual(['2']);
+    await w.svc.siblings(id);
+    const set = w.svc.forDoc(id);
+    expect(set.missing.map((c) => c.id)).toEqual(['2']);
+    expect(set.problems.map((p) => p.message.key)).toContain('channels.problems.siblingUnknown');
   });
 
   it('finds the sibling when it opens, and loses it when it closes', () => {

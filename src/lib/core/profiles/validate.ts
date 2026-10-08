@@ -587,6 +587,10 @@ function checkSyntax(value: unknown, p: Problems): void {
   if (typeof syntax.exponentMarker === 'string' && /^[A-Za-z]$/.test(syntax.exponentMarker)) {
     p.add('syntax.exponentMarker', 'has to be at least two letters: a single letter is an address of its own');
   }
+  // M9-2 (2026-10-08): marks that address the value behind them (Klartext `#5`).
+  checkSymbolAddresses(syntax, p);
+  // 2026-10-08: what Remove Spaces may do (Sinumerik refuses it, Okuma keeps long addresses apart).
+  optEnum(syntax.removeSpaces, 'syntax.removeSpaces', p, ['refuse', 'keepAroundLongAddresses'] as const);
   bool(syntax.decimalPointSignificant, 'syntax.decimalPointSignificant', p);
   bool(syntax.wordSeparatorRequired, 'syntax.wordSeparatorRequired', p);
   optStr(syntax.incrementalPrefix, 'syntax.incrementalPrefix', p, ADDRESS);
@@ -595,6 +599,35 @@ function checkSyntax(value: unknown, p: Problems): void {
   // M10 (WP10.2): read by the program checks.
   optNum(syntax.maxWordDigits, 'syntax.maxWordDigits', p, { int: true, min: 1 });
   optNum(syntax.maxMCodes, 'syntax.maxMCodes', p, { int: true, min: 1 });
+}
+
+/**
+ * `syntax.symbolAddresses`: one character each, and none that already means something to the
+ * tokenizer — a letter, a digit, a blank, `"`, a sign, the decimal separators, a comment
+ * start, the continuation mark or a block-skip mark.
+ */
+function checkSymbolAddresses(syntax: Record<string, unknown>, p: Problems): void {
+  const marks = syntax.symbolAddresses;
+  if (marks === undefined) return;
+  if (!Array.isArray(marks)) {
+    p.add('syntax.symbolAddresses', 'has to be a list of single characters');
+    return;
+  }
+  const taken = new Set<string>(['"', '+', '-', '.', ',', '(', ')', '[', ']', '=']);
+  const comments = Array.isArray(syntax.comments) ? syntax.comments : [];
+  for (const marker of comments) {
+    const start = (marker as { start?: unknown } | null)?.start;
+    if (typeof start === 'string' && start !== '') taken.add(start[0]);
+  }
+  if (typeof syntax.continuationMark === 'string' && syntax.continuationMark !== '') taken.add(syntax.continuationMark[0]);
+  const skip = syntax.blockSkip as { chars?: unknown } | undefined;
+  if (skip && typeof skip.chars === 'string') for (const char of skip.chars) taken.add(char);
+  marks.forEach((mark, i) => {
+    const path = `syntax.symbolAddresses[${i}]`;
+    if (typeof mark !== 'string' || mark.length !== 1) p.add(path, 'has to be one character');
+    else if (/[A-Za-z0-9\s]/.test(mark)) p.add(path, 'may not be a letter, a digit or a blank');
+    else if (taken.has(mark)) p.add(path, `already means something else in this profile (${mark})`);
+  });
 }
 
 function checkAddresses(value: unknown, p: Problems): void {

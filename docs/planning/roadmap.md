@@ -87,11 +87,11 @@ Releases (accepted 2026-10-01; [D70](phase-2-implementation.md#101-decided-by-th
 
 | Release | Contents | Status |
 |---|---|---|
-| v0.2 | M6–M8 with the fixes made since; the release workflow comes first (size S) | draft release made; the owner publishes it |
+| v0.2 | M6–M8 with the fixes made since; the release workflow comes first (size S) | published |
 | v0.3 | M9, with the Sinumerik milling profile | published |
-| v0.4 | M10 | draft release made; the owner publishes it |
-| v0.5 | M11 | draft release made; the owner publishes it |
-| v0.6 | M12 | next, after M12 lands on `main` |
+| v0.4 | M10 | published |
+| v0.5 | M11 | published |
+| v0.6 | M12, the owner answers of 2026-10-07 and 2026-10-08 | next: ready on `main`, cut when the owner asks |
 | 1.0 | M13, the Phase 2 exit | planned |
 
 Row by row:
@@ -170,6 +170,10 @@ Good candidates for contributed scripts. See [nc-transformations backlog](nc-tra
 - Multi-level outline from keywords in comments (tool → operation → step)
 - Illustrations for templates and cycle parameters
 - Findings from check scripts shown as editor markers while typing (live lint)
+- Native application menus on Windows and Linux (macOS has one; the owner, 2026-10-08)
+- A Klartext comment toggle that puts the `;` after the block number (the owner, 2026-10-08)
+- R9, an Okuma machining-centre profile: when a programming manual of the machining-centre control arrives ([source review §5](source-review-2026-09.md#5-roadmap-proposals); moved here from the open questions on 2026-10-08)
+- R10, the function feeds (`M128 F`, `M140 F`, `PLANE F`, cycle 19's `F`) and Klartext's Q-parameter feeds: when a real program shows such a feed (moved here from the open questions on 2026-10-08)
 
 Splitting multi-channel lathe programs by channel and checking their wait codes moved into Phase 2 (M12). The Phase 2 rows marked "deferred (backlog)" join this list when Phase 2 closes.
 
@@ -182,4 +186,4 @@ Out of scope for gEdit for now. We may revisit them later, but no design work is
 - **Program management:** program databases with machine assignment, revision servers, check-in/check-out, and ERP/PDM integration.
 - **Conversational and proprietary formats:** conversational shop-floor formats and viewers for them, machine-builder-specific cycles, and built-in wait-code sets per machine builder. (The channels and wait codes of your own machines are a machine setting you write yourself, built in M12.)
 - **Legacy conveniences:** line-printer output, punched-tape length display, serial print statements for data collection, launching the OS calculator, auto-exit when idle, lock files for concurrent access, a settings password, warning sounds, and virtual space past the line end.
-- **Cut from Phase 2:** external commands (a script can start a program itself), a numeric tolerance in compare, an in-app copy of the user guide, and character cleanup with transliteration tables.
+- **Cut from Phase 2:** external commands (a script can start a program itself), a numeric tolerance in compare, an in-app copy of the user guide, character cleanup with transliteration tables, and a global viewer mode (cut by the owner, 2026-10-08).

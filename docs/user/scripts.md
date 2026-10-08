@@ -629,7 +629,8 @@ per refused block, with the block as written and the reason in plain words.
   machine, not on the part.
 - **Inside a frame**: a tilted plane, a rotation, a mirror, a scaling, polar coordinates
   (`G16`), `CYCLE800`, `G68`. The numbers there are not the part's coordinates. A frame
-  that is closed again (`G69`, `G15`, `PLANE RESET`, `CYCLE800()`) ends it.
+  that is closed again (`G69`, `G15`, `PLANE RESET`, `CYCLE800()`) ends it, and so does a
+  Klartext cycle 19 or `PLANE SPATIAL`, `PROJECTED` or `EULER` with every angle at zero.
 - **A rotary axis without tool centre point control**, see the next section.
 - **A cycle it has no role for**: every lathe and Okuma cycle, a Fanuc `G65` that hands a
   chosen address a number, a Sinumerik or Klartext cycle the database has not reviewed, and

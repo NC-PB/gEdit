@@ -8,6 +8,7 @@ Multi-channel programs: this change set lets gEdit know the channels of a twin-t
 
 ### New
 
+- **Repository:** an MIT `LICENSE` file, a `repository` field in the package metadata, Dependabot for GitHub Actions (weekly, one pull request), a placeholder app icon, and Close Window in the macOS menu shows its shortcut, Shift+Cmd+W.
 - **Compare review mode, Cycle names** (Heidenhain Klartext only, off by default): leaves out the cycle name in the control's dialog language (`CYCL DEF 200 BOHREN` against `CYCL DEF 200 DRILLING`) and the label of an old numbered cycle (`V.ZEIT` against `DWELL` in `CYCL DEF 9.1 … 1.5`), so a program posted again in another language compares clean; the cycle number, the values and the parameter lines are still compared. Saved with the other review options.
 - **Channels, set up for each machine** (Settings, Machines, a new *Channels* step): say whether the channels are sections of one program or one program for each channel, name them, and say which codes are the waits. You write the waits as a plain list, such as `M900-M999, M300`, and a live preview shows the codes you meant. A mistake gets a plain message that quotes the item. Nothing is switched on for a machine you did not set up.
 - **The `P` word of a wait** is a dropdown with an example for each choice: path numbers (`P12`), a bit sum (`P3`), or no `P`, with what a wait without `P` means. A checkbox makes stops and ends (`M00`, `M01`, `M02`, `M30`) count as waits. **Advanced patterns** (regular expressions, with a link to the regex help page) stay closed unless you open them.
@@ -21,9 +22,25 @@ Multi-channel programs: this change set lets gEdit know the channels of a twin-t
 - **Tool list per channel:** on a program with channels the rows are grouped by channel and the list has a *Channel* column; with one file for each channel the list is for the file in front of you.
 - **Split into Channel Documents** (NC tab): one new untitled document for each channel of a one-file program, for reading or printing. It is a one-way copy and writes no file.
 - **Channels in scripts:** a script on a machine with channels sees `channels` in its context: the layout, the line ranges of every channel, the lines outside them and the waits. `gedit_nc` has helpers for it. A script on a program without channels runs unchanged.
+- **Klartext `M98`** in code help: complete machining of open contour corners, for its own block only.
+
+### Changed
+
+- **Fanuc mill:** in a block with two `T` words and `M6` (`T01 T00 M6`) the first `T` is the tool loaded, so the program map and the tool list show tool 1 there.
+- **Sinumerik:** a program that never writes `G90` starts in absolute positions (assumed, a machine can say otherwise), so address arithmetic and extents read it instead of refusing every word.
+- **Klartext:** cycle 19 and `PLANE SPATIAL`, `PROJECTED` or `EULER` with every angle at zero end the tilt, so address arithmetic and extents no longer treat the rest of the program as tilted.
+- **Sinumerik:** a name alone in its block (`CYCLE800`, `HOME`) is read as a call, no longer as an unknown mark; `CYCLE800` alone ends the swivel like `CYCLE800()`.
+- **Klartext:** the datum-table row of cycle 7 (`CYCL DEF 7.1 #5`, `#Q5`) is read as one word, no longer as an unknown `#`.
+- **Code help** describes Klartext `M89` (the modal cycle call) and the Sinumerik `M6` (the tool change) instead of leaving them out as unverified.
+- **Remove Spaces** is not offered on Sinumerik, whose names and long addresses need their spaces; on Okuma it keeps the space around a word such as `SB=1200`.
+- **Change Dialect suggestion:** a Siemens milling program that writes `G97 S…` or `DIAMOF` is no longer suggested the turning dialect.
 
 ### Fixed
 
+- When gEdit cannot look in the folder for the other channel file (the computer refuses it), the channel item says *could not be checked*, not *not found*.
+- A machine of the same control can now be chosen for a mill or a lathe program whichever type it is; when the type differs, the machine picker, the status bar item and its hover warn that the machine's diameter and G-code system settings do not apply.
+- A file that was plain ASCII and gets a character outside it (`Ø`, `°`) asks once at the first save: UTF-8, Windows-1252 or cancel; the answer is kept for that document.
+- A file of more than 10 % NUL bytes opens read-only, with the reason in the status bar, instead of being refused; transforms and scripts do not run on it.
 - A pattern in a machine's channel settings that could make gEdit hang on a long line is refused when you save it, with a plain message; lines over 1,000 characters are not read for channels and are counted in a problem.
 - A very large program with thousands of waits no longer makes the program map, typing or the first reading of the channels slow: the map froze for seconds on every edit before, and now answers in a fraction of a second.
 - When gEdit cannot read the channels in time, the status bar says *Channels: too slow to read* and Check Wait Codes says it did not check, instead of showing nothing.

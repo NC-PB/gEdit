@@ -195,5 +195,5 @@ pull request.
 
 ## License
 
-MIT. Third-party license notices are generated into `src/lib/data/licenses.json`
+MIT, see [LICENSE](LICENSE). Third-party license notices are generated into `src/lib/data/licenses.json`
 (`npm run licenses`) and shown in the About dialog.

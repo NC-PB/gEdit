@@ -129,6 +129,14 @@ vi.mock('$lib/stores/machines', async () => {
           (m) => chain.includes(m.profile) && !fake.unusable.has(m.id),
         );
       },
+      typeMismatch: (id: DocId) => {
+        const m = fake.chosen.value as MachineConfig | null;
+        const documentType = profiles.get(docs.get(id)?.profileId ?? '')?.machineType;
+        const machineType = m === null ? undefined : profiles.get(m.profile)?.machineType;
+        return m === null || machineType === undefined || documentType === undefined || machineType === documentType
+          ? null
+          : { name: m.name, machineType, documentType };
+      },
       defaultFor: () => fake.defaultId.value,
       add: async (): Promise<string> => 'x',
       update: async (): Promise<void> => {},
@@ -335,6 +343,19 @@ describe('picking a machine', () => {
     expect(fake.picks[1].map((entry) => (entry as QuickPickItem<string>).value)).toEqual(['lathe-2']);
   });
 
+  it('lists a machine of the other type with a warning, and keeps it selectable', async () => {
+    fake.setList([LATHE_2, MILL_1]);
+    fake.chosen.value = null;
+    // The mill machine is offered to the lathe program (same family) and carries the warning.
+    addDoc('/nc/part.nc', 'fanuc-lathe');
+    await contrib.commands[0].run();
+    const entries = fake.picks[0] as QuickPickItem<{ kind: string; id?: string }>[];
+    const mill = entries.find((e) => e.value.id === 'mill-1');
+    const lathe = entries.find((e) => e.value.id === 'lathe-2');
+    expect(mill?.detail).toContain(t('machines.typeDiffersShort', { machineType: t('machines.typeMill') }));
+    expect(lathe?.detail ?? '').not.toContain('diameter');
+  });
+
   it('offers no way to the other machines when every machine already fits', async () => {
     fake.setList([MILL_1]);
     addDoc('/nc/part.nc');
@@ -448,6 +469,25 @@ describe('the status item', () => {
     expect(html).toContain('data-machine-id="lathe-2"');
     expect(html).toContain('data-choice="document"');
     expect(html).toContain('data-assumed="0"');
+  });
+
+  it('warns when the machine is for another machine type than the program', () => {
+    fake.setList([LATHE_2]);
+    fake.chosen.value = LATHE_2;
+    fake.choice.value = 'document';
+    addDoc('/nc/part.nc', 'fanuc-gcode');
+    const html = item();
+    expect(html).toContain('data-type-mismatch="1"');
+    expect(html).toContain('Machine &quot;Lathe 2&quot; is for a lathe, this program is for a mill.');
+    expect(html).toContain('diameter and G-code system settings do not apply');
+  });
+
+  it('says nothing when the machine type matches the program', () => {
+    fake.setList([LATHE_2]);
+    fake.chosen.value = LATHE_2;
+    fake.choice.value = 'document';
+    addDoc('/nc/part.nc', 'fanuc-lathe');
+    expect(item()).toContain('data-type-mismatch="0"');
   });
 
   it('puts every effective parameter and its source in the tooltip', () => {

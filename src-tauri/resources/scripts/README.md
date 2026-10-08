@@ -473,7 +473,10 @@ that move or measure positions:
   them all. A `frame: 'close'` code ends the open frames of its **own group** only (`G69`
   ends `G68`, not the scaling of `G51`; `PLANE RESET` ends a `PLANE`, not the mirror of cycle
   8); a frame code written without values closes its group where the database says so
-  (`CYCLE800()`, `TRANS` alone). A close that matches nothing leaves the frame open: when in
+  (`CYCLE800()`, `TRANS` alone), and a Klartext tilt closes its group once every angle the
+  database names for it stands at zero (`frameZeroWords`: cycle 19's `A`/`B`/`C`, `PLANE
+  SPATIAL`'s `SPA`/`SPB`/`SPC`; an angle not written keeps its value, one that is not a plain
+  number counts as not zero). A close that matches nothing leaves the frame open: when in
   doubt, a position is in a frame.
 * **`tcp`** is the code that switched tool centre point control on (`TRAORI`, `G43.4`,
   `M128`, `FUNCTION TCPM`), or `None`. Under it `X`/`Y`/`Z` are the tool tip in the

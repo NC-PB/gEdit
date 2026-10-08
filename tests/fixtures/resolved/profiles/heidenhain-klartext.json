@@ -220,6 +220,9 @@
     ],
     "sectionHeading": "^\\s*(?:/\\s*)?\\d+\\s+(?:/\\s*)?\\*",
     "strings": true,
+    "symbolAddresses": [
+      "#"
+    ],
     "variables": "Q[LRS]?\\d+",
     "wordSeparatorRequired": true
   },

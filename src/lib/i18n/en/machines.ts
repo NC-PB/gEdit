@@ -132,6 +132,13 @@ export default {
   gone: 'The machine of this document is no longer available; the defaults are assumed',
   incompatible: 'Machine "{name}" is not for this profile; the defaults are assumed',
   unusable: 'Machine "{name}" cannot be used as machines.json writes it; the defaults are assumed',
+  // Owner answer 2026-10-08: every machine of the control can be chosen; a mill/lathe
+  // difference is warned about, never refused.
+  typeDiffers:
+    'Machine "{name}" is for a {machineType}, this program is for a {documentType}. Its diameter and G-code system settings do not apply.',
+  typeDiffersShort: 'Machine type differs: it is for a {machineType}. Its diameter and G-code system settings do not apply.',
+  typeMill: 'mill',
+  typeLathe: 'lathe',
   // AD-31: detection disagrees with the chosen machine. Nothing switches by itself.
   mismatch:
     'This program looks like {label} "{detected}"; machine "{name}" is set to "{chosen}". Nothing was changed.',

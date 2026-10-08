@@ -243,6 +243,7 @@
   "machineType": "mill",
   "modal": {
     "initial": {
+      "distance": "G90",
       "feedmode": "G94",
       "plane": "G17"
     }
@@ -456,6 +457,7 @@
     "labels": "^\\s*(?:/\\d?\\s*)?(?:N\\d+[ \\t]+)?(?<name>[A-Z_][A-Z0-9_]*):(?!=)",
     "maxLineLength": 512,
     "names": "[A-Z_]{2}[A-Z0-9_]*",
+    "removeSpaces": "refuse",
     "strings": true,
     "systemVariables": "\\$[A-Z_][A-Z0-9_]*",
     "variables": "R\\d+",

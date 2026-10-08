@@ -50,6 +50,7 @@
     "decimalSeparator": ".",
     "decimalPointSignificant": false,
     "wordSeparatorRequired": false,
+    "removeSpaces": "keepAroundLongAddresses",
     "variables": "V\\d+",
     "systemVariables": "V[A-Z][A-Z0-9]{3}",
     "assignment": "[A-Z][A-Z0-9]{0,3}(?=\\s*=(?!=))",

@@ -367,7 +367,7 @@ M-numbers above 30 are machine-specific, except the predefined `M40`–`M45` and
 - `T<n>` (tool number, 0–32000), `T=<n>`, `T<n>=…` (tool for spindle `<n>`; whether a control accepts the spindle extension is the builder's setup). `T0` deselects the tool. [P §2.4.1, p.64–65]
 - With tool management: `T="<name>"` names the tool, and the name is compared with its capitals; `T=<n>` is then the number of a magazine location, not a tool number. A location that is empty acts like `T0`. [P §2.4.3, p.67–70]
 - `D<n>`: cutting edge (offset set) of the active tool. `D0` switches length and radius offsets off [M, as `T0 D0`]. The tool change activates the offsets of a `D` number [P §2.4, p.64]; many configurations activate `D1` automatically after a tool change.
-- `M6`: executes the change on milling machines with a chain, disc or box magazine; a turret changes on the `T` word alone. Which of the two a machine does is set up by the builder at commissioning. [P §2.4, p.64; §2.4.2, p.66–67]
+- `M6`: executes the change on milling machines with a chain, disc or box magazine; a turret changes on the `T` word alone. Which of the two a machine does is set up by the builder at commissioning. [P §2.4, p.64; §2.4.2, p.66–67] On the owner's milling machines it is the tool change that loads the tool selected with `T` (the owner, 2026-10-08); the database entry is no longer `verify`.
 
 ### 5.2 Detecting a tool change for the program map
 
@@ -482,7 +482,7 @@ A subprogram call, cycles included, has to stand in a block of its own [P §3.2.
 |---|---|---|
 | `L<n>` | Call `L<n>.SPF`. Up to 7 digits, and leading zeros are part of the name: `L123`, `L0123` and `L00123` are three programs. | [M] call form; [P §3.2.3.1, p.534] |
 | `L<n>(args)` | Call with parameters | [M] |
-| `<NAME>` alone in a block | (gEdit: still an unknown token today; a bare `CYCLE800` or `HOME` is not read as a call, §10.2 of the Phase 2 plan, M9-3.) Call `<NAME>` by name; the control looks for `_MPF` first, then `_SPF`, so a subprogram named like its main program calls the main program again. A main program called this way returns at its `M2`/`M30`. | [M]; [P §3.2.3.1, p.534] |
+| `<NAME>` alone in a block | (gEdit: read as a call without arguments since the owner's answer of 2026-10-08, M9-3; a bare `CYCLE800` is `CYCLE800()`. A name among other words stays an unknown token.) Call `<NAME>` by name; the control looks for `_MPF` first, then `_SPF`, so a subprogram named like its main program calls the main program again. A main program called this way returns at its `M2`/`M30`. | [M]; [P §3.2.3.1, p.534] |
 | `<NAME> P<k>` / `L<n> P<k>` | Repeat the call k times, 1–9999; parameters are passed on the first run only | [P §3.2.3.3, p.538–539] |
 | `<NAME>(args)` | Parameterized call. Needs `PROC` in the callee and, for a program in the workpiece or global folder, `EXTERN` in the caller. | [M]; [P §3.2.3.2, p.536–538] |
 | `CALL <name>` | Indirect call, the name in a `STRING` constant (`CALL "/_N_WKS_DIR/…/_N_TEIL1_SPF"`) or variable; no parameters | [P §3.2.3.5, p.541–542] |

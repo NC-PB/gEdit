@@ -184,6 +184,24 @@ def frame_of(entry: Optional[Dict[str, Any]]) -> Optional[str]:
     return value if value in ("open", "close") else None
 
 
+def _zero_words_of(entry: Optional[Dict[str, Any]]) -> List[str]:
+    """The angle words of ``frameZeroWords``, upper case; empty when the entry has none."""
+    if not isinstance(entry, dict):
+        return []
+    words = entry.get("frameZeroWords")
+    if not isinstance(words, list):
+        return []
+    return [word.upper() for word in words if isinstance(word, str) and word != ""]
+
+
+def _is_zero(value: str) -> bool:
+    """A value written as a plain number that is zero (``+0``, ``-0.000``); anything else is not."""
+    try:
+        return float(value.strip()) == 0.0
+    except ValueError:
+        return False
+
+
 def speed_limit_bound_of(entry: Optional[Dict[str, Any]]) -> Optional[str]:
     """Which side of the speed range this code's ``S`` bounds: ``'upper'``, ``'lower'`` or ``None``.
 
@@ -507,6 +525,10 @@ class ModalInterpreter:
         #: written without any (`frameWithoutValues`, Siemens `TRANS`/`CYCLE800`); a database
         #: with no such code never asks, so no block pays for the walk.
         self._has_bare_frames = any(isinstance(entry, dict) and entry.get("frameWithoutValues") == "close" for entry in self.codes)
+        #: Rule 13 (owner decision of 2026-10-08, M10-2): the same walk for a database with a
+        #: tilt that reads as none when every angle is zero (`frameZeroWords`, Klartext cycle 19
+        #: and `PLANE SPATIAL`).
+        self._has_zero_frames = any(isinstance(entry, dict) and _zero_words_of(entry) for entry in self.codes)
         self.reset()
 
     # -- the power-on state -------------------------------------------------
@@ -549,6 +571,7 @@ class ModalInterpreter:
         #: Rule 13: the block's calls without arguments, and whether it writes any value.
         self._calls_bare = {}
         self._block_values = False
+        self._block_words: Dict[str, str] = {}
         self._modal_ambiguous: Optional[str] = None
         # Before the power-on codes below, which are applied through `_apply_sets` and may
         # touch the block's flags.
@@ -738,6 +761,11 @@ class ModalInterpreter:
         block writes any value besides its codes (``frameWithoutValues``)."""
         self._calls_bare: Dict[str, bool] = {}
         self._block_values = False
+        self._block_words = {}
+        if self._has_zero_frames:
+            for token in tokens:
+                if token.kind == "word" and token.address and (token.value_text or "") != "":
+                    self._block_words[token.address.upper()] = token.value_text or ""
         if not self._has_bare_frames:
             return
         for token in tokens:
@@ -772,6 +800,10 @@ class ModalInterpreter:
         ``ROT`` alone) the code closes the frames of its group instead, as the Siemens manuals
         say it does; with any value it keeps the reading of ``frame``.
         """
+        zero_words = _zero_words_of(entry)
+        if zero_words:
+            self._apply_zero_frame(zero_words, code, group, line)
+            return
         frame = frame_of(entry)
         if entry.get("frameWithoutValues") == "close" and self._written_bare(code):
             frame = "close"
@@ -779,6 +811,33 @@ class ModalInterpreter:
             self._frames = [f for f in self._frames if f["code"] != code]
             self._frames.append({"code": code, "line": line, "group": group})
         elif frame == "close":
+            self._frames = [f for f in self._frames if f["group"] != group]
+
+    def _apply_zero_frame(self, words: "Sequence[str]", code: str, group: Optional[str], line: int) -> None:
+        """Rule 13, ``frameZeroWords`` (owner decision of 2026-10-08, M10-2).
+
+        The tilt is in force while any of its angle words stands at a value other than zero,
+        and over once all of them are zero: then the code closes the frames of its group, as
+        ``PLANE RESET`` does. A block that writes none of the words changes nothing (the
+        ``CYCL DEF 19.0`` line only names the cycle; its ``19.1`` gives the angles). An angle
+        the block leaves out keeps its value, as the TNC manual says of cycle 19, and a value
+        that is not a plain number (``SPB+Q5``) counts as not zero: in doubt the frame stays
+        open, the safe reading for anything that moves positions.
+        """
+        written = {word: self._block_words[word] for word in words if word in self._block_words}
+        if not written:
+            return
+        previous = next((f for f in self._frames if f["code"] == code), None)
+        nonzero = set(previous.get("nonzero", ())) if previous is not None else set()
+        for word, value in written.items():
+            if _is_zero(value):
+                nonzero.discard(word)
+            else:
+                nonzero.add(word)
+        if nonzero:
+            self._frames = [f for f in self._frames if f["code"] != code]
+            self._frames.append({"code": code, "line": line, "group": group, "nonzero": nonzero})
+        else:
             self._frames = [f for f in self._frames if f["group"] != group]
 
     def _apply_tcp(self, sets: Dict[str, Any], code: str, group: Optional[str], line: int) -> None:

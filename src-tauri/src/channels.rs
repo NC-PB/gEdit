@@ -119,14 +119,12 @@ fn stat_sibling(folder: &Path, name: &str) -> SiblingInfo {
     info
 }
 
-/// The errors of a stat that say the name is not there (as named).
+/// The errors of a stat that say the name is not there (as named). A permission error is
+/// not one of them: the folder was not read, so the answer is "unavailable" (M12-5).
 fn is_absent(kind: io::ErrorKind) -> bool {
     matches!(
         kind,
-        io::ErrorKind::NotFound
-            | io::ErrorKind::NotADirectory
-            | io::ErrorKind::PermissionDenied
-            | io::ErrorKind::InvalidFilename
+        io::ErrorKind::NotFound | io::ErrorKind::NotADirectory | io::ErrorKind::InvalidFilename
     )
 }
 
@@ -655,6 +653,12 @@ mod tests {
         assert_eq!(answer[0].error.as_deref(), Some("unavailable"));
         std::thread::sleep(Duration::from_millis(450));
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_permission_error_is_not_an_absent_file() {
+        assert!(is_absent(io::ErrorKind::NotFound));
+        assert!(!is_absent(io::ErrorKind::PermissionDenied));
     }
 
     #[test]

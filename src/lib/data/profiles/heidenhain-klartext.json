@@ -30,6 +30,7 @@
     "sectionHeading": "^\\s*(?:/\\s*)?\\d+\\s+(?:/\\s*)?\\*",
     "continuation": "~\\s*$",
     "continuationMark": "~",
+    "symbolAddresses": ["#"],
     "blockSkip": { "chars": "/", "position": "either" },
     "blockNumber": { "mode": "leading-integer", "mandatory": true },
     "decimalSeparator": ".",

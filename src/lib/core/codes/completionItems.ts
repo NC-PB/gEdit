@@ -334,7 +334,10 @@ export function completionContext(
 
   const content = tokens.filter((token) => token.kind !== 'whitespace');
   const current = content[content.length - 1];
-  const onWord = current !== undefined && current.end === end && PREFIXABLE.has(current.kind);
+  // A name alone in its block is a call without arguments since M9-3 (owner decision of
+  // 2026-10-08): `N80 CYCLE8` is still a half-typed code, so a call with no bracket counts.
+  const prefixable = current !== undefined && (PREFIXABLE.has(current.kind) || (current.kind === 'call' && !current.text.includes('(')));
+  const onWord = current !== undefined && current.end === end && prefixable;
   const before = onWord ? content.slice(0, -1) : content;
 
   const start = onWord ? current.start : end;

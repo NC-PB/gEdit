@@ -78,7 +78,7 @@ export interface MachineServiceDeps {
   remember(path: string, machineId: string | null | undefined): void;
   profiles: {
     defaultId(): string;
-    get(id: string): { chain: string[] } | undefined;
+    get(id: string): { chain: string[]; machineType?: 'mill' | 'lathe' } | undefined;
     profile(id: string): Profile;
     effective(id: string, eff: EffectiveMachine): EffectiveProfile;
     detectVariants(id: string, text: string): Record<string, { value: string; margin: number }>;
@@ -229,6 +229,21 @@ export function createMachineService(deps: MachineServiceDeps): MachineService {
 
   function chainOf(profileId: string): string[] {
     return deps.profiles.get(profileId)?.chain ?? [profileId];
+  }
+
+  /**
+   * Whether a machine can be chosen for a document with this chain (owner answer
+   * 2026-10-08: show all machines of the dialect family, warn on a machine-type mismatch).
+   * It is the AD-31 chain rule, or the same family: the machine's profile and the document's
+   * profile share their root profile (a Fanuc lathe machine on a Fanuc mill program, and the
+   * other way round). What the profile does not declare, the machine does not set
+   * (`effectiveMachine`), so choosing one never reads the program with foreign rules.
+   */
+  function fits(m: MachineConfig, chain: readonly string[]): boolean {
+    if (compatible(m, chain)) return true;
+    if (typeof m?.profile !== 'string' || deps.profiles.get(m.profile) === undefined) return false;
+    const root = chainOf(m.profile).at(-1);
+    return root !== undefined && root === chain.at(-1);
   }
 
   /** The code database a record's own variants resolve to, or undefined when it has no profile. */
@@ -478,7 +493,7 @@ export function createMachineService(deps: MachineServiceDeps): MachineService {
     if (wanted === null) return { machine: null, choice: 'document' };
     if (typeof wanted === 'string') {
       const chosen = record(wanted);
-      if (usable(chosen) && compatible(chosen, chain)) return { machine: chosen, choice: 'document' };
+      if (usable(chosen) && fits(chosen, chain)) return { machine: chosen, choice: 'document' };
       if (!toldAboutFallback.has(docId)) {
         toldAboutFallback.add(docId);
         // Three different reasons, three different sentences: "gone", "not for this
@@ -487,7 +502,7 @@ export function createMachineService(deps: MachineServiceDeps): MachineService {
         notifyFromRead(
           chosen === undefined
             ? t('machines.gone')
-            : compatible(chosen, chain)
+            : fits(chosen, chain)
               ? t('machines.unusable', { name: chosen.name })
               : t('machines.incompatible', { name: chosen.name }),
         );
@@ -612,10 +627,21 @@ export function createMachineService(deps: MachineServiceDeps): MachineService {
 
     compatibleWith(profileId: string): MachineConfig[] {
       const chain = chainOf(profileId);
-      return file.machines.filter((m) => usable(m) && compatible(m, chain)).sort(byName);
+      return file.machines.filter((m) => usable(m) && fits(m, chain)).sort(byName);
     },
 
     defaultFor,
+
+    typeMismatch(docId: DocId): { name: string; machineType: 'mill' | 'lathe'; documentType: 'mill' | 'lathe' } | null {
+      const chosen = choiceOf(docId);
+      if (typeof chosen !== 'string') return null;
+      const machine = record(chosen);
+      const documentType = deps.profiles.get(profileIdOf(docId))?.machineType;
+      const machineType = machine === undefined ? undefined : deps.profiles.get(machine.profile)?.machineType;
+      if (machine === undefined || documentType === undefined || machineType === undefined) return null;
+      if (machineType === documentType || !fits(machine, chainOf(profileIdOf(docId)))) return null;
+      return { name: machine.name, machineType, documentType };
+    },
 
     async add(m: Omit<MachineConfig, 'id'>): Promise<string> {
       assertRoom();

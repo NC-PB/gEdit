@@ -7,7 +7,7 @@
 // leader and trailer: they are counted, kept out of the editor text, and written back
 // unchanged. NULs inside the text are stripped (with a count) unless `stripNul` is false,
 // and the file is refused as binary when they make up more than 10 % of the bytes between
-// leader and trailer.
+// leader and trailer - or, with `allowBinary`, read as they are (the caller opens it read-only).
 //
 // `decodeFile` returns LF text, the way the document is held in memory; `encodeFile` joins
 // it with the document's line ending again. A file therefore round trips byte for byte as
@@ -73,7 +73,7 @@ function finish(text: string, encoding: FileEncoding, nul: NulInfo): DecodeResul
  * Reads file bytes into editor text. The result carries everything `encodeFile` needs to
  * write the same bytes back: the encoding, the line ending and the NUL leader/trailer.
  */
-export function decodeFile(bytes: Uint8Array, o?: { stripNul?: boolean }): DecodeResult {
+export function decodeFile(bytes: Uint8Array, o?: { stripNul?: boolean; allowBinary?: boolean }): DecodeResult {
   // UTF-16 is all about NUL bytes, so it is settled before any of them is counted.
   if (hasUtf16Bom(bytes, true)) {
     return finish(decodeUtf16(bytes, true), { encoding: 'utf-16le', hasBom: true }, NO_NUL);
@@ -93,7 +93,13 @@ export function decodeFile(bytes: Uint8Array, o?: { stripNul?: boolean }): Decod
   if (inner > core.length * MAX_INNER_NUL_SHARE) {
     // Rounded up, so a refused file never reports the 10 % that would still be allowed.
     const percent = Math.ceil((inner / core.length) * 100);
-    return { ok: false, reason: 'binary', message: { key: BINARY_KEY, params: { percent } } };
+    if (o?.allowBinary !== true) {
+      return { ok: false, reason: 'binary', message: { key: BINARY_KEY, params: { percent } } };
+    }
+    // Owner answer 2026-10-08: such a file opens to be looked at, read-only. Nothing is
+    // stripped, so the text is the bytes as they are.
+    const { text, encoding } = decodeNarrow(core);
+    return { ...finish(text, encoding, { leader, trailer, stripped: 0 }), binary: { percent } } as DecodeResult;
   }
 
   const stripNul = o?.stripNul ?? true;
@@ -105,6 +111,28 @@ export function decodeFile(bytes: Uint8Array, o?: { stripNul?: boolean }): Decod
 
   const { text, encoding } = decodeNarrow(core);
   return finish(text, encoding, { leader, trailer, stripped });
+}
+
+/** True when every character is plain ASCII (a pure-ASCII file reads the same in UTF-8 and Windows-1252). */
+export function isAscii(text: string): boolean {
+  for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) > 0x7f) return false;
+  return true;
+}
+
+/** The first non-ASCII character of LF text with its 1-based line and column, or null. */
+export function firstNonAscii(text: string): { char: string; line: number; column: number } | null {
+  let line = 1;
+  let column = 1;
+  for (const char of text) {
+    if (char === '\n') {
+      line++;
+      column = 1;
+      continue;
+    }
+    if ((char.codePointAt(0) ?? 0) > 0x7f) return { char, line, column };
+    column++;
+  }
+  return null;
 }
 
 /** UTF-16 is the one encoding that cannot carry a punched-tape leader; see `encodeFile`. */

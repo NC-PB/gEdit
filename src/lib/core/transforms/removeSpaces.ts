@@ -28,6 +28,13 @@
 // field. The control requires it behind a number as much as behind a name (syntax-okuma
 // §3.1, §3.7), so `N100 G00` never becomes `N100G00`. A name behind the prefix needs no
 // such rule: joined, it would read as another token, and the guard keeps it anyway.
+//
+// Owner decision of 2026-10-08 (`syntax.removeSpaces`): **refused** on Sinumerik
+// (`'refuse'`), where names, keywords and the addresses of more than one letter need their
+// blanks and packing `N30 XNOW=62` into `N30XNOW=62` writes a different block; on Okuma
+// (`'keepAroundLongAddresses'`) the blank before a word whose address has more than one
+// letter (`SB=1200`, `QA=1`) stays, as the manual always writes it, and so does the one
+// behind it, where the value of the assignment would otherwise run on into the next word.
 
 import type { Located, Msg } from '$lib/app/types';
 import { tokenizeLine } from '$lib/core/nc/tokenizer';
@@ -58,6 +65,11 @@ function codeFingerprint(tokens: NcToken[]): string {
   return out;
 }
 
+/** A word whose address has more than one character (Okuma `SB=1200`). */
+function longAddress(token: NcToken): boolean {
+  return token.kind === 'word' && (token.address?.length ?? 0) > 1;
+}
+
 /** A half-open span of the line to drop. */
 interface Cut {
   start: number;
@@ -82,6 +94,9 @@ export const removeSpaces: TransformDef = {
     if (cp.profile.syntax?.wordSeparatorRequired === true) {
       return { key: 'ncCleanup.removeSpaces.unavailable', params: { profile: cp.profile.name } };
     }
+    if (cp.profile.syntax?.removeSpaces === 'refuse') {
+      return { key: 'ncCleanup.removeSpaces.refused', params: { profile: cp.profile.name } };
+    }
     return true;
   },
   run(lines: string[], ctx: TransformContext): TransformResult {
@@ -93,6 +108,8 @@ export const removeSpaces: TransformDef = {
     let changed = 0;
     // The block number keeps its separator where the field also carries names (see the header).
     const keepAfterNumber = ctx.cp.profile.syntax?.sequenceNames === true;
+    // The blank on either side of a word with a long address stays (see the header).
+    const keepLong = ctx.cp.profile.syntax?.removeSpaces === 'keepAroundLongAddresses';
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -114,7 +131,8 @@ export const removeSpaces: TransformDef = {
             ? true
             : CAN_JOIN_LEFT.has(before.kind) &&
               CAN_JOIN_RIGHT.has(after.kind) &&
-              !(keepAfterNumber && before.kind === 'blockNumber');
+              !(keepAfterNumber && before.kind === 'blockNumber') &&
+              !(keepLong && (longAddress(before) || longAddress(after)));
         if (joinable) cuts.push({ start: token.start, end: token.end });
       }
       if (cuts.length === 0) {

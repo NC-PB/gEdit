@@ -106,7 +106,7 @@ function readConflicts(raw: unknown, path: string, report: (p: CodeDbProblem) =>
 function readWords(raw: unknown, path: string, report: (p: CodeDbProblem) => void): string[] | undefined {
   if (raw === undefined) return undefined;
   if (!Array.isArray(raw)) {
-    report({ path, message: 'requires is not an array' });
+    report({ path, message: 'is not an array' });
     return undefined;
   }
   const out: string[] = [];
@@ -352,6 +352,9 @@ function readEntry(
   // P10: the close a code makes when it is written without values (`CYCLE800()`, `TRANS`).
   const bare = oneOf(raw.frameWithoutValues, ['close'] as const, `${path}.frameWithoutValues`, report);
   if (bare !== undefined) entry.frameWithoutValues = bare;
+  // Owner decision of 2026-10-08 (M10-2): the angle words whose zero closes the frame.
+  const zeroWords = readWords(raw.frameZeroWords, `${path}.frameZeroWords`, report);
+  if (zeroWords) entry.frameZeroWords = zeroWords;
   // M10 (WP10.2): what the program checks read about a code besides its `sets`.
   const conflicts = readConflicts(raw.conflicts, `${path}.conflicts`, report);
   if (conflicts) entry.conflicts = conflicts;

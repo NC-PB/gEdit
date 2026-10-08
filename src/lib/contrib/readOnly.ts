@@ -41,6 +41,11 @@ function toggle(arg: unknown): void {
   const id = docArg(arg);
   const doc = id === null ? undefined : docs.get(id);
   if (!doc) return;
+  // A file that is mostly NUL bytes is data: it stays locked (owner answer 2026-10-08).
+  if (doc.readOnlyReason === 'binary') {
+    status.show(t('readOnly.binaryStaysLocked', { name: doc.title }));
+    return;
+  }
   files.setReadOnly(doc.id, !doc.readOnly);
   status.show(doc.readOnly ? t('readOnly.unlocked', { name: doc.title }) : t('readOnly.locked', { name: doc.title }));
 }
