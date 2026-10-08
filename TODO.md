@@ -96,6 +96,7 @@ Later milestones add their own checks to [P2 §13](docs/planning/phase-2-impleme
 
 ### UI
 
+- [ ] **A transient wrong status message when a document with a same-control machine of another type switches control** — picking an Okuma machine through "Other machines…" on a mill document that has a lathe machine chosen first says "Machine … is not for this profile; the defaults are assumed" before the final (correct) state: the dialect switches before the machine is set. Found by the runtime scenarios on 2026-10-08 ([machineSelect.ts](src/lib/contrib/machineSelect.ts))
 - [ ] **Settings loses typed input** — Open settings file, and Save with a half-filled machine form, close the dialog without asking ([SettingsDialog.svelte:394](src/lib/components/dialogs/SettingsDialog.svelte#L394-L407))
 - [ ] **In-app text that promises what the app does not do**: the Machines page's Replace message and its "replaced" notice promise a `.bak` that is not always made, and a Replace that is refused for a file from a newer gEdit; the Fanuc mill's "As written" preset label mentions micron cycle steps the mill has no parameters for — users are told something untrue ([machines.ts](src/lib/i18n/en/machines.ts), [fanuc-gcode.json](src/lib/data/profiles/fanuc-gcode.json))
 - [ ] **A transform with 1000+ separate edits moves bookmarks and folds** (Monaco merges it into one) — and M7 saves the moved bookmarks ([applyLines.ts:38](src/lib/monaco/applyLines.ts#L38-L42))
