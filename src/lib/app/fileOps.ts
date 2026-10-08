@@ -403,10 +403,16 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     // removed user profile can never leave a file without a dialect.
     const remembered = deps.fileMemory.profileFor(path);
     const fallback = resolve()?.profileId ?? profiles.defaultId();
-    const profileId =
-      remembered !== undefined && profiles.get(remembered)
-        ? remembered
-        : profiles.detect(path, decoded.text, fallback);
+    // M12.5: a remembered dialect is never a guess; a detected one may be.
+    let profileId: string;
+    let uncertain = false;
+    if (remembered !== undefined && profiles.get(remembered)) {
+      profileId = remembered;
+    } else {
+      const detected = profiles.detectResult(path, decoded.text, fallback);
+      profileId = detected.id;
+      uncertain = detected.uncertain;
+    }
     const eol = decoded.eol ?? profiles.get(profileId)?.newFileEol ?? 'crlf';
 
     // AD-31: three answers, and `??` would collapse two of them. `undefined` is "nothing
@@ -424,6 +430,7 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
         path,
         untitledIndex: null,
         profileId,
+        ...(uncertain ? { dialectUncertain: true } : {}),
         ...(machineId !== undefined ? { machineId } : {}),
         encoding: decoded.encoding,
         eol,
@@ -447,6 +454,10 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     }
     if (decoded.eolMixed) {
       notices.push(t('files.eolMixed', { name, eol: EOL_LABELS[eol] }));
+    }
+    // Said once, when the file is opened; the status item keeps the question mark.
+    if (uncertain) {
+      notices.push(t('profiles.uncertain.opened', { file: name, name: profiles.get(profileId)?.shortName ?? profileId }));
     }
     // Said once, when it happens: a lock that is only visible as a small padlock is
     // found by the first refused keystroke, which is the wrong moment to learn it.
@@ -1035,26 +1046,41 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
       const pickedByHand = (picked !== undefined && profiles.get(picked) !== undefined) || machine !== undefined;
       if (pickedByHand) {
         // `machineId` only when one is remembered: a present `undefined` would delete it.
+        // A document that still carries the "?" of an uncertain detection has only a guess
+        // for a dialect (it was opened with just a machine remembered): a guess must not
+        // become a remembered decision by a rename, unless a dialect was remembered too.
         deps.fileMemory.remember(newPath, {
-          profileId: doc.profileId,
+          ...(doc.dialectUncertain !== true || (picked !== undefined && profiles.get(picked) !== undefined)
+            ? { profileId: doc.profileId }
+            : {}),
           ...(machine !== undefined ? { machineId: machine } : {}),
         });
         return null;
       }
     }
-    const profileId =
-      remembered !== undefined && profiles.get(remembered)
-        ? remembered
-        : profiles.detect(newPath, textLF, doc.profileId);
-    if (profileId === doc.profileId) return null;
-    setProfile(id, profileId);
+    let profileId: string;
+    let uncertain = false;
+    if (remembered !== undefined && profiles.get(remembered)) {
+      profileId = remembered;
+    } else {
+      const detected = profiles.detectResult(newPath, textLF, doc.profileId);
+      profileId = detected.id;
+      uncertain = detected.uncertain;
+    }
+    // `setProfile` clears the flag when the dialect changes, so the flag is set from
+    // detection **after** it: the new name may make the guess sure, or unsure.
+    const changed = profileId !== doc.profileId;
+    if (changed) setProfile(id, profileId);
+    if ((docs.get(id)?.dialectUncertain === true) !== uncertain) docs.update(id, { dialectUncertain: uncertain });
+    if (!changed) return null;
     return t('profiles.changed', { name: baseName(newPath), profile: profiles.get(profileId)?.shortName ?? profileId });
   }
 
   function setProfile(id: DocId, profileId: string): void {
     const doc = docs.get(id);
     if (!doc || doc.profileId === profileId) return;
-    docs.update(id, { profileId });
+    // A dialect that is set is no longer a guess (the "?" of an uncertain detection).
+    docs.update(id, { profileId, ...(doc.dialectUncertain === true ? { dialectUncertain: false } : {}) });
     editor.setLanguage(id, profileId);
   }
 

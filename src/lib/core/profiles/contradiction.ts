@@ -141,7 +141,21 @@ const EVIDENCE: readonly Evidence[] = [
   { ...OKUMA, kind: 'marker', re: /^[^(;]*(?<![A-Z])G0*8[5-8][ \t]*N[A-Z][A-Z0-9]{0,3}(?![A-Z0-9])/i },
   { ...OKUMA, kind: 'marker', re: /^[^(;]*(?<![A-Z])(?:CALL|MODIN)[ \t]+O[A-Z0-9]{1,4}(?![A-Z0-9_])/i, spares: ['sinumerik'] },
   { ...OKUMA, kind: 'marker', re: /^[ \t]*(?:N\w+[ \t]+)?(?:RTS|MODOUT)(?![A-Z0-9])/i },
-  { ...OKUMA, kind: 'marker', re: /^\$(?:[ \t]+[A-Z]|[A-Z]{1,2}[-+.\d= \t])/i, spares: ['sinumerik'] },
+  // (the two `$` forms are exactly the `detect.content` rules of `okuma-osp.json`: letter-value
+  // words after the `$`, with or without a blank — a `$ <text>` comment line of another ISO
+  // dialect is none of them, M12.5)
+  {
+    ...OKUMA,
+    kind: 'marker',
+    re: /^\$(?:[A-Z]{1,2}[ \t]*=?[ \t]*[-+]?(?:\d+(?:\.\d*)?|\.\d+)[ \t]*)+(?:\(.*)?$/i,
+    spares: ['sinumerik'],
+  },
+  {
+    ...OKUMA,
+    kind: 'marker',
+    re: /^\$[ \t]+(?:[A-Z]{1,2}[ \t]*=?[ \t]*[-+]?(?:\d+(?:\.\d*)?|\.\d+)[ \t]*)+(?:\(.*)?$/i,
+    spares: ['sinumerik'],
+  },
   // …its work coordinate systems (`G15 H2` modal, `G16 H3` for one block: on a Fanuc
   // control `G15`/`G16` are polar coordinates and take no `H`), the machining centre's
   // tool length offset `G56 H` (a Fanuc `G56` is a work offset, and its `H` belongs to a

@@ -1,0 +1,16 @@
+{
+  "input": "../nc/sinumerik-mill/s15-tagged.MPF",
+  "profile": "sinumerik-mill",
+  "preset": "sinumerik-mill/sinumerik-tagged",
+  "expect": {
+    "layout": "single-file",
+    "sections": [
+      {"channel":"1","ranges":[{"startLine":1,"endLine":13}]}
+    ],
+    "outside": [{"startLine":14,"endLine":19}],
+    "marks": [
+      {"ruleId":"waitm","mark":"1","line":10,"channel":"1","partners":["1","2"],"blocking":true}
+    ],
+    "problems": [{"path":"list[1]","key":"channels.problems.channelNotFound","params":{"channel":"Channel 2"}}]
+  }
+}

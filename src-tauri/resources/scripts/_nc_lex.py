@@ -243,6 +243,18 @@ class _LexSpec:
     #: there, so ``mask_comments`` always takes the character loop for that profile.
     #: Mirrors ``LexSpec.maskLeadPattern`` (``tokenizer.ts``).
     mask_lead_pattern: Optional[Any]
+    #: M12.5 ``syntax.freeText``: patterns with the group ``text``, tried where the block starts.
+    free_text: List[Any] = field(default_factory=list)
+    #: M12.5 ``syntax.colonWords`` as written (upper case unless case sensitive), longest first.
+    colon_words: List[str] = field(default_factory=list)
+    #: M12.5 ``syntax.callTargets``: the canonical keywords, and the name pattern.
+    call_after: frozenset = frozenset()
+    call_pattern: Optional[Any] = None
+    #: M12.5 ``syntax.labelAfter`` and ``syntax.declareAfter``, as canonical keywords.
+    label_after: frozenset = frozenset()
+    declare_after: frozenset = frozenset()
+    #: M12.5 ``syntax.plainTextRun``; 0 when the profile does not set it.
+    plain_text_run: int = 0
 
 
 @dataclass
@@ -526,6 +538,13 @@ def compile_profile(profile: Dict[str, Any]) -> CompiledProfile:
         "names": _compile_optional(syntax.get("names"), "syntax.names", flags),
         # Phase 2 (plan §7.16): a program name in place of a program number is one token.
         "program_names": _compile_optional(syntax.get("programNames"), "syntax.programNames", flags),
+        # M12.5 (plan §7.16 #179): text the control keeps, and a program name behind a call.
+        "free_text": _compile_list(syntax.get("freeText"), "syntax.freeText", flags),
+        "call_targets": (
+            _compile_pattern(_dict(syntax.get("callTargets")).get("pattern"), "syntax.callTargets.pattern", flags)
+            if syntax.get("callTargets") is not None
+            else None
+        ),
         "tool_trigger": _compile_pattern(tool_call.get("trigger"), "toolCall.trigger", flags),
         "tool_ignore": _compile_optional(tool_call.get("ignore"), "toolCall.ignore", flags),
         "tool": _compile_pattern(tool_call.get("tool"), "toolCall.tool", flags),
@@ -636,6 +655,20 @@ def _build_spec(cp: CompiledProfile) -> _LexSpec:
         comments, syntax.get("strings") is True, program_name_pattern, program_name_lead
     )
 
+    # M12.5 (plan §7.16 #179).
+    colon_words = sorted(
+        (
+            name if case_sensitive else name.upper()
+            for name in (syntax.get("colonWords") if isinstance(syntax.get("colonWords"), list) else [])
+            if isinstance(name, str) and name != ""
+        ),
+        key=lambda name: -len(name),
+    )
+    call_targets = _dict(syntax.get("callTargets"))
+    call_after = _canonical_keywords(call_targets.get("after"))
+    call_pattern = cp.patterns.get("call_targets")
+    plain_text_run = syntax.get("plainTextRun")
+
     return _LexSpec(
         packed=syntax.get("wordSeparatorRequired") is not True,
         case_sensitive=case_sensitive,
@@ -659,7 +692,10 @@ def _build_spec(cp: CompiledProfile) -> _LexSpec:
         decimal_point=ord(separator[0]) if isinstance(separator, str) and separator != "" else ord("."),
         decimal_point_alt=ord(separator_alt) if isinstance(separator_alt, str) and len(separator_alt) == 1 else _NO_CHAR,
         operators=frozenset(operators),
-        tape_marker=_PERCENT not in comment_leads and _PERCENT not in skip_codes,
+        # M12.5: ``syntax.tapeMarker: false`` says the dialect has no tape (Klartext).
+        tape_marker=syntax.get("tapeMarker") is not False
+        and _PERCENT not in comment_leads
+        and _PERCENT not in skip_codes,
         # A main block number with the prefix `:` (Sinumerik) is read before the program
         # marker is asked, and `:1234` is that block number there, not the punched-tape marker.
         colon_program=block_number.get("mode") != "leading-integer"
@@ -686,7 +722,29 @@ def _build_spec(cp: CompiledProfile) -> _LexSpec:
         program_names=cp.patterns.get("program_names"),
         program_name_lead=program_name_lead,
         mask_lead_pattern=mask_lead_pattern,
+        free_text=list(cp.patterns.get("free_text") or []),
+        colon_words=colon_words,
+        call_after=call_after if call_pattern is not None else frozenset(),
+        call_pattern=call_pattern if call_after else None,
+        label_after=_canonical_keywords(syntax.get("labelAfter")),
+        declare_after=_canonical_keywords(syntax.get("declareAfter")),
+        plain_text_run=(
+            plain_text_run
+            if isinstance(plain_text_run, int) and not isinstance(plain_text_run, bool) and plain_text_run >= 2
+            else 0
+        ),
     )
+
+
+def _canonical_keywords(value: Any) -> frozenset:
+    """A keyword list as the keyword tokens report it: upper case, one blank between the parts."""
+    out = set()
+    for entry in value if isinstance(value, list) else []:
+        if isinstance(entry, str):
+            parts = [part for part in re.split(r"\s+", entry) if part != ""]
+            if parts:
+                out.add(" ".join(parts).upper())
+    return frozenset(out)
 
 
 def _lex_spec(cp: CompiledProfile) -> _LexSpec:
@@ -831,6 +889,174 @@ def _name_end_at(line: str, p: int, limit: int, spec: _LexSpec) -> int:
     if match is None or match.end() == p:
         return p
     return min(match.end(), limit)
+
+
+def _is_identifier_part(code: int) -> bool:
+    """True for a character that continues an identifier: a letter, a digit or ``_``."""
+    return _is_letter(code) or _is_digit(code) or code == _UNDERSCORE
+
+
+def _letters_end_at(line: str, p: int, limit: int) -> int:
+    """End of the run of letters at ``p`` (``p`` when there is none)."""
+    i = p
+    while i < limit and _is_letter(ord(line[i])):
+        i += 1
+    return i
+
+
+@dataclass
+class _ColonWord:
+    name: str
+    end: int
+    value: Optional["_ValueRead"]
+    value_start: int
+
+
+def _colon_word_at(line: str, p: int, limit: int, spec: _LexSpec) -> Optional[_ColonWord]:
+    """The colon word at ``p`` (``syntax.colonWords``, M12.5), or ``None``.
+
+    A listed name, a ``:`` and a value (a number, or letters such as ``ON``) that ends at a
+    blank, a comment or the end of the block. ``None`` where ``p`` stands inside an identifier.
+    """
+    if p > 0 and _is_identifier_part(ord(line[p - 1])):
+        return None
+    for name in spec.colon_words:
+        colon = p + len(name)
+        if colon >= limit or ord(line[colon]) != _COLON or not _match_literal(line, p, name, spec.case_sensitive):
+            continue
+        value_start = colon + 1
+        value = _read_value(line, value_start, limit, spec, False)
+        end = value.end if value is not None else _letters_end_at(line, value_start, limit)
+        if end == value_start:
+            continue
+        if end < limit and not _is_space(ord(line[end])) and not (spec.comments and _comment_at(line, end, spec)):
+            continue
+        return _ColonWord(name=name, end=end, value=value, value_start=value_start)
+    return None
+
+
+def _starts_value(code: int, spec: _LexSpec) -> bool:
+    """True when ``code`` starts the value of a word: ``X10.``, ``X.5``, ``X-1``, ``X#1``, ``X[#1]``."""
+    return (
+        _is_digit(code)
+        or code == spec.decimal_point
+        or code == _PLUS
+        or code == _MINUS
+        or code == _BRACKET_OPEN
+        or (spec.variable_lead != _NO_CHAR and code == spec.variable_lead)
+    )
+
+
+def _plain_text_end_at(line: str, p: int, limit: int, spec: _LexSpec) -> int:
+    """End of the plain-text run at ``p`` (``syntax.plainTextRun``, M12.5), or ``p``.
+
+    At least ``plain_text_run`` letters in a row; the run goes on over blanks and further
+    groups of letters and stops in front of a group that is a keyword or has a value behind
+    it (``X10.``, ``S 500``). Mirrors ``plainTextEndAt`` in ``tokenizer.ts``.
+    """
+    end = _letters_end_at(line, p, limit)
+    if end - p < spec.plain_text_run:
+        return p
+    while True:
+        q = _skip_space(line, end, limit)
+        if q >= limit or q == end or not _is_letter(ord(line[q])):
+            return end
+        if _match_keyword(line, q, limit, spec) is not None:
+            return end
+        group_end = _letters_end_at(line, q, limit)
+        r = _skip_space(line, group_end, limit)
+        if r < limit and _starts_value(ord(line[r]), spec):
+            return end
+        end = group_end
+
+
+def _free_text_at(line: str, p: int, limit: int, spec: _LexSpec) -> Optional[Tuple[int, int]]:
+    """The span of the ``text`` group of the first ``syntax.freeText`` pattern that matches at ``p``.
+
+    M12.5. A group that is empty, did not take part, or runs past ``limit`` (into a Klartext
+    ``~``) is no text.
+    """
+    for regex in spec.free_text:
+        match = regex.match(line, p)
+        if match is None or "text" not in regex.groupindex:
+            continue
+        start, end = match.span("text")
+        if start >= p and end > start and end <= limit:
+            return (start, end)
+    return None
+
+
+def _target_behind_keyword(tokens: List["Token"], line: str, p: int, limit: int, spec: _LexSpec, keyword: str) -> int:
+    """What stands behind a keyword that names a target (M12.5).
+
+    A program name behind a ``syntax.callTargets`` keyword (``CALL OABCD``) is a
+    ``programMarker``, a name behind a ``syntax.labelAfter`` keyword (``GOTOF SKIPSIM``) a
+    ``label``. Pushes the blanks and the token and returns the position behind it, or returns
+    ``p`` and pushes nothing. A jump to a block number (``GOTOF N100``), a keyword, a call, an
+    assignment and an indexed name are no target. Mirrors ``targetBehindKeyword``.
+    """
+    calls = spec.call_pattern is not None and keyword in spec.call_after
+    jumps = keyword in spec.label_after
+    if not calls and not jumps:
+        return p
+    q = _skip_space(line, p, limit)
+    if q >= limit:
+        return p
+
+    if calls:
+        match = spec.call_pattern.match(line, q)
+        end = match.end() if match is not None else q
+        if end > q and end <= limit and (end == limit or not _is_identifier_part(ord(line[end]))):
+            _push_space(tokens, line, p, limit)
+            _push(tokens, "programMarker", line, q, end)
+            return end
+
+    if jumps and _is_identifier_start(ord(line[q])):
+        end = _identifier_end_at(line, q, limit)
+        behind = _skip_space(line, end, limit)
+        nxt = ord(line[behind]) if behind < limit else _NO_CHAR
+        if nxt in (_PAREN_OPEN, _EQUALS, _BRACKET_OPEN):
+            return p
+        matched = _match_keyword(line, q, limit, spec)
+        if matched is not None and matched[0] == end:
+            return p
+        block = _scan_block_number(line, q, limit, spec)
+        if block is not None and block.end == end:
+            return p
+        # ``GOTOF R10``: a variable (``syntax.variables``) is a computed target, not a label.
+        if spec.variables is not None:
+            variable = spec.variables.match(line, q)
+            if variable is not None and variable.end() == end and end > q:
+                return p
+        _push_space(tokens, line, p, limit)
+        token = _push(tokens, "label", line, q, end)
+        token.address = token.text if spec.case_sensitive else token.text.upper()
+        return end
+    return p
+
+
+def _declares_name_here(tokens: List["Token"], spec: _LexSpec) -> bool:
+    """True when an identifier here is a name a ``syntax.declareAfter`` block declares.
+
+    The last token is a type keyword (any keyword but the declaring one), the size of one
+    (``STRING[32]``), or a ``,``. Mirrors ``declaresNameHere``.
+    """
+    i = len(tokens) - 1
+    while i >= 0 and tokens[i].kind == "whitespace":
+        i -= 1
+    if i < 0:
+        return False
+    last = tokens[i]
+    if last.kind == "operator":
+        return last.text == ","
+    if last.kind == "expression":
+        i -= 1
+        while i >= 0 and tokens[i].kind == "whitespace":
+            i -= 1
+        if i < 0:
+            return False
+        last = tokens[i]
+    return last.kind == "keyword" and last.address is not None and last.address not in spec.declare_after
 
 
 def _program_name_end_at(line: str, p: int, limit: int, spec: _LexSpec) -> int:
@@ -1119,6 +1345,11 @@ def _scan_sequence_name(line: str, p: int, limit: int, spec: _LexSpec) -> Option
                 break
             i += 1
         if i < limit and not _is_space(ord(line[i])):
+            continue
+        # M12.5: a command of the dialect that has the shape of a name (Okuma `NOEX`, which
+        # opens a variable-setting sequence, OSP-P200L user task section) is that command.
+        keyword = _match_keyword(line, p, limit, spec)
+        if keyword is not None and keyword[0] == i:
             continue
         return _SequenceNameScan(start=p, end=i, name_start=name_start)
     return None
@@ -1451,6 +1682,15 @@ def tokenize_line(
         ``unknown`` token (a Klartext program name ``2.5D_MILLING``), not a value and a name
 
     A block-skip level is one digit, ``0`` included: ``/0`` is the level ``/`` means.
+
+    M12.5 (plan section 7.16 #179) adds seven more, opt-in like the rest (``tokenizer.ts``
+    has the full list): ``freeText`` (the ``text`` group of a pattern tried where the block
+    starts is one ``text`` token), ``colonWords`` (``VC:120``), ``callTargets`` (``CALL
+    OABCD`` names a program), ``labelAfter`` (the name behind ``GOTOF`` is a ``label``),
+    ``declareAfter`` (the names a ``DEF`` block declares are variables), ``plainTextRun``
+    (free text outside a comment is one ``unknown`` token) and ``tapeMarker`` (``false``: no
+    lone ``%`` tape marker); and a sequence name that is exactly a keyword (``NOEX``) is the
+    keyword.
     """
     spec = _lex_spec(cp)
     tokens: List[Token] = []
@@ -1557,7 +1797,27 @@ def tokenize_line(
         _push(tokens, "comment", line, p, end)
         p = end
 
-    while p < limit:
+    # M12.5 `syntax.freeText`: tried once, where the block starts. The line is read up to
+    # the `text` group with the group's start as its limit, so no token can run into the
+    # text; the group is one `text` token, and the rest is read as usual behind it.
+    full_limit = limit
+    text: Optional[Tuple[int, int]] = None
+    if spec.free_text and p < limit:
+        text = _free_text_at(line, p, limit, spec)
+    if text is not None:
+        limit = text[0]
+
+    # `DEF INT COUNTER` (M12.5 `syntax.declareAfter`): set by the keyword that opens the block.
+    declaring = False
+
+    # Every rule below is bounded by `limit`, so `p` reaches the text's start exactly.
+    while p < limit or (text is not None and p == text[0]):
+        if text is not None and p == text[0]:
+            _push(tokens, "text", line, text[0], text[1])
+            p = text[1]
+            limit = full_limit
+            text = None
+            continue
         code = ord(line[p])
         if _is_space(code):
             p = _push_space(tokens, line, p, limit)
@@ -1588,6 +1848,18 @@ def tokenize_line(
             p = program_name_end
             continue
 
+        # M12.5 `syntax.colonWords`: `VCONST:ON`, `VC:120`, `HSC-MODE:1` are one word each.
+        if spec.colon_words and _is_letter(code):
+            colon_word = _colon_word_at(line, p, limit, spec)
+            if colon_word is not None:
+                token = _push(tokens, "word", line, p, colon_word.end)
+                token.address = colon_word.name
+                token.value_text = line[colon_word.value_start : colon_word.end]
+                if colon_word.value is not None:
+                    token.value = colon_word.value.value
+                p = colon_word.end
+                continue
+
         # Where the profile declares names, a keyword is only one when the name that starts
         # here is no longer than it: `LOOP_A` and `GOTO100` are names, `LOOP` and `GOTOF`
         # keywords, `IF[` still a conditional.
@@ -1596,6 +1868,8 @@ def tokenize_line(
             keyword = None
         if keyword is not None:
             end, entry = keyword
+            # `DEF` declares only where it opens the block (behind its number, skip marks or label).
+            declares = entry.canonical in spec.declare_after and all(t.kind in _BLOCK_HEAD_KINDS for t in tokens)
             value: Optional[_ValueRead] = None
             if spec.packed:
                 # `GOTO100`, `DO1`, `END1`: the jump target belongs to the keyword, which
@@ -1616,7 +1890,22 @@ def tokenize_line(
                 token.value_text = value.text
                 token.value = value.value
             p = end
+            if declares:
+                declaring = True
+            if value is None:
+                p = _target_behind_keyword(tokens, line, p, limit, spec, entry.canonical)
             continue
+
+        # M12.5 `syntax.declareAfter`: on a `DEF` block, the name behind a type keyword (behind
+        # its `[…]` size, if any) or behind a `,` is declared here, and is a `variable`. A `,`
+        # is a separator on such a block, never the `,R` of a packed address.
+        if declaring:
+            if code == _COMMA:
+                p = _push(tokens, "operator", line, p, p + 1).end
+                continue
+            if _is_identifier_start(code) and _declares_name_here(tokens, spec):
+                p = _push(tokens, "variable", line, p, _identifier_end_at(line, p, limit)).end
+                continue
 
         # An identifier written in front of `(` is one token, together with everything up
         # to the matching `)`. What the arguments mean is the cycle's business, and taking
@@ -1760,6 +2049,13 @@ def tokenize_line(
                 continue
 
         if spec.packed:
+            # M12.5 `syntax.plainTextRun`: free text outside a comment is one unknown token.
+            if spec.plain_text_run and _is_letter(code):
+                end = _plain_text_end_at(line, p, limit, spec)
+                if end > p:
+                    _push_unknown(tokens, line, p, end)
+                    p = end
+                    continue
             # One letter is the address; `,R` and `,C` take the comma with them.
             address_end = _NO_CHAR
             if _is_letter(code):

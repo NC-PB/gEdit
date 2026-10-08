@@ -27,6 +27,7 @@
     "nc/okuma/o03-live-tool.MIN": "okuma-osp",
     "nc/okuma/o04-sub.SUB": "okuma-osp",
     "nc/okuma/o05-lap-tap.MIN": "okuma-osp",
-    "nc/okuma/o06-nend-comment.MIN": "okuma-osp"
+    "nc/okuma/o06-nend-comment.MIN": "okuma-osp",
+    "nc/okuma/o07-no-header.MIN": "okuma-osp"
   }
 }

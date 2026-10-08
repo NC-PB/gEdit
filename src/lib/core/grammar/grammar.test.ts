@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest';
 import { generateGrammar } from './index';
 import { isoRules } from './iso';
 import { klartextRules } from './klartext';
-import { orderedKeywords, type GrammarAction, type GrammarRule } from './shared';
+import { hasTapeMarker, orderedKeywords, type GrammarAction, type GrammarRule } from './shared';
 import { ROLES } from './roles';
 import { compileProfile } from '$lib/core/profiles/compile';
 import { validateProfile } from '$lib/core/profiles/validate';
@@ -561,6 +561,13 @@ describe('long lines', () => {
 });
 
 describe('the rule builders', () => {
+  it('hasTapeMarker follows syntax.tapeMarker (M12.5, the grammar mirrors the tokenizer)', () => {
+    const fanuc = byId('fanuc-gcode').profile;
+    expect(hasTapeMarker(fanuc)).toBe(true);
+    expect(hasTapeMarker({ ...fanuc, syntax: { ...fanuc.syntax, tapeMarker: false } })).toBe(false);
+    expect(hasTapeMarker(byId('heidenhain-klartext').profile)).toBe(false);
+  });
+
   it('leave out what the profile does not define', () => {
     const bare = {
       id: 'bare',

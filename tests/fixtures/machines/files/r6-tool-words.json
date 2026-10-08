@@ -1,6 +1,40 @@
 {
-  "about": "R6 (M9, WP9.4): what a tool word reads as under each choice of the toolWord variant. Shared by src/lib/data/profiles/r6Variants.test.ts and tests/python/test_r6_variants.py. A string is the tool (the station) the word selects; null is a word that is not a tool change (an offset cancel, a tool of 00, a word the choice has no reading for).",
+  "about": "R6 (M9, WP9.4; byLength and the M6 and three-digit-G rows M12.5 WP-RP3; the all-zero tool part and the control's own three-digit G codes M12.5 review): what a tool word reads as under each choice of the toolWord variant. Shared by src/lib/data/profiles/r6Variants.test.ts and tests/python/test_r6_variants.py. A string is the tool (the station) the word selects; null is a word that is not a tool change (an offset cancel, a tool of 00, a word the choice has no reading for).",
   "fanuc-lathe": {
+    "byLength": {
+      "T0101": "01",
+      "T101": "1",
+      "T1": "1",
+      "T12": "12",
+      "T1001": "10",
+      "T12012": "12",
+      "T12345": "12",
+      "T12300": "12",
+      "T0100": null,
+      "T100": null,
+      "T1000": null,
+      "T12000": null,
+      "T12000 M6": "12",
+      "M06 T21000": "21",
+      "T0100 M6": "01",
+      "T00 M6": null,
+      "G28 U0 T0100": null,
+      "G183 Z-5. T5 F20": null,
+      "G183 Z-5. T0505 F20": null,
+      "T0505": "05",
+      "T0": null,
+      "T123456": null,
+      "T00100": null,
+      "T0001": null,
+      "T00012": null,
+      "T012": null,
+      "T0123": "01",
+      "T00100 M6": null,
+      "G112 T0101": "01",
+      "G250 T0101": "01",
+      "G107 C0 T0303": "03",
+      "G500 T0101": null
+    },
     "offset2": {
       "T0101": "01",
       "T101": "1",
@@ -13,7 +47,13 @@
       "T1000": null,
       "T12300": null,
       "T0": null,
-      "T123456": null
+      "T123456": null,
+      "T12000 M6": "120",
+      "G183 Z-5. T0505 F20": null,
+      "T0001": null,
+      "T00012": null,
+      "T001": null,
+      "G112 T0101": "01"
     },
     "offset1": {
       "T11": "1",
@@ -25,7 +65,9 @@
       "T10": null,
       "T120": null,
       "T0": null,
-      "T12345": null
+      "T12345": null,
+      "T01": null,
+      "G113 T11": "1"
     },
     "offset3": {
       "T1001": "1",
@@ -37,7 +79,15 @@
       "T1000": null,
       "T12000": null,
       "T0": null,
-      "T1234567": null
+      "T1234567": null,
+      "T01001": "01",
+      "T0101": null,
+      "T12000 M6": "12",
+      "G183 Z-5. T1001 F20": null,
+      "T0100": null,
+      "T00100": null,
+      "G28 U0 T0100": null,
+      "G251 T01001": "01"
     }
   },
   "okuma-osp": {

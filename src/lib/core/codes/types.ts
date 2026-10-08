@@ -324,6 +324,17 @@ export interface CodeEntry {
    */
   frameZeroWords?: string[];
   /**
+   * M12.5 (§7.16 #180; TNC 640 cycle manual, cycle 19: "define
+   * cycle 19 again and answer the dialog question with NO ENT" switches the tilt off). The
+   * sub-block number — the digits after the point, `"1"` for `CYCL DEF 19.1` — whose block,
+   * when it writes **none** of the `frameZeroWords`, closes the frames of the code's `group`.
+   * Any other block that writes none of them still changes nothing (`CYCL DEF 19.0` only
+   * names the cycle), and a sub-block that writes some of them keeps the `frameZeroWords`
+   * reading. Only meaningful with `frameZeroWords`. Read by the modal interpreter
+   * (`_nc_modal.py`); the loader (`load.ts`) copies it (WP-RP4).
+   */
+  frameEmptyCloses?: string;
+  /**
    * M10 (WP10.2, the program checks; plan §7.16). The states in which the control refuses
    * this code, each one of `tcp`, `radiusComp`, `lengthComp`, `cycle` (a modal cycle or call),
    * `surfaceSpeed`, `feedNotPerMinute`, or `frame:<group>` (an open frame of that group); a

@@ -20,8 +20,16 @@
   "channels/resolve/c13-three-path-1.json": "channels/c13-three-path-1.json",
   "channels/resolve/c13-three-path-2.json": "channels/c13-three-path-2.json",
   "channels/resolve/c13-three-path-3.json": "channels/c13-three-path-3.json",
+  "channels/resolve/c14-part_1.json": "channels/c14-part_1.json",
+  "channels/resolve/c14-part_2.json": "channels/c14-part_2.json",
+  "channels/resolve/c15-O1000-unassigned.json": "channels/c15-O1000-unassigned.json",
+  "channels/resolve/c15-O1000.json": "channels/c15-O1000.json",
   "channels/resolve/o10-two-turret.json": "channels/o10-two-turret.json",
   "channels/resolve/o11-count-mismatch.json": "channels/o11-count-mismatch.json",
   "channels/resolve/s11-two-channel_1.json": "channels/s11-two-channel_1.json",
-  "channels/resolve/s11-two-channel_2.json": "channels/s11-two-channel_2.json"
+  "channels/resolve/s11-two-channel_2.json": "channels/s11-two-channel_2.json",
+  "channels/resolve/s12-archive.json": "channels/s12-archive.json",
+  "channels/resolve/s14-part_C1.json": "channels/s14-part_C1.json",
+  "channels/resolve/s14-part_C2.json": "channels/s14-part_C2.json",
+  "channels/resolve/s15-tagged.json": "channels/s15-tagged.json"
 }

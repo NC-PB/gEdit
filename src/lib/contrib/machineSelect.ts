@@ -146,6 +146,8 @@ async function pickOther(docId: DocId, title: string, profileId: string): Promis
   const machine = machines.get(picked);
   if (!machine) return;
   files.setProfile(docId, machine.profile);
+  // A machine picked by hand is a decision, so the "?" of an uncertain guess goes with it.
+  if (docs.get(docId)?.dialectUncertain === true) docs.update(docId, { dialectUncertain: false });
   // AD-22: picking a machine of another dialect changes the dialect too, and that is a
   // decision the user made by hand — so it is remembered for the file exactly as the
   // dialect picker's own choice is (`contrib/profileSelect.ts`). Without this line the

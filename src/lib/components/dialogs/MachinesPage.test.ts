@@ -351,6 +351,9 @@ describe('Add', () => {
     const mill = fieldsFor(addDraft('fanuc-gcode', deps), deps).map((field) => field.id);
     expect(mill).not.toContain(FIELD_DIAMETER);
     expect(mill).not.toContain(variantFieldId('gcodeSystem'));
+    // M12.5 decision 5: the Siemens mill offers its tool-change mode; the turning profile does not.
+    expect(fieldsFor(addDraft('sinumerik-mill', deps), deps).map((field) => field.id)).toContain(variantFieldId('toolChange'));
+    expect(fieldsFor(addDraft('sinumerik', deps), deps).map((field) => field.id)).not.toContain(variantFieldId('toolChange'));
   });
 
   it('saves what the form holds, under the dialect it was built for', async () => {
@@ -364,7 +367,7 @@ describe('Add', () => {
     expect(saved.notes).toBe('turret 1');
     // The preset's whole rule set is stored, not its id (§7.15).
     expect(saved.params.numberInput).toMatchObject({ mode: expect.any(String) });
-    expect(saved.params.variants).toEqual({ gcodeSystem: 'A', incrementalAddresses: 'uw', toolWord: 'offset2' });
+    expect(saved.params.variants).toEqual({ gcodeSystem: 'A', incrementalAddresses: 'uw', toolWord: 'byLength' });
     expect(fake.shown.at(-1)?.text).toBe(t('machines.page.added', { name: 'Lathe 2' }));
   });
 
@@ -395,7 +398,7 @@ describe('Edit', () => {
     expect(fake.update).toHaveBeenCalledWith('lathe-2', {
       name: 'Lathe 2a',
       params: expect.objectContaining({
-        variants: { gcodeSystem: 'B', incrementalAddresses: 'uw', toolWord: 'offset2' },
+        variants: { gcodeSystem: 'B', incrementalAddresses: 'uw', toolWord: 'byLength' },
         diameter: 'on',
       }),
       notes: '',

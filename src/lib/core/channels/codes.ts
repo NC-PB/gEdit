@@ -19,7 +19,7 @@
 // not used (the channels are, without that rule); the rest of the machine is unaffected.
 
 import type { Msg } from '$lib/app/types';
-import type { ParsedWaitCodes, WaitCodeRange } from './types';
+import type { ParsedWaitCodes, SyncRule, WaitCodeRange } from './types';
 
 /** The largest value a code word may carry (Fanuc: eight digits, parameter 8110/8111). */
 export const MAX_WAIT_CODE = 99_999_999;
@@ -151,4 +151,36 @@ export function waitCodeWordRe(ranges: readonly WaitCodeRange[]): RegExp | null 
 export function waitCodeId(letter: string, digits: string): string {
   const value = digits.replace(/^0+(?=\d)/, '');
   return `${letter.toUpperCase()}${value}`;
+}
+
+/** Parsed lists by their text, so a hover does not parse a machine's list on every call. */
+const PARSED = new Map<string, ParsedWaitCodes>();
+const PARSED_CAP = 64;
+
+function parsedOf(codes: string): ParsedWaitCodes {
+  let parsed = PARSED.get(codes);
+  if (parsed === undefined) {
+    parsed = parseWaitCodes(codes);
+    if (PARSED.size >= PARSED_CAP) PARSED.clear();
+    PARSED.set(codes, parsed);
+  }
+  return parsed;
+}
+
+/**
+ * M12.5 (§7.16 #178, decision 4): the first rule of `rules` whose plain `codes` list names the
+ * code word `letter` + `value` (`M198` in `M190-M199`), or `null`. Only a `codes` rule answers:
+ * a `regex` rule (`WAITM(…)`) is a call the code database describes correctly, and a `prefix`
+ * rule is the Advanced form. A list with an error answers nothing, as it finds no mark
+ * (`findMarks`). `value` is the word's number as the control reads it (`M0198` is 198); a
+ * value that is not a whole number (`M198.5`) is no code word of a list.
+ */
+export function waitCodeRuleOf(rules: readonly SyncRule[], letter: string, value: number): SyncRule | null {
+  if (!Number.isInteger(value) || value < 0 || !/^[A-Za-z]$/.test(letter)) return null;
+  for (const rule of rules) {
+    if (rule.match.kind !== 'codes' || typeof rule.match.codes !== 'string') continue;
+    const parsed = parsedOf(rule.match.codes);
+    if (parsed.errors.length === 0 && isWaitCode(parsed.ranges, letter, value)) return rule;
+  }
+  return null;
 }

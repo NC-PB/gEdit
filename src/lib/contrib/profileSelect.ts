@@ -84,6 +84,9 @@ export function pickerEntries(
   return out;
 }
 
+/** The value of the picker's "Keep … (the guess)" entry; no profile id looks like it. */
+const KEEP_GUESS = '\u0000keep';
+
 async function pickProfile(): Promise<void> {
   const id = docs.getActiveId();
   const doc = id === null ? undefined : docs.get(id);
@@ -100,14 +103,38 @@ async function pickProfile(): Promise<void> {
     }),
     value: entry.id,
   }));
+  const uncertain = doc.dialectUncertain === true;
+  const guessName = profiles.profile(doc.profileId).name;
+  if (uncertain) {
+    // M12.5: the first entry keeps the guess and remembers it, so the warning goes away.
+    items.unshift({
+      label: t('profiles.uncertain.keep', { name: guessName }),
+      detail: t('profiles.uncertain.keepDetail'),
+      value: KEEP_GUESS,
+    });
+  }
   const picked = await modals.quickPick(items, {
-    placeholder: t('profiles.placeholder'),
-    initialIndex: Math.max(
-      0,
-      entries.findIndex((entry) => entry.id === doc.profileId),
-    ),
+    placeholder: uncertain ? t('profiles.uncertain.placeholder') : t('profiles.placeholder'),
+    initialIndex: uncertain
+      ? 0
+      : Math.max(
+          0,
+          entries.findIndex((entry) => entry.id === doc.profileId),
+        ),
   });
-  if (picked === undefined || picked === doc.profileId) return;
+  if (picked === undefined) return;
+  if (uncertain) {
+    // Any pick clears the question mark. Keeping the guess, or picking the same dialect
+    // from the list, changes no profile but is still a decision: remember it.
+    docs.update(doc.id, { dialectUncertain: false });
+    if (picked === KEEP_GUESS || picked === doc.profileId) {
+      if (doc.path !== null) fileMemory.remember(doc.path, { profileId: doc.profileId });
+      status.show(t('profiles.uncertain.kept', { file: doc.title, name: profiles.get(doc.profileId)?.shortName ?? doc.profileId }));
+      return;
+    }
+  } else if (picked === doc.profileId) {
+    return;
+  }
   files.setProfile(doc.id, picked);
   // AD-22: a dialect picked by hand is remembered for the file and wins over detection
   // the next time it is opened (M7). It is recorded **here** and not in

@@ -6,6 +6,8 @@ What changed in each release of gEdit, written for the person who edits NC progr
 
 Multi-channel programs: this change set lets gEdit know the channels of a twin-turret lathe or a multi-path control, shows the map and the tool list for each channel, and checks that the wait codes of the channels fit each other. It runs nothing and synchronizes nothing. See the new [Channels](docs/user/channels.md) page.
 
+Real programs, second pass: programs from real CAM posts are recognised more reliably, a program that fits no dialect is marked as a guess, and the tool word, channel presets, checks and names follow what real posts write. See [Dialects](docs/user/dialects.md), [Machines](docs/user/machines.md) and [Channels](docs/user/channels.md).
+
 ### New
 
 - **Repository:** an MIT `LICENSE` file, a `repository` field in the package metadata, Dependabot for GitHub Actions (weekly, one pull request), a placeholder app icon, and Close Window in the macOS menu shows its shortcut, Shift+Cmd+W.
@@ -23,6 +25,14 @@ Multi-channel programs: this change set lets gEdit know the channels of a twin-t
 - **Split into Channel Documents** (NC tab): one new untitled document for each channel of a one-file program, for reading or printing. It is a one-way copy and writes no file.
 - **Channels in scripts:** a script on a machine with channels sees `channels` in its context: the layout, the line ranges of every channel, the lines outside them and the waits. `gedit_nc` has helpers for it. A script on a program without channels runs unchanged.
 - **Klartext `M98`** in code help: complete machining of open contour corners, for its own block only.
+- **Dialect uncertain:** a program that fits none of the dialects well shows its guess with a question mark in the status bar (`Fanuc T?`) and says so once when it opens; the picker offers *Keep Fanuc (ISO) lathe (the guess)*, which remembers the choice for the file. Nothing is blocked. See [When gEdit is not sure](docs/user/dialects.md#when-gedit-is-not-sure).
+- **Tool word by length** (Fanuc lathe, the new default of *Tool word: offset digits*): one or two digits are the station, three or four digits the station and a two-digit offset, five digits a two-digit station and a three-digit offset (`T12012` is tool 12); machines can still choose 3 + 2 (`T12345` is tool 123) or 2 + 3.
+- **Sinumerik milling, Tool change** (Machines): `M6` loads the tool selected with `T` (default), or a `T` alone changes the tool for a machine set up that way; with no machine, a program that never writes `M6` is read the second way.
+- **Channel presets:** Fanuc lathe with two paths tied by hand (waits without `P`), three paths named `<name>_<path>` with `M190-M199`, and two heads with `M100-M197` (where `M198` is no wait); Sinumerik with two channels in one archive file, files named `<name>_C1.MPF`, or tagged sections. All marked *verify*.
+- **Wait-code hover:** on a machine whose channel settings list a code as a wait, the hover says *Wait code on this machine* and leaves out the code database's text, so `M198` is a wait where the machine says so.
+- **Program checks at the end of a file:** a Klartext program with no `END PGM`, or an `END PGM` with another name, and a Sinumerik main program with no `M30`, `M2`, `M17` or `RET`, give one error on the last line; a Sinumerik subprogram is not judged.
+- **Names read as names:** Klartext cycle and program names, `CALL PGM` paths and `FN 16:` text are text (no hover, Convert Case leaves them); Sinumerik jump targets are labels and `DEF` names variables; Okuma `CALL O<name>` names a program and `VTLL`/`VTLD` are variables; `;%_N_NAME_MPF` starts the program in the map.
+- **New keywords:** Sinumerik `SBLOF`, `SBLON`, `DISPLOF`, `DISPLON`, `NORM`, `KONT`, `KONTC`, `KONTT`; Okuma `NOEX`, `DRAW`, `CLEAR`; the Klartext colon words `VCONST`, `VC` and `HSC-MODE`.
 
 ### Changed
 
@@ -34,9 +44,18 @@ Multi-channel programs: this change set lets gEdit know the channels of a twin-t
 - **Code help** describes Klartext `M89` (the modal cycle call) and the Sinumerik `M6` (the tool change) instead of leaving them out as unverified.
 - **Remove Spaces** is not offered on Sinumerik, whose names and long addresses need their spaces; on Okuma it keeps the space around a word such as `SB=1200`.
 - **Change Dialect suggestion:** a Siemens milling program that writes `G97 S…` or `DIAMOF` is no longer suggested the turning dialect.
+- **Detection of programs without a header:** an Okuma program with only numbered blocks and a `G13`/`G14`, `NOEX VTL…[` or `MT=1` marker opens as Okuma (a `G28` with an axis word or a `G15` alone in a block is Fanuc, and a `DEF` line with `MT=` is Siemens; a lone `G13`/`G14` is Okuma but not a certain marker, and `MT=`, `OS=` and `HP=` count only with a whole number); a header-less Siemens milling program with `Y` moves opens as Siemens milling; a five-axis Fanuc mill with `T1205 T1310 M6` is no longer taken for a lathe; a `$` comment line of another control no longer makes a file Okuma.
+- **Five-digit `T` without a machine** is read 2 + 3 (`T12000` cancels, `T12012` is tool 12); before, it was read 3 + 2. A machine that chose *The last two digits* keeps 3 + 2.
+- **A zero offset next to `M6` is a tool change** (`M06 T21000` loads tool 21), and a block with a three-digit `G` code (`G183 Z-5. T5`) has no tool change, except the control's own aliases (`G107`, `G112`, `G113`, `G250`, `G251`).
+- **A tool part of zeros** (`T00100`, `T0001`; under 2 + 3 also `T0101`) keeps the tool and changes only the offset: no tool change on any setting.
+- **Klartext, empty `CYCL DEF 19.1`:** ends the tilt, so address arithmetic and extents stop treating the rest of the program as tilted.
+- **Fanuc:** the machine-builder range `M900-M999` is now named as one builder's range in the two- and three-path presets, and the `_<n>` file-name presets warn that a version file such as `SHAFT_2.NC` is read as a path too.
 
 ### Fixed
 
+- Switching tabs away from a very large program is cheap again.
+- **Program checks:** `spindleOff` no longer reports the words of a cycle definition behind a bare `L` (`L CYCL DEF 32.1 T0.05`); `blockWords` accepts `T<a> T<b> M6` on the lathe profile; the Sinumerik end check skips an untitled document, a main program ending in an unconditional jump, a file that starts with a commented subprogram header (`;%_N_<name>_SPF`) and an archive's data section.
+- **Klartext:** `TOOL CALL "name"` followed directly by a digit is a tool change; a tool number with more than one decimal is read as its whole number.
 - When gEdit cannot look in the folder for the other channel file (the computer refuses it), the channel item says *could not be checked*, not *not found*.
 - A machine of the same control can now be chosen for a mill or a lathe program whichever type it is; when the type differs, the machine picker, the status bar item and its hover warn that the machine's diameter and G-code system settings do not apply.
 - A file that was plain ASCII and gets a character outside it (`Ø`, `°`) asks once at the first save: UTF-8, Windows-1252 or cancel; the answer is kept for that document.
@@ -49,6 +68,9 @@ Multi-channel programs: this change set lets gEdit know the channels of a twin-t
 - A wait in a loop, even with the label on the same line, is no longer reported as a count error.
 - Go to the Matching Mark goes only to the channels a wait names, so on three paths `M901 P12` and `M901 P13` find their own partners.
 - A wait list written as `M 900` or `M900 to M999` gets a plain message ("write a range with a dash") instead of a wrong reading.
+- No more false alarms from the program checks: `T7 T8 M6` in one block, a bare Klartext `L`, a jump to a computed target (`GOTOF "STEP_"<<COUNTER`), a `%` in a Klartext comment, and the words of a message in a Fanuc block.
+- A Klartext `TOOL CALL "END MILL 10"` with the name at the end of the line is now in the program map and the tool list.
+- No more missing-word or alone-in-block rows on a line that the machine's channel settings count as a wait.
 
 ## v0.5.0 (2026-10-05)
 
@@ -96,7 +118,7 @@ Check before the machine: this release adds the checks you run on a program befo
 
 ## v0.3.0 (2026-10-04)
 
-Real programs read right: this release is about gEdit reading the owner's real CAM output the way the machines read it, so that every later feature (checks, extents, a Z shift, compare) works on the right values. The installers are unsigned, as in v0.2.0; see "Installing an unsigned build" under v0.2.0.
+Real programs read right: this release is about gEdit reading the owner's published programs the way the machines read it, so that every later feature (checks, extents, a Z shift, compare) works on the right values. The installers are unsigned, as in v0.2.0; see "Installing an unsigned build" under v0.2.0.
 
 ### New
 

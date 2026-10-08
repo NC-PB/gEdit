@@ -5,9 +5,17 @@
 // same control, and the picker has to show it as one family instead of two entries whose
 // relationship the user has to guess.
 
-import { describe, expect, it } from 'vitest';
-import { pickerEntries } from './profileSelect';
-import type { ProfileInfo } from '$lib/app/types';
+import { render } from 'svelte/server';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import profileSelect, { pickerEntries } from './profileSelect';
+import ProfileStatus from '$lib/components/status/ProfileStatus.svelte';
+import { modals } from '$lib/app/modals';
+import { status } from '$lib/app/status';
+import { files } from '$lib/app/fileOps';
+import { docs } from '$lib/stores/documents';
+import { fileMemory } from '$lib/stores/fileMemory';
+import { t } from '$lib/i18n';
+import type { CommandDef, ProfileInfo, QuickPickItem } from '$lib/app/types';
 
 /** A `ProfileInfo` with only the members the picker reads. */
 function info(id: string, parent: string | null = null): ProfileInfo {
@@ -124,5 +132,113 @@ describe('the picker entries', () => {
 
   it('answer nothing when nothing loaded', () => {
     expect(pickerEntries([], nameOf)).toEqual([]);
+  });
+});
+
+// M12.5 (WP-RP6): a dialect that is only a guess.
+describe('an uncertain dialect', () => {
+  function addDoc(over: { dialectUncertain?: boolean; path?: string | null } = {}) {
+    return docs.add({
+      path: over.path === undefined ? '/nc/a.nc' : over.path,
+      untitledIndex: null,
+      profileId: 'fanuc-lathe',
+      ...(over.dialectUncertain ? { dialectUncertain: true } : {}),
+      encoding: { encoding: 'utf-8', hasBom: false },
+      eol: 'lf',
+      eolMixedOnLoad: false,
+      nul: { leader: 0, trailer: 0, stripped: 0 },
+      textDirty: false,
+      metaDirty: false,
+      disk: null,
+      external: 'none',
+      readOnly: false,
+      readOnlyReason: null,
+    });
+  }
+
+  /** Runs the picker with `choose` picking an item; returns what it was offered. */
+  async function runPicker(choose: (items: QuickPickItem<string>[]) => string | undefined) {
+    const seen: { items: QuickPickItem<string>[]; placeholder?: string; initialIndex?: number } = { items: [] };
+    vi.spyOn(modals, 'quickPick').mockImplementation(((items: QuickPickItem<string>[], o?: { placeholder?: string; initialIndex?: number }) => {
+      seen.items = items;
+      seen.placeholder = o?.placeholder;
+      seen.initialIndex = o?.initialIndex;
+      return Promise.resolve(choose(items));
+    }) as never);
+    const command = (profileSelect.commands as CommandDef[]).find((c) => c.id === 'file.setProfile');
+    await command?.run({} as never);
+    return seen;
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    for (const doc of [...docs.all()]) docs.remove(doc.id);
+  });
+
+  it('shows the guess with a question mark and a plain tooltip', () => {
+    addDoc({ dialectUncertain: true });
+    const html = render(ProfileStatus).body;
+    expect(html).toContain(t('profiles.uncertain.label', { name: 'Fanuc T' }));
+    expect(html).toContain('data-uncertain="true"');
+    expect(html).toContain('Dialect uncertain');
+  });
+
+  it('shows a sure dialect as before', () => {
+    addDoc();
+    const html = render(ProfileStatus).body;
+    expect(html).not.toContain('?');
+    expect(html).not.toContain('data-uncertain');
+  });
+
+  it('offers "Keep … (the guess)" first and remembers it though nothing changes', async () => {
+    const id = addDoc({ dialectUncertain: true });
+    const remember = vi.spyOn(fileMemory, 'remember').mockImplementation(() => {});
+    const setProfile = vi.spyOn(files, 'setProfile');
+    const show = vi.spyOn(status, 'show').mockImplementation(() => {});
+    const seen = await runPicker((items) => items[0].value);
+    expect(seen.items[0].label).toMatch(/^Keep .* \(the guess\)$/);
+    expect(seen.placeholder).toBe(t('profiles.uncertain.placeholder'));
+    expect(seen.initialIndex).toBe(0);
+    expect(remember).toHaveBeenCalledWith('/nc/a.nc', { profileId: 'fanuc-lathe' });
+    expect(setProfile).not.toHaveBeenCalled();
+    expect(docs.get(id)?.dialectUncertain).toBe(false);
+    expect(show).toHaveBeenCalledOnce();
+  });
+
+  it('is cleared and remembered by picking the same dialect from the list', async () => {
+    const id = addDoc({ dialectUncertain: true });
+    const remember = vi.spyOn(fileMemory, 'remember').mockImplementation(() => {});
+    vi.spyOn(status, 'show').mockImplementation(() => {});
+    await runPicker(() => 'fanuc-lathe');
+    expect(remember).toHaveBeenCalledWith('/nc/a.nc', { profileId: 'fanuc-lathe' });
+    expect(docs.get(id)?.dialectUncertain).toBe(false);
+  });
+
+  it('is cleared by picking another dialect', async () => {
+    const id = addDoc({ dialectUncertain: true });
+    const remember = vi.spyOn(fileMemory, 'remember').mockImplementation(() => {});
+    vi.spyOn(status, 'show').mockImplementation(() => {});
+    vi.spyOn(files, 'setProfile').mockImplementation((docId, profileId) => {
+      docs.update(docId, { profileId });
+    });
+    await runPicker(() => 'heidenhain-klartext');
+    expect(remember).toHaveBeenCalledWith('/nc/a.nc', { profileId: 'heidenhain-klartext' });
+    expect(docs.get(id)?.dialectUncertain).toBe(false);
+    expect(docs.get(id)?.profileId).toBe('heidenhain-klartext');
+  });
+
+  it('stays uncertain when the picker is dismissed', async () => {
+    const id = addDoc({ dialectUncertain: true });
+    await runPicker(() => undefined);
+    expect(docs.get(id)?.dialectUncertain).toBe(true);
+  });
+
+  it('has no "Keep" entry on a sure dialect, and an unchanged pick does nothing', async () => {
+    addDoc();
+    const remember = vi.spyOn(fileMemory, 'remember').mockImplementation(() => {});
+    const seen = await runPicker(() => 'fanuc-lathe');
+    expect(seen.items.some((item) => item.label.startsWith('Keep '))).toBe(false);
+    expect(seen.placeholder).toBe(t('profiles.placeholder'));
+    expect(remember).not.toHaveBeenCalled();
   });
 });

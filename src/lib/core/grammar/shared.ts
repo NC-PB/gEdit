@@ -147,6 +147,7 @@ export function operatorClass(p: Profile, extra = ''): string | null {
  * a block skip. Mirrors `tapeMarker` in `core/nc/tokenizer.ts`.
  */
 export function hasTapeMarker(p: Profile): boolean {
+  if (p.syntax?.tapeMarker === false) return false; // M12.5: Klartext has no tape
   if (commentLeads(p).has('%')) return false;
   return ![...(p.syntax?.blockSkip?.chars ?? '')].includes('%');
 }

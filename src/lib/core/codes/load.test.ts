@@ -264,6 +264,30 @@ describe('built-in code databases', () => {
 });
 
 describe('loadCodeDb', () => {
+  it('copies frameEmptyCloses beside frameZeroWords and drops a malformed one (M12.5, §7.16 #180)', () => {
+    const { db, problems } = load({
+      dialect: 'x',
+      version: 1,
+      codes: [
+        { code: 'CYCL DEF 19', label: 'Tilt', group: 'tilt', frame: 'open', frameZeroWords: ['A', 'B', 'C'], frameEmptyCloses: '1' },
+        { code: 'CYCL DEF 7', label: 'Shift', group: 'frame', frame: 'open', frameZeroWords: ['X'], frameEmptyCloses: 'one' },
+        { code: 'CYCL DEF 8', label: 'Mirror', group: 'frame', frame: 'open', frameEmptyCloses: '1' },
+      ],
+    });
+    expect(db.codes.map((e) => e.frameEmptyCloses ?? null)).toEqual(['1', null, null]);
+    expect(problems.map((p) => p.path)).toEqual(['codes[1].frameEmptyCloses', 'codes[2].frameEmptyCloses']);
+    expect(problems[1].message).toMatch(/needs frameZeroWords/);
+  });
+
+  it('ships the empty CYCL DEF 19.1 as the end of cycle 19 (TNC 640 cycle manual, cycle 19 reset)', () => {
+    const entry = heidenhain.db.codes.find((e) => e.code === 'CYCL DEF 19');
+    expect(entry?.frameEmptyCloses).toBe('1');
+    expect(heidenhain.db.codes.filter((e) => e.frameEmptyCloses !== undefined).map((e) => e.code)).toEqual(['CYCL DEF 19']);
+    for (const other of [fanuc, okuma, sinumerik]) {
+      expect(other.db.codes.filter((e) => e.frameEmptyCloses !== undefined)).toEqual([]);
+    }
+  });
+
   it('refuses a file that is not a code database', () => {
     expect(() => loadCodeDb(null)).toThrow(CodeDbError);
     expect(() => loadCodeDb([])).toThrow(CodeDbError);
@@ -518,9 +542,12 @@ describe('the database against the rest of the app', () => {
     // The owner's real programs (`nc/owner-public/`) are left out: they carry standard
     // codes the databases do not describe yet and builder codes they never will, which
     // `tests/fixtures/README.md` lists as known gaps. The synthetic fixtures are written
-    // from the syntax notes, so for them a missing entry is a mistake in the data.
+    // from the syntax notes, so for them a missing entry is a mistake in the data. The
+    // programs of dialects gEdit has no profile for (`nc/uncertain/`, M12.5) are left out
+    // too: their words belong to no database.
     const missing = new Map<string, string[]>();
-    for (const rel of listFixtures('nc').filter((path) => !path.startsWith('nc/owner-public/'))) {
+    const skipped = (path: string): boolean => path.startsWith('nc/owner-public/') || path.startsWith('nc/uncertain/');
+    for (const rel of listFixtures('nc').filter((path) => !skipped(path))) {
       const opened = openFixture(rel);
       if (opened.refused !== null) continue;
       const text = editorText(opened.text);

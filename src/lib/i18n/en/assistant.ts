@@ -24,6 +24,16 @@ export default {
     variable: 'Variable',
     variableValue: 'Only the control knows the value; the editor does not calculate it.',
     incremental: 'Incremental: the value is measured from the current position.',
+    /**
+     * M12.5 (§7.16 #178): a code word the document's machine lists as a wait code. It replaces
+     * the database's explanation, which describes the control's own meaning of the code.
+     */
+    waitCode: 'Wait code on this machine ({machine}): {rule}',
+    waitCodeNoLabel: 'Wait code on this machine ({machine})',
+    syncCode: 'Sync code on this machine ({machine}): {rule}',
+    syncCodeNoLabel: 'Sync code on this machine ({machine})',
+    syncCodeNote: 'The machine settings list this code as a synchronisation code; the code database describes the control\'s own meaning, which this machine does not use.',
+    waitCodeNote: 'The machine settings list this code as a wait; the code database describes the control\'s own meaning, which this machine does not use.',
   },
   completion: {
     /** Documentation note on an entry that still carries `verify: true`. */

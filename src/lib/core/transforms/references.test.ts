@@ -17,6 +17,7 @@ import {
   MAX_TARGET_DIGITS,
   blockKeyOf,
   comparesByText,
+  labelsOf,
   maskedOf,
   referenceAddresses,
   referencePreflight,
@@ -318,5 +319,23 @@ describe('referencePreflight', () => {
     });
     expect(referencePreflight({ count: 0, first: 0, unchecked: true }, keys)).toEqual({ key: 'a.unchecked' });
     expect(referencePreflight({ count: 0, first: 0, unchecked: false }, keys)).toBeNull();
+  });
+});
+
+// M12.5 (§7.16 #179): Sinumerik reads the name behind a jump keyword as a `label` token
+// (`syntax.labelAfter`). That token names a target and defines nothing, and a target that is
+// no label of the file may still be a STRING variable, so it is still a computed jump.
+describe('jump targets read as labels (M12.5)', () => {
+  const sinumerik = compiled('sinumerik');
+
+  it('counts only a label at the head of a block as one the file defines', () => {
+    expect([...labelsOf(['N10 GOTOF SKIPSIM ;NOTE: LATER', 'SKIP_B: G0 X0', 'N30 SKIP_C: M30'], sinumerik)]).toEqual(['SKIP_B', 'SKIP_C']);
+  });
+
+  it('reports a jump to a name the file does not define as computed, and leaves one to its own label', () => {
+    const line = 'N10 GOTOF DEST';
+    const tokens = tokenizeLine(line, sinumerik).tokens;
+    expect(referencesOn(tokens, line, sinumerik, referenceAddresses(sinumerik), new Set()).map((w) => [w.text, w.target])).toEqual([['DEST', null]]);
+    expect(referencesOn(tokens, line, sinumerik, referenceAddresses(sinumerik), new Set(['DEST']))).toEqual([]);
   });
 });

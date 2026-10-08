@@ -95,7 +95,7 @@
           "weight": 3
         },
         {
-          "pattern": "(?<![A-Z])G0*4[34](?![\\d.])(?=[^(]*H\\d)",
+          "pattern": "(?<![A-Z])G0*4[34](?:\\.4)?(?![\\d.])(?=[^(]*H\\d)",
           "weight": 3
         },
         {
@@ -382,6 +382,7 @@
         "BPRNT"
       ],
       "maxWordDigits": 8,
+      "plainTextRun": 3,
       "programNames": "<[A-Za-z0-9+\\-_.]+>",
       "variables": "#\\d+",
       "wordSeparatorRequired": false

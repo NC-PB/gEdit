@@ -26,7 +26,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { compileProfile } from '$lib/core/profiles/compile';
-import { MAX_SNIFF_LINES, VARIANT_MARGIN, detectProfile, detectVariants } from '$lib/core/profiles/detect';
+import { MAX_SNIFF_LINES, VARIANT_MARGIN, detectProfile, detectResult, detectVariants } from '$lib/core/profiles/detect';
 import { validateProfile } from '$lib/core/profiles/validate';
 import { OutlineIndex } from '$lib/core/profiles/outline';
 import { maskComments } from '$lib/core/nc/mask';
@@ -211,11 +211,15 @@ const KNOWN_GAPS: Record<string, string> = Object.assign({}, ...EXPECTED.map((e)
 /**
  * Every fixture that opens and that one profile wins outright. A known detection gap is
  * left out: its winner is the wrong profile, so a margin over the runner-up means nothing,
- * and `detect.test.ts` already runs it as an expected failure.
+ * and `detect.test.ts` already runs it as an expected failure. A fixture `detectResult` calls
+ * uncertain (M12.5: a fragment, or a dialect gEdit has no profile for) is left out too: it
+ * fits no dialect well by definition, and `detectRp.test.ts` holds what is said about it.
  */
 const decided = listFixtures('nc').filter((rel) => {
   const expected = FIXTURE_PROFILE[rel];
-  return expected !== undefined && expected !== 'fallback' && expected !== 'refused' && !(rel in KNOWN_GAPS);
+  if (expected === undefined || expected === 'fallback' || expected === 'refused' || rel in KNOWN_GAPS) return false;
+  const opened = openFixture(rel);
+  return opened.refused !== null || !detectResult(BUILTINS, `/work/${rel}`, opened.text, KLARTEXT).uncertain;
 });
 
 describe('the profile margin on every NC fixture', () => {
@@ -250,16 +254,18 @@ describe('the mill and the lathe against each other', () => {
 
   it('keeps a mill whose tool numbers have four digits', () => {
     // `T1001 M6` looks like a turret word (`T\d{4}`) and is not one: the mill markers of
-    // §8.1 — the `M6` itself, `G43 … H`, the `Y` words — outweigh it.
+    // §8.1 — the `M6` itself, `G43 … H`, the `Y` words — outweighed it, and since M12.5
+    // the turret-word rule does not fire on a block that writes `M6` (it was 5).
     const rel = 'nc/ambiguous/mill-4digit-t.nc';
     const text = readFixture(rel);
     expect(ranked(`/work/${rel}`, text).winner).toBe(MILL);
     // It is not a tie broken by `priority`: the mill outscores the lathe on this file.
-    expect(insideFamily(`/work/${rel}`, text)).toEqual({ by: 'score', margin: 5 });
+    expect(insideFamily(`/work/${rel}`, text)).toEqual({ by: 'score', margin: 11 });
   });
 
   it('reads a five-digit T word as a turret word too (owner decision of 2026-09-27)', () => {
-    // A lathe post of the owner writes `T12345`: a three-digit tool and a two-digit offset.
+    // A lathe post of the owner writes `T12345` (which digits are the tool is the machine's
+    // `toolWord` setting, M12.5 decision 1; detection only needs the word's shape).
     // It counts as lathe evidence exactly like `T0101`, and a mill program whose tool
     // numbers have five digits stays a mill on its `M6`, as with four (`mill-4digit-t.nc`).
     const turning = ['%', 'O0510', 'T12345', 'G96 S180 M03', 'G00 X50. Z2.', 'G01 Z-30. F0.2', 'G00 X200. Z200.', 'T10101', 'G97 S800 M03', 'M30', '%', ''].join('\n');
@@ -404,17 +410,50 @@ describe('the turret tool rule', () => {
     ['T0', false, undefined],
     ['T0000', false, undefined],
     ['G00 X100. Z100. T0100', false, undefined],
-    // Owner decision 3 (2026-09-27): a five-digit T word is a 3-digit tool plus a 2-digit
-    // offset, and its own cancel form (a 3-digit station followed by "00") is not a
-    // change either — one more digit each way than the 4-digit form above.
-    ['T10101', true, '101'],
-    ['T12345', true, '123'],
-    ['T12300', false, undefined],
+    // M12.5 decision 1 (the owner, 2026-10-08, revising 2026-09-27): with no machine a
+    // five-digit T word is a 2-digit tool plus a 3-digit offset (`byLength`, the default;
+    // the reading under which a non-zero offset is the tool's own number, plan §7.16 #181). Its
+    // cancel form is the tool followed by "000". The 3 + 2 reading is the `offset2`
+    // machine setting (`r6Variants.test.ts`).
+    ['T10101', true, '10'],
+    ['T12345', true, '12'],
+    ['T12012', true, '12'],
+    ['T12300', true, '12'],
+    ['T12000', false, undefined],
     // A sixth digit is outside every rule this pattern knows, so the word is left alone.
     ['T123456', false, undefined],
+    // On every choice: a zero offset part in a block that writes `M6` is the tool loaded
+    // into the milling spindle of a mill-turn, not an offset cancel; an all-zero word stays
+    // no tool.
+    ['N20 T12000 M6', true, '12'],
+    ['M06 T21000', true, '21'],
+    ['T0100 M6', true, '01'],
+    ['T00 M6', false, undefined],
+    ['G28 U0 T0100', false, undefined],
+    // A block with a three-digit G code is a builder cycle whose `T` is a parameter
+    // (M12.5 decision 1): no tool change, while the turret word itself still is one.
+    ['G183 Z-5. T5 F20', false, undefined],
+    ['G183 Z-5. T0505 F20', false, undefined],
+    ['T0505', true, '05'],
   ])('%s', (line, change, tool) => {
     expect(isToolChange(line), line).toBe(change);
     if (change) expect(station(line), line).toBe(tool);
+  });
+
+  it('reads the five-digit program of M12.5 decision 1 as stations 12 and 12 with no machine', () => {
+    // Before M12.5 the map read both words as station 120 (3 + 2).
+    const program = ['%', 'O2000', 'N10 G50 S3000', 'N20 T12000 M6', 'N30 T12012', 'N40 G96 S200 M3', 'N60 M30', '%'];
+    const index = new OutlineIndex(lathe);
+    index.reset(program);
+    const tools = index
+      .items()
+      .flatMap((item) => [item, ...(item.children ?? [])])
+      .filter((item) => item.kind === 'tool')
+      .map((item) => [item.line, item.tool]);
+    expect(tools).toEqual([
+      [4, '12'],
+      [5, '12'],
+    ]);
   });
 
   it('does not fire on a letter in front of the T', () => {

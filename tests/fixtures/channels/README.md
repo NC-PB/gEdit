@@ -59,6 +59,8 @@ paths as **digits of `P`** (`P12`, `P21`, `P13`), packed (`M901P12`) and spaced
 | `c09-notachannel.nc` | A base name no pattern matches: no channel (`layout: 'none'`) until the user assigns one (`c09-assigned.json`, `channels.assign` in WP12.5). |
 | `c12-main.nc`, `c12-main_GS.nc` | A main-spindle and a counter-spindle program with no channel token in common, expressed by **per-channel templates** `{{stem}}.nc` and `{{stem}}_GS.nc`; `P12` names the two through the aliases `1` and `2`. |
 | `c13-three-path.nc1`, `c13-three-path.nc2`, `c13-three-path.nc3` | Three paths, one file each, the path number at the end of the extension, read by the built-in preset `fanuc-lathe/fanuc-3path-digits` itself: `P123`, `P12`, `P13`, `P21`, `P31`, `P321`, packed and spaced — every wait matches. |
+| `c14-part_1.ISO`, `c14-part_2.ISO` (M12.5) | Paths 1 and 2 of a three-path set named `<stem>_<n>.ISO`, read by the preset `fanuc-lathe/fanuc-3path-digits-nop12` (waits `M190-M199`, `P` as path numbers, a wait without `P` = paths 1 and 2): `M198` and `M199` stand alone without `P` in both paths and pair; `M191 P123` stands in path 1 only (one `missing` against path 2; path 3 has no file here, so its siblings list names `c14-part_3.ISO` and the check says nothing about it). |
+| `O1000` (M12.5) | Path 1 of a two-path mill-turn program as such a post writes it: a file named after its program number, no extension, path 2 runs a stored program and is not on disk. `M999` alone before `M30`, no `P`. Read by `fanuc-lathe/fanuc-2path-nop` (no file-name rule): no channel until the user assigns one (`c15-O1000-unassigned.json`); assigned to path 1, the wait is found with paths 1 and 2 as partners (`c15-O1000.json`). |
 
 ### `nc/okuma/`
 
@@ -72,6 +74,16 @@ paths as **digits of `P`** (`P12`, `P21`, `P13`), packed (`M901P12`) and spaced
 | File | Contents |
 |---|---|
 | `s11-two-channel_1.MPF`, `s11-two-channel_2.MPF` | One program per channel, named `<stem>_<n>.MPF`; **rendezvous** waits `WAITM(10,TURN_MAIN,TURN_SUB)`, `WAITM(20, TURN_MAIN, TURN_SUB)`, `WAITMC(40,1,2)` whose partners are symbolic names resolved through the aliases `TURN_MAIN`/`TURN_SUB`, or numbers, in either order; `SETM(30)`/`CLEARM(30)` (not blocking: shown, never checked); not marks: `WAITM(…)` inside a `MSG("…")` string and in a `;` comment, and `WAITE(2)`. The patterns are the preset's, written for gEdit. |
+| `s12-archive.MPF` (M12.5) | Two channels in one archive file, read by `sinumerik/sinumerik-2channel-archive`: channel 1 from `%_N_1_0_MPF`, then the tool-data section `%_N_1_7_MPF` (its header line ends channel 1, its data lines belong to no channel), then channel 2 from `%_N_2_0_MPF` to the end. `WAITM(1,1,2)` and `WAITM(2,1,2)` in both channels, the second one of channel 2 written with a blank before the bracket. The check goldens `sinumerik-archive-clean.json` (0 findings) and `sinumerik-archive-missing.json` (the same lines without channel 2's second `WAITM`: one `missing`) read the same lines. |
+
+### `nc/sinumerik-mill/` (M12.5)
+
+Milling programs, so they are detected as `sinumerik-mill` and read with the presets it inherits from `sinumerik` through `extends`.
+
+| File | Contents |
+|---|---|
+| `s14-part_C1.MPF`, `s14-part_C2.MPF` | One program per channel named `<stem>_C<n>.MPF`, read by `sinumerik-mill/sinumerik-2channel-c`: each is tied to its channel by its name and names the other as its sibling; `WAITM(1,1,2)` and `WAITM(2,1,2)` in both. |
+| `s15-tagged.MPF` | A tagged single file, read by `sinumerik-mill/sinumerik-tagged`: `<PROG_BEGIN_C1>` … `<PROG_END_C1>` is channel 1 (the end tag included), the tagged parameter section after it belongs to no channel, and channel 2 is not in the file ("not found"). |
 
 ## Golden format
 

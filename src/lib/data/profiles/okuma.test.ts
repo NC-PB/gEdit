@@ -35,7 +35,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { compileProfile } from '$lib/core/profiles/compile';
-import { MAX_SNIFF_LINES, detectProfile } from '$lib/core/profiles/detect';
+import { MAX_SNIFF_LINES, detectProfile, detectResult } from '$lib/core/profiles/detect';
 import { validateProfile } from '$lib/core/profiles/validate';
 import { OutlineIndex } from '$lib/core/profiles/outline';
 import { maskComments } from '$lib/core/nc/mask';
@@ -223,11 +223,19 @@ describe('an Okuma program is recognised as one', () => {
       expect(okuma.profile.detect.extensions[ext], ext).toBeGreaterThan(strongestShared);
       expect(okuma.profile.detect.extensions[ext], ext).toBeLessThan(100);
     }
+    // Since the M12.5 review its `G91 G28 Z0.` lines (a `G28` with an axis word, which Okuma
+    // never writes) take Okuma out of the file altogether; without them the extension still
+    // only weighs.
     const rel = 'nc/fanuc/f08-tapping.MIN';
-    const { winner, margin, runnerUp } = ranked(`/work/${rel}`, readFixture(rel));
+    const fixture = readFixture(rel);
+    const { winner, margin } = ranked(`/work/${rel}`, fixture);
     expect(winner).toBe(MILL);
-    expect(runnerUp).toBe(OKUMA);
     expect(margin).toBeGreaterThanOrEqual(MIN_MARGIN);
+    expect(scores(`/work/${rel}`, fixture).get(OKUMA)).toBe(0);
+    const unvetoed = ranked(`/work/${rel}`, fixture.replace(/^G91 G28 Z0\.\r?\n/gm, ''));
+    expect(unvetoed.winner).toBe(MILL);
+    expect(unvetoed.runnerUp).toBe(OKUMA);
+    expect(unvetoed.margin).toBeGreaterThanOrEqual(MIN_MARGIN);
   });
 
   it('breaks the tie with the thread cycle when its parameters go on over a $ line (R1)', () => {
@@ -280,12 +288,21 @@ describe('an Okuma program is recognised as one', () => {
       'G85 NLAP1 D2 F0.3 U0.4 W0.2',
       'G71 X27.55 Z-30 B60 D0.7 U0.1 H2.45 L2 F2',
       'G77 X0 Z-20 K5 F1.25',
-      '$ H2.45 L2 F2 M23 M32 M73',
+      '$H2.45 L2 F2 M23 M32 M73',
     ];
     for (const line of strong) {
       const table = scores(null, line);
       expect(table.get(OKUMA), line).toBeGreaterThanOrEqual(100);
       for (const [id, score] of table) if (id !== OKUMA) expect(score, `${line}: ${id}`).toBeLessThanOrEqual(6);
+    }
+    // M12.5: with a blank after the `$` the line is still a continuation of NC words,
+    // but another ISO dialect writes `$ <text>` comment lines, so that form is a marker below
+    // the certain weight, and a `$` line of text is no marker at all.
+    for (const line of ['$ H2.45 L2 F2 M23 M32 M73', '$ G84 XA=60 DA=2 FA=0.25', '$ XB=40 DB=1 FB=0.2']) {
+      expect(scores(null, line).get(OKUMA), line).toBe(8);
+    }
+    for (const line of ['$ ROUGH TURNING', '$ OP1 - FACE AND TURN', '$A12-FINISH PASS', '$TEXT ONLY']) {
+      expect(scores(null, line).get(OKUMA), line).toBe(0);
     }
     // …and a Fanuc lathe block with P and Q is not an Okuma thread cycle.
     expect(scores(null, 'N80 G71 P90 Q130 U0.4 W0.2 D1.5 H1 F0.25').get(OKUMA)).toBeLessThan(10);
@@ -363,11 +380,17 @@ describe('an Okuma program is recognised as one', () => {
   });
 
   it('takes neither a page of comments nor a milling fragment', () => {
-    for (const rel of ['nc/ambiguous/comment-only.txt', 'nc/ambiguous/fanuc-fragment.txt']) {
-      const text = readFixture(rel);
-      expect(scores(null, text).get(OKUMA), rel).toBeLessThanOrEqual((scores(null, text).get(MILL) ?? 0) - MIN_MARGIN);
-      expect(detectProfile(BUILTINS, `/work/${rel}`, text, KLARTEXT), rel).toBe(MILL);
-    }
+    const comments = readFixture('nc/ambiguous/comment-only.txt');
+    expect(scores(null, comments).get(OKUMA)).toBeLessThanOrEqual((scores(null, comments).get(MILL) ?? 0) - MIN_MARGIN);
+    expect(detectProfile(BUILTINS, '/work/comment-only.txt', comments, KLARTEXT)).toBe(MILL);
+    // M12.5: Okuma scores a numbered block as both Fanuc profiles do, so six numbered
+    // positioning blocks fit Okuma almost as well as the Fanuc mill. The mill still wins,
+    // and the answer says that it is not sure.
+    const fragment = readFixture('nc/ambiguous/fanuc-fragment.txt');
+    expect(scores(null, fragment).get(OKUMA)).toBeLessThan(scores(null, fragment).get(MILL) ?? 0);
+    const result = detectResult(BUILTINS, '/work/fanuc-fragment.txt', fragment, KLARTEXT);
+    expect(result.id).toBe(MILL);
+    expect(result.uncertain).toBe(true);
   });
 
   it('gives every content rule a line of its own in the fixtures', () => {

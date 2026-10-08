@@ -13,10 +13,11 @@
 // switched by `monaco/editorOptions.ts` from the same setting, so the hover is off on
 // both sides.
 
-import { hoverAt } from '$lib/core/codes/hoverText';
+import { hoverAt, type WaitCodeLookup } from '$lib/core/codes/hoverText';
 import { tokenizeLine } from '$lib/core/nc/tokenizer';
 import { t } from '$lib/i18n';
 import { docIdOf } from '$lib/monaco/editorService';
+import { channels } from '$lib/stores/channels';
 import { codes } from '$lib/stores/codes';
 import { machines } from '$lib/stores/machines';
 import { profiles } from '$lib/stores/profiles';
@@ -49,11 +50,13 @@ export function stateBefore(
  * scratch model. Monaco hands a provider a model, not a document, so the way back is
  * `docIdOf`.
  */
-function viewOf(model: MonacoApi.editor.ITextModel, profileId: string): { cp: CompiledProfile; db: CodeDb } {
+function viewOf(model: MonacoApi.editor.ITextModel, profileId: string): { cp: CompiledProfile; db: CodeDb; waitCode?: WaitCodeLookup } {
   const docId = docIdOf(model);
   if (docId !== null) {
     const effective = machines.effective(docId);
-    return { cp: effective.cp, db: effective.codes };
+    // M12.5 (§7.16 #178): the document's machine's wait codes win over the database.
+    const waitCode: WaitCodeLookup = (letter, value) => channels.waitCodeRule(docId, letter, value);
+    return { cp: effective.cp, db: effective.codes, waitCode };
   }
   return { cp: profiles.compiled(profileId), db: codes.forProfile(profileId) };
 }
@@ -64,7 +67,7 @@ export function registerHover(monaco: Monaco, profileId: string): Disposable {
     provideHover(model, position) {
       if (!settings.get('assist.hover')) return null;
 
-      const { cp, db } = viewOf(model, profileId);
+      const { cp, db, waitCode } = viewOf(model, profileId);
       const line = model.getLineContent(position.lineNumber);
       const info = hoverAt(
         line,
@@ -73,6 +76,7 @@ export function registerHover(monaco: Monaco, profileId: string): Disposable {
         db,
         t,
         stateBefore(model, position.lineNumber, cp),
+        { waitCode },
       );
       if (!info) return null;
 

@@ -408,10 +408,10 @@ class TestTurningTokens(unittest.TestCase):
         profile = helpers.load_profile("sinumerik")
         profile["syntax"]["continuation"] = "_\\s*$"
         cp = gedit_nc.compile_profile(profile)
-        tokens, state = gedit_nc.tokenize_line("GOTOF XNOW_", cp)
+        tokens, state = gedit_nc.tokenize_line("IF XNOW_", cp)
         self.assertEqual(
             [(token.kind, token.text) for token in code_tokens(tokens)],
-            [("keyword", "GOTOF"), ("unknown", "XNOW"), ("continuation", "_")],
+            [("keyword", "IF"), ("unknown", "XNOW"), ("continuation", "_")],
         )
         self.assertTrue(state.continuation)
 
@@ -440,7 +440,8 @@ class TestTurningTokens(unittest.TestCase):
         )
 
     def test_a_name_carries_no_address_and_no_value(self):
-        for line, cp, name in [("GOTOF PASS2", self.sinumerik, "PASS2"), ("V1=DIA1*2", self.okuma, "DIA1")]:
+        # M12.5: a name behind `GOTOF` is a jump target, a `label` (`syntax.labelAfter`).
+        for line, cp, name in [("IF PASS2>1", self.sinumerik, "PASS2"), ("V1=DIA1*2", self.okuma, "DIA1")]:
             with self.subTest(line=line):
                 token = [token for token in self.tokens(line, cp) if token.text == name][0]
                 self.assertEqual(
@@ -621,7 +622,8 @@ class TestTheRemainingTokenizerRules(unittest.TestCase):
         self.assertEqual(self.tokens("X[1]==5", self.sinumerik)[0].value_text, "[1]")
         self.assertIsNone(self.tokens("S[]=3", self.sinumerik)[0].index)
         self.assertIsNone(self.tokens("S[2", self.sinumerik)[0].index)
-        self.assertEqual(self.kinds("DEF REAL ARR[10]", self.sinumerik), ["keyword", "keyword", "unknown", "expression"])
+        # M12.5: the name a `DEF` block declares is a `variable` (`syntax.declareAfter`).
+        self.assertEqual(self.kinds("DEF REAL ARR[10]", self.sinumerik), ["keyword", "keyword", "variable", "expression"])
 
     def test_the_profile_pattern_decides_which_name_takes_an_equals_sign(self):
         narrow = self.without("sinumerik", lambda syntax: syntax.__setitem__("assignment", "(?:LIMS|S)(?=\\s*=(?!=))"))
@@ -699,7 +701,8 @@ class TestTheRemainingTokenizerRules(unittest.TestCase):
         )
         self.assertEqual(self.kinds("#1=ROUND[#2]", self.lathe), ["variable", "operator", "keyword", "expression"])
         old = self.without("fanuc-gcode", lambda syntax: syntax.__setitem__("keywords", ["GOTO", "IF"]))
-        self.assertEqual(self.texts("POPEN", old), ["P", "O", "P", "E", "N"])
+        # M12.5: without the keyword it is plain text (`syntax.plainTextRun`), one unknown token.
+        self.assertEqual([(t.kind, t.text) for t in self.tokens("POPEN", old)], [("unknown", "POPEN")])
         self.assertEqual(self.kinds("G1 X10. F100.", self.fanuc), ["word", "word", "word"])
 
     def test_the_klartext_plane_tcpm_and_tilting_words_are_keywords(self):
@@ -740,8 +743,12 @@ class TestTheRemainingTokenizerRules(unittest.TestCase):
     def test_a_klartext_name_that_starts_with_digits_is_one_token(self):
         self.assertEqual(
             [(t.kind, t.text) for t in self.tokens("0 BEGIN PGM 2.5D_MILLING MM", self.klartext)],
-            [("blockNumber", "0"), ("keyword", "BEGIN PGM"), ("unknown", "2.5D_MILLING"), ("keyword", "MM")],
+            [("blockNumber", "0"), ("keyword", "BEGIN PGM"), ("text", "2.5D_MILLING"), ("keyword", "MM")],
         )
+        # M12.5: it is a `text` token by `syntax.freeText`; without the field, the rule above
+        # still keeps it one token.
+        bare = self.without("heidenhain-klartext", lambda syntax: syntax.pop("freeText"))
+        self.assertEqual(self.kinds("0 BEGIN PGM 2.5D_MILLING MM", bare), ["blockNumber", "keyword", "unknown", "keyword"])
         self.assertEqual(self.texts("99 END PGM 5X_MILLING MM", self.klartext), ["99", "END PGM", "5X_MILLING", "MM"])
 
     def test_a_number_followed_by_anything_but_a_letter_stays_a_number(self):

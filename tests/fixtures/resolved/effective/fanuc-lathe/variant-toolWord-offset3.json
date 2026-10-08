@@ -100,7 +100,7 @@
           "weight": 1
         },
         {
-          "pattern": "(?<![A-Z])T\\d{4,5}(?!\\d)",
+          "pattern": "^(?![^(]*(?<![A-Z])M0*6(?![\\d.]))(?![^(]*(?<![A-Z])T\\d[^(]*(?<![A-Z])T\\d)[^(]*?(?<![A-Z])T\\d{4,5}(?!\\d)",
           "weight": 3
         },
         {
@@ -171,8 +171,8 @@
         "presets": [
           {
             "id": "fanuc-2path",
-            "label": "Two paths, one file per path (path number at the end of the extension); waits M900-M999; P as a bit sum (the control's default, P3 = paths 1 and 2); no P = paths 1 and 2",
-            "source": "Fanuc 30i/31i user manual, multi-path waiting function (parameters 8110, 8111, 8103 bit 1); the range M900-M999 from the owner's local multi-path set (aggregate)",
+            "label": "Two paths, one file per path (path number at the end of the extension); waits M900-M999 (one builder's range; your machine's range is parameters 8110/8111); P as a bit sum (the control's default, P3 = paths 1 and 2); no P = paths 1 and 2",
+            "source": "Fanuc 30i/31i user manual, multi-path waiting function (parameters 8110, 8111, 8103 bit 1); the range M900-M999 and the file names are each a machine builder's choice, a layout seen in practice",
             "value": {
               "fileName": "^(?<stem>.+)\\.[A-Za-z]*-?(?<channel>\\d{1,2})$",
               "layout": "multi-file",
@@ -215,7 +215,7 @@
           },
           {
             "id": "fanuc-2path-digits",
-            "label": "Two paths, one file per path (path number at the end of the extension); waits M900-M999; P as path numbers (parameter 8103 bit 1 = 1, P12 = paths 1 and 2); no P = paths 1 and 2",
+            "label": "Two paths, one file per path (path number at the end of the extension); waits M900-M999 (one builder's range; your machine's range is parameters 8110/8111); P as path numbers (parameter 8103 bit 1 = 1, P12 = paths 1 and 2); no P = paths 1 and 2",
             "source": "Fanuc 30i/31i user manual, multi-path waiting function (parameters 8110, 8111; 8103 bit 1 = 1: P as path numbers; without P, paths 1 and 2 wait)",
             "value": {
               "fileName": "^(?<stem>.+)\\.[A-Za-z]*-?(?<channel>\\d{1,2})$",
@@ -259,8 +259,8 @@
           },
           {
             "id": "fanuc-3path-digits",
-            "label": "Three paths, one file per path (path number at the end of the extension); waits M900-M999; P as path numbers (P12 = paths 1 and 2, 0 = path 10); a wait without P is an error",
-            "source": "Fanuc 30i/31i user manual, multi-path waiting function (parameter 8103 bit 1 = 1; without P only two-path systems wait); the owner's local three-path set writes digit P words (aggregate)",
+            "label": "Three paths, one file per path (path number at the end of the extension); waits M900-M999 (one builder's range; your machine's range is parameters 8110/8111); P as path numbers (P12 = paths 1 and 2, 0 = path 10); a wait without P is an error",
+            "source": "Fanuc 30i/31i user manual, multi-path waiting function (parameter 8103 bit 1 = 1; without P only two-path systems wait); P written as path digits is a layout seen in practice",
             "value": {
               "fileName": "^(?<stem>.+)\\.[A-Za-z]*-?(?<channel>\\d{1,2})$",
               "layout": "multi-file",
@@ -303,7 +303,7 @@
           },
           {
             "id": "fanuc-3path-bitmask",
-            "label": "Three paths, one file per path (path number at the end of the extension); waits M900-M999; P as a bit sum (P7 = paths 1, 2 and 3); a wait without P is an error",
+            "label": "Three paths, one file per path (path number at the end of the extension); waits M900-M999 (one builder's range; your machine's range is parameters 8110/8111); P as a bit sum (P7 = paths 1, 2 and 3); a wait without P is an error",
             "source": "Fanuc 30i/31i user manual, multi-path waiting function (parameter 8103 bit 1 = 0)",
             "value": {
               "fileName": "^(?<stem>.+)\\.[A-Za-z]*-?(?<channel>\\d{1,2})$",
@@ -337,6 +337,140 @@
                     "kind": "word",
                     "whenAbsent": {
                       "kind": "none"
+                    }
+                  },
+                  "samePartners": true
+                }
+              ]
+            },
+            "verify": true
+          },
+          {
+            "id": "fanuc-2path-nop",
+            "label": "Two paths, files tied by hand (no file-name rule); waits M900-M999 written without P (one builder's range; your machine's range is parameters 8110/8111); a wait without P = paths 1 and 2; a P, when written, names path numbers (P12 = paths 1 and 2)",
+            "source": "Fanuc 30i/31i user manual, multi-path waiting function (without P, paths 1 and 2 wait on a two-path control); a builder's M9xx waits written without P, a layout seen in practice",
+            "value": {
+              "layout": "multi-file",
+              "list": [
+                {
+                  "id": "1",
+                  "name": "Path 1"
+                },
+                {
+                  "id": "2",
+                  "name": "Path 2"
+                }
+              ],
+              "stopsAndEndsWait": false,
+              "syncMarks": [
+                {
+                  "id": "wait",
+                  "label": "Waiting M-code: the range is parameters 8110/8111; without P it waits for paths 1 and 2",
+                  "match": {
+                    "codes": "M900-M999",
+                    "kind": "codes"
+                  },
+                  "partners": {
+                    "address": "P",
+                    "decode": "digits",
+                    "kind": "word",
+                    "whenAbsent": {
+                      "channels": [
+                        "1",
+                        "2"
+                      ],
+                      "kind": "fixed"
+                    }
+                  },
+                  "samePartners": true
+                }
+              ]
+            },
+            "verify": true
+          },
+          {
+            "id": "fanuc-3path-digits-nop12",
+            "label": "Three paths, one file per path named <name>_<path>.<ext> (PART_1.ISO, PART_2.ISO, PART_3.ISO; careful: a version file such as SHAFT_2.NC is read as path 2 too); waits M190-M199 (one builder's range; your machine's range is parameters 8110/8111); P as path numbers (P123 = paths 1, 2 and 3); a wait without P = paths 1 and 2",
+            "source": "Fanuc 30i/31i user manual, multi-path waiting function (a wait without P is defined for two paths only); a three-path machine on which a wait without P pairs paths 1 and 2 is one machine builder's variant, a layout seen in practice",
+            "value": {
+              "fileName": "^(?<stem>.+)_(?<channel>\\d{1,2})\\.[A-Za-z]+$",
+              "layout": "multi-file",
+              "list": [
+                {
+                  "id": "1",
+                  "name": "Path 1"
+                },
+                {
+                  "id": "2",
+                  "name": "Path 2"
+                },
+                {
+                  "id": "3",
+                  "name": "Path 3"
+                }
+              ],
+              "stopsAndEndsWait": false,
+              "syncMarks": [
+                {
+                  "id": "wait",
+                  "label": "Waiting M-code: the P word names the paths; without P it waits for paths 1 and 2",
+                  "match": {
+                    "codes": "M190-M199",
+                    "kind": "codes"
+                  },
+                  "partners": {
+                    "address": "P",
+                    "decode": "digits",
+                    "kind": "word",
+                    "whenAbsent": {
+                      "channels": [
+                        "1",
+                        "2"
+                      ],
+                      "kind": "fixed"
+                    }
+                  },
+                  "samePartners": true
+                }
+              ]
+            },
+            "verify": true
+          },
+          {
+            "id": "fanuc-2head-m100",
+            "label": "Two heads (two paths), files tied by hand (no file-name rule); waits M100-M197, the same code in both head programs, without P (paths 1 and 2); on this kind of machine M198 calls a program on an external device and is no wait",
+            "source": "a Fanuc-based two-head mill-turn programming guide (operation synchronisation: the same M-code from M100 to M197 in both head programs; M198: a subprogram call on an external device)",
+            "value": {
+              "layout": "multi-file",
+              "list": [
+                {
+                  "id": "1",
+                  "name": "Head 1"
+                },
+                {
+                  "id": "2",
+                  "name": "Head 2"
+                }
+              ],
+              "stopsAndEndsWait": false,
+              "syncMarks": [
+                {
+                  "id": "wait",
+                  "label": "Operation synchronisation: the same M-code in both head programs",
+                  "match": {
+                    "codes": "M100-M197",
+                    "kind": "codes"
+                  },
+                  "partners": {
+                    "address": "P",
+                    "decode": "digits",
+                    "kind": "word",
+                    "whenAbsent": {
+                      "channels": [
+                        "1",
+                        "2"
+                      ],
+                      "kind": "fixed"
                     }
                   },
                   "samePartners": true
@@ -518,10 +652,21 @@
         {
           "choices": [
             {
-              "label": "The last two digits are the offset: T0101 (default, verify)",
+              "label": "By length: T1 and T12 are stations, T0101 is tool 1 offset 01, T12012 is tool 12 offset 012 (default, verify)",
               "overlay": {
                 "toolCall": {
-                  "ignore": "(?<![A-Z])T(?:\\d{0,3}00|0+)(?!\\d)",
+                  "ignore": "^(?!.*(?<![A-Z])M0*6(?!\\d)).*(?<![A-Z])T(?:\\d{1,2}00|\\d{2}000)(?!\\d)|(?<![A-Z])T0+(?!\\d)|(?<![A-Z])T(?:0{1,2}(?=\\d{2}(?!\\d))|00(?=\\d{3}(?!\\d)))|(?<![A-Z])G(?!(?:107|112|113|250|251)(?!\\d))[1-9]\\d{2}(?!\\d)",
+                  "tool": "(?<![A-Z])T(?<tool>\\d{2}(?=\\d{3}(?!\\d))|\\d{1,2}?(?=\\d{2}(?!\\d))|\\d{1,2}(?!\\d))\\d{0,3}(?!\\d)",
+                  "trigger": "(?<![A-Z])T\\d{1,5}(?!\\d)"
+                }
+              },
+              "value": "byLength"
+            },
+            {
+              "label": "The last two digits are the offset: T0101, T12345 is tool 123 (3 + 2)",
+              "overlay": {
+                "toolCall": {
+                  "ignore": "^(?!.*(?<![A-Z])M0*6(?!\\d)).*(?<![A-Z])T(?:\\d{1,3}00)(?!\\d)|(?<![A-Z])T0+(?!\\d)|(?<![A-Z])T0+(?=\\d{2}(?!\\d))|(?<![A-Z])G(?!(?:107|112|113|250|251)(?!\\d))[1-9]\\d{2}(?!\\d)",
                   "tool": "(?<![A-Z])T(?<tool>\\d{1,3}?)(?:\\d{2})?(?!\\d)",
                   "trigger": "(?<![A-Z])T\\d{1,5}(?!\\d)"
                 }
@@ -532,7 +677,7 @@
               "label": "The last digit is the offset: T11",
               "overlay": {
                 "toolCall": {
-                  "ignore": "(?<![A-Z])T(?:\\d{0,3}0|0+)(?!\\d)",
+                  "ignore": "^(?!.*(?<![A-Z])M0*6(?!\\d)).*(?<![A-Z])T(?:\\d{1,3}0)(?!\\d)|(?<![A-Z])T0+(?!\\d)|(?<![A-Z])T0+(?=\\d(?!\\d))|(?<![A-Z])G(?!(?:107|112|113|250|251)(?!\\d))[1-9]\\d{2}(?!\\d)",
                   "tool": "(?<![A-Z])T(?<tool>\\d{1,3}?)\\d?(?!\\d)",
                   "trigger": "(?<![A-Z])T\\d{1,4}(?!\\d)"
                 }
@@ -540,10 +685,10 @@
               "value": "offset1"
             },
             {
-              "label": "The last three digits are the offset: T1001",
+              "label": "The last three digits are the offset: T01001 is tool 1 (2 + 3; T0101 is tool 0, no tool change)",
               "overlay": {
                 "toolCall": {
-                  "ignore": "(?<![A-Z])T(?:\\d{0,3}000|0+)(?!\\d)",
+                  "ignore": "^(?!.*(?<![A-Z])M0*6(?!\\d)).*(?<![A-Z])T(?:\\d{1,3}000)(?!\\d)|(?<![A-Z])T0+(?!\\d)|(?<![A-Z])T0+(?=\\d{3}(?!\\d))|(?<![A-Z])G(?!(?:107|112|113|250|251)(?!\\d))[1-9]\\d{2}(?!\\d)",
                   "tool": "(?<![A-Z])T(?<tool>\\d{1,3}?)(?:\\d{3})?(?!\\d)",
                   "trigger": "(?<![A-Z])T\\d{1,6}(?!\\d)"
                 }
@@ -551,7 +696,7 @@
               "value": "offset3"
             }
           ],
-          "default": "offset2",
+          "default": "byLength",
           "id": "toolWord",
           "label": "Tool word: offset digits"
         }
@@ -731,12 +876,13 @@
         "BPRNT"
       ],
       "maxWordDigits": 8,
+      "plainTextRun": 3,
       "programNames": "<[A-Za-z0-9+\\-_.]+>",
       "variables": "#\\d+",
       "wordSeparatorRequired": false
     },
     "toolCall": {
-      "ignore": "(?<![A-Z])T(?:\\d{0,3}000|0+)(?!\\d)",
+      "ignore": "^(?!.*(?<![A-Z])M0*6(?!\\d)).*(?<![A-Z])T(?:\\d{1,3}000)(?!\\d)|(?<![A-Z])T0+(?!\\d)|(?<![A-Z])T0+(?=\\d{3}(?!\\d))|(?<![A-Z])G(?!(?:107|112|113|250|251)(?!\\d))[1-9]\\d{2}(?!\\d)",
       "tool": "(?<![A-Z])T(?<tool>\\d{1,3}?)(?:\\d{3})?(?!\\d)",
       "toolFrom": "same-line",
       "trigger": "(?<![A-Z])T\\d{1,6}(?!\\d)"

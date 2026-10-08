@@ -314,8 +314,11 @@ describe('the dialect with separated words', () => {
       expect.objectContaining({ address: 'Y', incremental: true, text: 'IY-20' }),
     ]);
     expect(tokens('18 CP IPA+360')[2]).toMatchObject({ address: 'PA', incremental: true });
-    expect(tokens('0 BEGIN PGM INCHJOB INCH')[2]).toMatchObject({ address: 'INCHJOB' });
+    // M12.5: a program name is one `text` token (`syntax.freeText`), whatever its letters.
+    expect(tokens('0 BEGIN PGM INCHJOB INCH')[2]).toMatchObject({ kind: 'text', text: 'INCHJOB' });
     expect(tokens('0 BEGIN PGM INCHJOB INCH')[2].incremental).toBeUndefined();
+    expect(tokens('5 L INCHJOB')[2]).toMatchObject({ address: 'INCHJOB' });
+    expect(tokens('5 L INCHJOB')[2].incremental).toBeUndefined();
   });
 
   it('reads a tool name and a label name as strings', () => {
@@ -378,8 +381,11 @@ describe('the dialect with separated words', () => {
   });
 
   it('reads a word it cannot split as one unknown token, not as letter soup', () => {
-    expect(tokens('26 CALL PGM TNC:\\SUB1.H').at(-1)).toMatchObject({ kind: 'unknown', text: 'TNC:\\SUB1.H' });
-    expect(tokens('0 BEGIN PGM H01_3TOOLS MM')[2]).toMatchObject({ kind: 'unknown', text: 'H01_3TOOLS' });
+    expect(tokens('26 SEL TABLE TNC:\\SUB1.TAB').at(-1)).toMatchObject({ kind: 'unknown', text: 'TNC:\\SUB1.TAB' });
+    expect(tokens('5 L H01_3TOOLS')[2]).toMatchObject({ kind: 'unknown', text: 'H01_3TOOLS' });
+    // M12.5: behind `CALL PGM` and `BEGIN PGM` the same text is a `text` token (`syntax.freeText`).
+    expect(tokens('26 CALL PGM TNC:\\SUB1.H').at(-1)).toMatchObject({ kind: 'text', text: 'TNC:\\SUB1.H' });
+    expect(tokens('0 BEGIN PGM H01_3TOOLS MM')[2]).toMatchObject({ kind: 'text', text: 'H01_3TOOLS' });
   });
 });
 
@@ -655,16 +661,20 @@ describe('a name the program gives itself (`names`)', () => {
       ['operator', '='],
       ['unknown', 'XBOT'],
       ['keyword', 'GOTOF'],
-      ['unknown', 'LAST_CUT'],
+      // M12.5: the target of a jump is a `label` (`syntax.labelAfter`).
+      ['label', 'LAST_CUT'],
     ]);
+    // M12.5: the name a `DEF` block declares is a `variable` (`syntax.declareAfter`).
     expect(shape(siemens('DEF REAL XNOW'))).toEqual([
       ['keyword', 'DEF'],
       ['keyword', 'REAL'],
-      ['unknown', 'XNOW'],
+      ['variable', 'XNOW'],
     ]);
-    expect(shape(siemens('GOTOF PASS2'))).toEqual([
-      ['keyword', 'GOTOF'],
+    expect(shape(siemens('IF PASS2>1'))).toEqual([
+      ['keyword', 'IF'],
       ['unknown', 'PASS2'],
+      ['operator', '>'],
+      ['word', '1'],
     ]);
     expect(shape(osp('V1=DIA1*2'))).toEqual([
       ['variable', 'V1'],
@@ -688,7 +698,7 @@ describe('a name the program gives itself (`names`)', () => {
   it('leaves no keyword and no block number inside a name', () => {
     expect(shape(siemens('GOTOB LOOP_N2'))).toEqual([
       ['keyword', 'GOTOB'],
-      ['unknown', 'LOOP_N2'],
+      ['label', 'LOOP_N2'],
     ]);
     expect(siemens('LOOP')[0]).toMatchObject({ kind: 'keyword', address: 'LOOP' });
     expect(siemens('DIAM90')[0]).toMatchObject({ kind: 'keyword', address: 'DIAM90' });
@@ -740,7 +750,8 @@ describe('a name the program gives itself (`names`)', () => {
   });
 
   it('matches whatever the case', () => {
-    expect(siemens('gotof last_cut')[1]).toMatchObject({ kind: 'unknown', text: 'last_cut' });
+    expect(siemens('gotof last_cut')[1]).toMatchObject({ kind: 'label', text: 'last_cut', address: 'LAST_CUT' });
+    expect(siemens('if xnow>1')[1]).toMatchObject({ kind: 'unknown', text: 'xnow' });
   });
 });
 
@@ -1040,7 +1051,7 @@ describe('an indexed assignment (`assignmentIndex`)', () => {
     expect(siemens('X[1]==5')[0].index).toBeUndefined();
     expect(siemens('S[]=3')[0].index).toBeUndefined();
     expect(siemens('S[2')[0].index).toBeUndefined();
-    expect(siemens('DEF REAL ARR[10]').map((token) => token.kind)).toEqual(['keyword', 'keyword', 'unknown', 'expression']);
+    expect(siemens('DEF REAL ARR[10]').map((token) => token.kind)).toEqual(['keyword', 'keyword', 'variable', 'expression']);
   });
 
   it('asks the profile whether the name takes an `=`, and sets nothing without the field', () => {
@@ -1148,7 +1159,8 @@ describe('the macro function and print names are keywords of the Fanuc profile',
   it('does the same on the lathe, which inherits them, and not without the data', () => {
     expect(kindsOf('#1=ROUND[#2]', lathe)).toEqual(['variable', 'operator', 'keyword', 'expression']);
     const old = without(fanuc, (syntax) => (syntax.keywords = ['GOTO', 'IF']));
-    expect(code(tokenizeLine('POPEN', old).tokens).map((token) => token.text)).toEqual(['P', 'O', 'P', 'E', 'N']);
+    // M12.5: without the keyword the name is plain text (`syntax.plainTextRun`), one unknown token.
+    expect(code(tokenizeLine('POPEN', old).tokens).map((token) => `${token.kind}:${token.text}`)).toEqual(['unknown:POPEN']);
   });
 
   it('ends a keyword at a letter, so an address word that starts like one stays a word', () => {
@@ -1220,10 +1232,13 @@ describe('the end of block `;` and a name that starts with digits', () => {
     expect(code(tokenizeLine('0 BEGIN PGM 2.5D_MILLING MM', klartext).tokens).map((token) => `${token.kind}:${token.text}`)).toEqual([
       'blockNumber:0',
       'keyword:BEGIN PGM',
-      'unknown:2.5D_MILLING',
+      // M12.5: a `text` token by `syntax.freeText`; without it the number rule keeps it whole.
+      'text:2.5D_MILLING',
       'keyword:MM',
     ]);
     expect(textsOf('99 END PGM 5X_MILLING MM', klartext)).toEqual(['99', 'END PGM', '5X_MILLING', 'MM']);
+    const bare = without(klartext, (syntax) => delete syntax.freeText);
+    expect(kindsOf('0 BEGIN PGM 2.5D_MILLING MM', bare)).toEqual(['blockNumber', 'keyword', 'unknown', 'keyword']);
   });
 
   it('leaves a number that is followed by anything but a letter a number', () => {
@@ -1258,7 +1273,7 @@ describe('a name alone in its block is a call (owner decision of 2026-10-08, M9-
     expect(kindsOf('N10 G2 X10 Y10 CR15', sinumerik).at(-1)).toBe('unknown');
     expect(kindsOf('MYSUB P3', sinumerik)).toEqual(['unknown', 'word']);
     expect(kindsOf('N20 TRAFOOF', sinumerik)).toEqual(['blockNumber', 'keyword']);
-    expect(kindsOf('GOTOF LOOP_A', sinumerik)).toEqual(['keyword', 'unknown']);
+    expect(kindsOf('GOTOF LOOP_A', sinumerik)).toEqual(['keyword', 'label']);
     expect(kindsOf('LOOP_A:', sinumerik)).toEqual(['label']);
     expect(kindsOf('XNOW=62', sinumerik)).toEqual(['word']);
   });
@@ -1307,6 +1322,225 @@ describe('the Sinumerik call-rule exclusions', () => {
   it('has cases on both sides, so a rule cannot swallow everything or nothing', () => {
     expect(cases.filter((entry) => entry.call !== null).length).toBeGreaterThanOrEqual(8);
     expect(cases.filter((entry) => entry.call === null).length).toBeGreaterThanOrEqual(15);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M12.5 (§7.16 #179, WP-RP2): the seven `syntax` fields for names and free text. The
+// goldens hold the lines of the plan (both tokenizers); the sentences below hold the edges
+// of each rule, and that each one is the profile's data: without the field, the line reads
+// as it did before. Every line is synthetic, written for gEdit.
+// ---------------------------------------------------------------------------
+
+const pairsOf = (line: string, cp: CompiledProfile): string[] =>
+  code(tokenizeLine(line, cp).tokens).map((token) => `${token.kind}:${token.text}`);
+
+describe('text the control keeps and shows (`freeText`, `text` tokens)', () => {
+  it('reads the Klartext cycle name, program name and paths as one text token each', () => {
+    expect(pairsOf('12 CYCL DEF 207 TAP.-RIGID NEW ~', klartext)).toEqual([
+      'blockNumber:12',
+      'keyword:CYCL DEF',
+      'word:207',
+      'text:TAP.-RIGID NEW',
+      'continuation:~',
+    ]);
+    expect(pairsOf('0 BEGIN PGM 7-AXLE PART MM', klartext)).toEqual(['blockNumber:0', 'keyword:BEGIN PGM', 'text:7-AXLE PART', 'keyword:MM']);
+    expect(pairsOf('3 CALL PGM TNC:\\PARTS\\SUB1.H', klartext).at(-1)).toBe('text:TNC:\\PARTS\\SUB1.H');
+    expect(pairsOf('4 FN 16: F-PRINT TNC:\\A.A / SCREEN:', klartext).at(-1)).toBe('text:F-PRINT TNC:\\A.A / SCREEN:');
+    expect(pairsOf('/5 CYCL DEF 200 DRILLING', klartext).at(-1)).toBe('text:DRILLING');
+  });
+
+  it('leaves the values of a sub-block, an empty cycle line and a cycle in the middle of a block alone', () => {
+    expect(kindsOf('6 CYCL DEF 7.1 X+12.5', klartext)).toEqual(['blockNumber', 'keyword', 'word', 'word']);
+    expect(kindsOf('7 CYCL DEF 19.1', klartext)).toEqual(['blockNumber', 'keyword', 'word']);
+    expect(kindsOf('8 CYCL DEF 200 Q200=2', klartext)).toEqual(['blockNumber', 'keyword', 'word', 'variable', 'operator', 'word']);
+    expect(kindsOf('9 L X+1 CYCL DEF 200 DRILLING', klartext)).not.toContain('text');
+    expect(pairsOf('10 CYCL DEF 200 DRILLING Q200=2', klartext).slice(3, 5)).toEqual(['text:DRILLING', 'variable:Q200']);
+  });
+
+  it('takes nothing for a text group that is empty, and reads in front of the text only up to it', () => {
+    const empty = without(klartext, (syntax) => (syntax.freeText = ['CYCL\\s+DEF\\s+\\d+\\s*(?<text>[A-Z]*)']));
+    expect(kindsOf('5 CYCL DEF 200', empty)).toEqual(['blockNumber', 'keyword', 'word']);
+    const inside = without(klartext, (syntax) => (syntax.freeText = ['L\\s+X(?<text>\\d+)']));
+    expect(pairsOf('5 L X10', inside)).toEqual(['blockNumber:5', 'keyword:L', 'word:X', 'text:10']);
+  });
+
+  it('finds the text where its group is followed by more of the pattern, not only at its end', () => {
+    const middle = without(klartext, (syntax) => (syntax.freeText = ['FOO\\s+(?<text>[A-Z]+)\\s+BAR']));
+    expect(pairsOf('5 FOO ABC BAR', middle)).toEqual(['blockNumber:5', 'word:FOO', 'text:ABC', 'word:BAR']);
+  });
+
+  it('is the profile data and nothing else', () => {
+    const bare = without(klartext, (syntax) => delete syntax.freeText);
+    expect(pairsOf('12 CYCL DEF 207 TAP.-RIGID NEW ~', bare)).toContain('unknown:TAP.-RIGID');
+    expect(kindsOf('0 BEGIN PGM INCHJOB INCH', bare)).toEqual(['blockNumber', 'keyword', 'word', 'keyword']);
+  });
+});
+
+describe('a word with its value behind a colon (`colonWords`)', () => {
+  it('reads the listed names, with a number or a word as the value', () => {
+    const [vconst, vc] = code(tokenizeLine('14 FUNCTION TURNDATA SPIN VCONST:ON VC:120 SMAX3000', klartext).tokens).slice(4, 6);
+    expect(vconst).toMatchObject({ kind: 'word', text: 'VCONST:ON', address: 'VCONST', valueText: 'ON' });
+    expect(vconst.value).toBeUndefined();
+    expect(vc).toMatchObject({ kind: 'word', text: 'VC:120', address: 'VC', valueText: '120', value: { raw: '120' } });
+    expect(code(tokenizeLine('13 CYCL DEF 32.2 HSC-MODE:1 TA0.5', klartext).tokens)[3]).toMatchObject({ address: 'HSC-MODE', valueText: '1' });
+    expect(kindsOf('15 FUNCTION TURNDATA SPIN VCONST:OFF ;NOTE', klartext).at(-2)).toBe('word');
+  });
+
+  it('takes no name without a value, with more behind the value, or inside another word', () => {
+    expect(pairsOf('5 VC: S100', klartext)[1]).not.toMatch(/^word:VC:/);
+    expect(pairsOf('5 VC:12A', klartext)[1]).toBe('unknown:VC:12A');
+    expect(pairsOf('5 XVC:12', klartext)[1]).toBe('unknown:XVC:12');
+  });
+
+  it('is the profile data and nothing else', () => {
+    const bare = without(klartext, (syntax) => delete syntax.colonWords);
+    expect(pairsOf('5 VC:120', bare)[1]).toBe('unknown:VC:120');
+  });
+});
+
+describe('a program named behind a call (`callTargets`)', () => {
+  it('reads the name as one program marker', () => {
+    expect(pairsOf('N100 CALL OABCD', okuma)).toEqual(['blockNumber:N100', 'keyword:CALL', 'programMarker:OABCD']);
+    const marker = code(tokenizeLine('MODIN O12 Q3', okuma).tokens)[1];
+    expect(marker).toMatchObject({ kind: 'programMarker', text: 'O12' });
+    expect([marker.address, marker.valueText]).toEqual([undefined, undefined]);
+    expect(pairsOf('CALL OSUB (ROUGH)', okuma)).toEqual(['keyword:CALL', 'programMarker:OSUB', 'comment:(ROUGH)']);
+  });
+
+  it('takes no name that runs on, and nothing behind another keyword', () => {
+    expect(kindsOf('CALL O12345', okuma)).toEqual(['keyword', 'word']);
+    expect(kindsOf('GOTO OABCD', okuma)).not.toContain('programMarker');
+  });
+
+  it('is the profile data and nothing else', () => {
+    const bare = without(okuma, (syntax) => delete syntax.callTargets);
+    expect(pairsOf('N100 CALL OABCD', bare).at(-1)).toBe('unknown:OABCD');
+  });
+});
+
+describe('a jump target (`labelAfter`)', () => {
+  it('reads the name behind a jump keyword as a label', () => {
+    expect(code(tokenizeLine('N30 IF $P_SIM GOTOF SKIPSIM', sinumerik).tokens).at(-1)).toMatchObject({ kind: 'label', address: 'SKIPSIM' });
+    expect(kindsOf('GOTOC LOOP_A ;LATER', sinumerik)).toEqual(['keyword', 'label', 'comment']);
+    expect(kindsOf('GOTO END_1', sinumerikMill)).toEqual(['keyword', 'label']);
+  });
+
+  it('leaves a block number, a string, an expression and a call behind the jump what they are', () => {
+    expect(code(tokenizeLine('N45 GOTOB N10', sinumerik).tokens).at(-1)).toMatchObject({ kind: 'word', address: 'N', valueText: '10' });
+    expect(kindsOf('N40 GOTOF "STEP_"<<COUNTER', sinumerik)).toEqual(['blockNumber', 'keyword', 'string', 'operator', 'operator', 'unknown']);
+    expect(kindsOf('GOTOF MARK(1)', sinumerik)).toEqual(['keyword', 'call']);
+    expect(kindsOf('GOTOF 100', sinumerik)).toEqual(['keyword']);
+    // Integration: an R parameter is a variable (a computed target), not a label.
+    expect(kindsOf('GOTOF R10', sinumerik)).toEqual(['keyword', 'variable']);
+    expect(kindsOf('GOTOF R10X', sinumerik)).toEqual(['keyword', 'label']);
+    expect(kindsOf('GOTOF IF', sinumerik)).toEqual(['keyword', 'keyword']);
+  });
+
+  it('is the profile data and nothing else', () => {
+    const bare = without(sinumerik, (syntax) => delete syntax.labelAfter);
+    expect(kindsOf('GOTOF SKIPSIM', bare)).toEqual(['keyword', 'unknown']);
+  });
+});
+
+describe('the names a declaration declares (`declareAfter`)', () => {
+  it('reads each declared name as a variable, sizes and initial values apart', () => {
+    expect(pairsOf('N12 DEF REAL WIDTH, DEPTH=2.5, AREA[3]', sinumerik)).toEqual([
+      'blockNumber:N12',
+      'keyword:DEF',
+      'keyword:REAL',
+      'variable:WIDTH',
+      'operator:,',
+      'variable:DEPTH',
+      'operator:=',
+      'word:2.5',
+      'operator:,',
+      'variable:AREA',
+      'expression:[3]',
+    ]);
+    expect(kindsOf('N14 DEF STRING[16] STEPNAME="START"', sinumerik)).toEqual(['blockNumber', 'keyword', 'keyword', 'expression', 'variable', 'operator', 'string']);
+    expect(kindsOf('DEF INT A,B', sinumerik)).toEqual(['keyword', 'keyword', 'variable', 'operator', 'variable']);
+  });
+
+  it('declares nothing behind the declaring keyword itself, in the middle of a block, or on a later line', () => {
+    expect(pairsOf('DEF CHAN INT LIMIT', sinumerik)).toEqual(['keyword:DEF', 'unknown:CHAN', 'keyword:INT', 'variable:LIMIT']);
+    expect(kindsOf('N10 IF R1>1 DEF INT AB', sinumerik).at(-1)).toBe('unknown');
+    expect(kindsOf('N20 IF COUNTER>1', sinumerik)[2]).toBe('unknown');
+  });
+
+  it('is the profile data and nothing else', () => {
+    const bare = without(sinumerik, (syntax) => delete syntax.declareAfter);
+    expect(kindsOf('N10 DEF INT COUNTER', bare).at(-1)).toBe('unknown');
+  });
+});
+
+describe('free text outside a comment (`plainTextRun`)', () => {
+  it('reads a run of plain words as one unknown token up to the next word with a value or keyword', () => {
+    expect(pairsOf('M797 SPINDLE ONE DONE', fanuc)).toEqual(['word:M797', 'unknown:SPINDLE ONE DONE']);
+    expect(pairsOf('N20 M01 CHECK INSERT X10.', lathe).slice(2)).toEqual(['unknown:CHECK INSERT', 'word:X10.']);
+    expect(pairsOf('N30 M00 PART LOADED GOTO 40', fanuc).slice(2)).toEqual(['unknown:PART LOADED', 'keyword:GOTO 40']);
+    expect(pairsOf('M990 TRANSFER OK S 500', lathe).slice(1)).toEqual(['unknown:TRANSFER OK', 'word:S 500']);
+    expect(pairsOf('m797spindle on', fanuc)).toEqual(['word:m797', 'unknown:spindle on']);
+  });
+
+  it('leaves code alone: words with values, two letters, keywords and the other dialects', () => {
+    expect(kindsOf('G28 U0 W0', lathe)).toEqual(['word', 'word', 'word']);
+    expect(kindsOf('G1 AB', fanuc)).toEqual(['word', 'word', 'word']);
+    expect(kindsOf('#1=SQRT[#2]', fanuc)).toEqual(['variable', 'operator', 'keyword', 'expression']);
+    expect(kindsOf('G65 P9010 A1. B2.', fanuc)).toEqual(['word', 'word', 'word', 'word']);
+    expect(pairsOf('N10 G0 X10. (SPINDLE ONE)', fanuc).at(-1)).toBe('comment:(SPINDLE ONE)');
+  });
+
+  it('is the profile data and nothing else', () => {
+    const bare = without(fanuc, (syntax) => delete syntax.plainTextRun);
+    // Letter by letter, with the `LE` of `SPINDLE` and the `NE` of `ONE` read as comparisons.
+    expect(textsOf('M797 SPINDLE ONE', bare)).toEqual(['M797', 'S', 'P', 'I', 'N', 'D', 'LE', 'O', 'NE']);
+  });
+});
+
+describe('a dialect without a tape (`tapeMarker: false`)', () => {
+  it('reads a lone `%` as no program marker on Klartext, and as one on the ISO dialects', () => {
+    expect(kindsOf('%', klartext)).toEqual(['operator']);
+    expect(kindsOf('7 Q1=+100 ;INPUT 50...150 %', klartext).at(-1)).toBe('comment');
+    expect(kindsOf('%', fanuc)).toEqual(['programMarker']);
+    expect(kindsOf('%', lathe)).toEqual(['programMarker']);
+  });
+
+  it('is the profile data and nothing else', () => {
+    const bare = without(klartext, (syntax) => delete syntax.tapeMarker);
+    expect(kindsOf('%', bare)).toEqual(['programMarker']);
+  });
+});
+
+describe('the M12.5 keywords and system variables', () => {
+  it('reads the Siemens single-block, display and approach commands as keywords, not calls', () => {
+    for (const line of ['SBLOF', 'N20 SBLON', 'DISPLOF', 'N22 DISPLON']) expect(kindsOf(line, sinumerik).at(-1), line).toBe('keyword');
+    expect(kindsOf('N50 G1 G41 CFC NORM X10 Y10', sinumerik)).toEqual(['blockNumber', 'word', 'word', 'keyword', 'keyword', 'word', 'word']);
+    expect(code(tokenizeLine('N55 G1 G42 KONTC X0', sinumerikMill).tokens)[3]).toMatchObject({ kind: 'keyword', address: 'KONTC' });
+    expect(kindsOf('NORMAL=1', sinumerik)).toEqual(['word']);
+  });
+
+  it('reads the Okuma drawing commands, NOEX and the tool-data variables', () => {
+    expect(kindsOf('N5 DRAW', okuma)).toEqual(['blockNumber', 'keyword']);
+    expect(kindsOf('N6 CLEAR', okuma)).toEqual(['blockNumber', 'keyword']);
+    expect(pairsOf('NOEX VTLL[1]=50 VTLD[1]=8', okuma)).toEqual([
+      'keyword:NOEX',
+      'variable:VTLL',
+      'expression:[1]',
+      'operator:=',
+      'word:50',
+      'variable:VTLD',
+      'expression:[1]',
+      'operator:=',
+      'word:8',
+    ]);
+  });
+
+  it('reads a sequence name that is exactly a keyword as the keyword, and every other one as a name', () => {
+    expect(kindsOf('NOEX V1=2', okuma)[0]).toBe('keyword');
+    expect(code(tokenizeLine('NOEX1 G0', okuma).tokens)[0]).toMatchObject({ kind: 'label', address: 'OEX1' });
+    expect(code(tokenizeLine('NLAP1 G85', okuma).tokens)[0]).toMatchObject({ kind: 'label', address: 'LAP1' });
+    expect(code(tokenizeLine('GOTO NOEX', okuma).tokens).map((token) => token.kind)).toEqual(['keyword', 'keyword']);
   });
 });
 

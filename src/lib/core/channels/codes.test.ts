@@ -1,7 +1,8 @@
 // The plain wait-code list (the owner's decision of 2026-10-07, §10.1; §7.17).
 
 import { describe, expect, it } from 'vitest';
-import { describeWaitCodes, isWaitCode, parseWaitCodes, waitCodeId, waitCodeWordRe } from './codes';
+import { describeWaitCodes, isWaitCode, parseWaitCodes, waitCodeId, waitCodeRuleOf, waitCodeWordRe } from './codes';
+import type { SyncRule } from './types';
 
 const keys = (text: string, letters?: string[]) => parseWaitCodes(text, { letters }).errors.map((e) => [e.key, e.params?.item]);
 
@@ -64,5 +65,32 @@ describe('matching a word', () => {
   });
   it('names a code by its value', () => {
     expect([waitCodeId('m', '0150'), waitCodeId('M', '150'), waitCodeId('P', '0')]).toEqual(['M150', 'M150', 'P0']);
+  });
+});
+
+describe('waitCodeRuleOf (M12.5, §7.16 #178)', () => {
+  const codes = (id: string, list: string): SyncRule => ({ id, label: `rule ${id}`, match: { kind: 'codes', codes: list }, partners: { kind: 'all' } });
+  const rules: SyncRule[] = [
+    { id: 'waitm', label: 'WAITM', match: { kind: 'regex', pattern: '\\bWAITM\\((?<mark>\\d+)' }, partners: { kind: 'all' } },
+    { id: 'm1xx', label: 'M1 + two digits', match: { kind: 'prefix', prefix: 'M1', idDigits: { min: 2, max: 2 } }, partners: { kind: 'all' } },
+    codes('bad', 'M2O0'),
+    codes('wait', 'M190-M199, M300'),
+    codes('later', 'M100-M399'),
+  ];
+
+  it('answers the first plain codes rule that lists the word', () => {
+    expect(waitCodeRuleOf(rules, 'M', 198)?.id).toBe('wait');
+    expect(waitCodeRuleOf(rules, 'm', 300)?.id).toBe('wait');
+    expect(waitCodeRuleOf(rules, 'M', 150)?.id).toBe('later');
+  });
+
+  it('answers nothing for a word no codes rule lists, a regex or prefix rule, a broken list or a decimal', () => {
+    expect(waitCodeRuleOf(rules, 'M', 30)).toBeNull();
+    expect(waitCodeRuleOf(rules, 'P', 198)).toBeNull();
+    expect(waitCodeRuleOf(rules.slice(0, 3), 'M', 130)).toBeNull(); // only the prefix rule names M130
+    expect(waitCodeRuleOf(rules.slice(0, 3), 'M', 200)).toBeNull(); // `M2O0` is no list
+    expect(waitCodeRuleOf(rules, 'M', 198.5)).toBeNull();
+    expect(waitCodeRuleOf(rules, 'MM', 198)).toBeNull();
+    expect(waitCodeRuleOf([], 'M', 198)).toBeNull();
   });
 });

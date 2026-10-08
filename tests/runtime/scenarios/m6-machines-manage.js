@@ -73,7 +73,8 @@ const AS_WRITTEN_RULES = { mode: 'calculator', incrementMm: '0.001' }
  * and the split of the `T` word). A machine stores all of them, so that a later change of a
  * default in the dialect's data cannot silently change a machine set up before it.
  */
-const LATHE_VARIANTS = { gcodeSystem: 'A', incrementalAddresses: 'uw', toolWord: 'offset2' }
+// M12.5: the tool word's default is `byLength` (T12 and T12012 are stations, T0101 is tool 1 offset 01).
+const LATHE_VARIANTS = { gcodeSystem: 'A', incrementalAddresses: 'uw', toolWord: 'byLength' }
 
 /** A machine record, spelled the way the page writes one. */
 const record = (/** @type {string} */ id, /** @type {string} */ name, /** @type {object} */ numberInput, /** @type {object} */ rest = {}) => ({

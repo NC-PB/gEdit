@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import fanucProfileJson from '$lib/data/profiles/fanuc-gcode.json';
+import fanucLatheProfileJson from '$lib/data/profiles/fanuc-lathe.json';
 import heidenhainProfileJson from '$lib/data/profiles/heidenhain-klartext.json';
 import okumaProfileJson from '$lib/data/profiles/okuma-osp.json';
 import sinumerikProfileJson from '$lib/data/profiles/sinumerik.json';
@@ -16,6 +17,7 @@ import sinumerikCodesJson from '$lib/data/codes/sinumerik.json';
 import { compileProfile } from '$lib/core/profiles/compile';
 import { t } from '$lib/i18n';
 import { loadCodeDb } from './load';
+import { lookupCode } from './lookup';
 import { codeAddressesOf, escapeMarkdown, hoverAt, hoverTarget, hoverText } from './hoverText';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
 import type { NcToken } from '$lib/core/nc/types';
@@ -366,5 +368,72 @@ describe('escapeMarkdown', () => {
     const text = hoverText(token, lookup, t) as string;
     expect(text).not.toContain('](');
     expect(text).toContain('\\!\\[x\\]');
+  });
+});
+
+describe('hoverText: a machine’s wait codes win over the database (M12.5 decision 4, §7.16 #178)', () => {
+  const fanucLatheProfile = compileProfile(fanucLatheProfileJson as unknown as Profile);
+  // What `ChannelService.waitCodeRule` answers for a machine whose waits are `M190-M199`.
+  const asked: [string, number][] = [];
+  const waitCode = (letter: string, value: number) => {
+    asked.push([letter, value]);
+    return letter === 'M' && value >= 190 && value <= 199 ? { ruleId: 'wait', label: 'Waiting M-code <of this builder>', machineName: 'Twin_Turret' } : null;
+  };
+  const latheHover = (line: string, at: string, o: { waitCode?: typeof waitCode } = { waitCode }): string | null =>
+    hoverAt(line, line.indexOf(at), fanucLatheProfile, fanuc, t, undefined, o)?.markdown ?? null;
+
+  it('presents M198 as a wait on this machine, without the database’s meaning or its required P', () => {
+    const text = latheHover('M198', 'M198') as string;
+    expect(text).toBe(
+      [
+        '**M198**',
+        escapeMarkdown('Wait code on this machine (Twin_Turret): Waiting M-code <of this builder>'),
+        `_${escapeMarkdown(t('assistant.hover.waitCodeNote'))}_`,
+      ].join('\n\n'),
+    );
+    expect(text).not.toContain('Required');
+    expect(text).not.toContain('External subprogram call');
+  });
+
+  it('reads the word as the control does: M0198 is M198; a point or an assignment is another word', () => {
+    expect(latheHover('N10 M0198', 'M0198')).toContain('Wait code on this machine');
+    asked.length = 0;
+    latheHover('M198.', 'M198');
+    // Sinumerik `M2=198`: the M198 of spindle 2 is no code word of the list (as `waitCodeWordRe` reads it).
+    hoverAt('M2=198', 0, sinumerikProfile, sinumerik, t, undefined, { waitCode });
+    expect(asked).toEqual([]);
+  });
+
+  it('says only that it is a wait when the database has no entry, and uses the plain line without a rule label', () => {
+    expect(latheHover('M195', 'M195')).toBe(['**M195**', escapeMarkdown('Wait code on this machine (Twin_Turret): Waiting M-code <of this builder>')].join('\n\n'));
+    const unlabelled = hoverAt('M198', 0, fanucLatheProfile, fanuc, t, undefined, { waitCode: () => ({ ruleId: 'wait', label: null, machineName: 'Twin' }) })?.markdown;
+    expect(unlabelled).toContain(escapeMarkdown('Wait code on this machine (Twin)'));
+    expect(unlabelled).not.toContain(':');
+  });
+
+  it('calls an ordered rule a sync code, not a wait code (an order number such as P1-P9999)', () => {
+    const ordered = { ruleId: 'p-code', label: 'P sync code: an order', machineName: 'Twin_Turret', semantics: 'ordered' };
+    const text = hoverAt('G04 P500', 'G04 P500'.indexOf('P500'), fanucLatheProfile, fanuc, t, undefined, { waitCode: () => ordered })?.markdown ?? '';
+    expect(text).toContain(escapeMarkdown('Sync code on this machine (Twin_Turret): P sync code: an order'));
+    expect(text).not.toContain('Wait code');
+    const bare = hoverAt('M100', 0, fanucLatheProfile, fanuc, t, undefined, { waitCode: () => ({ ...ordered, label: null }) })?.markdown ?? '';
+    expect(bare).toContain(escapeMarkdown('Sync code on this machine (Twin_Turret)'));
+    // A count or rendezvous rule keeps the wait wording.
+    expect(latheHover('M198', 'M198')).toContain('Wait code on this machine');
+  });
+
+  it('leaves every other word to the database, and the database speaks without a machine', () => {
+    expect(latheHover('M30', 'M30')).toContain('Program end and rewind');
+    expect(latheHover('G0 X100.', 'X100.')).not.toContain('Wait code');
+    const withoutMachine = latheHover('M198 P1234', 'M198', {}) as string;
+    expect(withoutMachine).toContain('External subprogram call');
+    expect(withoutMachine).toContain('Required: P');
+  });
+});
+
+describe('hoverText: text the control does not execute (M12.5, §7.16 #179)', () => {
+  it('says nothing about a `text` token, even where the database describes a word of that spelling', () => {
+    const token: NcToken = { kind: 'text', start: 0, end: 4, text: 'M198' };
+    expect(hoverText(token, { entry: lookupCode(fanuc, 'M198') } as unknown as CodeLookup, t, { waitCode: () => ({ ruleId: 'w', label: 'W', machineName: 'M' }) })).toBeNull();
   });
 });

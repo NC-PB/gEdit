@@ -26,6 +26,7 @@
 
 import { derived, writable, type Readable } from 'svelte/store';
 import { checkSyncMarksReport } from '$lib/core/channels/check';
+import { waitCodeRuleOf } from '$lib/core/channels/codes';
 import { channelAt, channelRefs, resolveChannelToken } from '$lib/core/channels/resolve';
 import { mergeDirty, patchResolution, type DirtySpan } from '$lib/core/channels/incremental';
 import { findMarks, resolveDocument, sectionOwners } from '$lib/core/channels/marks';
@@ -600,6 +601,21 @@ export function createChannelService(deps: ChannelServiceDeps): ChannelServiceIn
 
     channelAt(id: DocId, line: number): ChannelRef | null {
       return channelAt(forDoc(id), line);
+    },
+
+    /**
+     * M12.5 (§7.16 #178, decision 4): the plain `codes` rule of this document's machine that
+     * lists the word. A pure lookup on the machine's valid block (no resolution, no cache to
+     * wait for), so hover answers the moment a machine is set.
+     */
+    waitCodeRule(id: DocId, letter: string, value: number): { ruleId: string; label: string | null; machineName: string | null; semantics: string } | null {
+      const found = blockOf(id);
+      if (found === null || found.block.state !== 'valid' || found.block.params.layout === 'none') return null;
+      const rule = waitCodeRuleOf(found.block.params.syncMarks, letter, value);
+      if (rule === null) return null;
+      const label = rule.label.trim();
+      const record = found.view.machineId === null ? undefined : deps.machine(found.view.machineId);
+      return { ruleId: rule.id, label: label === '' ? null : label, semantics: rule.semantics ?? 'rendezvous', machineName: found.view.machineName ?? record?.name ?? null };
     },
 
     async siblings(id: DocId): Promise<ChannelMember[]> {

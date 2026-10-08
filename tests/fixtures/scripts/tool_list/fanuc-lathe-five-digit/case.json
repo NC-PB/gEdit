@@ -1,3 +1,9 @@
 {
-  "profile": "fanuc-lathe"
+  "profile": "fanuc-lathe",
+  "machine": {
+    "variants": {
+      "toolWord": "offset2"
+    }
+  },
+  "machineName": "Lathe 3 + 2"
 }

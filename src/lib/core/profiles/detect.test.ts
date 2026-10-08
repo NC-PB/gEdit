@@ -15,8 +15,11 @@ import {
   CERTAIN_WEIGHT,
   DECISIVE_WEIGHT,
   MAX_SNIFF_LINES,
+  UNCERTAIN_FAMILY_MARGIN,
+  UNCERTAIN_MIN_LINES,
   VARIANT_MARGIN,
   detectProfile,
+  detectResult,
   detectScores,
   detectVariants,
   extensionOf,
@@ -30,6 +33,7 @@ const KLARTEXT = 'heidenhain-klartext';
 const LATHE = 'fanuc-lathe';
 const OKUMA = 'okuma-osp';
 const SINUMERIK = 'sinumerik';
+const SINUMERIK_MILL = 'sinumerik-mill';
 
 /** The built-ins, through the same gate the registry uses. */
 const BUILTINS: CompiledProfile[] = BUILTIN_PROFILE_JSON.map((raw) => {
@@ -298,10 +302,13 @@ describe('decisive headers', () => {
   it('decide the dialect against a full page of lines that score for another', () => {
     // 5X_MILLING_VECTOR.H and the Siemens milling programs opened as Fanuc mill: every
     // line that moves Y scored for the mill, and nothing outweighed 400 of them.
+    // Under a Siemens header the page of mill moves is a Siemens milling program (M12.5:
+    // the milling profile scores a line that moves Y; the turning profile does not).
     const cases: [string, string][] = [
       ['0 BEGIN PGM VECTOR MM', KLARTEXT],
-      ['%_N_PLATE_MPF', SINUMERIK],
-      [';$PATH=/_N_WKS_DIR/_N_PLATE_WPD', SINUMERIK],
+      ['%_N_PLATE_MPF', SINUMERIK_MILL],
+      [';$PATH=/_N_WKS_DIR/_N_PLATE_WPD', SINUMERIK_MILL],
+      [';%_N_PLATE_MPF', SINUMERIK_MILL],
       ['$PLATE.MIN%', OKUMA],
     ];
     for (const [header, expected] of cases) {
@@ -510,7 +517,7 @@ describe('variant detection', () => {
     expect(detected.gcodeSystem).toEqual({ value: 'B', margin: 3 });
     // The two R6 variants carry no rules: they answer with their default and a margin of 0.
     expect(detected.incrementalAddresses).toEqual({ value: 'uw', margin: 0 });
-    expect(detected.toolWord).toEqual({ value: 'offset2', margin: 0 });
+    expect(detected.toolWord).toEqual({ value: 'byLength', margin: 0 });
     expect(detected.gcodeSystem.margin).toBeGreaterThanOrEqual(VARIANT_MARGIN);
 
     // Without the threading passes it is a drilling program that says nothing about the
@@ -586,6 +593,73 @@ describe('folders', () => {
 
   it('are skipped for a document without a path', () => {
     expect(detectProfile(profiles, null, 'X\n', 'machine')).toBe('other');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M12.5: how sure detection is (`detectResult`, §7.16 #177; WP-RP1)
+// ---------------------------------------------------------------------------
+
+describe('detectResult', () => {
+  /** A profile of its own grammar, for the family margin. */
+  function ofGrammar(id: string, grammar: string, detect: Partial<Profile['detect']>): CompiledProfile {
+    const cp = variant(id, detect);
+    return compileProfile({ ...cp.profile, grammar } as Profile);
+  }
+  const iso = ofGrammar('iso', 'iso', { content: [{ pattern: '^N\\d+', weight: 1 }, { pattern: '^%$', weight: 5 }] });
+  const isoTwin = ofGrammar('iso-twin', 'iso', { content: [{ pattern: '^N\\d+', weight: 1 }] });
+  const other = ofGrammar('other', 'other', {
+    content: [{ pattern: '^N\\d+', weight: 1 }, { pattern: 'MARK=', weight: CERTAIN_WEIGHT }],
+  });
+  const lines = (count: number): string[] => Array.from({ length: count }, (_, i) => `N${i + 1} X${i}`);
+
+  it('answers what detectProfile answers, with how it got there', () => {
+    const cases: [CompiledProfile[], string | null, string, string][] = [
+      [BUILTINS, '/work/a.nc', '%\nO1234\nN10 G0 X0\n', KLARTEXT],
+      [BUILTINS, '/work/a.txt', '', 'siemens-840d'],
+      [BUILTINS, null, '0 BEGIN PGM A MM\n', FANUC],
+      [[], '/work/a.nc', 'N1', FANUC],
+      [[iso, isoTwin, other], '/work/a', lines(9).join('\n'), 'other'],
+    ];
+    for (const [profiles, path, text, fallback] of cases) {
+      expect(detectResult(profiles, path, text, fallback).id).toBe(detectProfile(profiles, path, text, fallback));
+    }
+    expect(detectResult(BUILTINS, '/work/a.txt', '', 'siemens-840d')).toEqual({
+      id: 'siemens-840d', by: 'fallback', score: 0, rival: null, familyMargin: 0, certain: false, uncertain: false,
+    });
+  });
+
+  it('measures the margin against another grammar only, and calls a near tie uncertain', () => {
+    // Nine numbered lines score 9 on all three; `iso` wins the tie by registry order. Its
+    // twin of the same grammar is no rival: mill against lathe is not a dialect question.
+    const result = detectResult([iso, isoTwin, other], '/work/a', lines(9).join('\n'), 'iso');
+    expect(result).toEqual({ id: 'iso', by: 'content', score: 9, rival: 'other', familyMargin: 0, certain: false, uncertain: true });
+    // Five points of markers only one grammar writes are enough (the calibrated margin).
+    const header = detectResult([iso, isoTwin, other], '/work/a', ['%', ...lines(9)].join('\n'), 'iso');
+    expect(header.familyMargin).toBe(UNCERTAIN_FAMILY_MARGIN);
+    expect(header.uncertain).toBe(false);
+  });
+
+  it('is never uncertain on a certain rule of the winner, a short text, a folder or no score', () => {
+    const certain = detectResult([iso, other], '/work/a', ['MARK=1', ...lines(9)].join('\n'), 'iso');
+    expect(certain).toMatchObject({ id: 'other', certain: true, uncertain: false });
+    const short = detectResult([iso, isoTwin, other], '/work/a', lines(UNCERTAIN_MIN_LINES - 1).join('\n'), 'iso');
+    expect(short).toMatchObject({ familyMargin: 0, uncertain: false });
+    const enough = detectResult([iso, isoTwin, other], '/work/a', lines(UNCERTAIN_MIN_LINES).join('\n'), 'iso');
+    expect(enough.uncertain).toBe(true);
+    const mine = ofGrammar('mine', 'iso', { folders: ['/cam/mill'] });
+    expect(detectResult([iso, other, mine], '/cam/mill/a.nc', lines(9).join('\n'), 'iso')).toMatchObject({
+      id: 'mine', by: 'folder', uncertain: false,
+    });
+    expect(detectResult([iso, other], '/work/a', 'nothing here\n'.repeat(9), 'iso')).toMatchObject({
+      id: 'iso', by: 'fallback', uncertain: false,
+    });
+  });
+
+  it('reads a decisive header of the built-ins as certain', () => {
+    const text = ['%_N_PLATE_MPF', ...Array.from({ length: 20 }, (_, i) => `N${i} G1 X${i}`)].join('\n');
+    expect(detectResult(BUILTINS, '/work/a.mpf', text, FANUC)).toMatchObject({ certain: true, uncertain: false });
+    expect(detectResult(BUILTINS, '/work/a.mpf', text, FANUC).score).toBeGreaterThanOrEqual(DECISIVE_WEIGHT);
   });
 });
 

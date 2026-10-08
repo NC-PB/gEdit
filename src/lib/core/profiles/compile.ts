@@ -73,6 +73,13 @@ export function compileProfile(p: Profile): CompiledProfile {
   const outline: { kind: OutlineKind; pattern: Pattern }[] = p.outline ?? [];
   const references = p.numbering?.references ?? [];
 
+  // M12.5 (§7.16 #179): the tokenizer compiles `syntax.freeText` and `syntax.callTargets`
+  // once per compiled profile with the sticky and indices flags it needs (`lexSpec`, as it
+  // does `programNames`); they are compiled here as well so that a bad one is reported
+  // as a `ProfileError` with its path, like every other pattern, not as a tokenizer crash.
+  compileList(syntax.freeText, 'syntax.freeText', flags);
+  if (syntax.callTargets !== undefined && syntax.callTargets !== null) compilePattern(syntax.callTargets?.pattern, 'syntax.callTargets.pattern', flags);
+
   return {
     profile: p,
     flags,

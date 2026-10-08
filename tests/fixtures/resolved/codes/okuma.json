@@ -2390,6 +2390,21 @@
       "label": "Select a program"
     },
     {
+      "code": "NOEX",
+      "description": "Stands at the start of a block that only sets variables: the control works it out without stopping after it in single-block mode, which speeds up a program check. The result is the same with or without it.",
+      "label": "Calculate without single-block stops"
+    },
+    {
+      "code": "DRAW",
+      "description": "A command of the control's drawing function, written by posts that describe the blank for the animation; it moves nothing. gEdit reads it as a command and does not explain it further.",
+      "label": "Drawing command"
+    },
+    {
+      "code": "CLEAR",
+      "description": "A command of the control's drawing function, written by posts that describe the blank for the animation; it moves nothing. gEdit reads it as a command and does not explain it further.",
+      "label": "Clear the drawing"
+    },
+    {
       "code": "GET",
       "description": "Takes characters from the buffer that READ filled and puts them into a variable.",
       "group": "program",

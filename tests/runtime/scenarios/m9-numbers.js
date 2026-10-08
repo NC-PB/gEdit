@@ -252,7 +252,7 @@ scenario('m9-numbers', { timeout: 540 }, async (h) => {
     ['okuma', OKUMA, 'MIN'],
   ]
   for (const [folder, profile, extension] of FOLDERS) {
-    for (const choice of folder === 'okuma' ? ['offset2', 'offset3'] : ['offset2', 'offset1', 'offset3']) {
+    for (const choice of folder === 'okuma' ? ['offset2', 'offset3'] : ['byLength', 'offset2', 'offset1', 'offset3']) {
       const golden = JSON.parse(await h.disk.read(await h.fixture(`expected/outline/${folder}/variants/toolWord-${choice}.json`)))
       const name = `${profile} T ${choice}`
       await addMachine(name, profile, { variants: { toolWord: choice } })

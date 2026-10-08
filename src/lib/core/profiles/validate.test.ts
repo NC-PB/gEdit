@@ -642,3 +642,57 @@ describe('M12 (P12): channel rows and channel presets', () => {
     expect(paths).toEqual(['machineParams.channels.presets[0].value.list', 'machineParams.channels.presets[0].value.sectionStart']);
   });
 });
+
+// ---------------------------------------------------------------------------
+// M12.5 (§7.16 #179, WP-RP2): the seven tokenizer fields
+// ---------------------------------------------------------------------------
+
+describe('the M12.5 syntax fields', () => {
+  const syntaxOf = (p: Record<string, unknown>): Record<string, unknown> => p.syntax as Record<string, unknown>;
+
+  it('take a free-text pattern only with the group `text`, inside the subset, and never matching nothing', () => {
+    expect(pathsOf((p) => (syntaxOf(p).freeText = ['CALL\\s+(?<text>\\S+)']))).toEqual([]);
+    expect(errorsOf((p) => (syntaxOf(p).freeText = ['CALL\\s+(\\S+)']))).toEqual(['syntax.freeText[0]: has to carry the named group (?<text>…)']);
+    expect(errorsOf((p) => (syntaxOf(p).freeText = ['(?<text>[A-Z]*)']))).toEqual([
+      'syntax.freeText[0]: can match an empty string, and a text has to take at least one character',
+    ]);
+    expect(pathsOf((p) => (syntaxOf(p).freeText = ['(?<text>[A-Z']))).toEqual(['syntax.freeText[0]']);
+    expect(pathsOf((p) => (syntaxOf(p).freeText = ['(?<=A+)(?<text>B)']))).toEqual(['syntax.freeText[0]']);
+    expect(pathsOf((p) => (syntaxOf(p).freeText = 'CALL (?<text>.+)'))).toEqual(['syntax.freeText']);
+    expect(pathsOf((p) => (syntaxOf(p).freeText = []))).toEqual(['syntax.freeText']);
+  });
+
+  it('take colon words that are names', () => {
+    expect(pathsOf((p) => (syntaxOf(p).colonWords = ['VC', 'HSC-MODE']))).toEqual([]);
+    expect(pathsOf((p) => (syntaxOf(p).colonWords = ['VC:']))).toEqual(['syntax.colonWords[0]']);
+    expect(pathsOf((p) => (syntaxOf(p).colonWords = ['1X']))).toEqual(['syntax.colonWords[0]']);
+  });
+
+  it('take call targets, jump targets and declarations only behind keywords of the profile', () => {
+    expect(pathsOf((p) => (syntaxOf(p).callTargets = { after: ['GOTO'], pattern: 'O[A-Z0-9]{1,4}' }))).toEqual([]);
+    expect(pathsOf((p) => (syntaxOf(p).callTargets = { after: ['CALL'], pattern: 'O[A-Z0-9]{1,4}' }))).toEqual(['syntax.callTargets.after[0]']);
+    expect(pathsOf((p) => (syntaxOf(p).callTargets = { pattern: 'O[A-Z0-9]{1,4}' }))).toEqual(['syntax.callTargets.after']);
+    expect(pathsOf((p) => (syntaxOf(p).callTargets = { after: ['GOTO'], pattern: 'O*' }))).toEqual(['syntax.callTargets.pattern']);
+    expect(pathsOf((p) => (syntaxOf(p).callTargets = { after: ['GOTO'] }))).toEqual(['syntax.callTargets.pattern']);
+    expect(pathsOf((p) => (syntaxOf(p).labelAfter = ['goto']))).toEqual([]);
+    expect(pathsOf((p) => (syntaxOf(p).labelAfter = ['GOTOF']))).toEqual(['syntax.labelAfter[0]']);
+    expect(pathsOf((p) => (syntaxOf(p).declareAfter = ['DEF']))).toEqual(['syntax.declareAfter[0]']);
+    expect(pathsOf((p) => (syntaxOf(p).declareAfter = 'IF'))).toEqual(['syntax.declareAfter']);
+  });
+
+  it('take a plain-text run of two letters or more, and a tape switch that is a boolean', () => {
+    expect(pathsOf((p) => (syntaxOf(p).plainTextRun = 3))).toEqual([]);
+    for (const value of [1, 2.5, '3']) expect(pathsOf((p) => (syntaxOf(p).plainTextRun = value)), String(value)).toEqual(['syntax.plainTextRun']);
+    expect(pathsOf((p) => (syntaxOf(p).tapeMarker = false))).toEqual([]);
+    expect(pathsOf((p) => (syntaxOf(p).tapeMarker = 'no'))).toEqual(['syntax.tapeMarker']);
+  });
+
+  it('are set on the shipped profiles in the AD-11 subset, so the Python side compiles them too', () => {
+    const sources = BUILTIN_PROFILE_JSON.flatMap((raw) => {
+      const syntax = ((raw as Profile).syntax ?? {}) as Profile['syntax'];
+      return [...(syntax.freeText ?? []), ...(syntax.callTargets ? [syntax.callTargets.pattern] : [])];
+    });
+    expect(sources.length).toBeGreaterThanOrEqual(6);
+    for (const source of sources) expect(patternSubsetProblem(source), source).toBeNull();
+  });
+});

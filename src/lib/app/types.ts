@@ -25,6 +25,7 @@ import type { NcToken } from '$lib/core/nc/types';
 import type { Settings } from '$lib/core/settings/schema';
 import type { OutlineItem } from '$lib/core/profiles/outline';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
+import type { DetectResult } from '$lib/core/profiles/detect';
 import type { TransformDef, TransformResult } from '$lib/core/transforms/types';
 import type {
   EffectiveMachine,
@@ -283,6 +284,14 @@ export interface DocMeta {
   asciiOnLoad?: boolean;
   /** The user answered that question for this document; it is not asked again. */
   encodingAsked?: boolean;
+  /**
+   * M12.5 (owner decision of 2026-10-08, §7.16 #177): the dialect was **detected** on open
+   * and detection was uncertain (`DetectResult.uncertain`) — no profile fits the program
+   * well. The status item marks the dialect as a guess and the picker offers to keep it.
+   * Absent or `false` otherwise; cleared when the user picks a dialect or keeps the guess
+   * (which `fileMemory` remembers, so the next open is not a guess any more).
+   */
+  dialectUncertain?: boolean;
 }
 
 export type NewDocMeta = Omit<DocMeta, 'id' | 'title' | 'dirty'>;
@@ -567,6 +576,12 @@ export interface ProfileRegistry {
   get(id: string): ProfileInfo | undefined;
   defaultId(): string;
   detect(path: string | null, text: string, fallback: string): string;
+  /**
+   * M12.5 (§7.16 #177): `detect` with the confidence of its answer. `id` equals `detect`'s
+   * answer for the same arguments; `uncertain` is the owner's "no profile fits well" signal
+   * (2026-10-08), shown by the dialect status item and the picker.
+   */
+  detectResult(path: string | null, text: string, fallback: string): DetectResult;
   /** `[]` on macOS (F7). */
   openFilters(): DialogFilter[];
   saveFilters(id: string): DialogFilter[];
@@ -1211,6 +1226,15 @@ export interface ChannelService {
    *  navigation, which act on the lines of the moment. */
   fresh(id: DocId): ChannelSet;
   channelAt(id: DocId, line: number): ChannelRef | null;
+  /**
+   * M12.5 (§7.16 #178): the wait rule of this document's machine
+   * that names the code word `letter` + `value` in its plain `codes` list (`M198` in
+   * `M190-M199`), or `null` — no machine, no valid channel block, or no `codes` rule names it
+   * (a `regex` rule never answers: `WAITM(…)` is described correctly by the database). Hover
+   * then presents the word as a wait on this machine instead of the database's meaning, and
+   * leaves out the database's required-word note. Pure lookup, no resolution.
+   */
+  waitCodeRule(id: DocId, letter: string, value: number): { ruleId: string; label: string | null; machineName: string | null; semantics: string } | null;
   /** `multi-file`: existence of the siblings, through `channelSiblings` — metadata only. */
   siblings(id: DocId): Promise<ChannelMember[]>;
   /** `multi-file`: tie an OPEN document to a channel by hand (M7's `FileMemo.channelId`);

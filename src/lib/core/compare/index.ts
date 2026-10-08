@@ -480,7 +480,8 @@ function gluesNames(tokens: NcToken[], index: number, rules: NumberRules): boole
 
 /** True when `token` may be dropped as part of a cycle name: a name, never a value or an address. */
 function isNameToken(token: NcToken, rules: NumberRules): boolean {
-  if (token.kind === 'unknown') return true;
+  // M12.5 (§7.16 #179): the Klartext cycle name is one `text` token (`syntax.freeText`).
+  if (token.kind === 'unknown' || token.kind === 'text') return true;
   if (token.kind !== 'word' || token.incremental === true) return false;
   if ((token.valueText ?? '') !== '' || (token.value !== undefined && token.value !== null)) return false;
   const address = token.address?.toUpperCase();

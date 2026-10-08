@@ -157,23 +157,27 @@ function extensionWeight(cp: CompiledProfile, ext: string): number {
   return typeof weight === 'number' && Number.isFinite(weight) ? weight : 0;
 }
 
-/**
- * Every profile's score for a file, in the order of `profiles`: the extension weight plus
- * the strongest content rule per line over the first [`MAX_SNIFF_LINES`] non-empty lines,
- * or 0 for a profile one of whose `detect.vetoes` matches one of those lines (rule 5).
- * Exported for the tests that print the margins (gate G10), so they read what detection
- * reads.
- */
-export function detectScores(profiles: CompiledProfile[], path: string | null, text: string): number[] {
+/** What one pass over the sniffed lines found: every profile's score, and what the result reads. */
+interface ScoreSheet {
+  scores: number[];
+  /** Per profile: a rule of [`CERTAIN_WEIGHT`] or more was a line's strongest match. */
+  certain: boolean[];
+  /** How many non-empty lines were read (at most [`MAX_SNIFF_LINES`]). */
+  lines: number;
+}
+
+function scoreSheet(profiles: CompiledProfile[], path: string | null, text: string): ScoreSheet {
   const ext = path === null ? '' : extensionOf(path);
   const scores = profiles.map((cp) => extensionWeight(cp, ext));
   const vetoed = profiles.map(() => false);
+  const certain = profiles.map(() => false);
 
   // Strongest pattern per line: the rules are tried in descending weight, and the first
   // one that matches ends the line for that profile.
   const rules = profiles.map((cp) => [...cp.re.detectContent].sort((a, b) => b.weight - a.weight));
   const vetoes = profiles.map((cp) => cp.re.detectVetoes ?? []);
-  for (const line of firstLines(text, MAX_SNIFF_LINES)) {
+  const sniffed = firstLines(text, MAX_SNIFF_LINES);
+  for (const line of sniffed) {
     for (let i = 0; i < profiles.length; i++) {
       if (vetoed[i]) continue;
       if (vetoes[i].length > 0 && vetoes[i].some((veto) => veto.test(line))) {
@@ -183,12 +187,52 @@ export function detectScores(profiles: CompiledProfile[], path: string | null, t
       for (const rule of rules[i]) {
         if (rule.re.test(line)) {
           scores[i] += rule.weight;
+          if (rule.weight >= CERTAIN_WEIGHT) certain[i] = true;
           break;
         }
       }
     }
   }
-  return scores.map((score, i) => (vetoed[i] ? 0 : score));
+  return {
+    scores: scores.map((score, i) => (vetoed[i] ? 0 : score)),
+    certain: certain.map((hit, i) => hit && !vetoed[i]),
+    lines: sniffed.length,
+  };
+}
+
+/**
+ * Every profile's score for a file, in the order of `profiles`: the extension weight plus
+ * the strongest content rule per line over the first [`MAX_SNIFF_LINES`] non-empty lines,
+ * or 0 for a profile one of whose `detect.vetoes` matches one of those lines (rule 5).
+ * Exported for the tests that print the margins (gate G10), so they read what detection
+ * reads.
+ */
+export function detectScores(profiles: CompiledProfile[], path: string | null, text: string): number[] {
+  return scoreSheet(profiles, path, text).scores;
+}
+
+/** The index of the winner by the rules 2 to 4 of the header, or -1 when nothing scored. */
+function winnerOf(profiles: CompiledProfile[], scores: number[], fallback: string, rank: Rank): number {
+  let bestIndex = -1;
+  for (let i = 0; i < profiles.length; i++) {
+    if (scores[i] <= 0) continue;
+    if (bestIndex === -1 || scores[i] > scores[bestIndex]) {
+      bestIndex = i;
+      continue;
+    }
+    if (scores[i] < scores[bestIndex]) continue;
+    // Equal scores: the higher priority wins, then a user profile, then the fallback
+    // profile, then the registry order (which leaves `bestIndex` where it is).
+    if (beats(profiles[i], profiles[bestIndex], rank)) bestIndex = i;
+    else if (
+      !beats(profiles[bestIndex], profiles[i], rank) &&
+      profiles[i].profile.id === fallback &&
+      profiles[bestIndex].profile.id !== fallback
+    ) {
+      bestIndex = i;
+    }
+  }
+  return bestIndex;
 }
 
 /**
@@ -214,29 +258,119 @@ export function detectProfile(
     if (folderMatch) return folderMatch.profile.id;
   }
 
-  const scores = detectScores(profiles, path, text);
+  const bestIndex = winnerOf(profiles, detectScores(profiles, path, text), fallback, rank);
+  return bestIndex === -1 ? fallback : profiles[bestIndex].profile.id;
+}
 
-  let bestIndex = -1;
-  for (let i = 0; i < profiles.length; i++) {
-    if (scores[i] <= 0) continue;
-    if (bestIndex === -1 || scores[i] > scores[bestIndex]) {
-      bestIndex = i;
-      continue;
-    }
-    if (scores[i] < scores[bestIndex]) continue;
-    // Equal scores: the higher priority wins, then a user profile, then the fallback
-    // profile, then the registry order (which leaves `bestIndex` where it is).
-    if (beats(profiles[i], profiles[bestIndex], rank)) bestIndex = i;
-    else if (
-      !beats(profiles[bestIndex], profiles[i], rank) &&
-      profiles[i].profile.id === fallback &&
-      profiles[bestIndex].profile.id !== fallback
-    ) {
-      bestIndex = i;
-    }
+// ---------------------------------------------------------------------------
+// "No profile fits well" (M12.5, owner decision of 2026-10-08; plan §7.16 #177)
+// ---------------------------------------------------------------------------
+
+/**
+ * Below this **family margin** — the winner's score minus the best score of a profile of
+ * another `grammar` — a detection without a certain hit is uncertain. Measured against
+ * another grammar on purpose: a Fanuc mill against the Fanuc lathe, or the two Siemens
+ * profiles, is a question of the machine type, which the weights settle (M12.5), not of
+ * the dialect.
+ *
+ * **Calibrated once in M12.5, an absolute margin of 5** (the evidence is in the plan,
+ * §7.16 #177). Okuma scores one point per numbered block as both Fanuc profiles do, so the
+ * family margin of an ISO program is the sum of the markers only one of the two writes —
+ * which is exactly the question "does this program fit Fanuc or Okuma at all". A program of
+ * a dialect gEdit has no profile for writes none of them and ties; a Fanuc or Okuma program
+ * writes at least a few. A margin relative to the winner's score was tried and does not
+ * separate better: a 400-line program carries as few markers as a 40-line one. The
+ * committed fixtures hold the value from both sides: `nc/uncertain/` stays below it, and
+ * the lowest family margin outside `nc/ambiguous/` and `nc/uncertain/` is 9 (the owner's
+ * five-axis program).
+ */
+export const UNCERTAIN_FAMILY_MARGIN = 5;
+
+/**
+ * A text with fewer non-empty lines than this is never called uncertain: an empty or nearly
+ * empty buffer has nothing to be wrong about yet.
+ */
+export const UNCERTAIN_MIN_LINES = 5;
+
+/** What detection decided, and how sure it is (M12.5). */
+export interface DetectResult {
+  /** The profile id, exactly what `detectProfile` answers. */
+  id: string;
+  /** How the answer was reached: a folder of the profile, the content (with the extension), or nothing scored. */
+  by: 'folder' | 'content' | 'fallback';
+  /** The winner's score (0 for `folder` and `fallback`). */
+  score: number;
+  /** The best profile of another grammar, or `null` when no other grammar scored. */
+  rival: string | null;
+  /** `score` minus the rival's score. */
+  familyMargin: number;
+  /**
+   * A decisive (`DECISIVE_WEIGHT`) or certain (`CERTAIN_WEIGHT`) rule of the winner was the
+   * strongest match of at least one line it read. Always `false` for `folder` and `fallback`.
+   */
+  certain: boolean;
+  /**
+   * No profile fits well: the answer came from the content, no certain rule of the winner
+   * matched, at least `UNCERTAIN_MIN_LINES` non-empty lines were read and the family margin
+   * is below `UNCERTAIN_FAMILY_MARGIN`. The status item and the dialect picker say so;
+   * nothing else changes (the guess is still applied).
+   */
+  uncertain: boolean;
+}
+
+/**
+ * `detectProfile` with the confidence of its answer (M12.5, §7.16 #177).
+ *
+ * `id` is `detectProfile`'s answer for every input (one scoring pass serves both, and a
+ * test holds the two together on every fixture). A folder match and a file nothing scored
+ * on are never uncertain: the first is the user's own choice, the second keeps the
+ * document's profile and says nothing about the text.
+ */
+export function detectResult(
+  profiles: CompiledProfile[],
+  path: string | null,
+  text: string,
+  fallback: string,
+  o?: DetectOptions,
+): DetectResult {
+  const none: DetectResult = {
+    id: fallback,
+    by: 'fallback',
+    score: 0,
+    rival: null,
+    familyMargin: 0,
+    certain: false,
+    uncertain: false,
+  };
+  if (profiles.length === 0) return none;
+  const rank = rankWith(o);
+  if (path !== null) {
+    const folderMatch = byFolder(profiles, path, rank);
+    if (folderMatch) return { ...none, id: folderMatch.profile.id, by: 'folder' };
   }
 
-  return bestIndex === -1 ? fallback : profiles[bestIndex].profile.id;
+  const sheet = scoreSheet(profiles, path, text);
+  const index = winnerOf(profiles, sheet.scores, fallback, rank);
+  if (index === -1) return none;
+
+  const grammar = profiles[index].profile.grammar;
+  let rival = -1;
+  profiles.forEach((cp, i) => {
+    if (i === index || cp.profile.grammar === grammar || sheet.scores[i] <= 0) return;
+    if (rival === -1 || sheet.scores[i] > sheet.scores[rival]) rival = i;
+  });
+  const score = sheet.scores[index];
+  const familyMargin = score - (rival === -1 ? 0 : sheet.scores[rival]);
+  const certain = sheet.certain[index];
+  return {
+    id: profiles[index].profile.id,
+    by: 'content',
+    score,
+    rival: rival === -1 ? null : profiles[rival].profile.id,
+    familyMargin,
+    certain,
+    uncertain: !certain && sheet.lines >= UNCERTAIN_MIN_LINES && familyMargin < UNCERTAIN_FAMILY_MARGIN,
+  };
 }
 
 // ---------------------------------------------------------------------------

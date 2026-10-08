@@ -174,7 +174,9 @@ export const convertCase: TransformDef = {
       const patches: Patch[] = [];
       let lengthChanged = false;
       for (const token of tokens) {
-        if (token.kind === 'whitespace' || token.kind === 'string') continue;
+        // M12.5 (§7.16 #179): a `text` token (a Klartext program or cycle name, a path) is
+        // the control's text, which no transform rewrites — kept like a string.
+        if (token.kind === 'whitespace' || token.kind === 'string' || token.kind === 'text') continue;
         if (token.kind === 'comment' && excludeComments) continue;
         // A quote keeps its text only where the token can hold a string. A comment (and a
         // Klartext structure block, which reads as one) is prose: its quotes are marks of

@@ -27,6 +27,21 @@ export default {
   // Status message
   changed: '{name} now uses the {profile} dialect',
 
+  // M12.5, owner decision of 2026-10-08: no profile fits the program well (plan §7.16 #177).
+  // `{name}` is the short name of the guessed dialect (data, untranslated).
+  uncertain: {
+    // The status item: the guess, marked as one.
+    label: '{name}?',
+    tooltip: 'Dialect uncertain: this program fits none of the dialects well. It is read as {name}, the closest guess. Click to choose the dialect, or keep the guess.',
+    // The picker, opened on an uncertain document.
+    placeholder: 'The control that wrote this program is not clear. Read it as…',
+    keep: 'Keep {name} (the guess)',
+    keepDetail: 'Remembered for this file; the warning goes away',
+    // Once, in the status line, when such a file is opened.
+    opened: '{file}: the dialect is uncertain; read as {name} for now. Click the dialect in the status bar to choose.',
+    kept: '{file} keeps the {name} dialect',
+  },
+
   // Dialog filters (Windows and Linux only; macOS gets none, AD-7 / F7)
   filterNc: 'NC programs',
   filterAll: 'All files',

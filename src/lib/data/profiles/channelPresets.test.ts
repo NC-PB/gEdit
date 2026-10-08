@@ -17,11 +17,21 @@ import { cpOf, profileOf } from '../../../../tests/unit/helpers/profiles';
 import { BUILTIN_PROFILE_JSON } from './index';
 
 /** §8.9: profile → its preset ids, in order; every other profile declares none. */
+const SIEMENS = ['sinumerik-2channel', 'sinumerik-2channel-archive', 'sinumerik-2channel-c', 'sinumerik-tagged'];
 const GOLDEN: Record<string, string[]> = {
-  'fanuc-lathe': ['fanuc-2path', 'fanuc-2path-digits', 'fanuc-3path-digits', 'fanuc-3path-bitmask'],
+  'fanuc-lathe': [
+    'fanuc-2path',
+    'fanuc-2path-digits',
+    'fanuc-3path-digits',
+    'fanuc-3path-bitmask',
+    // M12.5 (decision 3, §8.9): builders' variants seen in practice and the two-head guide.
+    'fanuc-2path-nop',
+    'fanuc-3path-digits-nop12',
+    'fanuc-2head-m100',
+  ],
   'okuma-osp': ['okuma-2turret'],
-  sinumerik: ['sinumerik-2channel'],
-  'sinumerik-mill': ['sinumerik-2channel'], // inherited through `extends`
+  sinumerik: SIEMENS,
+  'sinumerik-mill': SIEMENS, // inherited through `extends`
 };
 
 const ids = BUILTIN_PROFILE_JSON.map((p) => (p as { id: string }).id);
@@ -123,7 +133,9 @@ describe('channel presets (§8.9)', () => {
     for (const id of GOLDEN['fanuc-lathe']) {
       expect(preset('fanuc-lathe', id).syncMarks.map((r) => r.samePartners), id).toEqual([true]);
     }
-    expect(preset('sinumerik', 'sinumerik-2channel').syncMarks.map((r) => r.samePartners ?? false)).toEqual([false, false, false]);
+    for (const id of SIEMENS) {
+      expect(preset('sinumerik', id).syncMarks.map((r) => r.samePartners ?? false), id).toEqual([false, false, false]);
+    }
   });
 
   it('M12 review fix NC-02: SETM answers, CLEARM does not, both non-blocking', () => {
@@ -191,6 +203,105 @@ describe('channel presets (§8.9)', () => {
       ['waitm', '1', ['1', '2'], true],
       ['setm', '5', ['1', '2'], false],
       ['waitm', '7', ['2'], true],
+    ]);
+  });
+
+  // --- M12.5 (decision 3; §8.9 corrected and extended; §7.16 #183) -------------------------
+
+  it('M12.5: every M900-M999 preset says it is one builder’s range and where the machine’s range is set', () => {
+    const fanuc = profileOf('fanuc-lathe').machineParams?.channels?.presets ?? [];
+    const ranged = fanuc.filter((p) => p.value.syncMarks.some((r) => r.match.kind === 'codes' && /M900-M999/.test(r.match.codes)));
+    expect(ranged.map((p) => p.id)).toEqual(['fanuc-2path', 'fanuc-2path-digits', 'fanuc-3path-digits', 'fanuc-3path-bitmask', 'fanuc-2path-nop']);
+    for (const p of ranged) expect(p.label, p.id).toMatch(/M900-M999[^(]*\(one builder's range; your machine's range is parameters 8110\/8111\)/);
+    // The builder variant M190-M199 says the same of its range.
+    expect(fanuc.find((p) => p.id === 'fanuc-3path-digits-nop12')?.label).toMatch(/M190-M199 \(one builder's range/);
+  });
+
+  it('M12.5: fanuc-2path-nop — no file-name rule, waits without P are paths 1 and 2, a P names path numbers', () => {
+    const p = preset('fanuc-lathe', 'fanuc-2path-nop');
+    expect(p.layout).toBe('multi-file');
+    expect(p.fileName).toBeUndefined();
+    expect(siblingNames('O1000', p, '1')).toBeNull();
+    const marks = findMarks(['M999', 'N80 M990', 'M993 P12', 'M30'], cpOf('fanuc-lathe'), p, { channelOf: () => '1' }).marks;
+    expect(marks.map((m) => [m.mark, m.partners, m.absent ?? false])).toEqual([
+      ['M999', ['1', '2'], true],
+      ['M990', ['1', '2'], true],
+      ['M993', ['1', '2'], false],
+    ]);
+  });
+
+  it('M12.5: fanuc-3path-digits-nop12 — a P-less wait pairs paths 1 and 2 where the shipped three-path preset finds no partner', () => {
+    const p = preset('fanuc-lathe', 'fanuc-3path-digits-nop12');
+    const cp = cpOf('fanuc-lathe');
+    expect(p.list.map((c) => c.id)).toEqual(['1', '2', '3']);
+    const lines = ['M198', 'M191 P123', 'M192 P13', 'M199', 'M920'];
+    expect(findMarks(lines, cp, p, { channelOf: () => '1' }).marks.map((m) => [m.mark, m.partners])).toEqual([
+      ['M198', ['1', '2']],
+      ['M191', ['1', '2', '3']],
+      ['M192', ['1', '3']],
+      ['M199', ['1', '2']],
+    ]);
+    // The reason for the variant: the shipped three-path rule with the same codes reads M198 with no partner (unmatched).
+    const shipped = preset('fanuc-lathe', 'fanuc-3path-digits');
+    const asShipped = { ...shipped, syncMarks: shipped.syncMarks.map((r) => ({ ...r, match: { kind: 'codes' as const, codes: 'M190-M199' } })) };
+    expect(findMarks(['M198'], cp, asShipped, { channelOf: () => '1' }).marks.map((m) => m.partners)).toEqual([[]]);
+    // The file names: `<stem>_<n>.<ext>`; the label warns that a version file is caught the same way.
+    expect(siblingNames('PART_2.ISO', p)?.map((s) => s.name)).toEqual(['PART_1.ISO', 'PART_3.ISO']);
+    expect(siblingNames('SHAFT_2.NC', p)?.map((s) => s.channel.id)).toEqual(['1', '3']);
+    expect(siblingNames('PART.ISO', p)).toBeNull();
+    expect(profileOf('fanuc-lathe').machineParams?.channels?.presets.find((x) => x.id === 'fanuc-3path-digits-nop12')?.label).toMatch(/version file/);
+  });
+
+  it('M12.5: fanuc-2head-m100 — M100 to M197 are waits for both heads, M198 is not one, and the label says why', () => {
+    const p = preset('fanuc-lathe', 'fanuc-2head-m100');
+    expect(p.fileName).toBeUndefined();
+    const marks = findMarks(['M100', 'N20 M150', 'M197', 'M198 P1234', 'M199', 'M99'], cpOf('fanuc-lathe'), p, { channelOf: () => '2' }).marks;
+    expect(marks.map((m) => [m.mark, m.partners])).toEqual([
+      ['M100', ['1', '2']],
+      ['M150', ['1', '2']],
+      ['M197', ['1', '2']],
+    ]);
+    expect(profileOf('fanuc-lathe').machineParams?.channels?.presets.find((x) => x.id === 'fanuc-2head-m100')?.label).toMatch(
+      /M198 calls a program on an external device and is no wait/,
+    );
+  });
+
+  it('M12.5: the three Siemens layouts carry exactly the rules of sinumerik-2channel', () => {
+    const base = preset('sinumerik', 'sinumerik-2channel');
+    for (const id of ['sinumerik-2channel-archive', 'sinumerik-2channel-c', 'sinumerik-tagged']) {
+      const p = preset('sinumerik', id);
+      expect(p.syncMarks, id).toEqual(base.syncMarks);
+      expect(p.list, id).toEqual(base.list);
+      expect(p.stopsAndEndsWait, id).toBe(false);
+    }
+  });
+
+  it('M12.5: sinumerik-2channel-archive — the %_N_<n>_0_MPF sections are the channels, the other archive sections none', () => {
+    const p = preset('sinumerik', 'sinumerik-2channel-archive');
+    const lines = ['%_N_1_0_MPF', 'WAITM(1,1,2)', 'M30', '%_N_1_7_MPF', '$TC_DP3[1,1]=150', '%_N_2_0_MPF', 'WAITM(1,1,2)', 'M30', '%_N_2_7_MPF', '$TC_DP3[1,1]=90'];
+    const found = findSections(lines, compileProfile(profileOf('sinumerik')), p);
+    expect(found.sections.map((s) => [s.channel.id, s.ranges.map((r) => [r.startLine, r.endLine])])).toEqual([
+      ['1', [[1, 4]]],
+      ['2', [[6, 9]]],
+    ]);
+    expect(found.problems).toEqual([]);
+    // A longer name is no section start.
+    expect(findSections(['%_N_1_0_MPFX', 'M30'], compileProfile(profileOf('sinumerik')), p).sections).toEqual([]);
+  });
+
+  it('M12.5: sinumerik-2channel-c — <stem>_C<n>.MPF ties a file to its channel and names its sibling', () => {
+    const p = preset('sinumerik', 'sinumerik-2channel-c');
+    expect(siblingNames('PART_C1.MPF', p)?.map((s) => [s.channel.id, s.name])).toEqual([['2', 'PART_C2.MPF']]);
+    expect(siblingNames('PART_1.MPF', p)).toBeNull();
+  });
+
+  it('M12.5: sinumerik-tagged — <PROG_BEGIN_C<n>> starts a channel, <PROG_END_ ends it, other tags are no channel', () => {
+    const p = preset('sinumerik', 'sinumerik-tagged');
+    const lines = ['<PROG_BEGIN_C1>', 'WAITM(1,1,2)', 'M30', '<PROG_END_C1>', '<PROG_BEGIN_REZ>', 'R1=1', '<PROG_END_REZ>', '<PROG_BEGIN_C2>', 'WAITM(1,1,2)', '<PROG_END_C2>'];
+    const found = findSections(lines, compileProfile(profileOf('sinumerik')), p);
+    expect(found.sections.map((s) => [s.channel.id, s.ranges.map((r) => [r.startLine, r.endLine])])).toEqual([
+      ['1', [[1, 4]]],
+      ['2', [[8, 10]]],
     ]);
   });
 });

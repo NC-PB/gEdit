@@ -1,0 +1,8 @@
+{
+  "profile": "fanuc-gcode",
+  "items": [
+    {"kind":"comment","line":2,"text":"WRITTEN FOR GEDIT - SYNTHETIC: AN ISO MILLING DIALECT WITH A %PM FIRST LINE AND G54 I, NO PROFILE FITS"},
+    {"kind":"tool","line":7,"text":"T1","tool":"1","endLine":16},
+      {"kind":"end","line":15,"text":"M30"}
+  ]
+}

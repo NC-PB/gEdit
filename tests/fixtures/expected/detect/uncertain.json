@@ -1,0 +1,14 @@
+{
+  "note": [
+    "Expected profile detection (plan §5 WP3.1, AD-11), read by src/lib/core/profiles/detect.test.ts.",
+    "M12.5 (WP-RP1): synthetic programs in the shapes of dialects gEdit has no profile for. The value is the",
+    "closest profile detection picks; src/lib/data/profiles/detectRp.test.ts holds that detectResult calls",
+    "every one of them uncertain, and every fixture outside nc/ambiguous/ and this folder certain enough."
+  ],
+  "fixtures": {
+    "nc/uncertain/u01-pm-header.pm": "fanuc-gcode",
+    "nc/uncertain/u02-bracket-params.nc": "fanuc-gcode",
+    "nc/uncertain/u03-dollar-comments.iso": "fanuc-lathe",
+    "nc/uncertain/u04-implied-decimal.ptp": "fanuc-gcode"
+  }
+}

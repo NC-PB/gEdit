@@ -164,20 +164,35 @@ extension, and three short synthetic programs written during the NC review (no h
 | `SHAFT-OP2` | A turning and cross-drilling program in a file **without an extension and without the `$…%` header**, which is how a program copied off the control can arrive: only the content decides the dialect. |
 | `O06-THREAD` | A turning program without an extension and without the header whose only Okuma syntax is its `G71` thread cycle, written as the manual writes it: the end point, infeed angle and cuts on the `G71` line, the thread height and lead on a continuation line `$H2.45 … F2` with no blank after the `$`. Before R1 nothing in it was an Okuma marker and it read as Fanuc lathe, where the lead is a feed. |
 | `detect-okuma.txt` | A complete program in a `.txt` file, with the header and the modal call `MODIN O3000` … `MODOUT`, so only the content decides the dialect. |
+| `o07-no-header.MIN` | (M12.5) A lathe program **without the `$…%` header** whose blocks are mostly modal `N… X… Z…` lines, the way some posts write Okuma code: a numbered line scores on both lathes, so only the markers near the top decide — `G140` (turning mode), a lone `G13` (turret select), `T010101`, `SB=`, `NOEX VTLL[1]=50 VTLD[1]=8` and `G20 HP=1`. The lines the M12.5 detection rules for those markers need. |
 
 ## `nc/ambiguous/`: content that barely decides, or does not decide at all
 
 | File | Contents |
 |---|---|
-| `fanuc-fragment.txt` | Fanuc blocks without `%` or an O number: only weak markers. |
+| `fanuc-fragment.txt` | Fanuc blocks without `%` or an O number: only weak markers. Since M12.5 an Okuma program scores its numbered lines too, so the fragment fits Fanuc and Okuma almost equally: it is read as Fanuc mill and flagged "dialect uncertain". |
 | `heidenhain-fragment.txt` | Numbered Klartext `L`, `CC` and `C` blocks without `BEGIN PGM`. |
 | `comment-only.txt` | Only `( )` comment lines. |
-| `mill-4digit-t.nc` | A milling program whose tool numbers have four digits (`T1001 M6`), so it matches the lathe's turret-word rule and stays a mill on the mill markers (`M6`, `G43 … H`, `G17`, `Y` words). |
+| `mill-4digit-t.nc` | A milling program whose tool numbers have four digits (`T1001 M6`). Until M12.5 they matched the lathe's turret-word rule and the program stayed a mill on the mill markers (`M6`, `G43 … H`, `G17`, `Y` words); since M12.5 the turret-word rule skips a block that writes `M6` or two `T` words. |
 | `empty.txt` | Zero bytes. |
+
+## `nc/uncertain/`: dialects gEdit has no profile for (M12.5)
+
+Short programs in the shapes of ISO dialects gEdit has no profile for, written for gEdit
+from the shape alone. Detection still picks the closest profile, and `detectResult` calls
+each of them uncertain (no certain marker, a family margin below
+`UNCERTAIN_FAMILY_MARGIN`), so the status bar shows the dialect with a question mark.
+
+| File | Contents |
+|---|---|
+| `u01-pm-header.pm` | A milling program with a `%PM` first line, `N9000` and a work offset written `G54 I1`. |
+| `u02-bracket-params.nc` | Comments in square brackets and `P<n>=` parameters used as `ZP2`, `FP3`, `XP1`. |
+| `u03-dollar-comments.iso` | A turning program that starts with `%1` and writes its comments as lines that start with `$` (`$FACING AND TURNING`). |
+| `u04-implied-decimal.ptp` | Signed integers with an implied decimal point (`X+040000`, `F+0200`) and four-digit block numbers. |
 
 ## `nc/owner-public/`: the owner's own programs
 
-Real CAM output, not written for gEdit: the owner published these programs at
+Programs not written for gEdit: the owner published these programs at
 github.com/NC-PB/NC-Code and handed them over for this folder on 2026-09-25. Every file
 below is **published by the owner at github.com/NC-PB/NC-Code, cleared for public use on
 2026-09-25**, and is committed byte for byte as it is published there (LF endings, ASCII).

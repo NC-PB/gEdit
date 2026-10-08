@@ -390,6 +390,62 @@ export interface Profile {
      * Absent: the general rules only. Read by `transforms/removeSpaces.ts`; no tokenizer reads it.
      */
     removeSpaces?: 'refuse' | 'keepAroundLongAddresses';
+    /**
+     * M12.5 (§7.16 #179; WP-RP2, both tokenizers on shared goldens). Text the control keeps
+     * and shows but does not execute. Each pattern is tried at the start of a block (behind
+     * the block number) and must have the named group `text`; that group becomes **one**
+     * `text` token (§7.5) and tokenizing goes on behind it. Klartext: the cycle name behind
+     * `CYCL DEF <n>` up to `~`, `;` or the end (`CYCL DEF 207 TAP.-RIGID NEW`), the program
+     * name between `BEGIN PGM`/`END PGM` and `MM`/`INCH` (`BEGIN PGM 7-AXLE PART MM`), the
+     * `FN 16: F-PRINT` and `CALL PGM` paths. No transform rewrites a `text` token, no check
+     * reads a word inside it, and hover says nothing about it.
+     */
+    freeText?: Pattern[];
+    /**
+     * M12.5 (§7.16 #179). Multi-letter addresses whose value stands behind a colon: Klartext
+     * `VCONST:ON`, `VC:120` (`FUNCTION TURNDATA SPIN`), `HSC-MODE:1` (cycle 32). One `word`
+     * with `address` = the name as listed and `valueText` = what follows the colon (a number
+     * or a plain upper-case word such as `ON`).
+     */
+    colonWords?: string[];
+    /**
+     * M12.5 (§7.16 #179). A program name written behind a call keyword: Okuma `CALL OABCD`,
+     * `MODIN O1234` (the outline rule already accepts `O[A-Z0-9]{1,4}`). `after` are the
+     * keywords, `pattern` the name; the match is one `programMarker` token, as a Fanuc
+     * `<NAME>` behind `M98` is.
+     */
+    callTargets?: { after: string[]; pattern: Pattern };
+    /**
+     * M12.5 (§7.16 #179). Keywords behind which a name is a jump **target**: Sinumerik
+     * `GOTO`, `GOTOF`, `GOTOB`, `GOTOC`. That name is a `label` token (as a label behind a
+     * jump already is for the program checks' `defines_label`), not `unknown`. A string or
+     * an expression behind the keyword (`GOTOF "STEP_"<<N`) keeps its own tokens.
+     */
+    labelAfter?: string[];
+    /**
+     * M12.5 (§7.16 #179). Declaration keywords: Sinumerik `DEF`. On a line that starts with
+     * one (behind the block number), the names it declares (behind the type keyword, split
+     * on `,`, an `=` initializer and a `[…]` size excepted) are `variable` tokens. The use of
+     * such a name on a later line stays one `unknown` token — the tokenizer reads one line at
+     * a time; G11 counts a name declared in the same file as known (WP-RP8).
+     */
+    declareAfter?: string[];
+    /**
+     * M12.5 (§7.16 #179). A run of this many or more letters with no
+     * digit between them, outside comments and strings, that is no keyword, function or name
+     * of the profile, is **one** `unknown` token instead of a row of one-letter words: free
+     * text written outside a comment (`M797 SPINDLE ONE DONE`) no longer reads as `S`, `P`,
+     * `I`, … words. Fanuc mill and lathe: 3. Absent: off.
+     */
+    plainTextRun?: number;
+    /**
+     * M12.5 (§7.16 #179). `false`: a lone `%` is **not** a tape marker in
+     * this dialect (Klartext has no tape; a `%` in a Q-parameter comment is text), so neither
+     * tokenizer reads it as a `programMarker` and the program checks' tape rules stay off.
+     * Absent or `true`: today's reading (a `%` that is no comment start or skip code is the
+     * tape marker).
+     */
+    tapeMarker?: boolean;
   };
   addresses: {
     tool?: string;

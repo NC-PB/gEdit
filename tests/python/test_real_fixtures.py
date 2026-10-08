@@ -252,8 +252,10 @@ class TestOnASyntheticManifest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, str(self.dir), True)
         shutil.copyfile(str(helpers.FIXTURES_DIR / "nc" / "fanuc" / "f01-mill-3tools.nc"), str(self.dir / "mill.nc"))
         (self.dir / "unknown.nc").write_bytes(b"%\r\nO1000 (WRITTEN FOR GEDIT)\r\nG0 X0 Y0\r\n?\r\nM30\r\n%\r\n")
+        # The first line has no unit, so the name is no program name (`syntax.freeText`, M12.5)
+        # and stays the one unknown token the manifest has to allow.
         (self.dir / "klartext.h").write_bytes(
-            "0 BEGIN PGM 2.5D_PART MM\n1 L Z+100 R0 FMAX\n2 END PGM 2.5D_PART MM\n".encode("utf-8")
+            "0 BEGIN PGM 2.5D_PART\n1 L Z+100 R0 FMAX\n2 END PGM 2.5D_PART MM\n".encode("utf-8")
         )
         self.programs = [
             {"file": "mill.nc", "profile": "fanuc-gcode"},

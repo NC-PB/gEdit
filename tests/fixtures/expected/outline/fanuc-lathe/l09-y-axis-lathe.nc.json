@@ -4,8 +4,8 @@
     {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
     {"kind":"comment","line":2,"text":"Y-AXIS LATHE: FIVE-DIGIT T WORDS, LIVE-TOOL MILLING IN G17, G30 RETURNS BY U V W"},
     {"kind":"program","line":4,"text":"O3009","endLine":51},
-    {"kind":"tool","line":8,"text":"T10 — OD TURN","tool":"010","endLine":16},
-    {"kind":"tool","line":17,"text":"T50 — D10 END MILL - LIVE TOOL","tool":"050","endLine":51},
+    {"kind":"tool","line":8,"text":"T1 — OD TURN","tool":"01","endLine":16},
+    {"kind":"tool","line":17,"text":"T5 — D10 END MILL - LIVE TOOL","tool":"05","endLine":51},
       {"kind":"end","line":49,"text":"M30"}
   ]
 }

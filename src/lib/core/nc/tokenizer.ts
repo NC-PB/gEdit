@@ -68,6 +68,36 @@
 // function and print names, the Klartext PLANE words, the short Sinumerik header) are
 // `syntax.keywords` and `syntax.header` and live in the profiles.
 //
+// M12.5 (§7.16 #179, WP-RP2) adds seven more, opt-in like the rest, for names and free text
+// that came out as `unknown` or misread:
+//
+//   syntax.freeText                patterns tried once per line where the block starts
+//                                  (behind the block number and the skip marks); the named
+//                                  group `text` is one `text` token, and the line is read
+//                                  in front of it and behind it as usual. Klartext: the
+//                                  cycle name behind `CYCL DEF 207` (`TAP.-RIGID NEW`), the
+//                                  program name of `BEGIN PGM`/`END PGM`, the `FN 16` and
+//                                  `CALL PGM` paths
+//   syntax.colonWords              `VCONST:ON`, `VC:120`, `HSC-MODE:1`: one `word`, the name
+//                                  as listed for `address`, what follows the colon for
+//                                  `valueText` (a number, or letters such as `ON`)
+//   syntax.callTargets             a program name behind a call keyword (Okuma `CALL OABCD`):
+//                                  one `programMarker` with neither address nor value
+//   syntax.labelAfter              the name behind a jump keyword (Sinumerik `GOTOF SKIPSIM`)
+//                                  is a `label`; a block number (`GOTOF N100`), a string or
+//                                  an expression behind it keeps its own tokens
+//   syntax.declareAfter            on a block that starts with the keyword (Sinumerik `DEF`),
+//                                  each name declared behind a type keyword or a `,` is a
+//                                  `variable`
+//   syntax.plainTextRun            where words are packed: a run of at least this many
+//                                  letters, and the letter groups and blanks that follow it
+//                                  up to the next word with a value or keyword, is one
+//                                  `unknown` token (`M797 SPINDLE ONE DONE`)
+//   syntax.tapeMarker              `false`: a lone `%` is no tape marker (Klartext)
+//
+// and one rule without a field: a sequence name that is exactly a keyword (Okuma `NOEX`,
+// `NOT`) is the keyword.
+//
 // Token shapes that the contract in `types.ts` leaves open, decided here:
 //
 //   - A value without an address (`GOTO 100`'s target, `LBL 1`'s number, `BLK FORM 0.1`'s
@@ -267,6 +297,127 @@ interface LexSpec {
    * program-name lead are already computed in this function.
    */
   maskLeadPattern: RegExp | null;
+  /**
+   * M12.5 `syntax.freeText`, sticky and with indices, so the `text` group's span is known.
+   * `leads` are the upper-case first characters the pattern can start with, when its source
+   * says (`CYCL…`, `(?:BEGIN|END)…`), so a line that starts otherwise is not asked; null: always asked.
+   */
+  freeText: FreeTextRule[];
+  /** M12.5 `syntax.colonWords`, as written in the profile (upper case unless case sensitive), longest first. */
+  colonWords: string[];
+  /** The first characters of the colon words, both cases unless case sensitive, so most words are not asked. */
+  colonLeads: ReadonlySet<number>;
+  /** M12.5 `syntax.callTargets`: the canonical keywords and the sticky name pattern. */
+  callTargets: { after: ReadonlySet<string>; pattern: RegExp } | null;
+  /** M12.5 `syntax.labelAfter`, as canonical keywords (upper case, one space between parts). */
+  labelAfter: ReadonlySet<string>;
+  /** M12.5 `syntax.declareAfter`, as canonical keywords. */
+  declareAfter: ReadonlySet<string>;
+  /** M12.5 `syntax.plainTextRun`; 0 when the profile does not set it. */
+  plainTextRun: number;
+}
+
+/**
+ * One compiled `syntax.freeText` pattern. `re` is sticky without indices; `indexed` is the
+ * same pattern with them, asked only where the source cannot say where the group starts —
+ * a match with indices costs about three times one without, and the patterns are tried
+ * on every block. Where the `text` group ends the match (only lookarounds behind it),
+ * the group's start is the match's end less its length.
+ */
+interface FreeTextRule {
+  re: RegExp;
+  indexed: RegExp | null;
+  leads: ReadonlySet<number> | null;
+}
+
+/** The index of the `)` that closes the group opened at `open`, or -1. */
+function groupCloseAt(source: string, open: number): number {
+  let depth = 0;
+  let inClass = false;
+  for (let i = open; i < source.length; i++) {
+    const c = source[i];
+    if (c === '\\') i++;
+    else if (inClass) inClass = c !== ']';
+    else if (c === '[') inClass = true;
+    else if (c === '(') depth++;
+    else if (c === ')' && --depth === 0) return i;
+  }
+  return -1;
+}
+
+/** True when nothing but lookarounds and `$` follows the `text` group of `source`. */
+function textEndsMatch(source: string): boolean {
+  const open = source.indexOf('(?<text>');
+  const close = open < 0 ? -1 : groupCloseAt(source, open);
+  if (close < 0) return false;
+  let rest = source.slice(close + 1);
+  while (rest.startsWith('(?=') || rest.startsWith('(?!')) {
+    const end = groupCloseAt(rest, 0);
+    if (end < 0) return false;
+    rest = rest.slice(end + 1);
+  }
+  return rest === '' || rest === '$';
+}
+
+/** A keyword list from the profile as the keyword tokens report it: upper case, one blank between the parts. */
+function canonicalKeywords(list: unknown): Set<string> {
+  const out = new Set<string>();
+  if (!Array.isArray(list)) return out;
+  for (const entry of list) {
+    if (typeof entry !== 'string') continue;
+    const parts = entry.split(/\s+/).filter((part) => part !== '');
+    if (parts.length > 0) out.add(parts.join(' ').toUpperCase());
+  }
+  return out;
+}
+
+/**
+ * The letters a pattern can start with, upper case, when its source starts with a letter
+ * (`CYCL\\s+DEF…`) or with a group of alternatives that each start with one
+ * (`(?:BEGIN|END)\\s+PGM…`); null when the source says nothing so simple. Only a shortcut:
+ * a pattern with leads is still asked wherever one of them stands.
+ */
+function leadLetters(source: string, caseSensitive: boolean): ReadonlySet<number> | null {
+  const add = (out: Set<number>, ch: string): void => {
+    out.add(ch.charCodeAt(0));
+    if (!caseSensitive) {
+      out.add(ch.toUpperCase().charCodeAt(0));
+      out.add(ch.toLowerCase().charCodeAt(0));
+    }
+  };
+  if (hasTopLevelAlternative(source)) return null;
+  const first = source.match(/^([A-Za-z])(?![*?{]|\+\?)/);
+  if (first) {
+    const out = new Set<number>();
+    add(out, first[1]);
+    return out;
+  }
+  const group = source.match(/^\(\?:((?:[A-Za-z][A-Za-z0-9]*\|)*[A-Za-z][A-Za-z0-9]*)\)(?![*?{])/);
+  if (!group) return null;
+  const out = new Set<number>();
+  for (const alternative of group[1].split('|')) add(out, alternative[0]);
+  return out;
+}
+
+/** True when `source` has a `|` outside every group and class: then it may start with anything. */
+function hasTopLevelAlternative(source: string): boolean {
+  let depth = 0;
+  let inClass = false;
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i];
+    if (c === '\\') i++;
+    else if (inClass) inClass = c !== ']';
+    else if (c === '[') inClass = true;
+    else if (c === '(') depth++;
+    else if (c === ')') depth--;
+    else if (c === '|' && depth === 0) return true;
+  }
+  return false;
+}
+
+/** Compiles one M12.5 pattern for the scanner: sticky, with the profile's case flag (and indices for `freeText`). */
+function stickyPattern(source: unknown, flags: string): RegExp | null {
+  return typeof source === 'string' && source !== '' ? new RegExp(source, flags) : null;
 }
 
 const SPECS = new WeakMap<CompiledProfile, LexSpec>();
@@ -333,6 +484,27 @@ function buildSpec(cp: CompiledProfile): LexSpec {
 
   const maskLeadPattern = buildMaskLeadPattern(comments, syntax.strings === true, programNameSource, programNameLead);
 
+  // M12.5 (§7.16 #179). Compiled here, once per compiled profile, like `programNames`;
+  // `compile.ts` compiles them as well, so a bad pattern is a `ProfileError` with its path.
+  const freeText = (Array.isArray(syntax.freeText) ? syntax.freeText : []).flatMap((source): FreeTextRule[] => {
+    const re = stickyPattern(source, `${cp.flags}y`);
+    if (re === null) return [];
+    const text = source as string;
+    return [{ re, indexed: textEndsMatch(text) ? null : new RegExp(text, `${cp.flags}dy`), leads: leadLetters(text, caseSensitive) }];
+  });
+  const colonWords = (Array.isArray(syntax.colonWords) ? syntax.colonWords : [])
+    .filter((name): name is string => typeof name === 'string' && name !== '')
+    .map((name) => (caseSensitive ? name : name.toUpperCase()))
+    .sort((a, b) => b.length - a.length);
+  const colonLeads = new Set<number>();
+  for (const name of colonWords) {
+    colonLeads.add(name.charCodeAt(0));
+    if (!caseSensitive) colonLeads.add(name.toLowerCase().charCodeAt(0));
+  }
+  const callPattern = stickyPattern(syntax.callTargets?.pattern, `${cp.flags}y`);
+  const callAfter = canonicalKeywords(syntax.callTargets?.after);
+  const plainTextRun = syntax.plainTextRun;
+
   return {
     packed: syntax.wordSeparatorRequired !== true,
     caseSensitive,
@@ -352,7 +524,8 @@ function buildSpec(cp: CompiledProfile): LexSpec {
     decimalPoint: (syntax.decimalSeparator ?? '.').charCodeAt(0),
     decimalPointAlt: typeof syntax.decimalSeparatorAlt === 'string' && syntax.decimalSeparatorAlt.length === 1 ? syntax.decimalSeparatorAlt.charCodeAt(0) : NO_CHAR,
     operators,
-    tapeMarker: !commentLeads.has(PERCENT) && !skipCodes.has(PERCENT),
+    // M12.5: `syntax.tapeMarker: false` says the dialect has no tape (Klartext).
+    tapeMarker: syntax.tapeMarker !== false && !commentLeads.has(PERCENT) && !skipCodes.has(PERCENT),
     // A main block number with the prefix `:` (Sinumerik) is read before the program marker
     // is asked, and `:1234` is that block number there, not the punched-tape marker.
     colonProgram: syntax.blockNumber?.mode !== 'leading-integer' && !commentLeads.has(COLON) && mainStart !== ':',
@@ -376,6 +549,13 @@ function buildSpec(cp: CompiledProfile): LexSpec {
     programNames,
     programNameLead,
     maskLeadPattern,
+    freeText,
+    colonWords,
+    colonLeads,
+    callTargets: callPattern !== null && callAfter.size > 0 ? { after: callAfter, pattern: callPattern } : null,
+    labelAfter: canonicalKeywords(syntax.labelAfter),
+    declareAfter: canonicalKeywords(syntax.declareAfter),
+    plainTextRun: typeof plainTextRun === 'number' && Number.isInteger(plainTextRun) && plainTextRun >= 2 ? plainTextRun : 0,
   };
 }
 
@@ -520,6 +700,78 @@ function nameEndAt(line: string, p: number, limit: number, spec: LexSpec): numbe
   const match = spec.names.exec(line);
   if (!match || match.index !== p || match[0].length === 0) return p;
   return Math.min(p + match[0].length, limit);
+}
+
+/** True for a character that continues an identifier: a letter, a digit or `_`. */
+function isIdentifierPart(code: number): boolean {
+  return isLetter(code) || isDigit(code) || code === UNDERSCORE;
+}
+
+/** End of the run of letters at `p` (`p` when there is none). */
+function lettersEndAt(line: string, p: number, limit: number): number {
+  let i = p;
+  while (i < limit && isLetter(line.charCodeAt(i))) i++;
+  return i;
+}
+
+/**
+ * The colon word at `p` (`syntax.colonWords`, M12.5): a listed name, a `:` and a value —
+ * a number, or letters (`VCONST:ON`) — that ends at a blank, a comment or the end of the
+ * block. Null where none starts, or where `p` stands inside an identifier.
+ */
+function colonWordAt(
+  line: string,
+  p: number,
+  limit: number,
+  spec: LexSpec,
+): { name: string; end: number; value: ValueRead | null; valueStart: number } | null {
+  if (p > 0 && isIdentifierPart(line.charCodeAt(p - 1))) return null;
+  for (const name of spec.colonWords) {
+    const colon = p + name.length;
+    if (colon >= limit || line.charCodeAt(colon) !== COLON || !matchLiteral(line, p, name, spec.caseSensitive)) continue;
+    const valueStart = colon + 1;
+    const value = readValue(line, valueStart, limit, spec, false);
+    const end = value ? value.end : lettersEndAt(line, valueStart, limit);
+    if (end === valueStart) continue;
+    if (end < limit && !isSpace(line.charCodeAt(end)) && !(spec.comments.length > 0 && commentAt(line, end, spec))) continue;
+    return { name, end, value, valueStart };
+  }
+  return null;
+}
+
+/** True when the character at `q` starts the value of a word: `X10.`, `X.5`, `X-1`, `X#1`, `X[#1]`. */
+function startsValue(code: number, spec: LexSpec): boolean {
+  return (
+    isDigit(code) ||
+    code === spec.decimalPoint ||
+    code === PLUS ||
+    code === MINUS ||
+    code === BRACKET_OPEN ||
+    (spec.variableLead !== NO_CHAR && code === spec.variableLead)
+  );
+}
+
+/**
+ * End of the plain-text run at `p` (`syntax.plainTextRun`, M12.5), or `p` when none starts.
+ *
+ * A run is at least `plainTextRun` letters in a row. It goes on over blanks and further
+ * groups of letters, and stops in front of a group that is a keyword or that has a value
+ * behind it (`X10.`, `S 500`): free text written outside a comment
+ * (`M797 SPINDLE ONE DONE`) is one token up to the next real word, never a row of
+ * one-letter words a check would count and a script would scale.
+ */
+function plainTextEndAt(line: string, p: number, limit: number, spec: LexSpec): number {
+  let end = lettersEndAt(line, p, limit);
+  if (end - p < spec.plainTextRun) return p;
+  for (;;) {
+    const q = skipSpace(line, end, limit);
+    if (q >= limit || q === end || !isLetter(line.charCodeAt(q))) return end;
+    if (matchKeyword(line, q, limit, spec)) return end;
+    const groupEnd = lettersEndAt(line, q, limit);
+    const r = skipSpace(line, groupEnd, limit);
+    if (r < limit && startsValue(line.charCodeAt(r), spec)) return end;
+    end = groupEnd;
+  }
 }
 
 /**
@@ -787,6 +1039,9 @@ function scanSequenceName(line: string, p: number, limit: number, spec: LexSpec)
       i++;
     }
     if (i < limit && !isSpace(line.charCodeAt(i))) continue;
+    // M12.5: a command of the dialect that has the shape of a name (Okuma `NOEX`, which
+    // opens a variable-setting sequence, OSP-P200L user task section) is that command.
+    if (matchKeyword(line, p, limit, spec)?.end === i) continue;
     return { start: p, end: i, nameStart };
   }
   return null;
@@ -1126,7 +1381,26 @@ export function tokenizeLine(line: string, cp: CompiledProfile, prev?: LineState
     p = end;
   }
 
-  while (p < limit) {
+  // M12.5 `syntax.freeText`: tried once, where the block starts. The line is read up to the
+  // `text` group with the group's start as its limit, so no token can run into the text;
+  // the group is one `text` token, and the rest of the line is read as usual behind it.
+  const fullLimit = limit;
+  let text: { start: number; end: number } | null = null;
+  if (spec.freeText.length > 0 && p < limit) text = freeTextAt(line, p, limit, spec);
+  if (text !== null) limit = text.start;
+
+  // `DEF INT COUNTER` (M12.5 `syntax.declareAfter`): set by the keyword that opens the block.
+  let declaring = false;
+
+  // Every rule below is bounded by `limit`, so `p` reaches the text's start exactly.
+  while (p < limit || (text !== null && p === text.start)) {
+    if (text !== null && p === text.start) {
+      push(tokens, 'text', line, text.start, text.end);
+      p = text.end;
+      limit = fullLimit;
+      text = null;
+      continue;
+    }
     const code = line.charCodeAt(p);
     if (isSpace(code)) {
       p = pushSpace(tokens, line, p, limit);
@@ -1162,12 +1436,27 @@ export function tokenizeLine(line: string, cp: CompiledProfile, prev?: LineState
       continue;
     }
 
+    // M12.5 `syntax.colonWords`: `VCONST:ON`, `VC:120`, `HSC-MODE:1` are one word each.
+    if (spec.colonLeads.has(code)) {
+      const colonWord = colonWordAt(line, p, limit, spec);
+      if (colonWord) {
+        const token = push(tokens, 'word', line, p, colonWord.end);
+        token.address = colonWord.name;
+        token.valueText = line.slice(colonWord.valueStart, colonWord.end);
+        if (colonWord.value) token.value = colonWord.value.value;
+        p = colonWord.end;
+        continue;
+      }
+    }
+
     // Where the profile declares names, a keyword is only one when the name that starts
     // here is no longer than it: `LOOP_A` and `GOTO100` are names, `LOOP` and `GOTOF`
     // keywords, `IF[` still a conditional.
     const matched = matchKeyword(line, p, limit, spec);
     const keyword = matched && (spec.names === null || nameEndAt(line, p, limit, spec) <= matched.end) ? matched : null;
     if (keyword) {
+      // `DEF` declares only where it opens the block (behind its number, skip marks or label).
+      const declares = spec.declareAfter.has(keyword.entry.canonical) && tokens.every((token) => BLOCK_HEAD_KINDS.has(token.kind));
       let end = keyword.end;
       let value: ValueRead | null = null;
       if (spec.packed) {
@@ -1188,7 +1477,23 @@ export function tokenizeLine(line: string, cp: CompiledProfile, prev?: LineState
         token.value = value.value;
       }
       p = end;
+      if (declares) declaring = true;
+      if (!value) p = targetBehindKeyword(tokens, line, p, limit, spec, keyword.entry.canonical);
       continue;
+    }
+
+    // M12.5 `syntax.declareAfter`: on a `DEF` block, the name behind a type keyword (behind
+    // its `[…]` size, if any) or behind a `,` is declared here, and is a `variable`. A `,`
+    // is a separator on such a block, never the `,R` of a packed address.
+    if (declaring) {
+      if (code === COMMA) {
+        p = push(tokens, 'operator', line, p, p + 1).end;
+        continue;
+      }
+      if (isIdentifierStart(code) && declaresNameHere(tokens, spec)) {
+        p = push(tokens, 'variable', line, p, identifierEndAt(line, p, limit)).end;
+        continue;
+      }
     }
 
     // An identifier written in front of `(` is one token, together with everything up to
@@ -1356,6 +1661,15 @@ export function tokenizeLine(line: string, cp: CompiledProfile, prev?: LineState
     }
 
     if (spec.packed) {
+      // M12.5 `syntax.plainTextRun`: free text outside a comment is one unknown token.
+      if (spec.plainTextRun > 0 && isLetter(code)) {
+        const end = plainTextEndAt(line, p, limit, spec);
+        if (end > p) {
+          pushUnknown(tokens, line, p, end);
+          p = end;
+          continue;
+        }
+      }
       // One letter is the address; `,R` and `,C` take the comma with them.
       let addressEnd = NO_CHAR;
       if (isLetter(code)) addressEnd = p + 1;
@@ -1480,6 +1794,102 @@ function nameAloneInBlock(tokens: NcToken[], line: string, end: number, limit: n
   for (const token of tokens) if (!BLOCK_HEAD_KINDS.has(token.kind)) return false;
   const q = skipSpace(line, end, limit);
   return q >= limit || (spec.comments.length > 0 && commentAt(line, q, spec) !== null);
+}
+
+/**
+ * The span of the `text` group of the first `syntax.freeText` pattern that matches at `p`
+ * (M12.5), or null. A group that is empty, or that runs past `limit` (into a Klartext `~`),
+ * is no text.
+ */
+function freeTextAt(line: string, p: number, limit: number, spec: LexSpec): { start: number; end: number } | null {
+  const lead = line.charCodeAt(p);
+  for (const { re, indexed, leads } of spec.freeText) {
+    if (leads !== null && !leads.has(lead)) continue;
+    re.lastIndex = p;
+    const match = re.exec(line);
+    const text = match?.groups?.text;
+    if (!match || match.index !== p || text === undefined || text === '') continue;
+    let start = match.index + match[0].length - text.length;
+    let end = match.index + match[0].length;
+    if (indexed !== null) {
+      indexed.lastIndex = p;
+      const at = indexed.exec(line)?.indices?.groups?.text;
+      if (!at) continue;
+      [start, end] = at;
+    }
+    if (end > start && start >= p && end <= limit) return { start, end };
+  }
+  return null;
+}
+
+/**
+ * What stands behind a keyword that names a target (M12.5): a program name behind a
+ * `syntax.callTargets` keyword (`CALL OABCD`) is a `programMarker`, a name behind a
+ * `syntax.labelAfter` keyword (`GOTOF SKIPSIM`) a `label`. Pushes the blanks and the token
+ * and returns the position behind it, or returns `p` and pushes nothing.
+ *
+ * A jump to a block number (`GOTOF N100`) keeps its `N` word, which a renumber rewrites; a
+ * keyword, a call (`NAME(`), an assignment and an indexed name are no target either.
+ */
+function targetBehindKeyword(tokens: NcToken[], line: string, p: number, limit: number, spec: LexSpec, keyword: string): number {
+  const calls = spec.callTargets !== null && spec.callTargets.after.has(keyword);
+  const jumps = spec.labelAfter.has(keyword);
+  if (!calls && !jumps) return p;
+  const q = skipSpace(line, p, limit);
+  if (q >= limit) return p;
+
+  if (calls && spec.callTargets) {
+    const re = spec.callTargets.pattern;
+    re.lastIndex = q;
+    const match = re.exec(line);
+    const end = match && match.index === q ? q + match[0].length : q;
+    if (end > q && end <= limit && (end === limit || !isIdentifierPart(line.charCodeAt(end)))) {
+      pushSpace(tokens, line, p, limit);
+      push(tokens, 'programMarker', line, q, end);
+      return end;
+    }
+  }
+
+  if (jumps && isIdentifierStart(line.charCodeAt(q))) {
+    const end = identifierEndAt(line, q, limit);
+    const behind = skipSpace(line, end, limit);
+    const next = behind < limit ? line.charCodeAt(behind) : NO_CHAR;
+    if (next === PAREN_OPEN || next === EQUALS || next === BRACKET_OPEN) return p;
+    if (matchKeyword(line, q, limit, spec)?.end === end) return p;
+    const block = scanBlockNumber(line, q, limit, spec);
+    if (block !== null && block.end === end) return p;
+    // `GOTOF R10`: a variable (`syntax.variables`) is a computed target, not a label.
+    if (spec.variables) {
+      spec.variables.lastIndex = q;
+      const variable = spec.variables.exec(line);
+      if (variable && variable.index === q && q + variable[0].length === end) return p;
+    }
+    pushSpace(tokens, line, p, limit);
+    const token = push(tokens, 'label', line, q, end);
+    token.address = spec.caseSensitive ? token.text : token.text.toUpperCase();
+    return end;
+  }
+  return p;
+}
+
+/**
+ * True when an identifier at this point of a `syntax.declareAfter` block is a name it
+ * declares: the last token is a type keyword (any keyword but the declaring one), the size
+ * of one (`STRING[32]`), or a `,`.
+ */
+function declaresNameHere(tokens: NcToken[], spec: LexSpec): boolean {
+  let i = tokens.length - 1;
+  while (i >= 0 && tokens[i].kind === 'whitespace') i--;
+  if (i < 0) return false;
+  let last = tokens[i];
+  if (last.kind === 'operator') return last.text === ',';
+  if (last.kind === 'expression') {
+    i--;
+    while (i >= 0 && tokens[i].kind === 'whitespace') i--;
+    if (i < 0) return false;
+    last = tokens[i];
+  }
+  return last.kind === 'keyword' && last.address !== undefined && !spec.declareAfter.has(last.address);
 }
 
 /**

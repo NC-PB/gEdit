@@ -22,7 +22,8 @@ import { readable } from 'svelte/store';
 import { BUILTIN_CODE_DB_JSON } from '$lib/data/codes';
 import { BUILTIN_PROFILE_SOURCES, FALLBACK_PROFILE_ID } from '$lib/data/profiles';
 import { compileProfile } from '$lib/core/profiles/compile';
-import { detectProfile, detectVariants as detectVariantsIn } from '$lib/core/profiles/detect';
+import { detectProfile, detectResult as detectResultIn, detectVariants as detectVariantsIn } from '$lib/core/profiles/detect';
+import type { DetectResult } from '$lib/core/profiles/detect';
 import { resolveProfiles } from '$lib/core/profiles/resolve';
 import { validateProfile } from '$lib/core/profiles/validate';
 import { modalGroupsOf } from '$lib/core/codes/resolve';
@@ -222,6 +223,17 @@ export function createProfileRegistry(deps: ProfileRegistryDeps): ProfileRegistr
      */
     detect(path: string | null, text: string, fallback: string): string {
       return detectProfile(compiledList, path, text, byId.has(fallback) ? fallback : defaultId(), {
+        origin: (cp) => originOf.get(cp) ?? 'builtin',
+      });
+    },
+
+    /**
+     * M12.5: `detect` with how sure the answer is (`core/profiles/detect.ts`, `DetectResult`).
+     * `id` is always what `detect` answers for the same arguments; `uncertain` drives the
+     * "dialect uncertain" status and the picker's "keep the guess" (plan §7.16 #177).
+     */
+    detectResult(path: string | null, text: string, fallback: string): DetectResult {
+      return detectResultIn(compiledList, path, text, byId.has(fallback) ? fallback : defaultId(), {
         origin: (cp) => originOf.get(cp) ?? 'builtin',
       });
     },

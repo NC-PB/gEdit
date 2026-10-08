@@ -168,11 +168,12 @@ const SettingsDialog = (await import('$lib/components/dialogs/SettingsDialog.sve
 const { docs } = await import('$lib/stores/documents');
 const { hasKey, t } = await import('$lib/i18n');
 
-function addDoc(path: string | null, profileId = 'fanuc-lathe'): DocId {
+function addDoc(path: string | null, profileId = 'fanuc-lathe', uncertain = false): DocId {
   const meta: NewDocMeta = {
     path,
     untitledIndex: path === null ? 1 : null,
     profileId,
+    ...(uncertain ? { dialectUncertain: true } : {}),
     encoding: { encoding: 'utf-8', hasBom: false },
     eol: 'lf',
     eolMixedOnLoad: false,
@@ -341,6 +342,15 @@ describe('picking a machine', () => {
     expect(fake.shown.at(-1)?.text).toContain('Lathe 2');
     // The second pick only offered the machines that do not fit this document.
     expect(fake.picks[1].map((entry) => (entry as QuickPickItem<string>).value)).toEqual(['lathe-2']);
+  });
+
+  it('clears the question mark of an uncertain dialect when a machine of another dialect is picked (M12.5)', async () => {
+    fake.setList([LATHE_2, MILL_1]);
+    const id = addDoc('/nc/part.nc', 'fanuc-gcode', true);
+    expect(docs.get(id)?.dialectUncertain).toBe(true);
+    fake.answers.push({ kind: 'other' }, 'lathe-2');
+    await contrib.commands[0].run();
+    expect(docs.get(id)?.dialectUncertain).toBe(false);
   });
 
   it('lists a machine of the other type with a warning, and keeps it selectable', async () => {

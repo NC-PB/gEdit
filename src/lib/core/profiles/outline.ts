@@ -293,8 +293,16 @@ function classify(line: string, cp: CompiledProfile, spec: OutlineSpec): LineMar
   // A trigger line that also matches `toolCall.ignore` is not a tool change: a Fanuc lathe
   // writes `T0100` to cancel the offset of station 1, and `G00 X100. Z100. T0100` to
   // retract with it. Counting those would put a tool step on every retract (§7.1).
-  const ignored = cp.re.toolIgnore?.test(masked) ?? false;
-  const isTool = cp.re.toolTrigger.test(masked) && !ignored;
+  //
+  // The answer only matters on a line that triggers or names a tool, so it is asked there
+  // and nowhere else. `toolCall.ignore` may be an expensive pattern (Fanuc's "the first T
+  // of the line is T0" tests a lookahead at every character), and WebKit runs it several
+  // times slower than V8: asked on all 300k lines of a 10 MB program it stretched the
+  // first build of the map past two seconds, and the chunk that was still running made
+  // the first tab switch away from that program miss its 100 ms (`m1-perf-open`).
+  const triggered = cp.re.toolTrigger.test(masked);
+  const ignoredTrigger = triggered && (cp.re.toolIgnore?.test(masked) ?? false);
+  const isTool = triggered && !ignoredTrigger;
   let tool: string | null = null;
   let axis = false;
   if (isTool || spec.toolFromLast) {
@@ -324,7 +332,7 @@ function classify(line: string, cp: CompiledProfile, spec: OutlineSpec): LineMar
   // A tool change with neither a tool number nor a comment still needs a label, so the
   // line itself is kept as the last fallback (`M6` on its own after no `T` at all).
   if (isTool && kind === null && text === '') text = line.trim();
-  return { kind, text, isTool, tool, axis, unload: tool !== null && ignored, description };
+  return { kind, text, isTool, tool, axis, unload: tool !== null && (triggered ? ignoredTrigger : (cp.re.toolIgnore?.test(masked) ?? false)), description };
 }
 
 /**

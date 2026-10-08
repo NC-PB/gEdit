@@ -9,7 +9,7 @@
   "detect": {
     "extensions": { "mpf": 8, "spf": 8 },
     "content": [
-      { "pattern": "^%_N_\\w+_(?:MPF|SPF)", "weight": 5000 },
+      { "pattern": "^;?%_N_\\w+_(?:MPF|SPF)", "weight": 5000 },
       { "pattern": "^;\\$PATH=", "weight": 5000 },
       { "pattern": "^(?![\\d(;])(?:[^\";]*\"[^\"]*\")*[^\";]*?(?<![A-Z0-9_$])(?:CYCLE(?:6[0134]|7[026-9]|832|899)|POCKET[34]|SLOT[12]|LONGHOLE)(?![A-Z0-9_])", "weight": 6 },
       { "pattern": "^(?![\\d(;])(?![^;]*(?<![A-Z0-9_$])T\\d+(?![\\d.]|[ \\t]*=))(?:[^\";]*\"[^\"]*\")*[^\";]*?(?<![A-Z0-9_$])M0*6(?![\\d.]|[ \\t]*=)", "weight": 5 },
@@ -26,8 +26,9 @@
       { "pattern": "^(?![\\d(;])[^;]*(?<![A-Z0-9_$])G0*(?:17|94)(?![\\d.])", "weight": 2 },
       { "pattern": "(?<![A-Z0-9_$])G0*64[0-9](?![\\d.])", "weight": 2 },
       { "pattern": "^;", "weight": 1 },
-      { "pattern": "^(?![^;]*(?<![A-Z_$])Y)N\\d+", "weight": 1 },
-      { "pattern": "^(?![^;]*(?<![A-Z_$])Y)(?:N\\d+[ \\t]*)?[GM]\\d{1,3}(?![\\d.])", "weight": 1 }
+      { "pattern": "^(?![\\d(;])(?:[^\";]*\"[^\"]*\")*[^\";]*?(?<![A-Z0-9_$])Y[-+=]?\\.?\\d", "weight": 1 },
+      { "pattern": "^N\\d+", "weight": 1 },
+      { "pattern": "^(?:N\\d+[ \\t]*)?[GM]\\d{1,3}(?![\\d.])", "weight": 1 }
     ],
     "priority": -2,
     "vetoes": [
@@ -45,6 +46,37 @@
   },
   "modal": { "initial": { "plane": "G17", "feedmode": "G94", "distance": "G90" } },
   "machineParams": {
-    "diameter": "off"
+    "diameter": "off",
+    "variants": [
+      {
+        "id": "toolChange",
+        "label": "Tool change",
+        "default": "m6",
+        "choices": [
+          {
+            "value": "m6",
+            "label": "M6 loads the tool selected with T (default, verify)",
+            "detect": [{ "pattern": "^(?:[^\"]*\"[^\"]*\")*[^\"]*?(?<![A-Z0-9_$])M0*6(?![\\d.]|\\s*=)", "weight": 5 }],
+            "overlay": {
+              "toolCall": {
+                "trigger": "^(?:[^\"]*\"[^\"]*\")*[^\"]*?(?<![A-Z0-9_$])M0*6(?![\\d.]|\\s*=)",
+                "toolFrom": "same-line-or-last"
+              }
+            }
+          },
+          {
+            "value": "t",
+            "label": "T changes the tool, no M6 (the builder sets the change mode)",
+            "detect": [{ "pattern": "^(?:N\\d+[ \\t]+)?T(?:(?!0+(?![\\d.]))\\d+|\\d*[ \\t]*=[ \\t]*(?:\"[^\"]*\"|(?!0+(?![\\d.]))\\d+))(?:[ \\t]+D\\d+)?$", "weight": 3 }],
+            "overlay": {
+              "toolCall": {
+                "trigger": "^(?:[^\"]*\"[^\"]*\")*[^\"]*?(?<![A-Z_$])T(?:\\d*\\s*=\\s*\"[^\"]*\"|\\d*\\s*=\\s*(?!0+(?![\\d.]))\\d+(?![\\d._])|(?!0+(?![\\d.]))\\d+(?![\\d._])(?!\\s*=))",
+                "toolFrom": "same-line"
+              }
+            }
+          }
+        ]
+      }
+    ]
   }
 }

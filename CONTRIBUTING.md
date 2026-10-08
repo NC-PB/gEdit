@@ -63,7 +63,7 @@ Run what CI runs: `npm run check`, `npm test`, `npm run build`, `npm run license
 - **rust** (macOS, Windows, Linux): `cargo fmt`, `clippy` with warnings as errors, `cargo test`.
 - **bundle** (macOS, Windows, Linux): an unsigned debug build of the installers, uploaded as workflow artifacts for manual smoke tests.
 
-The runtime harness has a workflow of its own, `.github/workflows/harness.yml`: it builds the patched app on a GitHub-hosted macOS 14 runner (which has a live desktop session) and runs the cumulative suite m0 to m12 (106 scenarios). It is not part of `ci.yml` and does not run on pull requests, because it takes about 25 minutes of macOS runner time; it runs on every push to `main` and on demand (Actions tab, Harness, Run workflow), and uploads the result files and app logs as the `harness-results` artifact.
+The runtime harness has a workflow of its own, `.github/workflows/harness.yml`: it builds the patched app on a GitHub-hosted macOS 14 runner (which has a live desktop session) and runs the cumulative suite m0 to m12 and rp (112 scenarios). It is not part of `ci.yml` and does not run on pull requests, because it takes about 25 minutes of macOS runner time; it runs on every push to `main` and on demand (Actions tab, Harness, Run workflow), and uploads the result files and app logs as the `harness-results` artifact.
 
 ## Releases
 
@@ -147,6 +147,10 @@ docs/user/     The user guide. docs/planning/ is the design and roadmap notes.
 ### Content in your own words
 
 Completion texts, code descriptions, templates, help and documentation are written by contributors in their own words. Control manuals are a source of facts only; do not copy their text, tables or illustrations, and do not copy text from other editors' documentation.
+
+### Evidence stays in the plan
+
+What was learned from real programs (counts, the labels of a review's findings, what particular programs write) is recorded in `docs/planning/` and nowhere else. Code, tests, fixtures, data files, the user guide, the changelog and the TODO list say what a rule does and why, in neutral words, and never name where the knowledge came from. `tests/unit/evidenceGate.test.ts` enforces it: it fails when a text file outside `docs/planning/` contains "clean-room", the phrase "real CAM output", the word "survey", "aggregate:", or a finding label (`F` and a number from 1 to 15) next to the milestone's name. Format markers such as `<PROG_BEGIN_C1>` are not evidence and are fine. The header of the test has the exact rules; only the test and this file are allowed to name them.
 
 ### Bundled Python scripts
 

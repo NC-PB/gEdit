@@ -463,16 +463,17 @@ describe('tool labels', () => {
     expect(index('T101 M8\n', lathe).items()[0].tool).toBe('1');
     expect(index('T0101 M8\n', lathe).items()[0].tool).toBe('01');
     expect(index('T1234 M8\n', lathe).items()[0].tool).toBe('12');
-    // Owner decision 3: T12345 = tool 123, offset 45.
-    expect(index('T12345 M8\n', lathe).items()[0].tool).toBe('123');
+    // M12.5 decision 1 (the owner, 2026-10-08): with no machine T12345 = tool 12, offset
+    // 345 (`byLength`); the 3 + 2 reading of 2026-09-27 is the `offset2` machine setting.
+    expect(index('T12345 M8\n', lathe).items()[0].tool).toBe('12');
   });
 
   it('reads a Fanuc lathe offset cancel at every digit count, including five', () => {
     const lathe = compiled('fanuc-lathe');
-    // `T0100` cancels station 1's offset; `T12300` cancels station 123's offset the same
-    // way (owner decision 3's 3-digit station). Neither is a tool change.
+    // `T0100` cancels station 1's offset; `T12000` cancels tool 12's offset the same way
+    // (M12.5 decision 1: five digits are 2 + 3 with no machine). Neither is a tool change.
     expect(index('G00 X100. Z100. T0100\n', lathe).items()).toEqual([]);
-    expect(index('G00 X100. Z100. T12300\n', lathe).items()).toEqual([]);
+    expect(index('G00 X100. Z100. T12000\n', lathe).items()).toEqual([]);
   });
 
   it('leaves a six-digit T word alone: not a Fanuc lathe tool-and-offset form', () => {
@@ -711,6 +712,41 @@ describe('the cost of an edit', () => {
     outline.items();
     expect(lines() - inserted).toBe(2);
     expect(outline.itemAt(2000)?.tool).toBe('7');
+  });
+
+  /**
+   * `toolCall.ignore` is asked only where its answer can matter: a line that triggers a
+   * tool change or names a tool. Fanuc's pattern ("the first T of the line is T0", owner
+   * answer 2026-10-08) tests a lookahead at every character; WebKit ran it on every line of
+   * the 10 MB program at ~0.7 s, the first build of the map outlasted the scenario's pause,
+   * and the first tab switch away from that program took 140-160 ms against 100
+   * (`m1-perf-open`). V8 runs the pattern fast enough that a millisecond budget here would
+   * not see that, so this is counted, like the edit above.
+   */
+  it('asks toolCall.ignore only on lines that trigger or name a tool', () => {
+    const real = cp.re.toolIgnore;
+    expect(real).toBeDefined();
+    let asked = 0;
+    const toolIgnore = {
+      test(text: string): boolean {
+        asked++;
+        return real!.test(text);
+      },
+    } as RegExp;
+    const lines = bigProgram();
+    // The shape of the scenario's program as well: long runs of moves without a T or an M6.
+    for (let i = 1000; i < 200_000; i++) lines[i] = `G1 X${i % 100}.5 Y${i % 80}. Z-1.2345 F800.`;
+    lines.push('T0 M6', 'T01 T00 M6', 'G0 T0');
+    const outline = new OutlineIndex({ ...cp, re: { ...cp.re, toolIgnore } });
+    outline.reset(lines);
+    const toolish = lines.filter((line) => cp.re.toolTrigger.test(line) || cp.re.tool.test(line)).length;
+    expect(asked).toBe(toolish);
+    expect(asked).toBeLessThan(lines.length / 5);
+    // Where it is asked, it still decides: `T0 M6` unloads, `T01 T00 M6` loads tool 01.
+    const tools = outline.toolLines();
+    expect(tools).not.toContain(lines.length - 2);
+    expect(tools).toContain(lines.length - 1);
+    expect(outline.itemAt(lines.length - 1)?.tool).toBe('01');
   });
 
   it('aggregates once and hands the same tree out again until something changes', () => {

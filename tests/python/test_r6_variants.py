@@ -1,8 +1,10 @@
 """The two R6 machine choices, the Python half (plan M9 WP9.4, section 8.8 "The M9 variants").
 
 ``fanuc-lathe`` ``incrementalAddresses`` (``uw`` default, ``uwvh``, ``none``) and
-``fanuc-lathe`` / ``okuma-osp`` ``toolWord`` (``offset2`` default, ``offset1``, ``offset3``)
-are overlays on the effective profile. Python never merges a machine itself; it reads the
+``fanuc-lathe`` / ``okuma-osp`` ``toolWord`` (on the lathe ``byLength`` default since M12.5,
+``offset2``, ``offset1``, ``offset3``; on Okuma ``offset2`` default and ``offset3``) are
+overlays on the effective profile, and so is M12.5's ``sinumerik-mill`` ``toolChange``
+(``m6`` default, ``t``). Python never merges a machine itself; it reads the
 effective profile ``tests/unit/resolved.test.ts`` wrote for each choice, so these tests prove
 the files Python really gets: ``incremental_axes`` under each choice, the tool rule of each
 choice on the same word table the TypeScript test reads
@@ -81,12 +83,76 @@ class TestToolWord(unittest.TestCase):
         self.assertGreaterEqual(count, 50)
 
     def test_the_default_choice_is_the_rule_the_profile_had_before(self):
-        for profile_id in (LATHE, OKUMA):
+        # The lathe's default is ``byLength`` since M12.5 decision 1 (the owner, 2026-10-08);
+        # Okuma's is still ``offset2``. Either way the base profile states its default.
+        for profile_id, default in ((LATHE, "byLength"), (OKUMA, "offset2")):
             with self.subTest(profile=profile_id):
                 resolved = helpers.load_profile(profile_id)["toolCall"]
                 effective = helpers.effective_context(profile_id)["profile"]["toolCall"]
                 self.assertEqual(effective, resolved)
-                self.assertEqual(profile_of(profile_id, toolWord="offset2")["toolCall"], resolved)
+                self.assertEqual(profile_of(profile_id, toolWord=default)["toolCall"], resolved)
+
+    def test_a_lathe_with_no_machine_reads_five_digits_two_plus_three(self):
+        # M12.5 decision 1: ``T12000 M6`` loads tool 12 into the milling spindle and
+        # ``T12012`` is tool 12 with offset 12; the 3 + 2 machine setting reads 120 for both.
+        program = "%\nO2000\nN10 G50 S3000\nN20 T12000 M6\nN30 T12012\nN40 G96 S200 M3\nN60 M30\n%\n"
+        for choice, tools in ((None, ["T12"]), ("offset2", ["T120"])):
+            with self.subTest(choice=choice):
+                context = (
+                    helpers.effective_context(LATHE)
+                    if choice is None
+                    else helpers.effective_context(LATHE, variant=("toolWord", choice))
+                )
+                full = helpers.make_context(profile=context["profile"], codes=context["codes"])
+                full["machine"] = context["machine"]
+                result = helpers.run_script("tool_list.py", stdin=program, context=full)
+                self.assertTrue(result.ok, result.stderr)
+                rows = result.json()["rows"]
+                self.assertEqual([row["tool"] for row in rows], tools)
+                self.assertEqual([row["calls"] for row in rows], [2])
+                self.assertEqual([row["line"] for row in rows], [4])
+
+
+class TestSiemensMillToolChange(unittest.TestCase):
+    """M12.5 decision 5: ``sinumerik-mill`` ``toolChange`` (``m6`` as built, ``t``)."""
+
+    def report(self, program, choice=None):
+        context = (
+            helpers.effective_context("sinumerik-mill")
+            if choice is None
+            else helpers.effective_context("sinumerik-mill", variant=("toolChange", choice))
+        )
+        full = helpers.make_context(profile=context["profile"], codes=context["codes"])
+        full["machine"] = context["machine"]
+        result = helpers.run_script("tool_list.py", stdin=program, context=full)
+        self.assertTrue(result.ok, result.stderr)
+        return [(row["tool"], row["line"]) for row in result.json()["rows"]]
+
+    def test_t_lists_the_tool_of_a_program_without_m6(self):
+        program = "N10 T5\nN20 L6\nN30 G0 X0 Y0 Z5\nN40 M30\n"
+        self.assertEqual(self.report(program, "t"), [("T5", 1)])
+        # The defaults (m6) list nothing, as before M12.5: the program map agrees on both
+        # (``sinumerikMill.test.ts``), and the app hands a script the detected variant.
+        self.assertEqual(self.report(program), [])
+
+    def test_m6_is_the_default_and_reads_as_built(self):
+        self.assertEqual(
+            helpers.effective_context("sinumerik-mill")["machine"]["params"]["variants"], {"toolChange": "m6"}
+        )
+        self.assertEqual(self.report("N10 T5\nN20 M6\nN30 M30\n", "m6"), [("T5", 2)])
+        self.assertEqual(self.report("N10 T5\nN20 M6\nN30 M30\n"), [("T5", 2)])
+
+    def test_both_detection_rules_compile_in_python(self):
+        profile = helpers.load_profile("sinumerik-mill")
+        (variant,) = profile["machineParams"]["variants"]
+        compiled = gedit_nc.compile_profile(profile)
+        self.assertIsNotNone(compiled)
+        import re
+
+        lone = re.compile(variant["choices"][1]["detect"][0]["pattern"], re.IGNORECASE)
+        for line, hit in (("N10 T5", True), ("T2 D1", True), ('N10 T="MILL10"', True), ("N10 T0", False), ("N10 T5 M6", False)):
+            with self.subTest(line=line):
+                self.assertEqual(lone.search(line) is not None, hit)
 
     def test_the_tool_list_of_a_three_digit_offset_lathe(self):
         context = helpers.effective_context(LATHE, variant=("toolWord", "offset3"))

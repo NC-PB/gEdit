@@ -247,7 +247,8 @@ class TestRules(unittest.TestCase):
         self.assertEqual(report["rows"][0]["calls"], 2)
 
     def test_a_five_digit_fanuc_lathe_t_word_is_a_3_digit_tool_and_a_2_digit_offset(self):
-        # Owner decision 3 (2026-09-27): T12345 = tool 123, offset 45. T12300 cancels that
+        # Owner decision 3 (2026-09-27), since M12.5 the ``offset2`` machine setting (the
+        # case's machine states it): T12345 = tool 123, offset 45. T12300 cancels that
         # offset the same way T0100 cancels station 1's, and a six-digit word is outside
         # every Fanuc lathe T-word rule, so it is never read as a tool change at all.
         report = self.report_of("fanuc-lathe-five-digit")
@@ -256,6 +257,73 @@ class TestRules(unittest.TestCase):
         self.assertEqual(row["tool"], "T123")
         self.assertEqual(row["offsets"], "45")
         self.assertEqual(row["calls"], 1)
+
+    def run_text(self, profile_id, program, variant=None):
+        context = (
+            helpers.effective_context(profile_id)
+            if variant is None
+            else helpers.effective_context(profile_id, variant=variant)
+        )
+        full = helpers.make_context(profile=context["profile"], codes=context["codes"])
+        full["machine"] = context["machine"]
+        result = helpers.run_script(SCRIPT, stdin=program, context=full)
+        self.assertTrue(result.ok, result.stderr)
+        return result.json()["rows"]
+
+    def test_a_five_digit_lathe_word_without_a_machine_is_a_2_digit_tool_and_a_3_digit_offset(self):
+        # M12.5 decision 1 (the owner, 2026-10-08): ``byLength``, the default. The same
+        # program under the case's 3 + 2 machine lists T123.
+        rows = self.run_text("fanuc-lathe", "O2003\nN10 T12345 M8\nN20 G97 S1200 M03\nN30 G00 X100. Z100. T12000\nN40 M30\n")
+        self.assertEqual([(row["tool"], row["offsets"], row["calls"]) for row in rows], [("T12", "345", 1)])
+
+    def test_a_zero_offset_lathe_word_with_m6_loads_the_milling_spindle(self):
+        # M12.5 decision 1: ``M06 T21000`` is tool 21 on every choice that reads 2 + 3; the
+        # same word without ``M6`` stays an offset cancel.
+        rows = self.run_text("fanuc-lathe", "O2004\nN10 M06 T21000\nN20 G1 X10. F100.\nN30 T21000\nN40 T0100\nN50 M30\n")
+        self.assertEqual([(row["tool"], row["line"], row["calls"]) for row in rows], [("T21", 2, 1)])
+
+    def test_a_lathe_t_inside_a_three_digit_g_block_is_no_tool_change(self):
+        # M12.5 decision 1: a builder cycle's ``T`` is a parameter, on every ``toolWord`` choice.
+        for variant in (None, ("toolWord", "offset2"), ("toolWord", "offset1"), ("toolWord", "offset3")):
+            # `T0505` is tool 0 under `offset3` (2 + 3), which is no tool: there `T05005`.
+            first = "T05005" if variant == ("toolWord", "offset3") else "T0505"
+            program = "O2005\nN10 %s\nN20 G183 Z-5. T5 F20\nN30 G150 X10. T0707\nN40 M30\n" % first
+            with self.subTest(variant=variant):
+                rows = self.run_text("fanuc-lathe", program, variant)
+                self.assertEqual([row["calls"] for row in rows], [1])
+                self.assertEqual([row["line"] for row in rows], [2])
+
+    def test_a_klartext_tool_call_by_name_at_the_end_of_the_line_is_a_tool_change(self):
+        # M12.5: the trailing ``\b`` after a closing quote never matched at the line end.
+        program = '0 BEGIN PGM DEMO MM\n1 TOOL CALL "END MILL 10"\n2 TOOL CALL "END MILL 10" Z S3000\n3 END PGM DEMO MM\n'
+        rows = self.run_text("heidenhain-klartext", program)
+        self.assertEqual([(row["tool"], row["line"], row["calls"]) for row in rows], [("END MILL 10", 2, 2)])
+
+    def test_a_klartext_tool_name_with_a_digit_straight_behind_it_is_still_a_tool_change(self):
+        # M12.5 review: the guard belongs on the axis letter, not on the name; and behind a
+        # tool number with more than one decimal the tool is the whole number, not `5.1`.
+        program = '0 BEGIN PGM DEMO MM\n1 TOOL CALL "D10"5 Z S3000\n2 TOOL CALL 5 ZS3000\n3 TOOL CALL 7.12 Z\n4 END PGM DEMO MM\n'
+        rows = self.run_text("heidenhain-klartext", program)
+        self.assertIn(("D10", 2), [(row["tool"], row["line"]) for row in rows])
+        self.assertIn(("T5", 3), [(row["tool"], row["line"]) for row in rows])
+        self.assertIn(("T7", 4), [(row["tool"], row["line"]) for row in rows])
+        self.assertNotIn("T7.1", [row["tool"] for row in rows])
+
+    def test_a_lathe_word_whose_tool_part_is_all_zeros_is_no_tool(self):
+        # M12.5 review: `T00100` keeps the tool and changes the offset, on every choice; under
+        # `offset3` (2 + 3) so do `T0101` and `T0100`.
+        program = "O2006\nN10 T00100\nN20 T0001\nN30 T00012\nN40 M30\n"
+        self.assertEqual(self.run_text("fanuc-lathe", program), [])
+        program = "O2007\nN10 T0101\nN20 G28 U0 T0100\nN30 T00100\nN40 T01001\nN50 M30\n"
+        rows = self.run_text("fanuc-lathe", program, ("toolWord", "offset3"))
+        self.assertEqual([row["line"] for row in rows], [5])
+
+    def test_a_lathe_t_in_a_block_of_the_controls_own_three_digit_g_codes_is_a_tool_change(self):
+        # M12.5 review: `G107`, `G112`, `G113`, `G250` and `G251` are the control's own
+        # three-digit codes (the user manual's lathe G-code table), not builder cycles.
+        program = "O2008\nN10 G112 T0101\nN20 G250 T0202\nN30 G500 T0303\nN40 M30\n"
+        rows = self.run_text("fanuc-lathe", program)
+        self.assertEqual([row["line"] for row in rows], [2, 3])
 
     def test_an_okuma_dollar_continuation_carries_the_thread_lead_of_the_block_above_it(self):
         # G10 M8: `$` continues the block above it (`gedit_nc.continues_block`), so the F

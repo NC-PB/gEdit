@@ -189,9 +189,22 @@ export function labelsOf(lines: readonly string[], cp: CompiledProfile): Set<str
     if (!line.includes(':')) continue;
     for (const token of tokenizeLine(line, cp).tokens) {
       if (token.kind === 'label' && token.address !== undefined) labels.add(token.address.toUpperCase());
+      // M12.5 (`syntax.labelAfter`): a label behind a jump names its target and defines
+      // nothing; only the head of a block (number, skip marks, blanks) can define one.
+      if (token.kind !== 'whitespace' && token.kind !== 'blockNumber' && token.kind !== 'skip') break;
     }
   }
   return labels;
+}
+
+/**
+ * True when `keyword` is one of the profile's `syntax.labelAfter` jumps (M12.5): the name
+ * behind it is a `label` token, which may still be a `STRING` variable rather than a label
+ * of this file, so it is judged as the `unknown` name it used to be.
+ */
+function jumpsToLabel(cp: CompiledProfile, keyword: string): boolean {
+  const list = cp.profile.syntax?.labelAfter;
+  return Array.isArray(list) && list.some((entry) => typeof entry === 'string' && entry.trim().toUpperCase() === keyword.toUpperCase());
 }
 
 /**
@@ -241,7 +254,10 @@ export function referencesOn(
       next.kind === 'variable' ||
       next.kind === 'expression' ||
       (token.kind === 'keyword' && next.kind === 'string') ||
-      (token.kind === 'keyword' && next.kind === 'unknown' && IDENTIFIER.test(next.text) && !labels?.has(next.text.toUpperCase()));
+      (token.kind === 'keyword' &&
+        (next.kind === 'unknown' || (next.kind === 'label' && jumpsToLabel(cp, token.address))) &&
+        IDENTIFIER.test(next.text) &&
+        !labels?.has(next.text.toUpperCase()));
     if (!computed) continue;
     (carried ??= []).push({ address: token.address, start: next.start, end: next.end, text: next.text });
   }

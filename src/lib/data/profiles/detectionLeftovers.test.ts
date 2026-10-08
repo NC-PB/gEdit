@@ -243,8 +243,11 @@ describe('a program of numbered blocks and G96/G97 only', () => {
     const s = scores(BUILTINS, '/work/tie', TIE);
     expect(s.get(LATHE)).toBe(s.get(SINUMERIK));
     expect(s.get(LATHE)).toBeGreaterThan(0);
+    // M12.5: Okuma scores a numbered block as the other ISO profiles do, so it ties
+    // the two as well; its priority (-1, as Sinumerik's) leaves the program to the lathe.
     for (const id of IDS.filter((other) => other !== LATHE && other !== SINUMERIK)) {
-      expect(s.get(id)!, id).toBeLessThan(s.get(LATHE)!);
+      if (id === 'okuma-osp') expect(s.get(id)!, id).toBe(s.get(LATHE)!);
+      else expect(s.get(id)!, id).toBeLessThan(s.get(LATHE)!);
     }
   });
 

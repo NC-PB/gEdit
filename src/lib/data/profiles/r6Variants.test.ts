@@ -3,14 +3,17 @@
 //   - `fanuc-lathe` `incrementalAddresses`: which of `U`, `W`, `V`, `H` move incrementally
 //     (`uw` default, `uwvh`, `none`);
 //   - `fanuc-lathe` and `okuma-osp` `toolWord`: how many of a tool word's digits are the
-//     offset (`offset2` default, `offset1` and `offset3` on the lathe, `offset3` on Okuma).
+//     offset (on the lathe `byLength` default since M12.5, `offset2`, `offset1` and
+//     `offset3`; on Okuma `offset2` default and `offset3`).
 //
 // Both are overlays only: no `detect`, no `codes`. What this file proves:
 //
 //   1. the declaration is what §8.8 pins (ids, choices, defaults, nothing else);
 //   2. **the default of each choice reproduces the reading the profile had before the
-//      variants existed**: the strings below are frozen copies of the pre-M9 `toolCall`
-//      and `addresses`, so a later edit of the base cannot move them silently;
+//      variants existed**, except the lathe's tool word, which M12.5 decision 1 changed on
+//      purpose (the owner, 2026-10-08): five digits read 2 + 3 with no machine, a zero
+//      offset with `M6` loads the tool, a three-digit `G` block has no tool. The strings
+//      below are frozen copies, so a later edit of the base cannot move them silently;
 //   3. each choice reads a tool word as `tests/fixtures/machines/files/r6-tool-words.json`
 //      says (the table Python reads too), and the program map of a short program under
 //      each choice is the golden under `tests/fixtures/expected/outline/**/variants/`;
@@ -76,7 +79,7 @@ describe('the declaration (§8.8 "The M9 variants")', () => {
     expect(variantsOf(LATHE).map((v) => [v.id, v.default, v.choices.map((c) => c.value)])).toEqual([
       ['gcodeSystem', 'A', ['A', 'B']],
       ['incrementalAddresses', 'uw', ['uw', 'uwvh', 'none']],
-      ['toolWord', 'offset2', ['offset2', 'offset1', 'offset3']],
+      ['toolWord', 'byLength', ['byLength', 'offset2', 'offset1', 'offset3']],
     ]);
   });
 
@@ -131,6 +134,8 @@ describe('the declaration (§8.8 "The M9 variants")', () => {
 
 /** The `toolCall` of the base profiles at the P9 commit (8586a6b), frozen. */
 const BEFORE: Record<string, Record<string, string>> = {
+  // The lathe's entry is now the `offset2` choice's reading of a word alone (below); the
+  // default is `byLength` (BY_LENGTH).
   [LATHE]: {
     trigger: '(?<![A-Z])T\\d{1,5}(?!\\d)',
     ignore: '(?<![A-Z])T(?:\\d{0,3}00|0+)(?!\\d)',
@@ -145,11 +150,41 @@ const BEFORE: Record<string, Record<string, string>> = {
   },
 };
 
+/**
+ * The lathe's tool rule since M12.5 (decision 1, §7.16 #181), frozen: `byLength` is the base
+ * and the default; every choice shares the `M6` exception and the three-digit-`G` rule (the
+ * control's own `G107`, `G112`, `G113`, `G250`, `G251` excepted), and a tool part of zeros
+ * is no tool on every choice (each with its own length of the offset).
+ */
+const NO_M6 = '^(?!.*(?<![A-Z])M0*6(?!\\d)).*';
+const T0 = '|(?<![A-Z])T0+(?!\\d)';
+const G3 = '|(?<![A-Z])G(?!(?:107|112|113|250|251)(?!\\d))[1-9]\\d{2}(?!\\d)';
+const BY_LENGTH = {
+  trigger: '(?<![A-Z])T\\d{1,5}(?!\\d)',
+  ignore: `${NO_M6}(?<![A-Z])T(?:\\d{1,2}00|\\d{2}000)(?!\\d)${T0}|(?<![A-Z])T(?:0{1,2}(?=\\d{2}(?!\\d))|00(?=\\d{3}(?!\\d)))${G3}`,
+  tool: '(?<![A-Z])T(?<tool>\\d{2}(?=\\d{3}(?!\\d))|\\d{1,2}?(?=\\d{2}(?!\\d))|\\d{1,2}(?!\\d))\\d{0,3}(?!\\d)',
+  toolFrom: 'same-line',
+};
+
 describe('the default choice reads exactly as the profile did before M9', () => {
-  it.each([LATHE, OKUMA])('%s: the tool rule, with no machine and with each default stated', (id) => {
-    expect(profile(id).toolCall).toEqual(BEFORE[id]);
-    expect(applyMachine(profile(id), noMachine(profile(id))).profile.toolCall).toEqual(BEFORE[id]);
-    expect(effective(id, { toolWord: 'offset2' }).profile.toolCall).toEqual(BEFORE[id]);
+  it('Okuma: the tool rule, with no machine and with the default stated', () => {
+    expect(profile(OKUMA).toolCall).toEqual(BEFORE[OKUMA]);
+    expect(applyMachine(profile(OKUMA), noMachine(profile(OKUMA))).profile.toolCall).toEqual(BEFORE[OKUMA]);
+    expect(effective(OKUMA, { toolWord: 'offset2' }).profile.toolCall).toEqual(BEFORE[OKUMA]);
+  });
+
+  it('the Fanuc lathe: byLength is the base and the default (M12.5 decision 1)', () => {
+    expect(profile(LATHE).toolCall).toEqual(BY_LENGTH);
+    expect(applyMachine(profile(LATHE), noMachine(profile(LATHE))).profile.toolCall).toEqual(BY_LENGTH);
+    expect(effective(LATHE, { toolWord: 'byLength' }).profile.toolCall).toEqual(BY_LENGTH);
+  });
+
+  it('the Fanuc lathe offset2 keeps the pre-M9 trigger and tool, and its ignore gains only the M12.5 rules', () => {
+    const rule = effective(LATHE, { toolWord: 'offset2' }).profile.toolCall;
+    expect(rule.trigger).toBe(BEFORE[LATHE].trigger);
+    expect(rule.tool).toBe(BEFORE[LATHE].tool);
+    expect(rule.toolFrom).toBe(BEFORE[LATHE].toolFrom);
+    expect(rule.ignore).toBe(`${NO_M6}(?<![A-Z])T(?:\\d{1,3}00)(?!\\d)${T0}|(?<![A-Z])T0+(?=\\d{2}(?!\\d))${G3}`);
   });
 
   it('the Fanuc lathe: U and W incremental, X and U diameters, as before', () => {
@@ -165,7 +200,7 @@ describe('the default choice reads exactly as the profile did before M9', () => 
 
   it('a machine that sets nothing about the R6 variants gets the defaults', () => {
     const eff = machineWith(profile(LATHE), { gcodeSystem: 'B' });
-    expect(eff.params.variants).toEqual({ gcodeSystem: 'B', incrementalAddresses: 'uw', toolWord: 'offset2' });
+    expect(eff.params.variants).toEqual({ gcodeSystem: 'B', incrementalAddresses: 'uw', toolWord: 'byLength' });
     expect(eff.source.variants.toolWord).toBe('profile');
     expect(eff.source.variants.incrementalAddresses).toBe('profile');
   });
@@ -220,9 +255,40 @@ describe('toolWord: a word under each choice (r6-tool-words.json, read by Python
 
   it('reads one word three ways on the Fanuc lathe', () => {
     // T1001: tool 10 offset 01, tool 100 offset 1, tool 1 offset 001.
+    expect(toolOf(effective(LATHE, { toolWord: 'byLength' }), 'T1001')).toBe('10');
     expect(toolOf(effective(LATHE, { toolWord: 'offset2' }), 'T1001')).toBe('10');
     expect(toolOf(effective(LATHE, { toolWord: 'offset1' }), 'T1001')).toBe('100');
     expect(toolOf(effective(LATHE, { toolWord: 'offset3' }), 'T1001')).toBe('1');
+  });
+
+  it('reads a five-digit word 2 + 3 by length, 3 + 2 under offset2 and 2 + 3 under offset3', () => {
+    // M12.5 decision 1: the length decides with no machine; a machine states its split.
+    expect(toolOf(effective(LATHE), 'T12012')).toBe('12');
+    expect(toolOf(effective(LATHE, { toolWord: 'offset2' }), 'T12345')).toBe('123');
+    expect(toolOf(effective(LATHE, { toolWord: 'offset3' }), 'T01001')).toBe('01');
+    // …and only offset3 reads a four-digit word as tool 0, which is why it is no default; a
+    // tool 0 is no tool, so the word changes nothing there (M12.5 review).
+    expect(toolOf(effective(LATHE), 'T0101')).toBe('01');
+    expect(toolOf(effective(LATHE, { toolWord: 'offset3' }), 'T0101')).toBeNull();
+  });
+
+  it('loads a zero-offset word with M6 and reads no tool in a three-digit G block, on every choice', () => {
+    const cases: Record<string, [string, string][]> = {
+      byLength: [['M06 T21000', '21'], ['T0100 M6', '01']],
+      offset2: [['M06 T21000', '210'], ['T0100 M6', '01']],
+      offset1: [['M06 T2100', '210'], ['T10 M6', '1']],
+      offset3: [['M06 T21000', '21'], ['T1000 M6', '1']],
+    };
+    for (const [choice, words] of Object.entries(cases)) {
+      const cp = effective(LATHE, { toolWord: choice });
+      for (const [line, tool] of words) {
+        expect(toolOf(cp, line), `${choice}: ${line}`).toBe(tool);
+        expect(toolOf(cp, line.replace(/\s*M0?6\s*/, ' ').trim()), `${choice}: ${line} without M6`).toBeNull();
+      }
+      expect(toolOf(cp, 'T0 M6'), choice).toBeNull();
+      expect(toolOf(cp, 'G183 Z-5. T5 F20'), choice).toBeNull();
+      expect(toolOf(cp, 'G150 X10. T11'), choice).toBeNull();
+    }
   });
 
   it('reads T2000 on Okuma as station 2 only with three-digit offsets', () => {
@@ -245,6 +311,17 @@ describe('toolWord: a word under each choice (r6-tool-words.json, read by Python
 
 const PROGRAMS: Record<string, Record<string, string[]>> = {
   [LATHE]: {
+    byLength: [
+      'O2100',
+      'N10 G50 S3000',
+      'N20 T12000 M6 (MILL SPINDLE)',
+      'N30 T12012 (OD ROUGH)',
+      'N40 G28 U0 T0100',
+      'N50 T0101 (OD FINISH)',
+      'N60 G183 Z-5. T5 F20',
+      'N70 T0505',
+      'N80 M30',
+    ],
     offset1: ['O2101', 'T11 (OD ROUGH)', 'G0 X50. Z2.', 'G1 Z-20. F0.2', 'T10', 'T22 (OD FINISH)', 'G0 X40. Z1.', 'T123', 'M30'],
     offset2: ['O2102', 'T0101 (OD ROUGH)', 'G0 X50. Z2.', 'G1 Z-20. F0.2', 'T0100', 'T0303 (OD FINISH)', 'G0 X40. Z1.', 'T12345', 'M30'],
     offset3: ['O2103', 'T1001 (OD ROUGH)', 'G0 X50. Z2.', 'G1 Z-20. F0.2', 'T1000', 'T3003 (OD FINISH)', 'G0 X40. Z1.', 'T123456', 'M30'],

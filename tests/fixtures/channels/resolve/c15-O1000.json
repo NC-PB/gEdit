@@ -1,0 +1,16 @@
+{
+  "input": "../nc/fanuc-lathe/O1000",
+  "profile": "fanuc-lathe",
+  "preset": "fanuc-lathe/fanuc-2path-nop",
+  "assigned": "1",
+  "expect": {
+    "layout": "multi-file",
+    "self": "1",
+    "by": "assigned",
+    "marks": [
+      {"ruleId":"wait","mark":"M999","line":12,"channel":"1","partners":["1","2"],"blocking":true}
+    ],
+    "problems": [],
+    "siblings": null
+  }
+}

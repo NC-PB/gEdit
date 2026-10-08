@@ -218,7 +218,7 @@ class MachineParams(unittest.TestCase):
         # M9 (R6): the two tool/U-W variants join the G-code system, each at its default.
         self.assertEqual(
             machine["params"]["variants"],
-            {"gcodeSystem": "A", "incrementalAddresses": "uw", "toolWord": "offset2"},
+            {"gcodeSystem": "A", "incrementalAddresses": "uw", "toolWord": "byLength"},
         )
 
     def test_a_profile_that_declares_nothing_reads_its_numbers_as_written(self):

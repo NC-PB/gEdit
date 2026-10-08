@@ -2278,6 +2278,46 @@
       "label": "Feed on an inside radius"
     },
     {
+      "code": "NORM",
+      "label": "Approach and leave the contour straight",
+      "description": "With G41 or G42 (approach) and G40 (retract): the tool moves to the contour point on a straight line and stands square to the contour there."
+    },
+    {
+      "code": "KONT",
+      "label": "Approach and leave around the contour point",
+      "description": "With G41 or G42 and G40: the tool goes around the start or end point of the contour the way G450 or G451 sets for corners."
+    },
+    {
+      "code": "KONTC",
+      "label": "Approach and leave with continuous curvature",
+      "description": "With G41 or G42 and G40: the control replaces the approach and retract G1 blocks by a curve whose direction and curvature meet the contour without a jump."
+    },
+    {
+      "code": "KONTT",
+      "label": "Approach and leave with continuous tangent",
+      "description": "With G41 or G42 and G40: the control replaces the approach and retract G1 blocks by a curve whose direction meets the contour without a jump."
+    },
+    {
+      "code": "SBLOF",
+      "label": "Single block off",
+      "description": "In single-block mode the control no longer stops after each block: the blocks up to SBLON (or the end of the subprogram) run like one block. It stands in a PROC line or alone in its block."
+    },
+    {
+      "code": "SBLON",
+      "label": "Single block on",
+      "description": "Ends what SBLOF started: in single-block mode the control stops after each block again. It stands alone in its block."
+    },
+    {
+      "code": "DISPLOF",
+      "label": "Hide the current block",
+      "description": "Written at the end of a PROC line: while this subprogram runs, the block display shows its call instead of its blocks, up to the return."
+    },
+    {
+      "code": "DISPLON",
+      "label": "Show the current block",
+      "description": "Written at the end of a PROC line: this subprogram shows its own blocks again, even when it is called from one that hides them."
+    },
+    {
       "code": "ORIWKS",
       "label": "Orientation in workpiece coordinates",
       "description": "The tool direction a five-axis program writes is read in workpiece coordinates, so it does not depend on the machine the program runs on. It is the control's basic setting."

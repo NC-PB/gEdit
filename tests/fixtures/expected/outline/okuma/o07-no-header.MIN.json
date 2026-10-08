@@ -1,0 +1,9 @@
+{
+  "profile": "okuma-osp",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE"},
+    {"kind":"comment","line":2,"text":"AN OKUMA LATHE PROGRAM WITHOUT THE $NAME.MIN% HEADER, MOSTLY MODAL BLOCKS"},
+    {"kind":"tool","line":7,"text":"T1","tool":"01","endLine":64},
+      {"kind":"end","line":63,"text":"M2"}
+  ]
+}

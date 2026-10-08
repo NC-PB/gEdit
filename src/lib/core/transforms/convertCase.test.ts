@@ -139,6 +139,13 @@ describe('convertCase rules', () => {
     expect(run(line, { case: 'lower' }, klartext)).toBe('2 tool call "mill_d10" z s5000');
   });
 
+  // M12.5 (§7.16 #179): a program name, a cycle name and a path are `text` tokens, which no
+  // transform rewrites: the name of `BEGIN PGM` is the file's, and the control shows the rest.
+  it('never converts a text token', () => {
+    expect(run('0 begin pgm Part_a mm', { case: 'upper' }, klartext)).toBe('0 BEGIN PGM Part_a MM');
+    expect(run('5 CYCL DEF 200 Drilling ~', { case: 'lower' }, klartext)).toBe('5 cycl def 200 Drilling ~');
+  });
+
   // M8 integration: on Sinumerik a string also stands inside a word or a call, and the
   // tool it names is matched literally against the tool table just like a Klartext one.
   it('keeps a string inside an assignment or a call exactly as written', () => {

@@ -1,5 +1,5 @@
 # The runtime harness (tests/runtime) on a GitHub-hosted macOS runner: the cumulative suite
-# m0..m12, 106 scenarios that drive the real app with native key and mouse events.
+# m0..m12 and rp (M12.5), 112 scenarios that drive the real app with native key and mouse events.
 #
 # Why not on every pull request: the job takes about 15 minutes of a macOS runner (the build
 # of the patched app alone is about two), it owns the runner's one screen for that time, and
@@ -42,9 +42,9 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -54,7 +54,7 @@ jobs:
       # The patched app builds into $GEDIT_RH_DIR/target. Caching it (and the crate sources)
       # takes the build from minutes to the app crate alone. The key follows the lock file,
       # the toolchain-independent inputs of the patch, and the runner image.
-      - uses: actions/cache@v6
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -72,9 +72,9 @@ jobs:
           tests/runtime/sync.sh 2>&1 | tee "$RUNNER_TEMP/logs/sync.log"
 
       # Exits non-zero on a FAIL or a BLOCKED; a pass on the retry is FLAKY and does not.
-      - name: Suite m0..m12
+      - name: Suite m0..m12 and rp
         run: |
-          tests/runtime/suite.sh tests/runtime/suites/m{0,1,2,3,4,5,6,7,8,9,10,11,12}.txt 2>&1 | tee "$RUNNER_TEMP/logs/suite.log"
+          tests/runtime/suite.sh tests/runtime/suites/{m{0,1,2,3,4,5,6,7,8,9,10,11,12},rp}.txt 2>&1 | tee "$RUNNER_TEMP/logs/suite.log"
           exit "${PIPESTATUS[0]}"
         shell: bash
 
@@ -91,7 +91,7 @@ jobs:
           done
           cp -R "$RUNNER_TEMP/logs" "$RUNNER_TEMP/collect/ci-logs" 2>/dev/null || true
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: harness-results

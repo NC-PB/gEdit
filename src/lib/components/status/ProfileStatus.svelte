@@ -14,17 +14,24 @@
 
   const active = docs.active;
 
-  const label = $derived($active ? (profiles.get($active.profileId)?.shortName ?? $active.profileId) : '');
+  const name = $derived($active ? (profiles.get($active.profileId)?.shortName ?? $active.profileId) : '');
+  // M12.5: a dialect that was only a guess is shown with a question mark.
+  const uncertain = $derived($active?.dialectUncertain === true);
+  const label = $derived(uncertain ? t('profiles.uncertain.label', { name }) : name);
+  const tooltip = $derived(
+    uncertain ? t('profiles.uncertain.tooltip', { name }) : t('profiles.tooltip', { name }),
+  );
 </script>
 
 <button
   class="item"
   type="button"
   disabled={!$active}
-  title={t('profiles.tooltip', { name: label })}
+  title={tooltip}
   onclick={() => void commands.run('file.setProfile')}
   data-testid="status-item"
-  data-item="profile">{label}</button
+  data-item="profile"
+  data-uncertain={uncertain ? 'true' : undefined}>{label}</button
 >
 
 <style>

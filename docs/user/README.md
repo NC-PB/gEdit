@@ -51,6 +51,10 @@ the encoding to change what the file is written as, the line ending to change th
 the script to stop the run, and **Read-only** to unlock the document. The machine field is
 not shown for a dialect that has no machine settings.
 
+A dialect with a question mark (`Fanuc T?`) is a guess: the program fits none of the dialects
+well. Click it to keep the guess or to choose the control — see [When gEdit is not
+sure](dialects.md#when-gedit-is-not-sure).
+
 There are three panels:
 
 - **Program Map**, on the left (`View ▸ Side Panel`) — the structure of the program.
@@ -364,7 +368,7 @@ tab first, rather than the order in which you last opened things.
 
 - the cursor line and column, and the line the view was scrolled to;
 - the bookmarks;
-- a dialect you picked by hand;
+- a dialect you picked by hand, or a guessed one you chose to keep;
 - the machine you picked for that program, including an explicit **none**, which is a
   different answer from never having chosen one — see [Machines](machines.md).
 
@@ -585,7 +589,10 @@ CAM systems emit. That includes what five-axis and high-speed milling posts writ
 centre point control, tilted working planes, mirror, scaling, polar and cylindrical
 interpolation, the Klartext datum, plane and tilt cycles and the `PLANE` functions, and
 the Fanuc macro functions. Hovering a Klartext sub-block such as `CYCL DEF 19.1` shows its
-cycle. A code the database does not describe says so rather than guessing. An
+cycle. On a machine whose channel settings list a code as a wait, the hover says it is a wait
+on that machine ([Channels](channels.md#the-hover-on-a-wait-code)). Names that are not codes —
+a Klartext cycle or program name, for instance — get no hover. A code the database does not
+describe says so rather than guessing. An
 entry the project has written but not yet checked against a control's documentation is
 **not shown in the hover at all** — the hover says the database does not describe the word,
 which is the honest answer while nobody has confirmed it; the completion list shows it with

@@ -126,6 +126,11 @@ describe('the evidence', () => {
     expect(guard(LATHE, 'G71 X27.55 Z-24 B60 D0.6 U0.1\n$H2.45 L2 F2\n')).toMatchObject({ likely: 'okuma-osp', line: 2 });
     expect(guard(LATHE, 'G71 X27.55 Z-30 B60 D0.7 U0.1 H2.45 L2 F2 M23\n')).toMatchObject({ likely: 'okuma-osp', line: 1 });
     expect(guard(FANUC, 'O1001\nCALL O2345 Q2\n')).toMatchObject({ likely: 'okuma-osp', line: 2 });
+    // M12.5: the `$` continuation line is letter-value words only; a `$ <text>` comment
+    // line of another ISO dialect is no Okuma evidence.
+    expect(guard(LATHE, 'G71 X27.55 Z-24 B60 D0.6 U0.1\n$ H2.45 L2 F2\n')).toMatchObject({ likely: 'okuma-osp', line: 2 });
+    expect(guard(LATHE, 'O1001\n$ OP1 - ROUGH TURNING\nG0 X10\n')).toBeNull();
+    expect(guard(LATHE, 'O1001\n$FACING AND TURNING\nG0 X10\n')).toBeNull();
     // The M8 re-review: a Fanuc lathe program read as Okuma, whose G70/G71 P/Q a renumber
     // would leave pointing at old numbers.
     expect(guard(OKUMA, G183)).toMatchObject({ likely: 'fanuc-lathe', dialect: 'Fanuc', kind: 'marker' });

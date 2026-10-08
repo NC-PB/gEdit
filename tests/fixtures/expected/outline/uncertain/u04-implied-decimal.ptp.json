@@ -1,0 +1,7 @@
+{
+  "profile": "fanuc-gcode",
+  "items": [
+    {"kind":"comment","line":1,"text":"WRITTEN FOR GEDIT - SYNTHETIC: SIGNED INTEGERS WITH AN IMPLIED DECIMAL POINT, NO PROFILE FITS"},
+    {"kind":"end","line":10,"text":"M02"}
+  ]
+}

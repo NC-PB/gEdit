@@ -1,0 +1,20 @@
+{
+  "input": "../nc/sinumerik/s12-archive.MPF",
+  "profile": "sinumerik",
+  "preset": "sinumerik/sinumerik-2channel-archive",
+  "expect": {
+    "layout": "single-file",
+    "sections": [
+      {"channel":"1","ranges":[{"startLine":1,"endLine":13}]},
+      {"channel":"2","ranges":[{"startLine":18,"endLine":29}]}
+    ],
+    "outside": [{"startLine":14,"endLine":17}],
+    "marks": [
+      {"ruleId":"waitm","mark":"1","line":5,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"waitm","mark":"2","line":11,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"waitm","mark":"1","line":21,"channel":"2","partners":["1","2"],"blocking":true},
+      {"ruleId":"waitm","mark":"2","line":27,"channel":"2","partners":["1","2"],"blocking":true}
+    ],
+    "problems": []
+  }
+}

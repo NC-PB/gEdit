@@ -48,8 +48,8 @@ import { NC_DIR, REPO_FILE, channelItem, channelState, context, golden, mapRows,
 const SECTION_START = '^O(?<channel>[12])\\d{3}(?![\\d.])'
 const SECTION_END = '(?<![A-Z])M(?:99|30)(?![\\d.])'
 
-/** What the lathe's own default stores for the rest of a machine (`m6-machines-manage`). */
-const LATHE_REST = { numberInput: { mode: 'calculator', incrementMm: '0.001' }, units: 'mm', diameter: 'on', variants: { gcodeSystem: 'A', incrementalAddresses: 'uw', toolWord: 'offset2' } }
+/** What the lathe's own default stores for the rest of a machine (`m6-machines-manage`; the tool word is `byLength` since M12.5). */
+const LATHE_REST = { numberInput: { mode: 'calculator', incrementMm: '0.001' }, units: 'mm', diameter: 'on', variants: { gcodeSystem: 'A', incrementalAddresses: 'uw', toolWord: 'byLength' } }
 
 /** The channel block the steps below build. */
 const WANTED = {

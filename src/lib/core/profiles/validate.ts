@@ -599,6 +599,60 @@ function checkSyntax(value: unknown, p: Problems): void {
   // M10 (WP10.2): read by the program checks.
   optNum(syntax.maxWordDigits, 'syntax.maxWordDigits', p, { int: true, min: 1 });
   optNum(syntax.maxMCodes, 'syntax.maxMCodes', p, { int: true, min: 1 });
+  checkTextFields(syntax, caseSensitive, p);
+}
+
+/** M12.5: a colon word's name, `VCONST`, `HSC-MODE` — letters, digits, `_` and `-`, starting with a letter. */
+const COLON_WORD = /^[A-Za-z][A-Za-z0-9_-]*$/;
+
+/**
+ * The seven M12.5 fields (§7.16 #179). The keyword lists name keywords of the profile,
+ * because the tokenizers only look behind a keyword token; a `freeText` pattern carries the
+ * group `text`, the one the tokenizers read; no pattern may match the empty string, which
+ * would read nothing as a program name or a text.
+ */
+function checkTextFields(syntax: Record<string, unknown>, caseSensitive: boolean, p: Problems): void {
+  const known = new Set(
+    (Array.isArray(syntax.keywords) ? syntax.keywords : [])
+      .filter((keyword): keyword is string => typeof keyword === 'string')
+      .map((keyword) => keyword.trim().split(/\s+/).join(' ').toUpperCase()),
+  );
+  const keywordList = (value: unknown, path: string): void => {
+    if (value === undefined) return;
+    const before = p.list.length;
+    strArr(value, path, p, { min: 1 });
+    if (p.list.length !== before || !Array.isArray(value)) return;
+    value.forEach((entry, i) => {
+      if (!known.has(String(entry).trim().split(/\s+/).join(' ').toUpperCase())) p.add(`${path}[${i}]`, 'is not one of syntax.keywords');
+    });
+  };
+
+  if (syntax.freeText !== undefined) {
+    const list = arr(syntax.freeText, 'syntax.freeText', p, 1);
+    list?.forEach((entry, i) => {
+      const path = `syntax.freeText[${i}]`;
+      const before = p.list.length;
+      pattern(entry, path, p);
+      if (p.list.length !== before || typeof entry !== 'string') return;
+      if (!entry.includes('(?<text>')) p.add(path, 'has to carry the named group (?<text>…)');
+      else if (matchesEmpty(entry, caseSensitive)) p.add(path, 'can match an empty string, and a text has to take at least one character');
+    });
+  }
+  optStrArr(syntax.colonWords, 'syntax.colonWords', p, { min: 1, allow: COLON_WORD });
+  const callTargets = optObj(syntax.callTargets, 'syntax.callTargets', p);
+  if (callTargets) {
+    keywordList(callTargets.after ?? [], 'syntax.callTargets.after');
+    const before = p.list.length;
+    pattern(callTargets.pattern, 'syntax.callTargets.pattern', p);
+    if (p.list.length === before && typeof callTargets.pattern === 'string' && matchesEmpty(callTargets.pattern, caseSensitive)) {
+      p.add('syntax.callTargets.pattern', 'can match an empty string, and a program name has to take at least one character');
+    }
+  }
+  keywordList(syntax.labelAfter, 'syntax.labelAfter');
+  keywordList(syntax.declareAfter, 'syntax.declareAfter');
+  // One letter would make every address of a packed dialect a run of plain text.
+  optNum(syntax.plainTextRun, 'syntax.plainTextRun', p, { int: true, min: 2 });
+  optBool(syntax.tapeMarker, 'syntax.tapeMarker', p);
 }
 
 /**

@@ -1,0 +1,13 @@
+{
+  "profile": "fanuc-lathe",
+  "variants": {"toolWord":"byLength"},
+  "program": ["O2100","N10 G50 S3000","N20 T12000 M6 (MILL SPINDLE)","N30 T12012 (OD ROUGH)","N40 G28 U0 T0100","N50 T0101 (OD FINISH)","N60 G183 Z-5. T5 F20","N70 T0505","N80 M30"],
+  "items": [
+    {"kind":"program","line":1,"text":"O2100","endLine":9},
+    {"kind":"tool","line":3,"text":"T12 — MILL SPINDLE","tool":"12","endLine":3},
+    {"kind":"tool","line":4,"text":"T12 — OD ROUGH","tool":"12","endLine":5},
+    {"kind":"tool","line":6,"text":"T1 — OD FINISH","tool":"01","endLine":7},
+    {"kind":"tool","line":8,"text":"T5","tool":"05","endLine":9},
+    {"kind":"end","line":9,"text":"M30"}
+  ]
+}

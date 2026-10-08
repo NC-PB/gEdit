@@ -291,3 +291,15 @@ describe('the dialect the built-in profiles describe', () => {
     }
   });
 });
+
+describe('the M12.5 tokenizer patterns (§7.16 #179)', () => {
+  it('name the field when a free-text or call-target pattern does not compile', () => {
+    const syntax = { ...fanuc.syntax, keywords: ['CALL'] };
+    expect(() => compileProfile({ ...fanuc, syntax: { ...syntax, freeText: ['(?<text>A', 'B'] } })).toThrow(/syntax\.freeText\[0\]/);
+    expect(() => compileProfile({ ...fanuc, syntax: { ...syntax, callTargets: { after: ['CALL'], pattern: '[' } } })).toThrow(
+      /syntax\.callTargets\.pattern/,
+    );
+    expect(() => compileProfile({ ...fanuc, syntax: { ...syntax, callTargets: { after: ['CALL'] } as never } })).toThrow(ProfileError);
+    expect(() => compileProfile({ ...fanuc, syntax: { ...syntax, freeText: ['CALL\\s+(?<text>\\S+)'] } })).not.toThrow();
+  });
+});

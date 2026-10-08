@@ -15,7 +15,9 @@
         "mode": "calculator"
       },
       "units": "mm",
-      "variants": {}
+      "variants": {
+        "toolChange": "m6"
+      }
     },
     "source": {
       "diameter": "profile",
@@ -26,7 +28,9 @@
       },
       "numberInput": "machine",
       "units": "profile",
-      "variants": {}
+      "variants": {
+        "toolChange": "profile"
+      }
     }
   },
   "profile": {
@@ -78,7 +82,7 @@
     "detect": {
       "content": [
         {
-          "pattern": "^%_N_\\w+_(?:MPF|SPF)",
+          "pattern": "^;?%_N_\\w+_(?:MPF|SPF)",
           "weight": 5000
         },
         {
@@ -146,11 +150,15 @@
           "weight": 1
         },
         {
-          "pattern": "^(?![^;]*(?<![A-Z_$])Y)N\\d+",
+          "pattern": "^(?![\\d(;])(?:[^\";]*\"[^\"]*\")*[^\";]*?(?<![A-Z0-9_$])Y[-+=]?\\.?\\d",
           "weight": 1
         },
         {
-          "pattern": "^(?![^;]*(?<![A-Z_$])Y)(?:N\\d+[ \\t]*)?[GM]\\d{1,3}(?![\\d.])",
+          "pattern": "^N\\d+",
+          "weight": 1
+        },
+        {
+          "pattern": "^(?:N\\d+[ \\t]*)?[GM]\\d{1,3}(?![\\d.])",
           "weight": 1
         }
       ],
@@ -240,6 +248,194 @@
               ]
             },
             "verify": true
+          },
+          {
+            "id": "sinumerik-2channel-archive",
+            "label": "Two channels in one archive file: channel 1 starts at %_N_1_0_MPF, channel 2 at %_N_2_0_MPF; the archive's other sections (%_N_1_7_MPF tool data and the like) belong to no channel; WAITM/WAITMC wait with a mark number; SETM answers a WAITM, CLEARM does not; SETM and CLEARM are reached with Next/Previous Sync Point and not listed in the map; WAITE not counted",
+            "source": "one archive file that holds both channels as %_N_<n>_0_MPF sections, a layout seen in practice; the rules of sinumerik-2channel (syntax-sinumerik.md §7.2a)",
+            "value": {
+              "layout": "single-file",
+              "list": [
+                {
+                  "id": "1",
+                  "name": "Channel 1"
+                },
+                {
+                  "id": "2",
+                  "name": "Channel 2"
+                }
+              ],
+              "sectionEnd": "^%_N_(?!\\d+_0_MPF\\b)",
+              "sectionStart": "^%_N_(?<channel>\\d+)_0_MPF\\b",
+              "stopsAndEndsWait": false,
+              "syncMarks": [
+                {
+                  "id": "waitm",
+                  "label": "WAITM / WAITMC: wait for a mark number in the channels listed",
+                  "match": {
+                    "kind": "regex",
+                    "pattern": "\\bWAITMC?\\s*\\(\\s*(?<mark>[^,)\\s]+)"
+                  },
+                  "partners": {
+                    "decode": "split",
+                    "kind": "line",
+                    "pattern": "\\bWAITMC?\\s*\\(\\s*[^,)\\s]+\\s*,(?<channels>[^)]*)\\)",
+                    "separator": ","
+                  }
+                },
+                {
+                  "answers": true,
+                  "blocking": false,
+                  "id": "setm",
+                  "label": "SETM: sets a mark without waiting; it answers a WAITM of that mark in another channel",
+                  "match": {
+                    "kind": "regex",
+                    "pattern": "\\bSETM\\s*\\(\\s*(?<mark>[^,)\\s]+)"
+                  },
+                  "partners": {
+                    "kind": "all"
+                  }
+                },
+                {
+                  "blocking": false,
+                  "id": "clearm",
+                  "label": "CLEARM: clears a mark without waiting; it answers nothing",
+                  "match": {
+                    "kind": "regex",
+                    "pattern": "\\bCLEARM\\s*\\(\\s*(?<mark>[^,)\\s]+)"
+                  },
+                  "partners": {
+                    "kind": "all"
+                  }
+                }
+              ]
+            },
+            "verify": true
+          },
+          {
+            "id": "sinumerik-2channel-c",
+            "label": "Two channels, one program per channel named <name>_C1.MPF and <name>_C2.MPF; WAITM/WAITMC wait with a mark number; SETM answers a WAITM, CLEARM does not; SETM and CLEARM are reached with Next/Previous Sync Point and not listed in the map; WAITE not counted; a machine that synchronises its channels through its builder's own cycle needs Advanced rules (see the user guide)",
+            "source": "channel files named <name>_C<n>.MPF, a layout seen in practice (a builder's own synchronisation cycle goes in the Advanced form); the rules of sinumerik-2channel (syntax-sinumerik.md §7.2a)",
+            "value": {
+              "fileName": "^(?<stem>.+)_C(?<channel>\\d{1,2})\\.MPF$",
+              "layout": "multi-file",
+              "list": [
+                {
+                  "id": "1",
+                  "name": "Channel 1"
+                },
+                {
+                  "id": "2",
+                  "name": "Channel 2"
+                }
+              ],
+              "stopsAndEndsWait": false,
+              "syncMarks": [
+                {
+                  "id": "waitm",
+                  "label": "WAITM / WAITMC: wait for a mark number in the channels listed",
+                  "match": {
+                    "kind": "regex",
+                    "pattern": "\\bWAITMC?\\s*\\(\\s*(?<mark>[^,)\\s]+)"
+                  },
+                  "partners": {
+                    "decode": "split",
+                    "kind": "line",
+                    "pattern": "\\bWAITMC?\\s*\\(\\s*[^,)\\s]+\\s*,(?<channels>[^)]*)\\)",
+                    "separator": ","
+                  }
+                },
+                {
+                  "answers": true,
+                  "blocking": false,
+                  "id": "setm",
+                  "label": "SETM: sets a mark without waiting; it answers a WAITM of that mark in another channel",
+                  "match": {
+                    "kind": "regex",
+                    "pattern": "\\bSETM\\s*\\(\\s*(?<mark>[^,)\\s]+)"
+                  },
+                  "partners": {
+                    "kind": "all"
+                  }
+                },
+                {
+                  "blocking": false,
+                  "id": "clearm",
+                  "label": "CLEARM: clears a mark without waiting; it answers nothing",
+                  "match": {
+                    "kind": "regex",
+                    "pattern": "\\bCLEARM\\s*\\(\\s*(?<mark>[^,)\\s]+)"
+                  },
+                  "partners": {
+                    "kind": "all"
+                  }
+                }
+              ]
+            },
+            "verify": true
+          },
+          {
+            "id": "sinumerik-tagged",
+            "label": "Two channels as tagged sections of one file: <PROG_BEGIN_C1> starts channel 1, <PROG_BEGIN_C2> channel 2, a <PROG_END_…> line ends the section; other tagged sections belong to no channel; WAITM/WAITMC wait with a mark number; SETM answers a WAITM, CLEARM does not; SETM and CLEARM are reached with Next/Previous Sync Point and not listed in the map; WAITE not counted",
+            "source": "one file whose channels are tagged <PROG_BEGIN_C<n>> … <PROG_END_…>, a layout seen in practice; the rules of sinumerik-2channel (syntax-sinumerik.md §7.2a)",
+            "value": {
+              "layout": "single-file",
+              "list": [
+                {
+                  "id": "1",
+                  "name": "Channel 1"
+                },
+                {
+                  "id": "2",
+                  "name": "Channel 2"
+                }
+              ],
+              "sectionEnd": "^<PROG_END_",
+              "sectionStart": "^<PROG_BEGIN_C(?<channel>\\d+)>",
+              "stopsAndEndsWait": false,
+              "syncMarks": [
+                {
+                  "id": "waitm",
+                  "label": "WAITM / WAITMC: wait for a mark number in the channels listed",
+                  "match": {
+                    "kind": "regex",
+                    "pattern": "\\bWAITMC?\\s*\\(\\s*(?<mark>[^,)\\s]+)"
+                  },
+                  "partners": {
+                    "decode": "split",
+                    "kind": "line",
+                    "pattern": "\\bWAITMC?\\s*\\(\\s*[^,)\\s]+\\s*,(?<channels>[^)]*)\\)",
+                    "separator": ","
+                  }
+                },
+                {
+                  "answers": true,
+                  "blocking": false,
+                  "id": "setm",
+                  "label": "SETM: sets a mark without waiting; it answers a WAITM of that mark in another channel",
+                  "match": {
+                    "kind": "regex",
+                    "pattern": "\\bSETM\\s*\\(\\s*(?<mark>[^,)\\s]+)"
+                  },
+                  "partners": {
+                    "kind": "all"
+                  }
+                },
+                {
+                  "blocking": false,
+                  "id": "clearm",
+                  "label": "CLEARM: clears a mark without waiting; it answers nothing",
+                  "match": {
+                    "kind": "regex",
+                    "pattern": "\\bCLEARM\\s*\\(\\s*(?<mark>[^,)\\s]+)"
+                  },
+                  "partners": {
+                    "kind": "all"
+                  }
+                }
+              ]
+            },
+            "verify": true
           }
         ],
         "waitLetters": [
@@ -269,7 +465,48 @@
           }
         ]
       },
-      "units": "mm"
+      "units": "mm",
+      "variants": [
+        {
+          "choices": [
+            {
+              "detect": [
+                {
+                  "pattern": "^(?:[^\"]*\"[^\"]*\")*[^\"]*?(?<![A-Z0-9_$])M0*6(?![\\d.]|\\s*=)",
+                  "weight": 5
+                }
+              ],
+              "label": "M6 loads the tool selected with T (default, verify)",
+              "overlay": {
+                "toolCall": {
+                  "toolFrom": "same-line-or-last",
+                  "trigger": "^(?:[^\"]*\"[^\"]*\")*[^\"]*?(?<![A-Z0-9_$])M0*6(?![\\d.]|\\s*=)"
+                }
+              },
+              "value": "m6"
+            },
+            {
+              "detect": [
+                {
+                  "pattern": "^(?:N\\d+[ \\t]+)?T(?:(?!0+(?![\\d.]))\\d+|\\d*[ \\t]*=[ \\t]*(?:\"[^\"]*\"|(?!0+(?![\\d.]))\\d+))(?:[ \\t]+D\\d+)?$",
+                  "weight": 3
+                }
+              ],
+              "label": "T changes the tool, no M6 (the builder sets the change mode)",
+              "overlay": {
+                "toolCall": {
+                  "toolFrom": "same-line",
+                  "trigger": "^(?:[^\"]*\"[^\"]*\")*[^\"]*?(?<![A-Z_$])T(?:\\d*\\s*=\\s*\"[^\"]*\"|\\d*\\s*=\\s*(?!0+(?![\\d.]))\\d+(?![\\d._])|(?!0+(?![\\d.]))\\d+(?![\\d._])(?!\\s*=))"
+                }
+              },
+              "value": "t"
+            }
+          ],
+          "default": "m6",
+          "id": "toolChange",
+          "label": "Tool change"
+        }
+      ]
     },
     "machineType": "mill",
     "modal": {
@@ -322,7 +559,7 @@
     "outline": [
       {
         "kind": "program",
-        "pattern": "^%(?:_N_)?(?<name>\\w+)_(?:MPF|SPF)"
+        "pattern": "^;?%(?:_N_)?(?<name>\\w+)_(?:MPF|SPF)"
       },
       {
         "kind": "program",
@@ -401,8 +638,11 @@
       ],
       "decimalPointSignificant": false,
       "decimalSeparator": ".",
+      "declareAfter": [
+        "DEF"
+      ],
       "exponentMarker": "EX",
-      "header": "^%(?:_N_)?\\w+_(?:MPF|SPF)",
+      "header": "^;?%(?:_N_)?\\w+_(?:MPF|SPF)",
       "keywords": [
         "IF",
         "ELSE",
@@ -492,7 +732,21 @@
         "CHAR",
         "STRING",
         "AXIS",
-        "FRAME"
+        "FRAME",
+        "SBLOF",
+        "SBLON",
+        "DISPLOF",
+        "DISPLON",
+        "NORM",
+        "KONT",
+        "KONTC",
+        "KONTT"
+      ],
+      "labelAfter": [
+        "GOTO",
+        "GOTOF",
+        "GOTOB",
+        "GOTOC"
       ],
       "labels": "^\\s*(?:/\\d?\\s*)?(?:N\\d+[ \\t]+)?(?<name>[A-Z_][A-Z0-9_]*):(?!=)",
       "maxLineLength": 512,

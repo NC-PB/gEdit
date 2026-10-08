@@ -43,12 +43,12 @@ jobs:
     outputs:
       version: ${{ steps.check.outputs.version }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v5
         with:
           # the whole history, for the "is this commit on main" question
           fetch-depth: 0
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -132,7 +132,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v5
 
       # patchelf is needed for the AppImage
       - name: Install Linux dependencies
@@ -141,7 +141,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y $LINUX_PACKAGES patchelf
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -187,7 +187,7 @@ jobs:
             fi
           done
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v5
         with:
           name: gedit-release-${{ matrix.os }}
           path: |
@@ -212,12 +212,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v5
         with:
           # the token is only for `gh`; nothing here pushes
           persist-credentials: false
 
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v5
         with:
           pattern: gedit-release-*
           merge-multiple: true

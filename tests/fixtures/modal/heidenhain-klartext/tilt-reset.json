@@ -1,0 +1,19 @@
+{
+  "about": "M12.5 decision 6 (plan 7.4 rule 13, 7.16 #180): the TNC 640 cycle manual switches cycle 19 off by defining it again and answering the angle question with NO ENT, which writes an empty CYCL DEF 19.1 (frameEmptyCloses). 19.0 alone still changes nothing; a 19.1 that writes some angles keeps the M10-2 reading (an angle not written keeps its value).",
+  "input": "tilt-reset.h",
+  "states": [
+    { "line": 6, "about": "19.0 only names the cycle.", "after": { "frame": null } },
+    { "line": 7, "about": "B+30 tilts the plane.", "after": { "frame": "CYCL DEF 19" } },
+    { "line": 8, "about": "A move under the tilt (address arithmetic refuses it).", "after": { "frame": "CYCL DEF 19" } },
+    { "line": 9, "about": "19.0 of the reset names the cycle and changes nothing.", "after": { "frame": "CYCL DEF 19" } },
+    { "line": 10, "about": "The empty 19.1 (NO ENT) switches cycle 19 off.", "after": { "frame": null } },
+    { "line": 11, "about": "The move after the reset is in the untilted plane.", "after": { "frame": null } },
+    { "line": 12, "after": { "frame": "CYCL DEF 19" } },
+    { "line": 13, "about": "B+0 alone: A+20 still stands, the tilt stays.", "after": { "frame": "CYCL DEF 19" } },
+    { "line": 14, "about": "Every angle written so far is zero now: closed (M10-2).", "after": { "frame": null } },
+    { "line": 15, "after": { "frame": "CYCL DEF 19" } },
+    { "line": 16, "about": "A+0 after B+45: B still stands at 45, the tilt stays open.", "after": { "frame": "CYCL DEF 19" } },
+    { "line": 17, "about": "19.0 alone does not close it.", "after": { "frame": "CYCL DEF 19" } },
+    { "line": 18, "about": "B+0 sets the last non-zero angle to zero: closed (M10-2).", "after": { "frame": null } }
+  ]
+}

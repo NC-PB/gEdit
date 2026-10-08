@@ -1,0 +1,31 @@
+# RP: M12.5 "Real programs, second pass" - an uncertain dialect shown as a guess and kept, the
+# five-digit lathe T and the Siemens mill T change on the map, a wait code of the machine in the
+# hover, the older tilt cycle closed by an empty 19.1, detection of the shapes the milestone
+# fixed, and the new channel presets.
+# Run with: tests/runtime/suites/m0.txt tests/runtime/suites/m1.txt tests/runtime/suites/m2.txt tests/runtime/suites/m3.txt tests/runtime/suites/m4.txt tests/runtime/suites/m5.txt tests/runtime/suites/m6.txt tests/runtime/suites/m7.txt tests/runtime/suites/m8.txt tests/runtime/suites/m9.txt tests/runtime/suites/m10.txt tests/runtime/suites/m11.txt tests/runtime/suites/m12.txt tests/runtime/suites/rp.txt
+#
+# Every expected answer is written out from the synthetic programs (tests/fixtures/nc/uncertain/,
+# the outline goldens, tests/fixtures/channels/) and from the translations, never read from what
+# the app answers.
+
+# The dialect item of a guess reads "<dialect>?" with the tooltip, the picker opens on "Keep ... (the
+# guess)", keeping it (or any pick) clears the mark and is remembered for the file, a copy is a new
+# question, a sure program has none of it.
+rp-uncertain
+
+# The five-digit lathe T is read by length with no machine and moved by the 3+2 / 2+3 machine
+# choices; the machine form pre-selects "By length"; a Siemens mill program with no M6 lists its T
+# tools unless the machine says M6.
+rp-toolword
+
+# M198 on a machine that lists M190-M199 as waits says so (and on one whose waits are M100-M197 does not).
+rp-wait-hover
+
+# CYCL DEF 19.1 with no angle closes the tilt, 19.0 does not, an angle keeps it open.
+rp-cycl19
+
+# Okuma with no header, Siemens mill with no header, a five-axis Fanuc mill, the ;%_N_ header.
+rp-detect
+
+# The seven lathe presets and four Sinumerik presets, applied on their button and saved.
+rp-presets

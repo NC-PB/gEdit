@@ -600,3 +600,40 @@ describe('fixes of the M12 review', () => {
     expect(w.svc.check(one).longLines).toEqual([{ channel: '2', count: 1 }]);
   });
 });
+
+describe('waitCodeRule (M12.5, §7.16 #178)', () => {
+  const builder: ChannelParams = {
+    ...multi,
+    syncMarks: [
+      { id: 'waitm', label: 'WAITM', match: { kind: 'regex', pattern: '\\bWAITM\\((?<mark>\\d+)' }, partners: { kind: 'all' } },
+      { id: 'wait', label: 'Waiting M-code of this builder', match: { kind: 'codes', codes: 'M190-M199' }, partners: { kind: 'all' } },
+    ],
+  };
+
+  it('names the codes rule of the document’s machine that lists the word, with the machine', () => {
+    w.machinesById.set('m1', machine('m1'));
+    w.blocks.set('m1', valid(builder));
+    const id = w.open('PART_1.ISO', ['M198']);
+    expect(w.svc.waitCodeRule(id, 'M', 198)).toEqual({ ruleId: 'wait', label: 'Waiting M-code of this builder', machineName: 'Machine m1', semantics: 'rendezvous' });
+    expect(w.svc.waitCodeRule(id, 'm', 190)?.ruleId).toBe('wait');
+  });
+
+  it('answers null for a word the list does not name, and without a machine or a valid block', () => {
+    w.machinesById.set('m1', machine('m1'));
+    w.blocks.set('m1', valid(builder));
+    const id = w.open('PART_1.ISO', ['M198']);
+    expect(w.svc.waitCodeRule(id, 'M', 98)).toBeNull();
+    expect(w.svc.waitCodeRule(id, 'M', 200)).toBeNull();
+    expect(w.svc.waitCodeRule(w.open('b.nc', ['M198'], null, null), 'M', 198)).toBeNull();
+    w.machinesById.set('m2', machine('m2'));
+    w.blocks.set('m2', { state: 'invalid', problems: [] });
+    expect(w.svc.waitCodeRule(w.open('c.nc', ['M198'], null, 'm2'), 'M', 198)).toBeNull();
+  });
+
+  it('answers without waiting for a resolution, and a blank rule label is null', () => {
+    w.machinesById.set('m1', machine('m1'));
+    w.blocks.set('m1', valid({ ...builder, syncMarks: [{ ...builder.syncMarks[1], label: '  ' }] }));
+    const id = w.open('PART_1.ISO', ['M198']);
+    expect(w.svc.waitCodeRule(id, 'M', 195)).toEqual({ ruleId: 'wait', label: null, machineName: 'Machine m1', semantics: 'rendezvous' });
+  });
+});

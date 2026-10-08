@@ -163,6 +163,11 @@
         "chars": "/",
         "position": "either"
       },
+      "colonWords": [
+        "VCONST",
+        "VC",
+        "HSC-MODE"
+      ],
       "comments": [
         {
           "end": null,
@@ -174,6 +179,13 @@
       "decimalPointSignificant": false,
       "decimalSeparator": ".",
       "decimalSeparatorAlt": ",",
+      "freeText": [
+        "CYCL\\s+DEF\\s+\\d+(?:\\.0+)?\\s+(?<text>(?![A-Z]{1,2}[+\\-]?\\d)[^\\s;~+\\-.\\d#\"(](?:[^;~]*?[^\\s;~])?)(?=\\s*(?:[;~]|$)|\\s+Q\\d+\\s*=)",
+        "CYCL\\s+DEF\\s+9\\.1\\s+(?<text>[A-Z][A-Z.\\-]*)(?=\\s*[+-]?\\d)",
+        "(?:BEGIN|END)\\s+PGM\\s+(?<text>[^\\s;](?:[^;]*?[^\\s;])?)(?=\\s+(?:MM|INCH)\\s*(?:;|$))",
+        "FN\\s*16\\s*:\\s*(?<text>[^\\s;](?:[^;]*?[^\\s;])?)(?=\\s*(?:;|$))",
+        "CALL\\s+PGM\\s+(?<text>[^\\s;~\"]+)"
+      ],
       "incrementalPrefix": "I",
       "keywords": [
         "BEGIN PGM",
@@ -250,11 +262,12 @@
       "symbolAddresses": [
         "#"
       ],
+      "tapeMarker": false,
       "variables": "Q[LRS]?\\d+",
       "wordSeparatorRequired": true
     },
     "toolCall": {
-      "tool": "TOOL\\s+CALL\\s+(?<tool>\\d+(\\.\\d)?|\"[^\"]+\"|QS\\d+)\\s*(?<axis>[XYZ])?\\b",
+      "tool": "TOOL\\s+CALL\\s+(?<tool>\\d+(?:\\.\\d(?!\\d))?|\"[^\"]+\"|QS\\d+)\\s*(?:(?<axis>[XYZ])(?![A-Z0-9_]))?",
       "toolFrom": "same-line",
       "trigger": "\\bTOOL\\s+CALL\\s+(\\d|\"|QS\\d)"
     },

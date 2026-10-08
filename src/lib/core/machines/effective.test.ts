@@ -37,7 +37,7 @@ describe('defaultParams', () => {
     expect(params.numberInput?.mode).toBe('calculator');
     expect(params.units).toBe('mm');
     expect(params.diameter).toBe('on');
-    expect(params.variants).toEqual({ gcodeSystem: 'A', incrementalAddresses: 'uw', toolWord: 'offset2' });
+    expect(params.variants).toEqual({ gcodeSystem: 'A', incrementalAddresses: 'uw', toolWord: 'byLength' });
     expect(defaultParams(MILL).numberInput?.mode).toBe('increment');
     expect(defaultParams(MILL).diameter).toBeNull();
   });
@@ -96,7 +96,7 @@ describe('effectiveMachine', () => {
       params: { variants: { gcodeSystem: 'Z', nosuch: 'x' }, modalInitial: { feedmode: 'G95', coolant: 'M8' } },
     });
     const eff = effectiveMachine(LATHE, odd, 'document', {});
-    expect(eff.params.variants).toEqual({ gcodeSystem: 'A', incrementalAddresses: 'uw', toolWord: 'offset2' });
+    expect(eff.params.variants).toEqual({ gcodeSystem: 'A', incrementalAddresses: 'uw', toolWord: 'byLength' });
     expect(eff.params.modalInitial).toEqual({ feedmode: 'G95' });
   });
 

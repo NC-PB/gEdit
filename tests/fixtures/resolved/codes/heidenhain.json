@@ -548,8 +548,9 @@
     {
       "axisWords": "data",
       "code": "CYCL DEF 19",
-      "description": "Tilts the working plane: sub-block 19.1 gives the angles of the swivel axes A, B and C, and with them the feed and the safety distance for the control's own positioning. Whether the angles are axis positions or solid angles depends on the machine. Define it again with all angles at 0 and then once more without an angle to end it; PLANE RESET ends it as well. gEdit reads the plane as untilted from the sub-block that sets every angle to 0; an angle that is not written keeps its value. It acts from its definition on and is never called.",
+      "description": "Tilts the working plane: sub-block 19.1 gives the angles of the swivel axes A, B and C, and with them the feed and the safety distance for the control's own positioning. Whether the angles are axis positions or solid angles depends on the machine. Define it again with all angles at 0 and then once more without an angle to end it; PLANE RESET ends it as well. gEdit reads the plane as untilted from the sub-block that sets every angle to 0, and from a 19.1 sub-block that writes no angle at all; an angle that is not written keeps its value. It acts from its definition on and is never called.",
       "frame": "open",
+      "frameEmptyCloses": "1",
       "frameZeroWords": [
         "A",
         "B",

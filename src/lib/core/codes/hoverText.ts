@@ -28,12 +28,18 @@
 //     two letters, staying silent;
 //   - a word the database does not describe: shown as such, never guessed. An entry that
 //     still carries `verify: true` counts as "not described" — its label and description
-//     stay out of hover until someone has confirmed them (content rule, §5 WP3.3).
+//     stay out of hover until someone has confirmed them (content rule, §5 WP3.3);
+//   - a code word the document's machine lists as a wait code (M12.5 decision 4, §7.16 #178:
+//     `M198` in a machine's `M190-M199`): "Wait code on this machine (<machine>): <rule>",
+//     instead of the database's meaning and its required words, which describe the
+//     control's own use of the code and not this machine's. Only a plain `codes` list
+//     answers (`ChannelService.waitCodeRule`); without a machine the database speaks.
 //
 // What stays silent, because saying "unknown" about it would be noise rather than help:
 // comments, strings, operators, expressions, block skips, a bare value with no address
-// (`TOOL CALL 5`), and a many-lettered word that is a name and not a code
-// (`BEGIN PGM TEST`).
+// (`TOOL CALL 5`), a many-lettered word that is a name and not a code
+// (`BEGIN PGM TEST`), and `text` (M12.5, §7.16 #179: text the control keeps and shows but
+// does not execute — a Klartext cycle name, a program name — which no word is read from).
 
 import { tokenizeLine } from '$lib/core/nc/tokenizer';
 import { isAssignmentWord, lookupCode, lookupWord, normalizeCode } from './lookup';
@@ -49,6 +55,19 @@ export interface HoverInfo {
   end: number;
 }
 
+/** What `ChannelService.waitCodeRule` answers for a code word of the document's machine. */
+export interface WaitCodeAnswer {
+  ruleId: string;
+  /** The rule's label (data, untranslated); `null` when the rule has none. */
+  label: string | null;
+  machineName: string | null;
+  /** The rule's semantics (`rendezvous`, `count`, `ordered`); absent means a rendezvous. */
+  semantics?: string;
+}
+
+/** Asks the document's machine whether `letter` + `value` is one of its wait codes. */
+export type WaitCodeLookup = (letter: string, value: number) => WaitCodeAnswer | null;
+
 export interface HoverOptions {
   /**
    * Address letters the database uses for numbered codes (`G`, `M`). A word with such an
@@ -63,6 +82,11 @@ export interface HoverOptions {
    * list and the word is described as before.
    */
   extendedAddresses?: RegExp | null;
+  /**
+   * M12.5 (§7.16 #178): the document's machine's wait codes. Absent (no document, no machine)
+   * or answering `null`, the database describes the word as before.
+   */
+  waitCode?: WaitCodeLookup;
 }
 
 /** Characters markdown would read as formatting. */
@@ -241,12 +265,14 @@ export function hoverAt(
   db: CodeDb,
   t: Translate,
   prev?: LineState,
+  o: Pick<HoverOptions, 'waitCode'> = {},
 ): HoverInfo | null {
   const token = hoverTarget(line, offset, cp, db, prev);
   if (!token) return null;
   const markdown = hoverText(token, lookupFor(db, token), t, {
     codeAddresses: codeAddressesOf(db),
     extendedAddresses: extendedAddressesOf(cp),
+    waitCode: o.waitCode,
   });
   return markdown === null ? null : { markdown, start: token.start, end: token.end };
 }
@@ -345,6 +371,35 @@ function wordDisplay(token: NcToken): string {
   return `${token.address ?? ''}${index}${gap}${token.valueText ?? ''}`;
 }
 
+/**
+ * A code word the machine's wait list could name: one address letter, a whole number written
+ * without sign or point (`M198`, `M0198`), no assignment and no index. `M198.` and `M2=198`
+ * are other words, as they are to the wait-code reader (`waitCodeWordRe`).
+ */
+function waitCodeWord(token: NcToken): { letter: string; value: number } | null {
+  const v = token.value;
+  if (token.address === undefined || !/^[A-Za-z]$/.test(token.address)) return null;
+  if (isAssignmentWord(token) || token.index !== undefined) return null;
+  if (!v || v.sign !== '' || v.hasPoint || !/^\d+$/.test(v.intPart)) return null;
+  return { letter: token.address.toUpperCase(), value: Number(v.intPart) };
+}
+
+/**
+ * A wait code of the document's machine: what the machine says, not the database. The
+ * database's meaning and its required words are left out (they describe the control's own
+ * use of the code); `hasEntry` adds the note that says so, when the database has one.
+ */
+function waitCodeHover(display: string, answer: WaitCodeAnswer, hasEntry: boolean, t: Translate): string {
+  const machine = answer.machineName ?? '';
+  // An `ordered` rule (an order number such as `P1-P9999`) is not a wait: it names the
+  // place in a sequence, so the hover says "sync code", not "wait code".
+  const sync = answer.semantics === 'ordered' ? 'Sync' : '';
+  const line = answer.label
+    ? t(`assistant.hover.${sync ? 'syncCode' : 'waitCode'}`, { machine, rule: answer.label })
+    : t(`assistant.hover.${sync ? 'syncCodeNoLabel' : 'waitCodeNoLabel'}`, { machine });
+  return paragraphs([heading(display), escapeMarkdown(line), hasEntry ? `_${escapeMarkdown(t(sync ? 'assistant.hover.syncCodeNote' : 'assistant.hover.waitCodeNote'))}_` : null]);
+}
+
 /** True for a value that could be the number of a code: `83`, not `+5` and not `#101`. */
 function looksLikeCodeNumber(token: NcToken): boolean {
   return token.valueText !== undefined && token.value !== null && token.value !== undefined && token.value.sign === '';
@@ -391,6 +446,10 @@ export function hoverText(
     case 'word': {
       if (token.address === undefined) return null; // a bare value: `TOOL CALL 5`
       const display = wordDisplay(token);
+      // M12.5 decision 4: the machine's wait codes win over the database.
+      const wait = o.waitCode ? waitCodeWord(token) : null;
+      const answer = wait && o.waitCode ? o.waitCode(wait.letter, wait.value) : null;
+      if (answer) return waitCodeHover(display, answer, entry !== null, t);
       if (described) return codeHover(display, described, t);
       const address = lookup?.address;
       if (entry) return unknownHover(display, t, address); // an unverified entry
@@ -405,6 +464,10 @@ export function hoverText(
       }
       return token.address.length <= MAX_ADDRESS_LENGTH ? unknownHover(display, t) : null;
     }
+
+    case 'text':
+      // M12.5 (§7.16 #179): text the control shows but does not execute says nothing.
+      return null;
 
     default:
       return null;

@@ -1,0 +1,7 @@
+{
+  "profile": "fanuc-lathe",
+  "items": [
+    {"kind":"comment","line":2,"text":"WRITTEN FOR GEDIT - SYNTHETIC: A %1 START AND $ COMMENT LINES, NO PROFILE FITS"},
+    {"kind":"end","line":14,"text":"M30"}
+  ]
+}

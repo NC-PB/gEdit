@@ -355,6 +355,18 @@ function readEntry(
   // Owner decision of 2026-10-08 (M10-2): the angle words whose zero closes the frame.
   const zeroWords = readWords(raw.frameZeroWords, `${path}.frameZeroWords`, report);
   if (zeroWords) entry.frameZeroWords = zeroWords;
+  // M12.5 (§7.16 #180): the sub-block whose empty block closes the tilt (`"1"`: an empty
+  // `CYCL DEF 19.1`). Digits only, and only beside `frameZeroWords`, whose reading it ends.
+  if (raw.frameEmptyCloses !== undefined) {
+    const sub = typeof raw.frameEmptyCloses === 'string' ? raw.frameEmptyCloses.trim() : undefined;
+    if (sub === undefined || !/^\d+$/.test(sub)) {
+      report({ path: `${path}.frameEmptyCloses`, message: 'has to be a sub-block number such as "1"' });
+    } else if (!entry.frameZeroWords) {
+      report({ path: `${path}.frameEmptyCloses`, message: `frameEmptyCloses of ${entry.code} needs frameZeroWords` });
+    } else {
+      entry.frameEmptyCloses = sub;
+    }
+  }
   // M10 (WP10.2): what the program checks read about a code besides its `sets`.
   const conflicts = readConflicts(raw.conflicts, `${path}.conflicts`, report);
   if (conflicts) entry.conflicts = conflicts;

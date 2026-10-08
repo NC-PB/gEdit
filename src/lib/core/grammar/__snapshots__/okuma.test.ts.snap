@@ -53,7 +53,7 @@ exports[`the okuma grammar > is stable 1`] = `
     ],
   ],
   [
-    "(?:PSELECT|MODOUT|MODIN|WRITE|CALL|GOTO|READ|AND|END|EOR|GET|NOT|PUT|RTS|EQ|GE|GT|IF|LE|LT|NE|OR)(?![A-Za-z])",
+    "(?:PSELECT|MODOUT|CLEAR|MODIN|WRITE|CALL|DRAW|GOTO|NOEX|READ|AND|END|EOR|GET|NOT|PUT|RTS|EQ|GE|GT|IF|LE|LT|NE|OR)(?![A-Za-z])",
     "keyword",
   ],
   [
@@ -65,7 +65,7 @@ exports[`the okuma grammar > is stable 1`] = `
     "section",
   ],
   [
-    "(?:V[A-Z][A-Z0-9]{3})",
+    "(?:V[A-Z][A-Z0-9]{3}|VTL[A-Z])",
     "variable",
   ],
   [

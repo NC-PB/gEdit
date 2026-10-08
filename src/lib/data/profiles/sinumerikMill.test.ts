@@ -28,10 +28,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { compileProfile } from '$lib/core/profiles/compile';
-import { MAX_SNIFF_LINES, detectProfile } from '$lib/core/profiles/detect';
+import { MAX_SNIFF_LINES, detectProfile, detectResult, detectVariants } from '$lib/core/profiles/detect';
 import { validateProfile } from '$lib/core/profiles/validate';
 import { OutlineIndex } from '$lib/core/profiles/outline';
-import { applyMachine, noMachine } from '$lib/core/machines/effective';
+import { applyMachine, effectiveMachine, noMachine } from '$lib/core/machines/effective';
 import { BUILTIN_PROFILE_JSON } from '$lib/data/profiles';
 import { listFixtures, openFixture } from '../../../../tests/unit/helpers/fixtures';
 import type { CompiledProfile } from '$lib/core/profiles/types';
@@ -326,9 +326,13 @@ describe('milling against turning', () => {
     ]) {
       expect(lineScore(turn, line), line).toBeGreaterThan(lineScore(mill, line));
     }
-    // A line that moves Y counts for neither (point 1 above).
-    expect(lineScore(mill, 'N140 Y25.969')).toBe(0);
-    expect(lineScore(mill, 'N150 G2 X226.031 Y10.219 F800')).toBe(0);
+    // A line that moves Y counts for the milling profile and not for the turning one
+    // (M12.5: until then it counted for neither, and a milling program without a
+    // header lost to the Fanuc mill, which scores every such line).
+    for (const line of ['N140 Y25.969', 'N150 G2 X226.031 Y10.219 F800', 'X10 Y20']) {
+      expect(lineScore(mill, line), line).toBe(1);
+      expect(lineScore(turn, line), line).toBe(0);
+    }
   });
 
   it('gives a Fanuc tool change, a comment and a Klartext block no milling bonus', () => {
@@ -360,13 +364,24 @@ describe('milling against turning', () => {
     // (`f03-multi-program.nc` has an `M6` block): they tell milling from turning, not one
     // dialect from another, so what is asserted for them is that no other dialect's file
     // comes within 3 of being read as Siemens milling.
+    //
+    // M12.5 adds three rules that score a milling line the way the Fanuc mill scores it
+    // — a numbered block and a G/M block that moves Y, and a Y word — so they fire on every
+    // ISO dialect's file by design and are asserted like the milling words. A file that
+    // `detectResult` calls uncertain (a fragment, or a dialect gEdit has no profile for)
+    // fits no dialect well, so no margin is asserted on it.
     const ownRules = mill.re.detectContent.filter(
       (rule) => !turn.re.detectContent.some((other) => other.re.source === rule.re.source),
     );
-    expect(ownRules.length).toBe(5);
-    const millingWords = (source: string): boolean => /M0\*6|G0\*\(\?:17\|94\)/.test(source);
-    expect(ownRules.filter((rule) => millingWords(rule.re.source)).length).toBe(2);
-    const others = listFixtures('nc').filter((rel) => !SIEMENS.includes(rel) && openFixture(rel).refused === null);
+    expect(ownRules.length).toBe(8);
+    const millingWords = (source: string): boolean =>
+      /M0\*6|G0\*\(\?:17\|94\)|\)Y\[-\+=\]|^\^N\\d\+$|^\^\(\?:N\\d\+/.test(source);
+    expect(ownRules.filter((rule) => millingWords(rule.re.source)).length).toBe(5);
+    const others = listFixtures('nc').filter((rel) => {
+      const opened = openFixture(rel);
+      if (SIEMENS.includes(rel) || opened.refused !== null) return false;
+      return !detectResult(BUILTINS, `/work/${rel}`, opened.text, MILLING).uncertain;
+    });
     const foreign = others.flatMap((rel) => sniffLines(readFixture(rel)));
     for (const rule of ownRules) {
       if (millingWords(rule.re.source)) continue;
@@ -439,6 +454,82 @@ describe('the tool change', () => {
       [2457, '4'],
     ]);
     expect(toolRows(turn, lines).length).toBe(9);
+  });
+});
+
+describe('the tool change without M6 (M12.5 decision 5, the toolChange variant)', () => {
+  // The Sinumerik programming manual (§2.4): the machine builder sets whether `T` changes
+  // the tool directly or only selects it for `M6`. Many Siemens mill programs select tools
+  // with `T<n>` (or `T<n> D<n>`) and never write `M6`.
+  function toolRows(cp: CompiledProfile, lines: string[]): [number, string | undefined][] {
+    const index = new OutlineIndex(cp);
+    index.reset(lines);
+    return index
+      .items()
+      .flatMap((item) => [item, ...(item.children ?? [])])
+      .filter((item) => item.kind === 'tool')
+      .map((item) => [item.line, item.tool]);
+  }
+
+  /** The program map's profile for a document with no machine: the detected variant, if sure. */
+  function noMachineOn(lines: string[]): { cp: CompiledProfile; detected: Record<string, { value: string; margin: number }> } {
+    const detected = detectVariants(mill, lines.join('\n'));
+    const applied = applyMachine(mill.profile, effectiveMachine(mill.profile, null, 'none', detected)).profile;
+    const checked = validateProfile(applied, { applied: true });
+    if (!checked.ok) throw new Error(checked.errors.join('; '));
+    return { cp: compileProfile(checked.profile), detected };
+  }
+
+  function withMachine(value: string): CompiledProfile {
+    const machine = { id: 'm', name: 'm', profile: MILLING, params: { variants: { toolChange: value } } };
+    const applied = applyMachine(mill.profile, effectiveMachine(mill.profile, machine, 'document', {})).profile;
+    const checked = validateProfile(applied, { applied: true });
+    if (!checked.ok) throw new Error(checked.errors.join('; '));
+    return compileProfile(checked.profile);
+  }
+
+  it('declares m6 (the default, as built) and t, each with one detection rule', () => {
+    const variants = mill.profile.machineParams?.variants ?? [];
+    expect(variants.map((v) => [v.id, v.default, v.choices.map((c) => c.value)])).toEqual([['toolChange', 'm6', ['m6', 't']]]);
+    const [m6, t] = variants[0].choices;
+    expect(m6.detect?.map((rule) => rule.weight)).toEqual([5]);
+    expect(t.detect?.map((rule) => rule.weight)).toEqual([3]);
+    expect(/verify/.test(m6.label)).toBe(true);
+    expect(/verify/.test(t.label)).toBe(false);
+    // The turning profile has no such choice: there `T` is always the change.
+    expect(turn.profile.machineParams?.variants).toBeUndefined();
+  });
+
+  it('lists the T of a program that never writes M6, and never claims L6 is the change', () => {
+    const program = ['N10 T5', 'N20 L6', 'N30 G0 X0 Y0 Z5', 'N40 M30'];
+    const { cp, detected } = noMachineOn(program);
+    expect(detected.toolChange).toEqual({ value: 't', margin: 3 });
+    expect(toolRows(cp, program)).toEqual([[1, '5']]);
+    // Before M12.5 the map of this program had no tool at all.
+    expect(toolRows(mill, program)).toEqual([]);
+    // `T<n> D<n>` and a named tool are lone selections too; `T0` is not.
+    expect(detectVariants(mill, 'N10 T2 D1\nN20 L6\n').toolChange.value).toBe('t');
+    expect(detectVariants(mill, 'N10 T="MILL10"\nN20 L6\n').toolChange.value).toBe('t');
+    expect(detectVariants(mill, 'N10 T0\nN20 L6\n').toolChange).toEqual({ value: 'm6', margin: 0 });
+  });
+
+  it('stays m6 as built on a program with any M6', () => {
+    const program = ['N10 T5', 'N20 M6', 'N30 M30'];
+    const { cp, detected } = noMachineOn(program);
+    expect(detected.toolChange).toEqual({ value: 'm6', margin: 2 });
+    expect(toolRows(cp, program)).toEqual([[2, '5']]);
+  });
+
+  it('lets a machine decide either way', () => {
+    expect(toolRows(withMachine('t'), ['N10 T1 D1', 'N20 M6', 'N30 T2', 'N40 T0'])).toEqual([
+      [1, '1'],
+      [3, '2'],
+    ]);
+    expect(toolRows(withMachine('m6'), ['N10 T5', 'N20 L6', 'N30 M30'])).toEqual([]);
+    // Under `t` the rule is the turning profile's own.
+    expect(withMachine('t').profile.toolCall.trigger).toBe(turn.profile.toolCall.trigger);
+    expect(withMachine('t').profile.toolCall.toolFrom).toBe('same-line');
+    expect(withMachine('m6').profile.toolCall).toEqual(mill.profile.toolCall);
   });
 });
 

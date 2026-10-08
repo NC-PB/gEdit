@@ -194,6 +194,15 @@ def _zero_words_of(entry: Optional[Dict[str, Any]]) -> List[str]:
     return [word.upper() for word in words if isinstance(word, str) and word != ""]
 
 
+def _empty_closes_of(entry: Optional[Dict[str, Any]]) -> Optional[str]:
+    """``frameEmptyCloses``: the sub-block number (``"1"``) whose block, writing none of the
+    ``frameZeroWords``, closes the frames of the code's group; ``None`` when the entry has none."""
+    if not isinstance(entry, dict):
+        return None
+    value = entry.get("frameEmptyCloses")
+    return value if isinstance(value, str) and value.isdigit() else None
+
+
 def _is_zero(value: str) -> bool:
     """A value written as a plain number that is zero (``+0``, ``-0.000``); anything else is not."""
     try:
@@ -529,6 +538,9 @@ class ModalInterpreter:
         #: tilt that reads as none when every angle is zero (`frameZeroWords`, Klartext cycle 19
         #: and `PLANE SPATIAL`).
         self._has_zero_frames = any(isinstance(entry, dict) and _zero_words_of(entry) for entry in self.codes)
+        #: M12.5 (`frameEmptyCloses`): the same walk reads the sub-block number of each
+        #: keyword code (`CYCL DEF 19.1` is sub-block 1 of cycle 19).
+        self._has_empty_closes = any(_empty_closes_of(entry) is not None for entry in self.codes)
         self.reset()
 
     # -- the power-on state -------------------------------------------------
@@ -572,6 +584,9 @@ class ModalInterpreter:
         self._calls_bare = {}
         self._block_values = False
         self._block_words: Dict[str, str] = {}
+        #: Rule 13 (`frameEmptyCloses`): the sub-block number each keyword code of the block
+        #: was written with, by normalized code (``CYCL DEF 19`` -> ``"1"`` for ``19.1``).
+        self._block_subs: Dict[str, str] = {}
         self._modal_ambiguous: Optional[str] = None
         # Before the power-on codes below, which are applied through `_apply_sets` and may
         # touch the block's flags.
@@ -762,10 +777,23 @@ class ModalInterpreter:
         self._calls_bare: Dict[str, bool] = {}
         self._block_values = False
         self._block_words = {}
+        self._block_subs = {}
         if self._has_zero_frames:
             for token in tokens:
                 if token.kind == "word" and token.address and (token.value_text or "") != "":
                     self._block_words[token.address.upper()] = token.value_text or ""
+        if self._has_empty_closes:
+            count = len(tokens)
+            for i, token in enumerate(tokens):
+                if token.kind != "keyword" or token.value_text is not None:
+                    continue
+                nxt = _next_code_token(tokens, i + 1, count)
+                if nxt is None or nxt.address is not None or nxt.value_text is None:
+                    continue
+                whole, dot, part = nxt.value_text.partition(".")
+                joined = _joined_code(token.address or token.text, nxt.value_text, self._entries)
+                if dot == "." and part.isdigit() and joined is not None:
+                    self._block_subs[normalize_code(joined)] = part
         if not self._has_bare_frames:
             return
         for token in tokens:
@@ -819,13 +847,24 @@ class ModalInterpreter:
         The tilt is in force while any of its angle words stands at a value other than zero,
         and over once all of them are zero: then the code closes the frames of its group, as
         ``PLANE RESET`` does. A block that writes none of the words changes nothing (the
-        ``CYCL DEF 19.0`` line only names the cycle; its ``19.1`` gives the angles). An angle
+        ``CYCL DEF 19.0`` line only names the cycle; its ``19.1`` gives the angles), except
+        the sub-block named by ``frameEmptyCloses`` (M12.5): an empty ``CYCL DEF 19.1`` is the
+        manual's switch-off and closes the frames of the group. An angle
         the block leaves out keeps its value, as the TNC manual says of cycle 19, and a value
         that is not a plain number (``SPB+Q5``) counts as not zero: in doubt the frame stays
         open, the safe reading for anything that moves positions.
         """
         written = {word: self._block_words[word] for word in words if word in self._block_words}
         if not written:
+            # M12.5 (§7.16 #180): the TNC 640 cycle manual ends cycle 19 by defining it
+            # again and answering the angle question with NO ENT, which writes an empty
+            # `CYCL DEF 19.1`. That sub-block (`frameEmptyCloses`) closes the frames of the
+            # group; any other block without an angle (`19.0`, which only names the cycle)
+            # still changes nothing.
+            entry = self._entries.get(normalize_code(code))
+            empty = _empty_closes_of(entry)
+            if empty is not None and self._block_subs.get(normalize_code(code)) == empty:
+                self._frames = [f for f in self._frames if f["group"] != group]
             return
         previous = next((f for f in self._frames if f["code"] == code), None)
         nonzero = set(previous.get("nonzero", ())) if previous is not None else set()

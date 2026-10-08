@@ -328,13 +328,21 @@ of feeds and speeds each tool is used with. Click a row to jump to the call.
 
 On a Fanuc or Okuma turning program it lists the **turret stations**, and an extra column
 shows the offsets each station was called with (`01, 11`) — so a station used with two
-different offsets is one row and tells you both. On a Fanuc lathe, `T0100` (and, with a
-five-digit word, `T12300`), which cancels the offset rather than changing the tool, is not a
-call; on an Okuma, `T0100` is station 1 with offset 00, and only station `00` (`T0001`) is
+different offsets is one row and tells you both. On a Fanuc lathe, `T0100` (and, with no
+machine, the five-digit `T12000`; on a 3 + 2 machine `T12300`), which cancels the offset rather
+than changing the tool, is not a call, unless the block also writes `M6` (`M06 T21000` loads
+tool 21); a `T` in a block with a three-digit `G` code (`G183 Z-5. T5 F20`) is not a call
+either; on an Okuma, `T0100` is station 1 with offset 00, and only station `00` (`T0001`) is
 no tool. A six-digit Okuma `T010203` is nose-radius set 01, station 02 and offset 03, and a
 `T` inside a cycle block only switches the offset. A Sinumerik `T` carries no offset, so its
 list has no such column. On a Fanuc mill, `T0` followed by `M6` is an unload — no tool T0 —
 even when the two are on separate lines.
+
+On a Sinumerik milling program the tool is the `T` before `M6`, or, on a machine set to
+change the tool by `T` alone, every `T`
+([Machines](machines.md#sinumerik-diameter-programming-and-the-rest)). A Klartext
+`TOOL CALL "END MILL 10"` with the name at the end of the line, or with a digit straight behind it, is read like one with more
+words behind it; a tool number with more than one decimal is read as its whole number.
 
 A Klartext `TOOL CALL` of the tool already in the spindle, written with no axis, is a speed
 change rather than a second call: only a `TOOL CALL` that names a different tool, or names
@@ -408,8 +416,8 @@ data the dialect does not have is not run; the general checks run on every diale
 
 | Check | Severity | What it finds |
 |---|---|---|
-| **Program frame** | error, warning | A program that runs into the next start marker or the closing `%` with no end code; code after the end or after the closing `%`, which never runs; the end written twice; a tape with only one `%` |
-| **Spindle** | warning | A cut while the spindle is stopped (the row names the code that stopped it), or a cut before the program starts a spindle. The second is reported only in a program that starts a spindle somewhere, because a subprogram runs under its caller's spindle |
+| **Program frame** | error, warning | A program that runs into the next start marker or the closing `%` with no end code; code after the end or after the closing `%`, which never runs; the end written twice; a tape with only one `%`. Also a file that stops short: a Klartext program with no `END PGM`, or with an `END PGM` that names another program than its `BEGIN PGM`; a Sinumerik main program (`.MPF`, or no header) that has no `M30`, `M2`, `M17` or `RET` anywhere. One row, on the last line. A Sinumerik subprogram (`.SPF`, `_SPF` or `PROC`, or a file whose first line is a commented subprogram header `;%_N_<name>_SPF`) is not judged, because it may end at its last block; nor is an untitled document, a main program whose last block is an unconditional jump (`GOTOB`, `GOTOF`, `GOTO`), or the data section of an archive (`%_N_<n>_<m>_MPF`, `<m>` not 0) |
+| **Spindle** | warning | A cut while the spindle is stopped (the row names the code that stopped it; a Klartext `L` with no coordinate word is no cut, and the words of a cycle definition written behind a bare `L`, such as `L CYCL DEF 32.1 T0.05`, are not read as a move), or a cut before the program starts a spindle. The second is reported only in a program that starts a spindle somewhere, because a subprogram runs under its caller's spindle |
 | **Spindle after tool change** | warning | The first cut after a tool change with no spindle start in between. Only on a machining centre, whose tool change stops the spindle; a turret does not |
 | **Tool change in a cycle** | warning | A tool change while a modal cycle, or a modal call such as `MCALL` or Klartext `M89`, is in force |
 | **Offset cancel** | warning | Lathe: a cut after a lone tool word that cancels the offset (`T0100`) and before the next tool call |
@@ -417,23 +425,23 @@ data the dialect does not have is not run; the general checks run on every diale
 | **Speed clamp** | warning | Constant surface speed with no spindle-speed limit earlier in the program (once per program) |
 | **Thread under surface speed** | warning | A thread cut under constant surface speed (once per stretch of it) |
 | **Refused in this state** | warning | A code written in a state the control refuses it in. Examples: `G28` or `G53` under tool centre point control, a tilted working plane under compensation or inside another frame, Klartext `TOOL CALL` or `M91` while `M128` is on, Sinumerik `G75` under radius compensation, Okuma `G140` under constant surface speed |
-| **Missing word** | error | A code whose block lacks the word the control needs with it: Klartext `PLANE` without `MOVE`, `TURN` or `STAY`, Okuma `G96` without `S` |
-| **Alone in its block** | error | A code that has to stand in a block of its own does not: Fanuc `G53.1` and a `G65` macro call (its arguments may follow it, nothing may stand in front), Okuma `M110` |
+| **Missing word** | error | A code whose block lacks the word the control needs with it: Klartext `PLANE` without `MOVE`, `TURN` or `STAY`, Okuma `G96` without `S`. Not on a line your machine's channel settings count as a wait code: a wait such as `M198` written without `P` is judged by the Channels settings, not here |
+| **Alone in its block** | error | A code that has to stand in a block of its own does not: Fanuc `G53.1` and a `G65` macro call (its arguments may follow it, nothing may stand in front), Okuma `M110`. Not on a wait-code line of the machine's channels either |
 | **Rigid tapping** | error | A speed word or a move between the rigid-tapping call (`M29`) and its cycle, or the call inside a running tapping cycle. `M29` counts as a tapping call only when a tapping cycle follows it, so on a lathe where that M number means something else nothing is reported |
 | **Cycle call** | error | A cycle call with no cycle defined before it. A Klartext definition the database does not know still counts as a definition, so nothing is reported after one |
 | **Modal call** | warning | A modal call still in force at the end of the program |
 | **Control language** | warning | A code that switches the control to its ISO dialect (Sinumerik `G291`) |
 | **Profile targets** | error | Lathe: the `P` and `Q` blocks of a roughing or finishing cycle missing, or `P` after `Q` |
 | **Call in a profile** | error | Lathe: a subprogram call inside such a `P` to `Q` profile |
-| **Jump target** | error, warning | A jump to a block or label that is not in the program; a target written on two lines; `GOTOF` to a label above, `GOTOB` to one below. A jump to a name that no label has but that begins labels which exist (`GOTOF TOOL` over `TOOL_1_0:`) is a string variable the check cannot see, and is not reported |
+| **Jump target** | error, warning | A jump to a block or label that is not in the program; a target written on two lines; `GOTOF` to a label above, `GOTOB` to one below. A jump to a name that no label has but that begins labels which exist (`GOTOF TOOL` over `TOOL_1_0:`) is a string variable the check cannot see, and is not reported. A target that is worked out while the program runs (`GOTOF "STEP_"<<COUNTER`, `GOTOF R10`) is not judged either |
 | **DO and END** | error | Loop numbers outside 1 to 3, an `END` with no `DO`, loops that cross, a `DO` never ended |
-| **Words in a block** | error | Two speed words or two tool words in one block; more M codes than the control takes (Okuma: eight) |
+| **Words in a block** | error | Two speed words or two tool words in one block; more M codes than the control takes (Okuma: eight). Two `T` words with an `M6` (`N20 T7 T8 M6`, the tool in the spindle and the one to fetch) are fine on a milling profile, and so are the words of a message |
 | **Tool word** | warning | A tool word the machine's tool-word format does not describe, and tool words of different lengths in one file. Only where the machine itself states the format |
 | **Program name** | error | A program name that shares its block with other words |
 | **Sequence name** | error | A sequence name or block number with no space or tab behind it |
 | **Digits** | error | A word with more digits than the control stores (Fanuc: eight), once converted to increments, under every reading the machine or the presets allow |
 | **Machine reading** | info | A dimension word without a decimal point whose value depends on how the machine reads numbers, see below |
-| **Tape marker** | error | A `%` inside a comment, which ends the program when the tape is read in |
+| **Tape marker** | error | A `%` inside a comment, which ends the program when the tape is read in. Not on Klartext, which has no tape marker: `; INPUT 50...150 %` is fine |
 | **Comment** | error | A comment opened and not closed on its line |
 | **Brackets** | error | Brackets or quotes that are not balanced in a block, or a `)` with no `(` |
 | **Lower case** | info | Lower-case addresses outside comments and strings, on a control that reads upper case |
@@ -630,7 +638,7 @@ per refused block, with the block as written and the reason in plain words.
 - **Inside a frame**: a tilted plane, a rotation, a mirror, a scaling, polar coordinates
   (`G16`), `CYCLE800`, `G68`. The numbers there are not the part's coordinates. A frame
   that is closed again (`G69`, `G15`, `PLANE RESET`, `CYCLE800()`) ends it, and so does a
-  Klartext cycle 19 or `PLANE SPATIAL`, `PROJECTED` or `EULER` with every angle at zero.
+  Klartext cycle 19 or `PLANE SPATIAL`, `PROJECTED` or `EULER` with every angle at zero, and a `CYCL DEF 19.1` that names no angle.
 - **A rotary axis without tool centre point control**, see the next section.
 - **A cycle it has no role for**: every lathe and Okuma cycle, a Fanuc `G65` that hands a
   chosen address a number, a Sinumerik or Klartext cycle the database has not reviewed, and

@@ -79,5 +79,7 @@
   {"line":"G96 S200 (<S999>)","tokens":[{"kind":"word","text":"G96","address":"G","valueText":"96"},{"kind":"word","text":"S200","address":"S","valueText":"200"},{"kind":"comment","text":"(<S999>)"}]},
   {"line":"#1=FIX[#2]","tokens":[{"kind":"variable","text":"#1"},{"kind":"operator","text":"="},{"kind":"keyword","text":"FIX","address":"FIX"},{"kind":"expression","text":"[#2]"}]},
   {"line":"DPRNT[T#1[20]]","tokens":[{"kind":"keyword","text":"DPRNT","address":"DPRNT"},{"kind":"expression","text":"[T#1[20]]"}]},
-  {"line":"/1 /3 N10 G0 X10.","tokens":[{"kind":"skip","text":"/1"},{"kind":"skip","text":"/3"},{"kind":"blockNumber","text":"N10","address":"N","valueText":"10"},{"kind":"word","text":"G0","address":"G","valueText":"0"},{"kind":"word","text":"X10.","address":"X","valueText":"10."}]}
+  {"line":"/1 /3 N10 G0 X10.","tokens":[{"kind":"skip","text":"/1"},{"kind":"skip","text":"/3"},{"kind":"blockNumber","text":"N10","address":"N","valueText":"10"},{"kind":"word","text":"G0","address":"G","valueText":"0"},{"kind":"word","text":"X10.","address":"X","valueText":"10."}]},
+  {"line":"M797 SPINDLE ONE DONE","tokens":[{"kind":"word","text":"M797","address":"M","valueText":"797"},{"kind":"unknown","text":"SPINDLE ONE DONE"}]},
+  {"line":"M990 TRANSFER OK S500","tokens":[{"kind":"word","text":"M990","address":"M","valueText":"990"},{"kind":"unknown","text":"TRANSFER OK"},{"kind":"word","text":"S500","address":"S","valueText":"500"}]}
 ]

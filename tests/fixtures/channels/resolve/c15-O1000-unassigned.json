@@ -1,0 +1,11 @@
+{
+  "input": "../nc/fanuc-lathe/O1000",
+  "profile": "fanuc-lathe",
+  "preset": "fanuc-lathe/fanuc-2path-nop",
+  "expect": {
+    "layout": "none",
+    "self": null,
+    "marks": [],
+    "problems": []
+  }
+}

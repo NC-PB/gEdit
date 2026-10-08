@@ -59,6 +59,8 @@ export type TokenKind =
   | 'label'
   | 'call'
   | 'whitespace'
+  /** M12.5 (§7.16 #179): text the control keeps and shows but does not execute (`syntax.freeText`). */
+  | 'text'
   | 'unknown';
 
 /**

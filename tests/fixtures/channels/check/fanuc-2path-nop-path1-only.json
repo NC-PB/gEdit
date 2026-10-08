@@ -1,0 +1,27 @@
+{
+  "comment": "Written for gEdit (synthetic, not for a machine); see README.md here.",
+  "description": "Two paths, waits written without P; only path 1 exists as a file (path 2 runs a stored program): M999 alone before M30 is a wait for paths 1 and 2, and with path 2 not open there is nothing to compare (correct NC).",
+  "profile": "fanuc-lathe",
+  "preset": "fanuc-2path-nop",
+  "program": {
+    "1": [
+      "%",
+      "(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)",
+      "O1000 (PATH 1 - PATH 2 RUNS A STORED PROGRAM)",
+      "N1 G18 G21 G40 G99",
+      "N2 G28 U0 W0",
+      "N3 T0303",
+      "N4 G96 S180 M3",
+      "N5 G50 S2500",
+      "N6 G0 X52. Z2. M8",
+      "N7 G1 Z-25. F0.18",
+      "N8 G0 X120. Z150. M9",
+      "M999",
+      "N9 M30",
+      "%"
+    ]
+  },
+  "expect": {
+    "findings": []
+  }
+}

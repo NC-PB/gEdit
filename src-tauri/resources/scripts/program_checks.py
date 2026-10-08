@@ -361,6 +361,28 @@ CONDITION_TEXT = {
 JUMP_DIRECTION = {"GOTOF": "forward", "GOTOB": "backward"}
 JUMP_MAY_MISS = ("GOTOC",)
 
+#: M12.5 decision 9: a control whose main program has to end with an end code while a
+#: subprogram may simply return at its last line. The profile's file extensions say whether
+#: the control is one of these (it keeps subprograms in files of their own extension), and a
+#: program is a subprogram when its file has that extension or its start line names it
+#: (`%_N_PART_SPF`) or defines a procedure (`PROC PART`). Every other program of such a
+#: profile is a main program, and the last one of a file that ends with no end code is cut
+#: short or unfinished.
+SUBPROGRAM_EXTENSIONS = ("spf",)
+SUBPROGRAM_START = re.compile(r"(?:^|[_.])SPF\b|^\s*(?:N\d+[ \t]+)?PROC\b", re.IGNORECASE)
+#: A section of a Sinumerik archive that holds data, not a program: `%_N_<n>_<m>_MPF` with a
+#: section number `<m>` other than 0 (tool data and the like; the `_0_` sections are the
+#: channels' programs). It has no end code to miss.
+#: A subprogram header written as a comment on the first line of the file (`;%_N_PART_SPF`):
+#: the file holds a subprogram whatever its name says. Only the first line counts: further
+#: down, a commented header is a comment, and the program it names is not split off.
+COMMENTED_SUBPROGRAM_HEADER = re.compile(r"^;%(?:_N_)?\w+_SPF\b", re.IGNORECASE)
+ARCHIVE_DATA_START = re.compile(r"^;?%_N_\d+_0*[1-9]\d*_MPF\b", re.IGNORECASE)
+#: The jumps that never fall through to the next block when nothing makes them conditional:
+#: a main program whose last block is one of them loops and does not run off its end. `GOTOC`
+#: goes on when its target is missing and `GOTOS` when the PLC signal is 0, so they are not.
+UNCONDITIONAL_JUMPS = ("GOTOB", "GOTOF", "GOTO")
+
 #: How far apart a DO and its END may be numbered (macro statements, `syntax.keywords` with
 #: both `DO` and `END`): the control knows the loop numbers 1 to 3.
 DO_NUMBERS = (1, 2, 3)
@@ -609,6 +631,19 @@ class Run:
         self.sequence_names = syntax.get("sequenceNames") is True
         self.has_labels = isinstance(syntax.get("labels"), str) and syntax.get("labels") != ""
         self.has_header = isinstance(syntax.get("header"), str) and syntax.get("header") != ""
+        program = as_dict(profile.get("program"))
+        #: The program's end line is its closing record (Klartext `END PGM`), named like its start.
+        self.end_record = program.get("endRecord") is True
+        extensions = {str(e).lower() for e in as_list(as_dict(profile.get("files")).get("extensions")) if isinstance(e, str)}
+        #: A main program has to end with an end code (`SUBPROGRAM_EXTENSIONS`).
+        self.main_needs_end = bool(extensions.intersection(SUBPROGRAM_EXTENSIONS)) and bool(program.get("end"))
+        document = as_dict(self.context.get("document"))
+        name = document.get("name") if isinstance(document.get("name"), str) else document.get("path")
+        stem, dot, extension = (name or "").rpartition(".") if isinstance(name, str) else ("", "", "")
+        #: The document is a subprogram file by its extension.
+        self.subprogram_file = bool(dot) and extension.lower() in SUBPROGRAM_EXTENSIONS
+        #: The document has never been saved (no path): no file name says what it holds.
+        self.untitled = not (isinstance(document.get("path"), str) and document.get("path") != "")
         keywords = {str(k).upper() for k in as_list(syntax.get("keywords")) if isinstance(k, str)}
         self.keywords = keywords
         self.upper_only = as_dict(profile.get("editing")).get("forceUppercase") is True
@@ -656,6 +691,13 @@ class Run:
         variant_sources = as_dict(as_dict(self.machine.get("source")).get("variants"))
         self.tool_word_stated = variant_sources.get("toolWord") == "machine"
         self.presets = [as_dict(p) for p in as_list(as_dict(decl.get("numberInput")).get("presets"))]
+        #: M12.5 decision 4 (§7.16 #178): the lines that hold one of the machine's channel
+        #: marks (`channels.marks`, resolved by the app). The machine's wait code wins over the
+        #: code database there (`M198` is a wait on a three-path machine, not the database's
+        #: external call), so no `requiredWords` or `aloneInBlock` row is written on them.
+        self.mark_lines: Set[int] = {
+            mark["line"] for mark in gedit_nc.sync_marks(self.context) if isinstance(mark.get("line"), int)
+        }
 
     def _read_database(self) -> None:
         codes = self.codes
@@ -1154,12 +1196,34 @@ def finish_block(run: Run, block: Block, doc: "Document") -> None:
     if keyword_move and not moves:
         # A path keyword moves without an axis word only with words of its own (a polar
         # `LP PR+10 PA+45`); `L M3` or `L R0 F500` alone moves nothing.
+        # A number without an address is no word of the move either: it belongs to the code
+        # in front of it (`L CYCL DEF 32.0 TOLERANCE`, the cycle's sub-block number; M12.5
+        # decision 8, a bare `L` is no move).
+        # A word behind another statement keyword of the block belongs to that statement
+        # (`L CYCL DEF 32.1 T0.05`: `T` is the cycle's tolerance, `TA` its angle tolerance;
+        # a cycle definition moves nothing in its own block), so only the words in front of
+        # the first such keyword can move the path keyword.
         codes = {id(w.token) for w in written if w.entry is not None}
+        statements = {
+            id(w.token)
+            for w in written
+            if w.kind == "keyword"
+            and w.entry is not None
+            and (w.facts is None or w.facts.motion is None)
+            and (w.token.address or w.token.text or "").upper() != (run.rapid_word or "")
+        }
+        own: List[gedit_nc.Token] = []
+        for _, t in block.tokens:
+            if id(t) in statements:
+                break
+            if t.kind == "word":
+                own.append(t)
         keyword_move = any(
             id(t) not in codes
             and (t.value_text or "") != ""
+            and (t.address or "") != ""
             and (t.address or "").upper() not in (run.feed_address, run.speed_address, "M")
-            for _, t in words
+            for t in own
         )
     motion = own_motion or run.motion_modal
     tool_change = is_tool_change(run, block)
@@ -1307,14 +1371,14 @@ def finish_block(run: Run, block: Block, doc: "Document") -> None:
             if reason is not None:
                 run.add("stateConflicts", w.line, "warning", "%s: %s" % (shown(w.token.text), reason))
         # -- the words a block has to carry (`requires`) ----------------------
-        if f.requires and emit:
+        if f.requires and emit and w.line not in run.mark_lines:
             present = {
                 ((t.address or t.text) or "").upper() for _, t in block.tokens if t.kind in ("word", "keyword") and t is not w.token
             }
             if not present.intersection(f.requires):
                 run.add("requiredWords", w.line, "error", "%s: the block has to write %s" % (f.code, listing(f.requires)))
         # -- a code that has to stand alone (`alone`) -------------------------
-        if f.alone and emit:
+        if f.alone and emit and w.line not in run.mark_lines:
             check_alone(run, block, w)
         # -- the control language ---------------------------------------------
         if f.language == "iso" and not run.iso_reported:
@@ -1404,6 +1468,10 @@ def check_block_words(run: Run, block: Block, words: Sequence[Tuple[int, gedit_n
             tool += 1
         elif address == "M":
             m_count += 1
+    if tool == 2 and two_tools_with_change(run, block):
+        # `T7 T8 M6` (owner, 2026-10-08, M9-1): the first word is the tool the change loads
+        # and the second the one the magazine prepares; the tool rule takes the first.
+        tool = 1
     for address, count in ((run.speed_address, speed), (run.tool_address, tool)):
         if count > 1:
             run.add("blockWords", block.line, "error", "%s: %d %s words in one block" % (shown(block.text()), count, address))
@@ -1414,6 +1482,43 @@ def check_block_words(run: Run, block: Block, words: Sequence[Tuple[int, gedit_n
             "error",
             "%s: %d M codes in one block; the control takes at most %d" % (shown(block.text()), m_count, run.max_m),
         )
+
+
+def two_tools_with_change(run: Run, block: Block) -> bool:
+    """`blockWords` (M12.5 decision 8): a block with two tool words is legal when it also
+    writes the tool-change code — the profile's tool trigger still matches once the tool
+    words are blanked out (`M6`), or the block writes `M6` itself (a lathe profile, whose
+    trigger *is* the tool word, reading a mill-turn's `T01 T02 M06`) — and the tool rule
+    takes the first of the two words."""
+    if run.tool_trigger is None or run.tool_address is None:
+        return False
+    first: Optional[gedit_nc.Token] = None
+    change = False
+    for _, _, masked, tokens in block.lines:
+        blanked = list(masked)
+        for t in tokens:
+            if t.kind != "word" or t.index is not None or "=" in t.text:
+                continue
+            address = (t.address or "").upper()
+            if address == "M" and (t.value_text or "").strip().lstrip("0") == "6":
+                change = True
+            if address == run.tool_address:
+                if first is None:
+                    first = t
+                for i in range(t.start, min(t.end, len(blanked))):
+                    blanked[i] = " "
+        if run.tool_trigger.search("".join(blanked)):
+            change = True
+    if not change or first is None:
+        return False
+    if run.tool_pattern is None:
+        return True
+    tool = tool_of(run, block)
+    match = run.tool_pattern.search(first.text)
+    if match is None:
+        return False
+    station = match.groupdict().get("tool") or match.group(0)
+    return tool is not None and tool == (station.strip().lstrip("0") or "0")
 
 
 def is_tool_change(run: Run, block: Block) -> bool:
@@ -1854,11 +1959,15 @@ def increments_of(literal: Any, cls: str, machine: Dict[str, Any], units: str) -
 class Program:
     """One program of the document, from a start marker (or the top) to the next one."""
 
-    def __init__(self, line: int, start_text: Optional[str]) -> None:
+    def __init__(self, line: int, start_text: Optional[str], name: Optional[str] = None) -> None:
         self.line = line
         self.start_text = start_text
+        #: The name the start line gives the program (the start pattern's `name` group).
+        self.name = name
         self.code_lines = 0
         self.any_end = False
+        #: The last code line is a jump that cannot fall through (`UNCONDITIONAL_JUMPS`).
+        self.ends_in_jump = False
         self.hard_end: Optional[Tuple[int, str]] = None
         self.after_end_reported = False
         #: The first code line after the end: (line, text, its block number).
@@ -1870,6 +1979,17 @@ class Program:
         self.profiles: List[Tuple[int, Optional[int], Optional[int], str]] = []
         self.calls: List[int] = []
         self.dos: List[Tuple[int, int]] = []
+
+
+def ends_in_jump(tokens: Sequence[gedit_nc.Token]) -> bool:
+    """A block that is one unconditional jump (`GOTOB START`): the jump keyword is the first
+    keyword of the block and the block is not skipped (`/`)."""
+    for t in tokens:
+        if t.kind == "skip":
+            return False
+        if t.kind == "keyword":
+            return (t.address or t.text or "").upper() in UNCONDITIONAL_JUMPS
+    return False
 
 
 def is_code(token: gedit_nc.Token) -> bool:
@@ -1894,6 +2014,10 @@ class Document:
         self.tape_closed: Optional[int] = None
         self.after_tape_reported = False
         self.first_code: Optional[int] = None
+        #: The last line of the document that holds any text (where an end check reports).
+        self.last_text: Optional[int] = None
+        #: The first line of the document that holds any text.
+        self.first_text: Optional[str] = None
 
     def line(self, number: int, text: str, masked: str, tokens: List[gedit_nc.Token]) -> None:
         run = self.run
@@ -1902,6 +2026,10 @@ class Document:
             if any(r.search(masked) for r in run.program_start):
                 run._reset_program()
             return
+        if text.strip():
+            self.last_text = number
+            if self.first_text is None:
+                self.first_text = text.strip()
         code_tokens = [t for t in tokens if is_code(t)]
         tape = run.tape_marker and len(tokens) == 1 and tokens[0].kind == "programMarker" and tokens[0].text.strip() == "%"
         start = None if tape else next((m for m in (r.search(masked) for r in run.program_start) if m is not None), None)
@@ -1912,7 +2040,7 @@ class Document:
             run.add("programFrame", number, "error", "%s: after the closing %% on line %d; the control never reads it" % (shown(text.strip()), self.tape_closed))
             self.after_tape_reported = True
         if start is not None:
-            self.on_start(number, text.strip())
+            self.on_start(number, text.strip(), start.groupdict().get("name"))
         elif code_tokens:
             self.on_code(number, text, masked, tokens)
         program = self.current
@@ -1947,7 +2075,7 @@ class Document:
         if self.tape_closed is None:
             self.tape_closed = number
 
-    def on_start(self, number: int, text: str) -> None:
+    def on_start(self, number: int, text: str, name: Optional[str] = None) -> None:
         run = self.run
         program = self.current
         if program.code_lines > 0 and not program.any_end and self.whole:
@@ -1959,7 +2087,7 @@ class Document:
                 % (shown(text), " (" + shown(program.start_text) + ", line %d)" % program.line if program.start_text else ""),
             )
         self.close(program)
-        self.current = Program(number, text)
+        self.current = Program(number, text, name)
         self.programs.append(self.current)
         run._reset_program()
 
@@ -1990,6 +2118,20 @@ class Document:
                 program.after_end = (number, shown(text.strip()), numbers[0] if numbers else None)
                 program.after_end_reported = True
         program.code_lines += 1
+        program.ends_in_jump = ends_in_jump(tokens)
+        if hard is not None and run.end_record and program.name and self.whole:
+            # M12.5 decision 9: the closing record names the program as its start does
+            # (`END PGM T MM` closes `BEGIN PGM T MM`).
+            after = masked[hard.end():].split()
+            closing = after[0] if after else None
+            if closing is not None and closing.upper() != program.name.upper():
+                run.add(
+                    "programFrame",
+                    number,
+                    "error",
+                    "%s: the end names the program %s, and its start on line %d names it %s"
+                    % (shown(text.strip()), shown(closing), program.line, shown(program.name)),
+                )
         if hard is not None and not conditional:
             program.any_end = True
             if program.hard_end is None:
@@ -2008,12 +2150,54 @@ class Document:
         run = self.run
         if not self.whole:
             return
+        self.check_end_at_end_of_file()
         if run.tape_marker and len(self.tape) == 1 and self.first_code is not None:
             only = self.tape[0]
             if only < self.first_code:
                 run.add("programFrame", only, "info", "%: the tape starts here and has no closing %; a transfer that reads to the closing % needs one")
             else:
                 run.add("programFrame", only, "info", "%: the tape ends here and has no opening % before the program; a transfer that starts at the first % needs one")
+
+    def check_end_at_end_of_file(self) -> None:
+        """M12.5 decision 9: the file ends inside a program that has no end. A program
+        with a closing record (Klartext `BEGIN PGM` without `END PGM`), and a main program of
+        a control whose main programs have to end with an end code (`SUBPROGRAM_EXTENSIONS`;
+        a subprogram returns at its last line and is not judged). Both are what a file cut
+        short looks like. Reported once, at the last line that holds text."""
+        run = self.run
+        program = self.current
+        if program.code_lines == 0 or program.any_end or self.last_text is None:
+            return
+        if run.end_record:
+            if program.start_text is None:
+                return
+            run.add(
+                "programFrame",
+                self.last_text,
+                "error",
+                "the file ends here, and the program %s (line %d) has no end; the file may be cut short"
+                % (shown(program.start_text), program.line),
+            )
+            return
+        if not run.main_needs_end or run.subprogram_file or run.untitled:
+            # An untitled document has no file name to say main program or subprogram: a
+            # pasted subprogram body or a snippet is no file cut short.
+            return
+        if program.start_text is not None and SUBPROGRAM_START.search(program.start_text):
+            return
+        if program.ends_in_jump:
+            return
+        if program is self.programs[0] and self.first_text is not None and COMMENTED_SUBPROGRAM_HEADER.search(self.first_text):
+            return
+        if len(self.programs) > 1 and program.start_text is not None and ARCHIVE_DATA_START.search(program.start_text):
+            return
+        run.add(
+            "programFrame",
+            self.last_text,
+            "error",
+            "the file ends here, and the main program%s has no end code; the file may be cut short"
+            % (" " + shown(program.start_text) + " (line %d)" % program.line if program.start_text else ""),
+        )
 
     # -- references and jumps -----------------------------------------------
 
@@ -2194,6 +2378,22 @@ def defines_label(tokens: Sequence[gedit_nc.Token], label: gedit_nc.Token) -> bo
     return False
 
 
+def is_expression_target(rest: Sequence[gedit_nc.Token]) -> bool:
+    """A jump target written as an expression, which the check does not judge (M12.5
+    decision 8; the Sinumerik programming manual allows a string, a variable and a
+    concatenation as the target of `GOTOF`/`GOTOB`): a string (`GOTOF "STEP_"<<COUNTER`),
+    a variable (`GOTOF R10`) or a name joined to something by an operator (`COUNT<<1`)."""
+    code = [t for t in rest if t.kind not in ("whitespace", "comment")]
+    if not code:
+        return False
+    head = code[0]
+    if head.kind in ("string", "variable"):
+        return True
+    if len(code) > 1 and code[1].kind == "operator" and code[1].text != ":" and head.kind in ("unknown", "word", "label"):
+        return True
+    return False
+
+
 def word_number(tokens: Sequence[gedit_nc.Token], address: str) -> Optional[int]:
     for t in tokens:
         if t.kind == "word" and (t.address or "").upper() == address and (t.value_text or "").isdigit():
@@ -2210,6 +2410,8 @@ def jump_target(tokens: Sequence[gedit_nc.Token], address: str, after: int, name
     """
     if address == "N":
         rest = [t for t in tokens if t.start >= after]
+        if names and is_expression_target(rest):
+            return None
         for i, t in enumerate(rest):
             if t.kind == "label" and t.address:
                 return (t.address.upper(), "label", t.text)

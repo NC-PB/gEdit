@@ -1,0 +1,18 @@
+{
+  "input": "../nc/fanuc-lathe/c14-part_1.ISO",
+  "profile": "fanuc-lathe",
+  "preset": "fanuc-lathe/fanuc-3path-digits-nop12",
+  "expect": {
+    "layout": "multi-file",
+    "self": "1",
+    "by": "fileName",
+    "stem": "c14-part",
+    "marks": [
+      {"ruleId":"wait","mark":"M198","line":9,"channel":"1","partners":["1","2"],"blocking":true},
+      {"ruleId":"wait","mark":"M191","line":12,"channel":"1","partners":["1","2","3"],"blocking":true},
+      {"ruleId":"wait","mark":"M199","line":13,"channel":"1","partners":["1","2"],"blocking":true}
+    ],
+    "problems": [],
+    "siblings": [{"channel":"2","name":"c14-part_2.ISO"},{"channel":"3","name":"c14-part_3.ISO"}]
+  }
+}

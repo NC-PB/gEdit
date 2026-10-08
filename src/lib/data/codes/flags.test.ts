@@ -68,6 +68,8 @@ function declaredOf(entry: CodeEntry): Record<string, unknown> {
   if (entry.frameWithoutValues !== undefined) out.frameWithoutValues = entry.frameWithoutValues;
   // Owner decision of 2026-10-08 (M10-2): the tilt that reads as none at all-zero angles.
   if (entry.frameZeroWords !== undefined) out.frameZeroWords = entry.frameZeroWords;
+  // M12.5 (B-3): a block of the tilt that writes no angle at all, with this sub-block, ends it.
+  if (entry.frameEmptyCloses !== undefined) out.frameEmptyCloses = entry.frameEmptyCloses;
   // M10 review: the pole (NC-2), a program call (NC-6) and a coordinate shift (NC-7).
   if (entry.pole !== undefined) out.pole = entry.pole;
   if (entry.call !== undefined) out.call = entry.call;
@@ -360,6 +362,12 @@ describe('what the flags decide (the reasons are in the entries and in the G10 t
     expect(codesWith('heidenhain', (e) => e.frameZeroWords !== undefined)).toEqual(['CYCL DEF 19', 'PLANE SPATIAL', 'PLANE PROJECTED', 'PLANE EULER']);
     expect(loadedEntry('heidenhain', 'CYCL DEF 19').frameZeroWords).toEqual(['A', 'B', 'C']);
     expect(loadedEntry('heidenhain', 'PLANE SPATIAL').frameZeroWords).toEqual(['SPA', 'SPB', 'SPC']);
+    // M12.5 (B-3): an empty `CYCL DEF 19.1` ends the tilt; only cycle 19 says so.
+    expect(codesWith('heidenhain', (e) => e.frameEmptyCloses !== undefined)).toEqual(['CYCL DEF 19']);
+    expect(loadedEntry('heidenhain', 'CYCL DEF 19').frameEmptyCloses).toBe('1');
+    for (const dialect of DIALECTS.filter((d) => d !== 'heidenhain')) {
+      expect(codesWith(dialect, (e) => e.frameEmptyCloses !== undefined), dialect).toEqual([]);
+    }
     // PLANE AXIAL is left out on purpose: the manual says a zero axis angle does not end it.
     expect(loadedEntry('heidenhain', 'PLANE AXIAL').frameZeroWords).toBeUndefined();
     for (const dialect of DIALECTS.filter((d) => d !== 'heidenhain')) {

@@ -357,6 +357,34 @@ patterns** link on the Channels step tells you where to find it. Use the tester 
 
 Most machines never need Advanced.
 
+### A builder's own cycle: an Advanced example
+
+Some machines do not wait with `M` codes or `WAITM` at all. The builder's cycle package has a
+cycle, and a call of it is the wait. Say your Sinumerik post writes
+
+```
+N120 SYNC_C(3)
+N130 G1 X20 F0.2
+N140 SYNC_C(4)
+```
+
+in both channels. `SYNC_C` is the builder's name (here an invented one); the number in
+brackets is the mark. To let gEdit see these as waits:
+
+1. On the Channels step, under **Wait codes**, add a block for the builder's waits. In *What is
+   checked* choose **Numbered waits**: the same number must meet in the same order in the
+   other channel.
+2. Open **Advanced** and set *These codes are found by* to **A pattern**.
+3. In the *Pattern* field write `\bSYNC_C\((?<mark>\d+)\)`. The part in `(?<mark>…)` is the
+   number gEdit pairs; the rest says which line is a wait. Where the number may be a name or a
+   variable (`SYNC_C(_M)`), use `(?<mark>\w+)`.
+4. Press **Try these settings on a program**, paste the part above, and check that the tester
+   shows two waits, 3 and 4, and in the other channel the same two.
+
+The pattern is yours to write and to check: the cycle's name and the way it counts are the
+builder's. [Regular expressions](regex.md) explains patterns with NC examples. A call in a
+comment or a string is not a wait, as everywhere else.
+
 ---
 
 ## What kind of wait it is
@@ -391,10 +419,24 @@ documentation. It is only a **starting point**:
 
 | Control | Preset | What it assumes | What to check |
 |---|---|---|---|
-| Fanuc lathe | **Two paths, one file per path** (two presets) | Files with the path number at the end of the extension; waits `M900-M999`; `P` as a bit sum, or as path numbers (`P12`); a wait without `P` means paths 1 and 2; the paths of one wait must name the same paths | Which `P` form the control reads. The wait range: `M900-M999` is a **builder's choice**, not Fanuc's. Look at your own programs and your machine's documentation. The manual describes the range as set by parameters (8110 and 8111) and the `P` form by parameter 8103 bit 1. Whether a stop or end counts as a wait |
+| Fanuc lathe | **Two paths, one file per path** (two presets) | Files with the path number at the end of the extension; waits `M900-M999` (one builder's range, not Fanuc's); `P` as a bit sum, or as path numbers (`P12`); a wait without `P` means paths 1 and 2; the paths of one wait must name the same paths | Which `P` form the control reads. The wait range: `M900-M999` is a **builder's choice**, not Fanuc's. Look at your own programs and your machine's documentation. The manual describes the range as set by parameters (8110 and 8111) and the `P` form by parameter 8103 bit 1. Whether a stop or end counts as a wait |
 | Fanuc lathe | **Three paths** (two presets) | As above, with `P` as path numbers or as a bit sum | Which form the control reads. With three or more paths a wait without `P` is an error on the control, so the presets report it |
+| Fanuc lathe | **Two paths, files tied by hand** | No file-name rule; waits `M900-M999` written **without `P`**: a wait with no `P` means paths 1 and 2, and a `P`, when written, names path numbers (`P12`) | That your post writes the waits with no `P`. Open the files and assign each to its path by hand (see [When the names do not tell](#when-the-names-do-not-tell)) |
+| Fanuc lathe | **Three paths, files named `<name>_<path>`, no `P` means 1 and 2** | Files `PART_1.ISO`, `PART_2.ISO`, `PART_3.ISO`; waits `M190-M199`; `P` as path numbers (`P123` is all three); a wait without `P` means paths 1 and 2. **Careful:** the file-name rule also catches a version file such as `SHAFT_2.NC`, which it reads as path 2 | That the range and the "no `P` = 1 and 2" are what your machine does. Where your folders hold version files, do not use a file-name rule; assign the files by hand |
+| Fanuc lathe | **Two heads, `M100-M197`** | Files tied by hand ("Head 1", "Head 2"); the waits are `M100-M197`, the same code in both head programs, written without `P` (paths 1 and 2). On this kind of machine `M198` calls a program on an external device and is **no wait**; `M199` is not one either | That the codes your post uses for the heads are in `M100-M197` |
 | Okuma | **Two turrets in one program** | `G13` or `G013` starts turret A, `G14` or `G014` turret B, as often as needed; `P` codes in order (smaller number first); `M100` by count | That your post writes the turret starts that way. That the `P1-P9999` range is what your post uses |
+| Sinumerik | **Two channels in one archive file** | Channel 1 starts at `%_N_1_0_MPF`, channel 2 at `%_N_2_0_MPF`; the archive's other sections (`%_N_1_7_MPF` tool data and the like) belong to no channel. The waits are the same as in the next row | That your archive numbers its channel sections that way |
+| Sinumerik | **Two channels, one program per channel, named `<name>_C1.MPF`, `<name>_C2.MPF`** | The files are tied by the `_C<n>` in the name; the waits are as in the next row. A machine that synchronises its channels through its builder's own cycle needs [Advanced rules](#a-builders-own-cycle-an-advanced-example) | That your files are named that way. That the machine uses `WAITM` and not a cycle of the builder |
+| Sinumerik | **Two channels as tagged sections of one file** | `<PROG_BEGIN_C1>` starts channel 1, `<PROG_BEGIN_C2>` channel 2, and a `<PROG_END_…>` line ends the section; other tagged sections belong to no channel. The waits are as in the next row | That your post writes the tags that way |
 | Sinumerik | **Two channels, one program per channel** | `WAITM` and `WAITMC` with a mark number (a number or a variable such as `_M`, paired by its text); `SETM` answers a `WAITM` of its mark in the other channel, `CLEARM` answers nothing; neither is checked itself, and both are reached with Next/Previous Sync Point but not listed in the map; `WAITE` not counted; no rule for the file names | That your post writes the mark numbers and channel numbers in the order the preset reads them. Add a file-name rule or assign the files by hand |
+
+**A file-name rule belongs to a machine, never to a default.** A rule such as "the path
+number after the last underscore" reads `PART_2.ISO` as path 2. It reads `SHAFT_2.NC`, the
+second version of a program, as path 2 as well; in a folder of real programs a good part of
+the names ending in `_<n>` are versions and not channels. That is why no profile ships such a
+rule on its own, and why the presets that carry one say so in their label. Use one only for
+the machine whose folders you know, and check with the tester that it does not claim the
+version files. When in doubt, leave the rule out and assign the files by hand.
 
 **What to check, in short.**
 
@@ -429,6 +471,21 @@ Hover it for what was used to find the channel: the sections of the program, the
 the marker or your assignment. **Click** it for a list: each channel (choosing one takes you
 to its lines or its tab), **Open the other channels…**, **Assign this document to** a
 channel, and **Remove the assignment**.
+
+### The hover on a wait code
+
+When a machine lists a code as a wait, hovering it says so: for a machine with `M190-M199`
+as waits, the hover on `M198` reads *Wait code on this machine (Lathe 3)*, followed by the
+name of the rule it belongs to. The machine's list wins over the code database. A code
+such as `M198`, which the database may describe as something else on another control
+(a call of a program on an external device), is shown as a wait **on a machine that says it
+is one**, and with its database text on every other machine. The *Required: P* line of the
+database is left out there, because on your machine the rule says how a wait without `P`
+is read. Only plain code lists answer this way; a wait found by a start-and-digits rule or
+a pattern is not explained in the hover.
+
+For the same reason, the program checks *Missing word* and *Alone in its block* do not
+report a wait-code line.
 
 ### The program map
 

@@ -208,6 +208,7 @@ that machine.
 | **G-code system** | Fanuc lathe only: A or B. See [the Fanuc lathe](#the-fanuc-lathe) |
 | **U, W, V and H move incrementally** | Fanuc lathe only: *U and W* (the default), *U, W, V and H*, or *none*. See [the Fanuc lathe](#the-fanuc-lathe) |
 | **Tool word: offset digits** | Fanuc lathe and Okuma: how a `T` word splits into station and offset. See [the Fanuc lathe](#the-fanuc-lathe) and [Okuma](#okuma-the-unit-system-scales-every-number) |
+| **Tool change** | Sinumerik milling only: whether `M6` changes the tool, or a `T` alone does. See [Sinumerik](#sinumerik-diameter-programming-and-the-rest) |
 | **Feed mode**, **Spindle-speed mode**, **Plane** and **Positioning at power-on** | What is in force before the program sets it, as far as the dialect offers them — Fanuc mill: feed mode, positioning, plane; Fanuc lathe: feed mode, spindle-speed mode, plane; Okuma: feed mode, positioning, spindle-speed mode; Sinumerik turning and milling: feed mode (the feed type), plane, positioning. "Dialect default" leaves it to the profile |
 | **Notes** | Your own note, up to 500 characters. gEdit only stores it |
 
@@ -348,14 +349,32 @@ offset, and a `T…00` offset cancel is not a change — see
 [dialects.md](dialects.md#the-fanuc-iso-lathe-profile). How many of the digits are the
 offset depends on the machine's tool offset memory, so it is a setting:
 
-| *Tool word: offset digits* | `T0101` | `T12` | `T1001` |
-|---|---|---|---|
-| **The last two digits** (the default, verify) | station 1, offset 01 | the station alone | station 10, offset 01 |
-| The last digit | station 010, offset 1 | station 1, offset 2 | station 100, offset 1 |
-| The last three digits | station 0, offset 101 | the station alone | station 1, offset 001 |
+| *Tool word: offset digits* | `T12` | `T0101` | `T12012` | `T12345` |
+|---|---|---|---|---|
+| **By length** (the default, verify) | the station alone | station 1, offset 01 | station 12, offset 012 | station 12, offset 345 |
+| **The last two digits** ("3 + 2") | the station alone | station 1, offset 01 | station 120, offset 12 | station 123, offset 45 |
+| **The last three digits** ("2 + 3") | the station alone | station 0, offset 101 | station 12, offset 012 | station 12, offset 345 |
+| The last digit | station 1, offset 2 | station 010, offset 1 | station 1201, offset 2 | station 1234, offset 5 |
 
-A word whose offset is all zeros (`T0100`, `T120` under the last-digit reading) cancels the
-offset and is no tool change, in every reading.
+**By length** is what you get with no machine, or a machine that has not set this: one or two
+digits are the station, three or four digits are the station and a two-digit offset
+(`T101`, `T0101`), and five digits are a two-digit station and a three-digit offset
+(`T12012`, `T21000`). For most posts that is right, and you need not set anything.
+
+Set the choice when your machine's offset memory is arranged otherwise:
+
+- **3 + 2** when five-digit words are three digits of station and two of offset, as on a
+  turret with more than a hundred stations. With it, `T12345` is station 123, and the
+  program map and the tool list show 123.
+- **2 + 3** when the offset is always three digits, also in the short words. Then a
+  four-digit `T0101` is tool 0, offset 101, which is no tool change; do not pick it for a
+  machine that writes four-digit words with two-digit offsets.
+
+A word whose offset is all zeros (`T0100`, `T12000` by length, `T120` under the last-digit
+reading) cancels the offset and is no tool change, in every reading. Two more rules hold in
+every reading: **a zero offset next to `M6` is a tool change** (`M06 T21000` loads tool 21, as
+a mill-turn does for its milling spindle), and **a block with a three-digit `G` code has no
+tool change**, because the `T` in `G183 Z-5. T5 F20` belongs to the builder's cycle.
 
 **The G-code system also decides what some blocks are.** A `G92` with `I` and `K` is a
 thread cycle in system A and the coordinate system in B; read as system A, a program that
@@ -479,8 +498,18 @@ status bar says Sinumerik, change it by hand.
 
 **Sinumerik milling.** The milling profile has the same parameters. Its diameter setting
 defaults to off, and it assumes the plane `G17` and feed per minute (`G94`) at power-on, where
-the turning profile assumes `G18` and `G95`. The tool word is not a setting: `M6` changes the
-tool and a `T` alone preselects.
+the turning profile assumes `G18` and `G95`.
+
+**How the tool is changed (milling).** *Tool change* has two choices. **`M6` loads the tool
+selected with `T`** is the default (verify): `T="DRILL_D8" M6` changes the tool, and a `T`
+alone only selects the next one, so the program map and the tool list show one entry for each
+tool. **`T` changes the tool, no `M6`** is for a machine that is set up to change the tool at
+the `T` word itself, as a lathe does (`N10 T5` is the change). The Siemens programming manual
+says that the machine builder sets the type of tool change, so gEdit cannot know it from the
+program alone. Without a machine, gEdit looks at the program: any `M6` means the first
+choice; a program with lone `T` words and no `M6` is read as the second. A machine you set
+up wins over both. gEdit never reads `L6` as a tool change; it stays a subprogram call in
+the map.
 
 **Power-on state.** The turning profile assumes the turning plane (`G18`) and feed per
 revolution (`G95`). Both are machine data on the control, and both can be corrected per machine, under
@@ -608,8 +637,10 @@ It is plain JSON and hand-editing is supported:
 ```
 
 A machine made on the Machines page stores every variant (the G-code system, the `U`/`W`
-choice and the tool word for a Fanuc lathe); one written by hand may name only some of them,
-and the profile's default fills the rest.
+choice and the tool word for a Fanuc lathe; the tool change for Sinumerik milling); one
+written by hand may name only some of them, and the profile's default fills the rest.
+The tool word values are `byLength` (the default), `offset2` ("3 + 2", the example above),
+`offset3` ("2 + 3") and `offset1`; the Sinumerik milling `toolChange` values are `m6` and `t`.
 
 A machine stores the whole rule set of the preset it was given — the first machine above is
 what the Fanuc lathe's "As written" preset writes, the second what "Unit 10 µm, metric
@@ -688,7 +719,8 @@ shows it as "dialect default, assumed" — or, for a G-code system read off the 
 | X is a diameter | not a parameter of this dialect | on (`X` and `U`) | on | on (`DIAMON`) | off |
 | G-code system | not a parameter of this dialect | A | not a parameter of this dialect | not a parameter of this dialect | not a parameter of this dialect |
 | `U`, `W`, `V`, `H` incremental | not a parameter of this dialect | `U` and `W` (verify) | not a parameter of this dialect | not a parameter of this dialect | not a parameter of this dialect |
-| Tool word: offset digits | not a parameter of this dialect | the last two digits (verify) | two-digit offsets (verify) | not a parameter of this dialect | not a parameter of this dialect |
+| Tool word: offset digits | not a parameter of this dialect | by length: 1–2 digits station, 3–4 digits station + 2, 5 digits 2 + 3 (verify) | two-digit offsets (verify) | not a parameter of this dialect | not a parameter of this dialect |
+| Tool change | not a parameter of this dialect | not a parameter of this dialect | not a parameter of this dialect | not a parameter of this dialect | `M6` (verify) |
 | Power-on codes | feed per minute (`G94`) | feed per revolution (`G99`), direct rpm (`G97`), ZX plane (`G18`) | feed per revolution (`G95`), absolute (`G90`); no spindle-speed mode | feed per revolution (`G95`), ZX plane (`G18`) | feed per minute (`G94`), XY plane (`G17`) |
 
 Known soft spots in that table, said plainly:
@@ -706,9 +738,10 @@ Known soft spots in that table, said plainly:
   control's two feed parameters. A control with those parameters changed, or with the
   option that counts feeds in thousandths, reads them differently; gEdit has no setting for
   that yet. Both presets say it in their own name.
-- The **`U`/`W` choice** and the **tool word** defaults follow the documented default of both
-  G-code systems and the usual two-digit offset; the project has no machine data for them and
-  marks both "verify". The Okuma default of two-digit offsets matches the owner's lathes,
+- The **`U`/`W` choice**, the **tool word** (by length on a Fanuc lathe) and the **Sinumerik
+  milling tool change** (`M6`) defaults follow the documented default of both G-code systems,
+  the usual two-digit offset and the common way a milling post writes a tool change; the
+  project has no machine data for them and marks all three "verify". The Okuma default of two-digit offsets matches the owner's lathes,
   which use two or three of about 64 offsets.
 - The **Okuma default of 1 mm** is the one of the three unit systems that reads a program
   the way it looks. It is **not** known to be what your Okuma machines are set to, and it

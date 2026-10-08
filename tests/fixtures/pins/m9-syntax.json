@@ -5,7 +5,9 @@
     "Any other change to a pinned member during M9 is a hand-off note to the integration (I9), which applies it and updates this file. A content work package never edits it.",
     "M10 review (NC-9): the block skip of the Fanuc and Sinumerik profiles gains plainLevel, the level the bare mark is (BDT1 on Fanuc, /0 on Sinumerik): a named pin change.",
     "Integration I9 folded the three deferred values (Fanuc function and print names, Klartext PLANE and TCPM words, the short Sinumerik header) into 'pinned'; 'deferred' is empty. A later value that cannot be written without changing an existing golden goes into 'deferred' again.",
-    "Owner answers of 2026-10-08 (plan section 7.16 #172, #175): Klartext gains symbolAddresses ['#'] (the datum-table row of cycle 7), and removeSpaces is 'refuse' on the two Sinumerik profiles and 'keepAroundLongAddresses' on Okuma: named pin changes."
+    "Owner answers of 2026-10-08 (plan section 7.16 #172, #175): Klartext gains symbolAddresses ['#'] (the datum-table row of cycle 7), and removeSpaces is 'refuse' on the two Sinumerik profiles and 'keepAroundLongAddresses' on Okuma: named pin changes.",
+    "M12.5 WP-RP2 (plan section 7.16 #179, decision 7): the syntax members freeText, colonWords and tapeMarker (Klartext), callTargets, the keywords NOEX, DRAW, CLEAR and the system variables VTL... (Okuma), labelAfter, declareAfter and the keywords SBLOF, SBLON, DISPLOF, DISPLON, NORM, KONT, KONTC, KONTT (Sinumerik, and so Sinumerik milling), plainTextRun (Fanuc, and so the lathe): named pin changes, written by the work package for its gates and to be checked by the integration.",
+    "M12.5 integration (plan section 7.16 #185): the Sinumerik header accepts a leading semicolon, so a commented archive header names the program in the map; and the jump-target label is not read when the name is an R parameter (a tokenizer rule, no pinned member): named pin change."
   ],
   "milestone": "M9",
   "pinned": {
@@ -76,6 +78,7 @@
           "BPRNT"
         ],
         "maxWordDigits": 8,
+        "plainTextRun": 3,
         "programNames": "<[A-Za-z0-9+\\-_.]+>",
         "variables": "#\\d+",
         "wordSeparatorRequired": false
@@ -151,6 +154,7 @@
           "BPRNT"
         ],
         "maxWordDigits": 8,
+        "plainTextRun": 3,
         "programNames": "<[A-Za-z0-9+\\-_.]+>",
         "variables": "#\\d+",
         "wordSeparatorRequired": false
@@ -169,6 +173,11 @@
           "chars": "/",
           "position": "either"
         },
+        "colonWords": [
+          "VCONST",
+          "VC",
+          "HSC-MODE"
+        ],
         "comments": [
           {
             "end": null,
@@ -180,6 +189,13 @@
         "decimalPointSignificant": false,
         "decimalSeparator": ".",
         "decimalSeparatorAlt": ",",
+        "freeText": [
+          "CYCL\\s+DEF\\s+\\d+(?:\\.0+)?\\s+(?<text>(?![A-Z]{1,2}[+\\-]?\\d)[^\\s;~+\\-.\\d#\"(](?:[^;~]*?[^\\s;~])?)(?=\\s*(?:[;~]|$)|\\s+Q\\d+\\s*=)",
+          "CYCL\\s+DEF\\s+9\\.1\\s+(?<text>[A-Z][A-Z.\\-]*)(?=\\s*[+-]?\\d)",
+          "(?:BEGIN|END)\\s+PGM\\s+(?<text>[^\\s;](?:[^;]*?[^\\s;])?)(?=\\s+(?:MM|INCH)\\s*(?:;|$))",
+          "FN\\s*16\\s*:\\s*(?<text>[^\\s;](?:[^;]*?[^\\s;])?)(?=\\s*(?:;|$))",
+          "CALL\\s+PGM\\s+(?<text>[^\\s;~\"]+)"
+        ],
         "incrementalPrefix": "I",
         "keywords": [
           "BEGIN PGM",
@@ -253,11 +269,12 @@
         ],
         "sectionHeading": "^\\s*(?:/\\s*)?\\d+\\s+(?:/\\s*)?\\*",
         "strings": true,
-        "variables": "Q[LRS]?\\d+",
-        "wordSeparatorRequired": true,
         "symbolAddresses": [
           "#"
-        ]
+        ],
+        "tapeMarker": false,
+        "variables": "Q[LRS]?\\d+",
+        "wordSeparatorRequired": true
       },
       "callRules": [
         "\\b(?<text>(?:CALL\\s+(?:LBL|PGM)|SEL\\s+PGM)\\s+\\S+(?:\\s+REP\\s+\\S+)?)"
@@ -276,6 +293,13 @@
           "chars": "/",
           "levels": false,
           "position": "either"
+        },
+        "callTargets": {
+          "after": [
+            "CALL",
+            "MODIN"
+          ],
+          "pattern": "O[A-Z0-9]{1,4}"
         },
         "comments": [
           {
@@ -310,16 +334,19 @@
           "AND",
           "OR",
           "EOR",
-          "NOT"
+          "NOT",
+          "NOEX",
+          "DRAW",
+          "CLEAR"
         ],
         "maxLineLength": 158,
         "maxMCodes": 8,
         "names": "[A-Z]{2}[A-Z0-9]*",
+        "removeSpaces": "keepAroundLongAddresses",
         "sequenceNames": true,
-        "systemVariables": "V[A-Z][A-Z0-9]{3}",
+        "systemVariables": "V[A-Z][A-Z0-9]{3}|VTL[A-Z]",
         "variables": "V\\d+",
-        "wordSeparatorRequired": false,
-        "removeSpaces": "keepAroundLongAddresses"
+        "wordSeparatorRequired": false
       },
       "callRules": [
         "(?<![A-Z])(?<text>(?:CALL|MODIN)[ \\t]+O[A-Z0-9]{1,4}|G0*(?:16[1-9]|17[01]|20[5-9]|21[0-4])(?![\\d.]))"
@@ -351,8 +378,11 @@
         ],
         "decimalPointSignificant": false,
         "decimalSeparator": ".",
+        "declareAfter": [
+          "DEF"
+        ],
         "exponentMarker": "EX",
-        "header": "^%(?:_N_)?\\w+_(?:MPF|SPF)",
+        "header": "^;?%(?:_N_)?\\w+_(?:MPF|SPF)",
         "keywords": [
           "IF",
           "ELSE",
@@ -442,16 +472,30 @@
           "CHAR",
           "STRING",
           "AXIS",
-          "FRAME"
+          "FRAME",
+          "SBLOF",
+          "SBLON",
+          "DISPLOF",
+          "DISPLON",
+          "NORM",
+          "KONT",
+          "KONTC",
+          "KONTT"
+        ],
+        "labelAfter": [
+          "GOTO",
+          "GOTOF",
+          "GOTOB",
+          "GOTOC"
         ],
         "labels": "^\\s*(?:/\\d?\\s*)?(?:N\\d+[ \\t]+)?(?<name>[A-Z_][A-Z0-9_]*):(?!=)",
         "maxLineLength": 512,
         "names": "[A-Z_]{2}[A-Z0-9_]*",
+        "removeSpaces": "refuse",
         "strings": true,
         "systemVariables": "\\$[A-Z_][A-Z0-9_]*",
         "variables": "R\\d+",
-        "wordSeparatorRequired": false,
-        "removeSpaces": "refuse"
+        "wordSeparatorRequired": false
       },
       "callRules": [
         "^\\s*(?:/\\d?[ \\t]*)?(?:N\\d+[ \\t]+)?(?:MCALL[ \\t]+)?(?!(?:AC|IC|DC|ACP|ACN|MSG|IF|WHILE|FOR|CASE|UNTIL|REPEATB|REPEAT|LOOP|GOTOF|GOTOB|GOTOC|GOTO|DEF|SETMS|SETM|CLEARM|WAITMC|WAITM|WAITE|WAITS|INIT|START|ORIRESET|FGROUP|TRAORI|TRANSMIT|TRACYL|TRAANG|EXTCALL|CALLPATH)[ \\t]*\\()(?<text>[A-Z_][A-Z0-9_]*(?=\\()|[A-Z_]{2}[A-Z0-9_]*(?=[ \\t]+\\())[ \\t]*\\(",
@@ -485,8 +529,11 @@
         ],
         "decimalPointSignificant": false,
         "decimalSeparator": ".",
+        "declareAfter": [
+          "DEF"
+        ],
         "exponentMarker": "EX",
-        "header": "^%(?:_N_)?\\w+_(?:MPF|SPF)",
+        "header": "^;?%(?:_N_)?\\w+_(?:MPF|SPF)",
         "keywords": [
           "IF",
           "ELSE",
@@ -576,16 +623,30 @@
           "CHAR",
           "STRING",
           "AXIS",
-          "FRAME"
+          "FRAME",
+          "SBLOF",
+          "SBLON",
+          "DISPLOF",
+          "DISPLON",
+          "NORM",
+          "KONT",
+          "KONTC",
+          "KONTT"
+        ],
+        "labelAfter": [
+          "GOTO",
+          "GOTOF",
+          "GOTOB",
+          "GOTOC"
         ],
         "labels": "^\\s*(?:/\\d?\\s*)?(?:N\\d+[ \\t]+)?(?<name>[A-Z_][A-Z0-9_]*):(?!=)",
         "maxLineLength": 512,
         "names": "[A-Z_]{2}[A-Z0-9_]*",
+        "removeSpaces": "refuse",
         "strings": true,
         "systemVariables": "\\$[A-Z_][A-Z0-9_]*",
         "variables": "R\\d+",
-        "wordSeparatorRequired": false,
-        "removeSpaces": "refuse"
+        "wordSeparatorRequired": false
       },
       "callRules": [
         "^\\s*(?:/\\d?[ \\t]*)?(?:N\\d+[ \\t]+)?(?:MCALL[ \\t]+)?(?!(?:AC|IC|DC|ACP|ACN|MSG|IF|WHILE|FOR|CASE|UNTIL|REPEATB|REPEAT|LOOP|GOTOF|GOTOB|GOTOC|GOTO|DEF|SETMS|SETM|CLEARM|WAITMC|WAITM|WAITE|WAITS|INIT|START|ORIRESET|FGROUP|TRAORI|TRANSMIT|TRACYL|TRAANG|EXTCALL|CALLPATH)[ \\t]*\\()(?<text>[A-Z_][A-Z0-9_]*(?=\\()|[A-Z_]{2}[A-Z0-9_]*(?=[ \\t]+\\())[ \\t]*\\(",

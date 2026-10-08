@@ -63,8 +63,8 @@
   {"line":"X50.","tokens":[{"kind":"word","text":"X50.","address":"X","valueText":"50."}]},
   {"line":"F.15","tokens":[{"kind":"word","text":"F.15","address":"F","valueText":".15"}]},
   {"line":"X-0.5 Z+3","tokens":[{"kind":"word","text":"X-0.5","address":"X","valueText":"-0.5"},{"kind":"word","text":"Z+3","address":"Z","valueText":"+3"}]},
-  {"line":"CALL O1234 Q2","tokens":[{"kind":"keyword","text":"CALL","address":"CALL"},{"kind":"word","text":"O1234","address":"O","valueText":"1234"},{"kind":"word","text":"Q2","address":"Q","valueText":"2"}]},
-  {"line":"MODIN O2000","tokens":[{"kind":"keyword","text":"MODIN","address":"MODIN"},{"kind":"word","text":"O2000","address":"O","valueText":"2000"}]},
+  {"line":"CALL O1234 Q2","tokens":[{"kind":"keyword","text":"CALL","address":"CALL"},{"kind":"programMarker","text":"O1234"},{"kind":"word","text":"Q2","address":"Q","valueText":"2"}]},
+  {"line":"MODIN O2000","tokens":[{"kind":"keyword","text":"MODIN","address":"MODIN"},{"kind":"programMarker","text":"O2000"}]},
   {"line":"MODOUT","tokens":[{"kind":"keyword","text":"MODOUT","address":"MODOUT"}]},
   {"line":"RTS","tokens":[{"kind":"keyword","text":"RTS","address":"RTS"}]},
   {"line":"GOTO N200","tokens":[{"kind":"keyword","text":"GOTO","address":"GOTO"},{"kind":"word","text":"N200","address":"N","valueText":"200"}]},
@@ -116,5 +116,10 @@
   {"line":"N20 G1 X10 M1292 S800","tokens":[{"kind":"blockNumber","text":"N20","address":"N","valueText":"20"},{"kind":"word","text":"G1","address":"G","valueText":"1"},{"kind":"word","text":"X10","address":"X","valueText":"10"},{"kind":"word","text":"M1292","address":"M","valueText":"1292"},{"kind":"word","text":"S800","address":"S","valueText":"800"}]},
   {"line":"M1234 M13","tokens":[{"kind":"word","text":"M1234","address":"M","valueText":"1234"},{"kind":"word","text":"M13","address":"M","valueText":"13"}]},
   {"line":"N30 DIA1=50 ZL1=-20","tokens":[{"kind":"blockNumber","text":"N30","address":"N","valueText":"30"},{"kind":"word","text":"DIA1=50","address":"DIA1","valueText":"50"},{"kind":"word","text":"ZL1=-20","address":"ZL1","valueText":"-20"}]},
-  {"line":"N40 QR=5 TL=V1","tokens":[{"kind":"blockNumber","text":"N40","address":"N","valueText":"40"},{"kind":"word","text":"QR=5","address":"QR","valueText":"5"},{"kind":"word","text":"TL=V1","address":"TL","valueText":"V1"}]}
+  {"line":"N40 QR=5 TL=V1","tokens":[{"kind":"blockNumber","text":"N40","address":"N","valueText":"40"},{"kind":"word","text":"QR=5","address":"QR","valueText":"5"},{"kind":"word","text":"TL=V1","address":"TL","valueText":"V1"}]},
+  {"line":"N100 CALL OABCD","tokens":[{"kind":"blockNumber","text":"N100","address":"N","valueText":"100"},{"kind":"keyword","text":"CALL","address":"CALL"},{"kind":"programMarker","text":"OABCD"}]},
+  {"line":"MODIN OSUB Q3","tokens":[{"kind":"keyword","text":"MODIN","address":"MODIN"},{"kind":"programMarker","text":"OSUB"},{"kind":"word","text":"Q3","address":"Q","valueText":"3"}]},
+  {"line":"NOEX VTLL[1]=50 VTLD[1]=8","tokens":[{"kind":"keyword","text":"NOEX","address":"NOEX"},{"kind":"variable","text":"VTLL"},{"kind":"expression","text":"[1]"},{"kind":"operator","text":"="},{"kind":"word","text":"50","valueText":"50"},{"kind":"variable","text":"VTLD"},{"kind":"expression","text":"[1]"},{"kind":"operator","text":"="},{"kind":"word","text":"8","valueText":"8"}]},
+  {"line":"N5 DRAW","tokens":[{"kind":"blockNumber","text":"N5","address":"N","valueText":"5"},{"kind":"keyword","text":"DRAW","address":"DRAW"}]},
+  {"line":"N6 CLEAR","tokens":[{"kind":"blockNumber","text":"N6","address":"N","valueText":"6"},{"kind":"keyword","text":"CLEAR","address":"CLEAR"}]}
 ]

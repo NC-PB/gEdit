@@ -352,6 +352,7 @@ interface Harness {
   editor: FakeEditor;
   dialogs: FakeDialogs;
   status: FakeStatus;
+  profiles: ReturnType<typeof createProfileRegistry>;
   fs: ReturnType<typeof createFakeFs>;
   backup: FakeBackup;
   memory: FakeMemory;
@@ -451,6 +452,7 @@ function setup(o: { isTauri?: boolean; filtersSupported?: boolean } = {}): Harne
     editor,
     dialogs,
     status,
+    profiles,
     fs,
     backup,
     memory,
@@ -542,6 +544,96 @@ describe('open', () => {
     const [id] = await h.files.open([h.put('/nc/b.h', 'nc/heidenhain/h01-3tools.h')]);
     expect(h.docs.get(id)?.profileId).toBe('heidenhain-klartext');
     expect(h.editor.languages.get(id)).toBe('heidenhain-klartext');
+  });
+
+  describe('an uncertain dialect (M12.5, WP-RP6)', () => {
+    const uncertainAnswer = (id: string) => ({
+      id,
+      by: 'content' as const,
+      score: 5,
+      rival: 'heidenhain-klartext',
+      familyMargin: 2,
+      certain: false,
+      uncertain: true,
+    });
+
+    it('marks the document and says so once when detection is unsure', async () => {
+      h.profiles.detectResult = (_p, _t, fallback) => uncertainAnswer(fallback);
+      const [id] = await h.files.open([h.put('/nc/u.nc', 'nc/encoding/utf8-lf.nc')]);
+      expect(h.docs.get(id)?.dialectUncertain).toBe(true);
+      const said = h.status.last();
+      expect(said).toContain('u.nc');
+      expect(said).toContain(t('profiles.uncertain.opened', { file: 'u.nc', name: 'Fanuc' }).slice(0, 20));
+    });
+
+    it('does not mark a sure detection', async () => {
+      const [id] = await h.files.open([h.put('/nc/u.nc', 'nc/encoding/utf8-lf.nc')]);
+      expect(h.docs.get(id)?.dialectUncertain).toBeUndefined();
+    });
+
+    it('never marks a dialect remembered for the file', async () => {
+      h.profiles.detectResult = (_p, _t, fallback) => uncertainAnswer(fallback);
+      h.memory.profiles.set('/nc/u.nc', 'fanuc-gcode');
+      const [id] = await h.files.open([h.put('/nc/u.nc', 'nc/encoding/utf8-lf.nc')]);
+      expect(h.docs.get(id)?.dialectUncertain).toBeUndefined();
+    });
+
+    it('is decided again by Save As to another extension', async () => {
+      const [id] = await h.files.open([h.put('/nc/a.nc', 'nc/ambiguous/comment-only.txt')]);
+      expect(h.docs.get(id)?.dialectUncertain).toBeUndefined();
+      h.profiles.detectResult = (_p, _t, fallback) => uncertainAnswer(fallback);
+      h.dialogs.answers.saveFile.push('/nc/a.h');
+      await h.files.saveAs(id);
+      expect(h.docs.get(id)?.dialectUncertain).toBe(true);
+    });
+
+    it('is cleared by Save As when the new name makes the dialect sure', async () => {
+      h.profiles.detectResult = (_p, _t, fallback) => uncertainAnswer(fallback);
+      const [id] = await h.files.open([h.put('/nc/a.nc', 'nc/ambiguous/comment-only.txt')]);
+      expect(h.docs.get(id)?.dialectUncertain).toBe(true);
+      h.profiles.detectResult = createProfileRegistry({ filtersSupported: true }).detectResult;
+      h.dialogs.answers.saveFile.push('/nc/a.h');
+      await h.files.saveAs(id);
+      expect(h.docs.get(id)?.dialectUncertain).toBe(false);
+    });
+
+    it('keeps the flag when Save As lands on an uncertain dialect and changes the profile', async () => {
+      const [id] = await h.files.open([h.put('/nc/a.nc', 'nc/ambiguous/comment-only.txt')]);
+      const before = h.docs.get(id)?.profileId;
+      h.profiles.detectResult = () => uncertainAnswer('okuma-osp');
+      h.dialogs.answers.saveFile.push('/nc/a.min');
+      await h.files.saveAs(id);
+      expect(before).not.toBe('okuma-osp');
+      expect(h.docs.get(id)?.profileId).toBe('okuma-osp');
+      expect(h.docs.get(id)?.dialectUncertain).toBe(true);
+    });
+
+    it('clears the flag when the dialect is set by hand (setProfile)', async () => {
+      h.profiles.detectResult = (_p, _t, fallback) => uncertainAnswer(fallback);
+      const [id] = await h.files.open([h.put('/nc/u.nc', 'nc/encoding/utf8-lf.nc')]);
+      expect(h.docs.get(id)?.dialectUncertain).toBe(true);
+      h.files.setProfile(id, 'okuma-osp');
+      expect(h.docs.get(id)?.dialectUncertain).toBeFalsy();
+    });
+
+    it('does not write the guessed dialect to the new path when only a machine was remembered', async () => {
+      h.profiles.detectResult = (_p, _t, fallback) => uncertainAnswer(fallback);
+      h.memory.machines.set('/nc/a.nc', 'some-machine');
+      const [id] = await h.files.open([h.put('/nc/a.nc', 'nc/encoding/utf8-lf.nc')]);
+      expect(h.docs.get(id)?.dialectUncertain).toBe(true);
+      h.dialogs.answers.saveFile.push('/nc/b.h');
+      await h.files.saveAs(id);
+      expect(h.memory.profiles.has('/nc/b.h')).toBe(false);
+      expect(h.memory.machines.get('/nc/b.h')).toBe('some-machine');
+      expect(h.docs.get(id)?.dialectUncertain).toBe(true);
+    });
+
+    it('flags a real unsupported-dialect fixture through the real registry, and not a Fanuc one', async () => {
+      const [odd] = await h.files.open([h.put('/nc/u02.nc', 'nc/uncertain/u02-bracket-params.nc')]);
+      expect(h.docs.get(odd)?.dialectUncertain).toBe(true);
+      const [sure] = await h.files.open([h.put('/nc/f01.nc', 'nc/fanuc/f01-mill-3tools.nc')]);
+      expect(h.docs.get(sure)?.dialectUncertain).toBeUndefined();
+    });
   });
 
   it('records the encoding, the line ending and the disk stamp', async () => {
