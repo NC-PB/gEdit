@@ -1,0 +1,24 @@
+{
+  "about": "X6: Find all \"S>2000\", whole address, over the three open documents (scope: all open documents), no machine. The rows of the report in order.",
+  "query": "S>2000",
+  "flags": {
+    "wholeAddress": true,
+    "caseSensitive": false,
+    "regex": false,
+    "inComments": false,
+    "scope": "open"
+  },
+  "title": "2 hits for S>2000",
+  "rows": [
+    {
+      "document": "search-a.nc",
+      "line": 15,
+      "text": "G0 G54 X20. Y20. S2400 M3"
+    },
+    {
+      "document": "search-c.nc",
+      "line": 7,
+      "text": "G0 G54 X-5. Y-5. S2001 M3"
+    }
+  ]
+}

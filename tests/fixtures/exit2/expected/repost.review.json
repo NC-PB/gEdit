@@ -1,0 +1,50 @@
+{
+  "about": "X5: repost-new.nc (the active document) compared with repost-old.nc in review mode with the fanuc-gcode defaults, no machine. Exactly these changed lines; \"line\" is the file line \"go to line\" lands on in each document. The export of this view is repost.review.diff (no newline after the last line).",
+  "profile": "fanuc-gcode",
+  "options": {
+    "ignoreBlockNumbers": true,
+    "ignoreWhitespace": true,
+    "ignoreComments": true,
+    "ignoreCase": false,
+    "ignoreNumberFormat": true,
+    "ignoreCycleNames": false
+  },
+  "changes": [
+    {
+      "original": {
+        "document": "repost-old.nc",
+        "line": 11,
+        "text": "N70 X130. F600.",
+        "normalized": [
+          "X130. F600."
+        ]
+      },
+      "modified": {
+        "document": "repost-new.nc",
+        "line": 13,
+        "text": "X130.000 F650.0",
+        "normalized": [
+          "X130. F650."
+        ]
+      }
+    },
+    {
+      "original": {
+        "document": "repost-old.nc",
+        "line": 19,
+        "text": "N140 G81 G98 X20. Y20. Z-15.25 R2. F120.",
+        "normalized": [
+          "G81 G98 X20. Y20. Z-15.25 R2. F120."
+        ]
+      },
+      "modified": {
+        "document": "repost-new.nc",
+        "line": 22,
+        "text": "G81 G98 X20.000 Y20.000 Z-15.000 R2.000 F120.0",
+        "normalized": [
+          "G81 G98 X20. Y20. Z-15. R2. F120."
+        ]
+      }
+    }
+  ]
+}

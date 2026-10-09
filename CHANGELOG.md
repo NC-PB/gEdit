@@ -8,6 +8,8 @@ Multi-channel programs: this change set lets gEdit know the channels of a twin-t
 
 Real programs, second pass: programs from real CAM posts are recognised more reliably, a program that fits no dialect is marked as a guess, and the tool word, channel presets, checks and names follow what real posts write. See [Dialects](docs/user/dialects.md), [Machines](docs/user/machines.md) and [Channels](docs/user/channels.md).
 
+Your own dialects and codes (the end of Phase 2): you can write profiles and code files of your own, test a profile on the open program, move machine configurations between computers, and type without lower case or joined blocks. See [Your own profiles and code files](docs/user/profiles.md).
+
 ### New
 
 - **Repository:** an MIT `LICENSE` file, a `repository` field in the package metadata, Dependabot for GitHub Actions (weekly, one pull request), a placeholder app icon, and Close Window in the macOS menu shows its shortcut, Shift+Cmd+W.
@@ -33,6 +35,19 @@ Real programs, second pass: programs from real CAM posts are recognised more rel
 - **Program checks at the end of a file:** a Klartext program with no `END PGM`, or an `END PGM` with another name, and a Sinumerik main program with no `M30`, `M2`, `M17` or `RET`, give one error on the last line; a Sinumerik subprogram is not judged.
 - **Names read as names:** Klartext cycle and program names, `CALL PGM` paths and `FN 16:` text are text (no hover, Convert Case leaves them); Sinumerik jump targets are labels and `DEF` names variables; Okuma `CALL O<name>` names a program and `VTLL`/`VTLD` are variables; `;%_N_NAME_MPF` starts the program in the map.
 - **New keywords:** Sinumerik `SBLOF`, `SBLON`, `DISPLOF`, `DISPLON`, `NORM`, `KONT`, `KONTC`, `KONTT`; Okuma `NOEX`, `DRAW`, `CLEAR`; the Klartext colon words `VCONST`, `VC` and `HSC-MODE`.
+- **User profiles:** a profile of your own starts from one of the six or from another profile of yours and changes only what differs (folder, extension and content rules for detection, block numbering, outline rules, tool-call patterns, typing options). It is one JSON file in the `profiles` folder next to the settings, and a saved file is loaded at once, without a restart and without closing a document.
+- **User code files:** a file in the `codes` folder adds your own G and M codes (a builder M-code table, say) to the hover and completion of a built-in set, or makes a set of its own that starts from a built-in one. An entry for a code that exists changes only the members it writes; write `"replace": true` to replace the entry whole. Every change of meaning is listed as a notice.
+- **Profiles page** (Settings, Profiles; *Manage Profiles…* in the palette): your files with their problems, New Profile From…, New Code File, Open, Import, Export, Remove (asks first) and Reload.
+- **Test Profile on Document** (Profiles page and Tools tab): shows what every rule of a profile finds on the open program, line by line, with the time each took, and which dialect would be detected; a rule that takes too long is stopped and said so.
+- **A broken file is a row, not a crash:** the file, the place in it and the reason are shown on the Profiles page and in Results; everything else keeps working. Files are limited in size, count, nesting and pattern length, and a pattern that could run away is refused.
+- **Your profile is picked on its own rules only:** when it and a built-in profile score the same, the built-in profile wins, whatever the priority; yours is chosen by its own folder, extension or content rules, or by hand (remembered for the file).
+- **Machine import and export** (*Import Machines…*, *Export Machines…*, and buttons on the Machines page): move all machine configurations to another computer; imported machines get new ids and a name with ` (2)` where one exists, and a count of what was refused is shown.
+- **Upper-Case Typing** (Home tab): a session switch for the profile's typing option.
+- **Typing options on every control:** letters typed in code come out in upper case on all six built-in profiles, Klartext included; comments, strings and names (Klartext program and cycle names, Fanuc `<name>`, `MSG("…")`, `T="…"`) stay as typed. Not applied in `.json` and `.py` files.
+- **Blocks are not joined by accident:** Backspace at the start of a line and Delete at the end of a line (also with Ctrl, Alt or Cmd) do nothing when both lines hold text. Empty lines can still be deleted, and a selected line break can be removed.
+- **Scripts:** address arithmetic, scale feed and scale speed name a word whose number cannot be read (a dash pasted for the minus sign) instead of passing it over.
+- **Check Wait Codes** shows the channel prefix of a mark in every message, and the count text reads "…, T2 has 1; both need the same number."
+- **Renumber** tells you when a jump left as written now lands on another block, or on none.
 
 ### Changed
 
@@ -50,9 +65,12 @@ Real programs, second pass: programs from real CAM posts are recognised more rel
 - **A tool part of zeros** (`T00100`, `T0001`; under 2 + 3 also `T0101`) keeps the tool and changes only the offset: no tool change on any setting.
 - **Klartext, empty `CYCL DEF 19.1`:** ends the tilt, so address arithmetic and extents stop treating the rest of the program as tilted.
 - **Fanuc:** the machine-builder range `M900-M999` is now named as one builder's range in the two- and three-path presets, and the `_<n>` file-name presets warn that a version file such as `SHAFT_2.NC` is read as a path too.
+- **Convert Case to lower case asks first on every built-in profile** (before: only on Fanuc), because the control expects upper case.
+- **Program checks, tool list and extents:** a subprogram written behind the main program is charged to no tool (it was charged to the main program's last tool); the extents label a tool as it is written (`T1 (T010101, line 9)`); a thread's `F` that is not its lead is said so; a feed range in another unit than the program's says which.
 
 ### Fixed
 
+- **Machine item tooltip, feed mode at power-on:** on a lathe program read as G-code system B with no machine chosen, the tooltip said G99 while naming the program as its source. It now lists G95, the feed mode the detected system powers up in.
 - Switching tabs away from a very large program is cheap again.
 - **Program checks:** `spindleOff` no longer reports the words of a cycle definition behind a bare `L` (`L CYCL DEF 32.1 T0.05`); `blockWords` accepts `T<a> T<b> M6` on the lathe profile; the Sinumerik end check skips an untitled document, a main program ending in an unconditional jump, a file that starts with a commented subprogram header (`;%_N_<name>_SPF`) and an archive's data section.
 - **Klartext:** `TOOL CALL "name"` followed directly by a digit is a tool change; a tool number with more than one decimal is read as its whole number.

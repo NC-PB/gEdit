@@ -1,0 +1,105 @@
+{
+  "about": "X1: no machine. F7/Shift+F7 visit toolLines; the map tool rows are mapTools; toolList is the envelope of the bundled tool_list.py with its form defaults.",
+  "input": "fanuc-lathe-a.nc",
+  "profile": "fanuc-lathe",
+  "machine": null,
+  "variants": {
+    "gcodeSystem": {
+      "value": "A",
+      "source": "detected"
+    },
+    "incrementalAddresses": {
+      "value": "uw",
+      "source": "profile"
+    },
+    "toolWord": {
+      "value": "byLength",
+      "source": "profile"
+    }
+  },
+  "toolLines": [
+    16,
+    34,
+    41
+  ],
+  "mapTools": [
+    {
+      "line": 16,
+      "text": "T1 — OD ROUGH"
+    },
+    {
+      "line": 34,
+      "text": "T1 — OD FINISH"
+    },
+    {
+      "line": 41,
+      "text": "T3 — THREAD"
+    }
+  ],
+  "toolList": {
+    "title": "Tool list",
+    "columns": [
+      {
+        "key": "tool",
+        "label": "Tool"
+      },
+      {
+        "key": "offsets",
+        "label": "Offsets"
+      },
+      {
+        "key": "description",
+        "label": "Description"
+      },
+      {
+        "key": "line",
+        "label": "First call"
+      },
+      {
+        "key": "calls",
+        "label": "Calls"
+      },
+      {
+        "key": "feed",
+        "label": "Feed"
+      },
+      {
+        "key": "speed",
+        "label": "Speed"
+      }
+    ],
+    "rows": [
+      {
+        "tool": "T1",
+        "offsets": "01, 11",
+        "description": "OD ROUGH",
+        "line": 16,
+        "calls": 2,
+        "feed": "0.12-0.25 /rev",
+        "speed": "200-240 m/min (G96)"
+      },
+      {
+        "tool": "T3",
+        "offsets": "03",
+        "description": "THREAD",
+        "line": 41,
+        "calls": 1,
+        "feed": "",
+        "speed": "1000"
+      }
+    ],
+    "message": "2 tools",
+    "findings": [
+      {
+        "line": 17,
+        "severity": "info",
+        "message": "T1: the S of 1 block is a speed limit, not a spindle speed, so it is not in the range."
+      },
+      {
+        "line": 46,
+        "severity": "info",
+        "message": "T3: the F of 3 blocks is a thread pitch, not a feed rate, so it is not in the range."
+      }
+    ]
+  }
+}

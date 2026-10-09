@@ -1,4 +1,4 @@
-// The settings dialog (plan §5 WP2.7, §7.11). Owner: WP2.7.
+// The settings dialog (plan §5 WP2.7, §7.11). Owner: WP2.7; `profile.manage` (M13 integration).
 // One feature per file (plan AD-3); see ./README.md.
 //
 // `settings.open` is §7.11's `Mod+,`, the platform-standard key for preferences, and the
@@ -11,7 +11,7 @@
 // effective values would drift apart until the next start.
 
 import Settings2 from 'lucide-svelte/icons/settings-2';
-import SettingsDialog from '$lib/components/dialogs/SettingsDialog.svelte';
+import SettingsDialog, { PROFILES_TAB } from '$lib/components/dialogs/SettingsDialog.svelte';
 import { asIcon } from '$lib/app/icons';
 import { files } from '$lib/app/fileOps';
 import { modals } from '$lib/app/modals';
@@ -44,6 +44,16 @@ export default {
       keys: 'Mod+,',
       global: true,
       run: () => modals.open(SettingsDialog, {}),
+    },
+    {
+      // M13 (integration): the way to the Profiles page without a key. The page's buttons
+      // run the `profile.*` commands of `contrib/userConfig.ts`; this one is here, not
+      // there, because the page imports that file and this one already imports the dialog.
+      id: 'profile.manage',
+      title: 'userConfig.manage',
+      category: 'userConfig.category',
+      global: true,
+      run: () => modals.open(SettingsDialog, { initialTab: PROFILES_TAB }),
     },
   ],
   // A group's place in the tab is the smallest `order` its items carry, so 95 puts

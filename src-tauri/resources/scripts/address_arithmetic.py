@@ -256,7 +256,7 @@ BLOCK_REASONS = (
     "arc-geometry",
     "not-scaled",
 )
-WORD_REASONS = ("data", "incremental", "expression", "machine-dependent", "count")
+WORD_REASONS = ("unreadable", "data", "incremental", "expression", "machine-dependent", "count")
 
 #: What the summary calls a count of each reason (singular, plural).
 REASON_TEXT = {
@@ -274,6 +274,7 @@ REASON_TEXT = {
     "pole": ("block around a pole that cannot be moved", "blocks around a pole that cannot be moved"),
     "arc-geometry": ("arc whose centre or intermediate point cannot be moved", "arcs whose centre or intermediate point cannot be moved"),
     "not-scaled": ("block a multiply or divide does not scale", "blocks a multiply or divide does not scale"),
+    "unreadable": ("word that cannot be read", "words that cannot be read"),
     "data": ("data word", "data words"),
     "incremental": ("incremental word", "incremental words"),
     "expression": ("variable or expression", "variables or expressions"),
@@ -1194,9 +1195,13 @@ class Run:
         """A block this run would change, a frame it opens, or a cycle whose positions it moves."""
         setup = self.setup
         words = setup.words
-        for token, _ in block.words:
-            if (token.address or "").upper() in words and (token.value_text or "") != "":
-                return True
+        for token, line in block.words:
+            if (token.address or "").upper() in words:
+                if (token.value_text or "") != "":
+                    return True
+                # NC-5: a chosen word that cannot be read is reported (`judge`).
+                if gedit_nc.unreadable_value(token, line.tokens) is not None:
+                    return True
         if not setup.touches_positions:
             return False
         return group is not None or block.opens_frame
@@ -1253,6 +1258,13 @@ class Run:
         for token, line in block.words:
             address = (token.address or "").upper()
             if (token.value_text or "") == "":
+                # M13 review (NC-5): `Z–5.` with a dash pasted for the minus sign is the address
+                # alone, a character no control reads and a bare number. Left as written, and
+                # said so: the user asked for every Z.
+                unreadable = gedit_nc.unreadable_value(token, line.tokens) if address in setup.words else None
+                if unreadable is not None:
+                    written, why = unreadable
+                    outcomes.append(("skip", line, "unreadable", "%s: %s; left as written" % (written, why), written))
                 continue
             is_cycle = id(token) in cycle_words
             # NC-3: an absolute arc centre (`I=AC(50)`) or a `CIP` intermediate point is a
@@ -1279,7 +1291,7 @@ class Run:
 
         if geometry and any(o[0] == "edit" for o in outcomes):
             bad = next((o for o in geometry if o[0] == "skip"), None) or next(
-                (o for o in outcomes if o[0] == "skip" and o[2] in ("expression", "machine-dependent")), None
+                (o for o in outcomes if o[0] == "skip" and o[2] in ("expression", "machine-dependent", "unreadable")), None
             )
             if bad is not None:
                 why = bad[3].split(": ", 1)[-1]
@@ -1294,7 +1306,7 @@ class Run:
             # A cycle is moved in one piece or not at all (R8), and so is the contour around
             # a pole (NC-2).
             for outcome in outcomes:
-                if outcome[0] == "skip" and outcome[2] in ("expression", "machine-dependent"):
+                if outcome[0] == "skip" and outcome[2] in ("expression", "machine-dependent", "unreadable"):
                     why = outcome[3].split(": ", 1)[-1]
                     if group.kind == "pole":
                         block.refusal = (
@@ -1303,7 +1315,7 @@ class Run:
                             % (outcome[4], why),
                         )
                         return
-                    reason = "cycle-expression" if outcome[2] == "expression" else "cycle-unresolved"
+                    reason = "cycle-expression" if outcome[2] in ("expression", "unreadable") else "cycle-unresolved"
                     block.refusal = (reason, "%s cannot be moved (%s), so the cycle cannot be moved in one piece" % (outcome[4], why))
                     return
 
@@ -2086,7 +2098,8 @@ def collect_findings(run: Run, findings: Findings) -> None:
             rows.append((block.number, 0, "warning", "%s: %s." % (block.as_written(), text), reason))
             continue
         for number, reason, text in block.word_findings:
-            rows.append((number, 1, "info", text + ".", reason))
+            # NC-5: a word that cannot be read still goes to the old position: a warning.
+            rows.append((number, 1, "warning" if reason == "unreadable" else "info", text + ".", reason))
         for number, text in block.notes:
             rows.append((number, 2, "info", text + ".", "rounded"))
     for code, (line, count) in run.unknown_seen.items():

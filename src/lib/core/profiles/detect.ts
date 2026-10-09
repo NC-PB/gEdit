@@ -9,10 +9,17 @@
 //   2. Otherwise a profile scores its extension weight plus the content weights over the
 //      first 400 non-empty lines. A line counts only for its **strongest** matching
 //      pattern, so a file does not win on the same line twice.
-//   3. The highest score wins; a tie goes to the higher `detect.priority`, then to a user
-//      profile over a built-in (M6: a user who writes a profile for their own posts means
-//      it to win over the one we shipped), then to `fallback`, then to the first profile
-//      in registry order.
+//   3. The highest score wins. A tie goes, in this order:
+//      - to a **built-in** profile over a user profile, whatever either's priority (owner
+//        decision of 2026-10-09, M13 review NC-2). A user profile that `extends` a built-in
+//        inherits its detection rules and scores exactly what its parent scores, so it can
+//        only win through a rule it adds itself (a folder, an extension, a content rule) and
+//        never takes a program from a built-in on a tie. Picking it by hand still works and
+//        is remembered per file;
+//      - between two user profiles, to the ancestor over its descendant (the same reason);
+//      - to the higher `detect.priority`;
+//      - to `fallback`, then to the first profile in registry order.
+//      Rule 1 uses the same order when two profiles list the same folder.
 //   4. Nothing scored at all (an empty file, an unknown extension, no marker) keeps
 //      `fallback` — the current or default profile.
 //   5. A profile one of whose `detect.vetoes` matches a scanned line scores nothing for
@@ -66,7 +73,7 @@ export const DECISIVE_WEIGHT = 5000;
  */
 export const CERTAIN_WEIGHT = 20;
 
-/** Where a profile came from, for the tie-break (M6; the registry knows, a profile does not). */
+/** Where a profile came from, for the tie-break (M6, M13 NC-2; the registry knows, a profile does not). */
 export type ProfileOrigin = 'builtin' | 'user';
 
 /** What `detectProfile` cannot read off a compiled profile. */
@@ -113,7 +120,7 @@ function firstLines(text: string, max: number): string[] {
  * The profile whose `detect.folders` contains `path`, or `null`. The deepest folder wins,
  * so a machine folder inside a CAM root beats the root; the usual tie-break follows.
  */
-function byFolder(profiles: CompiledProfile[], path: string, rank: Rank): CompiledProfile | null {
+function byFolder(profiles: CompiledProfile[], path: string, beats: Beats): CompiledProfile | null {
   const file = normalizePath(path);
   let best: CompiledProfile | null = null;
   let bestLength = -1;
@@ -122,7 +129,7 @@ function byFolder(profiles: CompiledProfile[], path: string, rank: Rank): Compil
     for (const folder of cp.profile.detect?.folders ?? []) {
       const prefix = normalizePath(folder);
       if (prefix === '' || !file.startsWith(`${prefix}/`)) continue;
-      if (prefix.length > bestLength || (prefix.length === bestLength && best !== null && beats(cp, best, rank))) {
+      if (prefix.length > bestLength || (prefix.length === bestLength && best !== null && beats(cp, best))) {
         best = cp;
         bestLength = prefix.length;
       }
@@ -131,23 +138,41 @@ function byFolder(profiles: CompiledProfile[], path: string, rank: Rank): Compil
   return best;
 }
 
-/** How a profile ranks in a tie: its `detect.priority` first, then user over built-in. */
-type Rank = (cp: CompiledProfile) => [number, number];
-
-function rankWith(o: DetectOptions | undefined): Rank {
-  return (cp) => [cp.profile.detect?.priority ?? 0, o?.origin?.(cp) === 'user' ? 1 : 0];
-}
-
 /**
- * Tie-break between two equally scoring profiles: the higher `detect.priority` wins, then
- * a user profile over a built-in one. `fallback` and the registry order follow at the call
- * site, where they are known.
+ * Tie-break between two equally scoring profiles (rule 3 of the header): does `candidate`
+ * win over `current`? `fallback` and the registry order follow at the call site, where
+ * they are known.
  */
-function beats(candidate: CompiledProfile, current: CompiledProfile, rank: Rank): boolean {
-  const [priority, origin] = rank(candidate);
-  const [theirPriority, theirOrigin] = rank(current);
-  if (priority !== theirPriority) return priority > theirPriority;
-  return origin > theirOrigin;
+type Beats = (candidate: CompiledProfile, current: CompiledProfile) => boolean;
+
+function tieBreak(profiles: readonly CompiledProfile[], o: DetectOptions | undefined): Beats {
+  const byId = new Map(profiles.map((cp) => [cp.profile.id, cp]));
+  const isUser = (cp: CompiledProfile): boolean => o?.origin?.(cp) === 'user';
+  /** Does `cp` have `ancestor` on its `extends` chain (through the profiles of this call)? */
+  const descends = (cp: CompiledProfile, ancestor: string): boolean => {
+    const seen = new Set<string>([cp.profile.id]);
+    let id = cp.profile.extends;
+    while (typeof id === 'string' && id !== '' && !seen.has(id)) {
+      if (id === ancestor) return true;
+      seen.add(id);
+      id = byId.get(id)?.profile.extends;
+    }
+    return false;
+  };
+  return (candidate, current) => {
+    const user = isUser(candidate);
+    const theirUser = isUser(current);
+    // A built-in wins every tie with a user profile (NC-2), before any priority.
+    if (user !== theirUser) return !user;
+    // Two user profiles: the ancestor wins, so a child needs a rule of its own as well.
+    if (user) {
+      if (descends(current, candidate.profile.id)) return true;
+      if (descends(candidate, current.profile.id)) return false;
+    }
+    const priority = candidate.profile.detect?.priority ?? 0;
+    const theirPriority = current.profile.detect?.priority ?? 0;
+    return priority > theirPriority;
+  };
 }
 
 /** `detect.extensions[ext]`, or 0 when the profile does not claim that extension. */
@@ -212,7 +237,7 @@ export function detectScores(profiles: CompiledProfile[], path: string | null, t
 }
 
 /** The index of the winner by the rules 2 to 4 of the header, or -1 when nothing scored. */
-function winnerOf(profiles: CompiledProfile[], scores: number[], fallback: string, rank: Rank): number {
+function winnerOf(profiles: CompiledProfile[], scores: number[], fallback: string, beats: Beats): number {
   let bestIndex = -1;
   for (let i = 0; i < profiles.length; i++) {
     if (scores[i] <= 0) continue;
@@ -221,11 +246,12 @@ function winnerOf(profiles: CompiledProfile[], scores: number[], fallback: strin
       continue;
     }
     if (scores[i] < scores[bestIndex]) continue;
-    // Equal scores: the higher priority wins, then a user profile, then the fallback
-    // profile, then the registry order (which leaves `bestIndex` where it is).
-    if (beats(profiles[i], profiles[bestIndex], rank)) bestIndex = i;
+    // Equal scores: a built-in over a user profile, an ancestor over its descendant, the
+    // higher priority, then the fallback profile, then the registry order (which leaves
+    // `bestIndex` where it is).
+    if (beats(profiles[i], profiles[bestIndex])) bestIndex = i;
     else if (
-      !beats(profiles[bestIndex], profiles[i], rank) &&
+      !beats(profiles[bestIndex], profiles[i]) &&
       profiles[i].profile.id === fallback &&
       profiles[bestIndex].profile.id !== fallback
     ) {
@@ -251,14 +277,14 @@ export function detectProfile(
   o?: DetectOptions,
 ): string {
   if (profiles.length === 0) return fallback;
-  const rank = rankWith(o);
+  const beats = tieBreak(profiles, o);
 
   if (path !== null) {
-    const folderMatch = byFolder(profiles, path, rank);
+    const folderMatch = byFolder(profiles, path, beats);
     if (folderMatch) return folderMatch.profile.id;
   }
 
-  const bestIndex = winnerOf(profiles, detectScores(profiles, path, text), fallback, rank);
+  const bestIndex = winnerOf(profiles, detectScores(profiles, path, text), fallback, beats);
   return bestIndex === -1 ? fallback : profiles[bestIndex].profile.id;
 }
 
@@ -343,14 +369,14 @@ export function detectResult(
     uncertain: false,
   };
   if (profiles.length === 0) return none;
-  const rank = rankWith(o);
+  const beats = tieBreak(profiles, o);
   if (path !== null) {
-    const folderMatch = byFolder(profiles, path, rank);
+    const folderMatch = byFolder(profiles, path, beats);
     if (folderMatch) return { ...none, id: folderMatch.profile.id, by: 'folder' };
   }
 
   const sheet = scoreSheet(profiles, path, text);
-  const index = winnerOf(profiles, sheet.scores, fallback, rank);
+  const index = winnerOf(profiles, sheet.scores, fallback, beats);
   if (index === -1) return none;
 
   const grammar = profiles[index].profile.grammar;

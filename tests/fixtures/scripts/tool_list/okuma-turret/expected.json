@@ -64,7 +64,7 @@
       "description": "CROSS HOLE D8 WITH A DRIVEN TOOL",
       "line": 34,
       "calls": 1,
-      "feed": "120",
+      "feed": "120 /min",
       "speed": ""
     },
     {

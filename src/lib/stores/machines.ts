@@ -29,7 +29,7 @@
 // a restart — and picking "follow the profile's default" forgets it rather than leaving
 // the old id behind.
 
-import { writable } from 'svelte/store';
+import { writable, type Readable } from 'svelte/store';
 import { applyMachine, compatible, effectiveMachine } from '$lib/core/machines/effective';
 import {
   emptyMachinesFile,
@@ -39,7 +39,7 @@ import {
   serializeMachinesFile,
 } from '$lib/core/machines/file';
 import { MACHINES_VERSION } from '$lib/core/machines/types';
-import { MAX_ID_LENGTH, MAX_MACHINES, validateMachine } from '$lib/core/machines/validate';
+import { MAX_ID_LENGTH, MAX_MACHINES, MAX_NAME_LENGTH, validateMachine } from '$lib/core/machines/validate';
 import { codes as appCodes } from '$lib/stores/codes';
 import { docs as appDocs } from '$lib/stores/documents';
 import { fileMemory as appFileMemory } from '$lib/stores/fileMemory';
@@ -51,7 +51,7 @@ import { t } from '$lib/i18n';
 import { isTauriRuntime } from '$lib/utils/platform';
 import type { CodeDb } from '$lib/core/codes/types';
 import type { Profile } from '$lib/core/profiles/types';
-import type { DocId, MachineService } from '$lib/app/types';
+import type { DocId, MachineImportSummary, MachineService } from '$lib/app/types';
 import type {
   EffectiveMachine,
   EffectiveProfile,
@@ -82,6 +82,14 @@ export interface MachineServiceDeps {
     profile(id: string): Profile;
     effective(id: string, eff: EffectiveMachine): EffectiveProfile;
     detectVariants(id: string, text: string): Record<string, { value: string; margin: number }>;
+    /**
+     * M13 (AD-29): bumps whenever the set of profiles changed (`userConfig.load()`). Every
+     * record is checked against its base profile again then: a machine whose base appears
+     * becomes usable, one whose base is gone is kept and listed with its problem (never
+     * deleted), and every open document is evaluated again. Optional so a fake registry
+     * that never changes need not have one.
+     */
+    revision?: Readable<number>;
   };
   /** The resolved database of a dialect id, for the `modalInitial` check. */
   codeDb(dialect: string): CodeDb;
@@ -177,6 +185,37 @@ const FOLLOW_DEFAULT = Symbol('follow the profile default');
 
 function byName(a: MachineConfig, b: MachineConfig): number {
   return a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }) || a.id.localeCompare(b.id);
+}
+
+/** `Lathe 2` taken → `Lathe 2 (2)`, `(3)`, …, cut so that the whole name stays within the limit. */
+function freeName(name: string, taken: ReadonlySet<string>): string {
+  const trimmed = name.trim();
+  if (!taken.has(trimmed.toLowerCase())) return trimmed;
+  for (let n = 2; n < 1000; n += 1) {
+    const suffix = ` (${n})`;
+    const candidate = `${trimmed.slice(0, MAX_NAME_LENGTH - suffix.length).trimEnd()}${suffix}`;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
+  }
+  throw new Error(`no free name for "${name}"`);
+}
+
+function idOf(raw: unknown): string {
+  return typeof raw === 'object' && raw !== null && typeof (raw as { id?: unknown }).id === 'string' ? (raw as { id: string }).id : '';
+}
+
+function nameOf(raw: unknown): string | null {
+  const name = typeof raw === 'object' && raw !== null ? (raw as { name?: unknown }).name : undefined;
+  return typeof name === 'string' && name !== '' ? name : null;
+}
+
+/** The one status message of an import, in plain words. */
+function summaryText(summary: MachineImportSummary): string {
+  if (summary.imported === 0 && summary.skipped.length === 0) return t('machines.transfer.none');
+  const parts = [t('machines.transfer.done', { count: summary.imported })];
+  if (summary.renamed > 0) parts.push(t('machines.transfer.renamed', { count: summary.renamed }));
+  if (summary.inactive > 0) parts.push(t('machines.transfer.inactive', { count: summary.inactive }));
+  if (summary.skipped.length > 0) parts.push(t('machines.transfer.skipped', { count: summary.skipped.length }));
+  return parts.join(' ');
 }
 
 export function createMachineService(deps: MachineServiceDeps): MachineService {
@@ -545,6 +584,20 @@ export function createMachineService(deps: MachineServiceDeps): MachineService {
     );
   }
 
+  // M13 (AD-29): the set of profiles changed, so every record is checked against its base
+  // profile again and every open document is evaluated again. The first value is the state
+  // the service was built in; only a later one is a change.
+  if (deps.profiles.revision) {
+    let seen: number | null = null;
+    deps.profiles.revision.subscribe((value) => {
+      if (seen !== null && value !== seen) {
+        revalidate();
+        invalidate();
+      }
+      seen = value;
+    });
+  }
+
   return {
     list: { subscribe: list.subscribe },
     revision: { subscribe: revision.subscribe },
@@ -721,6 +774,83 @@ export function createMachineService(deps: MachineServiceDeps): MachineService {
         defaults[profileId] = id;
       }
       await persist(withMachines(file.machines, defaults));
+    },
+
+    async importMachines(raw: unknown): Promise<MachineImportSummary> {
+      if (blocked()) {
+        const message = t('machines.fileBlocked');
+        deps.notify(message, { error: true, detail: fileError ?? t('machines.fileReadOnly') });
+        throw new Error(fileError ?? message);
+      }
+      const incoming = parseMachinesFile(raw);
+      if (incoming.error !== null) {
+        deps.notify(t('machines.transfer.unreadable'), { error: true, detail: incoming.error });
+        throw new Error(incoming.error);
+      }
+
+      const takenIds = new Set([...file.machines.map((m) => m.id), ...file.invalid.map((entry) => idOf(entry.raw))]);
+      const takenNames = new Set(file.machines.map((m) => m.name.trim().toLowerCase()));
+      const summary: MachineImportSummary = {
+        imported: 0,
+        renamed: 0,
+        reassigned: 0,
+        inactive: 0,
+        defaults: 0,
+        skipped: incoming.invalid.map((entry) => ({
+          name: nameOf(entry.raw),
+          reason: entry.problems.map((p) => `${p.path}: ${p.message}`).join('; '),
+        })),
+      };
+      const added: MachineConfig[] = [];
+      /** The id each imported record got, by the id it had in the file. */
+      const idMap = new Map<string, string>();
+      let room = MAX_MACHINES - file.machines.length - file.invalid.length;
+
+      for (const source of incoming.machines) {
+        if (room <= 0) {
+          summary.skipped.push({ name: source.name, reason: t('machines.transfer.full', { max: MAX_MACHINES }) });
+          continue;
+        }
+        const id = takenIds.has(source.id) ? freeId(source.name, takenIds) : source.id;
+        const name = freeName(source.name, takenNames);
+        const machine: MachineConfig = { ...source, id, name, params: structuredClone(source.params) };
+        // Checked like a hand edit: a record the base profile does not accept (yet) is kept
+        // and listed with its problem, so importing before the profile exists loses nothing.
+        const known = deps.profiles.get(machine.profile) !== undefined;
+        const profile = known ? deps.profiles.profile(machine.profile) : undefined;
+        const problems = validateMachine(machine, {
+          path: `machines[${file.machines.length + file.invalid.length + added.length}]`,
+          profile,
+          codes: profile === undefined ? undefined : codesFor(machine, profile),
+        });
+        takenIds.add(id);
+        takenNames.add(name.toLowerCase());
+        idMap.set(source.id, id);
+        added.push(machine);
+        room -= 1;
+        summary.imported += 1;
+        if (id !== source.id) summary.reassigned += 1;
+        if (name !== source.name.trim()) summary.renamed += 1;
+        if (problems.length > 0) summary.inactive += 1;
+      }
+
+      if (added.length === 0) {
+        deps.notify(summaryText(summary));
+        return summary;
+      }
+
+      // A default is taken over only where this installation has none for that profile.
+      const defaults = { ...file.defaults };
+      for (const [profileId, wanted] of Object.entries(incoming.defaults)) {
+        const mapped = typeof wanted === 'string' ? idMap.get(wanted) : undefined;
+        if (mapped === undefined || typeof defaults[profileId] === 'string') continue;
+        defaults[profileId] = mapped;
+        summary.defaults += 1;
+      }
+
+      await persist(withMachines([...file.machines, ...added], defaults));
+      deps.notify(summaryText(summary));
+      return summary;
     },
 
     async openFile(): Promise<void> {

@@ -30,6 +30,8 @@ export default {
     files: 'Files',
     scripts: 'Scripts',
     machines: 'Machines',
+    /** M13 (P13; WP13.3 builds the page): your own profiles and code files. */
+    profiles: 'Profiles',
   },
   saved: 'Settings saved',
   saveFailed: 'The settings could not be saved',

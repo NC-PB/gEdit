@@ -1,0 +1,27 @@
+{
+  "about": "X12 (d): the machine \"Twin broken\" (section start \"^O(?<channel>[12]\\d{3}\", which does not compile). Its channel block is reported (problems, as the Machines page lists them) and read as layout none; the document has no channel item, and everything else of the machine is in force: address arithmetic Z -0.5 on twin-single.nc gives the same text under \"Twin broken\" and under \"Twin 31i\".",
+  "machine": "Twin broken",
+  "blockState": "invalid",
+  "problems": [
+    {
+      "path": "machines.params.channels.sectionStart",
+      "message": "the section start is not a valid pattern: Invalid regular expression: /^O(?<channel>[12]\\d{3}/i: Unterminated group"
+    }
+  ],
+  "serviceProblems": [
+    {
+      "path": "",
+      "text": "The channel rules of this machine are broken."
+    },
+    {
+      "path": "machines.params.channels.sectionStart",
+      "text": "the section start is not a valid pattern: Invalid regular expression: /^O(?<channel>[12]\\d{3}/i: Unterminated group"
+    }
+  ],
+  "layout": "none",
+  "arithSameAsValid": true,
+  "arithMessage": {
+    "broken": "Subtracted 0.5 from Z in 17 words on 17 blocks. Machine 'Twin broken': numbers are read as written; X is a diameter.",
+    "valid": "Subtracted 0.5 from Z in 17 words on 17 blocks. Machine 'Twin 31i': numbers are read as written; X is a diameter."
+  }
+}

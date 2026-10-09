@@ -1,0 +1,164 @@
+{
+  "about": "X8: the bundled program_checks.py on checks-mill.nc with its form defaults, no machine chosen. The whole report; every row with a line jumps to it.",
+  "input": "checks-mill.nc",
+  "profile": "fanuc-gcode",
+  "machine": null,
+  "report": {
+    "title": "Program checks",
+    "columns": [
+      {
+        "key": "line",
+        "label": "Line"
+      },
+      {
+        "key": "check",
+        "label": "Check"
+      },
+      {
+        "key": "severity",
+        "label": "Severity"
+      },
+      {
+        "key": "message",
+        "label": "Finding"
+      }
+    ],
+    "rows": [
+      {
+        "line": 12,
+        "check": "Machine reading",
+        "checkId": "machineReading",
+        "severity": "info",
+        "message": "X50: read as 0.05 mm by 'Increments of 0.001 mm (IS-B)' (the assumed default), 0.005 mm by 'Increments of 0.0001 mm (IS-C)' or 50 mm by 'As written'; choose a machine"
+      },
+      {
+        "line": 16,
+        "check": "Spindle",
+        "checkId": "spindleOff",
+        "severity": "warning",
+        "message": "Y40.: a cut while the spindle is stopped (M5 on line 14)"
+      },
+      {
+        "line": 22,
+        "check": "Spindle after tool change",
+        "checkId": "toolChangeSpindle",
+        "severity": "warning",
+        "message": "G81 G98 Z-15. R2. F120.: the first cut after the tool change on line 18 (T2 M6), and no spindle start between them"
+      },
+      {
+        "line": 25,
+        "check": "Tool change in a cycle",
+        "checkId": "toolChangeInCycle",
+        "severity": "warning",
+        "message": "T3 M6: a tool change while the cycle G81 (line 22) is in force"
+      },
+      {
+        "line": 32,
+        "check": "Rigid tapping",
+        "checkId": "rigidTapping",
+        "severity": "error",
+        "message": "G0 X25.: a move between M29 (line 30) and the tapping cycle"
+      },
+      {
+        "line": 35,
+        "check": "Refused in this state",
+        "checkId": "stateConflicts",
+        "severity": "warning",
+        "message": "G43.4: the control refuses it while the cycle G84 is in force"
+      },
+      {
+        "line": 38,
+        "check": "Alone in its block",
+        "checkId": "aloneInBlock",
+        "severity": "error",
+        "message": "G65: has to stand in a block of its own; the block writes G0 in front of it or another G code"
+      },
+      {
+        "line": 41,
+        "check": "DO and END",
+        "checkId": "doEnd",
+        "severity": "error",
+        "message": "DO1: no END1 follows in the program"
+      },
+      {
+        "line": 44,
+        "check": "Jump target",
+        "checkId": "jumpTargets",
+        "severity": "error",
+        "message": "GOTO 900: no block N900 in this program"
+      },
+      {
+        "line": 46,
+        "check": "Words in a block",
+        "checkId": "blockWords",
+        "severity": "error",
+        "message": "S1000 S1200 M3: 2 S words in one block"
+      },
+      {
+        "line": 48,
+        "check": "Digits",
+        "checkId": "wordDigits",
+        "severity": "error",
+        "message": "X123456.789: 9 digits once it is converted to increments; the control takes at most 8"
+      },
+      {
+        "line": 49,
+        "check": "Tape marker",
+        "checkId": "tapeMarkerInComment",
+        "severity": "error",
+        "message": "(STEP OVER 50% OF THE CUTTER): a % inside a comment ends the program when it is read in from tape or a serial line"
+      },
+      {
+        "line": 50,
+        "check": "Comment",
+        "checkId": "unclosedComments",
+        "severity": "error",
+        "message": "(RETRACT, THE COMMENT IS NOT CLOSED: the comment is opened with ( and not closed with ) on its line"
+      },
+      {
+        "line": 51,
+        "check": "Brackets",
+        "checkId": "brackets",
+        "severity": "error",
+        "message": "#2=[#1+1: 1 [ is not closed"
+      },
+      {
+        "line": 52,
+        "check": "Lower case",
+        "checkId": "lowerCase",
+        "severity": "info",
+        "message": "g0, x0., y0.: written in lower case; this control reads its addresses in upper case"
+      },
+      {
+        "line": 54,
+        "check": "Characters",
+        "checkId": "characters",
+        "severity": "warning",
+        "message": "–: – (en dash) is not an ASCII character, outside a comment"
+      },
+      {
+        "line": 55,
+        "check": "Stop",
+        "checkId": "stops",
+        "severity": "info",
+        "message": "M0: Program stop"
+      },
+      {
+        "line": 56,
+        "check": "Stop",
+        "checkId": "stops",
+        "severity": "info",
+        "message": "M1: Optional stop"
+      },
+      {
+        "line": 59,
+        "check": "Program frame",
+        "checkId": "programFrame",
+        "severity": "error",
+        "message": "G0 X0. Y0.: after the program end M30 on line 57; it never runs"
+      }
+    ],
+    "message": "19 findings in 18 checks. No machine chosen: where the presets read a number differently, the finding lists every reading.",
+    "findings": []
+  }
+}

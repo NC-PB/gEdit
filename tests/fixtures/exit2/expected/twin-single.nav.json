@@ -1,0 +1,282 @@
+{
+  "about": "X12 (a): next sync point (Alt+F7) walks the marks of the channel at the cursor across both of its sections, wrapping at the end; Shift+Alt+F7 goes back. \"Go to the matching mark\" (Mod+Alt+P) from each mark lands on partner.line in partner.channel (\"none\" where the check reports the mark).",
+  "machine": "Twin 31i",
+  "channel1": {
+    "next": [
+      {
+        "from": 5,
+        "to": 10,
+        "mark": "10",
+        "wrapped": false
+      },
+      {
+        "from": 10,
+        "to": 14,
+        "mark": "20",
+        "wrapped": false
+      },
+      {
+        "from": 14,
+        "to": 16,
+        "mark": "30",
+        "wrapped": false
+      },
+      {
+        "from": 16,
+        "to": 18,
+        "mark": "30",
+        "wrapped": false
+      },
+      {
+        "from": 18,
+        "to": 37,
+        "mark": "40",
+        "wrapped": false
+      },
+      {
+        "from": 37,
+        "to": 39,
+        "mark": "41",
+        "wrapped": false
+      },
+      {
+        "from": 39,
+        "to": 41,
+        "mark": "50",
+        "wrapped": false
+      },
+      {
+        "from": 41,
+        "to": 43,
+        "mark": "10",
+        "wrapped": false
+      },
+      {
+        "from": 43,
+        "to": 44,
+        "mark": "70",
+        "wrapped": false
+      },
+      {
+        "from": 44,
+        "to": 10,
+        "mark": "10",
+        "wrapped": true
+      }
+    ],
+    "previousFromFirst": {
+      "from": 10,
+      "to": 44,
+      "wrapped": true
+    }
+  },
+  "channel2": {
+    "next": [
+      {
+        "from": 21,
+        "to": 25,
+        "mark": "10",
+        "wrapped": false
+      },
+      {
+        "from": 25,
+        "to": 29,
+        "mark": "20",
+        "wrapped": false
+      },
+      {
+        "from": 29,
+        "to": 31,
+        "mark": "30",
+        "wrapped": false
+      },
+      {
+        "from": 31,
+        "to": 50,
+        "mark": "41",
+        "wrapped": false
+      },
+      {
+        "from": 50,
+        "to": 52,
+        "mark": "40",
+        "wrapped": false
+      },
+      {
+        "from": 52,
+        "to": 54,
+        "mark": "60",
+        "wrapped": false
+      },
+      {
+        "from": 54,
+        "to": 56,
+        "mark": "10",
+        "wrapped": false
+      },
+      {
+        "from": 56,
+        "to": 57,
+        "mark": "70",
+        "wrapped": false
+      },
+      {
+        "from": 57,
+        "to": 25,
+        "mark": "10",
+        "wrapped": true
+      }
+    ],
+    "previousFromFirst": {
+      "from": 25,
+      "to": 57,
+      "wrapped": true
+    }
+  },
+  "partners": [
+    {
+      "line": 10,
+      "mark": "10",
+      "channel": "1",
+      "partner": {
+        "channel": "2",
+        "line": 25
+      }
+    },
+    {
+      "line": 14,
+      "mark": "20",
+      "channel": "1",
+      "partner": {
+        "channel": "2",
+        "line": 29
+      }
+    },
+    {
+      "line": 16,
+      "mark": "30",
+      "channel": "1",
+      "partner": {
+        "channel": "2",
+        "line": 31
+      }
+    },
+    {
+      "line": 18,
+      "mark": "30",
+      "channel": "1",
+      "partner": "none"
+    },
+    {
+      "line": 25,
+      "mark": "10",
+      "channel": "2",
+      "partner": {
+        "channel": "1",
+        "line": 10
+      }
+    },
+    {
+      "line": 29,
+      "mark": "20",
+      "channel": "2",
+      "partner": {
+        "channel": "1",
+        "line": 14
+      }
+    },
+    {
+      "line": 31,
+      "mark": "30",
+      "channel": "2",
+      "partner": {
+        "channel": "1",
+        "line": 16
+      }
+    },
+    {
+      "line": 37,
+      "mark": "40",
+      "channel": "1",
+      "partner": {
+        "channel": "2",
+        "line": 52
+      }
+    },
+    {
+      "line": 39,
+      "mark": "41",
+      "channel": "1",
+      "partner": {
+        "channel": "2",
+        "line": 50
+      }
+    },
+    {
+      "line": 41,
+      "mark": "50",
+      "channel": "1",
+      "partner": "none"
+    },
+    {
+      "line": 43,
+      "mark": "10",
+      "channel": "1",
+      "partner": {
+        "channel": "2",
+        "line": 56
+      }
+    },
+    {
+      "line": 44,
+      "mark": "70",
+      "channel": "1",
+      "partner": {
+        "channel": "2",
+        "line": 57
+      }
+    },
+    {
+      "line": 50,
+      "mark": "41",
+      "channel": "2",
+      "partner": {
+        "channel": "1",
+        "line": 39
+      }
+    },
+    {
+      "line": 52,
+      "mark": "40",
+      "channel": "2",
+      "partner": {
+        "channel": "1",
+        "line": 37
+      }
+    },
+    {
+      "line": 54,
+      "mark": "60",
+      "channel": "2",
+      "partner": "none"
+    },
+    {
+      "line": 56,
+      "mark": "10",
+      "channel": "2",
+      "partner": {
+        "channel": "1",
+        "line": 43
+      }
+    },
+    {
+      "line": 57,
+      "mark": "70",
+      "channel": "2",
+      "partner": {
+        "channel": "1",
+        "line": 44
+      }
+    }
+  ]
+}

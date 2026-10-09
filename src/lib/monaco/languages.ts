@@ -179,31 +179,133 @@ export function defineThemes(monaco: Monaco, list: Profile[]): void {
   monaco.editor.defineTheme(THEME_IDS.light, themes.light as Parameters<typeof monaco.editor.defineTheme>[1]);
 }
 
-/** Registers every profile of `sources` as a Monaco language. */
-export function registerLanguages(monaco: Monaco, sources: LanguageSources): void {
-  const list = sources.list();
-  for (const p of list) {
-    monaco.languages.register({
-      id: p.id,
-      extensions: (p.files?.extensions ?? []).map((extension) => `.${extension}`),
-      aliases: [p.name, p.shortName].filter((alias): alias is string => typeof alias === 'string' && alias !== ''),
-    });
-    monaco.languages.setLanguageConfiguration(
-      p.id,
-      languageConfiguration(p) as Parameters<typeof monaco.languages.setLanguageConfiguration>[1],
-    );
-    monaco.languages.setMonarchTokensProvider(
-      p.id,
-      generateGrammar(p, sources.codeDb(p.id)) as Parameters<typeof monaco.languages.setMonarchTokensProvider>[1],
-    );
-  }
-  defineThemes(monaco, list);
+/** What was handed to Monaco for one language id, so a second call can tell a change from none. */
+interface Registered {
+  profile: Profile;
+  db: CodeDb;
+  /** `JSON.stringify` of the two, built when a later call needs to compare (identity decides first). */
+  signature?: string;
 }
 
-/** Registers every profile as a Monaco language, with its configuration and grammar. */
-export function registerAll(monaco: Monaco): void {
-  registerLanguages(monaco, {
-    list: () => profiles.list().map((info) => profiles.profile(info.id)),
-    codeDb: (profileId) => unionCodeDb(variantDialects(profiles.profile(profileId)).map((id) => codes.byId(id))),
+/** Per Monaco instance (a test makes its own), the languages it has been given. */
+const registered = new WeakMap<Monaco, Map<string, Registered>>();
+
+/** Per Monaco instance, the ids `register` was called for: an id is registered once, whatever else fails. */
+const registeredIds = new WeakMap<Monaco, Set<string>>();
+
+function signatureOf(entry: Registered): string {
+  entry.signature ??= JSON.stringify([entry.profile, entry.db]);
+  return entry.signature;
+}
+
+/**
+ * Registers every profile of `sources` as a Monaco language, and updates the ones it has
+ * registered before (M13, AD-29).
+ *
+ * **A language id is registered once**, whatever the number of calls: Monaco's `register`
+ * would add the extensions and aliases of the second call to the first's, and an id cannot be
+ * removed again. A later call (a reload) therefore sets the language configuration and the
+ * grammar again only for an id whose profile or database is different, and defines the two
+ * themes again when any language was added or changed — they are generated from the whole
+ * list. A model whose language is a changed id re-tokenizes by itself when its token provider
+ * is replaced. An id that has gone from `sources` stays registered, harmlessly: nothing opens
+ * a document as it any more.
+ *
+ * What a reload cannot change on an id that exists is its extensions and display names (the
+ * `register` call): they only matter to Monaco's own language detection by file name, which
+ * the app does not use (the profile decides).
+ */
+export function registerLanguages(monaco: Monaco, sources: LanguageSources): void {
+  const list = sources.list();
+  let known = registered.get(monaco);
+  if (known === undefined) {
+    known = new Map();
+    registered.set(monaco, known);
+  }
+  let ids = registeredIds.get(monaco);
+  if (ids === undefined) {
+    ids = new Set();
+    registeredIds.set(monaco, ids);
+  }
+  let changed = false;
+  for (const p of list) {
+    // One profile that Monaco or the generators choke on is logged and skipped: the others are
+    // registered and the themes are defined (M13 review fix CODE-14b).
+    try {
+      const db = sources.codeDb(p.id);
+      const before = known.get(p.id);
+      if (before !== undefined) {
+        const same =
+          (before.profile === p && before.db === db) ||
+          signatureOf(before) === signatureOf({ profile: p, db });
+        if (same) {
+          before.profile = p;
+          before.db = db;
+          continue;
+        }
+      }
+      if (!ids.has(p.id)) {
+        monaco.languages.register({
+          id: p.id,
+          extensions: (p.files?.extensions ?? []).map((extension) => `.${extension}`),
+          aliases: [p.name, p.shortName].filter((alias): alias is string => typeof alias === 'string' && alias !== ''),
+        });
+        ids.add(p.id);
+      }
+      monaco.languages.setLanguageConfiguration(
+        p.id,
+        languageConfiguration(p) as Parameters<typeof monaco.languages.setLanguageConfiguration>[1],
+      );
+      monaco.languages.setMonarchTokensProvider(
+        p.id,
+        generateGrammar(p, db) as Parameters<typeof monaco.languages.setMonarchTokensProvider>[1],
+      );
+      known.set(p.id, { profile: p, db });
+      changed = true;
+    } catch (error) {
+      console.error(`The dialect ${p.id} could not be registered`, error);
+    }
+  }
+  // The first call defines the themes even for an empty list, as before.
+  if (changed || !themesDefined.has(monaco)) {
+    defineThemes(monaco, list);
+    themesDefined.add(monaco);
+  }
+}
+
+const themesDefined = new WeakSet<Monaco>();
+
+/** The profiles as Monaco should know them now, from the registries. */
+const registrySources: LanguageSources = {
+  list: () => profiles.list().map((info) => profiles.profile(info.id)),
+  codeDb: (profileId) => unionCodeDb(variantDialects(profiles.profile(profileId)).map((id) => codes.byId(id))),
+};
+
+/**
+ * Registers every profile as a Monaco language, with its configuration and grammar, and keeps
+ * them current: a `profiles.revision` bump (a reload of the user's profiles or code files,
+ * AD-29) registers the new ids and sets the configuration, grammar and themes again for the
+ * changed ones, without registering any id twice. Answers the disposer of that subscription.
+ */
+export function registerAll(monaco: Monaco): () => void {
+  try {
+    registerLanguages(monaco, registrySources);
+  } catch (error) {
+    // The editor has to load even when the dialects cannot be listed (CODE-14b).
+    console.error('The dialects could not be registered', error);
+  }
+  let first = true;
+  return profiles.revision.subscribe(() => {
+    // `subscribe` calls back at once with the current value; the registration above covered it.
+    if (first) {
+      first = false;
+      return;
+    }
+    try {
+      registerLanguages(monaco, registrySources);
+    } catch (error) {
+      // A throw here would travel up through `profiles.reload` and stop the other subscribers.
+      console.error('The dialects could not be registered again after a reload', error);
+    }
   });
 }

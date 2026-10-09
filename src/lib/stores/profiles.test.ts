@@ -5,6 +5,8 @@
 import { get } from 'svelte/store';
 import { describe, expect, it } from 'vitest';
 import { createProfileRegistry } from './profiles';
+import { createCodeDbService } from './codes';
+import { BUILTIN_CODE_DB_JSON } from '$lib/data/codes';
 import { BUILTIN_PROFILE_SOURCES } from '$lib/data/profiles';
 import fanucJson from '$lib/data/profiles/fanuc-gcode.json';
 import { effectiveMachine, noMachine } from '$lib/core/machines/effective';
@@ -434,5 +436,322 @@ describe('what it costs', () => {
       5,
       'detect and detectVariants of 400 lines',
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M13 (WP13.2, AD-29): the registry reloads
+// ---------------------------------------------------------------------------
+
+/** A user profile file: a child of the Fanuc lathe, as a user would write one. */
+function userProfile(id: string, patch: Record<string, unknown> = {}): { name: string; text: string } {
+  return {
+    name: `${id}.json`,
+    text: JSON.stringify({ id, name: `${id} lathe`, shortName: id.toUpperCase().slice(0, 8), extends: 'fanuc-lathe', ...patch }),
+  };
+}
+
+/** A registry wired to a code service the way the application wires its singletons. */
+function wired() {
+  const codes = createCodeDbService({
+    dialectOf: (dialect) => dialect,
+    source: (dialect) => BUILTIN_CODE_DB_JSON[dialect],
+    sources: () => BUILTIN_CODE_DB_JSON,
+    warn: () => {},
+  });
+  const problems: string[] = [];
+  const registry = createProfileRegistry({
+    filtersSupported: true,
+    codeDbFiles: () => codes.files(),
+    codeDb: (dialect, own) => codes.over(own, dialect),
+    onProblem: (message) => problems.push(message),
+  });
+  return { codes, registry, problems };
+}
+
+describe('reload', () => {
+  it('loads a user profile after the built-ins, with its origin and file, and bumps the revision once', () => {
+    const { registry } = wired();
+    const seen: number[] = [];
+    const stop = registry.revision.subscribe((n) => seen.push(n));
+    const lists: string[][] = [];
+    const stopAll = registry.all.subscribe((all) => lists.push(all.map((p) => p.id)));
+
+    expect(registry.reload([userProfile('shop-lathe')])).toEqual([]);
+
+    expect(seen).toEqual([0, 1]);
+    expect(registry.list().map((p) => p.id).slice(-1)).toEqual(['shop-lathe']);
+    expect(lists.at(-1)).toContain('shop-lathe');
+    expect(registry.get('shop-lathe')).toMatchObject({
+      origin: 'user',
+      file: 'shop-lathe.json',
+      parent: 'fanuc-lathe',
+      chain: ['shop-lathe', 'fanuc-lathe', 'fanuc-gcode'],
+    });
+    expect(registry.compiled('shop-lathe').profile.id).toBe('shop-lathe');
+    expect(registry.get('fanuc-gcode')?.origin).toBe('builtin');
+    stop();
+    stopAll();
+  });
+
+  it('bumps on every reload, also one that changes nothing', () => {
+    const { registry } = wired();
+    let n = 0;
+    registry.revision.subscribe((value) => (n = value));
+    registry.reload([]);
+    registry.reload([]);
+    expect(n).toBe(2);
+  });
+
+  it('refuses a user id equal to a built-in id and keeps the built-in', () => {
+    const { registry } = wired();
+    const problems = registry.reload([userProfile('fanuc-gcode', { name: 'Mine', shortName: 'Mine' })]);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatchObject({ origin: 'user', file: 'fanuc-gcode.json', profileId: 'fanuc-gcode', path: 'id' });
+    expect(registry.problems()).toEqual(problems);
+    expect(registry.get('fanuc-gcode')).toMatchObject({ origin: 'builtin', file: null });
+    expect(registry.profile('fanuc-gcode').name).not.toBe('Mine');
+  });
+
+  it('loads the first of two files with one id, by file name, and reports the second', () => {
+    const { registry } = wired();
+    const a = userProfile('twin', { name: 'First', shortName: 'One' });
+    const b = { ...userProfile('twin', { name: 'Second', shortName: 'Two' }), name: 'zz-twin.json' };
+    const problems = registry.reload([b, a]);
+    expect(registry.profile('twin').name).toBe('First');
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatchObject({ file: 'zz-twin.json', path: 'id' });
+  });
+
+  it('reports a broken file with its file and the JSON path, and every built-in still works', () => {
+    const { registry, problems: messages } = wired();
+    const before = registry.list().map((p) => p.id);
+    const problems = registry.reload([
+      { name: 'not-json.json', text: '{ nope' },
+      userProfile('bad-step', { numbering: { step: 'ten' } }),
+      userProfile('no-parent', { extends: 'nowhere' }),
+      userProfile('good'),
+    ]);
+    expect(registry.list().map((p) => p.id)).toEqual([...before, 'good']);
+    const byFile = Object.fromEntries(problems.map((p) => [p.file, p]));
+    expect(byFile['not-json.json']).toMatchObject({ origin: 'user', path: '' });
+    expect(byFile['not-json.json'].message).toMatch(/not valid JSON/);
+    expect(byFile['bad-step.json']).toMatchObject({ profileId: 'bad-step', path: 'numbering.step' });
+    expect(byFile['no-parent.json']).toMatchObject({ profileId: 'no-parent', path: 'extends' });
+    expect(messages.some((m) => m.startsWith('bad-step was not loaded'))).toBe(true);
+    expect(registry.detect('x.mpf', 'G1 X1', 'fanuc-gcode')).toBe('sinumerik');
+  });
+
+  it('names a byte order mark', () => {
+    const { registry } = wired();
+    const problems = registry.reload([{ name: 'bom.json', text: '﻿{}' }]);
+    expect(problems[0].message).toMatch(/byte order mark/);
+  });
+
+  it('lets a user profile extend another user profile, whatever the file order', () => {
+    const { registry } = wired();
+    const parent = userProfile('zz-parent', { numbering: { step: 5 } });
+    const child = userProfile('aa-child', { extends: 'zz-parent', name: 'Child', shortName: 'Child' });
+    expect(registry.reload([child, parent])).toEqual([]);
+    expect(registry.profile('aa-child').numbering?.step).toBe(5);
+  });
+
+  it('recompiles the effective profile of a reloaded parent, and of its child', () => {
+    const { registry } = wired();
+    registry.reload([
+      userProfile('shop-base', { numbering: { step: 5 } }),
+      userProfile('shop-child', { extends: 'shop-base', name: 'Child', shortName: 'Child' }),
+    ]);
+    const none = (id: string) => noMachine(registry.profile(id));
+    const before = registry.effective('shop-child', none('shop-child'));
+    expect(before.profile.numbering?.step).toBe(5);
+    expect(registry.effective('shop-child', none('shop-child'))).toBe(before);
+
+    registry.reload([
+      userProfile('shop-base', { numbering: { step: 2 } }),
+      userProfile('shop-child', { extends: 'shop-base', name: 'Child', shortName: 'Child' }),
+    ]);
+    const after = registry.effective('shop-child', none('shop-child'));
+    expect(after).not.toBe(before);
+    expect(after.profile.numbering?.step).toBe(2);
+    expect(after.cp.profile.numbering?.step).toBe(2);
+  });
+
+  it('forgets a user profile that is no longer in the files', () => {
+    const { registry } = wired();
+    registry.reload([userProfile('short-lived')]);
+    expect(registry.get('short-lived')).toBeDefined();
+    registry.reload([]);
+    expect(registry.get('short-lived')).toBeUndefined();
+    expect(() => registry.profile('short-lived')).toThrow(/Unknown profile/);
+    expect(registry.problems()).toEqual([]);
+  });
+
+  it('detects a user profile by its own extension', () => {
+    const { registry } = wired();
+    registry.reload([
+      userProfile('shop-lathe', {
+        files: { extensions: ['shp'], defaultExtension: 'shp', filterName: 'Shop', newFileLineEnding: 'lf' },
+        detect: { extensions: { shp: 20 } },
+      }),
+    ]);
+    expect(registry.detect('cut.shp', 'G1 X1', 'fanuc-gcode')).toBe('shop-lathe');
+  });
+});
+
+describe('reload with the code files of the same load', () => {
+  const codeFile = {
+    name: 'lathe-shop.json',
+    text: JSON.stringify({ dialect: 'lathe-shop', extends: 'fanuc-lathe', codes: [{ code: 'M13', label: 'Chuck clamp (shop)' }] }),
+  };
+  const systemB = (profile: string, id: string, registry: ReturnType<typeof wired>['registry']) =>
+    effectiveMachine(
+      registry.profile(profile),
+      { id, name: id, profile, params: { variants: { gcodeSystem: 'B' } } },
+      'document',
+      {},
+    );
+
+  it('uses the database a user profile names, once the code files are loaded', () => {
+    const { codes, registry } = wired();
+    codes.reload([codeFile]);
+    expect(registry.reload([userProfile('shop-lathe', { codes: 'lathe-shop' })])).toEqual([]);
+    const eff = registry.effective('shop-lathe', noMachine(registry.profile('shop-lathe')));
+    expect(eff.codes.dialect).toBe('lathe-shop');
+    expect(eff.codes.codes.find((c) => c.code === 'M13')?.label).toBe('Chuck clamp (shop)');
+  });
+
+  it('keeps the user M-code under G-code system B (the variant rule)', () => {
+    const { codes, registry } = wired();
+    codes.reload([codeFile]);
+    registry.reload([userProfile('shop-lathe', { codes: 'lathe-shop' })]);
+    const eff = registry.effective('shop-lathe', systemB('shop-lathe', 'm1', registry));
+    expect(eff.profile.modal?.initial?.feedmode).toBe('G95');
+    expect(eff.codes.codes.find((c) => c.code === 'M13')?.label).toBe('Chuck clamp (shop)');
+    // ... and the system-B meaning of the codes the user did not write.
+    expect(eff.codes.codes.find((c) => c.code === 'G95')?.group).toBe('feedmode');
+    // A profile on the built-in database gets the built-in B database, as before.
+    const builtinB = registry.effective('fanuc-lathe', systemB('fanuc-lathe', 'm2', registry));
+    expect(builtinB.codes.dialect).toBe('fanuc-lathe-b');
+  });
+
+  it('accepts a variant that names a user database, which exists only after the code reload', () => {
+    const { codes, registry } = wired();
+    const variants = structuredClone((LATHE.machineParams as unknown as { variants: unknown[] }).variants) as {
+      choices: { value: string; codes?: string }[];
+    }[];
+    variants[0].choices[1].codes = 'lathe-shop';
+    const patch = { machineParams: { ...LATHE.machineParams, variants } };
+    // Without the database the profile is refused ...
+    expect(registry.reload([userProfile('shop-lathe', patch)])[0]).toMatchObject({ file: 'shop-lathe.json' });
+    // ... and with it, loaded first, accepted.
+    codes.reload([codeFile]);
+    expect(registry.reload([userProfile('shop-lathe', patch)])).toEqual([]);
+  });
+});
+
+// M13 review fixes CODE-1, CODE-2, CODE-13.
+describe('user patterns are bounded (CODE-1)', () => {
+  const sinumerikTool = (BUILTIN_PROFILE_SOURCES.find((s) => (s.raw as { id?: string }).id === 'sinumerik')!.raw as {
+    toolCall: { tool: string };
+  }).toolCall.tool;
+  const child = (patch: Record<string, unknown>) => userProfile('shop-turn', { extends: 'sinumerik', codes: 'sinumerik', ...patch });
+
+  it('refuses a repeated group that repeats inside, loads the profile never, and detects fast', () => {
+    const { registry } = wired();
+    const problems = registry.reload([
+      userProfile('slow', { detect: { content: [{ pattern: '^(\\w+\\s?)*$', weight: 5 }] } }),
+    ]);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatchObject({ origin: 'user', file: 'slow.json', profileId: 'slow', path: 'detect.content[0].pattern' });
+    expect(problems[0].message).toContain('can take very long');
+    expect(registry.get('slow')).toBeUndefined();
+    const start = performance.now();
+    registry.detect(null, 'ABCDEFGHIJKLMNOPQRSTUVWXYZA!', 'fanuc-gcode');
+    expect(performance.now() - start).toBeLessThan(50);
+  });
+
+  it('loads a child that only inherits a built-in pattern the check would flag', () => {
+    const { registry } = wired();
+    expect(registry.reload([child({})])).toEqual([]);
+    expect(registry.get('shop-turn')).toBeDefined();
+  });
+
+  it('loads a user pattern copied verbatim from a built-in one, and refuses it with one character changed', () => {
+    const { registry } = wired();
+    expect(registry.reload([child({ toolCall: { tool: sinumerikTool } })])).toEqual([]);
+    const changed = registry.reload([child({ toolCall: { tool: `${sinumerikTool}x` } })]);
+    expect(changed).toHaveLength(1);
+    expect(changed[0]).toMatchObject({ file: 'shop-turn.json', path: 'toolCall.tool' });
+    expect(changed[0].message).toContain('can take very long');
+    expect(registry.get('shop-turn')).toBeUndefined();
+  });
+
+  it('refuses a very long pattern and a long list with their paths', () => {
+    const { registry } = wired();
+    const long = registry.reload([userProfile('long', { detect: { content: [{ pattern: 'A'.repeat(700_000), weight: 1 }] } })]);
+    expect(long).toHaveLength(1);
+    expect(long[0].message).toBe('is longer than 1000 characters');
+    const many = registry.reload([
+      userProfile('many', { outline: Array.from({ length: 5000 }, (_, i) => ({ kind: 'comment', pattern: `^X${i}$` })) }),
+    ]);
+    expect(many).toHaveLength(1);
+    expect(many[0]).toMatchObject({ path: 'outline', message: 'lists more than 200 entries' });
+  });
+
+  it('does not print thousands of lines for a file with thousands of problems', () => {
+    const { registry, problems: logged } = wired();
+    registry.reload([
+      userProfile('noisy', { outline: Array.from({ length: 5000 }, () => ({ kind: 'nonsense', pattern: '(' })) }),
+    ]);
+    expect(logged.length).toBeLessThanOrEqual(25);
+  });
+});
+
+describe('one broken user file costs the others nothing (CODE-2)', () => {
+  const deep = (levels: number): string => `${'['.repeat(levels)}${']'.repeat(levels)}`;
+
+  it('reports a file that nests absurdly deep with its name, and loads the good ones', () => {
+    const { registry } = wired();
+    const problems = registry.reload([
+      userProfile('a-good'),
+      { name: 'b-deep.json', text: `{"id":"b-deep","name":"b","shortName":"B","extends":"fanuc-lathe","zzz":${deep(8000)}}` },
+      userProfile('c-good'),
+    ]);
+    expect(problems.map((p) => p.file)).toEqual(['b-deep.json']);
+    expect(problems[0].message).toMatch(/nested too deeply/);
+    expect(registry.get('a-good')).toBeDefined();
+    expect(registry.get('c-good')).toBeDefined();
+    expect(registry.get('b-deep')).toBeUndefined();
+  });
+
+  it('survives a deep member in a profile with no parent too', () => {
+    const { registry } = wired();
+    const problems = registry.reload([
+      { name: 'x.json', text: `{"id":"x","zzz":${deep(8000)}}` },
+      userProfile('fine'),
+    ]);
+    expect(problems.map((p) => p.file)).toEqual(['x.json']);
+    expect(registry.get('fine')).toBeDefined();
+  });
+});
+
+describe('a name that is only inherited (CODE-13)', () => {
+  it('refuses codes: "constructor" because there is no such database, not for a modal group', () => {
+    const { registry } = wired();
+    const problems = registry.reload([userProfile('proto', { codes: 'constructor' })]);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatchObject({ file: 'proto.json', path: 'codes', message: 'the code database "constructor" was not found' });
+    expect(registry.get('proto')).toBeUndefined();
+  });
+
+  it('does not take "constructor" for a database of a variant either', () => {
+    const { registry } = wired();
+    const variants = structuredClone((LATHE.machineParams as unknown as { variants: unknown[] }).variants) as {
+      choices: { value: string; codes?: string }[];
+    }[];
+    variants[0].choices[1].codes = 'constructor';
+    const problems = registry.reload([userProfile('proto', { machineParams: { ...LATHE.machineParams, variants } })]);
+    expect(problems.some((p) => p.message.includes('"constructor" was not found'))).toBe(true);
   });
 });

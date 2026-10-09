@@ -1,5 +1,5 @@
 {
-  "note": "G8 M6. A maximum of 30 in steps of 10 makes this six-block program wrap where the shipped defaults need ten thousand blocks, and the effect is the same: every number is handed out twice. The duplicate test only ever looked at the numbering the run replaced, found each target unique there, and wrote the target's new number — a value the program now carries twice, which a control resolves to the first block that matches, so a G71 P-Q can rough the wrong pass. Both values are reported and left as they are now, and the run is asked about before it happens.",
+  "note": "G8 M6. A maximum of 30 in steps of 10 makes this six-block program wrap where the shipped defaults need ten thousand blocks, and the effect is the same: every number is handed out twice. The duplicate test only ever looked at the numbering the run replaced, found each target unique there, and wrote the target's new number — a value the program now carries twice, which a control resolves to the first block that matches, so a G71 P-Q can rough the wrong pass. Both values are reported and left as they are now, and the run is asked about before it happens. M13 review NC-8: N100 and N200 are N20 and N10 after the run, so each reference line gets one more row per value saying that no block with its number is left.",
   "profile": "fanuc-lathe",
   "options": { "max": 30, "onOverflow": "wrap" },
   "expect": {
@@ -8,7 +8,11 @@
       { "line": 1, "severity": "info" },
       { "line": 2, "severity": "info" },
       { "line": 3, "severity": "warning" },
+      { "line": 3, "severity": "warning" },
+      { "line": 3, "severity": "warning" },
       { "line": 6, "severity": "warning" },
+      { "line": 7, "severity": "warning" },
+      { "line": 7, "severity": "warning" },
       { "line": 7, "severity": "warning" },
       { "line": 9, "severity": "info" }
     ],

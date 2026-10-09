@@ -348,6 +348,7 @@ KINDS = {
     "distance-unknown": "warning",
     "diameter-unknown": "warning",
     "incremental-start": "warning",
+    "called-program": "warning",
     "frame": "warning",
     "unknown-code": "warning",
     "multi-pass": "warning",
@@ -424,6 +425,12 @@ def message_of(s: Dict[str, Any]) -> str:
             "%s, first %s, move from a position the program does not state (the start, or "
             "after a machine position, a cycle, a frame or a value that was not resolved): "
             "not resolved." % (times(count, "incremental word", "incremental words"), detail)
+        )
+    if kind == "called-program":
+        return (
+            "%s, first %s, in %s before it states the axis: a called program moves from "
+            "where the program that calls it left the tool, which the file does not say, so "
+            "they are not resolved." % (times(count, "incremental word", "incremental words"), detail, s["key"])
         )
     if kind == "frame":
         return (
@@ -556,6 +563,15 @@ class Extents:
         self.linear_axes = [axis for axis in self.axes.order if axis not in self.axes.angular]
         #: M10 review (NC-7): the coordinate shift in force (`G52 (line 8)`), if any.
         self.shift: Optional[str] = None
+        #: M13 review (NC-4): the program after the first one the walk is in (`O2 (line 14)`),
+        #: and the axes it has not stated yet: it starts where its caller left the tool.
+        self.called: Optional[str] = None
+        self.unstated: set = set()
+        #: M13 review (NC-9): the tool word of each tool line, as written (`T010101`).
+        self.tool_words: Dict[int, str] = {}
+        tool_list = as_dict(self.profile.get("toolList"))
+        self.drop_leading_zeros = tool_list.get("dropLeadingZeros") is True
+        self.collapse_offset_digits = tool_list.get("collapseOffsetDigits") is True
 
     # -- scopes ---------------------------------------------------------------
 
@@ -599,7 +615,13 @@ class Extents:
         if scope is None:
             written = str(tool.get("written") or station).strip()
             line = tool.get("line") if isinstance(tool.get("line"), int) else 0
-            scope = Scope("tool", "%s (line %d)" % (written, line))
+            # M13 review (NC-9): the tool as the tool list and the map name it, and the word
+            # as written when that says more (`T1 (T010101, line 9)`).
+            label = gedit_nc.tool_label(str(tool.get("station") or written), self.drop_leading_zeros, self.collapse_offset_digits)
+            word = self.tool_words.get(line, written)
+            if label == "":
+                label = word
+            scope = Scope("tool", "%s (line %d)" % (label, line) if word == label else "%s (%s, line %d)" % (label, word, line))
             group.tools[station] = scope
             group.order.append(station)
         return scope
@@ -715,10 +737,36 @@ class Extents:
             # The mode the run starts in: before its first line, which may switch it.
             diameter = self.interp.state["diameter"]
             self.diameter_start = dict(diameter) if diameter is not None else {}
-        self.interp.update(tokens, number, gedit_nc.mask_comments(line, cp))
+        masked = gedit_nc.mask_comments(line, cp)
+        start = gedit_nc.program_start_of(line, cp)
+        if start is not None and self.interp.program_start(number):
+            # M13 review (NC-4): a program after the first (a subprogram behind `M30`) runs
+            # with the tool and from the position its caller left, which the file does not
+            # say: no tool scope until its own tool call, and no axis until it states it.
+            self.forget_all()
+            self.called = "%s (line %d)" % (start, number)
+            self.unstated = set(self.axes.order)
+        self.interp.update(tokens, number, masked)
+        tool = self.interp.tool
+        if tool is not None and tool.get("line") == number:
+            self.tool_words[number] = self.tool_word(tokens, masked, tool)
         self.record = record
         self.block(tokens, number)
         return state
+
+    def tool_word(self, tokens: Sequence[gedit_nc.Token], masked: str, tool: Dict[str, Any]) -> str:
+        """NC-9: the word of a tool line that names the tool (`T010101`, `T="ROUGH"`), or the
+        text the profile's pattern matched when no word of an address does (`TOOL CALL 1 Z`)."""
+        written = str(tool.get("written") or "").strip()
+        station = str(tool.get("station") or "")
+        at = masked.find(written) if written else -1
+        if at >= 0 and station:
+            for token in tokens:
+                if token.kind != "word" or not token.address or token.start >= at + len(written) or token.end <= at:
+                    continue
+                if station in token.text:
+                    return token.text.strip()
+        return written
 
     def written(self, tokens: Sequence[gedit_nc.Token]) -> Written:
         """The database entries of the codes a line writes (the interpreter's reading)."""
@@ -1041,10 +1089,15 @@ class Extents:
             if incremental:
                 base = targets.get(axis) if axis in targets else self.pos.get(axis)
                 if base is None:
-                    self.miss(axis, line, "incremental-start", word)
+                    if axis in self.unstated and self.called is not None:
+                        self.miss(axis, line, "called-program", word, key=self.called)
+                    else:
+                        self.miss(axis, line, "incremental-start", word)
                     targets[axis] = None
                     continue
                 value = base + value
+            # NC-4: an axis a called program states is known from here on.
+            self.unstated.discard(axis)
             targets[axis] = value
         return targets
 

@@ -1,0 +1,135 @@
+{
+  "about": "X2: no machine. detected is the profile each file opens with; unknownTokens lists the tokenizer's unknown tokens outside comments (none). F7/Shift+F7 visit toolLines; mapTools are the map's tool rows; toolList is the bundled tool_list.py with its form defaults.",
+  "input": "okuma-lathe.MIN",
+  "profile": "okuma-osp",
+  "machine": null,
+  "variants": {
+    "toolWord": {
+      "value": "offset2",
+      "source": "profile"
+    }
+  },
+  "detected": {
+    "okuma-lathe.MIN": "okuma-osp",
+    "okuma-lathe.txt": "okuma-osp"
+  },
+  "sameBytes": true,
+  "unknownTokens": [],
+  "toolLines": [
+    8,
+    19,
+    28,
+    36,
+    45
+  ],
+  "mapTools": [
+    {
+      "line": 8,
+      "text": "T1 — FACE AND OD ROUGH"
+    },
+    {
+      "line": 19,
+      "text": "T3 — OD FINISH"
+    },
+    {
+      "line": 28,
+      "text": "T9 — GROOVE D66 WITH A DWELL"
+    },
+    {
+      "line": 36,
+      "text": "T5 — THREAD M74X2"
+    },
+    {
+      "line": 45,
+      "text": "T11 — FOUR HOLES D6 ON THE FACE - DRIVEN TOOL"
+    }
+  ],
+  "toolList": {
+    "title": "Tool list",
+    "columns": [
+      {
+        "key": "tool",
+        "label": "Tool"
+      },
+      {
+        "key": "offsets",
+        "label": "Offsets"
+      },
+      {
+        "key": "description",
+        "label": "Description"
+      },
+      {
+        "key": "line",
+        "label": "First call"
+      },
+      {
+        "key": "calls",
+        "label": "Calls"
+      },
+      {
+        "key": "feed",
+        "label": "Feed"
+      },
+      {
+        "key": "speed",
+        "label": "Speed"
+      }
+    ],
+    "rows": [
+      {
+        "tool": "T1",
+        "offsets": "01",
+        "description": "FACE AND OD ROUGH",
+        "line": 8,
+        "calls": 1,
+        "feed": "0.18-0.28 /rev",
+        "speed": "200 m/min (G96)"
+      },
+      {
+        "tool": "T3",
+        "offsets": "03",
+        "description": "OD FINISH",
+        "line": 19,
+        "calls": 1,
+        "feed": "0.12 /rev",
+        "speed": "240 m/min (G96)"
+      },
+      {
+        "tool": "T9",
+        "offsets": "09",
+        "description": "GROOVE D66 WITH A DWELL",
+        "line": 28,
+        "calls": 1,
+        "feed": "0.06 /rev",
+        "speed": "700"
+      },
+      {
+        "tool": "T5",
+        "offsets": "05",
+        "description": "THREAD M74X2",
+        "line": 36,
+        "calls": 1,
+        "feed": "",
+        "speed": "600"
+      },
+      {
+        "tool": "T11",
+        "offsets": "11",
+        "description": "FOUR HOLES D6 ON THE FACE - DRIVEN TOOL",
+        "line": 45,
+        "calls": 1,
+        "feed": "100 /min",
+        "speed": ""
+      }
+    ],
+    "message": "5 tools",
+    "findings": [
+      {
+        "line": 39,
+        "severity": "info",
+        "message": "T5: the F of 1 block is a thread pitch, not a feed rate, so it is not in the range."
+      }
+    ]
+  }
+}

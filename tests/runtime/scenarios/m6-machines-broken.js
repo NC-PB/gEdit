@@ -34,7 +34,7 @@ const CONFIG = 'home/Library/Application Support/com.pburg.gedit'
 const BROKEN = '{\n  "$version": 1,\n  "machines": [\n    { "id": "lathe", "name": "Lathe",\n  ],\n'
 
 /** Every write action of the page, by its `data-action`. */
-const WRITES = ['add', 'edit', 'duplicate', 'default', 'remove']
+const WRITES = ['add', 'import', 'edit', 'duplicate', 'default', 'remove']
 
 scenario('m6-machines-broken', { timeout: 300, files: { [`${CONFIG}/machines.json`]: BROKEN } }, async (h) => {
   const ctx = context(h)
@@ -62,7 +62,10 @@ scenario('m6-machines-broken', { timeout: 300, files: { [`${CONFIG}/machines.jso
   h.check('no machine is listed: a file that was not understood contributes nothing', machineRows(h).length === 0, machineRows(h).map((r) => r.id))
 
   const offered = h.qa('machine-action').map((e) => `${e.dataset.action}:${e.dataset.disabled}`)
-  h.check('exactly Add (disabled), Open machines file and Replace with an empty file are offered', JSON.stringify(offered) === JSON.stringify(['add:1', 'open-file:0', 'replace-file:0']), offered)
+  // M13 (WP13.3, an intentional change): Import and Export sit beside Add. Import adds to the file, so it
+  // waits for a usable one like Add does; Export is always possible, so a user can save a copy of the
+  // broken file before it is replaced.
+  h.check('exactly Add (disabled), Import (disabled), Export, Open machines file and Replace with an empty file are offered', JSON.stringify(offered) === JSON.stringify(['add:1', 'import:1', 'export:0', 'open-file:0', 'replace-file:0']), offered)
   h.check(
     'every action that would write is unavailable',
     WRITES.every((action) => {

@@ -653,6 +653,37 @@ describe('createEditorService with a fake Monaco', () => {
     ]);
   });
 
+  it('says so through onDidAttach after each attach that builds an editor, with the new one in place', async () => {
+    const h = await attached();
+    const seen: unknown[] = [];
+    const stop = h.service.onDidAttach(() => seen.push(h.service.editorInstance()));
+
+    await h.service.attach(h.container());
+    await h.service.attach(h.container());
+    // Same container again: nothing is built, nothing is announced.
+    const again = h.container();
+    await h.service.attach(again);
+    await h.service.attach(again);
+
+    expect(h.state.editors).toHaveLength(3);
+    expect(seen).toHaveLength(3);
+    expect(seen[0]).toBe(h.state.editors[0]);
+    expect(seen[2]).toBe(h.state.editors[2]);
+    expect(seen[0]).not.toBe(seen[1]);
+
+    stop();
+    await h.service.attach(h.container());
+    expect(seen).toHaveLength(3);
+  });
+
+  it('does not announce an attach that failed', async () => {
+    const h = await attached({ fail: true });
+    let n = 0;
+    h.service.onDidAttach(() => n++);
+    await expect(h.service.attach(h.container())).rejects.toThrow();
+    expect(n).toBe(0);
+  });
+
   it('applies an option set before the first attach to the editor that appears', async () => {
     // `app/theme.ts` runs during bootstrap, long before `EditorHost` has attached.
     const h = await attached();

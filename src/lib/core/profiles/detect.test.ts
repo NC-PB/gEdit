@@ -8,7 +8,8 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { BUILTIN_PROFILE_JSON } from '$lib/data/profiles';
+import { BUILTIN_PROFILE_JSON, BUILTIN_PROFILE_SOURCES } from '$lib/data/profiles';
+import { resolveProfiles } from './resolve';
 import { FIXTURES_DIR, listFixtures, openFixture } from '../../../../tests/unit/helpers/fixtures';
 import { compileProfile } from './compile';
 import {
@@ -258,20 +259,25 @@ describe('ties', () => {
     expect(detectProfile([second, first], null, 'X\n', 'someone-else')).toBe('second');
   });
 
-  // M6: the user wrote their profile for their own posts, so it beats the one we guessed at.
-  it('go to a user profile before a built-in, but after the priority', () => {
+  // M13 review NC-2 (owner decision of 2026-10-09): a user profile never takes a program
+  // from a built-in on a tie, whatever either's priority. (M6 had it the other way round.)
+  it('go to a built-in before a user profile, before the priority', () => {
     const rule = { content: [{ pattern: 'X', weight: 5 }] };
     const shipped = variant('shipped', rule);
     const mine = variant('mine', rule);
-    const important = variant('important', { ...rule, priority: 5 });
-    const origin = (cp: CompiledProfile) => (cp.profile.id === 'mine' ? ('user' as const) : ('builtin' as const));
+    const loud = variant('loud', { ...rule, priority: 5 });
+    const origin = (cp: CompiledProfile) =>
+      cp.profile.id === 'mine' || cp.profile.id === 'loud' ? ('user' as const) : ('builtin' as const);
 
-    expect(detectProfile([shipped, mine], null, 'X\n', 'shipped', { origin })).toBe('mine');
-    expect(detectProfile([mine, shipped], null, 'X\n', 'shipped', { origin })).toBe('mine');
+    expect(detectProfile([shipped, mine], null, 'X\n', 'shipped', { origin })).toBe('shipped');
+    expect(detectProfile([mine, shipped], null, 'X\n', 'shipped', { origin })).toBe('shipped');
+    // The user profile being the document's current one does not change it either.
+    expect(detectProfile([mine, shipped], null, 'X\n', 'mine', { origin })).toBe('shipped');
+    // A priority the user profile writes does not buy it the tie.
+    expect(detectProfile([loud, shipped], null, 'X\n', 'loud', { origin })).toBe('shipped');
     // Without the origin everything is a built-in, which is the P1 answer.
-    expect(detectProfile([shipped, mine], null, 'X\n', 'shipped')).toBe('shipped');
-    // A priority the shipped profile carries still wins: it is the explicit statement.
-    expect(detectProfile([mine, important], null, 'X\n', 'mine', { origin })).toBe('important');
+    expect(detectProfile([mine, shipped], null, 'X\n', 'shipped')).toBe('shipped');
+    expect(detectProfile([mine, shipped], null, 'X\n', 'mine')).toBe('mine');
   });
 
   it('are broken by three profiles in the documented order', () => {
@@ -283,10 +289,89 @@ describe('ties', () => {
     const all = [shipped, mine, important];
 
     expect(detectProfile(all, null, 'X\n', 'shipped', { origin })).toBe('important');
-    expect(detectProfile([shipped, mine], null, 'X\n', 'shipped', { origin })).toBe('mine');
+    expect(detectProfile([mine, shipped], null, 'X\n', 'mine', { origin })).toBe('shipped');
     expect(detectProfile([shipped, important], null, 'X\n', 'shipped')).toBe('important');
     // Nothing to tell them apart: the fallback, then the registry order.
     expect(detectProfile([shipped, mine], null, 'X\n', 'shipped')).toBe('shipped');
+  });
+
+  it('go to the ancestor between two user profiles', () => {
+    const rule = { content: [{ pattern: 'X', weight: 5 }] };
+    const base = variant('shop-base', { ...rule, priority: 0 });
+    const child = compileProfile({ ...structuredClone(variant('shop-child', { ...rule, priority: 3 }).profile), extends: 'shop-base' });
+    const origin = () => 'user' as const;
+    expect(detectProfile([child, base], null, 'X\n', 'shop-child', { origin })).toBe('shop-base');
+    expect(detectResult([child, base], null, 'X\n', 'shop-child', { origin }).id).toBe('shop-base');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M13 review NC-2: a user profile is picked only through rules it adds itself
+// ---------------------------------------------------------------------------
+
+describe('a user profile that extends a built-in', () => {
+  /** The built-ins plus one user profile, resolved, validated and compiled as the registry does. */
+  function withUser(user: Record<string, unknown>): { list: CompiledProfile[]; origin: (cp: CompiledProfile) => 'user' | 'builtin' } {
+    const { resolved, problems } = resolveProfiles([
+      ...BUILTIN_PROFILE_SOURCES,
+      { raw: { name: 'Shop', shortName: 'SHOP', ...user }, origin: 'user', file: `${String(user.id)}.json` },
+    ]);
+    expect(problems).toEqual([]);
+    const list = resolved.map((entry) => {
+      const checked = validateProfile(entry.profile);
+      if (!checked.ok) throw new Error(checked.errors.join('; '));
+      return compileProfile(checked.profile);
+    });
+    const userIds = new Set(resolved.filter((entry) => entry.origin === 'user').map((entry) => String(entry.profile.id)));
+    return { list, origin: (cp) => (userIds.has(cp.profile.id) ? 'user' : 'builtin') };
+  }
+
+  const LATHE_TEXT = ['%', 'O0017', 'G21 G40 G99', 'G50 S2000', 'T0101', 'G96 S180 M03', 'G00 X52. Z2.', 'G71 U1.5 R0.5', 'G71 P10 Q20 U0.4 W0.1 F0.25', 'N10 G00 X20.', 'N20 G01 Z-30.', 'M30', '%'].join('\n');
+  const MILL_TEXT = ['%', 'O1000', 'G90 G17 G40 G80', 'T1 M06', 'G54 G00 X0 Y0', 'G43 H01 Z50.', 'G81 X10. Y10. Z-5. R2. F100', 'G80', 'M30', '%'].join('\n');
+  const both = (o: ReturnType<typeof withUser>, path: string | null, text: string): [string, string] => [
+    detectProfile(o.list, path, text, FANUC, { origin: o.origin }),
+    detectResult(o.list, path, text, FANUC, { origin: o.origin }).id,
+  ];
+
+  it('with only a folder of its own is used inside that folder only', () => {
+    const o = withUser({ id: 'shop-lathe', extends: LATHE, detect: { folders: ['/shop/lathe3'] } });
+    expect(both(o, '/shop/lathe3/p.nc', LATHE_TEXT)).toEqual(['shop-lathe', 'shop-lathe']);
+    expect(detectResult(o.list, '/shop/lathe3/p.nc', LATHE_TEXT, FANUC, { origin: o.origin }).by).toBe('folder');
+    expect(both(o, '/work/p.nc', LATHE_TEXT)).toEqual([LATHE, LATHE]);
+    expect(both(o, '/work/O0017', LATHE_TEXT)).toEqual([LATHE, LATHE]);
+  });
+
+  it('with no detect of its own is never detected', () => {
+    const o = withUser({ id: 'shop-lathe', extends: LATHE });
+    for (const path of ['/shop/lathe3/p.nc', '/work/p.nc', '/work/O0017', null]) {
+      expect(both(o, path, LATHE_TEXT)).toEqual([LATHE, LATHE]);
+    }
+    expect(both(o, '/work/m.nc', MILL_TEXT)).toEqual([FANUC, FANUC]);
+  });
+
+  it('with only an extension of its own takes the files of that extension', () => {
+    const o = withUser({ id: 'shop-lathe', extends: LATHE, detect: { extensions: { lat: 50 } } });
+    expect(both(o, '/work/p.lat', LATHE_TEXT)).toEqual(['shop-lathe', 'shop-lathe']);
+    expect(both(o, '/work/p.nc', LATHE_TEXT)).toEqual([LATHE, LATHE]);
+  });
+
+  // Writing `content` replaces the inherited list (arrays are taken whole), so the marker
+  // carries the weight of a header here.
+  it('with a marker rule of its own takes only the programs that carry the marker', () => {
+    const o = withUser({
+      id: 'shop-lathe',
+      extends: LATHE,
+      detect: { content: [{ pattern: '^\\(SHOP LATHE 3\\)', weight: 200 }] },
+    });
+    expect(both(o, '/work/p.nc', `(SHOP LATHE 3)\n${LATHE_TEXT}`)).toEqual(['shop-lathe', 'shop-lathe']);
+    expect(both(o, '/work/p.nc', LATHE_TEXT)).toEqual([LATHE, LATHE]);
+  });
+
+  it('started from the mill with an empty content list never takes a file, an empty .nc included', () => {
+    const o = withUser({ id: 'shop-mill', extends: FANUC, detect: { content: [] } });
+    expect(both(o, '/work/m.nc', MILL_TEXT)).toEqual([FANUC, FANUC]);
+    expect(both(o, '/work/e.nc', '')).toEqual([FANUC, FANUC]);
+    expect(detectProfile(o.list, '/work/e.nc', '', 'shop-mill', { origin: o.origin })).toBe(FANUC);
   });
 });
 

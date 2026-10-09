@@ -1,0 +1,39 @@
+{
+  "script": "scale_speed.py",
+  "params": {
+    "percent": 110
+  },
+  "message": "Scaled 4 of 7 spindle speeds to 110 %; 3 left as a speed limit, 3 thread blocks to check by hand.",
+  "findings": [
+    {
+      "line": 9,
+      "severity": "info",
+      "message": "LIMS=2800 is a spindle speed limit, so it is not scaled."
+    },
+    {
+      "line": 20,
+      "severity": "info",
+      "message": "LIMS=3200 is a spindle speed limit, so it is not scaled."
+    },
+    {
+      "line": 31,
+      "severity": "info",
+      "message": "LIMS=2500 is a spindle speed limit, so it is not scaled."
+    },
+    {
+      "line": 41,
+      "severity": "warning",
+      "message": "This thread block (G33) runs at S700, which was scaled on line 38: the feed follows from the speed and the pitch, so check this block by hand."
+    },
+    {
+      "line": 45,
+      "severity": "warning",
+      "message": "This thread block (G33) runs at S700, which was scaled on line 38: the feed follows from the speed and the pitch, so check this block by hand."
+    },
+    {
+      "line": 49,
+      "severity": "warning",
+      "message": "This thread block (G33) runs at S700, which was scaled on line 38: the feed follows from the speed and the pitch, so check this block by hand."
+    }
+  ]
+}

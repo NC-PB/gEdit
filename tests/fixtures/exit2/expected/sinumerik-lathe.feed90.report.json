@@ -1,0 +1,19 @@
+{
+  "script": "scale_feed.py",
+  "params": {
+    "percent": 90
+  },
+  "message": "Scaled 5 of 6 feed rates to 90 %; 1 left in a thread block whose lead is written elsewhere, 1 rounded to the decimals it was written with. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 33,
+      "severity": "warning",
+      "message": "F0.06 becomes 0.05, not 0.054: the result was rounded to 2 decimals. Ask for more decimal places if that is too coarse."
+    },
+    {
+      "line": 49,
+      "severity": "warning",
+      "message": "F0.15 is not scaled: G33 takes its lead from I, J or K, not from F, and does not cut with this F, which stays the feed in force for the blocks after the thread. Check those feeds by hand."
+    }
+  ]
+}

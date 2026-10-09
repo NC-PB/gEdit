@@ -272,6 +272,7 @@ export function createEditorService(deps: EditorServiceDeps): EditorService {
   const cursorEvent = emitter<[CursorInfo]>();
   const createEvent = emitter<[DocId]>();
   const activateEvent = emitter<[DocId | null]>();
+  const attachEvent = emitter<[]>();
 
   let markReady: () => void = () => {};
   /**
@@ -470,6 +471,7 @@ export function createEditorService(deps: EditorServiceDeps): EditorService {
     appliedReadOnly = false; // a fresh instance starts from EDITOR_OPTIONS
     applyActive(active);
     markReady();
+    attachEvent.fire();
   }
 
   return {
@@ -707,6 +709,10 @@ export function createEditorService(deps: EditorServiceDeps): EditorService {
 
     onDidActivate(cb: (id: DocId | null) => void): Disposable {
       return activateEvent.add(cb);
+    },
+
+    onDidAttach(cb: () => void): Disposable {
+      return attachEvent.add(cb);
     },
 
     model(id: DocId): MonacoApi.editor.ITextModel | undefined {

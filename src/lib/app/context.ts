@@ -26,6 +26,7 @@ import { scripts } from '$lib/app/scripts';
 import { session } from '$lib/app/session';
 import { status } from '$lib/app/status';
 import { transforms } from '$lib/app/transforms';
+import { userConfig } from '$lib/app/userConfig';
 import { bookmarks } from '$lib/monaco/bookmarks';
 import { editor } from '$lib/monaco/editorService';
 import { channels } from '$lib/stores/channels';
@@ -72,4 +73,5 @@ export const ctx: AppContext = {
   session,
   recovery,
   channels,
+  userConfig,
 };

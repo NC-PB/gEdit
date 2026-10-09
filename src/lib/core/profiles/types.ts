@@ -98,6 +98,21 @@ export interface NumberFormatOptions {
 }
 
 /**
+ * P13 (AD-30). The typing options of a profile; both default to false when absent.
+ *
+ * - `forceUppercase`: a plain letter typed outside a comment, a string and kept text
+ *   (`TokenKind` `'comment'`, `'string'`, `'text'`) is typed in upper case. Paste, a
+ *   modifier, an IME composition and every edit that is not a keystroke are left alone.
+ * - `preventLineJoin`: Backspace at column 1 and Delete at the end of a line, with one
+ *   empty selection, do nothing and say why in the status bar. A selected line break can
+ *   still be deleted.
+ */
+export interface ProfileEditing {
+  forceUppercase?: boolean;
+  preventLineJoin?: boolean;
+}
+
+/**
  * One dialect profile, as it is stored in JSON.
  *
  * P1 uses the subset below. Fields of later phases (`editing`, `onSave`,
@@ -527,6 +542,14 @@ export interface Profile {
    * only a profile that declares them offers `ignoreCycleNames` (Klartext, off by default).
    */
   compare?: ProfileCompare;
+  /**
+   * P13 (§7.1, AD-30). How typing behaves in a document of this profile. Every built-in sets
+   * both to true (the owner's decision of 2026-10-08: upper case on every control); a user
+   * profile may turn either off. `convertCase` reads `forceUppercase` as "the control
+   * expects upper case" and asks before writing lower case (P1). Other members (`tabWidth`
+   * on `fanuc-gcode`) are carried, not read (§2.1: per-profile tab width is deferred).
+   */
+  editing?: ProfileEditing;
   /** Fields of later phases are preserved, not interpreted (see the note above). */
   [p2Field: string]: unknown;
 }
@@ -720,6 +743,18 @@ export interface ProfileProblem {
   profileId: string | null;
   path: string;
   message: string;
+  /**
+   * How serious the row is. `error` (the default when unset): the file or entry is not used.
+   * `info`: a notice that changes nothing, e.g. a user code entry that changes what a built-in
+   * code means (owner, 2026-10-09).
+   */
+  severity?: 'error' | 'info';
+  /**
+   * Which folder the file is in (`<config>/profiles` or `<config>/codes`): a profile file and a
+   * code file may have the same name, and only this tells their problems apart. Unset on a
+   * problem that belongs to no file (a folder that could not be read).
+   */
+  kind?: 'profiles' | 'codes';
   /** Which source it was, for a file that has no id and no name to be called by. */
   index?: number;
 }

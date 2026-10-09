@@ -48,9 +48,18 @@ export default {
       await editor.ready;
       const monaco = await getMonaco();
       if (stopped) return;
-      for (const profile of profiles.list()) {
-        registrations.push(registerHover(monaco, profile.id), registerCompletion(monaco, profile.id));
-      }
+      // One pair per profile id, once. A reload (AD-29, `profiles.revision`) can add ids; one
+      // it removes keeps its providers, which nothing can ask any more.
+      const have = new Set<string>();
+      const sync = (): void => {
+        for (const profile of profiles.list()) {
+          if (have.has(profile.id)) continue;
+          have.add(profile.id);
+          registrations.push(registerHover(monaco, profile.id), registerCompletion(monaco, profile.id));
+        }
+      };
+      sync();
+      registrations.push(profiles.revision.subscribe(sync));
     })().catch(() => {
       // `editor.ready` never rejects, and a Monaco that cannot be loaded is already
       // reported by EditorHost (and leaves `data-ready` at "0"). A second message here

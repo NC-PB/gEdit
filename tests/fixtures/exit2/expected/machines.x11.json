@@ -1,0 +1,65 @@
+{
+  "$version": 1,
+  "machines": [
+    {
+      "id": "*",
+      "name": "Lathe IS-B",
+      "profile": "fanuc-lathe",
+      "notes": "",
+      "params": {
+        "numberInput": {
+          "mode": "increment",
+          "incrementMm": "0.001",
+          "incrementInch": "0.0001",
+          "incrementDeg": "0.001",
+          "incrementSec": "0.001",
+          "classes": {
+            "feedPerMin": {
+              "mode": "increment",
+              "increment": "1",
+              "incrementInch": "0.01"
+            },
+            "feedPerRev": {
+              "mode": "increment",
+              "increment": "0.01",
+              "incrementInch": "0.0001"
+            }
+          }
+        },
+        "units": "mm",
+        "diameter": "on",
+        "variants": {
+          "gcodeSystem": "B",
+          "incrementalAddresses": "uw",
+          "toolWord": "byLength"
+        },
+        "modalInitial": {
+          "feedmode": "G95"
+        }
+      }
+    },
+    {
+      "id": "*",
+      "name": "Lathe calc",
+      "profile": "fanuc-lathe",
+      "notes": "",
+      "params": {
+        "numberInput": {
+          "mode": "calculator",
+          "incrementMm": "0.001"
+        },
+        "units": "mm",
+        "diameter": "on",
+        "variants": {
+          "gcodeSystem": "B",
+          "incrementalAddresses": "uw",
+          "toolWord": "byLength"
+        },
+        "modalInitial": {
+          "feedmode": "G95"
+        }
+      }
+    }
+  ],
+  "defaults": {}
+}

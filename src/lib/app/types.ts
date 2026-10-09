@@ -24,7 +24,7 @@ import type { FieldSpec } from '$lib/core/forms/types';
 import type { NcToken } from '$lib/core/nc/types';
 import type { Settings } from '$lib/core/settings/schema';
 import type { OutlineItem } from '$lib/core/profiles/outline';
-import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
+import type { CompiledProfile, Profile, ProfileProblem } from '$lib/core/profiles/types';
 import type { DetectResult } from '$lib/core/profiles/detect';
 import type { TransformDef, TransformResult } from '$lib/core/transforms/types';
 import type {
@@ -40,6 +40,7 @@ import type {
   PythonStatus,
   RecentEntry,
   ScriptEntry,
+  UserFileKind,
 } from '$lib/platform/commands';
 
 // ---------------------------------------------------------------------------
@@ -366,6 +367,13 @@ export interface EditorService {
   onDidChangeCursor(cb: (c: CursorInfo) => void): Disposable;
   onDidCreateModel(cb: (id: DocId) => void): Disposable;
   onDidActivate(cb: (id: DocId | null) => void): Disposable;
+  /**
+   * An editor instance was created and bound (every `attach()` that builds one: the first,
+   * and each remount, e.g. after the compare overlay). `editorInstance()` answers the new
+   * instance when `cb` runs. A listener that hooks the instance (keyboard, DOM) re-hooks here;
+   * one added after an attach does not hear about it and checks `editorInstance()` itself.
+   */
+  onDidAttach(cb: () => void): Disposable;
   /** Escape hatches: only `src/lib/monaco/**` may call these. */
   model(id: DocId): import('$lib/monaco/core').editor.ITextModel | undefined;
   editorInstance(): import('$lib/monaco/core').editor.IStandaloneCodeEditor | undefined;
@@ -608,6 +616,30 @@ export interface ProfileRegistry {
    * variant's default. Only consulted when the document has no machine (AD-31).
    */
   detectVariants(id: string, text: string): Record<string, { value: string; margin: number }>;
+  /**
+   * P13 (§7.3, AD-29): bumps on every `reload` (WP13.2). `userConfig.load()` calls `reload`
+   * only when a user file of either folder changed since its last load (§7.16 #192), so a
+   * bump always means "the profiles or the code databases they read are different now".
+   * Subscribers: the Monaco languages, grammars and themes, the providers registered per
+   * profile id, the outline, the machines (re-validation) and the Profiles page.
+   */
+  readonly revision: Readable<number>;
+  /** P13: the problems of the last load (built-ins and user files), with file and JSON path. */
+  problems(): ProfileProblem[];
+  /**
+   * P13: the built-ins plus `user` (the files of `<config>/profiles/`), resolved, validated
+   * and compiled again; every effective-profile cache is dropped. A broken user file is
+   * reported and skipped, a user id equal to a built-in id is refused, the built-ins always
+   * load. Never throws. Answers the problems of this load (also kept for `problems()`).
+   */
+  reload(user: UserFileText[]): ProfileProblem[];
+}
+
+/** P13 (§7.3): one user file as `user_files_list` read it, for `reload`. */
+export interface UserFileText {
+  /** The file name inside its folder (`lathe-shop.json`). */
+  name: string;
+  text: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -738,6 +770,16 @@ export interface CodeDbService {
   completions(profileId: string, prefix: string, atBlockStart: boolean): CodeEntry[];
   /** The flat list handed to a script's context (M4). */
   forScripts(profileId: string): CodeEntry[];
+  /**
+   * P13 (§7.3, AD-29; WP13.2): the built-in databases plus `user` (the files of
+   * `<config>/codes/`), resolved again and every cache dropped. A user file `<dialect>.json`
+   * whose `dialect` is a built-in id is laid over that database before its children resolve
+   * (so `fanuc-lathe-b` inherits what a user adds to `fanuc-lathe`); a new id is a database
+   * of its own that `extends` another one. Problems carry the dialect in `profileId`.
+   * Never throws. No `templates(profileId)`: a document's templates come from its
+   * effective database (`machines.effective(docId).codes.templates`, AD-28, AD-31).
+   */
+  reload(user: UserFileText[]): ProfileProblem[];
 }
 
 /**
@@ -934,6 +976,22 @@ export interface ScriptService {
 // §7.15 The service added in M6: machine configurations (AD-31)
 // ---------------------------------------------------------------------------
 
+/** What an import did (M13, §4). `skipped` records were not valid as a hand edit; none of them is written. */
+export interface MachineImportSummary {
+  /** Records written to the machines file. */
+  imported: number;
+  /** Imported under another name because theirs was taken (or the name had to be shortened). */
+  renamed: number;
+  /** Imported under another id because theirs was taken. */
+  reassigned: number;
+  /** Imported, but the base profile is not loaded or rejects them: kept and listed with the problem, not selectable. */
+  inactive: number;
+  /** Default machines taken over from the file (only where this installation has none for that profile). */
+  defaults: number;
+  /** Records not imported: the file's own problems (a bad id, a duplicate name, too many machines). */
+  skipped: { name: string | null; reason: string }[];
+}
+
 /**
  * stores/machines.ts → `export const machines: MachineService` (P6 stub; owner WP6.8;
  * WP7.5 adds the per-file persistence, WP12.6 import and export)
@@ -995,6 +1053,14 @@ export interface MachineService {
    * the profile's default machine.
    */
   setForDoc(docId: DocId, id: string | null | undefined): void;
+  /**
+   * M13: adds the machines of an exported file (`raw` = the parsed JSON object) to this
+   * installation's. Validated like a hand edit (`parseMachinesFile`): a record that is not
+   * valid is skipped and counted, one the base profile does not accept yet is imported
+   * inactive. An id already in use gets a new one, a name already in use a suffix
+   * (`Lathe 2 (2)`). One status summary. Rejects while the file cannot be written.
+   */
+  importMachines(raw: unknown): Promise<MachineImportSummary>;
 }
 
 // ---------------------------------------------------------------------------
@@ -1152,6 +1218,51 @@ export interface RecoveryService {
  * The aggregate the test hook exposes (§7.9). It only collects the singletons; features
  * import the service modules they need directly.
  */
+// ---------------------------------------------------------------------------
+// P13: the user's own profiles and code files (AD-29; `app/userConfig.ts`, WP13.2)
+// ---------------------------------------------------------------------------
+
+/** One file of `<config>/profiles/` or `<config>/codes/` as the Profiles page lists it. */
+export interface UserFileEntry {
+  kind: UserFileKind;
+  name: string;
+  /** Why the file could not be read (too large, not UTF-8, a link, one too many); null when read. */
+  error: string | null;
+}
+
+/**
+ * app/userConfig.ts → `export const userConfig: UserConfigService` (P13 stub; WP13.2).
+ *
+ * The one place that reads the two user folders and hands them to the registries. The
+ * order inside `load()` is fixed: both folders are listed (`user_files_list`), then
+ * `codes.reload(codeFiles)`, then `profiles.reload(profileFiles)` (a profile is validated
+ * against the databases that exist after the code reload), then every open document whose
+ * profile no longer exists is detected again (one status message), then the problems go to
+ * the Results panel when there are any. A load whose files are byte-identical to the last
+ * one's reloads nothing (§7.16 #192).
+ */
+export interface UserConfigService {
+  /** Every user file of the last load, profiles first, each folder sorted by name. */
+  readonly files: Readable<UserFileEntry[]>;
+  /** The problems of the last load: unreadable files and both registries' problems. */
+  readonly problems: Readable<ProfileProblem[]>;
+  /**
+   * Bootstrap calls it once, after settings and UI state and before `machines.load`, so a
+   * machine whose base is a user profile is valid at the first open (P13 wires the order;
+   * WP13.2 fills the body). Also after a save of a file in either folder (the hook in
+   * `contrib/userConfig.ts`, WP13.3), after New/Import/Remove and on `profile.reload`.
+   * Never throws; outside Tauri it reads nothing.
+   */
+  load(): Promise<ProfileProblem[]>;
+  /** The folder `path` lies directly in (`profilesDir` / `codesDir`), or null. */
+  kindOf(path: string): UserFileKind | null;
+  /**
+   * The user chose a dialect for this document by hand: it is no longer one that a later load
+   * may put back on a profile that was gone (CODE-6). True when it had been moved off one.
+   */
+  forget(docId: string): boolean;
+}
+
 export interface AppContext {
   commands: CommandRegistry;
   ribbon: RibbonRegistry;
@@ -1189,6 +1300,8 @@ export interface AppContext {
   recovery: RecoveryService;
   // P12
   channels: ChannelService;
+  // P13
+  userConfig: UserConfigService;
 }
 
 // ---------------------------------------------------------------------------

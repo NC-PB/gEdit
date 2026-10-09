@@ -1,0 +1,49 @@
+{
+  "about": "X11 (c): program_checks.py on decimal-lathe.nc, machine \"Lathe calc\".",
+  "input": "decimal-lathe.nc",
+  "profile": "fanuc-lathe",
+  "machine": {
+    "name": "Lathe calc",
+    "profile": "fanuc-lathe",
+    "params": {
+      "numberInput": {
+        "mode": "calculator",
+        "incrementMm": "0.001"
+      },
+      "units": "mm",
+      "diameter": "on",
+      "variants": {
+        "gcodeSystem": "B",
+        "incrementalAddresses": "uw",
+        "toolWord": "byLength"
+      },
+      "modalInitial": {
+        "feedmode": "G95"
+      }
+    }
+  },
+  "report": {
+    "title": "Program checks",
+    "columns": [
+      {
+        "key": "line",
+        "label": "Line"
+      },
+      {
+        "key": "check",
+        "label": "Check"
+      },
+      {
+        "key": "severity",
+        "label": "Severity"
+      },
+      {
+        "key": "message",
+        "label": "Finding"
+      }
+    ],
+    "rows": [],
+    "message": "No findings. Machine 'Lathe calc': every number is read as written.",
+    "findings": []
+  }
+}

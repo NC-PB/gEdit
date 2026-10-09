@@ -32,7 +32,7 @@
       "description": "FACE MILL D80",
       "line": 6,
       "calls": 1,
-      "feed": "120",
+      "feed": "120 /min",
       "speed": "150 m/min (G961)"
     },
     {

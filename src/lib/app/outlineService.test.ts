@@ -11,11 +11,11 @@ import { BUILTIN_PROFILE_JSON } from '$lib/data/profiles';
 import { compileProfile } from '$lib/core/profiles/compile';
 import { validateProfile } from '$lib/core/profiles/validate';
 import { createDocumentStore } from '$lib/stores/documents';
-import { cpOf } from '../../../tests/unit/helpers/profiles';
+import { cpOf, profileOf } from '../../../tests/unit/helpers/profiles';
 import { computeJumpLines, createOutlineService, groupByChannel, reuseRows, SYNC_ROWS_MAX, type OutlineServiceDeps, type OutlineServiceInternals } from './outlineService';
 import { expectWithin, fastest } from '../../../tests/unit/helpers/budget';
 import type { CompiledProfile } from '$lib/core/profiles/types';
-import type { ChannelSet } from '$lib/core/channels/types';
+import type { ChannelParams, ChannelSet } from '$lib/core/channels/types';
 import type { ContentChange, Disposable, DocId, DocumentStore, Eol, FileEncoding, NewDocMeta } from '$lib/app/types';
 
 const FANUC = 'fanuc-gcode';
@@ -483,6 +483,39 @@ describe('the program map with channels', () => {
     expect(get(h.outline.items(id))[0].kind).toBe('channel');
   });
 
+  it('M13 review NC-10: names a prefix rule\'s marks with the prefix, and an id-less mark by its rule', () => {
+    // `M1` + two digits keys `M130` as `30`; the row reads `M130`, not `30`, which looks like a block number.
+    const params: ChannelParams = {
+      layout: 'single-file',
+      list: [
+        { id: '1', name: 'Turret A' },
+        { id: '2', name: 'Turret B' },
+      ],
+      syncMarks: [{ id: 'p', label: 'Waits', match: { kind: 'prefix', prefix: 'M1', idDigits: { min: 2, max: 2 } }, partners: { kind: 'all' } }],
+    };
+    const set: ChannelSet = {
+      ...SECTIONS,
+      marks: [
+        { ruleId: 'p', mark: '30', line: 5, channel: '1', partners: ['2'], blocking: true },
+        { ruleId: 'p', mark: '30', line: 12, channel: '2', partners: ['1'], blocking: true },
+        { ruleId: 'other', mark: '', line: 8, channel: '2', partners: ['1'], blocking: true },
+      ],
+    };
+    const h = harness({ channels: { forDoc: () => set, revision: writable(0), ruleLabel: (_id, ruleId) => (ruleId === 'other' ? 'Other waits' : ''), params: () => params } });
+    const id = h.add(lines);
+    h.flush();
+    const rows = get(h.outline.items(id));
+    const syncs = (n: number): string[] => (rows[n].children ?? []).filter((c) => c.kind === 'sync').map((c) => c.text);
+    expect([...syncs(0), ...syncs(1)]).toEqual(['M130', 'Other waits', 'M130']);
+    // Without the machine's channel block the ids show as they are keyed. (A copy of the set:
+    // the sync rows are cached per set object.)
+    const bareSet: ChannelSet = { ...set };
+    const bare = harness({ channels: { forDoc: () => bareSet, revision: writable(0), ruleLabel: () => '' } });
+    const b = bare.add(lines);
+    bare.flush();
+    expect((get(bare.outline.items(b))[0].children ?? []).filter((c) => c.kind === 'sync').map((c) => c.text)).toEqual(['30']);
+  });
+
   it('toolLines(id) is the P1 list and toolLines(id, channel) the lines inside that channel', () => {
     const plain = harness();
     const a = plain.add(lines);
@@ -639,5 +672,63 @@ describe('computeJumpLines', () => {
     const sinu = cpOf('sinumerik');
     const lines = ['REPEAT', 'WAITM(1,1,2)', 'UNTIL R1>3', 'N10 WHILE R1<3', 'R1=R1+1', 'ENDWHILE', 'LOOP', 'ENDLOOP', 'FOR R1=1 TO 3', 'ENDFOR', '; WHILE in a comment'];
     expect(computeJumpLines(lines, sinu, (line) => (line <= 6 ? 'a' : 'b'))).toEqual({ a: [1, 3, 4, 6], b: [7, 8, 9, 10] });
+  });
+});
+
+// M13 (WP13.2, AD-29): a reload compiles every profile again. The index is rebuilt for a
+// document whose profile reads differently, and only for that one.
+describe('a profile reload', () => {
+  /** The program map of a Fanuc profile whose comment rule is gone. */
+  function withoutStops(): CompiledProfile {
+    const profile = structuredClone(profileOf(FANUC));
+    profile.outline = profile.outline.filter((rule) => rule.kind !== 'comment');
+    return compileProfile(profile);
+  }
+
+  function reloading() {
+    const revision = writable(0);
+    const views = new Map<string, CompiledProfile>(COMPILED);
+    const h = harness({
+      effective: (id: DocId) => {
+        const profileId = h.docs.get(id)?.profileId;
+        const cp = profileId === undefined ? undefined : views.get(profileId);
+        return cp === undefined ? null : { cp, key: profileId as string };
+      },
+      profileRevision: revision,
+    });
+    return { h, views, bump: () => revision.update((n) => n + 1) };
+  }
+
+  it('rebuilds the index of a document whose profile reads differently', () => {
+    const { h, views, bump } = reloading();
+    const id = h.add(PROGRAM);
+    h.flush();
+    expect(get(h.outline.items(id)).some((item) => item.kind === 'comment')).toBe(true);
+
+    views.set(FANUC, withoutStops());
+    bump();
+    h.flush();
+    expect(get(h.outline.items(id)).some((item) => item.kind === 'comment')).toBe(false);
+  });
+
+  it('keeps the index when a reload made an equal profile (a new object, the same content)', () => {
+    const { h, views, bump } = reloading();
+    const id = h.add(PROGRAM);
+    h.flush();
+    const before = get(h.outline.items(id));
+
+    views.set(FANUC, cpOf(FANUC));
+    bump();
+    expect(h.pending()).toBe(0);
+    expect(get(h.outline.items(id))).toBe(before);
+  });
+
+  it('survives a document whose profile has gone for the moment of the bump', () => {
+    const { h, views, bump } = reloading();
+    const id = h.add(PROGRAM);
+    h.flush();
+    views.delete(FANUC);
+    expect(() => bump()).not.toThrow();
+    expect(get(h.outline.items(id)).length).toBeGreaterThan(0);
   });
 });

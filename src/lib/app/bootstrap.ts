@@ -3,12 +3,14 @@
 //
 // The order is fixed:
 //   1. set the command context provider
-//   2. read settings.json, state.json and machines.json (P2, P6): the contributions build
+//   2. read settings.json, state.json, the user's own profiles and code files (P13) and
+//      machines.json (P2, P6): the contributions build
 //      their commands and panels from the effective settings and restore the saved
 //      layout, so both have to be in memory first, and the machines have to be there
 //      before the first document opens — otherwise its effective view would be built
-//      without them and every consumer would have to re-evaluate. None of the three may
-//      throw — a broken file falls back to the defaults and the store shows the notice —
+//      without them and every consumer would have to re-evaluate. The user profiles come
+//      before the machines, so a machine whose base is a user profile is valid at once
+//      (AD-29). None of the four may throw — a broken file falls back to the defaults and the store shows the notice —
 //      so a failure here is logged and startup continues.
 //   2b. start the channel service (P12, §7.17): after the machines, before the first
 //      document, so its first resolution already sees the machine set
@@ -52,6 +54,7 @@ import { settings } from '$lib/stores/settings';
 import { loadConfigOnce, uiState } from '$lib/stores/uiState';
 import { isTauriRuntime } from '$lib/utils/platform';
 import { files } from '$lib/app/fileOps';
+import { userConfig } from '$lib/app/userConfig';
 import { scripts } from '$lib/app/scripts';
 import { isScriptRunning, runningScript } from '$lib/stores/scripts';
 import type { CommandContext, Disposable } from '$lib/app/types';
@@ -144,6 +147,12 @@ export interface BootstrapDeps {
   loadSettings: () => Promise<unknown>;
   /** `uiState.load()` (WP2.3). */
   loadUiState: () => Promise<unknown>;
+  /**
+   * `userConfig.load()` (P13, AD-29): the user's profiles and code files, after the settings
+   * and the UI state and before the machines, so a machine whose base is a user profile is
+   * valid at the first open. Never throws (a broken user file costs the user nothing else).
+   */
+  loadUserConfig: () => Promise<unknown>;
   /** `machines.load(configLoad)` (P6, §7.15): the same round trip, no second read. */
   loadMachines: () => Promise<unknown>;
   /** `channels.start()` (P12, §7.17): right after the machines; never throws. */
@@ -179,7 +188,7 @@ const EMPTY_CONTEXT: CommandContext = {
  * start even when the config folder is unreadable.
  */
 async function loadPersisted(
-  deps: Pick<BootstrapDeps, 'loadSettings' | 'loadUiState' | 'loadMachines'>,
+  deps: Pick<BootstrapDeps, 'loadSettings' | 'loadUiState' | 'loadUserConfig' | 'loadMachines'>,
 ): Promise<void> {
   try {
     await deps.loadSettings();
@@ -190,6 +199,13 @@ async function loadPersisted(
     await deps.loadUiState();
   } catch (err) {
     console.error('the saved UI state could not be loaded', err);
+  }
+  try {
+    await deps.loadUserConfig();
+  } catch (err) {
+    // The service reports a broken file itself and is contracted not to throw; a rejection
+    // here means the folders could not be listed, and the built-ins are what is in use.
+    console.error('the user profiles and code files could not be loaded', err);
   }
   try {
     await deps.loadMachines();
@@ -277,6 +293,7 @@ export const startApp: () => Promise<Disposable> = createStartApp({
   commandContext,
   loadSettings: () => settings.load(),
   loadUiState: () => uiState.load(),
+  loadUserConfig: () => userConfig.load(),
   loadMachines: async () => {
     // `loadConfigOnce` is the memo behind `settings.load()`, so this is the same
     // `config_load` answer, not a second round trip (AD-8 allows exactly one).

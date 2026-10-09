@@ -14,6 +14,11 @@ import { status } from '$lib/app/status';
 import { files } from '$lib/app/fileOps';
 import { docs } from '$lib/stores/documents';
 import { fileMemory } from '$lib/stores/fileMemory';
+import { writable } from 'svelte/store';
+import { createUserConfig, userConfig } from '$lib/app/userConfig';
+import { codes } from '$lib/stores/codes';
+import { profiles } from '$lib/stores/profiles';
+import type { UserFile } from '$lib/platform/commands';
 import { t } from '$lib/i18n';
 import type { CommandDef, ProfileInfo, QuickPickItem } from '$lib/app/types';
 
@@ -240,5 +245,81 @@ describe('an uncertain dialect', () => {
     expect(seen.items.some((item) => item.label.startsWith('Keep '))).toBe(false);
     expect(seen.placeholder).toBe(t('profiles.placeholder'));
     expect(remember).not.toHaveBeenCalled();
+  });
+});
+
+// M13 (CODE-6 and AD-22): a profile that failed after a bad save comes back for the documents that
+// used it, but a dialect picked by hand meanwhile is the user's and wins, the one the document
+// had been moved to included.
+describe('a pick by hand while the document sits on the fallback', () => {
+  const TEXT = 'O1\nG21 G40 G99\nT0101 (ROUGH)\nM30\n';
+  const PATH = '/shop/part.nc';
+  const shop = (step: unknown): UserFile => ({
+    name: 'shop-lathe.json',
+    text: JSON.stringify({ id: 'shop-lathe', name: 'Shop lathe', shortName: 'SHOP', extends: 'fanuc-lathe', detect: { folders: ['/shop'], content: [] }, numbering: { step } }),
+    error: null,
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    profiles.reload([]);
+    for (const doc of [...docs.all()]) docs.remove(doc.id);
+    fileMemory.forget(PATH);
+  });
+
+  it('keeps the dialect the document was moved to, and the file remembers it', async () => {
+    let folder: UserFile[] = [shop(7)];
+    const local = createUserConfig({
+      available: () => true,
+      list: async (kind) => (kind === 'profiles' ? folder : []),
+      codes,
+      profiles,
+      docs: () => docs.all(),
+      text: () => TEXT,
+      setProfile: (docId, profileId) => docs.update(docId, { profileId }),
+      status: () => {},
+      report: () => {},
+      paths: writable(null),
+      caseInsensitivePaths: false,
+      backslashSeparator: false,
+    });
+    // The picker talks to the application's own service; this test's service stands in for it.
+    vi.spyOn(userConfig, 'forget').mockImplementation((docId) => local.forget(docId));
+    vi.spyOn(modals, 'quickPick').mockImplementation((() => Promise.resolve('fanuc-lathe')) as never);
+    vi.spyOn(status, 'show').mockImplementation(() => {});
+    vi.spyOn(files, 'setProfile').mockImplementation((docId, profileId) => {
+      docs.update(docId, { profileId });
+    });
+
+    await local.load();
+    const id = docs.add({
+      path: PATH,
+      untitledIndex: null,
+      profileId: 'shop-lathe',
+      encoding: { encoding: 'utf-8', hasBom: false },
+      eol: 'lf',
+      eolMixedOnLoad: false,
+      nul: { leader: 0, trailer: 0, stripped: 0 },
+      textDirty: false,
+      metaDirty: false,
+      disk: null,
+      external: 'none',
+      readOnly: false,
+      readOnlyReason: null,
+    });
+
+    folder = [shop('seven')]; // the bad save
+    await local.load();
+    expect(docs.get(id)?.profileId).toBe('fanuc-lathe');
+
+    const command = (profileSelect.commands as CommandDef[]).find((c) => c.id === 'file.setProfile');
+    await command?.run({} as never); // the user picks fanuc-lathe by hand
+    expect(fileMemory.get(PATH)?.profileId).toBe('fanuc-lathe');
+
+    folder = [shop(7)]; // the fixed save
+    await local.load();
+    expect(profiles.get('shop-lathe')).toBeDefined();
+    expect(docs.get(id)?.profileId).toBe('fanuc-lathe');
+    expect(fileMemory.get(PATH)?.profileId).toBe('fanuc-lathe');
   });
 });

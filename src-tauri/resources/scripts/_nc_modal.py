@@ -48,7 +48,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from _nc_lex import CompiledProfile, LineState, Token, continues_block, decimal_of, normalize_code, tokenize_line
+from _nc_lex import CompiledProfile, LineState, Token, continues_block, decimal_of, mask_comments, normalize_code, tokenize_line
 
 #: The feed modes plan §7.10 names, for a run **without** a code database. With one, the
 #: database decides (``sets.feedUnit``) and these are never consulted: on a lathe in G-code
@@ -563,6 +563,8 @@ class ModalInterpreter:
 
         self._tool: Optional[Dict[str, Any]] = None
         self._last_tool: Optional[Dict[str, Any]] = None
+        #: How many program starts :meth:`program_start` has seen (M13, NC-4).
+        self._programs = 0
         self._feed: Optional[Dict[str, Any]] = None
         self._speed: Optional[Dict[str, Any]] = None
         self._speed_limit: Optional[Dict[str, Any]] = None
@@ -1072,6 +1074,27 @@ class ModalInterpreter:
                 "written": self._last_tool["written"],
                 "line": line,
             }
+
+    def program_start(self, line: int) -> bool:
+        """A program starts on ``line`` (:func:`program_start_of`); answers whether that reset the tool.
+
+        M13 (NC-4): a file may hold several programs, and a post usually writes the
+        subprograms behind the main program's end. A subprogram runs with the tool and from
+        the position of whatever calls it, which the file does not say, so every start
+        **after the first** forgets the tool and the last tool written. The modal codes stay:
+        the caller's are not known either, and keeping them is the lesser error. This
+        interpreter tracks no positions; a script that does forgets them at the same line.
+
+        The caller decides which lines start a program and calls this before :meth:`update`
+        of that line. :meth:`update` never calls it, so the state of every other caller (and
+        of its TypeScript twin) is what it always was.
+        """
+        self._programs += 1
+        if self._programs == 1:
+            return False
+        self._tool = None
+        self._last_tool = None
+        return True
 
     # -- what is in force ---------------------------------------------------
 
@@ -1629,6 +1652,32 @@ def prime_tracker(
         tracker._clear_block_flags()
         tracker._publish()
     return state
+
+
+def program_start_of(line: str, cp: CompiledProfile) -> Optional[str]:
+    """The program start ``line`` writes (``O2``, ``%_N_SUB_SPF``), or ``None`` (M13, NC-4).
+
+    The test of ``_nc_lex._match_program_marker``: one of the profile's ``program.start``
+    patterns matches at the head of the line, outside every comment. A tape marker (``%``)
+    is no program start. The answer is the matched text, which names the program in a
+    finding.
+    """
+    starts = cp.patterns.get("program_start") or []
+    if not starts:
+        return None
+    masked: Optional[str] = None
+    for regex in starts:
+        match = regex.search(line)
+        if match is None or match.start() != 0:
+            continue
+        # Masked only when a pattern matched: a start never begins inside a comment, and
+        # a long program should not pay for a second mask of every line.
+        if masked is None:
+            masked = mask_comments(line, cp)
+        match = regex.search(masked)
+        if match is not None and match.start() == 0 and match.group(0).strip() != "":
+            return match.group(0).strip()
+    return None
 
 
 # ---------------------------------------------------------------------------

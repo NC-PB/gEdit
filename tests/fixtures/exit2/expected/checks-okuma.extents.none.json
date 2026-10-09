@@ -1,0 +1,194 @@
+{
+  "about": "X8: the bundled extents.py on checks-okuma.MIN with its form defaults, no machine chosen. The whole report; every row with a line jumps to it.",
+  "input": "checks-okuma.MIN",
+  "profile": "okuma-osp",
+  "machine": null,
+  "report": {
+    "title": "Extents",
+    "columns": [
+      {
+        "key": "where",
+        "label": "Where"
+      },
+      {
+        "key": "axis",
+        "label": "Axis"
+      },
+      {
+        "key": "min",
+        "label": "Min"
+      },
+      {
+        "key": "minLine",
+        "label": "At line"
+      },
+      {
+        "key": "max",
+        "label": "Max"
+      },
+      {
+        "key": "maxLine",
+        "label": "At line"
+      },
+      {
+        "key": "unresolved",
+        "label": "Not resolved"
+      }
+    ],
+    "rows": [
+      {
+        "where": "Program",
+        "scope": "program",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "",
+        "minLine": "",
+        "max": "",
+        "maxLine": "",
+        "unresolved": 12,
+        "line": 8
+      },
+      {
+        "where": "Program",
+        "scope": "program",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "",
+        "minLine": "",
+        "max": "",
+        "maxLine": "",
+        "unresolved": 10,
+        "line": 8
+      },
+      {
+        "where": "Program",
+        "scope": "program",
+        "axis": "C",
+        "axisId": "C",
+        "min": "0",
+        "minLine": 39,
+        "max": "0",
+        "maxLine": 39,
+        "unresolved": 1,
+        "line": 39
+      },
+      {
+        "where": "T1 (T010101, line 9)",
+        "scope": "tool",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "",
+        "minLine": "",
+        "max": "",
+        "maxLine": "",
+        "unresolved": 2,
+        "line": 12
+      },
+      {
+        "where": "T1 (T010101, line 9)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "",
+        "minLine": "",
+        "max": "",
+        "maxLine": "",
+        "unresolved": 3,
+        "line": 12
+      },
+      {
+        "where": "T3 (T0303, line 21)",
+        "scope": "tool",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "",
+        "minLine": "",
+        "max": "",
+        "maxLine": "",
+        "unresolved": 5,
+        "line": 23
+      },
+      {
+        "where": "T3 (T0303, line 21)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "",
+        "minLine": "",
+        "max": "",
+        "maxLine": "",
+        "unresolved": 3,
+        "line": 23
+      },
+      {
+        "where": "T11 (T001111, line 36)",
+        "scope": "tool",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "",
+        "minLine": "",
+        "max": "",
+        "maxLine": "",
+        "unresolved": 2,
+        "line": 39
+      },
+      {
+        "where": "T11 (T001111, line 36)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "",
+        "minLine": "",
+        "max": "",
+        "maxLine": "",
+        "unresolved": 2,
+        "line": 39
+      },
+      {
+        "where": "T11 (T001111, line 36)",
+        "scope": "tool",
+        "axis": "C",
+        "axisId": "C",
+        "min": "0",
+        "minLine": 39,
+        "max": "0",
+        "maxLine": 39,
+        "unresolved": 1,
+        "line": 39
+      },
+      {
+        "where": "T12 (T001212, line 43)",
+        "scope": "tool",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "",
+        "minLine": "",
+        "max": "",
+        "maxLine": "",
+        "unresolved": 2,
+        "line": 52
+      },
+      {
+        "where": "T12 (T001212, line 43)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "",
+        "minLine": "",
+        "max": "",
+        "maxLine": "",
+        "unresolved": 1,
+        "line": 54
+      }
+    ],
+    "message": "No machine: readings assumed from the profile defaults, and a word whose reading depends on the machine is not resolved. X is a diameter: diameter programming is on (assumed from the profile). 23 positions not resolved; the findings say why.",
+    "findings": [
+      {
+        "line": 8,
+        "severity": "warning",
+        "message": "23 words, first X600000 (line 8): the value depends on how the machine reads a number (okuma-1mm: 600000 mm; okuma-1um: 600 mm; okuma-10um: 6000 mm). Not resolved; choose a machine for this document to read them.",
+        "reason": "machine-dependent"
+      }
+    ]
+  }
+}

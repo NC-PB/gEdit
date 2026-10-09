@@ -32,7 +32,8 @@
     const doc = $active;
     if (!doc) return null;
     if (profiles.get(doc.profileId)?.hasMachineParams !== true) return null;
-    const eff = machines.effective(doc.id).machine;
+    const effective = machines.effective(doc.id);
+    const eff = effective.machine;
     const profile = profiles.profile(doc.profileId);
     const assumed = eff.id === null;
     const warning = machines.typeMismatch(doc.id);
@@ -42,9 +43,11 @@
       assumed,
       label: assumed ? t('machines.itemNone') : t('machines.item', { name: eff.name ?? '' }),
       // The dialect's own power-on state as well: without a machine it is every one of
-      // those values, and it is the assumption that decides how an `F` is read (G8 M6).
+      // those values, and it is the assumption that decides how an `F` is read (G8 M6). It is
+      // the **effective** profile's, because a G-code system detected in the program changes it
+      // (system B powers up in feed per revolution) and the line names that source.
       tooltip:
-        machineTooltip(eff, profile.machineParams, profile.modal?.initial, profile.addresses?.diameter) +
+        machineTooltip(eff, profile.machineParams, effective.profile.modal?.initial, profile.addresses?.diameter) +
         (warning === null
           ? ''
           : '\n\n' + t('machines.typeDiffers', { name: warning.name, machineType: t(warning.machineType === 'lathe' ? 'machines.typeLathe' : 'machines.typeMill'), documentType: t(warning.documentType === 'lathe' ? 'machines.typeLathe' : 'machines.typeMill') })),

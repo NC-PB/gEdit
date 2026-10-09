@@ -14,6 +14,8 @@ const PATHS: ConfigPaths = {
   stateFile: '/data/state.json',
   userScriptsDir: '/cfg/scripts',
   machinesFile: '/cfg/machines.json',
+  profilesDir: '/cfg/profiles',
+  codesDir: '/cfg/codes',
 };
 
 function load(o: Partial<ConfigLoad> = {}): ConfigLoad {

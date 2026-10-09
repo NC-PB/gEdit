@@ -493,3 +493,49 @@ class TestWordsWithNoMachine(unittest.TestCase):
         # One sentence for the one finding. Without the deferral it is built for every word.
         self.assertEqual(len(calls), 1)
 
+
+
+class TestM13Review(unittest.TestCase):
+    """The M13 review's extents findings: NC-4 (a program after the first) and NC-9 (labels)."""
+
+    MAIN = (
+        "O1\nG21 G99\nT0101\nG97 S800 M03\nG00 X50. Z2.\nG01 Z-20. F0.25\nG00 X100. Z100.\n"
+        "T0303\nG00 X42. Z5.\nG76 P010060 Q50 R0.02\nG76 X37.5 Z-22. P1500 Q400 F1.5\nG00 X100. Z100.\nM30\n"
+    )
+    SUB = "O2\nG00 X37. Z-48.\nG01 Z-50. F0.08\nU2. W-1.\nM99\n"
+
+    def tool_scopes(self, w):
+        return {scope.where: scope for group in w.groups for scope in group.tools.values()}
+
+    def test_a_subprogram_behind_the_main_program_moves_no_tool_of_the_main_program(self):
+        w = walk(self.MAIN + self.SUB, "fanuc-lathe")
+        scopes = self.tool_scopes(w)
+        self.assertEqual(extent(w, "Z", scopes["T3 (T0303, line 8)"]), ("-22", "100", 0))
+        self.assertEqual(extent(w, "Z"), ("-51", "100", 0))  # the program row holds it
+
+    def test_the_same_file_with_the_subprogram_first_reads_as_before(self):
+        w = walk(self.SUB + self.MAIN, "fanuc-lathe")
+        scopes = self.tool_scopes(w)
+        self.assertEqual(extent(w, "Z", scopes["T3 (T0303, line 13)"]), ("-22", "100", 0))
+        self.assertEqual(extent(w, "Z", scopes["T1 (T0101, line 8)"]), ("-20", "100", 0))
+
+    def test_an_incremental_word_before_a_called_program_states_its_axis(self):
+        w = walk(self.MAIN + "O2\nU-2. W-1.\nG00 Z-48.\nW-1.\nM99\n", "fanuc-lathe")
+        found = [f for f in w.findings.out() if f["reason"] == "called-program"]
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["line"], 15)
+        self.assertEqual(found[0]["severity"], "warning")
+        self.assertIn("2 incremental words, first U-2. (line 15), in O2 (line 14)", found[0]["message"])
+        # `W-1.` after the absolute `Z-48.` is resolved.
+        self.assertEqual(extent(w, "Z")[0], "-49")
+
+    def test_a_tool_scope_is_named_as_the_tool_list_names_the_tool(self):
+        okuma = walk("G50 S2000\nT010101\nG00 X50 Z2\nT0303\nG00 X40 Z3\nT001111\nG00 X30 Z4\n", "okuma-osp")
+        self.assertEqual(
+            sorted(self.tool_scopes(okuma)),
+            ["T1 (T010101, line 2)", "T11 (T001111, line 6)", "T3 (T0303, line 4)"],
+        )
+        sinumerik = walk('G90\nN20 T="ROUGH" D1\nG0 X10 Z5\n', "sinumerik")
+        self.assertEqual(list(self.tool_scopes(sinumerik)), ['ROUGH (T="ROUGH", line 2)'])
+        mill = walk("T5 M6\nG90 G0 X1 Y1 Z1\n", "fanuc-gcode")
+        self.assertEqual(list(self.tool_scopes(mill)), ["T5 (line 1)"])

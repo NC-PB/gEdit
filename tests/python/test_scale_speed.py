@@ -1481,3 +1481,21 @@ class TestTurningDialects(unittest.TestCase):
         self.assertTrue(result.ok, result.stderr)
         self.assertIn("G97 S1500 M03", result.json()["text"])
         self.assertIn("1 tapping speed left as written", result.json()["message"])
+
+
+class TestM13ReviewUnreadable(unittest.TestCase):
+    """M13 review NC-5: a dash pasted for the minus sign is named, not called a variable."""
+
+    def test_a_word_whose_value_cannot_be_read_is_named_and_counted(self):
+        profile = helpers.load_profile("fanuc-gcode")
+        context = helpers.make_context(params={"percent": 90}, profile=profile, codes=helpers.load_codes(profile))
+        result = helpers.run_script(SCRIPT, stdin="G97 S\u2013500 M3\nG97 S500 M3\n", context=context)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], "G97 S\u2013500 M3\nG97 S450 M3\n")
+        self.assertEqual(len(payload["findings"]), 1)
+        self.assertEqual(payload["findings"][0]["severity"], "warning")
+        self.assertIn("S\u2013", payload["findings"][0]["message"])
+        self.assertIn("U+2013 EN DASH, not the ASCII minus sign -", payload["findings"][0]["message"])
+        self.assertIn("Scaled 1 of 2 spindle speeds to 90 %; 1 left because the value cannot be read.", payload["message"])
+        self.assertNotIn("variable", payload["message"])

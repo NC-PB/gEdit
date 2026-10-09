@@ -46,6 +46,35 @@ describe('resolveCodeDbFiles', () => {
     });
   });
 
+  // M13 review CODE-2: the copy is recursive; a file nested past the cap is reported, never a stack overflow.
+  it('reports a file nested deeper than the cap and resolves the rest', () => {
+    let deep: unknown = 1;
+    for (let i = 0; i < 8000; i++) deep = [deep];
+    const out: string[] = [];
+    const merged = resolveCodeDbFiles(
+      { parent: PARENT, kid: { dialect: 'kid', version: 1, extends: 'parent', codes: [], zzz: deep } },
+      (dialect, problem) => out.push(`${dialect}: ${problem.message}`),
+    );
+    expect(out).toEqual(['kid: the file is nested more than 64 levels deep']);
+    expect(Object.keys(merged)).toEqual(['parent']);
+  });
+
+  // M13 review NC-1: only a file the caller marks is merged member by member.
+  it('merges a marked child member by member, and reports what it changes', () => {
+    const files = {
+      parent: PARENT,
+      kid: { dialect: 'kid', version: 1, extends: 'parent', codes: [{ code: 'G98', label: 'Mine', modal: false }] },
+    };
+    const notices: string[] = [];
+    const merged = resolveCodeDbFiles(files, undefined, {
+      memberMerge: (dialect) => dialect === 'kid',
+      onMerge: (n) => notices.push(`${n.code} ${n.member} ${String(n.before)}>${String(n.after)}`),
+    }).kid;
+    const g98 = (merged.codes as Record<string, unknown>[]).find((entry) => entry.code === 'G98');
+    expect(g98).toEqual({ code: 'G98', group: 'cyclereturn', modal: false, label: 'Mine' });
+    expect(notices).toEqual(['G98 modal true>false']);
+  });
+
   it('keeps the parent order and appends what the child adds', () => {
     const files = {
       parent: PARENT,

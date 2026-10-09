@@ -1,0 +1,62 @@
+{
+  "transform": "nc.renumber",
+  "options": "the form as it opens (the profile defaults)",
+  "preflight": "This program has 1 line that points at a block number this run cannot follow (9). It is left as it is, so the jump would end up somewhere else. Renumber anyway?",
+  "summary": "Renumbered 54 blocks, skipped 8 lines.",
+  "warnings": [
+    "2 jumps, returns and cycles were rewritten with the new block numbers.",
+    "1 reference was left as it is because this dialect never rewrites it; check it."
+  ],
+  "skipped": [
+    {
+      "line": 1,
+      "severity": "info",
+      "message": "Skipped: the line starts with one of the skipped prefixes."
+    },
+    {
+      "line": 2,
+      "severity": "info",
+      "message": "Skipped: this is a program marker, not a block."
+    },
+    {
+      "line": 3,
+      "severity": "info",
+      "message": "Skipped: this is a program marker, not a block."
+    },
+    {
+      "line": 9,
+      "severity": "warning",
+      "message": "This dialect never rewrites this reference: it may name a block of the calling program or of another program, or be a turning cycle read with a milling profile. It was left as it is."
+    },
+    {
+      "line": 9,
+      "severity": "warning",
+      "message": "N60 M99 P300 named N300 on line 39; after this renumber N300 is line 43 (N300 M08), so the jump lands there."
+    },
+    {
+      "line": 10,
+      "severity": "info",
+      "message": "Skipped: this is a program marker, not a block."
+    },
+    {
+      "line": 11,
+      "severity": "info",
+      "message": "Skipped: the line starts with one of the skipped prefixes."
+    },
+    {
+      "line": 12,
+      "severity": "info",
+      "message": "Skipped: the line starts with one of the skipped prefixes."
+    },
+    {
+      "line": 13,
+      "severity": "info",
+      "message": "Skipped: the line starts with one of the skipped prefixes."
+    },
+    {
+      "line": 62,
+      "severity": "info",
+      "message": "Skipped: this is a program marker, not a block."
+    }
+  ]
+}

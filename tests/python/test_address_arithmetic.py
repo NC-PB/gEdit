@@ -93,7 +93,7 @@ BLOCK_REASONS = {
     "cycle-expression",
     "cycle-unresolved",
 }
-WORD_REASONS = {"data", "incremental", "expression", "machine-dependent", "count"}
+WORD_REASONS = {"unreadable", "data", "incremental", "expression", "machine-dependent", "count"}
 NOTE_REASONS = {"rounded"}
 RUN_REASONS = {"selection", "no-database", "unknown-code-note"}
 
@@ -222,6 +222,8 @@ class TestGoldenCases(unittest.TestCase):
                     reason = finding["reason"]
                     if reason in BLOCK_REASONS:
                         self.assertEqual(finding["severity"], "warning")
+                    elif reason == "unreadable":
+                        self.assertEqual(finding["severity"], "warning")  # M13 review NC-5
                     elif reason in WORD_REASONS or reason in NOTE_REASONS:
                         self.assertEqual(finding["severity"], "info")
                     else:
@@ -875,3 +877,21 @@ class TestReviewFindings(unittest.TestCase):
         payload = run("G17 G90\nG1 Z=AC(3.25)\nG1 Z=IC(2)\n", profile="sinumerik-mill", operand=1, addresses=["Z"])
         self.assertEqual(lines_of(payload)[1:3], ["G1 Z=AC(4.25)", "G1 Z=IC(2)"])
         self.assertEqual(reasons(payload), ["incremental"])
+
+
+class TestM13ReviewUnreadable(unittest.TestCase):
+    """M13 review NC-5: a word whose value cannot be read is reported and counted."""
+
+    PROGRAM = "G00 X10. Z\u20135.\nG00 Z\u22125.\nG01 Z-5. F0.1\n"
+
+    def test_a_dash_pasted_for_the_minus_sign_is_named_and_counted(self):
+        payload = run(self.PROGRAM, profile="fanuc-lathe", operation="subtract", operand=0.5, addresses=["Z"])
+        self.assertEqual(lines_of(payload)[:3], ["G00 X10. Z\u20135.", "G00 Z\u22125.", "G01 Z-5.5 F0.1"])
+        self.assertEqual([(f["line"], f["reason"], f["severity"]) for f in payload["findings"]], [(1, "unreadable", "warning"), (2, "unreadable", "warning")])
+        self.assertIn("U+2013 EN DASH, not the ASCII minus sign -", payload["findings"][0]["message"])
+        self.assertIn("U+2212 MINUS SIGN", payload["findings"][1]["message"])
+        self.assertIn("Left 2 words as written: 2 words that cannot be read.", payload["message"])
+
+    def test_an_address_that_is_not_chosen_says_nothing(self):
+        payload = run(self.PROGRAM, profile="fanuc-lathe", operation="subtract", operand=0.5, addresses=["X"])
+        self.assertEqual(payload["findings"], [])

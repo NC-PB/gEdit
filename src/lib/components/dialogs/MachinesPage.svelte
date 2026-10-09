@@ -449,6 +449,7 @@
   import ChannelsTester from '$lib/components/dialogs/ChannelsTester.svelte';
   import { REPOSITORY_URL } from '$lib/components/dialogs/AboutDialog.svelte';
   import { editor } from '$lib/monaco/editorService';
+  import { commands } from '$lib/app/registry/commands';
   import { dialogs } from '$lib/app/dialogs';
   import { status } from '$lib/app/status';
   import { docs } from '$lib/stores/documents';
@@ -797,6 +798,24 @@
         data-disabled={view.blocked ? '1' : '0'}
         disabled={view.blocked}
         onclick={startAdd}>{t('machines.page.add')}</button
+      >
+      <!-- M13 (WP13.3, §4): the same two commands as the palette's. Import adds to the file, so it waits for a usable file; a copy of it can always be saved. -->
+      <button
+        type="button"
+        class="action"
+        data-testid="machine-action"
+        data-action="import"
+        data-disabled={view.blocked ? '1' : '0'}
+        disabled={view.blocked}
+        onclick={() => void run(() => commands.run('machines.import'))}>{t('machines.page.import')}</button
+      >
+      <button
+        type="button"
+        class="action"
+        data-testid="machine-action"
+        data-action="export"
+        data-disabled="0"
+        onclick={() => void run(() => commands.run('machines.export'))}>{t('machines.page.export')}</button
       >
       <button
         type="button"

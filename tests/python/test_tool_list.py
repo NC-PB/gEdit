@@ -828,7 +828,8 @@ class TestTurningDialects(unittest.TestCase):
         rows = self.rows("sinumerik-feed-type")
         self.assertEqual(rows["ROUGH_80"]["feed"], "0.25-0.3 /rev")
         self.assertEqual(rows["FINISH"]["speed"], "1800")
-        self.assertEqual(rows["DRILL_D8"]["feed"], "120")
+        # M13 review NC-13: a range in another unit than the program's own says which.
+        self.assertEqual(rows["DRILL_D8"]["feed"], "120 /min")
 
 
 class TestSurfaceSpeedTag(unittest.TestCase):
@@ -849,7 +850,7 @@ class TestSurfaceSpeedTag(unittest.TestCase):
     def test_the_code_that_set_the_surface_speed_is_named(self):
         rows = {row["tool"]: row for row in self.report("sinumerik-g961")["rows"]}
         self.assertEqual(rows["FACE_80"]["speed"], "150 m/min (G961)")
-        self.assertEqual(rows["FACE_80"]["feed"], "120")  # G961 is a feed per minute
+        self.assertEqual(rows["FACE_80"]["feed"], "120 /min")  # G961 is a feed per minute (NC-13: said)
         self.assertEqual(rows["DRILL_D8"]["speed"], "1800")
 
     def test_an_inch_program_reads_its_surface_speeds_in_feet_per_minute(self):
@@ -970,3 +971,59 @@ class TestChannels(unittest.TestCase):
                 context["channels"] = {"layout": "none", "list": [], "marks": []}
                 result = helpers.run_script(SCRIPT, stdin=case.input_text(), context=context)
                 self.assertEqual(result.json(), case.expected_json())
+
+
+# The M13 review's lathe pair (NC-4): a main program, then a subprogram behind its `M30`
+# that cuts with whatever tool calls it.
+M13_MAIN = (
+    "O1\nG21 G99\nT0101\nG97 S800 M03\nG00 X50. Z2.\nG01 Z-20. F0.25\nG00 X100. Z100.\n"
+    "T0303\nG00 X42. Z5.\nG76 P010060 Q50 R0.02\nG76 X37.5 Z-22. P1500 Q400 F1.5\nG00 X100. Z100.\nM30\n"
+)
+M13_SUB = "O2\nG00 X37. Z-48.\nG01 Z-50. F0.08\nU2. W-1.\nM99\n"
+
+
+class TestM13Review(unittest.TestCase):
+    """The M13 review's tool-list findings (NC-4, NC-13), each pinned on a small program."""
+
+    def report(self, profile_id, program):
+        context = helpers.effective_context(profile_id)
+        full = helpers.make_context(profile=context["profile"], codes=context["codes"])
+        full["machine"] = context["machine"]
+        result = helpers.run_script(SCRIPT, stdin=program, context=full)
+        self.assertTrue(result.ok, result.stderr)
+        return result.json()
+
+    def test_a_subprogram_behind_the_main_program_is_charged_to_no_tool(self):
+        report = self.report("fanuc-lathe", M13_MAIN + M13_SUB)
+        rows = {row["tool"]: row for row in report["rows"]}
+        self.assertEqual(rows["T1"]["feed"], "0.25 /rev")
+        self.assertEqual(rows["T3"]["feed"], "")  # not the edge break's F0.08
+        called = [f for f in report["findings"] if f["message"].startswith("O2:")]
+        self.assertEqual(len(called), 1)
+        self.assertEqual(called[0]["line"], 14)
+        self.assertEqual(called[0]["severity"], "info")
+        self.assertIn("1 feed (F0.08) before any tool call", called[0]["message"])
+
+    def test_a_subprogram_in_front_of_the_main_program_reads_as_before(self):
+        report = self.report("fanuc-lathe", M13_SUB + M13_MAIN)
+        self.assertEqual([(row["tool"], row["feed"]) for row in report["rows"]], [("T1", "0.25 /rev"), ("T3", "")])
+        self.assertFalse([f for f in report["findings"] if "before any tool call" in f["message"]])
+
+    def test_a_g33_feed_word_is_not_called_a_thread_pitch(self):
+        program = (
+            "%_N_T_MPF\nG18 G90 G95\nT=\"THREAD_M44\" D1\nG97 S600 M3\nG0 X48 Z5\n"
+            "G33 Z-30 K1.5 SF=0 F0.15\nG0 X60\nM30\n"
+        )
+        report = self.report("sinumerik", program)
+        messages = [f["message"] for f in report["findings"]]
+        self.assertEqual(len(messages), 1)
+        self.assertNotIn("thread pitch", messages[0])
+        self.assertIn("the F of 1 thread block is not its lead", messages[0])
+        self.assertIn("G33 takes its lead from I, J or K", messages[0])
+        # A Fanuc thread's F is its lead, and keeps the wording that says so.
+        fanuc = self.report("fanuc-lathe", "O1\nT0101\nG99 G97 S500 M3\nG32 Z-10. F2.\nM30\n")
+        self.assertIn("is a thread pitch", fanuc["findings"][0]["message"])
+
+    def test_a_range_in_another_unit_than_the_program_says_which(self):
+        report = self.report("fanuc-lathe", "O1\nG99\nT0101\nG97 S800 M03\nG01 Z-20. F0.25\nT0505\nG98 G01 X10. F100.\nM30\n")
+        self.assertEqual([(row["tool"], row["feed"]) for row in report["rows"]], [("T1", "0.25 /rev"), ("T5", "100. /min")])

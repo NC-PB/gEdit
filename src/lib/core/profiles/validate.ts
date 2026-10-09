@@ -43,8 +43,23 @@ import { normalizeCode } from '$lib/core/codes/lookup';
 import { COMPARE_OPTION_KEYS } from '$lib/core/compare/types';
 import type { Eol } from '$lib/app/types';
 import type { NumberClass, NumberReading, ParamSource } from '$lib/core/machines/types';
-import { validateChannels } from '$lib/core/machines/validate';
+import { hasRepeatedGroupShape, validateChannels } from '$lib/core/machines/validate';
+import { NON_NC_EXTENSIONS } from './ncDocument';
 import type { OutlineKind, Profile, ProfileValidation } from './types';
+
+/** M13 review fix CODE-1 (plan §4, standing rule 15): the longest a pattern may be. */
+export const MAX_PATTERN_LENGTH = 1000;
+/** ... the most entries a list of patterns may have (the longest built-in list has 28). */
+export const MAX_PATTERN_LIST = 200;
+/** ... and the most patterns a whole profile may have. */
+export const MAX_PATTERNS_PER_PROFILE = 1000;
+/** CODE-17: the longest name of a profile, of its file filter, and of one folder entry. */
+export const MAX_NAME_LENGTH = 80;
+/** ... and of the short name the status bar shows (the longest built-in one has 11). */
+export const MAX_SHORT_NAME_LENGTH = 16;
+export const MAX_FOLDER_LENGTH = 260;
+/** How much of a wrong value a message repeats. */
+const ECHO_LENGTH = 80;
 
 /** What `validateProfile` cannot see in the profile itself (see the header). */
 export interface ProfileValidationOptions {
@@ -57,6 +72,14 @@ export interface ProfileValidationOptions {
   codeDbs?: readonly string[];
   /** The modal group names of the profile's own database; `machineParams.modalGroups` names these. */
   modalGroups?: readonly string[];
+  /**
+   * CODE-1: whether the repeated-group shape check (`(\w+\s?)*`, which can take exponentially
+   * long on a line that almost matches) applies to this pattern text. The caller answers false
+   * for the patterns of the built-in profiles, which are ours and bounded by delimiters (13 of
+   * 199 would be flagged by the heuristic), and true for anything a user's file wrote or
+   * changed. Unset: no shape check.
+   */
+  checkShape?: (source: string) => boolean;
 }
 
 /** An extension as it may be written in a profile: lower case, no dot, no separator. */
@@ -237,6 +260,12 @@ function variableWidth(body: string): string | null {
 /** The problems found so far, each one prefixed with the JSON path of its field. */
 class Problems {
   readonly list: string[] = [];
+  /** The patterns seen so far, for the cap per profile. */
+  patterns = 0;
+  /** The cap was reported once; the patterns after it are not looked at. */
+  overCap = false;
+
+  constructor(readonly options: ProfileValidationOptions = {}) {}
 
   add(path: string, message: string): void {
     this.list.push(`${path}: ${message}`);
@@ -259,13 +288,22 @@ function optObj(value: unknown, path: string, p: Problems): Record<string, unkno
   return value === undefined ? null : obj(value, path, p);
 }
 
-function str(value: unknown, path: string, p: Problems, allow?: RegExp): string | null {
+/** A value as a message repeats it: cut to a line, so one long wrong value cannot fill the report. */
+function clip(value: string): string {
+  return value.length > ECHO_LENGTH ? `${value.slice(0, ECHO_LENGTH)}…` : value;
+}
+
+function str(value: unknown, path: string, p: Problems, allow?: RegExp, max?: number): string | null {
   if (typeof value !== 'string' || value === '') {
     p.add(path, value === undefined ? 'is required' : 'has to be a non-empty string');
     return null;
   }
+  if (max !== undefined && value.length > max) {
+    p.add(path, `is longer than ${max} characters`);
+    return null;
+  }
   if (allow && !allow.test(value)) {
-    p.add(path, `"${value}" does not match ${String(allow)}`);
+    p.add(path, `"${clip(value)}" does not match ${String(allow)}`);
     return null;
   }
   return value;
@@ -320,20 +358,51 @@ function arr(value: unknown, path: string, p: Problems, min = 0): unknown[] | nu
   return value;
 }
 
-function strArr(value: unknown, path: string, p: Problems, o: { min?: number; allow?: RegExp } = {}): void {
+function strArr(value: unknown, path: string, p: Problems, o: { min?: number; allow?: RegExp; max?: number; cap?: number } = {}): void {
   const list = arr(value, path, p, o.min ?? 0);
   if (!list) return;
-  list.forEach((entry, i) => str(entry, `${path}[${i}]`, p, o.allow));
+  if (o.cap !== undefined && list.length > o.cap) {
+    p.add(path, `lists more than ${o.cap} entries`);
+    return;
+  }
+  list.forEach((entry, i) => str(entry, `${path}[${i}]`, p, o.allow, o.max));
 }
 
-function optStrArr(value: unknown, path: string, p: Problems, o: { min?: number; allow?: RegExp } = {}): void {
+function optStrArr(value: unknown, path: string, p: Problems, o: { min?: number; allow?: RegExp; max?: number; cap?: number } = {}): void {
   if (value !== undefined) strArr(value, path, p, o);
 }
 
-/** A required pattern: a string that compiles and stays inside the AD-11 subset. */
+/** A list of patterns or of rules that hold one: an array of at most [`MAX_PATTERN_LIST`] entries. */
+function patternArr(value: unknown, path: string, p: Problems, min = 0): unknown[] | null {
+  const list = arr(value, path, p, min);
+  if (!list) return null;
+  if (list.length > MAX_PATTERN_LIST) {
+    p.add(path, `lists more than ${MAX_PATTERN_LIST} entries`);
+    return null;
+  }
+  return list;
+}
+
+/**
+ * A required pattern: a string of at most [`MAX_PATTERN_LENGTH`] characters that compiles,
+ * stays inside the AD-11 subset and, where the caller asks for it, has no repeated group that
+ * repeats or chooses inside (CODE-1). A profile holds at most [`MAX_PATTERNS_PER_PROFILE`].
+ */
 function pattern(value: unknown, path: string, p: Problems): void {
   const source = str(value, path, p);
   if (source === null) return;
+  p.patterns += 1;
+  if (p.patterns > MAX_PATTERNS_PER_PROFILE) {
+    if (!p.overCap) {
+      p.overCap = true;
+      p.add(path, `the profile has more than ${MAX_PATTERNS_PER_PROFILE} patterns; this one and the ones after it are not checked`);
+    }
+    return;
+  }
+  if (source.length > MAX_PATTERN_LENGTH) {
+    p.add(path, `is longer than ${MAX_PATTERN_LENGTH} characters`);
+    return;
+  }
   try {
     new RegExp(source);
   } catch (error) {
@@ -341,7 +410,16 @@ function pattern(value: unknown, path: string, p: Problems): void {
     return;
   }
   const problem = patternSubsetProblem(source);
-  if (problem !== null) p.add(path, problem);
+  if (problem !== null) {
+    p.add(path, problem);
+    return;
+  }
+  if (p.options.checkShape?.(source) === true && hasRepeatedGroupShape(source)) {
+    p.add(
+      path,
+      'can take very long on some lines; write it without a repeated part inside a repeated part, and without a choice (|) inside a repeated part',
+    );
+  }
 }
 
 function optPattern(value: unknown, path: string, p: Problems): void {
@@ -409,7 +487,7 @@ function optVariablePattern(value: unknown, path: string, caseSensitive: boolean
 }
 
 function patternList(value: unknown, path: string, p: Problems): void {
-  const list = arr(value, path, p);
+  const list = patternArr(value, path, p);
   if (!list) return;
   list.forEach((entry, i) => pattern(entry, `${path}[${i}]`, p));
 }
@@ -418,15 +496,29 @@ function patternList(value: unknown, path: string, p: Problems): void {
 // The sections
 // ---------------------------------------------------------------------------
 
+/**
+ * CODE-3: a profile cannot claim a `.json` or `.py` file. Those are the profile, code, settings
+ * and machines files and the scripts, which gEdit edits as plain text; a profile that took them
+ * would upper-case what is typed into them.
+ */
+function notNc(ext: unknown, path: string, p: Problems): void {
+  if (typeof ext === 'string' && NON_NC_EXTENSIONS.includes(ext.toLowerCase())) {
+    p.add(path, `"${ext}" files are the profile, settings and script files themselves, not NC programs, so a profile cannot take them`);
+  }
+}
+
 function checkFiles(value: unknown, p: Problems): void {
   const files = obj(value, 'files', p);
   if (!files) return;
-  strArr(files.extensions, 'files.extensions', p, { min: 1, allow: EXTENSION });
+  strArr(files.extensions, 'files.extensions', p, { min: 1, allow: EXTENSION, max: MAX_NAME_LENGTH });
+  if (Array.isArray(files.extensions)) {
+    files.extensions.forEach((ext, i) => notNc(ext, `files.extensions[${i}]`, p));
+  }
   const preferred = str(files.defaultExtension, 'files.defaultExtension', p, EXTENSION);
   if (preferred !== null && Array.isArray(files.extensions) && !files.extensions.includes(preferred)) {
     p.add('files.defaultExtension', `"${preferred}" is not in files.extensions`);
   }
-  str(files.filterName, 'files.filterName', p);
+  str(files.filterName, 'files.filterName', p, undefined, MAX_NAME_LENGTH);
   // P1 never rewrites a file it opened: both are `keep` until the P2 `onSave` block.
   enumOf(files.encoding, 'files.encoding', p, ['keep'] as const);
   enumOf(files.lineEnding, 'files.lineEnding', p, ['keep'] as const);
@@ -440,12 +532,13 @@ function checkDetect(value: unknown, p: Problems): void {
   const extensions = obj(detect.extensions, 'detect.extensions', p);
   if (extensions) {
     for (const [ext, weight] of Object.entries(extensions)) {
-      if (!EXTENSION.test(ext)) p.add(`detect.extensions.${ext}`, 'has to be a lower-case extension without a dot');
+      if (!EXTENSION.test(ext)) p.add(`detect.extensions.${clip(ext)}`, 'has to be a lower-case extension without a dot');
+      notNc(ext, `detect.extensions.${clip(ext)}`, p);
       num(weight, `detect.extensions.${ext}`, p, { min: 0 });
     }
   }
 
-  const content = arr(detect.content, 'detect.content', p);
+  const content = patternArr(detect.content, 'detect.content', p);
   if (content) {
     content.forEach((entry, i) => {
       const rule = obj(entry, `detect.content[${i}]`, p);
@@ -455,7 +548,7 @@ function checkDetect(value: unknown, p: Problems): void {
     });
   }
 
-  optStrArr(detect.folders, 'detect.folders', p);
+  optStrArr(detect.folders, 'detect.folders', p, { max: MAX_FOLDER_LENGTH, cap: MAX_PATTERN_LIST });
   optNum(detect.priority, 'detect.priority', p);
   if (detect.vetoes !== undefined) patternList(detect.vetoes, 'detect.vetoes', p);
 }
@@ -628,7 +721,7 @@ function checkTextFields(syntax: Record<string, unknown>, caseSensitive: boolean
   };
 
   if (syntax.freeText !== undefined) {
-    const list = arr(syntax.freeText, 'syntax.freeText', p, 1);
+    const list = patternArr(syntax.freeText, 'syntax.freeText', p, 1);
     list?.forEach((entry, i) => {
       const path = `syntax.freeText[${i}]`;
       const before = p.list.length;
@@ -795,7 +888,7 @@ function checkToolCall(value: unknown, p: Problems): void {
 }
 
 function checkOutline(value: unknown, p: Problems): void {
-  const outline = arr(value, 'outline', p);
+  const outline = patternArr(value, 'outline', p);
   if (!outline) return;
   outline.forEach((entry, i) => {
     const rule = obj(entry, `outline[${i}]`, p);
@@ -824,7 +917,7 @@ function checkNumbering(value: unknown, p: Problems): void {
   optBool(numbering.onlyNumbered, 'numbering.onlyNumbered', p);
 
   if (numbering.references !== undefined) {
-    const references = arr(numbering.references, 'numbering.references', p);
+    const references = patternArr(numbering.references, 'numbering.references', p);
     references?.forEach((entry, i) => {
       const rule = obj(entry, `numbering.references[${i}]`, p);
       if (!rule) return;
@@ -921,7 +1014,9 @@ function checkOverlay(value: unknown, path: string, p: Problems): void {
 
   const numbering = optObj(overlay.numbering, `${path}.numbering`, p);
   const references = numbering?.references;
-  if (Array.isArray(references)) {
+  if (Array.isArray(references) && references.length > MAX_PATTERN_LIST) {
+    p.add(`${path}.numbering.references`, `lists more than ${MAX_PATTERN_LIST} entries`);
+  } else if (Array.isArray(references)) {
     references.forEach((entry, i) => {
       if (isRecord(entry)) optPattern(entry.trigger, `${path}.numbering.references[${i}].trigger`, p);
     });
@@ -958,7 +1053,7 @@ function checkVariant(value: unknown, path: string, p: Problems, o: ProfileValid
     checkOverlay(choice.overlay, `${at}.overlay`, p);
 
     if (choice.detect !== undefined) {
-      const rules = arr(choice.detect, `${at}.detect`, p);
+      const rules = patternArr(choice.detect, `${at}.detect`, p);
       rules?.forEach((raw, j) => {
         const rule = obj(raw, `${at}.detect[${j}]`, p);
         if (!rule) return;
@@ -1129,7 +1224,7 @@ function checkCompare(value: unknown, p: Problems): void {
   for (const key of COMPARE_OPTION_KEYS) optBool(compare[key], `compare.${key}`, p);
   if (compare.keepComments !== undefined) patternList(compare.keepComments, 'compare.keepComments', p);
   if (compare.cycleNames !== undefined) {
-    const list = arr(compare.cycleNames, 'compare.cycleNames', p);
+    const list = patternArr(compare.cycleNames, 'compare.cycleNames', p);
     list?.forEach((entry, i) => {
       const before = p.list.length;
       pattern(entry, `compare.cycleNames[${i}]`, p);
@@ -1139,6 +1234,17 @@ function checkCompare(value: unknown, p: Problems): void {
       }
     });
   }
+}
+
+/**
+ * P13 (AD-30). `forceUppercase` and `preventLineJoin` are optional booleans; any other
+ * member (`tabWidth` on `fanuc-gcode`, a field of a later phase) is carried unread.
+ */
+function checkEditing(value: unknown, p: Problems): void {
+  const editing = optObj(value, 'editing', p);
+  if (!editing) return;
+  optBool(editing.forceUppercase, 'editing.forceUppercase', p);
+  optBool(editing.preventLineJoin, 'editing.preventLineJoin', p);
 }
 
 // ---------------------------------------------------------------------------
@@ -1154,16 +1260,21 @@ function checkCompare(value: unknown, p: Problems): void {
  * `o` carries what the profile cannot say about itself; see [`ProfileValidationOptions`].
  */
 export function validateProfile(raw: unknown, o: ProfileValidationOptions = {}): ProfileValidation {
-  const p = new Problems();
+  const p = new Problems(o);
   const root = obj(raw, '(profile)', p);
   if (!root) return { ok: false, errors: p.list };
 
   str(root.id, 'id', p, PROFILE_ID);
-  str(root.name, 'name', p);
-  str(root.shortName, 'shortName', p);
+  str(root.name, 'name', p, undefined, MAX_NAME_LENGTH);
+  str(root.shortName, 'shortName', p, undefined, MAX_SHORT_NAME_LENGTH);
   num(root.version, 'version', p, { int: true, min: 1 });
   enumOf(root.grammar, 'grammar', p, ['iso', 'klartext', 'okuma', 'sinumerik'] as const);
-  str(root.codes, 'codes', p, PROFILE_ID);
+  const own = str(root.codes, 'codes', p, PROFILE_ID);
+  // The database a profile names has to exist (CODE-13): an unknown name, `constructor` included,
+  // is refused here, whatever else the caller can tell about it. `codeDbs` is the list of ids.
+  if (own !== null && o.codeDbs !== undefined && !o.codeDbs.includes(own)) {
+    p.add('codes', `the code database "${own}" was not found`);
+  }
   optStr(root.extends, 'extends', p, PROFILE_ID);
   optEnum(root.machineType, 'machineType', p, ['mill', 'lathe'] as const);
 
@@ -1191,6 +1302,7 @@ export function validateProfile(raw: unknown, o: ProfileValidationOptions = {}):
 
   checkToolList(root.toolList, p);
   checkCompare(root.compare, p);
+  checkEditing(root.editing, p);
 
   return p.list.length === 0 ? { ok: true, profile: raw as Profile } : { ok: false, errors: p.list };
 }

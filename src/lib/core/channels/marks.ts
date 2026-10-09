@@ -10,7 +10,8 @@
 //             tokenizer allows them, leading zeros not counted, no decimal point, not an
 //             assignment (`M2=3` is a spindle's M3 on Sinumerik); id = the code read that
 //             way, so `M0901`, `M 901` and `M901` are the one wait `M901`; the primary form
-//   `prefix`  a literal prefix and digits (`M1` + two digits): id = the digits
+//   `prefix`  a literal prefix and digits (`M1` + two digits): id = the digits, shown
+//             with the prefix in front (`shownMark`: `M130`, M13 review NC-10)
 //   `regex`   a pattern with a `mark` capture (absent and not needed for `count`)
 //   and, when `stopsAndEndsWait` is set, the profile's own `stop`/`end` outline lines
 //
@@ -56,6 +57,25 @@ import {
 } from './types';
 
 export { maskForMarks };
+
+/**
+ * The prefix a mark of `rule` was written behind, or `''` (M13 review NC-10).
+ *
+ * A `prefix` rule keys its marks by the digits (`30` for `M130`), which is right for pairing
+ * and stays so; only the text a user reads puts the prefix back ([`shownMark`]).
+ */
+export function markPrefixOf(rule: SyncRule | undefined): string {
+  const match = rule?.match;
+  return match?.kind === 'prefix' && typeof match.prefix === 'string' ? match.prefix : '';
+}
+
+/**
+ * A mark id as a message or a program-map row shows it: `M130`, not `30`, which reads like a
+ * block number (M13 review NC-10). `''` stays `''` (an id-less mark; the caller names the rule).
+ */
+export function shownMark(mark: string, rule: SyncRule | undefined): string {
+  return mark === '' ? '' : markPrefixOf(rule) + mark;
+}
 
 /**
  * R5 `digits` / `bitmask`, and `split`: the channel tokens a capture names, before they

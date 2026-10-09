@@ -1,0 +1,100 @@
+{
+  "about": "X1: no machine (G-code system B detected). As fanuc-lathe-a.tools.json.",
+  "input": "fanuc-lathe-b.nc",
+  "profile": "fanuc-lathe",
+  "machine": null,
+  "variants": {
+    "gcodeSystem": {
+      "value": "B",
+      "source": "detected"
+    },
+    "incrementalAddresses": {
+      "value": "uw",
+      "source": "profile"
+    },
+    "toolWord": {
+      "value": "byLength",
+      "source": "profile"
+    }
+  },
+  "toolLines": [
+    6,
+    22
+  ],
+  "mapTools": [
+    {
+      "line": 6,
+      "text": "T1 — OD ROUGH"
+    },
+    {
+      "line": 22,
+      "text": "T2 — THREAD M30X2"
+    }
+  ],
+  "toolList": {
+    "title": "Tool list",
+    "columns": [
+      {
+        "key": "tool",
+        "label": "Tool"
+      },
+      {
+        "key": "offsets",
+        "label": "Offsets"
+      },
+      {
+        "key": "description",
+        "label": "Description"
+      },
+      {
+        "key": "line",
+        "label": "First call"
+      },
+      {
+        "key": "calls",
+        "label": "Calls"
+      },
+      {
+        "key": "feed",
+        "label": "Feed"
+      },
+      {
+        "key": "speed",
+        "label": "Speed"
+      }
+    ],
+    "rows": [
+      {
+        "tool": "T1",
+        "offsets": "01",
+        "description": "OD ROUGH",
+        "line": 6,
+        "calls": 1,
+        "feed": "0.12-0.28 /rev",
+        "speed": "180 m/min (G96)"
+      },
+      {
+        "tool": "T2",
+        "offsets": "02",
+        "description": "THREAD M30X2",
+        "line": 22,
+        "calls": 1,
+        "feed": "",
+        "speed": "900"
+      }
+    ],
+    "message": "2 tools",
+    "findings": [
+      {
+        "line": 7,
+        "severity": "info",
+        "message": "T1: the S of 1 block is a speed limit, not a spindle speed, so it is not in the range."
+      },
+      {
+        "line": 26,
+        "severity": "info",
+        "message": "T2: the F of 1 block is a thread pitch, not a feed rate, so it is not in the range."
+      }
+    ]
+  }
+}

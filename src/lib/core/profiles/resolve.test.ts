@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { BUILTIN_PROFILE_SOURCES } from '$lib/data/profiles';
-import { MAX_EXTENDS_DEPTH, mergeProfile, resolveProfiles } from './resolve';
+import { MAX_EXTENDS_DEPTH, MAX_NESTING, TooDeepError, mergeProfile, resolveProfiles } from './resolve';
 import type { ProfileSource } from './types';
 
 const builtin = (raw: unknown): ProfileSource => ({ raw, origin: 'builtin' });
@@ -164,5 +164,40 @@ describe('resolveProfiles', () => {
     const twice = resolveProfiles(once.resolved.map((entry) => builtin(entry.profile)));
     expect(twice.problems).toEqual([]);
     expect(twice.resolved.map((entry) => entry.profile)).toEqual(once.resolved.map((entry) => entry.profile));
+  });
+});
+
+// M13 review fix CODE-2: JSON that nests absurdly deep is reported, not a stack overflow.
+describe('the nesting cap', () => {
+  const deep = (levels: number): Record<string, unknown> => {
+    let value: Record<string, unknown> = { leaf: 1 };
+    for (let i = 0; i < levels; i++) value = { next: value };
+    return value;
+  };
+
+  it('throws a TooDeepError for data nested past the cap, and copies data at the cap', () => {
+    expect(() => mergeProfile({}, deep(MAX_NESTING + 10))).toThrow(TooDeepError);
+    expect(() => mergeProfile({}, deep(MAX_NESTING - 5))).not.toThrow();
+  });
+
+  it('caps arrays nested in arrays, and two objects merged level by level', () => {
+    let list: unknown[] = [1];
+    for (let i = 0; i < 100_000; i++) list = [list];
+    expect(() => mergeProfile({}, { list })).toThrow(TooDeepError);
+    // Both sides nest the same keys: the merge itself recurses, one level per key.
+    expect(() => mergeProfile(deep(100_000), deep(100_000))).toThrow(TooDeepError);
+  });
+
+  it('reports the one source that nests too deeply, with its file, and resolves the others', () => {
+    const tooDeep = { ...child('deep', 'base'), extra: deep(100_000) };
+    const { resolved, problems } = resolveProfiles([
+      builtin({ id: 'base', name: 'Base', shortName: 'B', grammar: 'iso' }),
+      user(tooDeep, 'deep.json'),
+      user(child('fine', 'base'), 'fine.json'),
+    ]);
+    expect(resolved.map((entry) => entry.profile.id).sort()).toEqual(['base', 'fine']);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatchObject({ origin: 'user', file: 'deep.json', profileId: 'deep' });
+    expect(problems[0].message).toContain('nested too deeply');
   });
 });

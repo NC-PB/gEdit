@@ -1,0 +1,86 @@
+# M13: your own dialects and codes, and the Phase 2 exit - user profiles and code files through the
+# Profiles page, typing in capitals and no join of two blocks, the machines file's import and export,
+# and one scenario per exit criterion of the plan (§2.2) over tests/fixtures/exit2/.
+# Run with: tests/runtime/suites/m0.txt tests/runtime/suites/m1.txt tests/runtime/suites/m2.txt tests/runtime/suites/m3.txt tests/runtime/suites/m4.txt tests/runtime/suites/m5.txt tests/runtime/suites/m6.txt tests/runtime/suites/m7.txt tests/runtime/suites/m8.txt tests/runtime/suites/m9.txt tests/runtime/suites/m10.txt tests/runtime/suites/m11.txt tests/runtime/suites/m12.txt tests/runtime/suites/rp.txt tests/runtime/suites/m13.txt
+#
+# Every expected answer of an exit scenario is a golden of tests/fixtures/exit2/ (its README is the
+# contract: which program, which golden, what is compared how), never read from what the app answers.
+# Two intentional changes of earlier scenarios, made in this milestone: m2-settings lists the Profiles
+# tab after Machines, and m6-machines-manage / m6-machines-broken list the Import and Export buttons of
+# the Machines page.
+
+# The six built-in profiles type capitals outside comments, strings and kept text, never join two blocks
+# with Backspace or Delete (an empty line stays deletable), the session toggle, and Convert Case to lower
+# case asking first.
+m13-typing
+
+# Settings > Profiles: the six built-ins, a code file and a profile made "from" one, edited and saved
+# (a save reloads), a program in the profile's folder with the code file's hover, Test on document, a
+# broken file as a row with its JSON path, Reload, Export, Import and Remove.
+m13-user-profile
+
+# Export the machines file, remove every machine, import it back; a second import renames; invalid
+# records are counted; a file that is not JSON or not a machines file is refused.
+m13-machines-io
+
+# ---- The Phase 2 exit criteria (plan §2.2), in the order of tests/fixtures/exit2/README.md. Every
+# scenario starts a fresh app, so X1 and X2 see no machine at all by construction; the order that
+# matters inside one app is kept inside the scenarios (X8 removes its machines, X9 its user files and
+# its machine and reloads, X11 (a) clears the default before (b), X12 has all its machines defined).
+
+# X1: the Fanuc lathe in G-code systems A (CRLF) and B with no machine: detection, the machine item,
+# F7 and the map, the tool list, hover, scale feed 90 %, scale speed 110 %, renumber, one undo each, the
+# saved bytes.
+exit2-x1
+
+# X2: Okuma and Sinumerik turning (also as .txt copies): detected by extension and content, no invalid or
+# unknown token, F7, the tool list, scale feed and speed, the Sinumerik modal state (DIAMON assumed, off
+# after DIAMOF), the saved bytes.
+exit2-x2
+
+# X5: the re-post pair as two files on disk: review mode shows exactly two changes, go to line lands on
+# the original lines, raw mode copies both ways with one undo each, export gives the golden diff.
+exit2-x5
+
+# X6: find-all T1, S>2000 and M8 over three open documents, replace M8 -> M88 (one undo; into a new tab
+# leaves the source), the saved bytes.
+exit2-x6
+
+# X8: program checks and extents on the four wrong programs (none / X8 Lathe IS-B / X8 Okuma 1um),
+# address arithmetic Z - 0.5, block skip insert and remove; the machines are removed at the end.
+exit2-x8
+
+# X9, the user-profile half: exit2-lathe (folder rule, step 5) and its code file (a builder M13) loaded,
+# exit2-broken reported with its path and skipped, a program in the folder opens with it and renumbers
+# in fives, a machine of fanuc-lathe applies; the files and the machine are removed and reloaded at the
+# end. The templates half of X9 is Phase 3.
+exit2-x9
+
+# X9, the owner's rule for a folder rule (M13 review NC-2): a user profile that extends a built-in is picked
+# only through rules it adds itself (here its folder); a built-in wins every tie, so the same programs
+# outside the folder keep the built-in profile.
+exit2-x9-ties
+
+# X11: machine configurations and how numbers are read - (a) the Machines page and machines.json, (b) the
+# status item and the tooltip, (c) address arithmetic, the check and scale feed under IS-B, calc and none,
+# (d) the user script that reports machine_params, (e) the explicit choice wins; -2 is the restart.
+exit2-x11-1
+exit2-x11-2
+
+# X12: channels and wait codes, last: (c) nothing changes with no channel machine chosen, (a) one file with
+# two channels (item, map, tool list, check, Alt+F7 / Mod+Alt+P, split), (a2) the partners from the
+# line, (b) one file per channel, (d) a broken channel block.
+exit2-x12
+
+# The Phase 2 exit without Python (GEDIT_PYTHON=/nonexistent): the TypeScript criteria in one run, every
+# script command showing the Phase 1 message, the saved documents byte for byte as their inputs.
+exit2-nopython
+
+# ---- Criteria with no scenario of their own here (they are proven where the plan says):
+#   X3 (no lost work)   m6-dock-quit-dirty, m6-dock-quit-clean-1/2 (suite m6); m7-backup, m7-readonly, m7-recovery-1/2 (suite m7)
+#   X4 (session)        m7-session-1, m7-session-2 (suite m7)
+#   X7 (inspector)      Phase 3, with the TypeScript modal interpreter
+#   X10 (no regression) this cumulative run: every scenario of m0..m13 PASS, 0 CSP violations, 0 unexpected
+#                       console errors, plus CI (macOS, Windows, Linux)
+#   X13 (real programs) tests/unit/ownerPublic.test.ts, tests/python/test_owner_public.py, m9-detect
+#                       (suite m9) and G11

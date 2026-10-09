@@ -45,6 +45,9 @@ const M7_SERVICES = ['fileMemory', 'session', 'recovery'] as const;
 /** What P12 adds (plan §7.17). The singleton is a stub on `m12/base`; the key is not. */
 const M12_SERVICES = ['channels'] as const;
 
+/** What P13 adds (plan §7.3, §7.12). The singleton is a stub on `m13/base`; the key is not. */
+const M13_SERVICES = ['userConfig'] as const;
+
 const SERVICES = [
   ...M1_SERVICES,
   ...M2_SERVICES,
@@ -54,10 +57,11 @@ const SERVICES = [
   ...M6_SERVICES,
   ...M7_SERVICES,
   ...M12_SERVICES,
+  ...M13_SERVICES,
 ];
 
 describe('app context', () => {
-  it('exposes every M1 to M7 and M12 service', () => {
+  it('exposes every M1 to M7, M12 and M13 service', () => {
     expect(Object.keys(ctx).sort()).toEqual([...SERVICES].sort());
   });
 

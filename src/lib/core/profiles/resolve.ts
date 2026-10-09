@@ -28,7 +28,8 @@
 //
 // Nothing here throws. A source that cannot be resolved is reported with its file and the
 // JSON path of the field at fault and is **left out** — the app has to start even when a
-// user profile names a parent that does not exist.
+// user profile names a parent that does not exist, or nests its JSON absurdly deep (the copy
+// is depth-capped, so that source is reported and the others resolve).
 
 import type { ProfileProblem, ProfileSource, ResolvedProfile } from './types';
 
@@ -60,14 +61,33 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  */
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
+/**
+ * How deep a profile's JSON may nest (M13 review fix CODE-2). A real profile is about ten levels
+ * deep; the user's file is checked on the way in (`app/userConfig.ts`), and this is the net
+ * under it for a caller that hands a registry something else: past it, the copy throws a
+ * [`TooDeepError`] instead of overflowing the stack, and the one source is reported.
+ */
+export const MAX_NESTING = 64;
+
+/** The data nests deeper than [`MAX_NESTING`]. */
+export class TooDeepError extends Error {
+  constructor() {
+    super(`nested too deeply (more than ${MAX_NESTING} levels)`);
+  }
+}
+
 /** A deep copy of JSON data, so a merged profile never shares a sub-object with its parent. */
-function clone<T>(value: T): T {
-  if (Array.isArray(value)) return value.map((entry) => clone(entry)) as unknown as T;
+function clone<T>(value: T, depth = 0): T {
+  if (Array.isArray(value)) {
+    if (depth >= MAX_NESTING) throw new TooDeepError();
+    return value.map((entry) => clone(entry, depth + 1)) as unknown as T;
+  }
   if (isPlainObject(value)) {
+    if (depth >= MAX_NESTING) throw new TooDeepError();
     const out: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value)) {
       if (FORBIDDEN_KEYS.has(key)) continue;
-      out[key] = clone(entry);
+      out[key] = clone(entry, depth + 1);
     }
     return out as T;
   }
@@ -81,16 +101,19 @@ function clone<T>(value: T): T {
 export function mergeProfile(
   parent: Readonly<Record<string, unknown>>,
   child: Readonly<Record<string, unknown>>,
+  depth = 0,
 ): Record<string, unknown> {
+  if (depth >= MAX_NESTING) throw new TooDeepError();
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(parent)) {
     if (key === '$schema' || FORBIDDEN_KEYS.has(key)) continue;
-    out[key] = clone(value);
+    out[key] = clone(value, depth + 1);
   }
   for (const [key, value] of Object.entries(child)) {
     if (key === '$schema' || FORBIDDEN_KEYS.has(key)) continue;
     const mine = out[key];
-    out[key] = isPlainObject(mine) && isPlainObject(value) ? mergeProfile(mine, value) : clone(value);
+    out[key] =
+      isPlainObject(mine) && isPlainObject(value) ? mergeProfile(mine, value, depth + 1) : clone(value, depth + 1);
   }
   return out;
 }
@@ -123,6 +146,7 @@ function problem(
     profileId,
     path,
     message,
+    kind: 'profiles',
     ...(index === undefined ? {} : { index }),
   };
 }
@@ -197,7 +221,13 @@ export function resolveProfiles(sources: readonly ProfileSource[]): {
     let chain: string[] = [id];
 
     if (parentId === null) {
-      merged = mergeProfile({}, raw);
+      try {
+        merged = mergeProfile({}, raw);
+      } catch (error) {
+        failed.add(id);
+        problems.push(problem(source, id, '', error instanceof Error ? error.message : String(error)));
+        return null;
+      }
     } else if (seen.includes(parentId)) {
       failed.add(id);
       problems.push(problem(source, id, 'extends', `"${parentId}" extends itself through "${id}"`));
@@ -237,7 +267,13 @@ export function resolveProfiles(sources: readonly ProfileSource[]): {
         );
         return null;
       }
-      merged = mergeProfile(parent.profile, raw);
+      try {
+        merged = mergeProfile(parent.profile, raw);
+      } catch (error) {
+        failed.add(id);
+        problems.push(problem(source, id, '', error instanceof Error ? error.message : String(error)));
+        return null;
+      }
       chain = [id, ...parent.chain];
     }
 

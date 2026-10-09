@@ -1241,6 +1241,21 @@ describe('the end of block `;` and a name that starts with digits', () => {
     expect(kindsOf('0 BEGIN PGM 2.5D_MILLING MM', bare)).toEqual(['blockNumber', 'keyword', 'unknown', 'keyword']);
   });
 
+  // M13 review NC-7: a name typed before its unit, and the program of a cycle 12 call, are text.
+  it('reads a program name with nothing behind it yet, and the program of CYCL DEF 12.1, as text', () => {
+    expect(textsOf('0 BEGIN PGM part1', klartext)).toEqual(['0', 'BEGIN PGM', 'part1']);
+    expect(kindsOf('9 END PGM part1', klartext)).toEqual(['blockNumber', 'keyword', 'text']);
+    expect(kindsOf('0 BEGIN PGM part1 MM', klartext)).toEqual(['blockNumber', 'keyword', 'text', 'keyword']);
+    expect(kindsOf('0 BEGIN PGM part1 m', klartext)).not.toContain('text');
+    expect(code(tokenizeLine('6 CYCL DEF 12.1 PGM part2', klartext).tokens).map((token) => `${token.kind}:${token.text}`)).toEqual([
+      'blockNumber:6',
+      'keyword:CYCL DEF',
+      'word:12.1',
+      'word:PGM',
+      'text:part2',
+    ]);
+  });
+
   it('leaves a number that is followed by anything but a letter a number', () => {
     expect(code(tokenizeLine('2 BLK FORM 0.1 Z X+0', klartext).tokens)[2]).toMatchObject({ kind: 'word', valueText: '0.1' });
     expect(code(tokenizeLine('5 FN 0: Q1 = +5', klartext).tokens).map((token) => token.text)).toEqual(['5', 'FN', '0', ':', 'Q1', '=', '+5']);

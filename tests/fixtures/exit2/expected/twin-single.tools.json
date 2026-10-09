@@ -1,0 +1,307 @@
+{
+  "about": "X12 (a): the bundled tool_list.py on twin-single.nc under \"Twin 31i\" (the context carries the channels): the whole report, with the Channel column. The no-Python run shows the \"Python not found\" message instead.",
+  "machine": "Twin 31i",
+  "channels": {
+    "layout": "single-file",
+    "self": null,
+    "list": [
+      {
+        "id": "1",
+        "name": "Channel 1",
+        "ranges": [
+          {
+            "startLine": 5,
+            "endLine": 20
+          },
+          {
+            "startLine": 34,
+            "endLine": 46
+          }
+        ]
+      },
+      {
+        "id": "2",
+        "name": "Channel 2",
+        "ranges": [
+          {
+            "startLine": 21,
+            "endLine": 33
+          },
+          {
+            "startLine": 47,
+            "endLine": 59
+          }
+        ]
+      }
+    ],
+    "marks": [
+      {
+        "id": "10",
+        "line": 10,
+        "channel": "1",
+        "partners": [
+          "1",
+          "2"
+        ],
+        "blocking": true
+      },
+      {
+        "id": "20",
+        "line": 14,
+        "channel": "1",
+        "partners": [
+          "1",
+          "2"
+        ],
+        "blocking": true
+      },
+      {
+        "id": "30",
+        "line": 16,
+        "channel": "1",
+        "partners": [
+          "1",
+          "2"
+        ],
+        "blocking": true
+      },
+      {
+        "id": "30",
+        "line": 18,
+        "channel": "1",
+        "partners": [
+          "1",
+          "2"
+        ],
+        "blocking": true
+      },
+      {
+        "id": "10",
+        "line": 25,
+        "channel": "2",
+        "partners": [
+          "1",
+          "2"
+        ],
+        "blocking": true
+      },
+      {
+        "id": "20",
+        "line": 29,
+        "channel": "2",
+        "partners": [
+          "1",
+          "2"
+        ],
+        "blocking": true
+      },
+      {
+        "id": "30",
+        "line": 31,
+        "channel": "2",
+        "partners": [
+          "1",
+          "2"
+        ],
+        "blocking": true
+      },
+      {
+        "id": "40",
+        "line": 37,
+        "channel": "1",
+        "partners": [
+          "1",
+          "2"
+        ],
+        "blocking": true
+      },
+      {
+        "id": "41",
+        "line": 39,
+        "channel": "1",
+        "partners": [
+          "1",
+          "2"
+        ],
+        "blocking": true
+      },
+      {
+        "id": "50",
+        "line": 41,
+        "channel": "1",
+        "partners": [
+          "1",
+          "2"
+        ],
+        "blocking": true
+      },
+      {
+        "id": "10",
+        "line": 43,
+        "channel": "1",
+        "partners": [
+          "1",
+          "2"
+        ],
+        "blocking": true
+      },
+      {
+        "id": "70",
+        "line": 44,
+        "channel": "1",
+        "partners": [
+          "1",
+          "2"
+        ],
+        "blocking": true
+      },
+      {
+        "id": "41",
+        "line": 50,
+        "channel": "2",
+        "partners": [
+          "1",
+          "2"
+        ],
+        "blocking": true
+      },
+      {
+        "id": "40",
+        "line": 52,
+        "channel": "2",
+        "partners": [
+          "1",
+          "2"
+        ],
+        "blocking": true
+      },
+      {
+        "id": "60",
+        "line": 54,
+        "channel": "2",
+        "partners": [
+          "1",
+          "2"
+        ],
+        "blocking": true
+      },
+      {
+        "id": "10",
+        "line": 56,
+        "channel": "2",
+        "partners": [
+          "1",
+          "2"
+        ],
+        "blocking": true
+      },
+      {
+        "id": "70",
+        "line": 57,
+        "channel": "2",
+        "partners": [
+          "1",
+          "2"
+        ],
+        "blocking": true
+      }
+    ],
+    "outside": [
+      {
+        "startLine": 1,
+        "endLine": 4
+      },
+      {
+        "startLine": 60,
+        "endLine": 66
+      }
+    ]
+  },
+  "toolList": {
+    "title": "Tool list",
+    "columns": [
+      {
+        "key": "channel",
+        "label": "Channel"
+      },
+      {
+        "key": "tool",
+        "label": "Tool"
+      },
+      {
+        "key": "offsets",
+        "label": "Offsets"
+      },
+      {
+        "key": "description",
+        "label": "Description"
+      },
+      {
+        "key": "line",
+        "label": "First call"
+      },
+      {
+        "key": "calls",
+        "label": "Calls"
+      },
+      {
+        "key": "feed",
+        "label": "Feed"
+      },
+      {
+        "key": "speed",
+        "label": "Speed"
+      }
+    ],
+    "rows": [
+      {
+        "channel": "Channel 1",
+        "tool": "T1",
+        "offsets": "01",
+        "description": "OD ROUGH",
+        "line": 7,
+        "calls": 1,
+        "feed": "0.25 /rev",
+        "speed": "200 m/min (G96)"
+      },
+      {
+        "channel": "Channel 1",
+        "tool": "T3",
+        "offsets": "03",
+        "description": "OD FINISH",
+        "line": 35,
+        "calls": 1,
+        "feed": "0.12 /rev",
+        "speed": "240 m/min (G96)"
+      },
+      {
+        "channel": "Channel 2",
+        "tool": "T2",
+        "offsets": "02",
+        "description": "CENTRE DRILL",
+        "line": 23,
+        "calls": 1,
+        "feed": "0.08 /rev",
+        "speed": "1500"
+      },
+      {
+        "channel": "Channel 2",
+        "tool": "T4",
+        "offsets": "04",
+        "description": "DRILL D10",
+        "line": 48,
+        "calls": 1,
+        "feed": "0.1 /rev",
+        "speed": "900"
+      }
+    ],
+    "message": "Channel 1: 2 tools; Channel 2: 2 tools",
+    "findings": [
+      {
+        "line": 8,
+        "severity": "info",
+        "message": "Channel 1: T1: the S of 1 block is a speed limit, not a spindle speed, so it is not in the range."
+      }
+    ]
+  }
+}

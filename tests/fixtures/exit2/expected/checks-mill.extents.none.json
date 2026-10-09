@@ -1,0 +1,236 @@
+{
+  "about": "X8: the bundled extents.py on checks-mill.nc with its form defaults, no machine chosen. The whole report; every row with a line jumps to it.",
+  "input": "checks-mill.nc",
+  "profile": "fanuc-gcode",
+  "machine": null,
+  "report": {
+    "title": "Extents",
+    "columns": [
+      {
+        "key": "where",
+        "label": "Where"
+      },
+      {
+        "key": "axis",
+        "label": "Axis"
+      },
+      {
+        "key": "min",
+        "label": "Min"
+      },
+      {
+        "key": "minLine",
+        "label": "At line"
+      },
+      {
+        "key": "max",
+        "label": "Max"
+      },
+      {
+        "key": "maxLine",
+        "label": "At line"
+      },
+      {
+        "key": "unresolved",
+        "label": "Not resolved"
+      }
+    ],
+    "rows": [
+      {
+        "where": "Program",
+        "scope": "program",
+        "axis": "X",
+        "axisId": "X",
+        "min": "-30",
+        "minLine": 8,
+        "max": "123456.789",
+        "maxLine": 48,
+        "unresolved": 1,
+        "line": 48
+      },
+      {
+        "where": "Program",
+        "scope": "program",
+        "axis": "Y",
+        "axisId": "Y",
+        "min": "0",
+        "minLine": 8,
+        "max": "40",
+        "maxLine": 16,
+        "unresolved": 0,
+        "line": 16
+      },
+      {
+        "where": "Program",
+        "scope": "program",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "-15",
+        "minLine": 22,
+        "max": "50",
+        "maxLine": 50,
+        "unresolved": 0,
+        "line": 50
+      },
+      {
+        "where": "G54 (line 8)",
+        "scope": "offset",
+        "axis": "X",
+        "axisId": "X",
+        "min": "-30",
+        "minLine": 8,
+        "max": "123456.789",
+        "maxLine": 48,
+        "unresolved": 1,
+        "line": 48
+      },
+      {
+        "where": "G54 (line 8)",
+        "scope": "offset",
+        "axis": "Y",
+        "axisId": "Y",
+        "min": "0",
+        "minLine": 8,
+        "max": "40",
+        "maxLine": 16,
+        "unresolved": 0,
+        "line": 16
+      },
+      {
+        "where": "G54 (line 8)",
+        "scope": "offset",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "-15",
+        "minLine": 22,
+        "max": "50",
+        "maxLine": 50,
+        "unresolved": 0,
+        "line": 50
+      },
+      {
+        "where": "G54, T1 (line 6)",
+        "scope": "tool",
+        "axis": "X",
+        "axisId": "X",
+        "min": "-30",
+        "minLine": 8,
+        "max": "130",
+        "maxLine": 13,
+        "unresolved": 1,
+        "line": 13
+      },
+      {
+        "where": "G54, T1 (line 6)",
+        "scope": "tool",
+        "axis": "Y",
+        "axisId": "Y",
+        "min": "0",
+        "minLine": 8,
+        "max": "40",
+        "maxLine": 16,
+        "unresolved": 0,
+        "line": 16
+      },
+      {
+        "where": "G54, T1 (line 6)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "-1",
+        "minLine": 10,
+        "max": "25",
+        "maxLine": 9,
+        "unresolved": 0,
+        "line": 9
+      },
+      {
+        "where": "G54, T2 (line 18)",
+        "scope": "tool",
+        "axis": "X",
+        "axisId": "X",
+        "min": "20",
+        "minLine": 19,
+        "max": "80",
+        "maxLine": 23,
+        "unresolved": 0,
+        "line": 23
+      },
+      {
+        "where": "G54, T2 (line 18)",
+        "scope": "tool",
+        "axis": "Y",
+        "axisId": "Y",
+        "min": "20",
+        "minLine": 19,
+        "max": "20",
+        "maxLine": 19,
+        "unresolved": 0,
+        "line": 19
+      },
+      {
+        "where": "G54, T2 (line 18)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "-15",
+        "minLine": 22,
+        "max": "25",
+        "maxLine": 20,
+        "unresolved": 0,
+        "line": 20
+      },
+      {
+        "where": "G54, T3 (line 25)",
+        "scope": "tool",
+        "axis": "X",
+        "axisId": "X",
+        "min": "0",
+        "minLine": 52,
+        "max": "123456.789",
+        "maxLine": 48,
+        "unresolved": 0,
+        "line": 48
+      },
+      {
+        "where": "G54, T3 (line 25)",
+        "scope": "tool",
+        "axis": "Y",
+        "axisId": "Y",
+        "min": "0",
+        "minLine": 52,
+        "max": "20",
+        "maxLine": 28,
+        "unresolved": 0,
+        "line": 28
+      },
+      {
+        "where": "G54, T3 (line 25)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "-12",
+        "minLine": 33,
+        "max": "50",
+        "maxLine": 50,
+        "unresolved": 0,
+        "line": 50
+      }
+    ],
+    "message": "No machine: readings assumed from the profile defaults, and a word whose reading depends on the machine is not resolved. 1 position not resolved; the findings say why.",
+    "findings": [
+      {
+        "line": 12,
+        "severity": "warning",
+        "message": "1 word, first X50 (line 12): the value depends on how the machine reads a number (is-b: 0.05 mm; is-c: 0.005 mm; calculator: 50 mm). Not resolved; choose a machine for this document to read them.",
+        "reason": "machine-dependent"
+      },
+      {
+        "line": 38,
+        "severity": "info",
+        "message": "G65, 1 block: its axis words are values, not positions; left out of the ranges.",
+        "reason": "data"
+      }
+    ]
+  }
+}

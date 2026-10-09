@@ -1,0 +1,9 @@
+{
+  "id": "exit2-broken",
+  "extends": "fanuc-lathe",
+  "name": "Exit2 broken (user profile)",
+  "shortName": "Exit2 X",
+  "numbering": {
+    "step": "five"
+  }
+}

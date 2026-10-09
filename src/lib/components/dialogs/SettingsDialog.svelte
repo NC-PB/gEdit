@@ -71,12 +71,18 @@
   // export to `string`, and `machines.manage` passes it as a `DialogTab`).
   export const MACHINES_TAB: 'machines' = 'machines';
 
-  /** A tab of the dialog: a settings category, or the Machines page. */
-  export type DialogTab = SettingCategory | typeof MACHINES_TAB;
+  /**
+   * The Profiles page (M13, AD-29): your own profiles and code files are files in two
+   * folders, not settings keys, so it is a tab of its own like Machines.
+   */
+  export const PROFILES_TAB: 'profiles' = 'profiles';
 
-  /** The tabs, in order: the schema pages, then Machines. */
+  /** A tab of the dialog: a settings category, or the Machines or Profiles page. */
+  export type DialogTab = SettingCategory | typeof MACHINES_TAB | typeof PROFILES_TAB;
+
+  /** The tabs, in order: the schema pages, then Machines, then Profiles. */
   export function tabsOf(pages: readonly SettingsPage[]): DialogTab[] {
-    return [...pages.map((page) => page.category), MACHINES_TAB];
+    return [...pages.map((page) => page.category), MACHINES_TAB, PROFILES_TAB];
   }
 
   /** The pages that have something to show, in `CATEGORY_ORDER`. */
@@ -187,6 +193,7 @@
   import { get } from 'svelte/store';
   import Modal from '$lib/components/common/Modal.svelte';
   import MachinesPage from '$lib/components/dialogs/MachinesPage.svelte';
+  import ProfilesPage from '$lib/components/dialogs/ProfilesPage.svelte';
   import FormRenderer from '$lib/components/forms/FormRenderer.svelte';
   import { dialogs } from '$lib/app/dialogs';
   import { files } from '$lib/app/fileOps';
@@ -232,6 +239,8 @@
         return t('settings.categories.files');
       case MACHINES_TAB:
         return t('settings.categories.machines');
+      case PROFILES_TAB:
+        return t('settings.categories.profiles');
       default:
         return t('settings.categories.scripts');
     }
@@ -447,7 +456,7 @@
       type="button"
       class="footer-action"
       data-testid="settings-reset"
-      disabled={readOnly || busy || active === MACHINES_TAB}
+      disabled={readOnly || busy || active === MACHINES_TAB || active === PROFILES_TAB}
       onclick={() => void resetCategory()}
     >
       {t('settings.reset')}
@@ -519,6 +528,8 @@
       >
         {#if active === MACHINES_TAB}
           <MachinesPage />
+        {:else if active === PROFILES_TAB}
+          <ProfilesPage />
         {:else}
           <FormRenderer
             fields={activeSpecs}

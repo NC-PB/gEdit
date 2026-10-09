@@ -216,6 +216,10 @@
       },
       "priority": -1
     },
+    "editing": {
+      "forceUppercase": true,
+      "preventLineJoin": true
+    },
     "files": {
       "defaultExtension": "mpf",
       "encoding": "keep",

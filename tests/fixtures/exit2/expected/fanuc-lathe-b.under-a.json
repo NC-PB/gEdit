@@ -1,0 +1,156 @@
+{
+  "about": "X11 (e): fanuc-lathe-b.nc (G-code system B, detected) with the machine \"X11 Lathe A\" (system A) chosen. The machine wins: tool list, scale feed and hover read the program as system A, and one status warning names the mismatch; nothing switches by itself.",
+  "input": "fanuc-lathe-b.nc",
+  "machine": {
+    "name": "X11 Lathe A",
+    "profile": "fanuc-lathe",
+    "notes": "",
+    "params": {
+      "numberInput": {
+        "mode": "calculator",
+        "incrementMm": "0.001"
+      },
+      "units": "mm",
+      "diameter": "on",
+      "variants": {
+        "gcodeSystem": "A",
+        "incrementalAddresses": "uw",
+        "toolWord": "byLength"
+      }
+    }
+  },
+  "variants": {
+    "gcodeSystem": {
+      "value": "A",
+      "source": "machine"
+    },
+    "incrementalAddresses": {
+      "value": "uw",
+      "source": "machine"
+    },
+    "toolWord": {
+      "value": "byLength",
+      "source": "machine"
+    }
+  },
+  "detected": {
+    "value": "B",
+    "margin": 12
+  },
+  "statusWarning": "This program looks like G-code system \"B\"; machine \"X11 Lathe A\" is set to \"A\". Nothing was changed.",
+  "toolLines": [
+    6,
+    22
+  ],
+  "toolList": {
+    "title": "Tool list",
+    "columns": [
+      {
+        "key": "tool",
+        "label": "Tool"
+      },
+      {
+        "key": "offsets",
+        "label": "Offsets"
+      },
+      {
+        "key": "description",
+        "label": "Description"
+      },
+      {
+        "key": "line",
+        "label": "First call"
+      },
+      {
+        "key": "calls",
+        "label": "Calls"
+      },
+      {
+        "key": "feed",
+        "label": "Feed"
+      },
+      {
+        "key": "speed",
+        "label": "Speed"
+      }
+    ],
+    "rows": [
+      {
+        "tool": "T1",
+        "offsets": "01",
+        "description": "OD ROUGH",
+        "line": 6,
+        "calls": 1,
+        "feed": "0.12-0.28 /rev",
+        "speed": "180 m/min (G96)"
+      },
+      {
+        "tool": "T2",
+        "offsets": "02",
+        "description": "THREAD M30X2",
+        "line": 22,
+        "calls": 1,
+        "feed": "",
+        "speed": "900"
+      }
+    ],
+    "message": "2 tools",
+    "findings": [
+      {
+        "line": 7,
+        "severity": "info",
+        "message": "T1: the S of 1 block is a speed limit, not a spindle speed, so it is not in the range."
+      },
+      {
+        "line": 26,
+        "severity": "info",
+        "message": "T2: the F of 1 block may be a thread lead rather than a feed rate, because its code is a threading cycle on another kind of machine or in another G-code system, so it is not in the range."
+      }
+    ]
+  },
+  "scaleFeed": {
+    "params": {
+      "percent": 90
+    },
+    "message": "Scaled 2 of 3 feed rates to 90 %; 1 left because the code means a threading cycle somewhere else. Machine 'X11 Lathe A'.",
+    "findings": [
+      {
+        "line": 26,
+        "severity": "warning",
+        "message": "F2.0 is not scaled: G78 is a threading cycle on another kind of machine or in another G-code system, where this F is the thread lead and not a feed rate. Check the block and scale it by hand if it really is a feed."
+      }
+    ],
+    "changedLines": [
+      {
+        "line": 12,
+        "before": "G71 P100 Q150 U0.4 W0.1 F0.28",
+        "after": "G71 P100 Q150 U0.4 W0.1 F0.25"
+      },
+      {
+        "line": 14,
+        "before": "N110 G01 Z0. F0.12",
+        "after": "N110 G01 Z0. F0.11"
+      }
+    ]
+  },
+  "hovers": [
+    {
+      "line": 7,
+      "word": "G92",
+      "lineText": "G92 S2200",
+      "markdown": "**G92** — Threading pass as a cycle\n\nCuts one threading pass, straight or tapered, and returns to the start point, so a thread is written as a list of X values\\. F is the thread lead per revolution, not a feed rate\\. On a mill and in G\\-code system B the same number sets the coordinate system and clamps the spindle speed instead\\. A threading pass carries no S word, so gEdit reads the S of a G92 block as that speed clamp rather than as a speed to scale — which is what protects a system\\-B program opened with a system\\-A machine\\.\n\nThe feed carries the thread pitch here, so changing it changes the thread\\.\n\n_Motion · modal_\n\nRequired: F"
+    },
+    {
+      "line": 26,
+      "word": "G78",
+      "lineText": "G78 X29.4 Z-24. F2.0",
+      "markdown": "**G78**\n\nThe code database does not describe this word yet\\.\n\n_G — Preparatory function_"
+    },
+    {
+      "line": 4,
+      "word": "G95",
+      "lineText": "G21 G40 G90 G95",
+      "markdown": "**G95**\n\nThe code database does not describe this word yet\\.\n\n_G — Preparatory function_"
+    }
+  ]
+}

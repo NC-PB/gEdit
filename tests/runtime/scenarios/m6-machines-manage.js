@@ -128,7 +128,8 @@ scenario('m6-machines-manage-1', { timeout: 420, vars: { HOME: HOME_1 } }, async
     rows: machineRows(h).length,
     text: h.q('settings-machines')?.textContent?.trim().slice(0, 120),
   })
-  h.check('with nothing to act on, only Add and Open machines file are offered', ['add', 'open-file'].every((a) => !!machineAction(h, a)) && !machineAction(h, 'replace-file'), {
+  // M13 (WP13.3, an intentional change): Import and Export (the machines file, §4) sit beside Add.
+  h.check('with nothing to act on, only Add, Import, Export and Open machines file are offered', JSON.stringify(h.qa('machine-action').map((e) => e.dataset.action)) === JSON.stringify(['add', 'import', 'export', 'open-file']) && !machineAction(h, 'replace-file'), {
     actions: h.qa('machine-action').map((e) => e.dataset.action),
   })
 

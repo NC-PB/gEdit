@@ -122,7 +122,9 @@ Each row names the owning work package and the feature.
 | `search.ts` | WP11.1 | Home tab "Search": `search.findAll` (Mod+Shift+F), `search.replace`, `search.wholeAddressInFind` |
 | `segments.ts` | WP10.1 | `nav.selectToolSegment` (Mod+F7): select from one tool change to the next |
 | `session.ts` | WP7.5 | session restore at start, and the per-file memory that follows the tabs |
-| `settings.ts` | WP2.7 | the settings dialog, `settings.open` (Mod+,), reload on save |
+| `settings.ts` | WP2.7 | the settings dialog, `settings.open` (Mod+,), `profile.manage` (Settings on the Profiles page, no key; M13 integration), reload on save |
 | `tabs.ts` | WP1.2 | next/previous/switch tab |
 | `theme.ts` | WP2.6 | `view.setTheme`, the settings → editor-option bridge |
+| `typing.ts` | WP13.4 | upper-case typing and no join of two blocks (AD-30), `edit.toggleForceUppercase` (M13; P13 pinned it) |
+| `userConfig.ts` | WP13.3 | the user's own profiles and code files: `profile.*`, `machines.import` / `machines.export`, the reload after a save in either folder (M13; P13 pinned them) |
 | `view.ts` | WP1.5 | panel toggles |

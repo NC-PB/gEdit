@@ -21,6 +21,19 @@
 //     alias the parent gave to another entry, and the clash has to be found on the result,
 //     not on either input.
 //
+// **The user's files are the exception (owner decision of 2026-10-09, M13 review NC-1).** A
+// user's code file is a delta on a reviewed entry, not a reviewed entry: a shop that writes
+// its own hover text for `G76` must not lose `pitchFeed` with it, or scale feed would scale
+// a thread lead. For a file the caller marks with `memberMerge` (every user layer; never a
+// built-in, so `fanuc-lathe-b`'s `G99` still does not inherit `fanuc-lathe`'s), an entry
+// whose code the resolved parent already has is laid over the parent's entry **member by
+// member**: objects by key (`sets`), lists and values whole (`params`, `aliases`,
+// `conflicts`, …), the AD-16 rule of the profiles. Members the entry does not mention are
+// kept, `label` included. `"replace": true` on the entry keeps the whole replacement.
+// `replace` itself never reaches the result. Every member whose meaning the result changes
+// against the parent's entry (`label` and `description` are text, not meaning) is handed to
+// `onMerge`, so the caller can tell the user.
+//
 // Two functions, because the resolved JSON is needed on both sides of the app:
 // [`resolveCodeDbFiles`] answers with the merged **file** objects (what
 // `tests/fixtures/resolved/codes/**` holds and what the Python side reads, so no second
@@ -28,10 +41,12 @@
 // `CodeDb` the app uses.
 //
 // Nothing throws. A file that cannot be resolved is reported and left out, so one broken
-// user database cannot take the editor's assistant with it.
+// user database cannot take the editor's assistant with it. That includes a file nested
+// deeper than [`MAX_CODE_DB_DEPTH`] (M13 review CODE-2): the copy below is recursive, and
+// a hand-made file thousands of levels deep would otherwise overflow the stack.
 
 import { MAX_EXTENDS_DEPTH } from '$lib/core/profiles/resolve';
-import { loadCodeDb, type CodeDbProblem } from './load';
+import { CodeDbError, loadCodeDb, type CodeDbProblem } from './load';
 import { normalizeCode } from './lookup';
 import type { CodeDb } from './types';
 
@@ -49,13 +64,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  */
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
-function clone<T>(value: T): T {
-  if (Array.isArray(value)) return value.map((entry) => clone(entry)) as unknown as T;
+/**
+ * How deep a database file may nest (M13 review CODE-2). The deepest built-in member is a
+ * handful of levels (`codes[].params[].…`); the Rust side refuses more than 128 when it
+ * creates or imports a file, so only a file copied in by hand gets near this.
+ */
+export const MAX_CODE_DB_DEPTH = 64;
+
+function clone<T>(value: T, depth = 0): T {
+  if (depth > MAX_CODE_DB_DEPTH) {
+    throw new CodeDbError('', `the file is nested more than ${MAX_CODE_DB_DEPTH} levels deep`);
+  }
+  if (Array.isArray(value)) return value.map((entry) => clone(entry, depth + 1)) as unknown as T;
   if (isRecord(value)) {
     const out: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value)) {
       if (FORBIDDEN_KEYS.has(key)) continue;
-      out[key] = clone(entry);
+      out[key] = clone(entry, depth + 1);
     }
     return out as T;
   }
@@ -74,16 +99,122 @@ function idOf(entry: unknown): string | null {
   return typeof id === 'string' && id.trim() !== '' ? id : null;
 }
 
+/** What `onMerge` hears about one member of a user entry laid over its parent's entry. */
+export interface CodeDbMergeNotice {
+  /** The child database (the user's layer). */
+  dialect: string;
+  /** The database the entry was laid over. */
+  parent: string;
+  /** The entry's index in the child's `codes`. */
+  index: number;
+  /** The normalized code. */
+  code: string;
+  /** The member, `sets` by key (`'pitchFeed'`, `'sets.cycle'`). */
+  member: string;
+  /** The parent's value; `undefined` when it has none. */
+  before: unknown;
+  /** The value in the result; `undefined` when the result has none. */
+  after: unknown;
+  /** The entry said `"replace": true`. */
+  replaced: boolean;
+}
+
+export interface ResolveCodeDbOptions {
+  /** Lay this child's entries over its parent's member by member (the user's files; see the header). */
+  memberMerge?: (dialect: string) => boolean;
+  /** Every meaning a member-merged entry changes against its parent's entry. */
+  onMerge?: (notice: CodeDbMergeNotice) => void;
+  /**
+   * A problem with one entry of a member-merged file, with the entry's index in the child's
+   * `codes` (its `path` says `codes[index]` too). Defaults to `onProblem`.
+   */
+  onEntryProblem?: (dialect: string, p: CodeDbProblem, index: number) => void;
+}
+
+/** Members that are text for a reader, not meaning for the scripts: never reported. */
+const TEXT_MEMBERS = new Set(['code', 'label', 'description', 'replace']);
+
+/** `false`, an empty list and an absent member read the same in `loadCodeDb`. */
+function meaningOf(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === false) return undefined;
+  if (Array.isArray(value) && value.length === 0) return undefined;
+  return stableJson(value);
+}
+
+/** JSON with the keys of every object sorted, so two spellings of one value compare equal. */
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (isRecord(value)) {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'undefined';
+}
+
+/** Objects by key, everything else whole: `over` laid on `base` (AD-16). */
+function mergeMembers(base: Record<string, unknown>, over: Record<string, unknown>, depth = 0): Record<string, unknown> {
+  const out = clone(base, depth);
+  for (const [key, value] of Object.entries(over)) {
+    if (FORBIDDEN_KEYS.has(key)) continue;
+    const below = out[key];
+    out[key] = isRecord(below) && isRecord(value) ? mergeMembers(below, value, depth + 1) : clone(value, depth + 1);
+  }
+  return out;
+}
+
+/** The members of `before` and `after` whose meaning differs, `sets` by key. */
+function changedMembers(before: Record<string, unknown>, after: Record<string, unknown>): { member: string; before: unknown; after: unknown }[] {
+  const out: { member: string; before: unknown; after: unknown }[] = [];
+  const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])];
+  for (const key of keys) {
+    if (TEXT_MEMBERS.has(key) || FORBIDDEN_KEYS.has(key)) continue;
+    const was = before[key];
+    const is = after[key];
+    if (key === 'sets' && (isRecord(was) || isRecord(is))) {
+      const a = isRecord(was) ? was : {};
+      const b = isRecord(is) ? is : {};
+      for (const sub of [...new Set([...Object.keys(a), ...Object.keys(b)])]) {
+        if (meaningOf(a[sub]) !== meaningOf(b[sub])) out.push({ member: `sets.${sub}`, before: a[sub], after: b[sub] });
+      }
+      continue;
+    }
+    if (meaningOf(was) !== meaningOf(is)) out.push({ member: key, before: was, after: is });
+  }
+  return out;
+}
+
+/** An entry without its `replace` member. */
+function withoutReplace(entry: unknown): unknown {
+  if (!isRecord(entry) || !('replace' in entry)) return entry;
+  const { replace: _replace, ...rest } = entry;
+  return rest;
+}
+
+/** How the code list of one child is merged (see the header). */
+interface ListMerge {
+  /** Member by member, with these reports; absent: whole entries (AD-17). */
+  members?: {
+    dialect: string;
+    parent: string;
+    report: (p: CodeDbProblem, index: number) => void;
+    onMerge?: (notice: CodeDbMergeNotice) => void;
+  };
+}
+
 /**
  * The parent's list with the child's entries merged in: a child entry replaces the
- * parent's entry with the same key, a new one is appended, and `removed` keys are dropped.
- * Parent order is kept, so a diff of the resolved file stays readable.
+ * parent's entry with the same key (or, for a user file, is laid over it member by
+ * member), a new one is appended, and `removed` keys are dropped. Parent order is kept, so
+ * a diff of the resolved file stays readable.
  */
 function mergeList(
   parent: unknown[],
   child: unknown[],
   keyOf: (entry: unknown) => string | null,
   removed: Set<string>,
+  how: ListMerge = {},
 ): unknown[] {
   const byKey = new Map<string, number>();
   const out: unknown[] = [];
@@ -93,16 +224,47 @@ function mergeList(
     if (key !== null) byKey.set(key, out.length);
     out.push(clone(entry));
   }
-  for (const entry of child) {
-    const key = keyOf(entry);
+  child.forEach((raw, index) => {
+    const key = keyOf(raw);
     const at = key === null ? undefined : byKey.get(key);
+    const m = how.members;
+    let replace = false;
+    if (m && isRecord(raw) && raw.replace !== undefined) {
+      if (typeof raw.replace === 'boolean') replace = raw.replace;
+      else m.report({ path: `codes[${index}].replace`, message: 'replace must be true or false; the entry is merged member by member' }, index);
+    }
+    const entry = withoutReplace(raw);
     if (at === undefined) {
+      if (m && isRecord(entry) && entry.label === undefined) {
+        // A delta needs an entry to lay itself over; a new code needs its own label.
+        m.report(
+          {
+            path: `codes[${index}].label`,
+            message: `entry ${String(entry.code)} has no label, and "${m.parent}" has no ${key ?? 'such code'} to take one from`,
+          },
+          index,
+        );
+        return;
+      }
       if (key !== null) byKey.set(key, out.length);
       out.push(clone(entry));
-    } else {
-      out[at] = clone(entry);
+      return;
     }
-  }
+    if (!m || !isRecord(entry) || !isRecord(out[at])) {
+      out[at] = clone(entry);
+      return;
+    }
+    if (replace && entry.label === undefined) {
+      m.report({ path: `codes[${index}].label`, message: `entry ${String(entry.code)} replaces the entry whole and needs its own label` }, index);
+      return;
+    }
+    const before = out[at] as Record<string, unknown>;
+    const after = replace ? clone(entry) : mergeMembers(before, entry);
+    for (const change of changedMembers(before, after)) {
+      m.onMerge?.({ dialect: m.dialect, parent: m.parent, index, code: key as string, replaced: replace, ...change });
+    }
+    out[at] = after;
+  });
   return out;
 }
 
@@ -110,6 +272,7 @@ function mergeList(
 function mergeFile(
   parent: Record<string, unknown>,
   child: Record<string, unknown>,
+  how: ListMerge = {},
 ): Record<string, unknown> {
   const removed = new Set<string>();
   const remove = child.remove;
@@ -127,7 +290,7 @@ function mergeFile(
 
   const parentCodes = Array.isArray(parent.codes) ? parent.codes : [];
   const childCodes = Array.isArray(child.codes) ? child.codes : [];
-  out.codes = mergeList(parentCodes, childCodes, codeOf, removed);
+  out.codes = mergeList(parentCodes, childCodes, codeOf, removed, how);
 
   const parentTemplates = Array.isArray(parent.templates) ? parent.templates : [];
   const childTemplates = Array.isArray(child.templates) ? child.templates : [];
@@ -156,12 +319,13 @@ function mergeFile(
  * Every database file with its parents merged in, keyed by dialect id.
  *
  * `files` is dialect id → the raw file as it was read. A file whose parent is unknown, a
- * cycle, and a chain deeper than the profile limit are reported through `onProblem` and
- * left out.
+ * cycle, a chain deeper than the profile limit and a file nested too deeply are reported
+ * through `onProblem` and left out. `options` marks the user's files (see the header).
  */
 export function resolveCodeDbFiles(
   files: Record<string, unknown>,
   onProblem?: (dialect: string, p: CodeDbProblem) => void,
+  options: ResolveCodeDbOptions = {},
 ): Record<string, Record<string, unknown>> {
   const report = onProblem ?? (() => {});
   const done = new Map<string, Record<string, unknown>>();
@@ -173,7 +337,8 @@ export function resolveCodeDbFiles(
     if (ready) return ready;
     if (failed.has(dialect)) return null;
 
-    const raw = files[dialect];
+    // Own members only (M13 review CODE-13): `constructor` is no database.
+    const raw = Object.hasOwn(files, dialect) ? files[dialect] : undefined;
     if (!isRecord(raw)) {
       failed.add(dialect);
       report(dialect, { path: '', message: 'the code database is not an object' });
@@ -182,32 +347,51 @@ export function resolveCodeDbFiles(
 
     const parentId = typeof raw.extends === 'string' && raw.extends !== '' ? raw.extends : null;
     let merged: Record<string, unknown>;
-
-    if (parentId === null) {
-      merged = mergeFile({}, raw);
-    } else if (seen.includes(parentId)) {
-      failed.add(dialect);
-      report(dialect, { path: 'extends', message: `"${parentId}" extends itself through "${dialect}"` });
-      return null;
-    } else if (!(parentId in files)) {
-      failed.add(dialect);
-      report(dialect, { path: 'extends', message: `the parent code database "${parentId}" was not found` });
-      return null;
-    } else if (seen.length >= MAX_EXTENDS_DEPTH) {
+    try {
+      if (parentId === null) {
+        merged = mergeFile({}, raw);
+      } else if (seen.includes(parentId)) {
+        failed.add(dialect);
+        report(dialect, { path: 'extends', message: `"${parentId}" extends itself through "${dialect}"` });
+        return null;
+      } else if (!Object.hasOwn(files, parentId)) {
+        failed.add(dialect);
+        report(dialect, { path: 'extends', message: `the parent code database "${parentId}" was not found` });
+        return null;
+      } else if (seen.length >= MAX_EXTENDS_DEPTH) {
+        failed.add(dialect);
+        report(dialect, {
+          path: 'extends',
+          message: `a code database may extend at most ${MAX_EXTENDS_DEPTH} parents`,
+        });
+        return null;
+      } else {
+        const parent = resolveOne(parentId, [...seen, dialect]);
+        if (parent === null) {
+          failed.add(dialect);
+          report(dialect, { path: 'extends', message: `the parent code database "${parentId}" could not be used` });
+          return null;
+        }
+        const members = options.memberMerge?.(dialect)
+          ? {
+              dialect,
+              parent: parentId,
+              report: (p: CodeDbProblem, index: number) =>
+                options.onEntryProblem ? options.onEntryProblem(dialect, p, index) : report(dialect, p),
+              onMerge: options.onMerge,
+            }
+          : undefined;
+        merged = mergeFile(parent, raw, { members });
+      }
+    } catch (error) {
+      // The depth cap above, or anything else one broken file could raise: that file is out,
+      // the rest of the set resolves.
       failed.add(dialect);
       report(dialect, {
-        path: 'extends',
-        message: `a code database may extend at most ${MAX_EXTENDS_DEPTH} parents`,
+        path: error instanceof CodeDbError ? error.path : '',
+        message: error instanceof Error ? error.message : String(error),
       });
       return null;
-    } else {
-      const parent = resolveOne(parentId, [...seen, dialect]);
-      if (parent === null) {
-        failed.add(dialect);
-        report(dialect, { path: 'extends', message: `the parent code database "${parentId}" could not be used` });
-        return null;
-      }
-      merged = mergeFile(parent, raw);
     }
 
     // The id is the child's own, whatever the parent called itself.

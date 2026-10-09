@@ -52,6 +52,7 @@ const fake = vi.hoisted(() => {
     /** The machine `effective()` answers with; null is "no machine". */
     chosen: { value: null as unknown },
     choice: { value: 'none' as 'document' | 'default' | 'none' },
+    detected: { value: {} as Record<string, { value: string; margin: number }> },
     defaultId: { value: null as string | null },
     reloadFromDisk: vi.fn(async (): Promise<void> => {}),
     openFile: vi.fn(async (): Promise<void> => {}),
@@ -109,7 +110,7 @@ vi.mock('$lib/app/status', () => ({
 }));
 
 vi.mock('$lib/stores/machines', async () => {
-  const { effectiveMachine } = await import('$lib/core/machines/effective');
+  const { applyMachine, effectiveMachine } = await import('$lib/core/machines/effective');
   const { profiles } = await import('$lib/stores/profiles');
   const { docs } = await import('$lib/stores/documents');
   return {
@@ -147,14 +148,8 @@ vi.mock('$lib/stores/machines', async () => {
       effective: (id: DocId): EffectiveProfile => {
         const profileId = docs.get(id)?.profileId ?? 'fanuc-gcode';
         const profile = profiles.profile(profileId);
-        return {
-          machine: effectiveMachine(
-            profile,
-            fake.chosen.value as MachineConfig | null,
-            fake.choice.value,
-            {},
-          ),
-        } as unknown as EffectiveProfile;
+        const machine = effectiveMachine(profile, fake.chosen.value as MachineConfig | null, fake.choice.value, fake.detected.value);
+        return { machine, profile: applyMachine(profile, machine).profile } as unknown as EffectiveProfile;
       },
       setForDoc: (...args: unknown[]) => fake.setForDoc(...(args as [])),
     },
@@ -511,5 +506,21 @@ describe('the status item', () => {
     expect(html).toContain(t('machines.source.machine'));
     expect(html).toContain(t('machines.source.profile'));
     expect(html).toContain(t('machines.tooltip.hint'));
+  });
+
+  it('lists the power-on feed mode the detected G-code system sets, not the dialect base', () => {
+    // No machine, system B detected in the program: the feed mode at power-on is G95 and its
+    // source is the program. The dialect base says G99, which would contradict the source.
+    fake.chosen.value = null;
+    fake.choice.value = 'none';
+    fake.detected.value = { gcodeSystem: { value: 'B', margin: 12 } };
+    try {
+      addDoc('/nc/part.nc');
+      const html = item();
+      expect(html).toContain(`${t('machines.groups.feedmode')}: G95`);
+      expect(html).not.toContain(`${t('machines.groups.feedmode')}: G99`);
+    } finally {
+      fake.detected.value = {};
+    }
   });
 });

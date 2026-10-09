@@ -1,0 +1,15 @@
+{
+  "about": "X6: Replace all M8 with M88 (whole address) in search-a.nc, the active document, whole document: the count and the status message (one undo step). \"Into a new tab\" gives the same text in a new untitled document and leaves search-a.nc untouched. The document after the run is search-a.replaced.nc.",
+  "document": "search-a.nc",
+  "options": {
+    "query": "M8",
+    "replacement": "M88",
+    "wholeAddress": true,
+    "caseSensitive": false,
+    "regex": false,
+    "inComments": false
+  },
+  "count": 2,
+  "message": "Replaced 2 hits.",
+  "m8InAllDocuments": 4
+}

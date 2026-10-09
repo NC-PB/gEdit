@@ -138,6 +138,20 @@ are on the Tools tab and in the palette; so is each bundled script, **Program ch
 **Edit Script** on a bundled script offers the same copy (*Copy and edit*). See
 [scripts.md](scripts.md).
 
+## Typing, profiles and machines
+
+None of these has a key; they are on the ribbon or in the palette (`F1`).
+
+- **Upper-Case Typing** (Home tab, *Typing*) switches [upper case while you type](README.md#typing-forced-upper-case-and-no-accidental-joins)
+  off or on for the session.
+- `Backspace` in column 1 and `Delete` at the end of a line refuse to join two blocks of text
+  (the switch above does not change that); select the line break to delete it.
+- **Manage Profiles…**, **New Profile From…**, **Open**, **Import** and **Export Profile
+  File…**, **Reload Profiles** and **Test Profile on Document** (Tools tab, *Profiles*) are
+  described in [Your own profiles and code files](profiles.md#the-profiles-page).
+- **Import Machines…** and **Export Machines…** are described under
+  [Moving machines to another computer](machines.md#moving-machines-to-another-computer).
+
 ## Compare, settings, help
 
 | Keys | |

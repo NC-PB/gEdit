@@ -85,7 +85,8 @@ const SHIPPED: Declared[] = readdirSync(CONTRIB)
 
 /**
  * Plan §7.13: the rows of WP10.1 (M10, pinned by P10), of WP11.1 and WP11.3 (M11, pinned by
- * P11) and of WP12.5 (M12, pinned by P12), with the i18n keys of their titles.
+ * P11), of WP12.5 (M12, pinned by P12) and of WP13.3 and WP13.4 (M13, pinned by P13), with
+ * the i18n keys of their titles.
  */
 const PINNED: { id: string; keys?: Keys; title: string; owner: string; pending?: true }[] = [
   { id: 'nc.blockSkip.add', title: 'ncBlockSkip.add', owner: 'ncBlockSkip.ts' },
@@ -115,16 +116,58 @@ const PINNED: { id: string; keys?: Keys; title: string; owner: string; pending?:
   { id: 'channels.checkSync', title: 'channels.checkSync', owner: 'channels.ts' },
   { id: 'channels.splitToDocuments', title: 'channels.splitToDocuments', owner: 'channels.ts' },
   { id: 'channels.testOnDocument', title: 'channels.testOnDocument', owner: 'channels.ts' },
+  // M13, WP13.3 (P13; registered by WP13.3, `contrib/userConfig.ts`). No default keys: each is
+  // rare, and a key on New or Import would be a file in the config folder made by accident.
+  // Palette, category `userConfig.category`, and the buttons of Settings ▸ Profiles;
+  // `profile.testOnDocument` also on the Tools tab, group `userConfig.toolsGroup`, after the
+  // Channels group. The two machine commands sit with them because the Machines page's
+  // Import and Export run the same code (category `machines.category`).
+  { id: 'profile.newFrom', title: 'userConfig.newFrom', owner: 'userConfig.ts' },
+  { id: 'profile.open', title: 'userConfig.open', owner: 'userConfig.ts' },
+  { id: 'profile.import', title: 'userConfig.import', owner: 'userConfig.ts' },
+  { id: 'profile.export', title: 'userConfig.export', owner: 'userConfig.ts' },
+  { id: 'profile.reload', title: 'userConfig.reload', owner: 'userConfig.ts' },
+  // Added at the M13 integration: Settings dialog on the Profiles tab (`contrib/settings.ts`,
+  // which already imports the dialog; the page imports `contrib/userConfig.ts`). No key.
+  { id: 'profile.manage', title: 'userConfig.manage', owner: 'settings.ts' },
+  { id: 'profile.testOnDocument', title: 'userConfig.testOnDocument', owner: 'userConfig.ts' },
+  { id: 'machines.import', title: 'machines.import', owner: 'userConfig.ts' },
+  { id: 'machines.export', title: 'machines.export', owner: 'userConfig.ts' },
+  // M13, WP13.4 (P13; registered by WP13.4, `contrib/typing.ts`): Home tab, group
+  // `typing.group`, after the Edit group; no default key (a toggle that silently changes what
+  // every keystroke does should not be one key press away).
+  { id: 'edit.toggleForceUppercase', title: 'typing.toggleForceUppercase', owner: 'typing.ts' },
 ];
-/** The ribbon groups of those entries: NC tab (M10, M12 navigation), Home tab (search), Tools tab (compare, M12 check). */
-const PINNED_GROUPS = ['ncBlockSkip.group', 'segments.group', 'search.group', 'compare.group', 'channels.group', 'channels.toolsGroup'];
+/**
+ * The ribbon groups of those entries: NC tab (M10, M12 navigation), Home tab (search, M13
+ * typing), Tools tab (compare, M12 check, M13 profile tester).
+ */
+const PINNED_GROUPS = [
+  'ncBlockSkip.group',
+  'segments.group',
+  'search.group',
+  'compare.group',
+  'channels.group',
+  'channels.toolsGroup',
+  'userConfig.toolsGroup',
+  'typing.group',
+];
 /** The palette categories of those entries. */
-const PINNED_CATEGORIES = ['ncBlockSkip.category', 'segments.category', 'search.category', 'compare.category', 'channels.category'];
+const PINNED_CATEGORIES = [
+  'ncBlockSkip.category',
+  'segments.category',
+  'search.category',
+  'compare.category',
+  'channels.category',
+  'userConfig.category',
+  'machines.category',
+  'typing.category',
+];
 
 const asDefs = (rows: { id: string; keys?: Keys }[]): CommandDef[] =>
   rows.map((row): CommandDef => ({ id: row.id, keys: row.keys, title: row.id, run: () => {} }));
 
-describe('the commands M10, M11 and M12 pin (plan §7.13; P10 item 2, P11 item 4, P12 item 8)', () => {
+describe('the commands M10 to M13 pin (plan §7.13; P10 item 2, P11 item 4, P12 item 8, P13)', () => {
   it('reads the shipped shortcuts it checks against', () => {
     // A sanity floor: F7 and Shift+F7 (navigation), Mod+S (files), F9 (scripts) are there.
     const keys = SHIPPED.map((d) => d.keys).filter((k): k is KeySpec => typeof k === 'string');

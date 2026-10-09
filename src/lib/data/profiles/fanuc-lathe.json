@@ -518,5 +518,6 @@
       { "trigger": "(?<![A-Z])GOTO", "addresses": ["GOTO"] }
     ]
   },
+  "editing": { "forceUppercase": true, "preventLineJoin": true },
   "toolList": { "description": "auto", "commentFilter": "^[-*=_\\s]*$", "dropLeadingZeros": true }
 }

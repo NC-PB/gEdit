@@ -4,11 +4,14 @@
 // check's report.
 
 import { describe, expect, it, vi } from 'vitest';
-import type { ChannelSet, SyncHit } from '$lib/core/channels/types';
+import type { ChannelParams, ChannelSet, SyncHit } from '$lib/core/channels/types';
 import { hasKey } from '$lib/i18n';
 
+/** The machine's channel block `channels.params` answers (`markName`, M13 review NC-10). */
+let machineParams: ChannelParams | null = null;
+
 vi.mock('$lib/stores/channels', () => ({
-  channels: { ruleLabel: () => '' },
+  channels: { ruleLabel: (_id: string, ruleId: string) => (ruleId === 'stops' ? 'Stops and ends' : ''), params: () => machineParams },
   sameMarkId: (a: string, b: string) => a === b || a.replace(/^M0+/, 'M') === b.replace(/^M0+/, 'M'),
 }));
 vi.mock('$lib/app/dialogs', () => ({ dialogs: {} }));
@@ -21,7 +24,7 @@ vi.mock('$lib/stores/documents', () => ({ docs: { getActiveId: () => 'd1', get: 
 vi.mock('$lib/stores/machines', () => ({ machines: {} }));
 vi.mock('$lib/stores/results', () => ({ results: {} }));
 
-const { default: contribution, stepSync, findPartner, splitTexts, selectItems, checkReport } = await import('./channels');
+const { default: contribution, stepSync, findPartner, splitTexts, selectItems, checkReport, markName } = await import('./channels');
 
 const hit = (line: number, mark: string, channel: string, ruleId = 'w', partners = ['1', '2', '3']): SyncHit => ({ ruleId, mark, line, channel, partners, blocking: true });
 const ref = (id: string, index: number) => ({ id, name: `Channel ${id}`, index });
@@ -210,5 +213,30 @@ describe('checkReport', () => {
     const report = checkReport({ machine: 'Lathe 1', current: 'Lathe 1', names, result: { findings: [], truncated: true, abandoned: true, checked: [], notChecked: [], otherMachines: [] }, docOf: () => null, textOf: () => '' });
     expect(report.title).toBe('Wait codes, Lathe 1: not checked');
     expect(report.message).toContain('took too long to read for channels, so nothing was checked');
+  });
+});
+
+describe('markName (M13 review NC-10)', () => {
+  it('shows a prefix rule\'s mark with its prefix, a codes rule\'s mark as it is, and an id-less mark by its rule', () => {
+    machineParams = {
+      layout: 'single-file',
+      list: [
+        { id: '1', name: 'Channel 1' },
+        { id: '2', name: 'Channel 2' },
+      ],
+      syncMarks: [
+        { id: 'p', label: 'Waits', match: { kind: 'prefix', prefix: 'M1', idDigits: { min: 2, max: 2 } }, partners: { kind: 'all' } },
+        { id: 'w', label: 'Codes', match: { kind: 'codes', codes: 'M900-M999' }, partners: { kind: 'all' } },
+      ],
+    };
+    try {
+      expect(markName('d1', hit(5, '30', '1', 'p'))).toBe('M130');
+      expect(markName('d1', hit(5, 'M901', '1', 'w'))).toBe('M901');
+      expect(markName('d1', hit(5, '', '1', 'stops'))).toBe('Stops and ends');
+    } finally {
+      machineParams = null;
+    }
+    // No machine block: the id as it is keyed.
+    expect(markName('d1', hit(5, '30', '1', 'p'))).toBe('30');
   });
 });

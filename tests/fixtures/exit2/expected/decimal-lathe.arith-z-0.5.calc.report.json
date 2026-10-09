@@ -1,0 +1,45 @@
+{
+  "script": "address_arithmetic.py",
+  "params": {
+    "operation": "subtract",
+    "operand": 0.5,
+    "addresses": [
+      "Z"
+    ]
+  },
+  "machine": {
+    "name": "Lathe calc",
+    "profile": "fanuc-lathe",
+    "params": {
+      "numberInput": {
+        "mode": "calculator",
+        "incrementMm": "0.001"
+      },
+      "units": "mm",
+      "diameter": "on",
+      "variants": {
+        "gcodeSystem": "B",
+        "incrementalAddresses": "uw",
+        "toolWord": "byLength"
+      },
+      "modalInitial": {
+        "feedmode": "G95"
+      }
+    }
+  },
+  "message": "Subtracted 0.5 from Z in 5 words on 5 blocks. Left 2 words as written: 2 incremental words. Machine 'Lathe calc': numbers are read as written; X is a diameter.",
+  "findings": [
+    {
+      "line": 15,
+      "severity": "info",
+      "message": "W-2000: W moves Z by a distance, so a shift does not apply to it.",
+      "reason": "incremental"
+    },
+    {
+      "line": 16,
+      "severity": "info",
+      "message": "W-5.: W moves Z by a distance, so a shift does not apply to it.",
+      "reason": "incremental"
+    }
+  ]
+}

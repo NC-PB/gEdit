@@ -1,0 +1,97 @@
+{
+  "about": "X9 (user-profile half): what gEdit shows after exit2-lathe.json and exit2-broken.json are in <config>/profiles/ and exit2-lathe.json in <config>/codes/ ({{SHOP}} replaced with the folder the run copied shop/ to; here /work/exit2/shop).",
+  "profile": {
+    "id": "exit2-lathe",
+    "displayName": "Exit2 lathe (user profile)",
+    "shortName": "Exit2 T",
+    "origin": "user",
+    "file": "exit2-lathe.json",
+    "parent": "fanuc-lathe",
+    "chain": [
+      "exit2-lathe",
+      "fanuc-lathe",
+      "fanuc-gcode"
+    ],
+    "machineType": "lathe"
+  },
+  "numbering": {
+    "start": 10,
+    "step": 5
+  },
+  "brokenLoaded": false,
+  "problems": {
+    "title": "Profiles and code files",
+    "message": "1 problem in your profiles and code files. Everything else loaded.",
+    "rows": [
+      {
+        "file": "exit2-broken.json",
+        "at": "exit2-broken · numbering.step",
+        "problem": "has to be a number"
+      }
+    ]
+  },
+  "document": {
+    "input": "shop/part-17.nc",
+    "path": "/work/exit2/shop/part-17.nc",
+    "opensWith": "exit2-lathe"
+  },
+  "renumber": {
+    "golden": "shop/part-17.renumber5.nc",
+    "summary": "Renumbered 21 blocks, skipped 4 lines.",
+    "warnings": [
+      "4 jumps, returns and cycles were rewritten with the new block numbers."
+    ]
+  },
+  "hover": {
+    "line": 6,
+    "word": "M13",
+    "markdown": "**M13** — Chip conveyor on\n\nStarts the chip conveyor\\. A code of the machine builder on the lathes of this shop, described in the shop's own code file; another lathe may use another code for it, or none\\."
+  },
+  "machine": {
+    "made": {
+      "name": "X9 Lathe",
+      "profile": "fanuc-lathe",
+      "notes": "",
+      "params": {
+        "numberInput": {
+          "mode": "increment",
+          "incrementMm": "0.001",
+          "incrementInch": "0.0001",
+          "incrementDeg": "0.001",
+          "incrementSec": "0.001",
+          "classes": {
+            "feedPerMin": {
+              "mode": "increment",
+              "increment": "1",
+              "incrementInch": "0.01"
+            },
+            "feedPerRev": {
+              "mode": "increment",
+              "increment": "0.01",
+              "incrementInch": "0.0001"
+            }
+          }
+        },
+        "units": "mm",
+        "diameter": "on",
+        "variants": {
+          "gcodeSystem": "A",
+          "incrementalAddresses": "uw",
+          "toolWord": "byLength"
+        }
+      }
+    },
+    "offered": true,
+    "applied": {
+      "name": "X9 Lathe",
+      "choice": "document",
+      "numberInput": "machine",
+      "decimalPointSignificant": true
+    },
+    "none": {
+      "choice": "none",
+      "numberInput": "profile",
+      "decimalPointSignificant": false
+    }
+  }
+}

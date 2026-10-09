@@ -28,6 +28,40 @@ export default {
   setMachine: 'Change Machine…',
   manage: 'Manage Machines…',
   openFile: 'Open Machines File',
+  /** M13 (P13, §7.13; WP13.3): a picked machines file merged in, validated like a hand edit. */
+  import: 'Import Machines…',
+  /** M13: the whole machines file saved where you choose. */
+  export: 'Export Machines…',
+
+  /**
+   * `machines.import` / `machines.export` (M13, WP13.3, §4). The file is the whole of
+   * `machines.json`: export saves a copy anywhere, import adds the machines of a picked file
+   * to the ones you have. One summary line says what happened.
+   */
+  transfer: {
+    // Import
+    title: 'Import machines',
+    pickTitle: 'Choose a machines file to import',
+    none: 'The file holds no machines.',
+    done_one: '{count} machine imported.',
+    done_other: '{count} machines imported.',
+    renamed_one: '{count} was renamed because its name was already in use.',
+    renamed_other: '{count} were renamed because their names were already in use.',
+    inactive_one: '{count} cannot be used yet: its dialect is not loaded or does not accept it (see the list).',
+    inactive_other: '{count} cannot be used yet: their dialect is not loaded or does not accept them (see the list).',
+    skipped_one: '{count} was not valid and was left out.',
+    skipped_other: '{count} were not valid and were left out.',
+    full: 'A machines file holds at most {max} machines.',
+    unreadable: 'That file is not a machines file',
+    notJson: 'That file is not valid JSON',
+    tooBig: 'That file is larger than 1 MiB',
+    importFailed: 'The machines could not be imported',
+
+    // Export
+    saveTitle: 'Save a copy of your machines',
+    exported: 'Your machines were saved to {file}',
+    exportFailed: 'The machines could not be exported',
+  },
 
   // Status item
   item: 'Machine: {name}',
@@ -172,6 +206,9 @@ export default {
     defaultClear: 'Not the default any more',
     defaultMark: 'Default',
     openFile: 'Open machines file',
+    /** M13 (WP13.3): add the machines of a file you picked / save all your machines as a file. */
+    import: 'Import…',
+    export: 'Export…',
     replaceFile: 'Replace with an empty file',
     save: 'Save',
     cancel: 'Cancel',

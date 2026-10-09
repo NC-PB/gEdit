@@ -1,0 +1,236 @@
+{
+  "about": "X8: the bundled extents.py on checks-lathe.nc with its form defaults, no machine chosen. The whole report; every row with a line jumps to it.",
+  "input": "checks-lathe.nc",
+  "profile": "fanuc-lathe",
+  "machine": null,
+  "report": {
+    "title": "Extents",
+    "columns": [
+      {
+        "key": "where",
+        "label": "Where"
+      },
+      {
+        "key": "axis",
+        "label": "Axis"
+      },
+      {
+        "key": "min",
+        "label": "Min"
+      },
+      {
+        "key": "minLine",
+        "label": "At line"
+      },
+      {
+        "key": "max",
+        "label": "Max"
+      },
+      {
+        "key": "maxLine",
+        "label": "At line"
+      },
+      {
+        "key": "unresolved",
+        "label": "Not resolved"
+      }
+    ],
+    "rows": [
+      {
+        "where": "Program",
+        "scope": "program",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "0",
+        "minLine": 48,
+        "max": "123456.789",
+        "maxLine": 70,
+        "unresolved": 2,
+        "line": 70
+      },
+      {
+        "where": "Program",
+        "scope": "program",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "-20",
+        "minLine": 15,
+        "max": "100",
+        "maxLine": 21,
+        "unresolved": 4,
+        "line": 21
+      },
+      {
+        "where": "T1 (T0101, line 8)",
+        "scope": "tool",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "20",
+        "minLine": 14,
+        "max": "100",
+        "maxLine": 21,
+        "unresolved": 2,
+        "line": 21
+      },
+      {
+        "where": "T1 (T0101, line 8)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "-20",
+        "minLine": 15,
+        "max": "100",
+        "maxLine": 21,
+        "unresolved": 3,
+        "line": 21
+      },
+      {
+        "where": "T3 (T0303, line 28)",
+        "scope": "tool",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "19",
+        "minLine": 33,
+        "max": "100",
+        "maxLine": 34,
+        "unresolved": 0,
+        "line": 34
+      },
+      {
+        "where": "T3 (T0303, line 28)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "-18",
+        "minLine": 32,
+        "max": "100",
+        "maxLine": 34,
+        "unresolved": 0,
+        "line": 34
+      },
+      {
+        "where": "T4 (T0404, line 38)",
+        "scope": "tool",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "30",
+        "minLine": 40,
+        "max": "100",
+        "maxLine": 43,
+        "unresolved": 0,
+        "line": 43
+      },
+      {
+        "where": "T4 (T0404, line 38)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "-7",
+        "minLine": 42,
+        "max": "100",
+        "maxLine": 43,
+        "unresolved": 0,
+        "line": 43
+      },
+      {
+        "where": "T5 (T0505, line 44)",
+        "scope": "tool",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "0",
+        "minLine": 48,
+        "max": "0",
+        "maxLine": 48,
+        "unresolved": 0,
+        "line": 48
+      },
+      {
+        "where": "T5 (T0505, line 44)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "-12",
+        "minLine": 49,
+        "max": "5",
+        "maxLine": 48,
+        "unresolved": 0,
+        "line": 48
+      },
+      {
+        "where": "T6 (T0606, line 51)",
+        "scope": "tool",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "100",
+        "minLine": 53,
+        "max": "100",
+        "maxLine": 53,
+        "unresolved": 0,
+        "line": 53
+      },
+      {
+        "where": "T6 (T0606, line 51)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "100",
+        "minLine": 53,
+        "max": "100",
+        "maxLine": 53,
+        "unresolved": 0,
+        "line": 53
+      },
+      {
+        "where": "T2 (T0202, line 57)",
+        "scope": "tool",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "40",
+        "minLine": 60,
+        "max": "123456.789",
+        "maxLine": 70,
+        "unresolved": 0,
+        "line": 70
+      },
+      {
+        "where": "T2 (T0202, line 57)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "100",
+        "minLine": 74,
+        "max": "100",
+        "maxLine": 74,
+        "unresolved": 0,
+        "line": 74
+      }
+    ],
+    "message": "No machine: readings assumed from the profile defaults, and a word whose reading depends on the machine is not resolved. X is a diameter: diameter programming is on (assumed from the profile). 6 positions not resolved; the findings say why.",
+    "findings": [
+      {
+        "line": 4,
+        "severity": "warning",
+        "message": "1 incremental word, first W-1. (line 4), move from a position the program does not state (the start, or after a machine position, a cycle, a frame or a value that was not resolved): not resolved.",
+        "reason": "incremental-start"
+      },
+      {
+        "line": 12,
+        "severity": "warning",
+        "message": "G71, 2 blocks: the control computes the passes of this cycle from its values; the start point and the profile are in the ranges, the passes are not resolved.",
+        "reason": "multi-pass"
+      },
+      {
+        "line": 27,
+        "severity": "warning",
+        "message": "1 word, first Z2000 (line 27): the value depends on how the machine reads a number (calculator: 2000 mm; is-b: 2 mm; is-c: 0.2 mm). Not resolved; choose a machine for this document to read them.",
+        "reason": "machine-dependent"
+      },
+      {
+        "line": 36,
+        "severity": "info",
+        "message": "G68.2, 1 block: its axis words are values, not positions; left out of the ranges.",
+        "reason": "data"
+      }
+    ]
+  }
+}

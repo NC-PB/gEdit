@@ -1,0 +1,206 @@
+{
+  "about": "X8: the bundled extents.py on checks-sinumerik.MPF with its form defaults, no machine chosen. The whole report; every row with a line jumps to it.",
+  "input": "checks-sinumerik.MPF",
+  "profile": "sinumerik",
+  "machine": null,
+  "report": {
+    "title": "Extents",
+    "columns": [
+      {
+        "key": "where",
+        "label": "Where"
+      },
+      {
+        "key": "axis",
+        "label": "Axis"
+      },
+      {
+        "key": "min",
+        "label": "Min"
+      },
+      {
+        "key": "minLine",
+        "label": "At line"
+      },
+      {
+        "key": "max",
+        "label": "Max"
+      },
+      {
+        "key": "maxLine",
+        "label": "At line"
+      },
+      {
+        "key": "unresolved",
+        "label": "Not resolved"
+      }
+    ],
+    "rows": [
+      {
+        "where": "Program",
+        "scope": "program",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "0",
+        "minLine": 20,
+        "max": "200",
+        "maxLine": 10,
+        "unresolved": 1,
+        "line": 10
+      },
+      {
+        "where": "Program",
+        "scope": "program",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "-40",
+        "minLine": 9,
+        "max": "200",
+        "maxLine": 10,
+        "unresolved": 1,
+        "line": 10
+      },
+      {
+        "where": "G500 (line 4)",
+        "scope": "offset",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "0",
+        "minLine": 20,
+        "max": "200",
+        "maxLine": 10,
+        "unresolved": 1,
+        "line": 10
+      },
+      {
+        "where": "G500 (line 4)",
+        "scope": "offset",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "-40",
+        "minLine": 9,
+        "max": "200",
+        "maxLine": 10,
+        "unresolved": 1,
+        "line": 10
+      },
+      {
+        "where": "G500, ROUGH (T=\"ROUGH\", line 5)",
+        "scope": "tool",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "40",
+        "minLine": 35,
+        "max": "200",
+        "maxLine": 10,
+        "unresolved": 0,
+        "line": 10
+      },
+      {
+        "where": "G500, ROUGH (T=\"ROUGH\", line 5)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "-40",
+        "minLine": 9,
+        "max": "200",
+        "maxLine": 10,
+        "unresolved": 0,
+        "line": 10
+      },
+      {
+        "where": "G500, THREAD_M44 (T=\"THREAD_M44\", line 11)",
+        "scope": "tool",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "43.4",
+        "minLine": 15,
+        "max": "200",
+        "maxLine": 17,
+        "unresolved": 0,
+        "line": 17
+      },
+      {
+        "where": "G500, THREAD_M44 (T=\"THREAD_M44\", line 11)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "-30",
+        "minLine": 16,
+        "max": "200",
+        "maxLine": 17,
+        "unresolved": 0,
+        "line": 17
+      },
+      {
+        "where": "G500, TAP_M8 (T=\"TAP_M8\", line 18)",
+        "scope": "tool",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "0",
+        "minLine": 20,
+        "max": "200",
+        "maxLine": 26,
+        "unresolved": 0,
+        "line": 26
+      },
+      {
+        "where": "G500, TAP_M8 (T=\"TAP_M8\", line 18)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "-15",
+        "minLine": 22,
+        "max": "200",
+        "maxLine": 26,
+        "unresolved": 0,
+        "line": 26
+      },
+      {
+        "where": "G500, DRILL_8 (T=\"DRILL_8\", line 27)",
+        "scope": "tool",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "0",
+        "minLine": 30,
+        "max": "0",
+        "maxLine": 30,
+        "unresolved": 1,
+        "line": 30
+      },
+      {
+        "where": "G500, DRILL_8 (T=\"DRILL_8\", line 27)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "4",
+        "minLine": 32,
+        "max": "5",
+        "maxLine": 30,
+        "unresolved": 1,
+        "line": 30
+      },
+      {
+        "where": "G75 (line 37)",
+        "scope": "machine",
+        "axis": "X",
+        "axisId": "X",
+        "min": "0",
+        "minLine": 37,
+        "max": "0",
+        "maxLine": 37,
+        "unresolved": 0,
+        "line": 37
+      }
+    ],
+    "message": "No machine: readings assumed from the profile defaults, and a word whose reading depends on the machine is not resolved. X is a diameter: diameter programming is on (assumed from the profile). 2 positions not resolved; the findings say why.",
+    "findings": [
+      {
+        "line": 31,
+        "severity": "warning",
+        "message": "CYCLE83 (line 31), run in 1 block: the positions this cycle works to are in its parameters, which the extents do not compute; they are not resolved (its depth is not in the Z and X (diameter) range).",
+        "reason": "cycle"
+      }
+    ]
+  }
+}

@@ -1,0 +1,359 @@
+{
+  "about": "X2: scripts/report_modal.py run as a user script on sinumerik-lathe.MPF with no machine: the whole report it writes. \"=on\" is diameter programming assumed from the profile default (DIAMON, D35); \"off\" is set by the program (the DIAMOF block).",
+  "input": "sinumerik-lathe.MPF",
+  "script": "scripts/report_modal.py",
+  "machine": null,
+  "report": {
+    "title": "Exit2 modal report",
+    "columns": [
+      {
+        "key": "line",
+        "label": "Line"
+      },
+      {
+        "key": "diameter",
+        "label": "Diameter programming"
+      },
+      {
+        "key": "x",
+        "label": "X is"
+      },
+      {
+        "key": "feedUnit",
+        "label": "Feed unit"
+      }
+    ],
+    "rows": [
+      {
+        "line": 1,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 2,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 3,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 4,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 5,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 6,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 7,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 8,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 9,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 10,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 11,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 12,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 13,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 14,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 15,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 16,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 17,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 18,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 19,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 20,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 21,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 22,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 23,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 24,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 25,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 26,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 27,
+        "diameter": "=on",
+        "x": "diameter",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 28,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 29,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 30,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 31,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 32,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 33,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 34,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 35,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 36,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 37,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 38,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 39,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 40,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 41,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 42,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 43,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 44,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 45,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 46,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 47,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 48,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 49,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 50,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 51,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 52,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 53,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 54,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      },
+      {
+        "line": 55,
+        "diameter": "off",
+        "x": "radius",
+        "feedUnit": "per-rev"
+      }
+    ]
+  }
+}

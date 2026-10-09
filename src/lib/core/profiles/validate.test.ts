@@ -6,7 +6,17 @@ import { BUILTIN_CODE_DB_JSON } from '$lib/data/codes';
 import { BUILTIN_PROFILE_JSON } from '$lib/data/profiles';
 import fanucJson from '$lib/data/profiles/fanuc-gcode.json';
 import { modalGroupsOf } from '$lib/core/codes/resolve';
-import { patternSubsetProblem, validateProfile, type ProfileValidationOptions } from './validate';
+import {
+  MAX_FOLDER_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_PATTERN_LENGTH,
+  MAX_PATTERN_LIST,
+  MAX_PATTERNS_PER_PROFILE,
+  MAX_SHORT_NAME_LENGTH,
+  patternSubsetProblem,
+  validateProfile,
+  type ProfileValidationOptions,
+} from './validate';
 import type { Profile } from './types';
 
 /** A fresh, valid profile object that a test can break in one place. */
@@ -694,5 +704,157 @@ describe('the M12.5 syntax fields', () => {
     });
     expect(sources.length).toBeGreaterThanOrEqual(6);
     for (const source of sources) expect(patternSubsetProblem(source), source).toBeNull();
+  });
+});
+
+// M13 (P13, AD-30; the owner's answer of 2026-10-08): typing in upper case and no join of
+// two blocks on every control. The two flags are optional booleans; any other member of
+// `editing` (`tabWidth`) is carried unread.
+describe('editing (P13)', () => {
+  it('is on for every built-in profile, as resolved', () => {
+    for (const raw of BUILTIN_PROFILE_JSON) {
+      const profile = raw as Profile;
+      expect(profile.editing, profile.id).toMatchObject({ forceUppercase: true, preventLineJoin: true });
+    }
+  });
+
+  it('checks the two flags and nothing else', () => {
+    expect(pathsOf((p) => (p.editing = { forceUppercase: 'yes' }))).toEqual(['editing.forceUppercase']);
+    expect(pathsOf((p) => (p.editing = { preventLineJoin: 1 }))).toEqual(['editing.preventLineJoin']);
+    expect(pathsOf((p) => (p.editing = []))).toEqual(['editing']);
+    expect(pathsOf((p) => (p.editing = { tabWidth: 'wide', later: true }))).toEqual([]);
+    expect(pathsOf((p) => delete p.editing)).toEqual([]);
+  });
+});
+
+// M13 review fix CODE-1 (plan §4: patterns <= 1,000 characters, standing rule 15).
+describe('bounded patterns (CODE-1)', () => {
+  const user: ProfileValidationOptions = { checkShape: () => true };
+  const check = (patch: (p: Record<string, unknown>) => void, o: ProfileValidationOptions = user): string[] => {
+    const profile = fanuc();
+    patch(profile);
+    const result = validateProfile(profile, o);
+    return result.ok ? [] : result.errors;
+  };
+  const shaped = 'can take very long on some lines';
+
+  it('refuses a pattern with a repeated group that repeats or chooses inside, with the path', () => {
+    for (const bad of ['(a+)+$', '(a|aa)+', '^(\\w+\\s?)*$']) {
+      const errors = check((p) => ((p.detect as { content: unknown[] }).content = [{ pattern: bad, weight: 1 }]));
+      expect(errors, bad).toHaveLength(1);
+      expect(errors[0], bad).toMatch(/^detect\.content\[0\]\.pattern: can take very long/);
+      expect(check((p) => ((p.outline as unknown[]) = [{ kind: 'comment', pattern: bad }]))[0], bad).toMatch(/^outline\[0\]\.pattern: /);
+      expect(check((p) => ((p.toolCall as { trigger: string }).trigger = bad))[0], bad).toMatch(/^toolCall\.trigger: /);
+    }
+  });
+
+  it('does not run the shape check unless the caller asks for it, and not for a built-in pattern', () => {
+    const bad = (p: Record<string, unknown>): void => {
+      (p.detect as { content: unknown[] }).content = [{ pattern: '^(\\w+\\s?)*$', weight: 1 }];
+    };
+    expect(check(bad, {})).toEqual([]);
+    expect(check(bad, { checkShape: () => false })).toEqual([]);
+    expect(check(bad, { checkShape: (source) => source !== '^(\\w+\\s?)*$' })).toEqual([]);
+  });
+
+  it('refuses a pattern longer than 1,000 characters, built-in options or not, and checks 1,000 exactly', () => {
+    const long = 'A'.repeat(MAX_PATTERN_LENGTH + 1);
+    for (const o of [{}, user]) {
+      const errors = check((p) => ((p.detect as { content: unknown[] }).content = [{ pattern: long, weight: 1 }]), o);
+      expect(errors).toEqual([`detect.content[0].pattern: is longer than ${MAX_PATTERN_LENGTH} characters`]);
+    }
+    expect(check((p) => ((p.detect as { content: unknown[] }).content = [{ pattern: 'A'.repeat(MAX_PATTERN_LENGTH), weight: 1 }]), {})).toEqual([]);
+  });
+
+  it('refuses a list of more than 200 patterns and accepts 200', () => {
+    const rules = (n: number): unknown[] => Array.from({ length: n }, (_, i) => ({ pattern: `^X${i}$`, weight: 1 }));
+    const tooMany = check((p) => ((p.detect as { content: unknown[] }).content = rules(MAX_PATTERN_LIST + 1)), {});
+    expect(tooMany).toEqual([`detect.content: lists more than ${MAX_PATTERN_LIST} entries`]);
+    expect(check((p) => ((p.detect as { content: unknown[] }).content = rules(MAX_PATTERN_LIST)), {})).toEqual([]);
+    expect(
+      check((p) => (p.outline = Array.from({ length: 5000 }, (_, i) => ({ kind: 'comment', pattern: `^X${i}$` }))), {}),
+    ).toEqual([`outline: lists more than ${MAX_PATTERN_LIST} entries`]);
+    expect(check((p) => ((p.program as { start: string[] }).start = Array.from({ length: 201 }, () => '^O')), {})).toEqual([
+      `program.start: lists more than ${MAX_PATTERN_LIST} entries`,
+    ]);
+  });
+
+  it('refuses a profile with more than 1,000 patterns in all, saying so once', () => {
+    const errors = check((p) => {
+      (p.detect as { content: unknown[] }).content = Array.from({ length: 200 }, (_, i) => ({ pattern: `^A${i}$`, weight: 1 }));
+      (p.syntax as { freeText: string[] }).freeText = Array.from({ length: 200 }, (_, i) => `(?<text>^B${i}$)`);
+      p.outline = Array.from({ length: 200 }, (_, i) => ({ kind: 'comment', pattern: `^C${i}$` }));
+      (p.numbering as { references: unknown[] }).references = Array.from({ length: 200 }, (_, i) => ({ trigger: `^D${i}$`, addresses: ['P'] }));
+      (p.compare as { keepComments: string[] }).keepComments = Array.from({ length: 200 }, (_, i) => `^E${i}$`);
+      (p.program as { start: string[] }).start = Array.from({ length: 200 }, (_, i) => `^F${i}$`);
+    }, {});
+    const over = errors.filter((e) => e.includes(`more than ${MAX_PATTERNS_PER_PROFILE} patterns`));
+    expect(over).toHaveLength(1);
+  });
+
+  it('leaves the shipped profiles valid under the strictest options', () => {
+    for (const raw of BUILTIN_PROFILE_JSON) {
+      const result = validateProfile(raw, { checkShape: (source) => !shapeExempt.has(source) });
+      expect(result.ok ? [] : result.errors, (raw as Profile).id).toEqual([]);
+    }
+  });
+
+  // The shipped patterns the heuristic flags (all bounded by a delimiter) are exempt by text.
+  const shapeExempt = new Set<string>(
+    BUILTIN_PROFILE_JSON.flatMap((raw) => {
+      const texts: string[] = [];
+      const visit = (value: unknown): void => {
+        if (typeof value === 'string') texts.push(value);
+        else if (Array.isArray(value)) value.forEach(visit);
+        else if (value && typeof value === 'object') Object.values(value).forEach(visit);
+      };
+      visit(raw);
+      return texts;
+    }),
+  );
+
+  it('echoes at most a short piece of a wrong value', () => {
+    const errors = check((p) => ((p.files as { extensions: string[] }).extensions = ['X'.repeat(5000)]), {});
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.every((e) => e.length < 400)).toBe(true);
+  });
+
+  it('keeps the shape message in plain words', () => {
+    const [error] = check((p) => ((p.detect as { content: unknown[] }).content = [{ pattern: '(a+)+$', weight: 1 }]));
+    expect(error).toContain(shaped);
+    expect(error).toContain('without a repeated part inside a repeated part');
+  });
+});
+
+// M13 review fix CODE-3: a profile cannot claim the files gEdit asks you to edit as text.
+describe('extensions a profile cannot take (CODE-3)', () => {
+  it.each(['json', 'py', 'JSON'])('refuses %s in files.extensions and detect.extensions', (ext) => {
+    const lower = ext.toLowerCase();
+    const errors = errorsOf((p) => {
+      (p.files as { extensions: string[] }).extensions = ['nc', lower];
+      (p.detect as { extensions: Record<string, number> }).extensions = { nc: 5, [lower]: 5 };
+    });
+    expect(errors.map((e) => e.slice(0, e.indexOf(':')))).toEqual(['files.extensions[1]', `detect.extensions.${lower}`]);
+    expect(errors[0]).toContain('not NC programs');
+  });
+
+  it('refuses it as the default extension too, and still accepts txt, tap and no dot at all', () => {
+    expect(pathsOf((p) => {
+      (p.files as Record<string, unknown>).extensions = ['json'];
+      (p.files as Record<string, unknown>).defaultExtension = 'json';
+    })).toEqual(['files.extensions[0]']);
+    expect(pathsOf((p) => ((p.files as { extensions: string[] }).extensions = ['nc', 'txt', 'tap', 'jsonc']))).toEqual([]);
+  });
+});
+
+// CODE-17
+describe('how long a name may be (CODE-17)', () => {
+  it('refuses a name, a short name, a filter name and a folder that run on', () => {
+    expect(pathsOf((p) => (p.name = 'N'.repeat(MAX_NAME_LENGTH + 1)))).toEqual(['name']);
+    expect(pathsOf((p) => (p.shortName = 'S'.repeat(MAX_SHORT_NAME_LENGTH + 1)))).toEqual(['shortName']);
+    expect(pathsOf((p) => ((p.files as Record<string, unknown>).filterName = 'F'.repeat(MAX_NAME_LENGTH + 1)))).toEqual(['files.filterName']);
+    expect(pathsOf((p) => ((p.detect as Record<string, unknown>).folders = ['/'.padEnd(MAX_FOLDER_LENGTH + 1, 'x')]))).toEqual(['detect.folders[0]']);
+    expect(pathsOf((p) => ((p.detect as Record<string, unknown>).folders = ['/shop'.padEnd(MAX_FOLDER_LENGTH, 'x')]))).toEqual([]);
+    expect(pathsOf((p) => (p.name = 'N'.repeat(MAX_NAME_LENGTH)))).toEqual([]);
   });
 });

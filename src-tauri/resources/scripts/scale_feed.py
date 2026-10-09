@@ -1448,6 +1448,14 @@ def scale_token(
     word = token.text.strip()
 
     if token.value is None or token.value_text is None:
+        # M13 review (NC-5): `F–200.` with a dash pasted for the minus sign is the address
+        # alone, a character no control reads and a bare number: named as such, not as a
+        # variable.
+        unreadable = gedit_nc.unreadable_value(token, tokens)
+        if unreadable is not None:
+            counts.skip("unreadable")
+            findings.add(line, "warning", "%s: %s, so it is not scaled." % unreadable)
+            return None
         counts.skip("value")
         findings.add(line, "warning", "%s is not a plain number, so it is not scaled." % word)
         return None
@@ -2082,6 +2090,7 @@ def summary(counts: Counts, findings: Findings, params: Params, reading: Reading
         ("range", "left because a profile-range cycle names no range and no machine confirms the dialect"),
         ("ambiguous", "left because the code means a threading cycle somewhere else"),
         ("unknown", "left under a code the database does not know"),
+        ("unreadable", "left because the value cannot be read"),
         ("value", "left as a variable or an expression"),
         ("mode", "left in another feed mode"),
     ):

@@ -1985,3 +1985,21 @@ class TestValuesReadRight(unittest.TestCase):
         limit = next(param for param in meta["params"] if param["id"] == "limitUnit")
         self.assertEqual(limit["default"], "auto")
         self.assertEqual([choice["value"] for choice in limit["choices"]], ["auto", "per-minute", "per-rev"])
+
+
+class TestM13ReviewUnreadable(unittest.TestCase):
+    """M13 review NC-5: a dash pasted for the minus sign is named, not called a variable."""
+
+    def test_a_word_whose_value_cannot_be_read_is_named_and_counted(self):
+        profile = helpers.load_profile("fanuc-gcode")
+        context = helpers.make_context(params={"percent": 90}, profile=profile, codes=helpers.load_codes(profile))
+        result = helpers.run_script(SCRIPT, stdin="G1 X10. F\u2013200.\nG1 X20. F200.\n", context=context)
+        self.assertTrue(result.ok, result.stderr)
+        payload = result.json()
+        self.assertEqual(payload["text"], "G1 X10. F\u2013200.\nG1 X20. F180.\n")
+        self.assertEqual(len(payload["findings"]), 1)
+        self.assertEqual(payload["findings"][0]["severity"], "warning")
+        self.assertIn("F\u2013", payload["findings"][0]["message"])
+        self.assertIn("U+2013 EN DASH, not the ASCII minus sign -", payload["findings"][0]["message"])
+        self.assertIn("Scaled 1 of 2 feed rates to 90 %; 1 left because the value cannot be read.", payload["message"])
+        self.assertNotIn("variable", payload["message"])

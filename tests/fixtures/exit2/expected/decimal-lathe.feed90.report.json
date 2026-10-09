@@ -1,0 +1,24 @@
+{
+  "about": "X11 (c): scale feed 90 % on decimal-lathe.nc gives decimal-lathe.feed90.nc under \"Lathe IS-B\", \"Lathe calc\" and no machine alike; the summary and findings of each run.",
+  "script": "scale_feed.py",
+  "params": {
+    "percent": 90
+  },
+  "runs": {
+    "is-b": {
+      "machine": "Lathe IS-B",
+      "message": "Scaled 3 feed rates to 90 %. Machine 'Lathe IS-B'.",
+      "findings": []
+    },
+    "calc": {
+      "machine": "Lathe calc",
+      "message": "Scaled 3 feed rates to 90 %. Machine 'Lathe calc'.",
+      "findings": []
+    },
+    "none": {
+      "machine": null,
+      "message": "Scaled 3 feed rates to 90 %. No machine: profile defaults assumed.",
+      "findings": []
+    }
+  }
+}

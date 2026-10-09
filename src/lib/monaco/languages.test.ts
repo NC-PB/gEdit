@@ -6,6 +6,7 @@
 // `defineTheme` calls, which is the whole contract this module has with the editor.
 
 import { describe, expect, it } from 'vitest';
+import { profiles as registry } from '$lib/stores/profiles';
 import { defineThemes, languageConfiguration, registerAll, registerLanguages } from './languages';
 import { THEME_IDS } from '$lib/core/grammar';
 import { validateProfile } from '$lib/core/profiles/validate';
@@ -154,5 +155,136 @@ describe('languageConfiguration', () => {
   it('follows the decimal separator of the profile', () => {
     const comma = { ...fanuc, syntax: { ...fanuc.syntax, decimalSeparator: ',' } } as unknown as Profile;
     expect('X10,5'.match(languageConfiguration(comma).wordPattern)).toEqual(['X10,5']);
+  });
+});
+
+// M13 (WP13.2, AD-29): a reload registers again, without registering an id twice.
+describe('registering again after a reload', () => {
+  const sources = (list: Profile[]) => ({ list: () => list, codeDb: (id: string) => dbOf(id === 'shop-lathe' ? fanuc.id : id) });
+
+  it('registers an id once, however often it is called, and touches nothing that did not change', () => {
+    const { monaco, log } = fakeMonaco();
+    registerLanguages(monaco, sources(profiles));
+    const counts = { registered: log.registered.length, configured: log.configured.length, themes: log.themes.length };
+
+    registerLanguages(monaco, sources(profiles));
+    registerLanguages(monaco, sources(profiles.map((p) => structuredClone(p))));
+
+    expect(log.registered).toHaveLength(counts.registered);
+    expect(log.configured).toHaveLength(counts.configured);
+    expect(log.grammars).toHaveLength(counts.configured);
+    expect(log.themes).toHaveLength(counts.themes);
+  });
+
+  it('registers a new id and sets the grammar and the themes again', () => {
+    const { monaco, log } = fakeMonaco();
+    registerLanguages(monaco, sources(profiles));
+    const before = { registered: log.registered.length, themes: log.themes.length };
+    const added = { ...structuredClone(fanuc), id: 'shop-lathe', name: 'Shop', shortName: 'Shop' };
+
+    registerLanguages(monaco, sources([...profiles, added]));
+
+    expect(log.registered).toHaveLength(before.registered + 1);
+    expect(log.registered.at(-1)?.id).toBe('shop-lathe');
+    expect(log.configured.filter(([id]) => id === 'shop-lathe')).toHaveLength(1);
+    expect(log.grammars.filter(([id]) => id === 'shop-lathe')).toHaveLength(1);
+    expect(log.themes).toHaveLength(before.themes + 2);
+  });
+
+  it('sets the configuration and grammar of a changed id again, and does not register it again', () => {
+    const { monaco, log } = fakeMonaco();
+    registerLanguages(monaco, sources(profiles));
+    const changed = structuredClone(fanuc);
+    changed.syntax.comments = [{ start: ';', end: null }] as typeof changed.syntax.comments;
+
+    registerLanguages(monaco, sources(profiles.map((p) => (p.id === fanuc.id ? changed : p))));
+
+    expect(log.registered.filter((entry) => entry.id === fanuc.id)).toHaveLength(1);
+    const configs = log.configured.filter(([id]) => id === fanuc.id);
+    expect(configs).toHaveLength(2);
+    expect((configs[1][1] as { comments: { lineComment?: string } }).comments.lineComment).toBe(';');
+    expect(log.grammars.filter(([id]) => id === fanuc.id)).toHaveLength(2);
+    // The ones that did not change were left alone.
+    expect(log.configured.filter(([id]) => id === klartext.id)).toHaveLength(1);
+  });
+
+  it('follows profiles.revision when registerAll is used, and stops when disposed', () => {
+    const { monaco, log } = fakeMonaco();
+    const stop = registerAll(monaco);
+    const initial = log.registered.length;
+    expect(initial).toBe(registry.list().length);
+
+    const user = { id: 'reload-demo', name: 'Demo', shortName: 'Demo', extends: 'fanuc-gcode' };
+    try {
+      expect(registry.reload([{ name: 'reload-demo.json', text: JSON.stringify(user) }])).toEqual([]);
+      expect(log.registered).toHaveLength(initial + 1);
+      expect(log.registered.at(-1)?.id).toBe('reload-demo');
+      expect(log.themes.length).toBeGreaterThan(2);
+
+      // A second reload of the same file registers nothing.
+      registry.reload([{ name: 'reload-demo.json', text: JSON.stringify(user) }]);
+      expect(log.registered).toHaveLength(initial + 1);
+
+      stop();
+      const other = { ...user, id: 'reload-demo-2' };
+      registry.reload([{ name: 'reload-demo-2.json', text: JSON.stringify(other) }]);
+      expect(log.registered).toHaveLength(initial + 1);
+    } finally {
+      stop();
+      registry.reload([]);
+    }
+  });
+});
+
+// M13 review fix CODE-14b: one profile that cannot be registered does not take the others with it.
+describe('a profile that cannot be registered', () => {
+  it('is logged and skipped; the others are registered and the themes are defined', () => {
+    const { monaco, log } = fakeMonaco();
+    const broken = { ...structuredClone(fanuc), id: 'broken-one', name: 'Broken', shortName: 'Brk' };
+    const errors: unknown[][] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => void errors.push(args);
+    try {
+      registerLanguages(monaco, {
+        list: () => [broken, ...profiles],
+        codeDb: (id: string) => {
+          if (id === 'broken-one') throw new Error('no code database');
+          return dbOf(id);
+        },
+      });
+    } finally {
+      console.error = original;
+    }
+    expect(errors).toHaveLength(1);
+    expect(String(errors[0][0])).toContain('broken-one');
+    expect(log.registered.map((entry) => entry.id)).toEqual(profiles.map((p) => p.id));
+    expect(log.themes.length).toBeGreaterThan(0);
+  });
+
+  it('registers an id once even when its grammar fails first and works on the retry', () => {
+    const { monaco, log } = fakeMonaco();
+    const original = console.error;
+    console.error = () => undefined;
+    let fail = true;
+    const flaky = {
+      ...monaco,
+      languages: {
+        ...monaco.languages,
+        setMonarchTokensProvider: (id: string, grammar: unknown) => {
+          if (fail && id === fanuc.id) throw new Error('grammar');
+          log.grammars.push([id, grammar]);
+        },
+      },
+    } as unknown as Monaco;
+    try {
+      const sources = { list: () => profiles, codeDb: dbOf };
+      registerLanguages(flaky, sources);
+      fail = false;
+      registerLanguages(flaky, sources);
+    } finally {
+      console.error = original;
+    }
+    expect(log.registered.filter((entry) => entry.id === fanuc.id)).toHaveLength(1);
+    expect(log.grammars.filter(([id]) => id === fanuc.id)).toHaveLength(1);
   });
 });

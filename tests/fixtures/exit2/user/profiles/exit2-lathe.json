@@ -1,0 +1,13 @@
+{
+  "id": "exit2-lathe",
+  "extends": "fanuc-lathe",
+  "name": "Exit2 lathe (user profile)",
+  "shortName": "Exit2 T",
+  "codes": "exit2-lathe",
+  "detect": {
+    "folders": ["{{SHOP}}"]
+  },
+  "numbering": {
+    "step": 5
+  }
+}

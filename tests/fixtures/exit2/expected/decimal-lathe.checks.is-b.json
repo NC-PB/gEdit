@@ -1,0 +1,86 @@
+{
+  "about": "X11 (c): program_checks.py on decimal-lathe.nc, machine \"Lathe IS-B\".",
+  "input": "decimal-lathe.nc",
+  "profile": "fanuc-lathe",
+  "machine": {
+    "name": "Lathe IS-B",
+    "profile": "fanuc-lathe",
+    "params": {
+      "numberInput": {
+        "mode": "increment",
+        "incrementMm": "0.001",
+        "incrementInch": "0.0001",
+        "incrementDeg": "0.001",
+        "incrementSec": "0.001",
+        "classes": {
+          "feedPerMin": {
+            "mode": "increment",
+            "increment": "1",
+            "incrementInch": "0.01"
+          },
+          "feedPerRev": {
+            "mode": "increment",
+            "increment": "0.01",
+            "incrementInch": "0.0001"
+          }
+        }
+      },
+      "units": "mm",
+      "diameter": "on",
+      "variants": {
+        "gcodeSystem": "B",
+        "incrementalAddresses": "uw",
+        "toolWord": "byLength"
+      },
+      "modalInitial": {
+        "feedmode": "G95"
+      }
+    }
+  },
+  "report": {
+    "title": "Program checks",
+    "columns": [
+      {
+        "key": "line",
+        "label": "Line"
+      },
+      {
+        "key": "check",
+        "label": "Check"
+      },
+      {
+        "key": "severity",
+        "label": "Severity"
+      },
+      {
+        "key": "message",
+        "label": "Finding"
+      }
+    ],
+    "rows": [
+      {
+        "line": 11,
+        "check": "Machine reading",
+        "checkId": "machineReading",
+        "severity": "info",
+        "message": "Z1000: 1 mm on machine 'Lathe IS-B'; Z1000. would be 1000 mm"
+      },
+      {
+        "line": 13,
+        "check": "Machine reading",
+        "checkId": "machineReading",
+        "severity": "info",
+        "message": "X50: 0.05 mm on machine 'Lathe IS-B'; X50. would be 50 mm"
+      },
+      {
+        "line": 15,
+        "check": "Machine reading",
+        "checkId": "machineReading",
+        "severity": "info",
+        "message": "W-2000: -2 mm on machine 'Lathe IS-B'; W-2000. would be -2000 mm"
+      }
+    ],
+    "message": "3 findings in 1 check. Machine 'Lathe IS-B': numbers without a point are increments of 0.001 mm.",
+    "findings": []
+  }
+}

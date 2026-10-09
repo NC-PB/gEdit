@@ -68,7 +68,7 @@
       "line": 6
     },
     {
-      "where": "TOOL CALL 1 Z (line 5)",
+      "where": "T1 (TOOL CALL 1 Z, line 5)",
       "scope": "tool",
       "axis": "X",
       "axisId": "X",
@@ -80,7 +80,7 @@
       "line": 11
     },
     {
-      "where": "TOOL CALL 1 Z (line 5)",
+      "where": "T1 (TOOL CALL 1 Z, line 5)",
       "scope": "tool",
       "axis": "Y",
       "axisId": "Y",
@@ -92,7 +92,7 @@
       "line": 11
     },
     {
-      "where": "TOOL CALL 1 Z (line 5)",
+      "where": "T1 (TOOL CALL 1 Z, line 5)",
       "scope": "tool",
       "axis": "Z",
       "axisId": "Z",
@@ -104,7 +104,7 @@
       "line": 6
     },
     {
-      "where": "TOOL CALL 2 Z (line 15)",
+      "where": "T2 (TOOL CALL 2 Z, line 15)",
       "scope": "tool",
       "axis": "X",
       "axisId": "X",
@@ -116,7 +116,7 @@
       "line": 26
     },
     {
-      "where": "TOOL CALL 2 Z (line 15)",
+      "where": "T2 (TOOL CALL 2 Z, line 15)",
       "scope": "tool",
       "axis": "Y",
       "axisId": "Y",
@@ -128,7 +128,7 @@
       "line": 25
     },
     {
-      "where": "TOOL CALL 2 Z (line 15)",
+      "where": "T2 (TOOL CALL 2 Z, line 15)",
       "scope": "tool",
       "axis": "Z",
       "axisId": "Z",

@@ -1,0 +1,230 @@
+{
+  "about": "X8: the bundled program_checks.py on checks-lathe.nc with its form defaults, under the machine \"X8 Lathe IS-B\" (made as \"machine\" says and chosen for this document). The whole report; every row with a line jumps to it.",
+  "input": "checks-lathe.nc",
+  "profile": "fanuc-lathe",
+  "machine": {
+    "name": "X8 Lathe IS-B",
+    "profile": "fanuc-lathe",
+    "params": {
+      "numberInput": {
+        "mode": "increment",
+        "incrementMm": "0.001",
+        "incrementInch": "0.0001",
+        "incrementDeg": "0.001",
+        "incrementSec": "0.001",
+        "classes": {
+          "feedPerMin": {
+            "mode": "increment",
+            "increment": "1",
+            "incrementInch": "0.01"
+          },
+          "feedPerRev": {
+            "mode": "increment",
+            "increment": "0.01",
+            "incrementInch": "0.0001"
+          }
+        }
+      },
+      "units": "mm",
+      "diameter": "on",
+      "variants": {
+        "gcodeSystem": "A",
+        "incrementalAddresses": "uw",
+        "toolWord": "byLength"
+      }
+    }
+  },
+  "report": {
+    "title": "Program checks",
+    "columns": [
+      {
+        "key": "line",
+        "label": "Line"
+      },
+      {
+        "key": "check",
+        "label": "Check"
+      },
+      {
+        "key": "severity",
+        "label": "Severity"
+      },
+      {
+        "key": "message",
+        "label": "Finding"
+      }
+    ],
+    "rows": [
+      {
+        "line": 10,
+        "check": "Speed clamp",
+        "checkId": "cssClamp",
+        "severity": "warning",
+        "message": "G96: constant surface speed with no spindle speed clamp before it; the spindle speeds up as the diameter shrinks"
+      },
+      {
+        "line": 17,
+        "check": "Call in a profile",
+        "checkId": "callInProfile",
+        "severity": "error",
+        "message": "a subprogram call inside the profile N100 to N200 that G71 on line 13 runs"
+      },
+      {
+        "line": 20,
+        "check": "Profile targets",
+        "checkId": "profileTargets",
+        "severity": "error",
+        "message": "G70: Q300 names no block of this program"
+      },
+      {
+        "line": 24,
+        "check": "Offset cancel",
+        "checkId": "offsetCancelCut",
+        "severity": "warning",
+        "message": "G01 Z-10. F0.2: a cut after T0100 cancelled the tool offset (line 21), with no tool call between"
+      },
+      {
+        "line": 27,
+        "check": "Machine reading",
+        "checkId": "machineReading",
+        "severity": "info",
+        "message": "Z2000: 2 mm on machine 'X8 Lathe IS-B'; Z2000. would be 2000 mm"
+      },
+      {
+        "line": 32,
+        "check": "Thread under surface speed",
+        "checkId": "threadUnderCss",
+        "severity": "warning",
+        "message": "G92 X19.4 Z-18. F1.5: a thread cut under constant surface speed; the speed changes with the diameter and the lead may not follow"
+      },
+      {
+        "line": 36,
+        "check": "Refused in this state",
+        "checkId": "stateConflicts",
+        "severity": "warning",
+        "message": "G68.2: the control refuses it while constant surface speed is on"
+      },
+      {
+        "line": 48,
+        "check": "Rigid tapping",
+        "checkId": "rigidTapping",
+        "severity": "error",
+        "message": "G00 X0. Z5.: a move between M29 (line 46) and the tapping cycle"
+      },
+      {
+        "line": 51,
+        "check": "Tool change in a cycle",
+        "checkId": "toolChangeInCycle",
+        "severity": "warning",
+        "message": "T0606: a tool change while the cycle G84 (line 49) is in force"
+      },
+      {
+        "line": 55,
+        "check": "Tool word",
+        "checkId": "toolWordFormat",
+        "severity": "warning",
+        "message": "T010101: not a tool word this machine's tool-word format describes (6 digits)"
+      },
+      {
+        "line": 57,
+        "check": "Words in a block",
+        "checkId": "blockWords",
+        "severity": "error",
+        "message": "T0202 T0303: 2 T words in one block"
+      },
+      {
+        "line": 60,
+        "check": "Spindle",
+        "checkId": "spindleOff",
+        "severity": "warning",
+        "message": "G01 X40. F0.1: a cut while the spindle is stopped (M05 on line 58)"
+      },
+      {
+        "line": 62,
+        "check": "Alone in its block",
+        "checkId": "aloneInBlock",
+        "severity": "error",
+        "message": "G65: has to stand in a block of its own; the block writes G00 in front of it or another G code"
+      },
+      {
+        "line": 65,
+        "check": "DO and END",
+        "checkId": "doEnd",
+        "severity": "error",
+        "message": "DO1: no END1 follows in the program"
+      },
+      {
+        "line": 68,
+        "check": "Jump target",
+        "checkId": "jumpTargets",
+        "severity": "error",
+        "message": "GOTO 900: no block N900 in this program"
+      },
+      {
+        "line": 70,
+        "check": "Digits",
+        "checkId": "wordDigits",
+        "severity": "error",
+        "message": "X123456.789: 9 digits once it is converted to increments; the control takes at most 8"
+      },
+      {
+        "line": 71,
+        "check": "Tape marker",
+        "checkId": "tapeMarkerInComment",
+        "severity": "error",
+        "message": "(FEED 100% FROM HERE): a % inside a comment ends the program when it is read in from tape or a serial line"
+      },
+      {
+        "line": 72,
+        "check": "Comment",
+        "checkId": "unclosedComments",
+        "severity": "error",
+        "message": "(RETRACT, THE COMMENT IS NOT CLOSED: the comment is opened with ( and not closed with ) on its line"
+      },
+      {
+        "line": 73,
+        "check": "Brackets",
+        "checkId": "brackets",
+        "severity": "error",
+        "message": "#2=[#1+1: 1 [ is not closed"
+      },
+      {
+        "line": 74,
+        "check": "Lower case",
+        "checkId": "lowerCase",
+        "severity": "info",
+        "message": "g00, z100.: written in lower case; this control reads its addresses in upper case"
+      },
+      {
+        "line": 76,
+        "check": "Characters",
+        "checkId": "characters",
+        "severity": "warning",
+        "message": "–: – (en dash) is not an ASCII character, outside a comment"
+      },
+      {
+        "line": 77,
+        "check": "Stop",
+        "checkId": "stops",
+        "severity": "info",
+        "message": "M00: Program stop"
+      },
+      {
+        "line": 78,
+        "check": "Stop",
+        "checkId": "stops",
+        "severity": "info",
+        "message": "M01: Optional stop"
+      },
+      {
+        "line": 81,
+        "check": "Program frame",
+        "checkId": "programFrame",
+        "severity": "error",
+        "message": "G00 X100. Z100.: after the program end M30 on line 79; it never runs"
+      }
+    ],
+    "message": "24 findings in 23 checks. Machine 'X8 Lathe IS-B': numbers without a point are increments of 0.001 mm.",
+    "findings": []
+  }
+}

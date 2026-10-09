@@ -317,6 +317,36 @@ Three programs and the bytes `m5-exit-criteria` and `m5-exit-criteria-nopython` 
 top-level README. Written by `exit/gen-exit.py`; do not edit them by hand.
 `exit/README.md` describes each file. `tests/unit/fixtures.test.ts` does not walk `exit/`.
 
+## `exit2/`: the Phase 2 exit-criteria programs
+
+The programs, user files and goldens of `m13-exit-criteria` and
+`m13-exit-criteria-nopython` (phase 2 plan §2.2, §6 M13 H13). H13a wrote them in M13.
+
+- **The inputs** are written by `exit2/gen-exit2.py`; do not edit them by hand. The two
+  report scripts under `exit2/scripts/` are plain files.
+- **The goldens** under `exit2/expected/` and `exit2/expected-nopython/` are what gEdit's own
+  TypeScript core and bundled Python scripts made of the inputs, each checked by hand
+  against its criterion.
+- **`exit2/README.md`** describes every file, the order of the run and the conventions.
+- **Test coverage.** `tests/unit/fixtures.test.ts` does not walk `exit2/`, and no unit test
+  reads it. The runtime scenarios are its tests.
+
+Every program is synthetic, written for gEdit in our own words from `docs/planning/syntax/`,
+and carries the marker in its first line, or its second under an Okuma or Sinumerik header.
+The files of each criterion:
+
+| Criterion | Files | Provenance |
+|---|---|---|
+| X1 | `fanuc-lathe-a.nc` (CRLF, G-code system A) and `fanuc-lathe-b.nc` (system B) | Written for gEdit from `syntax-fanuc.md` §4–§8. |
+| X2 | `okuma-lathe.MIN` with its byte copy `okuma-lathe.txt`, and `sinumerik-lathe.MPF` with its byte copy `sinumerik-lathe.txt` | Written for gEdit from `syntax-okuma.md` and `syntax-sinumerik.md`. |
+| X2 | `exit2/scripts/report_modal.py` | A user script written for gEdit. |
+| X5 | `repost-old.nc` and `repost-new.nc` | Byte copies of `compare/x5-repost/original.nc` and `reposted.nc`, gEdit's own fixtures. |
+| X6 | `search-a.nc`, `search-b.nc` and `search-c.nc` | Fanuc mill programs written for gEdit. |
+| X8 | `checks-mill.nc`, `checks-lathe.nc`, `checks-okuma.MIN` and `checks-sinumerik.MPF` | Deliberately wrong programs written for gEdit: one defect of every kind the program checks report on each dialect, each announced by a comment. |
+| X9 | `shop/part-17.nc`; the user files `user/profiles/exit2-lathe.json`, `user/profiles/exit2-broken.json` and `user/codes/exit2-lathe.json` | Written for gEdit. The builder code `M13` and its text are gEdit's own example. |
+| X11 | `decimal-lathe.nc` and `exit2/scripts/report_machine_params.py` | Written for gEdit. |
+| X12 | `twin-single.nc`, `twin_CH1.nc` and `twin_CH2.nc` | Written for gEdit. The wait codes `M1xx` and their defects are gEdit's own examples, as in `channels/`. |
+
 ## `compare/`: compare fixtures (WP11.2)
 
 Synthetic programs for the review-mode normalization and the unified diff (X5), read by

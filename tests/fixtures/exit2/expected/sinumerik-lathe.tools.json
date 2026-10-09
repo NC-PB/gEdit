@@ -1,0 +1,108 @@
+{
+  "about": "X2: no machine. detected is the profile each file opens with; unknownTokens lists the tokenizer's unknown tokens outside comments (none). F7/Shift+F7 visit toolLines; mapTools are the map's tool rows; toolList is the bundled tool_list.py with its form defaults.",
+  "input": "sinumerik-lathe.MPF",
+  "profile": "sinumerik",
+  "machine": null,
+  "variants": {},
+  "detected": {
+    "sinumerik-lathe.MPF": "sinumerik",
+    "sinumerik-lathe.txt": "sinumerik"
+  },
+  "sameBytes": true,
+  "unknownTokens": [],
+  "toolLines": [
+    8,
+    19,
+    30,
+    37
+  ],
+  "mapTools": [
+    {
+      "line": 8,
+      "text": "ROUGH — OD ROUGH"
+    },
+    {
+      "line": 19,
+      "text": "T1 — OD FINISH"
+    },
+    {
+      "line": 30,
+      "text": "T2 — FACE GROOVE"
+    },
+    {
+      "line": 37,
+      "text": "THREAD_M44 — THREAD M44X1.5"
+    }
+  ],
+  "toolList": {
+    "title": "Tool list",
+    "columns": [
+      {
+        "key": "tool",
+        "label": "Tool"
+      },
+      {
+        "key": "description",
+        "label": "Description"
+      },
+      {
+        "key": "line",
+        "label": "First call"
+      },
+      {
+        "key": "calls",
+        "label": "Calls"
+      },
+      {
+        "key": "feed",
+        "label": "Feed"
+      },
+      {
+        "key": "speed",
+        "label": "Speed"
+      }
+    ],
+    "rows": [
+      {
+        "tool": "ROUGH",
+        "description": "OD ROUGH",
+        "line": 8,
+        "calls": 1,
+        "feed": "0.18-0.28 /rev",
+        "speed": "180 m/min (G96)"
+      },
+      {
+        "tool": "T1",
+        "description": "OD FINISH",
+        "line": 19,
+        "calls": 1,
+        "feed": "0.15 /rev",
+        "speed": "220 m/min (G96)"
+      },
+      {
+        "tool": "T2",
+        "description": "FACE GROOVE",
+        "line": 30,
+        "calls": 1,
+        "feed": "0.06 /rev",
+        "speed": "150 m/min (G96)"
+      },
+      {
+        "tool": "THREAD_M44",
+        "description": "THREAD M44X1.5",
+        "line": 37,
+        "calls": 1,
+        "feed": "",
+        "speed": "700"
+      }
+    ],
+    "message": "4 tools",
+    "findings": [
+      {
+        "line": 49,
+        "severity": "info",
+        "message": "THREAD_M44: the F of 1 thread block is not its lead and is not cut with (G33 takes its lead from I, J or K), so it is not in the range."
+      }
+    ]
+  }
+}

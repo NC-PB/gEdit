@@ -1186,6 +1186,7 @@ def scale_token(
     surface: Optional[str] = None,
     idle_tap: bool = False,
     lower: bool = False,
+    tokens: Sequence[gedit_nc.Token] = (),
 ) -> Optional[Tuple[int, int, str]]:
     """The edit this spindle word needs, or ``None`` — with a finding when it is left alone.
 
@@ -1199,6 +1200,14 @@ def scale_token(
     block = block or Block(tracker.active_cycle, "G96")
 
     if token.value is None or token.value_text is None:
+        # M13 review (NC-5): `F–200.` with a dash pasted for the minus sign is the address
+        # alone, a character no control reads and a bare number: named as such, not as a
+        # variable.
+        unreadable = gedit_nc.unreadable_value(token, tokens)
+        if unreadable is not None:
+            counts.skip("unreadable")
+            findings.add(line, "warning", "%s: %s, so it is not scaled." % unreadable)
+            return None
         counts.skip("value")
         findings.add(line, "warning", "%s is not a plain number, so it is not scaled." % word)
         return None
@@ -1646,7 +1655,7 @@ def run(
                 # A clamp word (`LIMS=`, `LIMS[2]=`) is a limit wherever it stands; it names
                 # itself.
                 counts.total += 1
-                edit = scale_token(word.value, tracker, "", params, number, findings, counts, word.name, word.spindle, block)
+                edit = scale_token(word.value, tracker, "", params, number, findings, counts, word.name, word.spindle, block, tokens=tokens)
                 if edit is not None:
                     edits.append(edit)
                 continue
@@ -1656,7 +1665,7 @@ def run(
                 counts.total += 1
                 edit = scale_token(
                     word.value, tracker, limit_code, params, number, findings, counts, word.name, spindle, block,
-                    lower=lower,
+                    lower=lower, tokens=tokens,
                 )
                 if edit is not None:
                     edits.append(edit)
@@ -1682,7 +1691,7 @@ def run(
             edit = scale_token(
                 word.value, tracker, limit_code if word.kind in ("speed", "main") else None, params, number,
                 findings, counts, word.name, spindle if limit_code is not None else None, block, word.surface,
-                idle_tap, lower=lower and word.kind in ("speed", "main"),
+                idle_tap, lower=lower and word.kind in ("speed", "main"), tokens=tokens,
             )
             if edit is not None:
                 edits.append(edit)
@@ -1752,6 +1761,7 @@ def summary(counts: Counts, findings: Findings, params: Params) -> str:
 
     parts: List[str] = []
     for reason, text in (
+        ("unreadable", "left because the value cannot be read"),
         ("value", "left as a variable or an expression"),
         ("limit", "left as a speed limit"),
         ("css", "left as a surface speed"),

@@ -113,16 +113,20 @@ one answers whether a line belongs to the block above it by a leading marker (M8
 :func:`decimal_of` (2026-09) is the exact value of a written number: a Klartext decimal
 comma stays in a token's ``value.raw`` so that it is written back, which makes
 ``Decimal(value.raw)`` raise, and a script compares and limits values through this one
-instead. They are public, documented and covered by the tests, but the contract that may
-not move is the section 7.10 one.
+instead. :func:`program_start_of`, :func:`tool_label` and :func:`unreadable_value` (M13
+review) say where a program starts, how a tool is named, and why a word has no value. They
+are public, documented and covered by the tests, but the contract that may not move is the
+section 7.10 one.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import sys
-from typing import Any, Dict, List, Optional, Sequence
+import unicodedata
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 # The implementation, re-exported unchanged (see "How the module is laid out"). The
 # `noqa`-free plain imports are deliberate: a script that reads this file has to be able to
@@ -176,6 +180,7 @@ from _nc_modal import (
     names_main_spindle,
     position_of,
     prime_tracker,
+    program_start_of,
     same_spindle,
     speed_limit_bound_of,
     speed_limit_of,
@@ -240,6 +245,11 @@ __all__ = [
     "names_main_spindle",
     "same_spindle",
     "is_assignment",
+    # M13 review: the line a program starts on (NC-4), a tool as the tool list names it
+    # (NC-9), and a word whose value cannot be read (NC-5).
+    "program_start_of",
+    "tool_label",
+    "unreadable_value",
     # Beyond section 7.10, see the module docstring.
     "mask_comments",
     "block_number_of",
@@ -331,6 +341,69 @@ def preceding_lines(context: Dict[str, Any]) -> List[str]:
     if not isinstance(start, int) or isinstance(start, bool) or len(lines) != start - 1:
         return []
     return list(lines)
+
+
+# ---------------------------------------------------------------------------
+# Tools and words (M13 review)
+# ---------------------------------------------------------------------------
+
+_LEADING_ZEROS = re.compile(r"^0+(?=\d)", re.ASCII)
+_ALL_DIGITS = re.compile(r"^\d+$", re.ASCII)
+
+
+def tool_label(tool: str, drop_leading_zeros: bool = False, collapse_offset_digits: bool = False) -> str:
+    """``T01`` -> ``T1``, ``T0101`` -> ``T1`` on a lathe profile, ``"MILL_D10"`` -> ``MILL_D10``.
+
+    ``tool`` is the station as the profile's ``toolCall.tool`` reads it (its ``tool``
+    group); the two switches are the profile's ``toolList.dropLeadingZeros`` and
+    ``collapseOffsetDigits`` (the tool list's parameter may override the first). The tool
+    list names its rows with this, and the extents name their tool scopes with it (M13,
+    NC-9), so the two reports call one tool by one name.
+
+    A name keeps every character it was written with. One made of digits only keeps its
+    quotation marks too (``"007"``), so the list never shows it as the number it is not.
+    """
+    quoted = len(tool) >= 2 and tool.startswith('"') and tool.endswith('"')
+    if quoted:
+        value = tool[1:-1]
+        return tool if _ALL_DIGITS.match(value) or value == "" else value
+    value = tool
+    if collapse_offset_digits and _ALL_DIGITS.match(value) and len(value) >= 4 and len(value) % 2 == 0:
+        value = value[: len(value) // 2]
+    if value == "" or not value[0].isdigit():
+        return value
+    if drop_leading_zeros:
+        value = _LEADING_ZEROS.sub("", value)
+    return "T" + value
+
+
+def unreadable_value(token: Token, tokens: Sequence[Token]) -> Optional[Tuple[str, str]]:
+    """Why a word has no value, when a character no control reads stands right after it.
+
+    ``Z–5.`` (an en dash) and ``Z−5.`` (U+2212) are what a dash pasted from a document makes
+    of a word: the address ``Z``, a character the tokenizer cannot read (an ``unknown``
+    token) and a bare ``5.``. Answers ``(written, why)``: the three as they stand in the line
+    and ``no number can be read after Z (the next character is U+2013 EN DASH, not the ASCII
+    minus sign -)``. ``None`` for anything else, a word with no value followed by a space,
+    a comment or the end of the line included (Klartext's tool axis ``TOOL CALL 1 Z``).
+    """
+    if token.kind != "word" or token.value_text is not None or not token.address:
+        return None
+    after = [t for t in tokens if t.start >= token.end]
+    if not after or after[0].kind != "unknown" or after[0].start != token.end or after[0].text == "":
+        return None
+    odd = after[0]
+    end = odd.end
+    if len(after) > 1 and after[1].start == odd.end and after[1].kind == "word" and after[1].address is None:
+        end = after[1].end  # the bare number behind it (`5.`)
+    written = token.text + odd.text + (after[1].text if end != odd.end else "")
+    char = odd.text[0]
+    name = unicodedata.name(char, "")
+    shown = "U+%04X%s" % (ord(char), " " + name if name else "")
+    # A dash or a minus sign of another script is what was meant as a minus.
+    if unicodedata.category(char) == "Pd" or "MINUS" in name:
+        shown += ", not the ASCII minus sign -"
+    return written.strip(), "no number can be read after %s (the next character is %s)" % (token.text.strip(), shown)
 
 
 # ---------------------------------------------------------------------------

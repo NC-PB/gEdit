@@ -1,0 +1,217 @@
+{
+  "about": "X12: the four machines, as the run makes them (Machines page or ctx.machines.add); \"Twin broken\" is (d): its section start does not compile, so its channel block is reported and dropped to layout none while the rest of it stays in force.",
+  "machines": [
+    {
+      "name": "Twin 31i",
+      "profile": "fanuc-lathe",
+      "notes": "",
+      "params": {
+        "numberInput": {
+          "mode": "calculator",
+          "incrementMm": "0.001"
+        },
+        "units": "mm",
+        "diameter": "on",
+        "variants": {
+          "gcodeSystem": "A",
+          "incrementalAddresses": "uw",
+          "toolWord": "byLength"
+        },
+        "channels": {
+          "layout": "single-file",
+          "list": [
+            {
+              "id": "1",
+              "name": "Channel 1"
+            },
+            {
+              "id": "2",
+              "name": "Channel 2"
+            }
+          ],
+          "sectionStart": "^O(?<channel>[12])\\d{3}(?![\\d.])",
+          "sectionEnd": "(?<![A-Z])M(?:99|30)(?![\\d.])",
+          "syncMarks": [
+            {
+              "id": "m1xx",
+              "label": "M1 and two digits, all channels",
+              "semantics": "rendezvous",
+              "match": {
+                "kind": "prefix",
+                "prefix": "M1",
+                "idDigits": {
+                  "min": 2,
+                  "max": 2
+                }
+              },
+              "partners": {
+                "kind": "all"
+              },
+              "blocking": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Twin 31i lines",
+      "profile": "fanuc-lathe",
+      "notes": "",
+      "params": {
+        "numberInput": {
+          "mode": "calculator",
+          "incrementMm": "0.001"
+        },
+        "units": "mm",
+        "diameter": "on",
+        "variants": {
+          "gcodeSystem": "A",
+          "incrementalAddresses": "uw",
+          "toolWord": "byLength"
+        },
+        "channels": {
+          "layout": "single-file",
+          "list": [
+            {
+              "id": "1",
+              "name": "Channel 1"
+            },
+            {
+              "id": "2",
+              "name": "Channel 2"
+            }
+          ],
+          "sectionStart": "^O(?<channel>[12])\\d{3}(?![\\d.])",
+          "sectionEnd": "(?<![A-Z])M(?:99|30)(?![\\d.])",
+          "syncMarks": [
+            {
+              "id": "m1xx-p",
+              "label": "M1 and two digits, P names the channels",
+              "semantics": "rendezvous",
+              "match": {
+                "kind": "prefix",
+                "prefix": "M1",
+                "idDigits": {
+                  "min": 2,
+                  "max": 2
+                }
+              },
+              "partners": {
+                "kind": "line",
+                "pattern": "M1\\d\\d\\s*P(?<channels>\\d+)",
+                "decode": "digits",
+                "whenAbsent": {
+                  "kind": "none"
+                }
+              },
+              "blocking": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Twin 31i multi",
+      "profile": "fanuc-lathe",
+      "notes": "",
+      "params": {
+        "numberInput": {
+          "mode": "calculator",
+          "incrementMm": "0.001"
+        },
+        "units": "mm",
+        "diameter": "on",
+        "variants": {
+          "gcodeSystem": "A",
+          "incrementalAddresses": "uw",
+          "toolWord": "byLength"
+        },
+        "channels": {
+          "layout": "multi-file",
+          "list": [
+            {
+              "id": "1",
+              "name": "Channel 1"
+            },
+            {
+              "id": "2",
+              "name": "Channel 2"
+            }
+          ],
+          "fileName": "^(?<stem>.+)_CH(?<channel>\\d+)\\.nc$",
+          "syncMarks": [
+            {
+              "id": "m1xx",
+              "label": "M1 and two digits, all channels",
+              "semantics": "rendezvous",
+              "match": {
+                "kind": "prefix",
+                "prefix": "M1",
+                "idDigits": {
+                  "min": 2,
+                  "max": 2
+                }
+              },
+              "partners": {
+                "kind": "all"
+              },
+              "blocking": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Twin broken",
+      "profile": "fanuc-lathe",
+      "notes": "",
+      "params": {
+        "numberInput": {
+          "mode": "calculator",
+          "incrementMm": "0.001"
+        },
+        "units": "mm",
+        "diameter": "on",
+        "variants": {
+          "gcodeSystem": "A",
+          "incrementalAddresses": "uw",
+          "toolWord": "byLength"
+        },
+        "channels": {
+          "layout": "single-file",
+          "list": [
+            {
+              "id": "1",
+              "name": "Channel 1"
+            },
+            {
+              "id": "2",
+              "name": "Channel 2"
+            }
+          ],
+          "sectionStart": "^O(?<channel>[12]\\d{3}",
+          "sectionEnd": "(?<![A-Z])M(?:99|30)(?![\\d.])",
+          "syncMarks": [
+            {
+              "id": "m1xx",
+              "label": "M1 and two digits, all channels",
+              "semantics": "rendezvous",
+              "match": {
+                "kind": "prefix",
+                "prefix": "M1",
+                "idDigits": {
+                  "min": 2,
+                  "max": 2
+                }
+              },
+              "partners": {
+                "kind": "all"
+              },
+              "blocking": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

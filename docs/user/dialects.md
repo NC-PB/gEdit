@@ -11,7 +11,9 @@ renumbering, the code help and the scripts all ask the profile.
 A profile says how a program is **written**. How one particular control **reads** it — what
 `X50` is worth, which G-code system a lathe is set to, whether `X` is a diameter when the
 program starts — is a separate thing, and it lives in a
-[machine configuration](machines.md).
+[machine configuration](machines.md). The profiles that ship are not the only ones: you can
+write [profiles and code files of your own](profiles.md), which start from one of them and
+change only what differs.
 
 ## What ships
 
@@ -38,8 +40,10 @@ itself, even as an `.MPF` file; if the status bar says Sinumerik, change it by h
 ## Which dialect a file gets
 
 A dialect you picked by hand for a file wins: gEdit remembers it for that file
-([Coming back where you left off](README.md#coming-back-where-you-left-off)). Otherwise it
-scores each profile:
+([Coming back where you left off](README.md#coming-back-where-you-left-off)). That holds for
+a [profile of your own](profiles.md) as much as for a shipped one: it is in the list when you
+click the dialect, and the choice is remembered for the file. Otherwise it scores each
+profile:
 
 1. The **extension** counts. `.nc` and `.tap` point at Fanuc, and `.cnc`, `.eia` and `.iso`
    a little less; `.h` points strongly at Klartext; `.mpf` and `.spf` point at Sinumerik.
@@ -78,6 +82,15 @@ scores each profile:
    extension, a plain text note — opens with the dialect of the document you were working
    in, or, with no document open, with the default dialect from
    `Settings ▸ Files ▸ Default dialect`.
+
+**A profile of your own is picked automatically only through rules it added itself**: a
+folder it lists (every program inside it, subfolders included, is read with the profile), an
+extension of its own, or content patterns of its own. What it merely inherits from the
+profile it starts from does not make it a candidate, and when it and a shipped profile
+score the same, the shipped one wins, whatever the priority. So a profile of yours that only changes the numbering does
+not take over the programs of the profile it starts from; pick it by hand, or give it a
+folder. The details, with an example, are in [When your profile is
+used](profiles.md#when-your-profile-is-used).
 
 The extension is a **hint, not a verdict**. A Klartext program that somebody saved as
 `part.nc` is still recognised as Klartext, because its content says so. A Fanuc-style
@@ -145,7 +158,7 @@ program moves `Y` on many lines too, and stays with turning because of its one t
 `SETMS`, `TRANSMIT`, `TRACYL` or a speed or `M` code written for a numbered spindle (`S2=`,
 `M2=`), outside a comment or string, sends the whole file to the turning profile, however many
 milling operations it has. `G96`/`G97` alone and `DIAMOF` do not decide; a milling post that
-writes `G97 S…` stays milling. A folder rule of a user profile still wins. A file with neither kind of evidence — a subprogram that
+writes `G97 S…` stays milling. A folder rule of a profile of your own still wins. A file with neither kind of evidence — a subprogram that
 only moves — goes to the turning profile. Okuma has no milling partner yet: an Okuma
 milling program opens with the turning profile, from its `G15 H`/`G56 H` offsets as much as
 from its extension.
@@ -336,6 +349,12 @@ changes a value, but the machine's unit system decides what every number is wort
 may be written with a decimal comma instead of the point — the owner's published CAM output
 mostly does — and gEdit reads either one; a value keeps whichever mark it was written with
 when a script rewrites it.
+
+**Typing.** Every shipped profile also decides two things about how the editor behaves while
+you type, and they are the same on all six: letters typed in code are made upper case (a
+comment, a string and free text are left as typed), and a key press that would run two
+blocks together is refused. See [Typing](README.md#typing-forced-upper-case-and-no-accidental-joins);
+a profile of your own can change either one.
 
 The program map lists what each profile calls worth listing:
 
@@ -893,10 +912,18 @@ before you trust a code description on such a file.
 
 ## Writing your own profile
 
-Not in this version. Profiles are data files inside the application, and gEdit does not
-read profiles from your own folders yet. What you *can* shape today is a
-[machine configuration](machines.md), which is where the settings that differ from machine
-to machine belong anyway, and the script library — see [scripts.md](scripts.md). A script
-always gets the profile and the code database of the document it runs on, **with the
-document's machine already applied**, so it can be written against whatever dialect and
-whatever G-code system is in front of it instead of assuming one.
+You can write profiles and code files of your own: a profile for the programs of one
+machine or one folder (their numbering step, the files they come in, the way you want typing
+to behave), and a code file with the M codes your machine builder added. They live in two
+folders next to the settings, are managed on `Settings ▸ Profiles`, and are laid over the
+profile they start from, so a file is usually a few lines. Everything about them, with an
+example profile, an example M-code table and the rules that decide when a profile of yours
+is used, is on its own page: [Your own profiles and code files](profiles.md).
+
+What differs from machine to machine in how a control *reads* a program belongs in a
+[machine configuration](machines.md) instead, not in a profile
+([which is which](profiles.md#profile-or-machine)). The script library is the third
+way to shape gEdit — see [scripts.md](scripts.md). A script always gets the profile and the
+code database of the document it runs on, **with the document's machine already applied**,
+so it can be written against whatever dialect and whatever G-code system is in front of it
+instead of assuming one. That includes a profile of yours.

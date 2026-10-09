@@ -171,6 +171,10 @@
         "^(?![\\d(;])(?:[^\";]*\"[^\"]*\")*[^\";]*?(?<![A-Z0-9_$])(?:DIAM(?:ON|90)(?![A-Z0-9_])|LIMS[ \\t]*=|SETMS(?![A-Z0-9_])|TRANSMIT(?![A-Z0-9_])|TRACYL(?![A-Z0-9_])|[MS]\\d+[ \\t]*=)"
       ]
     },
+    "editing": {
+      "forceUppercase": true,
+      "preventLineJoin": true
+    },
     "extends": "sinumerik",
     "files": {
       "defaultExtension": "mpf",

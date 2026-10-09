@@ -35,6 +35,11 @@ const {
   recoveryRead,
   recoveryDiscard,
   channelSiblings,
+  userFilesList,
+  userFileCreate,
+  userFilePath,
+  userFileImport,
+  userFileDelete,
   RECOVERY_HEADER,
 } = await import('./commands');
 
@@ -313,5 +318,29 @@ describe('the M12 sibling lookup', () => {
     invoke.mockResolvedValue(answer);
     await expect(channelSiblings('/jobs/part_CH1.nc', ['part_CH2.nc'])).resolves.toEqual(answer);
     expect(invoke).toHaveBeenCalledWith('channel_siblings', { path: '/jobs/part_CH1.nc', names: ['part_CH2.nc'] });
+  });
+});
+
+// M13 (P13): the five user-file commands of §7.10. The names and the argument shapes are
+// what `src-tauri/src/userfiles.rs` declares; the folder is a `kind`, never a path.
+describe('the M13 user files', () => {
+  it('lists a folder by kind', async () => {
+    const answer = [{ name: 'lathe-shop.json', text: '{}', error: null }];
+    invoke.mockResolvedValue(answer);
+    await expect(userFilesList('profiles')).resolves.toEqual(answer);
+    expect(invoke).toHaveBeenCalledWith('user_files_list', { kind: 'profiles' });
+  });
+
+  it('creates, finds, imports and removes by kind and plain name', async () => {
+    invoke.mockResolvedValue('/cfg/codes/fanuc-lathe.json');
+    await userFileCreate('codes', 'fanuc-lathe.json', '{"dialect":"fanuc-lathe"}');
+    expect(invoke).toHaveBeenLastCalledWith('user_file_create', { kind: 'codes', name: 'fanuc-lathe.json', text: '{"dialect":"fanuc-lathe"}' });
+    await userFilePath('codes', 'fanuc-lathe.json');
+    expect(invoke).toHaveBeenLastCalledWith('user_file_path', { kind: 'codes', name: 'fanuc-lathe.json' });
+    await userFileImport('profiles', '/picked/lathe-shop.json');
+    expect(invoke).toHaveBeenLastCalledWith('user_file_import', { kind: 'profiles', src: '/picked/lathe-shop.json' });
+    invoke.mockResolvedValue(undefined);
+    await userFileDelete('profiles', 'lathe-shop.json');
+    expect(invoke).toHaveBeenLastCalledWith('user_file_delete', { kind: 'profiles', name: 'lathe-shop.json' });
   });
 });

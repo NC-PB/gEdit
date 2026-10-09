@@ -65,7 +65,7 @@
     }
   },
   "editing": {
-    "forceUppercase": false,
+    "forceUppercase": true,
     "preventLineJoin": true
   },
   "files": {
@@ -156,6 +156,8 @@
       "CYCL\\s+DEF\\s+\\d+(?:\\.0+)?\\s+(?<text>(?![A-Z]{1,2}[+\\-]?\\d)[^\\s;~+\\-.\\d#\"(](?:[^;~]*?[^\\s;~])?)(?=\\s*(?:[;~]|$)|\\s+Q\\d+\\s*=)",
       "CYCL\\s+DEF\\s+9\\.1\\s+(?<text>[A-Z][A-Z.\\-]*)(?=\\s*[+-]?\\d)",
       "(?:BEGIN|END)\\s+PGM\\s+(?<text>[^\\s;](?:[^;]*?[^\\s;])?)(?=\\s+(?:MM|INCH)\\s*(?:;|$))",
+      "(?:BEGIN|END)\\s+PGM\\s+(?<text>[^\\s;]+)(?=\\s*$)",
+      "CYCL\\s+DEF\\s+12\\.1\\s+PGM\\s+(?<text>[^\\s;~]+)",
       "FN\\s*16\\s*:\\s*(?<text>[^\\s;](?:[^;]*?[^\\s;])?)(?=\\s*(?:;|$))",
       "CALL\\s+PGM\\s+(?<text>[^\\s;~\"]+)"
     ],

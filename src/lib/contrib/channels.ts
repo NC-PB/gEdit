@@ -25,6 +25,7 @@ import { files } from '$lib/app/fileOps';
 import { modals } from '$lib/app/modals';
 import { computeJumpLines } from '$lib/app/outlineService';
 import { channelsAt } from '$lib/core/channels/resolve';
+import { shownMark } from '$lib/core/channels/marks';
 import { status } from '$lib/app/status';
 import { CHANNEL_CAPS, type ChannelRef, type ChannelSet, type SyncFinding, type SyncHit } from '$lib/core/channels/types';
 import { editor } from '$lib/monaco/editorService';
@@ -115,9 +116,14 @@ export function splitTexts(lines: readonly string[], set: ChannelSet): { channel
   return out;
 }
 
-/** What a mark is called on screen: its code, or the rule's label for a code-less one. */
-function markName(docId: DocId, hit: SyncHit): string {
-  return hit.mark !== '' ? hit.mark : channels.ruleLabel(docId, hit.ruleId) || hit.ruleId;
+/**
+ * What a mark is called on screen: its code, or the rule's label for a code-less one. A
+ * `prefix` rule's mark is keyed by its digits and shown with the prefix, `M130` and not `30`
+ * (M13 review NC-10). Exported for the tests.
+ */
+export function markName(docId: DocId, hit: SyncHit): string {
+  if (hit.mark === '') return channels.ruleLabel(docId, hit.ruleId) || hit.ruleId;
+  return shownMark(hit.mark, channels.params(docId)?.syncMarks.find((rule) => rule.id === hit.ruleId));
 }
 
 // --- navigation ---------------------------------------------------------------

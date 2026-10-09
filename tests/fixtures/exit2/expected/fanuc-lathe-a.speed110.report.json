@@ -1,0 +1,29 @@
+{
+  "script": "scale_speed.py",
+  "params": {
+    "percent": 110
+  },
+  "message": "Scaled 3 of 4 spindle speeds to 110 %; 1 left as a speed limit, 3 thread blocks to check by hand.",
+  "findings": [
+    {
+      "line": 17,
+      "severity": "info",
+      "message": "S2400 is a spindle speed limit (G50), so it is not scaled."
+    },
+    {
+      "line": 45,
+      "severity": "warning",
+      "message": "This thread block (G76) runs at S1000, which was scaled on line 42: the feed follows from the speed and the pitch, so check this block by hand."
+    },
+    {
+      "line": 48,
+      "severity": "warning",
+      "message": "This thread block (G92) runs at S1000, which was scaled on line 42: the feed follows from the speed and the pitch, so check this block by hand."
+    },
+    {
+      "line": 54,
+      "severity": "warning",
+      "message": "This thread block (G32) runs at S1000, which was scaled on line 42: the feed follows from the speed and the pitch, so check this block by hand."
+    }
+  ]
+}

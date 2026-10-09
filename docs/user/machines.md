@@ -12,6 +12,10 @@ none of that is a property of "Fanuc", "Okuma" or "Sinumerik". It is a property 
 machine standing in your workshop, set by its parameters when it was commissioned. So it is
 yours to tell gEdit, once per machine.
 
+A machine is also not the place for how your programs are *written*. The folder a post
+writes into, the numbering step, your own M codes: those belong to a
+[profile of your own](profiles.md#profile-or-machine), and a machine can be set up for one.
+
 You do not have to. Everything in this editor works without a single machine configured:
 the highlighting, the program map, the code help, the renumbering, the cleanups, the tool
 list, the scaling scripts, the program checks, the extents and address arithmetic.
@@ -195,7 +199,9 @@ that machine.
 
 1. **Add…**, and pick the dialect this machine runs. It cannot be changed afterwards — a
    machine is a setup of one dialect. (Only dialects that have machine parameters are
-   offered. Klartext has none, so there is nothing to configure there.)
+   offered. Klartext has none, so there is nothing to configure there. A [profile of
+   yours](profiles.md) is offered when the profile it starts from has them, with the same
+   fields as that profile.)
 2. Fill in the form. What it offers comes from the dialect, so a lathe gets fields a mill
    does not:
 
@@ -587,8 +593,9 @@ configuration folder — where that folder is on your system is in
 [Where things are](README.md#where-things-are). They are deliberately *not* in
 `settings.json`: they are records with their own names, not preferences.
 
-To back them up or move them to another computer, copy that one file. To share a shop's
-setup, copy it to the same place on the other computer. Copy it while gEdit is closed: a
+To back them up, copy that one file. To move machines to another computer or to share a
+shop's setup, **Export…** and **Import…** on the Machines page do it while gEdit runs (next
+section). If you copy the file into place by hand instead, do it while gEdit is closed: a
 file put in place while gEdit runs is not seen, and the next change on the Machines page
 writes over it.
 
@@ -700,6 +707,44 @@ in gEdit's own state file, not in `machines.json` (see
 across, but not "this program is for Lathe 2". A default for the dialect is the answer
 that does travel with that one file, which is what makes it the right setting for a shop
 where every lathe program goes to the same lathe.
+
+## Moving machines to another computer
+
+`Settings ▸ Machines` has **Import…** and **Export…** buttons, and the command palette
+(`F1`) has **Import Machines…** and **Export Machines…** (neither has a shortcut).
+
+**Export…** asks where to save and writes a copy of the whole machines file — every
+machine, with its notes, and the choice of default machine for each dialect. Your machines
+are not touched. The copy is an ordinary machines file, the same JSON as
+[the file itself](#where-the-file-is-and-how-to-back-it-up).
+
+**Import…** asks for a machines file and **adds** its machines to the ones you have. Nothing
+you have is replaced or removed. Each machine of the file is checked as if you had typed it
+into the file by hand, and then:
+
+- A machine whose **name** you already have gets `(2)` (or the next free number) after it.
+  A machine whose internal id is taken gets a new id; the default markers of the file follow.
+- The **defaults** of the file are taken over only for a dialect where you have none
+  yet. An import never changes which machine is your default.
+- A machine that is **not valid** (an id that does not fit, a duplicate name inside the file,
+  something that is not a machine at all) is left out, and counted.
+- A machine set up for a **profile that is not loaded here** — a [profile of
+  yours](profiles.md) that is still on the other computer, say — or whose settings the
+  profile does not accept, is imported anyway and **kept**. It is listed on the Machines page
+  with the reason as not usable yet, and it becomes usable by itself when the profile
+  appears. Nothing is lost by importing before the profile file is in place.
+- A file may bring a total of 100 machines at most; the rest are left out and counted.
+
+One line in the status bar sums up what happened: how many machines were imported, how
+many were renamed, how many cannot be used yet, how many were left out.
+
+A file over 1 MiB, one that is not UTF-8 text or not valid JSON, or one that is not a
+machines file is refused with a message and nothing is changed. **Import…** is also off while
+your own machines file cannot be used (see above): fix or replace that first.
+
+Which machine each *program* uses is not part of the file (it is remembered per file, in
+gEdit's own state), so an export and an import carry the machines and the defaults but not
+"this program is for Lathe 2". For a shop, set the default.
 
 ## What gEdit assumes, and what it does not know
 

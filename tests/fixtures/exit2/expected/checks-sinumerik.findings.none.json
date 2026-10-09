@@ -1,0 +1,143 @@
+{
+  "about": "X8: the bundled program_checks.py on checks-sinumerik.MPF with its form defaults, no machine chosen. The whole report; every row with a line jumps to it.",
+  "input": "checks-sinumerik.MPF",
+  "profile": "sinumerik",
+  "machine": null,
+  "report": {
+    "title": "Program checks",
+    "columns": [
+      {
+        "key": "line",
+        "label": "Line"
+      },
+      {
+        "key": "check",
+        "label": "Check"
+      },
+      {
+        "key": "severity",
+        "label": "Severity"
+      },
+      {
+        "key": "message",
+        "label": "Finding"
+      }
+    ],
+    "rows": [
+      {
+        "line": 7,
+        "check": "Speed clamp",
+        "checkId": "cssClamp",
+        "severity": "warning",
+        "message": "G96: constant surface speed with no spindle speed clamp before it; the spindle speeds up as the diameter shrinks"
+      },
+      {
+        "line": 16,
+        "check": "Thread under surface speed",
+        "checkId": "threadUnderCss",
+        "severity": "warning",
+        "message": "G33 Z-30 K1.5 SF=0: a thread cut under constant surface speed; the speed changes with the diameter and the lead may not follow"
+      },
+      {
+        "line": 25,
+        "check": "Speed after tapping",
+        "checkId": "speedAfterTapping",
+        "severity": "error",
+        "message": "G1 Z2 F0.1: a cut after G332 (left on line 25) with no new S; leaving G332 sets the spindle speed to zero"
+      },
+      {
+        "line": 29,
+        "check": "Words in a block",
+        "checkId": "blockWords",
+        "severity": "error",
+        "message": "S1200 S1500 M3: 2 S words in one block"
+      },
+      {
+        "line": 34,
+        "check": "Tool change in a cycle",
+        "checkId": "toolChangeInCycle",
+        "severity": "warning",
+        "message": "T=\"ROUGH\" D1: a tool change while the modal call of CYCLE83 (line 31) is in force"
+      },
+      {
+        "line": 37,
+        "check": "Refused in this state",
+        "checkId": "stateConflicts",
+        "severity": "warning",
+        "message": "G75: the control refuses it while radius compensation is on (G42, line 35)"
+      },
+      {
+        "line": 40,
+        "check": "Control language",
+        "checkId": "languageSwitch",
+        "severity": "warning",
+        "message": "G291: from here the control reads the program in its ISO dialect; these checks read it as written for this profile"
+      },
+      {
+        "line": 44,
+        "check": "Spindle",
+        "checkId": "spindleOff",
+        "severity": "warning",
+        "message": "G1 X60 F0.2: a cut while the spindle is stopped (M5 on line 42)"
+      },
+      {
+        "line": 46,
+        "check": "Jump target",
+        "checkId": "jumpTargets",
+        "severity": "error",
+        "message": "GOTOF NOWHERE: no block NOWHERE in this program"
+      },
+      {
+        "line": 47,
+        "check": "Brackets",
+        "checkId": "brackets",
+        "severity": "error",
+        "message": "R1=(R2+3: 1 ( is not closed"
+      },
+      {
+        "line": 48,
+        "check": "Lower case",
+        "checkId": "lowerCase",
+        "severity": "info",
+        "message": "g0, x200: written in lower case; this control reads its addresses in upper case"
+      },
+      {
+        "line": 50,
+        "check": "Characters",
+        "checkId": "characters",
+        "severity": "warning",
+        "message": "–: – (en dash) is not an ASCII character, outside a comment"
+      },
+      {
+        "line": 51,
+        "check": "Stop",
+        "checkId": "stops",
+        "severity": "info",
+        "message": "M0: Program stop"
+      },
+      {
+        "line": 52,
+        "check": "Stop",
+        "checkId": "stops",
+        "severity": "info",
+        "message": "M1: Optional stop"
+      },
+      {
+        "line": 54,
+        "check": "Modal call",
+        "checkId": "modalCallOpen",
+        "severity": "warning",
+        "message": "M30: the modal call of CYCLE83 (line 31) is still in force at the end of the program"
+      },
+      {
+        "line": 56,
+        "check": "Program frame",
+        "checkId": "programFrame",
+        "severity": "error",
+        "message": "G0 X200: after the program end M30 on line 54; it never runs"
+      }
+    ],
+    "message": "16 findings in 15 checks. No machine chosen.",
+    "findings": []
+  }
+}

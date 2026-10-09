@@ -9,6 +9,7 @@ import ProfileStatus from '$lib/components/status/ProfileStatus.svelte';
 import { files } from '$lib/app/fileOps';
 import { modals } from '$lib/app/modals';
 import { status } from '$lib/app/status';
+import { userConfig } from '$lib/app/userConfig';
 import { docs } from '$lib/stores/documents';
 import { fileMemory } from '$lib/stores/fileMemory';
 import { profiles } from '$lib/stores/profiles';
@@ -123,6 +124,9 @@ async function pickProfile(): Promise<void> {
         ),
   });
   if (picked === undefined) return;
+  // A document that was moved off a user profile that failed (CODE-6) is the user's from now
+  // on, whatever they pick, the dialect it sits on included: no later load moves it back.
+  const moved = userConfig.forget(doc.id);
   if (uncertain) {
     // Any pick clears the question mark. Keeping the guess, or picking the same dialect
     // from the list, changes no profile but is still a decision: remember it.
@@ -132,7 +136,7 @@ async function pickProfile(): Promise<void> {
       status.show(t('profiles.uncertain.kept', { file: doc.title, name: profiles.get(doc.profileId)?.shortName ?? doc.profileId }));
       return;
     }
-  } else if (picked === doc.profileId) {
+  } else if (picked === doc.profileId && !moved) {
     return;
   }
   files.setProfile(doc.id, picked);

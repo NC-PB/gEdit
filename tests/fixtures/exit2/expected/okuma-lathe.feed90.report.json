@@ -1,0 +1,19 @@
+{
+  "script": "scale_feed.py",
+  "params": {
+    "percent": 90
+  },
+  "message": "Scaled 6 of 7 feed rates to 90 %; 1 left as a thread pitch, 1 rounded to the decimals it was written with, 1 dwell time left as written. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 31,
+      "severity": "warning",
+      "message": "F0.06 becomes 0.05, not 0.054: the result was rounded to 2 decimals. Ask for more decimal places if that is too coarse."
+    },
+    {
+      "line": 39,
+      "severity": "warning",
+      "message": "F2 is a thread pitch (G71), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    }
+  ]
+}

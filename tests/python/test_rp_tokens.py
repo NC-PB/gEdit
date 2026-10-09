@@ -120,6 +120,16 @@ class TestTheEdgesOfTheNewRules(unittest.TestCase):
         middle = compiled("heidenhain-klartext", lambda s: s.__setitem__("freeText", ["FOO\\s+(?<text>[A-Z]+)\\s+BAR"]))
         self.assertEqual(pairs("5 FOO ABC BAR", middle), ["blockNumber:5", "word:FOO", "text:ABC", "word:BAR"])
 
+    def test_free_text_of_a_name_typed_before_its_unit(self):
+        # M13 review NC-7: a program name with nothing behind it yet, and the program of a
+        # cycle 12 call, are text (the twin of `tokenizer.test.ts`).
+        self.assertEqual(pairs("0 BEGIN PGM part1", self.klartext), ["blockNumber:0", "keyword:BEGIN PGM", "text:part1"])
+        self.assertEqual(pairs("9 END PGM part1", self.klartext)[2], "text:part1")
+        self.assertEqual(pairs("0 BEGIN PGM part1 MM", self.klartext)[2:], ["text:part1", "keyword:MM"])
+        self.assertNotIn("text", kinds("0 BEGIN PGM part1 m", self.klartext))
+        self.assertEqual(pairs("6 CYCL DEF 12.1 PGM part2", self.klartext)[-1], "text:part2")
+        self.assertEqual(pairs("6 CYCL DEF 12.1 PGM TNC:\\NC\\PART2.H", self.klartext)[-1], "text:TNC:\\NC\\PART2.H")
+
     def test_colon_words(self):
         tokens = code_tokens(gedit_nc.tokenize_line("14 FUNCTION TURNDATA SPIN VCONST:ON VC:120 SMAX3000", self.klartext)[0])
         self.assertEqual((tokens[4].address, tokens[4].value_text, tokens[4].value), ("VCONST", "ON", None))

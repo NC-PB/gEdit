@@ -28,7 +28,15 @@ decimal point or not), which G-code system a lathe uses, whether `X` is a diamet
 what is already in effect when a program starts. You define your machines once and pick
 one per file (Klartext has no machine settings); without a machine gEdit says which
 defaults it is assuming, and where the possible readings disagree it refuses to convert
-rather than guess. See [docs/user/machines.md](docs/user/machines.md).
+rather than guess. Your machines can be exported to a file and imported on another computer.
+See [docs/user/machines.md](docs/user/machines.md).
+
+Next to the six dialects you can write **profiles and code files of your own**: a profile for
+the programs of one machine or one folder that starts from a shipped dialect and changes only
+what differs (the folder it is picked for, the numbering step, the typing options), and a
+code file with the M codes your machine builder added, for the hover and the completion. A
+Profiles page manages them, and a test shows what every rule of a profile finds in the
+program you have open. See [docs/user/profiles.md](docs/user/profiles.md).
 
 ![The gEdit main window in the dark theme](docs/screenshots/main-window.png)
 
@@ -74,6 +82,9 @@ the NC transformations or a script's result from changing it.
 **Dialect profiles.** What a control considers a comment, a block number, a tool change or
 a program start is data, not code. The dialect is detected from the extension *and* the
 content — an Okuma extension settles it on its own — and can be changed in the status bar.
+Typing follows the dialect too: letters typed in code come out in upper case (comments,
+strings and free text stay as typed), and `Backspace` or `Delete` will not run two blocks
+together by accident.
 
 **Reading a program.** Syntax highlighting; a program map of tool calls, sections,
 comments, labels, stops and subprogram calls; go to line or block number (`Ctrl+G`); next
@@ -135,8 +146,8 @@ macro somebody mailed you. The full picture is in
 ### What gEdit does not do
 
 No backplot, simulation or 3D display. No DNC or machine communication. No program
-management. Only the six dialects above, and milling on an Okuma control is not covered
-yet. Python is needed **only** for the script features; everything else works
+management. Only the six dialects above (and profiles of your own that start
+from them), and milling on an Okuma control is not covered yet. Python is needed **only** for the script features; everything else works
 without it. On Windows and Linux, logging out or shutting down skips the unsaved-changes
 prompt, and the crash snapshot, taken every half minute, is all that catches the unsaved
 work. Every text in the program is English. The
@@ -145,20 +156,21 @@ work. Every text in the program is English. The
 
 ### Still to come
 
-Phase 2 is being built milestone by milestone (see the
-[roadmap](docs/planning/roadmap.md)). Still ahead, in this order: reading real programs
-right (M9, in v0.3.0); block skip, program checks, extents and arithmetic on address values
-(M10, built, release v0.4 to follow); comparing a re-posted program without the
-noise of renumbering and number formatting, merging in both directions, and search and
-replace by word value (`T1` but not `T10`, `S>2000`) (M11); multi-channel programs, with a
-check that the wait codes of the channels match (M12); your own dialect profiles and typing
-options such as forced upper case (M13). A code inspector that shows what is in force at
-the cursor, and templates, follow in Phase 3.
+Phase 2 is done: reading real programs right, block skip, program checks, extents and
+arithmetic on address values, comparing a re-posted program without the noise of renumbering
+and number formatting, merging in both directions, search and replace by word value
+(`T1` but not `T10`, `S>2000`), multi-channel programs with a check that the wait codes of the
+channels match, your own profiles and code files, and the typing options such as forced upper
+case (see the [roadmap](docs/planning/roadmap.md)). Phase 3 is next: a code inspector that
+shows what is in force at the cursor, hover help with the modal state, and templates.
+Showing the channels of a program side by side is planned for Phase 4.
 
 ## Documentation
 
 - **[User guide](docs/user/README.md)** — what the program does and how to use it, plus
   [dialects](docs/user/dialects.md), [machines](docs/user/machines.md),
+  [your own profiles and code files](docs/user/profiles.md),
+  [channels](docs/user/channels.md),
   [transformations](docs/user/transformations.md), [scripts](docs/user/scripts.md) and the
   [keyboard](docs/user/shortcuts.md).
 - **[Planning](docs/planning/README.md)** — scope, roadmap and feature notes.

@@ -24,8 +24,9 @@ const fake = vi.hoisted(() => {
   return {
     reloadFromDisk: vi.fn(async (): Promise<void> => {}),
     disposeSave: vi.fn((): void => {}),
-    /** The components handed to `modals.open`. */
+    /** The components handed to `modals.open`, and the props each got. */
     opened: [] as unknown[],
+    openedProps: [] as unknown[],
     setPaths(next: unknown): void {
       paths = next;
       for (const run of subscribers) run(next);
@@ -59,8 +60,9 @@ vi.mock('$lib/app/fileOps', () => ({
 
 vi.mock('$lib/app/modals', () => ({
   modals: {
-    open: async (component: unknown): Promise<undefined> => {
+    open: async (component: unknown, props?: unknown): Promise<undefined> => {
       fake.opened.push(component);
+      fake.openedProps.push(props);
       return undefined;
     },
   },
@@ -90,6 +92,8 @@ function paths(settingsFile: string): ConfigPaths {
     stateFile: '/data/state.json',
     userScriptsDir: '/config/scripts',
     machinesFile: '/config/machines.json',
+    profilesDir: '/config/profiles',
+    codesDir: '/config/codes',
   };
 }
 
@@ -116,6 +120,7 @@ beforeEach(() => {
   fake.reloadFromDisk.mockClear();
   fake.disposeSave.mockClear();
   fake.opened.length = 0;
+  fake.openedProps.length = 0;
   fake.setPaths(paths(SETTINGS_FILE));
 });
 
@@ -124,9 +129,11 @@ afterEach(() => {
 });
 
 describe('what it declares', () => {
-  it('registers one command, on §7.11’s Mod+,', () => {
-    expect(settingsContrib.commands).toHaveLength(1);
-    const [def] = settingsContrib.commands;
+  it('registers settings.open on §7.11’s Mod+, and profile.manage without a key', () => {
+    expect(settingsContrib.commands.map((c) => c.id)).toEqual(['settings.open', 'profile.manage']);
+    const [def, manage] = settingsContrib.commands;
+    expect('keys' in manage).toBe(false);
+    expect(manage.category).toBe('userConfig.category');
     expect(def.id).toBe('settings.open');
     expect(def.keys).toBe('Mod+,');
     expect(def.global).toBe(true);
@@ -136,17 +143,24 @@ describe('what it declares', () => {
     // `satisfies Contribution` keeps the literal type, so the command takes no argument.
     settingsContrib.commands[0].run();
     expect(fake.opened).toEqual([SettingsDialog]);
+    expect(fake.openedProps).toEqual([{}]);
+  });
+
+  it('profile.manage opens the same dialog on the Profiles tab', () => {
+    settingsContrib.commands[1].run();
+    expect(fake.opened).toEqual([SettingsDialog]);
+    expect(fake.openedProps).toEqual([{ initialTab: 'profiles' }]);
   });
 
   it('has an id that matches its file name, and the i18n namespace', () => {
     expect(settingsContrib.id).toBe('settings');
     expect(settingsContrib.commands[0].title.startsWith('settings.')).toBe(true);
+    expect(settingsContrib.commands[1].title).toBe('userConfig.manage');
   });
 
   it('every title, category and ribbon group key has a message', () => {
     const keys = [
-      settingsContrib.commands[0].title,
-      settingsContrib.commands[0].category,
+      ...settingsContrib.commands.flatMap((c) => [c.title, c.category]),
       ...settingsContrib.ribbon.map((item) => item.group),
     ].filter((key): key is string => typeof key === 'string');
     expect(keys.filter((key) => !hasKey(key))).toEqual([]);

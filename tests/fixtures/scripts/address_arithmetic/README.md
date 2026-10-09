@@ -125,6 +125,7 @@ under a Z shift has nothing to change and is not listed.
 
 | `reason` | When |
 |---|---|
+| `unreadable` | (M13 review, NC-5; **`severity: "warning"`**, the block still goes to the old position) the address of a chosen word stands alone, followed by a character no control reads: `Z–5.` with an en dash (U+2013) or a minus sign (U+2212) pasted for `-`. The finding names the character; the summary counts "words that cannot be read" |
 | `data` | a code whose axis words are data (`axisWords: 'data'` or `wordsAreData`: `G92`, `G52`, `G10`, `CYCL DEF 7`, `TRANS`) — its words are values, not positions. The pole (`pole: 'set'`) is not: its words in the plane are positions |
 | `incremental` | the distance mode is incremental (`G91`), or the address is an incremental twin (`addresses.incremental`, R6's `U`/`W` choice), or a Klartext `I` prefix (`IZ`) |
 | `expression` | a variable or an `=` expression (Okuma `X=V1+2`, Sinumerik `X=R1`); a value function around a plain number is read (M10 review): `Z=AC(3.25)` is an absolute position whatever the distance mode, `Z=IC(2)` an incremental distance (`incremental` on add and subtract, scaled on multiply and divide) |

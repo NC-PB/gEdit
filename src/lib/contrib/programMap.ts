@@ -40,9 +40,18 @@ export default {
     void getMonaco().then(
       (monaco) => {
         if (disposed) return;
-        for (const info of profiles.list()) {
-          stops.push(registerSymbols(monaco, info.id), registerFolding(monaco, info.id));
-        }
+        // One pair per profile id, once; a reload (`profiles.revision`) can add ids and an id it
+        // removes keeps its providers harmlessly (P13, AD-29).
+        const have = new Set<string>();
+        const sync = (): void => {
+          for (const info of profiles.list()) {
+            if (have.has(info.id)) continue;
+            have.add(info.id);
+            stops.push(registerSymbols(monaco, info.id), registerFolding(monaco, info.id));
+          }
+        };
+        sync();
+        stops.push(profiles.revision.subscribe(sync));
       },
       () => {
         // EditorHost already shows the load error; there is nothing to add here.

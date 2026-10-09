@@ -1,0 +1,489 @@
+{
+  "about": "X12 (a): the program map of twin-single.nc under \"Twin 31i\": one row per channel, then \"Outside the channels\"; every row with its depth (0 = a channel group), kind, line, channel id and text. sections/outside/marks are what the channel service resolved.",
+  "machine": "Twin 31i",
+  "sections": [
+    {
+      "channel": "1",
+      "ranges": [
+        {
+          "startLine": 5,
+          "endLine": 20
+        },
+        {
+          "startLine": 34,
+          "endLine": 46
+        }
+      ]
+    },
+    {
+      "channel": "2",
+      "ranges": [
+        {
+          "startLine": 21,
+          "endLine": 33
+        },
+        {
+          "startLine": 47,
+          "endLine": 59
+        }
+      ]
+    }
+  ],
+  "outside": [
+    {
+      "startLine": 1,
+      "endLine": 4
+    },
+    {
+      "startLine": 60,
+      "endLine": 66
+    }
+  ],
+  "marks": [
+    {
+      "mark": "10",
+      "line": 10,
+      "channel": "1",
+      "partners": [
+        "1",
+        "2"
+      ],
+      "blocking": true
+    },
+    {
+      "mark": "20",
+      "line": 14,
+      "channel": "1",
+      "partners": [
+        "1",
+        "2"
+      ],
+      "blocking": true
+    },
+    {
+      "mark": "30",
+      "line": 16,
+      "channel": "1",
+      "partners": [
+        "1",
+        "2"
+      ],
+      "blocking": true
+    },
+    {
+      "mark": "30",
+      "line": 18,
+      "channel": "1",
+      "partners": [
+        "1",
+        "2"
+      ],
+      "blocking": true
+    },
+    {
+      "mark": "10",
+      "line": 25,
+      "channel": "2",
+      "partners": [
+        "1",
+        "2"
+      ],
+      "blocking": true
+    },
+    {
+      "mark": "20",
+      "line": 29,
+      "channel": "2",
+      "partners": [
+        "1",
+        "2"
+      ],
+      "blocking": true
+    },
+    {
+      "mark": "30",
+      "line": 31,
+      "channel": "2",
+      "partners": [
+        "1",
+        "2"
+      ],
+      "blocking": true
+    },
+    {
+      "mark": "40",
+      "line": 37,
+      "channel": "1",
+      "partners": [
+        "1",
+        "2"
+      ],
+      "blocking": true
+    },
+    {
+      "mark": "41",
+      "line": 39,
+      "channel": "1",
+      "partners": [
+        "1",
+        "2"
+      ],
+      "blocking": true
+    },
+    {
+      "mark": "50",
+      "line": 41,
+      "channel": "1",
+      "partners": [
+        "1",
+        "2"
+      ],
+      "blocking": true
+    },
+    {
+      "mark": "10",
+      "line": 43,
+      "channel": "1",
+      "partners": [
+        "1",
+        "2"
+      ],
+      "blocking": true
+    },
+    {
+      "mark": "70",
+      "line": 44,
+      "channel": "1",
+      "partners": [
+        "1",
+        "2"
+      ],
+      "blocking": true
+    },
+    {
+      "mark": "41",
+      "line": 50,
+      "channel": "2",
+      "partners": [
+        "1",
+        "2"
+      ],
+      "blocking": true
+    },
+    {
+      "mark": "40",
+      "line": 52,
+      "channel": "2",
+      "partners": [
+        "1",
+        "2"
+      ],
+      "blocking": true
+    },
+    {
+      "mark": "60",
+      "line": 54,
+      "channel": "2",
+      "partners": [
+        "1",
+        "2"
+      ],
+      "blocking": true
+    },
+    {
+      "mark": "10",
+      "line": 56,
+      "channel": "2",
+      "partners": [
+        "1",
+        "2"
+      ],
+      "blocking": true
+    },
+    {
+      "mark": "70",
+      "line": 57,
+      "channel": "2",
+      "partners": [
+        "1",
+        "2"
+      ],
+      "blocking": true
+    }
+  ],
+  "rows": [
+    {
+      "depth": 0,
+      "kind": "channel",
+      "line": 5,
+      "channelId": "1",
+      "text": "Channel 1"
+    },
+    {
+      "depth": 1,
+      "kind": "program",
+      "line": 5,
+      "channelId": null,
+      "text": "O1001"
+    },
+    {
+      "depth": 1,
+      "kind": "tool",
+      "line": 7,
+      "channelId": null,
+      "text": "T1 — OD ROUGH"
+    },
+    {
+      "depth": 2,
+      "kind": "subprogram-call",
+      "line": 12,
+      "channelId": null,
+      "text": "M98 P9001"
+    },
+    {
+      "depth": 2,
+      "kind": "end",
+      "line": 20,
+      "channelId": null,
+      "text": "M99"
+    },
+    {
+      "depth": 1,
+      "kind": "sync",
+      "line": 10,
+      "channelId": null,
+      "text": "M110"
+    },
+    {
+      "depth": 1,
+      "kind": "sync",
+      "line": 14,
+      "channelId": null,
+      "text": "M120"
+    },
+    {
+      "depth": 1,
+      "kind": "sync",
+      "line": 16,
+      "channelId": null,
+      "text": "M130"
+    },
+    {
+      "depth": 1,
+      "kind": "sync",
+      "line": 18,
+      "channelId": null,
+      "text": "M130"
+    },
+    {
+      "depth": 1,
+      "kind": "program",
+      "line": 34,
+      "channelId": null,
+      "text": "O1002"
+    },
+    {
+      "depth": 1,
+      "kind": "tool",
+      "line": 35,
+      "channelId": null,
+      "text": "T3 — OD FINISH"
+    },
+    {
+      "depth": 2,
+      "kind": "end",
+      "line": 46,
+      "channelId": null,
+      "text": "M99"
+    },
+    {
+      "depth": 1,
+      "kind": "sync",
+      "line": 37,
+      "channelId": null,
+      "text": "M140"
+    },
+    {
+      "depth": 1,
+      "kind": "sync",
+      "line": 39,
+      "channelId": null,
+      "text": "M141"
+    },
+    {
+      "depth": 1,
+      "kind": "sync",
+      "line": 41,
+      "channelId": null,
+      "text": "M150"
+    },
+    {
+      "depth": 1,
+      "kind": "sync",
+      "line": 43,
+      "channelId": null,
+      "text": "M110"
+    },
+    {
+      "depth": 1,
+      "kind": "sync",
+      "line": 44,
+      "channelId": null,
+      "text": "M170"
+    },
+    {
+      "depth": 0,
+      "kind": "channel",
+      "line": 21,
+      "channelId": "2",
+      "text": "Channel 2"
+    },
+    {
+      "depth": 1,
+      "kind": "program",
+      "line": 21,
+      "channelId": null,
+      "text": "O2001"
+    },
+    {
+      "depth": 1,
+      "kind": "tool",
+      "line": 23,
+      "channelId": null,
+      "text": "T2 — CENTRE DRILL"
+    },
+    {
+      "depth": 2,
+      "kind": "subprogram-call",
+      "line": 27,
+      "channelId": null,
+      "text": "M98 P9001"
+    },
+    {
+      "depth": 2,
+      "kind": "end",
+      "line": 33,
+      "channelId": null,
+      "text": "M99"
+    },
+    {
+      "depth": 1,
+      "kind": "sync",
+      "line": 25,
+      "channelId": null,
+      "text": "M110"
+    },
+    {
+      "depth": 1,
+      "kind": "sync",
+      "line": 29,
+      "channelId": null,
+      "text": "M120"
+    },
+    {
+      "depth": 1,
+      "kind": "sync",
+      "line": 31,
+      "channelId": null,
+      "text": "M130"
+    },
+    {
+      "depth": 1,
+      "kind": "program",
+      "line": 47,
+      "channelId": null,
+      "text": "O2002"
+    },
+    {
+      "depth": 1,
+      "kind": "tool",
+      "line": 48,
+      "channelId": null,
+      "text": "T4 — DRILL D10"
+    },
+    {
+      "depth": 2,
+      "kind": "end",
+      "line": 59,
+      "channelId": null,
+      "text": "M30"
+    },
+    {
+      "depth": 1,
+      "kind": "sync",
+      "line": 50,
+      "channelId": null,
+      "text": "M141"
+    },
+    {
+      "depth": 1,
+      "kind": "sync",
+      "line": 52,
+      "channelId": null,
+      "text": "M140"
+    },
+    {
+      "depth": 1,
+      "kind": "sync",
+      "line": 54,
+      "channelId": null,
+      "text": "M160"
+    },
+    {
+      "depth": 1,
+      "kind": "sync",
+      "line": 56,
+      "channelId": null,
+      "text": "M110"
+    },
+    {
+      "depth": 1,
+      "kind": "sync",
+      "line": 57,
+      "channelId": null,
+      "text": "M170"
+    },
+    {
+      "depth": 0,
+      "kind": "channel",
+      "line": 1,
+      "channelId": "",
+      "text": "Outside the channels"
+    },
+    {
+      "depth": 1,
+      "kind": "comment",
+      "line": 1,
+      "channelId": null,
+      "text": "WRITTEN FOR GEDIT - SYNTHETIC EXIT-CRITERIA PROGRAM, NOT FOR A MACHINE"
+    },
+    {
+      "depth": 1,
+      "kind": "comment",
+      "line": 2,
+      "channelId": null,
+      "text": "TWO CHANNELS IN ONE FILE: O1XXX IS CHANNEL 1, O2XXX IS CHANNEL 2"
+    },
+    {
+      "depth": 1,
+      "kind": "comment",
+      "line": 3,
+      "channelId": null,
+      "text": "WAIT CODES M100-M199 - EVERY WAIT DEFECT ON PURPOSE - THE MOTION IS NOT COHERENT"
+    },
+    {
+      "depth": 1,
+      "kind": "program",
+      "line": 60,
+      "channelId": null,
+      "text": "O9001"
+    },
+    {
+      "depth": 1,
+      "kind": "end",
+      "line": 64,
+      "channelId": null,
+      "text": "M99"
+    }
+  ]
+}

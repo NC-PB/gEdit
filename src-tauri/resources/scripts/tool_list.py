@@ -160,6 +160,11 @@ UNIT_TEXT = {
 #: and a column that showed both as `220` would be read as the wrong one.
 UNIT_TAG = {"per-rev": "/rev", "per-tooth": "/tooth", "surface": "surface"}
 
+#: M13 (NC-13): the tag of a range in the unit a reader assumes, written only where the
+#: range is **not** in the program's own unit (a feed per minute under `G94` in a turning
+#: program, whose other rows say `/rev`): there a bare `100` would be read as per revolution.
+DEFAULT_UNIT_TAG = {"per-minute": "/min", "rpm": "rpm"}
+
 #: M9 (WP9.5a): what a surface speed is measured in, by the program's units. A range of
 #: surface speeds says this and the code that put it in force (`220 m/min (G96)`), because
 #: "surface" alone named neither the unit nor the code, and a Sinumerik `G961` was reported
@@ -577,17 +582,10 @@ def bare_tool(tool: str, spec: Spec) -> str:
 def tool_label(tool: str, spec: Spec) -> str:
     """``T01`` → ``T1``, ``T0101`` → ``T1`` on a lathe profile, ``"MILL_D10"`` → ``MILL_D10``.
 
-    A name keeps every character it was written with. One made of digits only keeps its
-    quotation marks too (``"007"``), so the list never shows it as the number it is not.
+    ``gedit_nc.tool_label`` with this run's rules (M13, NC-9: the extents name their tool
+    scopes with the same function, so both reports call one tool by one name).
     """
-    value = bare_tool(tool, spec)
-    if quoted(tool):
-        return tool if ALL_DIGITS.match(value) or value == "" else value
-    if value == "" or not value[0].isdigit():
-        return value
-    if spec.drop_leading_zeros:
-        value = LEADING_ZEROS.sub("", value)
-    return "T" + value
+    return gedit_nc.tool_label(tool, spec.drop_leading_zeros, spec.collapse_offset_digits)
 
 
 def tool_number_of(tool: str, spec: Spec) -> Optional[str]:
@@ -818,6 +816,12 @@ def build(
     surface = Surface(spec.units)
     surface.read(tracker.written)
     state: Optional[gedit_nc.LineState] = None
+    #: M13 (NC-4): the program starts seen so far, those above a selection included, and
+    #: the programs after the first one, each with the feeds and speeds it writes before
+    #: its first tool call (:func:`called_finding`).
+    programs = 0
+    called: Optional[Row] = None
+    called_rows: List[Row] = []
     if preceding:
         # The codes above a selection are read for the same two answers.
         above = gedit_nc.FeedModeTracker(codes)
@@ -826,6 +830,8 @@ def build(
             above_tokens, above_state = gedit_nc.tokenize_line(text, cp, above_state)
             above.update(above_tokens, continued=gedit_nc.continues_block(text, cp))
             surface.read(above.written)
+            if gedit_nc.program_start_of(text, cp) is not None:
+                programs += 1
         state = gedit_nc.prime_tracker(tracker, preceding, cp, lines[0] if lines else None)
     #: Values written since the last move; they go to the tool that moves next.
     pending = Pending()
@@ -837,6 +843,21 @@ def build(
         surface.read(tracker.written)
         mark = marks[i]
         number_line = line_numbers[i] if line_numbers is not None else base_line + i
+
+        start = gedit_nc.program_start_of(line, cp)
+        if start is not None:
+            programs += 1
+            if programs > 1:
+                # M13 (NC-4): a program after the first, most often a subprogram behind the
+                # main program's `M30`. It runs with the tool of whatever calls it, which the
+                # file does not say, so the tool of the program above is not its tool: what
+                # it cuts with before its own first tool call is charged to no tool.
+                pending.hand_to(None)
+                current = None
+                last_tool = None
+                last_unload = False
+                called = Row(label=start, number=None, line=number_line)
+                called_rows.append(called)
 
         if mark is not None:
             # The tool in the spindle before this line, for `is_speed_only` — a Klartext
@@ -872,6 +893,7 @@ def build(
                     )
                     unnamed += 1
                     current = None
+                    called = None
                     pending.hand_to(None)
                 else:
                     number = tool_number_of(tool, spec)
@@ -888,12 +910,17 @@ def build(
                     # What was written since the last move was written for this tool.
                     pending.hand_to(row)
                     current = row
+                    called = None
 
         if spec.feed_speed:
             collect(pending, tokens, tracker, spec, codes, number_line, surface.note())
             if moves_an_axis(tokens, spec):
-                pending.hand_to(current)
-    pending.hand_to(current)
+                pending.hand_to(current if current is not None else called)
+    pending.hand_to(current if current is not None else called)
+    for program in called_rows:
+        finding = called_finding(program, spec)
+        if finding is not None:
+            findings.append(finding)
 
     # Nothing described the tool at its call, but the header tool list did.
     for row in rows:
@@ -929,6 +956,43 @@ def build(
 
     findings.sort(key=lambda finding: finding["line"])
     return rows, findings, unnamed, tool_words
+
+
+def called_finding(program: Row, spec: Spec) -> Optional[Dict[str, Any]]:
+    """M13 (NC-4): the feeds and speeds a program after the first writes before its first
+    tool call, as one ``info`` finding at its start, or ``None`` when it writes none.
+
+    ``program`` is a :class:`Row` that stands for the program (its label is the program
+    start as written, ``O2``) and collects what no tool of the list cuts with.
+    """
+    parts: List[str] = []
+    count = 0
+    for kind, found in (("feed", program.by_mode), ("speed", program.by_speed)):
+        written: List[str] = []
+        total = 0
+        for key, values in found.items():
+            if kind == "feed":
+                address = key if key in PER_TOOTH_ADDRESSES else spec.feed_address
+            else:
+                address = spec.spindle_address
+            total += len(values)
+            for _, text in values:
+                word = address + text
+                if word not in written:
+                    written.append(word)
+        if total:
+            shown = ", ".join(written[:3]) + (" and %d more" % (len(written) - 3) if len(written) > 3 else "")
+            parts.append("%d %s (%s)" % (total, kind if total == 1 else kind + "s", shown))
+            count += total
+    if not parts:
+        return None
+    return {
+        "line": program.line,
+        "severity": "info",
+        "message": "%s: %s before any tool call; %s with the tool of the program that calls "
+        "it, which the tool list cannot follow, so %s in no tool's range."
+        % (program.label, " and ".join(parts), "it runs" if count == 1 else "they run", "it is" if count == 1 else "they are"),
+    }
 
 
 def power_on_state(tracker: gedit_nc.FeedModeTracker, cp: gedit_nc.CompiledProfile) -> None:
@@ -1011,7 +1075,7 @@ def collect(
 
     pitch_reason: Optional[str] = None
     if tracker.pitch_feed:
-        pitch_reason = "pitch"
+        pitch_reason = lead_elsewhere(tracker, spec) or "pitch"
     elif tracker.pitch_feed_ambiguous:
         pitch_reason = "ambiguous"
 
@@ -1052,6 +1116,33 @@ def collect(
                     "speed", speed_unit, (value, token.value_text or ""), line,
                     note if speed_unit == "surface" else None,
                 )
+
+
+def lead_elsewhere(tracker: gedit_nc.FeedModeTracker, spec: Spec) -> Optional[str]:
+    """M13 (NC-13): ``'lead:<code>:<addresses>'`` when the thread code of this block takes its
+    lead from words other than the feed word (Sinumerik `G33 Z-30 K1.5 F0.15`: I, J or K),
+    else ``None``.
+
+    The database declares a lead as a parameter whose unit is a feed per revolution, the
+    reading scale-feed uses (``lead_addresses`` there). Such a block's F is neither its lead
+    nor a feed it cuts with, so it stays out of the range under a finding of its own.
+    """
+    entry: Optional[Dict[str, Any]] = next(
+        (written for written, _ in tracker.written if written.get("pitchFeed") is True), None
+    )
+    if entry is None:
+        code = tracker.active_cycle or tracker.pitch_mode
+        entry = tracker.entry(code) if code else None
+    if not isinstance(entry, dict):
+        return None
+    leads = [
+        param.get("address")
+        for param in entry.get("params") or []
+        if isinstance(param, dict) and param.get("unit") == "feedPerRev" and isinstance(param.get("address"), str)
+    ]
+    if not leads or any(address.upper() == spec.feed_address.upper() for address in leads):
+        return None
+    return "lead:%s:%s" % (entry.get("code") or "", ",".join(leads))
 
 
 def choose_ranges(row: Row, spec: Spec) -> None:
@@ -1100,6 +1191,16 @@ def findings_of(row: Row) -> List[Dict[str, Any]]:
     for reason, (line, count) in sorted(row.skipped.items()):
         if reason == "pitch":
             text = "the F of %s is a thread pitch, not a feed rate" % blocks(count)
+        elif reason.startswith("lead:"):
+            # NC-13: the lead is another word, and the thread is not cut with this F.
+            _, code, leads = reason.split(":", 2)
+            words = leads.split(",")
+            text = "the F of %s is not %s lead and is not cut with (%s takes its lead from %s)" % (
+                "1 thread block" if count == 1 else "%d thread blocks" % count,
+                "its" if count == 1 else "their",
+                code,
+                words[0] if len(words) == 1 else "%s or %s" % (", ".join(words[:-1]), words[-1]),
+            )
         elif reason == "ambiguous":
             text = (
                 "the F of %s may be a thread lead rather than a feed rate, because its "
@@ -1336,9 +1437,15 @@ def main() -> int:
             entry["line"] = row.line
             entry["calls"] = row.calls
             if spec.feed_speed:
-                entry["feed"] = range_text(row.feeds, row.feed_unit)
+                # NC-13: a range in another unit than the program's own says which.
+                entry["feed"] = range_text(
+                    row.feeds, row.feed_unit,
+                    DEFAULT_UNIT_TAG.get(row.feed_unit or "") if row.feed_unit != spec.feed_unit else None,
+                )
                 entry["speed"] = range_text(
-                    row.speeds, row.speed_unit, row.surface_tag() if row.speed_unit == "surface" else None
+                    row.speeds, row.speed_unit,
+                    row.surface_tag() if row.speed_unit == "surface"
+                    else DEFAULT_UNIT_TAG.get(row.speed_unit or "") if row.speed_unit != spec.speed_unit else None,
                 )
             table.append(entry)
 

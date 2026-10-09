@@ -1,0 +1,214 @@
+{
+  "about": "X8: the bundled extents.py on checks-okuma.MIN with its form defaults, under the machine \"X8 Okuma 1um\" (made as \"machine\" says and chosen for this document). The whole report; every row with a line jumps to it.",
+  "input": "checks-okuma.MIN",
+  "profile": "okuma-osp",
+  "machine": {
+    "name": "X8 Okuma 1um",
+    "profile": "okuma-osp",
+    "params": {
+      "numberInput": {
+        "mode": "scale",
+        "incrementMm": "0.001",
+        "incrementInch": "0.0001",
+        "incrementDeg": "0.001",
+        "incrementSec": "0.01",
+        "classes": {
+          "feedPerRev": {
+            "increment": "0.001",
+            "incrementInch": "0.0001"
+          },
+          "feedPerMin": {
+            "increment": "0.1",
+            "incrementInch": "0.01"
+          }
+        }
+      },
+      "units": "mm",
+      "diameter": "on",
+      "variants": {
+        "toolWord": "offset2"
+      }
+    }
+  },
+  "report": {
+    "title": "Extents",
+    "columns": [
+      {
+        "key": "where",
+        "label": "Where"
+      },
+      {
+        "key": "axis",
+        "label": "Axis"
+      },
+      {
+        "key": "min",
+        "label": "Min"
+      },
+      {
+        "key": "minLine",
+        "label": "At line"
+      },
+      {
+        "key": "max",
+        "label": "Max"
+      },
+      {
+        "key": "maxLine",
+        "label": "At line"
+      },
+      {
+        "key": "unresolved",
+        "label": "Not resolved"
+      }
+    ],
+    "rows": [
+      {
+        "where": "Program",
+        "scope": "program",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "50",
+        "minLine": 39,
+        "max": "600",
+        "maxLine": 8,
+        "unresolved": 0,
+        "line": 8
+      },
+      {
+        "where": "Program",
+        "scope": "program",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "-40",
+        "minLine": 13,
+        "max": "400",
+        "maxLine": 8,
+        "unresolved": 0,
+        "line": 8
+      },
+      {
+        "where": "Program",
+        "scope": "program",
+        "axis": "C",
+        "axisId": "C",
+        "min": "0",
+        "minLine": 39,
+        "max": "90",
+        "maxLine": 41,
+        "unresolved": 0,
+        "line": 41
+      },
+      {
+        "where": "T1 (T010101, line 9)",
+        "scope": "tool",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "64",
+        "minLine": 12,
+        "max": "600",
+        "maxLine": 18,
+        "unresolved": 0,
+        "line": 18
+      },
+      {
+        "where": "T1 (T010101, line 9)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "-40",
+        "minLine": 13,
+        "max": "400",
+        "maxLine": 18,
+        "unresolved": 0,
+        "line": 18
+      },
+      {
+        "where": "T3 (T0303, line 21)",
+        "scope": "tool",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "59.4",
+        "minLine": 25,
+        "max": "600",
+        "maxLine": 26,
+        "unresolved": 0,
+        "line": 26
+      },
+      {
+        "where": "T3 (T0303, line 21)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "-30",
+        "minLine": 25,
+        "max": "400",
+        "maxLine": 26,
+        "unresolved": 0,
+        "line": 26
+      },
+      {
+        "where": "T11 (T001111, line 36)",
+        "scope": "tool",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "50",
+        "minLine": 39,
+        "max": "50",
+        "maxLine": 39,
+        "unresolved": 0,
+        "line": 39
+      },
+      {
+        "where": "T11 (T001111, line 36)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "-8",
+        "minLine": 40,
+        "max": "5",
+        "maxLine": 39,
+        "unresolved": 0,
+        "line": 39
+      },
+      {
+        "where": "T11 (T001111, line 36)",
+        "scope": "tool",
+        "axis": "C",
+        "axisId": "C",
+        "min": "0",
+        "minLine": 39,
+        "max": "90",
+        "maxLine": 41,
+        "unresolved": 0,
+        "line": 41
+      },
+      {
+        "where": "T12 (T001212, line 43)",
+        "scope": "tool",
+        "axis": "X (diameter)",
+        "axisId": "X",
+        "min": "600",
+        "minLine": 52,
+        "max": "600",
+        "maxLine": 52,
+        "unresolved": 0,
+        "line": 52
+      },
+      {
+        "where": "T12 (T001212, line 43)",
+        "scope": "tool",
+        "axis": "Z",
+        "axisId": "Z",
+        "min": "400",
+        "minLine": 54,
+        "max": "400",
+        "maxLine": 54,
+        "unresolved": 0,
+        "line": 54
+      }
+    ],
+    "message": "Machine 'X8 Okuma 1um'. X is a diameter: diameter programming is on (the machine).",
+    "findings": []
+  }
+}

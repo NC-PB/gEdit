@@ -1,0 +1,74 @@
+{
+  "about": "X11 (d): scripts/report_machine_params.py run as a user script on decimal-lathe.nc, no machine. The whole report.",
+  "input": "decimal-lathe.nc",
+  "machine": null,
+  "report": {
+    "title": "Exit2 machine parameters",
+    "columns": [
+      {
+        "key": "key",
+        "label": "Parameter"
+      },
+      {
+        "key": "value",
+        "label": "Value"
+      },
+      {
+        "key": "source",
+        "label": "Source"
+      }
+    ],
+    "rows": [
+      {
+        "key": "machine",
+        "value": "(none)",
+        "source": "none"
+      },
+      {
+        "key": "numberInput",
+        "value": "{\"incrementMm\": \"0.001\", \"mode\": \"calculator\"}",
+        "source": "profile"
+      },
+      {
+        "key": "units",
+        "value": "mm",
+        "source": "profile"
+      },
+      {
+        "key": "diameter",
+        "value": "on",
+        "source": "profile"
+      },
+      {
+        "key": "variant gcodeSystem",
+        "value": "B",
+        "source": "detected"
+      },
+      {
+        "key": "variant incrementalAddresses",
+        "value": "uw",
+        "source": "profile"
+      },
+      {
+        "key": "variant toolWord",
+        "value": "byLength",
+        "source": "profile"
+      },
+      {
+        "key": "power-on feedmode",
+        "value": "G95",
+        "source": "detected"
+      },
+      {
+        "key": "power-on plane",
+        "value": "G18",
+        "source": "profile"
+      },
+      {
+        "key": "power-on spindlemode",
+        "value": "G97",
+        "source": "profile"
+      }
+    ]
+  }
+}

@@ -14,7 +14,8 @@ the machine, not for the person who builds the editor — the build and design n
 |---|---|
 | This page | The window, files, never losing work, navigation, searching, code help, comparing, settings, and the limits |
 | [Dialects](dialects.md) | Dialect profiles: what they decide, which six ship, how the dialect is picked |
-| [Machines](machines.md) | Machine configurations: what `X50` is worth on **your** control, and how to tell gEdit |
+| [Machines](machines.md) | Machine configurations: what `X50` is worth on **your** control, how to tell gEdit, and how to move your machines to another computer |
+| [Your own profiles and code files](profiles.md) | Profiles for one shop, machine or folder, and your own G and M codes in the help; the Profiles page; when a profile of yours is used |
 | [Transformations](transformations.md) | The NC tab: renumbering, removing block numbers, the five cleanups, block skip and selecting a tool's lines |
 | [Channels](channels.md) | Twin-turret and multi-path programs: finding the channels, the wait codes, and checking that the waits fit |
 | [Scripts](scripts.md) | Running Python scripts, the six that ship (feeds, speeds, tool list, program checks, extents, address arithmetic), and how to write one |
@@ -34,10 +35,10 @@ Across the top is the **ribbon**, with five tabs:
 
 | Tab | What it holds |
 |---|---|
-| **Home** | New, Open, Save, Save As, Save All, Close · the recent-files list · **Program Header** (Fanuc mill and Klartext only) · undo, redo, find, replace, **Find All…**, **Replace All…**, **Find Whole Address…** ([Searching](#searching)), comment, duplicate, move, delete line, select all, upper and lower case (plain text commands; on a program use **Convert Case…** on the NC tab) |
+| **Home** | New, Open, Save, Save As, Save All, Close · the recent-files list · **Program Header** (Fanuc mill and Klartext only) · undo, redo, find, replace, **Find All…**, **Replace All…**, **Find Whole Address…** ([Searching](#searching)), comment, duplicate, move, delete line, select all, upper and lower case (plain text commands; on a program use **Convert Case…** on the NC tab) · **Typing**: **Upper-Case Typing** switches [upper case while you type](#typing-forced-upper-case-and-no-accidental-joins) off or on for this session |
 | **Insert** | The ready-made blocks of the active dialect — Fanuc mill and Klartext only in this version; on a Fanuc lathe, Okuma or Sinumerik program the tab shows no blocks |
 | **NC** | Renumbering, removing block numbers, the cleanups, block skip and selecting a tool segment — see [Transformations](transformations.md) |
-| **Tools** | Compare ([Comparing two programs](#comparing-two-programs)), and the scripts — see [Scripts](scripts.md) |
+| **Tools** | Compare ([Comparing two programs](#comparing-two-programs)), the scripts — see [Scripts](scripts.md) — and **Test Profile on Document** for [profiles of your own](profiles.md#testing-a-profile-on-a-program) |
 | **View** | The command palette, the panels, folding, display switches, zoom, theme, settings, the shortcut list and About |
 
 Below it are the **tabs**, one per open program, then the editor, and at the bottom the
@@ -784,9 +785,66 @@ byte, that the program checks, the extents and Address arithmetic run without a 
 for the program checks a line of how many findings each check made in how many programs, which is where a check that cries wolf shows.
 The manifest and the report are described in [tests/real/README.md](../../tests/real/README.md).
 
+## Typing: forced upper case and no accidental joins
+
+Two options of the dialect change what a key does while you type. Both are **on for all six
+shipped dialects**, and both can be changed per profile in a
+[profile of your own](profiles.md#typing-options-in-a-profile).
+
+**Upper case.** A lower-case letter you type in code comes out as a capital: `g1 x10.` becomes
+`G1 X10.`. It is one keystroke and one undo step, like any other typing. It does **not**
+touch:
+
+- what is **inside a comment**, in `( )` or after `;`, so the note to the operator stays as
+  you write it;
+- what is **inside a string** — a tool name in quotes (`TOOL CALL "mill_d10"`,
+  `T="drill_d8"`), the text of a message (`MSG("Check the clamp")`) — and text the dialect
+  keeps as text, such as a path in a Klartext program;
+- **paste**, drag and drop, a script's result, the text a command inserts and anything else
+  that is not a key press: those arrive as they are. (To change a program afterwards, use
+  [Convert Case…](transformations.md#convert-case).)
+- a key with `Ctrl`, `Alt` or `Cmd` held (so `AltGr` and `Option` characters are untouched),
+  a letter that has no single capital (`ß`), and text composed with an input method;
+- a **`.json` or `.py` file**: your profiles, `machines.json` and scripts are not NC programs,
+  and a lower-case key in them is a different key.
+
+gEdit looks at the line as it would read with the letter in it, so a letter typed right after
+the `(` of a comment is already inside the comment, and one typed after the `)` is code again.
+With several cursors, each decides for itself. A line of more than 20,000 characters is not
+looked at while you type. One Klartext detail: the program name in `BEGIN PGM name MM` is
+kept as written: a name typed from left to right keeps its case before the unit behind it
+is written. A Fanuc `<name>` in angle brackets keeps its case in the same way.
+
+The **Upper-Case Typing** button in the **Typing** group of the Home tab (also in the palette)
+switches this off, or on, **for this session**, for every open document. It is not
+remembered: the next start follows the profiles again. The status bar says which way it
+went. To switch it off for good for a machine or a folder, write `"forceUppercase": false`
+in a profile of your own.
+
+**No accidental joins.** `Backspace` in the first column of a line and `Delete` at the end of
+a line would join two blocks into one, which is almost never what you meant and easy to
+miss. gEdit refuses these key presses **when both lines hold text**, and says *"Not joined:
+that would run two blocks together. Select the line break to delete it."* in the status bar.
+
+- **Empty lines can still be deleted** the usual way: `Backspace` on an empty line, or `Delete`
+  at the end of the line above it, as long as one of the two lines is empty (a line of only
+  spaces counts as empty).
+- To really join two blocks, **select the line break** (shift-arrow across it) and delete it:
+  a selection is always deleted normally, and so is **Delete Line**. A word delete
+  (`Ctrl`, `Alt` or `Cmd` with `Backspace` or `Delete`) is refused at the join of two lines of
+  text like the plain key, since it would run the two blocks together as well.
+- Several cursors: the key press is refused only if one of them would join two lines of text.
+
+There is no switch for this one on the ribbon. A profile of yours turns it off with
+`"preventLineJoin": false`.
+
+**Convert Case… asks about lower case.** Because the dialects expect upper case,
+[Convert Case…](transformations.md#convert-case) asks a question before it writes a program
+in lower case, on every shipped dialect.
+
 ## Settings
 
-`Cmd/Ctrl+,` opens the settings dialog. Six pages:
+`Cmd/Ctrl+,` opens the settings dialog. Seven pages:
 
 | Page | What you can set |
 |---|---|
@@ -795,10 +853,12 @@ The manifest and the report are described in [tests/real/README.md](../../tests/
 | **Assistance** | Hover help on or off; completion automatic, manual or off |
 | **Files** | Length of the recent list, what happens when a file changes outside gEdit, the dialect new files start in, and what [Never losing work](#never-losing-work) sets: where the backup copy goes and how many versions to keep, and the switches for crash recovery, session restore and per-file memory |
 | **Scripts** | The Python interpreter, extra script folders, the time limit for a run, whether the bundled scripts are listed — and the path of your own scripts folder |
-| **Machines** | Your machine configurations: add, edit, duplicate, remove, and which one is the default for a dialect — see [Machines](machines.md) |
+| **Machines** | Your machine configurations: add, edit, duplicate, remove, import and export, and which one is the default for a dialect — see [Machines](machines.md) |
+| **Profiles** | Your own profiles and code files: new, open, import, export, remove, test on the open program — see [Your own profiles and code files](profiles.md). **Manage Profiles…** in the palette opens the dialog on this page |
 
-The Machines page is not a page of settings. Machine configurations are records with names
-of their own, and they live in their own file (`machines.json`), not in `settings.json`.
+The Machines and Profiles pages are not pages of settings. Machine configurations are
+records with names of their own, and they live in their own file (`machines.json`), not in
+`settings.json`; your profiles and code files are files of their own in two folders.
 
 Settings are stored as a small JSON file that holds only what you changed, so a default
 that improves in a later version reaches you. `Open settings file` in the dialog opens it
@@ -827,6 +887,10 @@ Being clear about this saves disappointment on the shop floor.
   there; it is a Phase 4 item, and today you step between the channels. **Split into Channel
   Documents** makes copies for reading: nothing you change in them comes back into the
   program. See [Channels](channels.md).
+- **A profile of your own describes; it does not compute.** It changes how a dialect's
+  programs are recognised, numbered and explained and what typing does. It cannot run code,
+  and a control gEdit has no profile for is still read by the closest dialect — see
+  [Your own profiles and code files](profiles.md#what-a-profile-of-yours-is-not).
 - **gEdit does not know your machine unless you tell it.** Whether `X50` is 50 mm or
   0.050 mm, which G-code system a lathe uses, what is modal at power-on: all of that is a
   machine setting, and with no machine configured gEdit says "assumed" and refuses to
@@ -864,6 +928,8 @@ Being clear about this saves disappointment on the shop floor.
 | Settings | `<config>/settings.json` |
 | Machine configurations | `<config>/machines.json` |
 | Your own scripts | `<config>/scripts/` |
+| Your own profiles | `<config>/profiles/` |
+| Your own code files | `<config>/codes/` |
 | Recent files, panel sizes, remembered form values, the last script you ran, the last session, and your place in each file | `<data>/state.json` |
 | Window size and position | `<config>/.window-state.json` |
 | The copies made before a save | `<data>/backups/` |

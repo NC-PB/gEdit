@@ -770,6 +770,39 @@ describe('checkSyncMarks: findings', () => {
     expect(checkSyncMarksReport(perChannel, two).findings).toHaveLength(5000);
   });
 
+  it('M13 review NC-10: a prefix rule names its marks with the prefix, and no "1 times"', () => {
+    // `M1` + two digits: the marks are keyed by the digits (`30` for `M130`), as `findMarks` makes them.
+    const p = machine(['1', '2'], [rule('wait', { match: { kind: 'prefix', prefix: 'M1', idDigits: { min: 2, max: 2 } } })]);
+    const perChannel = {
+      '1': seq('1', ['2'], [
+        ['30', 3],
+        ['30', 5],
+        ['40', 7],
+        ['50', 9],
+      ]),
+      '2': seq('2', ['1'], [
+        ['30', 4],
+        ['50', 6],
+        ['40', 8],
+      ]),
+    };
+    const f = checkSyncMarks(perChannel, p);
+    const count = f.find((x) => x.kind === 'count-mismatch');
+    // The key stays the digits: that is what pairs.
+    expect(count?.mark).toBe('30');
+    const text = t(count!.message.key, count!.message.params);
+    expect(text).toContain('M130');
+    expect(text.startsWith('M130: ')).toBe(true);
+    expect(text).not.toMatch(/\b1 times/);
+    expect(text).toBe('M130: Channel 1 waits on it 2 times for Channel 2, Channel 2 has 1; both need the same number.');
+    // Every other message that names a mark names it the same way.
+    const order = f.find((x) => x.kind === 'out-of-order');
+    expect(order).toBeDefined();
+    const orderText = t(order!.message.key, order!.message.params);
+    expect(orderText).toMatch(/M1[45]0/);
+    expect(orderText).not.toMatch(/(^|[^M\d])[45]0\b/);
+  });
+
   it('ignores a hit of a rule the machine does not have, and a channel it does not declare', () => {
     const perChannel = {
       '1': [hit('M901', 3, '1', ['2'], 'gone')],

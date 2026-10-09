@@ -45,6 +45,7 @@
 // written. A pair is only compared when both channels are keys of `perChannel`: a channel the
 // caller could not read (its file is not open) is left out, never reported as missing.
 
+import { markPrefixOf } from './marks';
 import { budgetClock } from './resolve';
 import {
   CHANNEL_CAPS,
@@ -94,6 +95,9 @@ interface RuleInfo {
   semantics: SyncSemantics;
   answers: boolean;
   samePartners: boolean;
+  /** M13 review NC-10: a `prefix` rule's prefix (`M1`), `''` otherwise. Its marks are keyed by
+   *  the digits; the messages show `prefix + mark` (`M130`, [`markText`]). */
+  prefix: string;
 }
 
 const KIND_ORDER: readonly SyncFindingKind[] = [
@@ -188,6 +192,7 @@ export function checkSyncMarksReport(
         semantics: r.semantics ?? 'rendezvous',
         answers: r.answers === true,
         samePartners: r.samePartners === true,
+        prefix: markPrefixOf(r),
       });
     }
   }
@@ -197,6 +202,7 @@ export function checkSyncMarksReport(
     semantics: 'count',
     answers: false,
     samePartners: false,
+    prefix: '',
   });
 
   const jumps = new Map<string, number[]>();
@@ -338,7 +344,7 @@ export function checkSyncMarksReport(
               line: it.hit.line,
               message: {
                 key: 'channels.findings.unmatched',
-                params: { mark: it.hit.mark, channel: display(channel) },
+                params: { mark: markText(it.hit, rules), channel: display(channel) },
               },
             });
           }
@@ -397,7 +403,7 @@ export function checkSyncMarksReport(
           ? {
               key: 'channels.findings.partnersDifferAbsent',
               params: {
-                mark: x.hit.mark,
+                mark: markText(x.hit, rules),
                 channel: display(a),
                 other: display(b),
                 line: x.hit.line,
@@ -408,7 +414,7 @@ export function checkSyncMarksReport(
           : {
               key: 'channels.findings.partnersDiffer',
               params: {
-                mark: x.hit.mark,
+                mark: markText(x.hit, rules),
                 channel: display(a),
                 other: display(b),
                 otherLine: y.hit.line,
@@ -496,8 +502,8 @@ export function checkSyncMarksReport(
             message: {
               key: excused ? 'channels.findings.orderNotCheckedOrdered' : 'channels.findings.notIncreasing',
               params: {
-                mark: it.hit.mark,
-                previous: previous.hit.mark,
+                mark: markText(it.hit, rules),
+                previous: markText(previous.hit, rules),
                 previousLine: previous.hit.line,
                 channel: display(channel),
               },
@@ -547,7 +553,7 @@ export function checkSyncMarksReport(
           message: {
             key: 'channels.findings.countNotChecked',
             params: {
-              mark: first.hit.mark,
+              mark: markText(first.hit, rules),
               channel: display(chMore),
               other: display(chFewer),
               count: more.length,
@@ -571,7 +577,7 @@ export function checkSyncMarksReport(
             message: {
               key: 'channels.findings.missing',
               params: {
-                mark: it.hit.mark,
+                mark: markText(it.hit, rules),
                 channel: display(chMore),
                 other: display(chFewer),
               },
@@ -593,7 +599,7 @@ export function checkSyncMarksReport(
           message: {
             key: 'channels.findings.countMismatch',
             params: {
-              mark: first.hit.mark,
+              mark: markText(first.hit, rules),
               channel: display(chMore),
               other: display(chFewer),
               count: more.length,
@@ -673,8 +679,8 @@ export function checkSyncMarksReport(
                 ? 'channels.findings.orderNotCheckedMore'
                 : 'channels.findings.orderNotChecked',
           params: {
-            mark: m.hit.mark,
-            crossed: c.hit.mark,
+            mark: markText(m.hit, rules),
+            crossed: markText(c.hit, rules),
             channel: display(a),
             other: display(b),
             line: m.hit.line,
@@ -691,9 +697,14 @@ export function checkSyncMarksReport(
   }
 }
 
-/** The mark as a message names it: its id, or the rule label for an id-less mark. */
+/**
+ * The mark as a message names it: its id, with a `prefix` rule's prefix in front (`M130`, not
+ * `30`; M13 review NC-10), or the rule label for an id-less mark. `SyncFinding.mark` keeps the
+ * id itself, which is what pairs.
+ */
 function markText(hit: SyncHit, rules: Map<string, RuleInfo>): string {
-  return hit.mark !== '' ? hit.mark : (rules.get(hit.ruleId)?.label ?? hit.ruleId);
+  const rule = rules.get(hit.ruleId);
+  return hit.mark !== '' ? (rule?.prefix ?? '') + hit.mark : (rule?.label ?? hit.ruleId);
 }
 
 /**

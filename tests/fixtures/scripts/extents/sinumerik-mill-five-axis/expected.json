@@ -152,7 +152,7 @@
       "line": 13
     },
     {
-      "where": "G54, T=\"MILL_D10\" (line 2)",
+      "where": "G54, MILL_D10 (T=\"MILL_D10\", line 2)",
       "scope": "tool",
       "axis": "X",
       "axisId": "X",
@@ -164,7 +164,7 @@
       "line": 6
     },
     {
-      "where": "G54, T=\"MILL_D10\" (line 2)",
+      "where": "G54, MILL_D10 (T=\"MILL_D10\", line 2)",
       "scope": "tool",
       "axis": "Y",
       "axisId": "Y",
@@ -176,7 +176,7 @@
       "line": 7
     },
     {
-      "where": "G54, T=\"MILL_D10\" (line 2)",
+      "where": "G54, MILL_D10 (T=\"MILL_D10\", line 2)",
       "scope": "tool",
       "axis": "Z",
       "axisId": "Z",
@@ -188,7 +188,7 @@
       "line": 5
     },
     {
-      "where": "G54, T=\"MILL_D10\" (line 2)",
+      "where": "G54, MILL_D10 (T=\"MILL_D10\", line 2)",
       "scope": "tool",
       "axis": "A",
       "axisId": "A",
@@ -200,7 +200,7 @@
       "line": 13
     },
     {
-      "where": "G54, T=\"MILL_D10\" (line 2)",
+      "where": "G54, MILL_D10 (T=\"MILL_D10\", line 2)",
       "scope": "tool",
       "axis": "C",
       "axisId": "C",

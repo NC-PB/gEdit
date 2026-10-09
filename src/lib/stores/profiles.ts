@@ -18,7 +18,7 @@
 // `createProfileRegistry(deps)` plus the singleton wired to the real modules (AD-2), so a
 // unit test can build a registry over its own profile JSON without touching Tauri.
 
-import { readable } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { BUILTIN_CODE_DB_JSON } from '$lib/data/codes';
 import { BUILTIN_PROFILE_SOURCES, FALLBACK_PROFILE_ID } from '$lib/data/profiles';
 import { compileProfile } from '$lib/core/profiles/compile';
@@ -32,10 +32,10 @@ import { codes as appCodes } from '$lib/stores/codes';
 import { settings } from '$lib/stores/settings';
 import { isMacPlatform } from '$lib/utils/platform';
 import { t } from '$lib/i18n';
-import type { CompiledProfile, Profile, ProfileSource, ResolvedProfile } from '$lib/core/profiles/types';
+import type { CompiledProfile, Profile, ProfileProblem, ProfileSource, ResolvedProfile } from '$lib/core/profiles/types';
 import type { EffectiveMachine, EffectiveProfile } from '$lib/core/machines/types';
 import type { CodeDb } from '$lib/core/codes/types';
-import type { DialogFilter, ProfileInfo, ProfileRegistry } from '$lib/app/types';
+import type { DialogFilter, ProfileInfo, ProfileRegistry, UserFileText } from '$lib/app/types';
 
 export interface ProfileRegistryDeps {
   /**
@@ -50,8 +50,12 @@ export interface ProfileRegistryDeps {
   sources?: readonly unknown[];
   /** The same, with the origin and file of each source (M6, AD-16). Wins over `sources`. */
   profileSources?: readonly ProfileSource[];
-  /** The resolved database of a dialect id, for `effective` (M6, AD-31). */
-  codeDb?: (dialect: string) => CodeDb;
+  /**
+   * The resolved database of a dialect id, for `effective` (M6, AD-31). `own` is the
+   * database the profile itself names (M13, §7.16 #195): a user database follows a machine's
+   * variant, so the answer for `dialect` depends on it.
+   */
+  codeDb?: (dialect: string, own: string) => CodeDb;
   /**
    * The stored database files, keyed by dialect id (M6). Validation reads them for the two
    * checks a profile cannot answer alone: that a variant's `codes` names a database that
@@ -59,7 +63,8 @@ export interface ProfileRegistryDeps {
    *
    * The **raw** files, not the code service: the registry is built while the service that
    * would answer is still importing it, and a profile has to load without a database
-   * anyway. The default is the built-ins.
+   * anyway. The default is the built-ins. A reload (M13) asks again, so it sees the
+   * databases that exist after `codes.reload`.
    */
   codeDbFiles?: () => Readonly<Record<string, unknown>>;
   /** `files.defaultProfile`; an unknown id falls back to the first built-in. */
@@ -96,9 +101,39 @@ function infoOf(profile: Profile, resolved: ResolvedProfile): ProfileInfo {
   };
 }
 
+/** Every string of the built-in profiles' JSON, collected once (see `isUserPattern`). */
+let builtinTexts: Set<string> | undefined;
+
+function builtinTextSet(): Set<string> {
+  if (builtinTexts !== undefined) return builtinTexts;
+  const out = new Set<string>();
+  const visit = (value: unknown): void => {
+    if (typeof value === 'string') out.add(value);
+    else if (Array.isArray(value)) value.forEach(visit);
+    else if (typeof value === 'object' && value !== null) Object.values(value).forEach(visit);
+  };
+  for (const source of BUILTIN_PROFILE_SOURCES) visit(source.raw);
+  builtinTexts = out;
+  return out;
+}
+
+/**
+ * M13 review fix CODE-1: the repeated-group shape check is for the patterns a user's file wrote
+ * or changed. A pattern whose text is one of the built-in profiles' own (inherited, or copied
+ * into a child) is the shipped one and is not held to it: 13 of the 199 shipped patterns are
+ * flagged by the heuristic, all of them bounded by a delimiter.
+ */
+function isUserPattern(source: string): boolean {
+  return !builtinTextSet().has(source);
+}
+
+/** How many problems one load prints to the console; the rest are counted (CODE-5). */
+const MAX_LOGGED = 20;
+
 /**
  * Resolves (AD-16), then validates, then compiles every source; a broken one is reported
- * and left out.
+ * and left out. One source cannot cost the others: whatever it throws is its own problem
+ * (M13 review fix CODE-2).
  *
  * The order matters: a child is checked on the merge result, exactly like a built-in, so
  * nothing reaches the compiler that the validator has not seen (F20).
@@ -109,14 +144,21 @@ function infoOf(profile: Profile, resolved: ResolvedProfile): ProfileInfo {
 function load(
   sources: readonly ProfileSource[],
   files: Readonly<Record<string, unknown>>,
-  onProblem: (message: string) => void,
-): Entry[] {
+  report: (message: string) => void,
+): { entries: Entry[]; problems: ProfileProblem[] } {
   const entries: Entry[] = [];
+  const found: ProfileProblem[] = [];
   const codeDbs = Object.keys(files);
   const groups = new Map<string, string[]>();
+  let logged = 0;
+  const onProblem = (message: string): void => {
+    logged += 1;
+    if (logged <= MAX_LOGGED) report(message.length > 400 ? `${message.slice(0, 400)}…` : message);
+  };
   /** The modal groups of one dialect, read once per registry. */
   const modalGroups = (dialect: unknown): string[] | undefined => {
-    if (typeof dialect !== 'string' || !(dialect in files)) return undefined;
+    // `Object.hasOwn`: a profile's `codes` may be "constructor", which `in` finds on every object.
+    if (typeof dialect !== 'string' || !Object.hasOwn(files, dialect)) return undefined;
     let known = groups.get(dialect);
     if (!known) {
       known = modalGroupsOf(files as Record<string, unknown>, dialect);
@@ -125,6 +167,7 @@ function load(
     return known;
   };
   const { resolved, problems } = resolveProfiles(sources);
+  found.push(...problems);
   for (const problem of problems) {
     const where =
       problem.profileId ?? problem.file ?? `profile #${(problem.index ?? 0) + 1}`;
@@ -135,16 +178,38 @@ function load(
   resolved.forEach((entry, i) => {
     const id = (entry.profile as Partial<Profile>).id;
     const where = typeof id === 'string' && id !== '' ? id : `profile #${i + 1}`;
-    const checked = validateProfile(entry.profile, {
-      codeDbs,
-      modalGroups: modalGroups(entry.profile.codes),
-    });
+    const origin = entry.origin;
+    const file = entry.file ?? null;
+    const profileId = typeof id === 'string' && id !== '' ? id : null;
+    const fail = (path: string, message: string): void => {
+      found.push({ origin, file, profileId, path, message, kind: 'profiles' });
+    };
+    let checked: ReturnType<typeof validateProfile>;
+    try {
+      checked = validateProfile(entry.profile, {
+        codeDbs,
+        modalGroups: modalGroups(entry.profile.codes),
+        ...(origin === 'user' ? { checkShape: isUserPattern } : {}),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      onProblem(`${where} was not loaded: ${message}`);
+      fail('', message);
+      return;
+    }
     if (!checked.ok) {
-      onProblem(`${where} was not loaded: ${checked.errors.join('; ')}`);
+      onProblem(`${where} was not loaded: ${checked.errors.slice(0, 5).join('; ')}${checked.errors.length > 5 ? `; and ${checked.errors.length - 5} more` : ''}`);
+      for (const error of checked.errors) {
+        // `<json.path>: <what is wrong>` (`validateProfile`); a path never contains ": ".
+        const at = error.indexOf(': ');
+        if (at < 0) fail('', error);
+        else fail(error.slice(0, at), error.slice(at + 2));
+      }
       return;
     }
     if (entries.some((loaded) => loaded.profile.id === checked.profile.id)) {
       onProblem(`${where} was not loaded: the id is already taken`);
+      fail('id', 'the id is already taken');
       return;
     }
     try {
@@ -157,25 +222,54 @@ function load(
       });
     } catch (error) {
       onProblem(`${where} was not loaded: ${error instanceof Error ? error.message : String(error)}`);
+      fail('', error instanceof Error ? error.message : String(error));
     }
   });
 
-  return entries;
+  if (logged > MAX_LOGGED) report(`and ${logged - MAX_LOGGED} more profile problems (not printed here)`);
+  return { entries, problems: found };
+}
+
+/** The raw code files of the code service as it stands, or the built-ins before it exists (module cycle). */
+function codeFilesNow(): Readonly<Record<string, unknown>> {
+  try {
+    return appCodes.files();
+  } catch {
+    return BUILTIN_CODE_DB_JSON;
+  }
 }
 
 export function createProfileRegistry(deps: ProfileRegistryDeps): ProfileRegistry {
   const onProblem = deps.onProblem ?? ((message: string) => console.warn(message));
-  const sources: readonly ProfileSource[] =
+  const builtin: readonly ProfileSource[] =
     deps.profileSources ??
     (deps.sources === undefined
       ? BUILTIN_PROFILE_SOURCES
       : deps.sources.map((raw) => ({ raw, origin: 'builtin' as const })));
-  const entries = load(sources, (deps.codeDbFiles ?? (() => BUILTIN_CODE_DB_JSON))(), onProblem);
-  const infos: ProfileInfo[] = entries.map((entry) => entry.info);
-  const byId = new Map<string, Entry>(entries.map((entry) => [entry.profile.id, entry]));
-  const compiledList = entries.map((entry) => entry.compiled);
+  const codeFiles = deps.codeDbFiles ?? (() => BUILTIN_CODE_DB_JSON);
+
+  // The loaded set. Everything below reads these, so `reload` replaces them in one go and the
+  // answers (`list`, `get`, `compiled`, `detect`) follow without anything to unsubscribe.
+  let entries: Entry[] = [];
+  let infos: ProfileInfo[] = [];
+  let byId = new Map<string, Entry>();
+  let compiledList: CompiledProfile[] = [];
   /** The detection tie-break needs the origin, which a compiled profile does not carry. */
-  const originOf = new Map(entries.map((entry) => [entry.compiled, entry.info.origin]));
+  let originOf = new Map<CompiledProfile, 'builtin' | 'user'>();
+  let problems: ProfileProblem[] = [];
+
+  function install(loaded: { entries: Entry[]; problems: ProfileProblem[] }): void {
+    entries = loaded.entries;
+    infos = entries.map((entry) => entry.info);
+    byId = new Map<string, Entry>(entries.map((entry) => [entry.profile.id, entry]));
+    compiledList = entries.map((entry) => entry.compiled);
+    originOf = new Map(entries.map((entry) => [entry.compiled, entry.info.origin]));
+    problems = loaded.problems;
+  }
+  install(load(builtin, codeFiles(), onProblem));
+
+  const all = writable<ProfileInfo[]>(infos);
+  const revision = writable(0);
 
   /** Every profile extension, each one once, in profile order. */
   function allExtensions(): string[] {
@@ -204,7 +298,7 @@ export function createProfileRegistry(deps: ProfileRegistryDeps): ProfileRegistr
   }
 
   return {
-    all: readable<ProfileInfo[]>(infos),
+    all: { subscribe: all.subscribe },
 
     list(): ProfileInfo[] {
       return infos;
@@ -279,7 +373,7 @@ export function createProfileRegistry(deps: ProfileRegistryDeps): ProfileRegistr
       const cached = entry.effective.get(eff.key);
       if (cached) return cached;
 
-      const db = deps.codeDb ?? ((dialect: string) => appCodes.byId(dialect));
+      const db = deps.codeDb ?? ((dialect: string, own: string) => appCodes.over(own, dialect));
       let profile = entry.profile;
       let compiled = entry.compiled;
       let dialect = entry.profile.codes;
@@ -295,7 +389,7 @@ export function createProfileRegistry(deps: ProfileRegistryDeps): ProfileRegistr
           `${id}: the machine settings could not be applied: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
-      const result: EffectiveProfile = { profile, cp: compiled, codes: db(dialect), machine: eff };
+      const result: EffectiveProfile = { profile, cp: compiled, codes: db(dialect, entry.profile.codes), machine: eff };
       entry.effective.set(eff.key, result);
       return result;
     },
@@ -313,6 +407,64 @@ export function createProfileRegistry(deps: ProfileRegistryDeps): ProfileRegistr
       const entry = byId.get(id);
       return entry ? detectVariantsIn(entry.compiled, text) : {};
     },
+
+    /**
+     * M13 (§7.3, AD-29): one bump per `reload`, after the new set is in place. It is the one
+     * signal for the profile files and the code files (`userConfig.load` reloads the code
+     * databases first and always follows with this).
+     */
+    revision: { subscribe: revision.subscribe },
+
+    /** The problems of the last load: the built-ins' (none, `compile.test.ts` covers them) and the user's files. */
+    problems(): ProfileProblem[] {
+      return problems;
+    },
+
+    /**
+     * M13 (AD-29, §7.16 #192): the built-ins plus `user`, resolved, validated and compiled
+     * again against the databases that exist now (`codeDbFiles`). Every entry is new, so every
+     * `effective` cache is gone with the old ones; `all` is set to the new list; `revision`
+     * bumps once. Open documents are not touched here: one whose profile no longer exists is
+     * `userConfig.load`'s to detect again.
+     *
+     * The user files are read in name order, so of two with one id the first loads and the
+     * second is reported; a user id equal to a built-in id, a file that is not JSON or not an
+     * object, a broken or unfinished profile are reported with their file and JSON path and
+     * left out. The built-ins load whatever `user` holds (they are resolved first, a built-in
+     * never extends a user profile). Never throws.
+     */
+    reload(user: UserFileText[]): ProfileProblem[] {
+      const sources: ProfileSource[] = [...builtin];
+      const bad: ProfileProblem[] = [];
+      for (const f of [...user].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+        let raw: unknown;
+        try {
+          raw = JSON.parse(f.text);
+        } catch (error) {
+          const message = f.text.charCodeAt(0) === 0xfeff
+            ? 'the file starts with a byte order mark; save it as UTF-8 without one'
+            : `not valid JSON: ${error instanceof Error ? error.message : String(error)}`;
+          onProblem(`${f.name} was not loaded: ${message}`);
+          bad.push({ origin: 'user', file: f.name, profileId: null, path: '', message, kind: 'profiles' });
+          continue;
+        }
+        sources.push({ raw, origin: 'user', file: f.name });
+      }
+      let loaded: { entries: Entry[]; problems: ProfileProblem[] };
+      try {
+        loaded = load(sources, codeFiles(), onProblem);
+      } catch (error) {
+        // `load` reports what it can; this is the net under it, so the old set stays.
+        const message = error instanceof Error ? error.message : String(error);
+        onProblem(`the profiles could not be reloaded: ${message}`);
+        return [{ origin: 'user', file: null, profileId: null, path: '', message, kind: 'profiles' }];
+      }
+      loaded.problems = [...bad, ...loaded.problems];
+      install(loaded);
+      all.set(infos);
+      revision.set(get(revision) + 1);
+      return problems;
+    },
   };
 }
 
@@ -320,4 +472,6 @@ export function createProfileRegistry(deps: ProfileRegistryDeps): ProfileRegistr
 export const profiles: ProfileRegistry = createProfileRegistry({
   filtersSupported: !isMacPlatform(),
   defaultProfileId: () => settings.get('files.defaultProfile'),
+  // A reload validates against the databases the code service holds after its own reload.
+  codeDbFiles: codeFilesNow,
 });

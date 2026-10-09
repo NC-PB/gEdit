@@ -193,6 +193,10 @@
         "^(?:N\\d+[ \\t]*)?G0*15(?![\\d.])[ \\t]*(?:\\(.*)?$"
       ]
     },
+    "editing": {
+      "forceUppercase": true,
+      "preventLineJoin": true
+    },
     "files": {
       "defaultExtension": "min",
       "encoding": "keep",

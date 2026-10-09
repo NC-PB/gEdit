@@ -190,6 +190,8 @@ mod tests {
             .map(|entry| entry.unwrap().file_name())
             .filter(|name| name != paths::MACHINES_FILE_NAME)
             .filter(|name| name != "scripts")
+            // M13: `ensure` makes the two folders of the user's own files beside it.
+            .filter(|name| name != paths::PROFILES_DIR_NAME && name != paths::CODES_DIR_NAME)
             .collect();
         assert!(strays.is_empty(), "left behind: {strays:?}");
         let _ = fs::remove_dir_all(&root);

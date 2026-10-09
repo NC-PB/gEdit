@@ -1,0 +1,50 @@
+{
+  "about": "X12 (a): \"Check wait codes\" on twin-single.nc under \"Twin 31i\". rows are the report rows in order (kind, channel, line and mark from the check; document is the document a row jumps into; text is what the row says).",
+  "machine": "Twin 31i",
+  "title": "Wait codes, Twin 31i: 4 to look at",
+  "message": "Checked: Channel 1, Channel 2.",
+  "rows": [
+    {
+      "kind": "count-mismatch",
+      "channel": "1",
+      "line": 18,
+      "mark": "30",
+      "other": "2",
+      "otherLine": 31,
+      "counts": {
+        "channel": 2,
+        "other": 1
+      },
+      "document": "d1",
+      "text": "M130: Channel 1 waits on it 2 times for Channel 2, Channel 2 has 1; both need the same number."
+    },
+    {
+      "kind": "out-of-order",
+      "channel": "1",
+      "line": 37,
+      "mark": "40",
+      "other": "2",
+      "otherLine": 52,
+      "document": "d1",
+      "text": "M140 (line 37) and M141 (line 39) are in the other order in Channel 2 (lines 52 and 50)."
+    },
+    {
+      "kind": "missing",
+      "channel": "1",
+      "line": 41,
+      "mark": "50",
+      "other": "2",
+      "document": "d1",
+      "text": "M150 in Channel 1 waits for Channel 2, but Channel 2 has no M150 that waits for Channel 1."
+    },
+    {
+      "kind": "missing",
+      "channel": "2",
+      "line": 54,
+      "mark": "60",
+      "other": "1",
+      "document": "d1",
+      "text": "M160 in Channel 2 waits for Channel 1, but Channel 1 has no M160 that waits for Channel 2."
+    }
+  ]
+}

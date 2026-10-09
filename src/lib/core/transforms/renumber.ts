@@ -608,6 +608,23 @@ function keyOfWritten(scan: ProgramScan, text: string, main: string | null = nul
 }
 
 /**
+ * The key of the block number `row` carries **after** the run: the digits the run wrote
+ * for a line of its scope, the number the scan read for every other row (or null).
+ */
+function keyAfter(
+  scan: ProgramScan,
+  row: number,
+  base: number,
+  lineCount: number,
+  newTextOf: (index: number) => string | null,
+  main: string | null,
+): BlockKey | null {
+  const written = row >= base && row < base + lineCount ? newTextOf(row - base) : null;
+  // A main block keeps its prefix, so it keeps its kind of key.
+  return written === null ? scan.keys[row] : keyOfWritten(scan, written, isMainKey(scan.keys[row], main) ? main : null);
+}
+
+/**
  * How often each block occurs in a program **after** the run.
  *
  * `newTextOf` is the run's answer for a line of its scope — the digits it wrote; every
@@ -628,13 +645,9 @@ function keysAfter(
   newTextOf: (index: number) => string | null,
   main: string | null,
 ): Map<BlockKey, number>[] {
-  const end = base + lineCount;
   const after: Map<BlockKey, number>[] = scan.segments.map(() => new Map());
   for (let row = 0; row < scan.keys.length; row++) {
-    const written = row >= base && row < end ? newTextOf(row - base) : null;
-    // A main block keeps its prefix, so it keeps its kind of key.
-    const key =
-      written === null ? scan.keys[row] : keyOfWritten(scan, written, isMainKey(scan.keys[row], main) ? main : null);
+    const key = keyAfter(scan, row, base, lineCount, newTextOf, main);
     if (key === null) continue;
     const counts = after[scan.segmentOf[row]];
     counts.set(key, (counts.get(key) ?? 0) + 1);
@@ -749,6 +762,93 @@ function applyReferences(out: string[], lines: readonly string[], decisions: rea
     }
     out[index] = text;
   }
+}
+
+/**
+ * Where a reference the run left as written lands **after** the run (M13 review NC-8).
+ *
+ * A value left standing is reported, but "check it" undersells the one case that is worse
+ * than a jump to nowhere: the block it named got a new number, and the run wrote the old
+ * number onto **another** block. `M99 P300` named `N300 G00 X100. Z100. T0100`; after the
+ * renumber that block is `N260` and `N300` is the `M08` four blocks further down, past the
+ * tool change, so the return skips it and the program still runs. This finds that block,
+ * or finds that no block carries the number any more (the control stops with an alarm).
+ *
+ * Only a target that existed once in the input counts: a value that named nothing, or two
+ * blocks, has its own row already, and so does a line whose two words of one address
+ * cannot be told apart. The target is looked for in the reference's own program; for a
+ * reference the dialect never rewrites (`M99 P` names a block of the **caller**) it is the
+ * one block of the file that carries the number, in another program than the reference
+ * (see `targetOf`).
+ */
+interface Landing {
+  /** The row of the block the reference named before the run. */
+  targetRow: number;
+  /** The row of the block that carries the number after the run, or -1 when none does. */
+  landingRow: number;
+}
+
+class LandingFinder {
+  /** Per program: block key → first row carrying it after the run. Built on first use. */
+  private after: Map<BlockKey, number>[] | null = null;
+
+  constructor(
+    private readonly scan: ProgramScan,
+    private readonly keyAfterRow: (row: number) => BlockKey | null,
+  ) {}
+
+  /** The block a reference on `row` named in the input, as program and site, or null. */
+  private targetOf(row: number, word: ReferenceWord): { segment: number; site: NumberSite } | null {
+    if (word.key === null) return null;
+    const own = this.scan.segmentOf[row];
+    if (word.rewrite) {
+      const here = this.scan.segments[own]?.get(word.key);
+      return here !== undefined && here.count === 1 ? { segment: own, site: here } : null;
+    }
+    // A value the dialect never rewrites names a block of **another** program: `M99 P`
+    // one of the caller, `M98 P2000 Q50` one of `O2000`. Where that block stands cannot be
+    // read from the line, so only a number exactly one block of the file carries is an
+    // answer, and only when that block is not in the reference's own program: `Q50` behind
+    // `M98 P2000` does not name the `N50` beside it (golden `m98-p-before-call`), and a
+    // subprogram's own `N30` is not where its `M99 P30` returns to (`m99-p-caller`).
+    let found: { segment: number; site: NumberSite } | null = null;
+    for (let segment = 0; segment < this.scan.segments.length; segment++) {
+      const site = this.scan.segments[segment].get(word.key);
+      if (site === undefined) continue;
+      if (segment === own || found !== null || site.count !== 1) return null;
+      found = { segment, site };
+    }
+    return found;
+  }
+
+  private firstAfter(segment: number, key: BlockKey): number {
+    if (this.after === null) {
+      const after: Map<BlockKey, number>[] = this.scan.segments.map(() => new Map());
+      for (let row = 0; row < this.scan.keys.length; row++) {
+        const k = this.keyAfterRow(row);
+        if (k === null) continue;
+        const counts = after[this.scan.segmentOf[row]];
+        if (!counts.has(k)) counts.set(k, row);
+      }
+      this.after = after;
+    }
+    return this.after[segment]?.get(key) ?? -1;
+  }
+
+  /** Null when the reference names nothing it named before, or its block kept the number. */
+  landingOf(row: number, word: ReferenceWord): Landing | null {
+    if (word.ambiguous) return null;
+    const target = this.targetOf(row, word);
+    if (target === null || word.key === null) return null;
+    if (this.keyAfterRow(target.site.row) === word.key) return null;
+    return { targetRow: target.site.row, landingRow: this.firstAfter(target.segment, word.key) };
+  }
+}
+
+/** A line as a row quotes it: trimmed, and cut short where it would swamp the message. */
+function quoted(line: string): string {
+  const text = line.trim();
+  return text.length > 40 ? `${text.slice(0, 39)}…` : text;
 }
 
 /**
@@ -1119,14 +1219,17 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
 
   // The references, over the whole document: a jump *above* the selection points into it
   // just as well, and the run's own walk only ever saw the selection (G8 M4).
-  const decisions = decideReferences(
-    scanFor(lines, ctx, cp),
-    ctx.firstLine,
-    lines.length,
-    (index) => newTextOf.get(index) ?? null,
-    main,
-  );
+  const scan = scanFor(lines, ctx, cp);
+  const writtenOf = (index: number): string | null => newTextOf.get(index) ?? null;
+  const decisions = decideReferences(scan, ctx.firstLine, lines.length, writtenOf, main);
   applyReferences(out, lines, decisions);
+
+  // Where a value left as written lands now (NC-8): rows of the scope are read as the run
+  // wrote them, every other row as it stands in the document.
+  const base = Math.max(0, Math.trunc(ctx.firstLine) - scan.firstLine);
+  const textAfter = (row: number): string =>
+    row >= base && row < base + out.length ? out[row - base] : (scan.scanned[row] ?? '');
+  const landings = new LandingFinder(scan, (row) => keyAfter(scan, row, base, lines.length, writtenOf, main));
 
   const rowText: Record<Outcome, string> = {
     rewritten: '',
@@ -1151,11 +1254,39 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
     else unresolved++;
     // Two values of one cycle call that fail the same way are one row, not two.
     const key = `${decision.line}:${decision.outcome}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if (referenceRows.length < SKIP_LIMIT) {
-      referenceRows.push({ line: decision.line, message: rowText[decision.outcome], severity: 'warning' });
+    if (!seen.has(key)) {
+      seen.add(key);
+      if (referenceRows.length < SKIP_LIMIT) {
+        referenceRows.push({ line: decision.line, message: rowText[decision.outcome], severity: 'warning' });
+      }
     }
+
+    // The value stands as written; say where it lands now when its block moved away.
+    const row = decision.line - scan.firstLine;
+    const landing = landings.landingOf(row, decision.word);
+    if (landing === null) continue;
+    // `G71 P100 Q100` is one target, not two.
+    const landingKey = `${decision.line}:lands:${String(decision.word.key)}`;
+    if (seen.has(landingKey)) continue;
+    seen.add(landingKey);
+    if (referenceRows.length >= SKIP_LIMIT) continue;
+    const params = {
+      reference: quoted(textAfter(row)),
+      target: (main !== null && isMainKey(decision.word.key, main) ? main : prefixOut) + decision.word.text,
+      line: scan.firstLine + landing.targetRow,
+    };
+    referenceRows.push({
+      line: decision.line,
+      message:
+        landing.landingRow < 0
+          ? t('ncNumbering.renumber.referenceGoneRow', params)
+          : t('ncNumbering.renumber.referenceLandsRow', {
+              ...params,
+              landing: scan.firstLine + landing.landingRow,
+              block: quoted(textAfter(landing.landingRow)),
+            }),
+      severity: 'warning',
+    });
   }
 
   if (rewritten > 0) warnings.push({ key: 'ncNumbering.renumber.referencesRewritten', params: { count: rewritten } });

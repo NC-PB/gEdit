@@ -295,6 +295,7 @@
       ]
     }
   },
+  "editing": { "forceUppercase": true, "preventLineJoin": true },
   "compare": {
     "ignoreBlockNumbers": true,
     "ignoreWhitespace": true,

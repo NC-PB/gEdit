@@ -32,7 +32,7 @@
       "description": "",
       "line": 2,
       "calls": 1,
-      "feed": "120",
+      "feed": "120 /min",
       "speed": "2000"
     },
     {

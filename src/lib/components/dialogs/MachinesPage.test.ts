@@ -204,7 +204,7 @@ describe('the list', () => {
     const html = page();
     expect(html).toContain('data-testid="settings-machines"');
     expect(html).toContain(t('machines.page.empty'));
-    expect(actions(html)).toEqual(['add', 'open-file']);
+    expect(actions(html)).toEqual(['add', 'import', 'export', 'open-file']);
   });
 
   it('shows one row per machine with its dialect and its default marker', () => {
@@ -232,6 +232,8 @@ describe('the list', () => {
       'default',
       'remove',
       'add',
+      'import',
+      'export',
       'open-file',
     ]);
   });
@@ -267,6 +269,8 @@ describe('the list', () => {
       'default!',
       'remove!',
       'add',
+      'import',
+      'export',
       'open-file',
     ]);
   });
@@ -280,7 +284,8 @@ describe('while the machines file could not be read', () => {
   it('disables every write and offers the two ways out (AD-31)', () => {
     const html = page();
     expect(html).toContain(t('machines.page.blocked'));
-    expect(actions(html)).toEqual(['add!', 'open-file', 'replace-file']);
+    expect(actions(html)).toEqual(['add!', 'import!', 'export', 'open-file', 'replace-file']);
+    // M13: Import adds to the file, so it waits for a usable one; a copy can always be saved.
   });
 
   it('refuses a save, a remove and a default, and writes nothing', async () => {

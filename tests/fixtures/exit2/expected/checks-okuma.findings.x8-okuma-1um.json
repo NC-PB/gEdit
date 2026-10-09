@@ -1,0 +1,198 @@
+{
+  "about": "X8: the bundled program_checks.py on checks-okuma.MIN with its form defaults, under the machine \"X8 Okuma 1um\" (made as \"machine\" says and chosen for this document). The whole report; every row with a line jumps to it.",
+  "input": "checks-okuma.MIN",
+  "profile": "okuma-osp",
+  "machine": {
+    "name": "X8 Okuma 1um",
+    "profile": "okuma-osp",
+    "params": {
+      "numberInput": {
+        "mode": "scale",
+        "incrementMm": "0.001",
+        "incrementInch": "0.0001",
+        "incrementDeg": "0.001",
+        "incrementSec": "0.01",
+        "classes": {
+          "feedPerRev": {
+            "increment": "0.001",
+            "incrementInch": "0.0001"
+          },
+          "feedPerMin": {
+            "increment": "0.1",
+            "incrementInch": "0.01"
+          }
+        }
+      },
+      "units": "mm",
+      "diameter": "on",
+      "variants": {
+        "toolWord": "offset2"
+      }
+    }
+  },
+  "report": {
+    "title": "Program checks",
+    "columns": [
+      {
+        "key": "line",
+        "label": "Line"
+      },
+      {
+        "key": "check",
+        "label": "Check"
+      },
+      {
+        "key": "severity",
+        "label": "Severity"
+      },
+      {
+        "key": "message",
+        "label": "Finding"
+      }
+    ],
+    "rows": [
+      {
+        "line": 4,
+        "check": "Program name",
+        "checkId": "programNameBlock",
+        "severity": "error",
+        "message": "O6301 G50: the program name has to stand in a block of its own"
+      },
+      {
+        "line": 8,
+        "check": "Sequence name",
+        "checkId": "sequenceSeparator",
+        "severity": "error",
+        "message": "N100G00: the sequence name has to be followed by a space or a tab"
+      },
+      {
+        "line": 11,
+        "check": "Speed clamp",
+        "checkId": "cssClamp",
+        "severity": "warning",
+        "message": "G96: constant surface speed with no spindle speed clamp before it; the spindle speeds up as the diameter shrinks"
+      },
+      {
+        "line": 15,
+        "check": "Missing word",
+        "checkId": "requiredWords",
+        "severity": "error",
+        "message": "G96: the block has to write S"
+      },
+      {
+        "line": 17,
+        "check": "Refused in this state",
+        "checkId": "stateConflicts",
+        "severity": "warning",
+        "message": "G140: the control refuses it while constant surface speed is on"
+      },
+      {
+        "line": 21,
+        "check": "Tool word",
+        "checkId": "toolWordFormat",
+        "severity": "warning",
+        "message": "T0303: a 4-digit tool word after 6-digit ones (line 9); one file should keep to one form"
+      },
+      {
+        "line": 25,
+        "check": "Thread under surface speed",
+        "checkId": "threadUnderCss",
+        "severity": "warning",
+        "message": "G33 X59400 Z-30000 F2000: a thread cut under constant surface speed; the speed changes with the diameter and the lead may not follow"
+      },
+      {
+        "line": 29,
+        "check": "Spindle",
+        "checkId": "spindleOff",
+        "severity": "warning",
+        "message": "G01 X60000 F200: a cut while the spindle is stopped (M05 on line 27)"
+      },
+      {
+        "line": 32,
+        "check": "Words in a block",
+        "checkId": "blockWords",
+        "severity": "error",
+        "message": "G97 S500 M03 S600: 2 S words in one block"
+      },
+      {
+        "line": 35,
+        "check": "Alone in its block",
+        "checkId": "aloneInBlock",
+        "severity": "error",
+        "message": "M110: has to stand in a block of its own; the block writes M05 besides it"
+      },
+      {
+        "line": 43,
+        "check": "Tool change in a cycle",
+        "checkId": "toolChangeInCycle",
+        "severity": "warning",
+        "message": "T001212: a tool change while the cycle G181 (line 40) is in force"
+      },
+      {
+        "line": 49,
+        "check": "Words in a block",
+        "checkId": "blockWords",
+        "severity": "error",
+        "message": "M03 M08 M10 M11 M24 M25 M41 M42 M73: 9 M codes in one block; the control takes at most 8"
+      },
+      {
+        "line": 51,
+        "check": "Jump target",
+        "checkId": "jumpTargets",
+        "severity": "error",
+        "message": "GOTO NEND2: no block NEND2 in this program"
+      },
+      {
+        "line": 52,
+        "check": "Comment",
+        "checkId": "unclosedComments",
+        "severity": "error",
+        "message": "(RETRACT, THE COMMENT IS NOT CLOSED: the comment is opened with ( and not closed with ) on its line"
+      },
+      {
+        "line": 53,
+        "check": "Brackets",
+        "checkId": "brackets",
+        "severity": "error",
+        "message": "VC1=[VC2+1: 1 [ is not closed"
+      },
+      {
+        "line": 54,
+        "check": "Lower case",
+        "checkId": "lowerCase",
+        "severity": "info",
+        "message": "g00, z400000: written in lower case; this control reads its addresses in upper case"
+      },
+      {
+        "line": 56,
+        "check": "Characters",
+        "checkId": "characters",
+        "severity": "warning",
+        "message": "–: – (en dash) is not an ASCII character, outside a comment"
+      },
+      {
+        "line": 57,
+        "check": "Stop",
+        "checkId": "stops",
+        "severity": "info",
+        "message": "M00: Program stop"
+      },
+      {
+        "line": 58,
+        "check": "Stop",
+        "checkId": "stops",
+        "severity": "info",
+        "message": "M01: Optional stop"
+      },
+      {
+        "line": 61,
+        "check": "Program frame",
+        "checkId": "programFrame",
+        "severity": "error",
+        "message": "G00 X600000: after the program end M02 on line 59; it never runs"
+      }
+    ],
+    "message": "20 findings in 18 checks. Machine 'X8 Okuma 1um': every number counts in units of 0.001 mm.",
+    "findings": []
+  }
+}

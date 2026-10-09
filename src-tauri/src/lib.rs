@@ -17,6 +17,7 @@
 //! - [`menu`] — the macOS menu and the two window-closing requests (macOS only)
 //! - [`python`] — finding the user's Python interpreter
 //! - [`scripts`] — the v2 scripting backend: discovery, the TOML header and the runner
+//! - [`userfiles`] — the user's own profiles and code files (M13)
 //!
 //! Window geometry is not ours: `tauri-plugin-window-state` saves and restores it
 //! into `.window-state.json` next to `settings.json` in the config folder. Its
@@ -47,6 +48,7 @@ mod session;
 #[cfg(test)]
 mod source_scan;
 mod state;
+mod userfiles;
 
 use tauri::{App, AppHandle, RunEvent};
 use tauri_plugin_window_state::StateFlags;
@@ -121,6 +123,11 @@ pub fn run() {
             quit::quit_guard_set_dirty,
             backup::files_backup,
             channels::channel_siblings,
+            userfiles::user_files_list,
+            userfiles::user_file_create,
+            userfiles::user_file_path,
+            userfiles::user_file_import,
+            userfiles::user_file_delete,
             session::session_save,
             session::session_load,
             recovery::recovery_put,

@@ -43,6 +43,11 @@ pub const BACKUPS_DIR_NAME: &str = "backups";
 /// folder per session, holding the `alive` heartbeat and the `<key>.{txt,json}`
 /// pairs.
 pub const RECOVERY_DIR_NAME: &str = "recovery";
+/// `<config>/profiles`, the user's own dialect profiles (M13, AD-29). Read by
+/// [`crate::userfiles`] only; the webview addresses a file by kind and name.
+pub const PROFILES_DIR_NAME: &str = "profiles";
+/// `<config>/codes`, the user's own code files (M13, AD-29), one per dialect.
+pub const CODES_DIR_NAME: &str = "codes";
 
 /// Whether this platform's file names are case-insensitive, and therefore
 /// whether two spellings of one path are the same file.
@@ -272,6 +277,11 @@ pub struct ConfigPaths {
     /// document from any other one it has open, exactly as it does with
     /// `settings_file`; knowing the path grants nothing.
     pub machines_file: String,
+    /// `<config>/profiles` (M13). The webview needs it to tell a document saved there
+    /// from any other one (the save reloads the profiles, AD-29); knowing it grants nothing.
+    pub profiles_dir: String,
+    /// `<config>/codes` (M13), for the same reason.
+    pub codes_dir: String,
 }
 
 /// The two folders everything gEdit owns hangs off. Resolved once per command,
@@ -302,6 +312,16 @@ impl AppDirs {
         self.config.join(MACHINES_FILE_NAME)
     }
 
+    /// `<config>/profiles` (M13, AD-29).
+    pub fn profiles_dir(&self) -> PathBuf {
+        self.config.join(PROFILES_DIR_NAME)
+    }
+
+    /// `<config>/codes` (M13, AD-29).
+    pub fn codes_dir(&self) -> PathBuf {
+        self.config.join(CODES_DIR_NAME)
+    }
+
     /// `<data>/backups` (M7). Not in [`ConfigPaths`]: the webview never names a
     /// backup, it only asks `files_backup` to make one.
     pub fn backups_dir(&self) -> PathBuf {
@@ -325,6 +345,8 @@ impl AppDirs {
             state_file: text(&self.state_file()),
             user_scripts_dir: text(&self.user_scripts_dir()),
             machines_file: text(&self.machines_file()),
+            profiles_dir: text(&self.profiles_dir()),
+            codes_dir: text(&self.codes_dir()),
         }
     }
 
@@ -341,6 +363,10 @@ impl AppDirs {
             self.config.clone(),
             self.data.clone(),
             self.user_scripts_dir(),
+            // M13 (AD-29): the two folders of the user's own profiles and code files, so
+            // the Profiles page can list them and "New profile from…" can write there.
+            self.profiles_dir(),
+            self.codes_dir(),
         ]
         .into_iter()
         .filter_map(|dir| match std::fs::create_dir_all(&dir) {
@@ -390,8 +416,9 @@ pub fn app_dirs(app: &AppHandle) -> Result<AppDirs, String> {
     })
 }
 
-/// Creates the config folder, the data folder, `<config>/scripts` and the two M7
-/// folders `<data>/backups` and `<data>/recovery` if they are missing. Called
+/// Creates the config folder, the data folder, `<config>/scripts`, the two M13
+/// folders `<config>/profiles` and `<config>/codes`, and the two M7 folders
+/// `<data>/backups` and `<data>/recovery` if they are missing. Called
 /// from `setup_app` before the window appears, so that every later write finds
 /// its folder. Failures are logged, never fatal: a read-only home directory must
 /// still give a usable editor.
@@ -564,6 +591,9 @@ mod tests {
         assert_eq!(paths.user_scripts_dir, under("/c", "scripts"));
         // M6: the machines file sits beside the settings, in the config folder.
         assert_eq!(paths.machines_file, under("/c", "machines.json"));
+        // M13: the user's own profiles and code files, beside them too.
+        assert_eq!(paths.profiles_dir, under("/c", "profiles"));
+        assert_eq!(paths.codes_dir, under("/c", "codes"));
         // M7: the two data folders are ours alone; the webview never gets their
         // paths, so they are not part of `ConfigPaths`.
         assert_eq!(dirs.backups_dir(), PathBuf::from("/d").join("backups"));
@@ -577,6 +607,8 @@ mod tests {
         assert!(dirs.config.is_dir());
         assert!(dirs.data.is_dir());
         assert!(dirs.user_scripts_dir().is_dir());
+        // M13: the folders of the user's own profiles and code files.
+        assert!(dirs.profiles_dir().is_dir() && dirs.codes_dir().is_dir());
         // M7: the backup and recovery roots exist before the window does, so the
         // first save and the first snapshot never have to create them.
         assert!(dirs.backups_dir().is_dir());
@@ -621,9 +653,9 @@ mod tests {
             data: root.join("data"),
         };
         let failures = dirs.ensure();
-        // The config folder and the scripts folder under it both fail; data works,
-        // and so do the two folders under it.
-        assert_eq!(failures.len(), 2, "{failures:?}");
+        // The config folder and the three folders under it (scripts, profiles, codes)
+        // fail; data works, and so do the two folders under it.
+        assert_eq!(failures.len(), 4, "{failures:?}");
         assert!(dirs.data.is_dir());
         assert!(dirs.backups_dir().is_dir() && dirs.recovery_dir().is_dir());
         let _ = std::fs::remove_dir_all(&root);

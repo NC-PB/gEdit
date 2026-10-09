@@ -95,9 +95,17 @@ describe('convertCase options', () => {
       key: 'ncCleanup.convertCase.lowerOnUppercaseControl',
       params: { profile: fanuc.profile.name },
     });
-    // Upper case is what the control wants, and Klartext does not set the flag at all.
+    // Upper case is what the control wants. Since M13 (P13, the owner's decision of
+    // 2026-10-08: upper case on every control) Klartext sets the flag too, so lower case
+    // there asks first as well; a profile without the flag still does not ask.
     expect(convertCase.preflight?.([], context(fanuc, { case: 'upper' }))).toBeNull();
-    expect(convertCase.preflight?.([], context(klartext, { case: 'lower' }))).toBeNull();
+    expect(klartext.profile.editing).toEqual({ forceUppercase: true, preventLineJoin: true });
+    expect(convertCase.preflight?.([], context(klartext, { case: 'lower' }))).toEqual({
+      key: 'ncCleanup.convertCase.lowerOnUppercaseControl',
+      params: { profile: klartext.profile.name },
+    });
+    const noFlag = compileProfile({ ...(heidenhainJson as unknown as Profile), editing: undefined });
+    expect(convertCase.preflight?.([], context(noFlag, { case: 'lower' }))).toBeNull();
   });
 
   it('reports a token it could not convert because the length would change', () => {

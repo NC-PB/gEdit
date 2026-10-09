@@ -1,0 +1,34 @@
+{
+  "about": "X1: hover with no machine (G-code system A detected). column is 1-based, on the first character of the word.",
+  "input": "fanuc-lathe-a.nc",
+  "hovers": [
+    {
+      "line": 21,
+      "column": 1,
+      "word": "G71",
+      "lineText": "G71 U1.5 R0.5",
+      "markdown": "**G71** — Roughing cycle along Z\n\nRoughs an outside or inside contour in passes along Z and leaves an allowance for the finishing cycle\\. It is written in two blocks: depth of cut and retract first, then the profile range and the allowances\\.\n\n_Cycle_"
+    },
+    {
+      "line": 46,
+      "column": 1,
+      "word": "G76",
+      "lineText": "G76 X18.16 Z-22. P920 Q300 F1.5",
+      "markdown": "**G76** — Multi\\-pass threading cycle\n\nCuts a thread in several passes, taking less material each time\\. Written in two blocks: the finishing passes, the pull\\-out chamfer and the insert angle packed into P, the smallest cut depth and the finish allowance first; then the thread end, the taper, the thread height, the first cut depth and the lead\\. F is the thread lead per revolution, not a feed rate\\. P means two different things in the two blocks and one entry cannot tell them apart, so gEdit counts it rather than measuring it: the packed six digits of the first block are never converted, and the thread height of the second is shown as written\\.\n\nThe feed carries the thread pitch here, so changing it changes the thread\\.\n\n_Cycle_\n\nRequired: F"
+    },
+    {
+      "line": 20,
+      "column": 5,
+      "word": "X46.",
+      "lineText": "G00 X46. Z2.",
+      "markdown": "**X** — X axis, a diameter\n\nPosition across the turning axis, written as a diameter while diameter programming is on\\. With G4 it is a dwell time in seconds\\."
+    },
+    {
+      "line": 7,
+      "column": 1,
+      "word": "U2.",
+      "lineText": "U2. W-1.",
+      "markdown": "**U** — Incremental X, a diameter\n\nDistance to move across the turning axis, as a diameter\\. Inside the multi\\-pass cycles it is a depth of cut or an allowance on X instead, and with G4 a dwell time in seconds\\."
+    }
+  ]
+}

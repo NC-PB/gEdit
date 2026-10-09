@@ -1,0 +1,60 @@
+{
+  "script": "address_arithmetic.py",
+  "params": {
+    "operation": "subtract",
+    "operand": 0.5,
+    "addresses": [
+      "Z"
+    ]
+  },
+  "machine": {
+    "name": "Lathe IS-B",
+    "profile": "fanuc-lathe",
+    "params": {
+      "numberInput": {
+        "mode": "increment",
+        "incrementMm": "0.001",
+        "incrementInch": "0.0001",
+        "incrementDeg": "0.001",
+        "incrementSec": "0.001",
+        "classes": {
+          "feedPerMin": {
+            "mode": "increment",
+            "increment": "1",
+            "incrementInch": "0.01"
+          },
+          "feedPerRev": {
+            "mode": "increment",
+            "increment": "0.01",
+            "incrementInch": "0.0001"
+          }
+        }
+      },
+      "units": "mm",
+      "diameter": "on",
+      "variants": {
+        "gcodeSystem": "B",
+        "incrementalAddresses": "uw",
+        "toolWord": "byLength"
+      },
+      "modalInitial": {
+        "feedmode": "G95"
+      }
+    }
+  },
+  "message": "Subtracted 0.5 from Z in 5 words on 5 blocks. Left 2 words as written: 2 incremental words. Machine 'Lathe IS-B': numbers without a point are increments of 0.001 mm; X is a diameter.",
+  "findings": [
+    {
+      "line": 15,
+      "severity": "info",
+      "message": "W-2000: W moves Z by a distance, so a shift does not apply to it.",
+      "reason": "incremental"
+    },
+    {
+      "line": 16,
+      "severity": "info",
+      "message": "W-5.: W moves Z by a distance, so a shift does not apply to it.",
+      "reason": "incremental"
+    }
+  ]
+}

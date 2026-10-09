@@ -84,6 +84,14 @@ export interface ConfigPaths {
    * settings). Nothing is granted by knowing the path.
    */
   machinesFile: string;
+  /**
+   * M13 (P13): `<config>/profiles` and `<config>/codes`, the folders of the user's own
+   * profiles and code files (AD-29). The webview needs them to tell a document saved there
+   * from any other one, so the save reloads the registries (`userConfig.kindOf`), and a
+   * runtime scenario writes its user files there. Nothing is granted by knowing them.
+   */
+  profilesDir: string;
+  codesDir: string;
 }
 
 /**
@@ -373,6 +381,58 @@ export interface SiblingInfo {
  */
 export function channelSiblings(path: string, names: string[]): Promise<SiblingInfo[]> {
   return invoke<SiblingInfo[]>('channel_siblings', { path, names });
+}
+
+// ---------------------------------------------------------------------------
+// M13: the user's own profiles and code files (src-tauri/src/userfiles.rs; plan §7.10, §4, AD-29)
+//
+// Two fixed folders, `<config>/profiles` and `<config>/codes`, addressed by `kind` and a plain
+// name (`^[a-z0-9][a-z0-9._-]{0,63}\.json$`), never by a path the webview makes up. Rust
+// lists and reads them (≤ 64 files, ≤ 1 MiB each, no link followed); a file is granted to
+// the fs scope only when the user creates it, opens it or imports it, so it can be opened
+// as a document. P13 registers the commands as stubs; WP13.1 implements them.
+// ---------------------------------------------------------------------------
+
+/** Which of the two folders. */
+export type UserFileKind = 'profiles' | 'codes';
+
+/** One file of a folder: its text, or why it could not be read (`text` is then null). */
+export interface UserFile {
+  name: string;
+  text: string | null;
+  error: string | null;
+}
+
+/** Every `.json` file of the folder, by name; never more than 64. */
+export function userFilesList(kind: UserFileKind): Promise<UserFile[]> {
+  return invoke<UserFile[]>('user_files_list', { kind });
+}
+
+/**
+ * Writes a new file (`text` must be one JSON object), atomically; refuses a name that is
+ * taken. Answers the absolute path, already granted, so the caller can open it.
+ */
+export function userFileCreate(kind: UserFileKind, name: string, text: string): Promise<string> {
+  return invoke<string>('user_file_create', { kind, name, text });
+}
+
+/** The absolute path of an existing file, granted, for Open and Export. */
+export function userFilePath(kind: UserFileKind, name: string): Promise<string> {
+  return invoke<string>('user_file_path', { kind, name });
+}
+
+/**
+ * Copies `src` (a file the user picked in the open dialog) into the folder under its own
+ * name; refuses a name that is taken and anything that is not one JSON object. Answers the
+ * name it got.
+ */
+export function userFileImport(kind: UserFileKind, src: string): Promise<string> {
+  return invoke<string>('user_file_import', { kind, src });
+}
+
+/** Removes one file of the folder (the Profiles page asks first). */
+export function userFileDelete(kind: UserFileKind, name: string): Promise<void> {
+  return invoke<void>('user_file_delete', { kind, name });
 }
 
 // ---------------------------------------------------------------------------

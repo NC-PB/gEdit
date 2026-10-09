@@ -47,6 +47,11 @@ function fixture(rel: string): Uint8Array {
   return new Uint8Array(readFileSync(`${FIXTURES}${rel}`));
 }
 
+/** The ASCII bytes of a string. */
+function ascii(text: string): number[] {
+  return Array.from(text, (ch) => ch.charCodeAt(0));
+}
+
 function hex(bytes: Uint8Array): string {
   return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
@@ -154,6 +159,7 @@ function createFakeEditor(docs: DocumentStore): FakeEditor {
     onDidChangeCursor: () => off(),
     onDidCreateModel: () => off(),
     onDidActivate: () => off(),
+    onDidAttach: () => off(),
     model: never,
     editorInstance: never,
   };
@@ -2307,6 +2313,45 @@ describe('restoreDocument (AD-21)', () => {
 
     expect(h.docs.get(id)?.readOnly).toBe(false);
     expect(h.docs.get(id)?.path).toBe(path);
+  });
+
+  it('keeps the profile, the machine, the encoding and the line ending of the snapshot, and saves them byte for byte (X3)', async () => {
+    // A snapshot that detection alone would not reproduce: mill text under the lathe dialect, a
+    // machine, windows-1252 and CRLF. Whatever the restore loses, the next Cmd+S would write
+    // (the wrong bytes) over the user's file.
+    const path = '/nc/welle.nc';
+    const onDisk = new Uint8Array([...ascii('O1000 (WELLE '), 0xc4, 0xd6, 0xdc, ...ascii(')\r\nG0 X1\r\n')]);
+    h.fs.files.set(path, onDisk);
+    h.fs.mtimes.set(path, 500);
+    const text = 'O1000 (WELLE ÄÖÜ)\nG0 X1\n';
+
+    const id = h.files.restoreDocument({
+      ...SNAPSHOT,
+      path,
+      profileId: 'fanuc-lathe',
+      machineId: 'm1',
+      encoding: { encoding: 'windows-1252', hasBom: false },
+      eol: 'crlf',
+      textLF: text,
+      diskStamp: { mtimeMs: 500, size: onDisk.length, hash: 7 },
+    });
+    await settled();
+
+    const doc = h.docs.get(id);
+    expect(doc?.profileId).toBe('fanuc-lathe');
+    expect(h.editor.languages.get(id)).toBe('fanuc-lathe');
+    expect(doc?.machineId).toBe('m1');
+    expect(doc?.encoding).toEqual({ encoding: 'windows-1252', hasBom: false });
+    expect(h.editor.eols.get(id)).toBe('crlf');
+    expect(doc?.path).toBe(path);
+
+    h.editor.type(id, `${text}G0 X2 (ÜBER)\n`);
+    expect(await h.files.save(id)).toBe(true);
+
+    expect(h.dialogs.calls.filter((call) => call.kind === 'confirm')).toEqual([]);
+    const want = new Uint8Array([...onDisk, ...ascii('G0 X2 ('), 0xdc, ...ascii('BER)\r\n')]);
+    expect(hex(h.fs.files.get(path) as Uint8Array)).toBe(hex(want));
+    expect(h.docs.get(id)?.dirty).toBe(false);
   });
 
   it('stays dirty through an undo back to the snapshot text', () => {

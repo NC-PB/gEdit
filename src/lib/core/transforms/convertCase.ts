@@ -35,9 +35,11 @@
 // load. The choice is still offered, because the document may be on its way somewhere
 // else, but the run asks first (G8 M4).
 //
-// `editing.forceUppercase` is read **here and nowhere else** in Phase 1. The rest of
-// `profile.editing` is a later-phase field, and no typing path upper-cases anything: the
-// message must not promise that it does (I5, from the WP5.3 review).
+// `editing.forceUppercase` is read here and, since M13, by the typing option
+// (`contrib/typing.ts`), which upper-cases a lower-case letter as it is typed in an NC program,
+// outside comments and strings. This transform converts what is already written; the ask
+// below says only that the control reads upper case, and does not promise that typing does
+// it too, because the typing option can be switched off for the session.
 
 import type { Located, Msg } from '$lib/app/types';
 import type { FieldSpec } from '$lib/core/forms/types';

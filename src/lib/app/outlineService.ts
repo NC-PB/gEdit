@@ -24,9 +24,11 @@ import { OutlineIndex, type OutlineItem } from '$lib/core/profiles/outline';
 import { editor as appEditor } from '$lib/monaco/editorService';
 import { docs as appDocs } from '$lib/stores/documents';
 import { machines as appMachines } from '$lib/stores/machines';
+import { profiles as appProfiles } from '$lib/stores/profiles';
 import { channels as appChannels } from '$lib/stores/channels';
 import { STOPS_AND_ENDS_RULE } from '$lib/core/channels/types';
-import type { ChannelSet } from '$lib/core/channels/types';
+import { shownMark } from '$lib/core/channels/marks';
+import type { ChannelParams, ChannelSet, SyncRule } from '$lib/core/channels/types';
 import { labelsOf, referenceAddresses, referencesOn, blockKeyOf, comparesByText, maskedOf } from '$lib/core/transforms/references';
 import type { BlockKey } from '$lib/core/transforms/references';
 import { tokenizeLine } from '$lib/core/nc/tokenizer';
@@ -54,6 +56,12 @@ export interface OutlineServiceDeps {
   /** Bumps whenever a machine or a document's choice changed, so the keys are re-read. */
   machineRevision?: Readable<number>;
   /**
+   * M13 (AD-29): `profiles.revision`. A reload compiles every profile again, so a document's
+   * effective profile can be a different object under the same key; the index is rebuilt for
+   * those whose profile is different in content, and kept for the others.
+   */
+  profileRevision?: Readable<number>;
+  /**
    * M12 (WP12.5): the channels of a document. With a `single-file` layout the published
    * items are grouped per channel; without it (or without this member) they are the P1 tree.
    */
@@ -61,6 +69,9 @@ export interface OutlineServiceDeps {
     forDoc(id: DocId): ChannelSet;
     revision: Readable<number>;
     ruleLabel(id: DocId, ruleId: string): string;
+    /** The machine's channel block (M13 review NC-10: a `prefix` rule's marks are shown with
+     *  their prefix, `M130` and not `30`). Absent = the ids as they are keyed. */
+    params?(id: DocId): ChannelParams | null;
   };
   /** `setTimeout`, as a canceller; `ms` of 0 means "after this frame". */
   schedule(fn: () => void, ms: number): Disposable;
@@ -71,6 +82,8 @@ export interface OutlineServiceDeps {
 interface Entry {
   /** `EffectiveMachine.key`: the profile **and** the machine the index was built with. */
   key: string;
+  /** The compiled profile the index was built with (a reload replaces the object, not always the content). */
+  cp: CompiledProfile;
   index: OutlineIndex;
   store: Writable<OutlineItem[]>;
   /** The chunked first build, or null once it has finished. */
@@ -398,14 +411,29 @@ export function createOutlineService(deps: OutlineServiceDeps): OutlineServiceIn
               for (const [id, entry] of [...entries]) reindexIfChanged(id, entry);
             }),
           ]),
+      ...(deps.profileRevision === undefined
+        ? []
+        : [
+            deps.profileRevision.subscribe(() => {
+              for (const [id, entry] of [...entries]) reindexIfChanged(id, entry);
+            }),
+          ]),
     ];
   }
 
   /** Rebuilds when the document's effective view is not the one the index was built with. */
   function reindexIfChanged(id: DocId, entry: Entry): void {
     const view = deps.effective(id);
-    if (view === null || view.key === entry.key) return;
+    if (view === null) return;
+    if (view.key === entry.key) {
+      if (view.cp === entry.cp) return;
+      // A reload made a new object. Only a profile that reads differently needs a new index.
+      const same = JSON.stringify(view.cp.profile) === JSON.stringify(entry.cp.profile);
+      entry.cp = view.cp;
+      if (same) return;
+    }
     entry.key = view.key;
+    entry.cp = view.cp;
     entry.index = new OutlineIndex(view.cp);
     rebuild(id, entry);
   }
@@ -435,7 +463,11 @@ export function createOutlineService(deps: OutlineServiceDeps): OutlineServiceIn
     // Nothing changed since the last publish (a channel revision of another document, say).
     if (entry.grouped !== null && entry.grouped.items === items && entry.grouped.set === set) return;
     const channels = deps.channels;
-    const fresh = groupByChannel(items, set, (hit) => (hit.mark !== '' ? hit.mark : channels.ruleLabel(entry.id, hit.ruleId) || hit.ruleId));
+    const rules = new Map<string, SyncRule>();
+    for (const rule of channels.params?.(entry.id)?.syncMarks ?? []) if (!rules.has(rule.id)) rules.set(rule.id, rule);
+    const fresh = groupByChannel(items, set, (hit) =>
+      hit.mark !== '' ? shownMark(hit.mark, rules.get(hit.ruleId)) : channels.ruleLabel(entry.id, hit.ruleId) || hit.ruleId,
+    );
     const rows = entry.grouped === null ? fresh : reuseRows(entry.grouped.rows, fresh);
     entry.grouped = { items, set, rows };
     entry.store.set(rows);
@@ -501,6 +533,7 @@ export function createOutlineService(deps: OutlineServiceDeps): OutlineServiceIn
     const view = deps.effective(id);
     const entry: Entry = {
       key: view?.key ?? '',
+      cp: view?.cp ?? profileOf(id),
       index: new OutlineIndex(view?.cp ?? profileOf(id)),
       store: writable<OutlineItem[]>([]),
       build: null,
@@ -586,11 +619,15 @@ export const outline: OutlineServiceInternals = createOutlineService({
   docs: appDocs,
   editor: appEditor,
   effective: (id) => {
-    if (appDocs.get(id) === undefined) return null;
+    const doc = appDocs.get(id);
+    // A reload can remove a document's profile for the moment between the registry swap and
+    // `userConfig.load` detecting the document again (AD-29): nothing to index then.
+    if (doc === undefined || appProfiles.get(doc.profileId) === undefined) return null;
     const view = appMachines.effective(id);
     return { cp: view.cp, key: view.machine.key };
   },
   machineRevision: appMachines.revision,
+  profileRevision: appProfiles.revision,
   channels: appChannels,
   schedule: (fn, ms) => {
     const handle = setTimeout(fn, ms);

@@ -1,0 +1,16 @@
+{
+  "about": "X8: block skip on a selection of checks-mill.nc (the T2 operation, lines startLine..endLine, whole lines). Insert with the form defaults gives checks-mill.blockskip.nc; remove on the same selection gives the input back. One undo step each.",
+  "selection": {
+    "startLine": 18,
+    "endLine": 23
+  },
+  "insert": {
+    "status": "Marked 6 blocks as skipped. (selection)",
+    "warnings": []
+  },
+  "remove": {
+    "status": "Removed the skip mark from 6 blocks. (selection)",
+    "warnings": [],
+    "givesTheInputBack": true
+  }
+}

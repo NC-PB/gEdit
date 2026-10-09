@@ -456,6 +456,45 @@ describe('references', () => {
     expect(result.warnings).toEqual([{ key: 'ncNumbering.renumber.referencesUnresolved', params: { count: 1 } }]);
   });
 
+  describe('a value left as written whose block got another number (M13 review NC-8)', () => {
+    // The shipped profile: `M99 P` is never rewritten, it names a block of the caller.
+    const RUN = { start: 10, step: 10, skipStartingWith: '% O (', restartAtProgramStart: true, onlyNumbered: true };
+    const SUB = ['%', 'O2', 'G0 X5.', 'M99 P30'];
+
+    it('names the other block the return now lands on', () => {
+      const main = ['O1', 'N5 G0 X0', 'N10 T0101', 'N15 M08', 'N20 G1 X1.', 'N25 Z-1.', 'N30 X1.', 'N35 G0 X50.', 'N40 M30', '%'];
+      const lines = [...SUB, ...main];
+      const result = renumber.run(lines, context(fanuc, RUN, 1, lines));
+      // The run itself: `N30` (line 11) is `N60` now, the `M08` (line 8) is `N30`.
+      expect(result.lines[10]).toBe('N60 X1.');
+      expect(result.lines[7]).toBe('N30 M08');
+      expect(result.lines[3]).toBe('M99 P30');
+      const rows = result.skipped.filter((row) => row.line === 4).map((row) => row.message);
+      expect(rows).toContain(
+        'M99 P30 named N30 on line 11; after this renumber N30 is line 8 (N30 M08), so the jump lands there.',
+      );
+      // The generic preflight stays.
+      expect(renumber.preflight?.(lines, context(fanuc, RUN, 1, lines))?.key).toBe('ncNumbering.renumber.references');
+    });
+
+    it('says when no block with that number is left', () => {
+      const lines = [...SUB, 'O1', 'N30 X1.', 'N40 M30', '%'];
+      const result = renumber.run(lines, context(fanuc, RUN, 1, lines));
+      expect(result.lines.slice(5, 7)).toEqual(['N10 X1.', 'N20 M30']);
+      const rows = result.skipped.filter((row) => row.line === 4).map((row) => row.message);
+      expect(rows).toContain(
+        'M99 P30 named N30 on line 6; after this renumber no block N30 is left, so the control will stop with an alarm.',
+      );
+    });
+
+    it('says nothing more when the named block keeps its number', () => {
+      const lines = [...SUB, 'O1', 'N10 G0 X0', 'N20 G1 X1.', 'N30 X1.', 'N40 M30', '%'];
+      const result = renumber.run(lines, context(fanuc, RUN, 1, lines));
+      // Only the row every kept reference gets.
+      expect(result.skipped.filter((row) => row.line === 4 && row.severity === 'warning')).toHaveLength(1);
+    });
+  });
+
   it('follows the block numbers of the program the jump stands in', () => {
     const cp = withReferences([{ trigger: '(?<![A-Z])GOTO', addresses: ['GOTO'] }]);
     const lines = ['O1000', 'N5 GOTO 9', 'N9 G0 X0', 'M30', 'O1001', 'N5 GOTO 9', 'N9 G0 Z5.', 'M30'];

@@ -11,13 +11,14 @@
 // real ones: a test that checked the selection order against an invented profile would not
 // notice that the lathe's variant is called `gcodeSystem`.
 
-import { get } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { profiles } from './profiles';
 import { codes } from './codes';
 import { createMachineService, slugOf } from './machines';
+import type { MachineServiceDeps } from './machines';
 import type { ConfigLoad } from '$lib/platform/commands';
 import type { DocId, MachineService } from '$lib/app/types';
 import type { EffectiveMachine } from '$lib/core/machines/types';
@@ -35,6 +36,8 @@ const PATHS: ConfigLoad['paths'] = {
   stateFile: '/data/state.json',
   userScriptsDir: '/cfg/scripts',
   machinesFile: '/cfg/machines.json',
+  profilesDir: '/cfg/profiles',
+  codesDir: '/cfg/codes',
 };
 
 interface FakeDoc {
@@ -68,7 +71,15 @@ interface Harness {
   memory: Record<string, string | null>;
 }
 
-function harness(o: { docs?: FakeDoc[]; file?: Record<string, unknown>; machinesError?: string } = {}): Harness {
+function harness(
+  o: {
+    docs?: FakeDoc[];
+    file?: Record<string, unknown>;
+    machinesError?: string;
+    /** M13: a registry that changes (a user profile appearing); defaults to the real one. */
+    registry?: Partial<MachineServiceDeps['profiles']>;
+  } = {},
+): Harness {
   const list = new Map<DocId, FakeDoc>((o.docs ?? []).map((doc) => [doc.id, { ...doc }]));
   const state: Harness = {
     machines: undefined as unknown as MachineService,
@@ -119,6 +130,7 @@ function harness(o: { docs?: FakeDoc[]; file?: Record<string, unknown>; machines
       profile: (id) => profiles.profile(id),
       effective: (id, eff) => profiles.effective(id, eff),
       detectVariants: (id) => state.detect[id] ?? {},
+      ...o.registry,
     },
     codeDb: (dialect) => codes.byId(dialect),
     text: (id) => list.get(id)?.text ?? '',
@@ -751,5 +763,262 @@ describe('the machines document', () => {
   it('opens the file through the command that grants it', async () => {
     const h = harness();
     await expect(h.machines.openFile()).resolves.toBeUndefined();
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// M13, WP13.3: the set of profiles changes (AD-29)
+// ---------------------------------------------------------------------------
+
+/**
+ * A registry in which the user profile `shop-lathe` (a child of the Fanuc lathe) can come and
+ * go. Everything else is the real registry, so the checks a record goes through are real.
+ */
+function changingRegistry(): {
+  registry: NonNullable<Parameters<typeof harness>[0]>['registry'];
+  setPresent(present: boolean): void;
+} {
+  const revision = writable(0);
+  let present = false;
+  const base = (id: string): string => (id === 'shop-lathe' ? 'fanuc-lathe' : id);
+  return {
+    setPresent(next) {
+      present = next;
+      revision.update((n) => n + 1);
+    },
+    registry: {
+      revision,
+      get: (id) => {
+        if (id === 'shop-lathe') {
+          const parent = profiles.get('fanuc-lathe');
+          return present && parent ? { ...parent, chain: ['shop-lathe', ...parent.chain] } : undefined;
+        }
+        return profiles.get(id);
+      },
+      profile: (id) => ({ ...profiles.profile(base(id)), id }),
+      effective: (id, e) => profiles.effective(base(id), e),
+    },
+  };
+}
+
+describe('machines follow the set of profiles (AD-29)', () => {
+  const SHOP = { id: 'shop-1', name: 'Shop lathe', profile: 'shop-lathe', params: {} };
+  const FILE = { $version: 1, machines: [SHOP], defaults: {} };
+
+  it('keeps a machine whose base profile is not there yet, inactive and with its problem', () => {
+    const c = changingRegistry();
+    const h = harness({ file: FILE, registry: c.registry });
+    expect(get(h.machines.list).map((m) => m.id)).toEqual(['shop-1']);
+    expect(h.machines.compatibleWith('fanuc-lathe')).toEqual([]);
+    expect(h.machines.problems().some((p) => p.machineId === 'shop-1' && p.path.endsWith('.profile'))).toBe(true);
+  });
+
+  it('turns the machine active when its base profile appears', () => {
+    const c = changingRegistry();
+    const h = harness({ docs: [{ id: 'd1', profileId: 'fanuc-lathe' }], file: FILE, registry: c.registry });
+    c.setPresent(true);
+    expect(h.machines.compatibleWith('fanuc-lathe').map((m) => m.id)).toEqual(['shop-1']);
+    expect(h.machines.problems()).toEqual([]);
+    h.machines.setForDoc('d1', 'shop-1');
+    expect(eff(h, 'd1')).toMatchObject({ id: 'shop-1', choice: 'document' });
+  });
+
+  it('turns it inactive again when the base disappears; the record stays in the file', async () => {
+    const c = changingRegistry();
+    c.setPresent(true);
+    const h = harness({ docs: [{ id: 'd1', profileId: 'fanuc-lathe' }], file: FILE, registry: c.registry });
+    h.machines.setForDoc('d1', 'shop-1');
+    expect(eff(h, 'd1').id).toBe('shop-1');
+    h.notes.length = 0;
+    c.setPresent(false);
+    expect(h.machines.compatibleWith('fanuc-lathe')).toEqual([]);
+    expect(h.machines.get('shop-1')).toBeDefined();
+    expect(h.saved).toEqual([]);
+    // The open document is evaluated again at once: it no longer uses the machine.
+    expect(eff(h, 'd1').id).toBeNull();
+    await said();
+    expect(h.notes).toHaveLength(1);
+    // And the machine is back as soon as the profile is.
+    c.setPresent(true);
+    expect(h.machines.problems()).toEqual([]);
+  });
+
+  it('answers a document whose profile vanished with the default profile, until it is detected again', () => {
+    const c = changingRegistry();
+    c.setPresent(true);
+    const h = harness({ docs: [{ id: 'd1', profileId: 'shop-lathe' }], file: FILE, registry: c.registry });
+    expect(() => h.machines.effective('d1')).not.toThrow();
+    c.setPresent(false);
+    expect(() => h.machines.effective('d1')).not.toThrow();
+    expect(h.machines.effective('d1').profile.id).toBe(profiles.defaultId());
+  });
+
+  it('drops the cached view of every document when the set changes, so none keeps a stale profile', () => {
+    const c = changingRegistry();
+    c.setPresent(true);
+    const h = harness({ docs: [{ id: 'd1', profileId: 'shop-lathe' }], file: FILE, registry: c.registry });
+    const before = h.machines.effective('d1');
+    c.setPresent(true);
+    expect(h.machines.effective('d1')).not.toBe(before);
+  });
+
+  it('bumps its own revision, so every consumer reads the documents again', () => {
+    const c = changingRegistry();
+    const h = harness({ file: FILE, registry: c.registry });
+    const seen: number[] = [];
+    const stop = h.machines.revision.subscribe((n) => seen.push(n));
+    c.setPresent(true);
+    stop();
+    expect(seen.length).toBe(2);
+    expect(seen[1]).toBeGreaterThan(seen[0]);
+  });
+
+  it('does nothing for the value the service was built with', () => {
+    const c = changingRegistry();
+    const h = harness({ file: FILE, registry: c.registry });
+    const seen: number[] = [];
+    const stop = h.machines.revision.subscribe((n) => seen.push(n));
+    stop();
+    expect(seen).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M13, WP13.3: import (§4)
+// ---------------------------------------------------------------------------
+
+describe('importMachines', () => {
+  const LATHE = { id: 'lathe-1', name: 'Lathe 1', profile: 'fanuc-lathe', params: { variants: { gcodeSystem: 'B' } } };
+  const MILL = { id: 'mill-1', name: 'Mill 1', profile: 'fanuc-gcode', params: {} };
+  const exported = (machines: unknown[], defaults: Record<string, string> = {}) => ({ $version: 1, machines, defaults });
+
+  it('adds the machines of a file to an empty installation, as they are, with one summary', async () => {
+    const h = harness();
+    const summary = await h.machines.importMachines(exported([LATHE, MILL], { 'fanuc-lathe': 'lathe-1' }));
+    expect(summary).toMatchObject({ imported: 2, renamed: 0, reassigned: 0, inactive: 0, defaults: 1, skipped: [] });
+    expect(h.saved).toHaveLength(1);
+    expect((h.saved[0].machines as { id: string }[]).map((m) => m.id)).toEqual(['lathe-1', 'mill-1']);
+    expect(h.machines.defaultFor('fanuc-lathe')).toBe('lathe-1');
+    expect(h.notes).toEqual(['2 machines imported.']);
+  });
+
+  it('gives an id that is already in use a new one, and keeps the machine apart', async () => {
+    const h = harness({ file: exported([{ ...LATHE, name: 'Own lathe' }]) });
+    const summary = await h.machines.importMachines(exported([LATHE]));
+    expect(summary).toMatchObject({ imported: 1, reassigned: 1, renamed: 0 });
+    const ids = get(h.machines.list).map((m) => m.id);
+    expect(ids).toContain('lathe-1');
+    expect(ids).toContain('lathe-1-2');
+    expect(h.machines.get('lathe-1')?.name).toBe('Own lathe');
+    expect(h.machines.get('lathe-1-2')?.name).toBe('Lathe 1');
+  });
+
+  it('puts a suffix on a name that is already in use, whatever the case', async () => {
+    const h = harness({ file: exported([{ ...MILL, id: 'my-mill', name: 'LATHE 1' }]) });
+    const summary = await h.machines.importMachines(exported([LATHE]));
+    expect(summary).toMatchObject({ imported: 1, renamed: 1 });
+    expect(h.machines.get('lathe-1')?.name).toBe('Lathe 1 (2)');
+    expect(h.notes[0]).toContain('1 was renamed');
+  });
+
+  it('keeps the name inside its limit when a suffix has to be added', async () => {
+    const long = 'N'.repeat(64);
+    const h = harness({ file: exported([{ ...MILL, id: 'a', name: long }]) });
+    await h.machines.importMachines(exported([{ ...MILL, id: 'b', name: long }]));
+    const name = h.machines.get('b')?.name ?? '';
+    expect(name.length).toBeLessThanOrEqual(64);
+    expect(name.endsWith(' (2)')).toBe(true);
+  });
+
+  it('skips records that are not valid, counts them, and imports the rest', async () => {
+    const h = harness();
+    const summary = await h.machines.importMachines(
+      exported([LATHE, { id: 'Bad Id!', name: 'Broken', profile: 'fanuc-gcode', params: {} }, 42, { ...MILL, name: 'lathe 1' }]),
+    );
+    expect(summary.imported).toBe(1);
+    expect(summary.skipped).toHaveLength(3);
+    expect(summary.skipped[0].name).toBe('Broken');
+    expect(summary.skipped[0].reason).toContain('id');
+    expect(h.notes[0]).toContain('3 were not valid');
+    expect((h.saved[0].machines as unknown[]).length).toBe(1);
+  });
+
+  it('takes a machine whose dialect is not loaded yet, inactive, and loses nothing', async () => {
+    const c = changingRegistry();
+    const h = harness({ registry: c.registry });
+    const summary = await h.machines.importMachines(exported([{ id: 'shop-1', name: 'Shop', profile: 'shop-lathe', params: {} }]));
+    expect(summary).toMatchObject({ imported: 1, inactive: 1 });
+    expect(h.machines.compatibleWith('fanuc-lathe')).toEqual([]);
+    expect(h.notes[0]).toContain('cannot be used yet');
+    c.setPresent(true);
+    expect(h.machines.compatibleWith('fanuc-lathe').map((m) => m.id)).toEqual(['shop-1']);
+  });
+
+  it('takes a default over only where the installation has none for that dialect', async () => {
+    const h = harness({
+      file: { $version: 1, machines: [{ ...LATHE, id: 'mine', name: 'Mine' }], defaults: { 'fanuc-lathe': 'mine' } },
+    });
+    const summary = await h.machines.importMachines(
+      exported([LATHE, MILL], { 'fanuc-lathe': 'lathe-1', 'fanuc-gcode': 'mill-1' }),
+    );
+    expect(summary.defaults).toBe(1);
+    expect(h.machines.defaultFor('fanuc-lathe')).toBe('mine');
+    expect(h.machines.defaultFor('fanuc-gcode')).toBe('mill-1');
+  });
+
+  it('maps a default to the new id when the id changed', async () => {
+    const h = harness({ file: exported([{ ...MILL, id: 'lathe-1', name: 'Taken id' }]) });
+    await h.machines.importMachines(exported([LATHE], { 'fanuc-lathe': 'lathe-1' }));
+    expect(h.machines.defaultFor('fanuc-lathe')).toBe('lathe-1-2');
+  });
+
+  it('stops at the limit of a machines file and says which were left out', async () => {
+    const existing = Array.from({ length: 99 }, (_, i) => ({ ...MILL, id: `m${i}`, name: `Machine ${i}` }));
+    const h = harness({ file: exported(existing) });
+    const summary = await h.machines.importMachines(exported([LATHE, MILL]));
+    expect(summary.imported).toBe(1);
+    expect(summary.skipped).toEqual([{ name: 'Mill 1', reason: 'A machines file holds at most 100 machines.' }]);
+  });
+
+  it('says so when the file holds no machines, and writes nothing', async () => {
+    const h = harness();
+    const summary = await h.machines.importMachines(exported([]));
+    expect(summary.imported).toBe(0);
+    expect(h.saved).toEqual([]);
+    expect(h.notes).toEqual(['The file holds no machines.']);
+  });
+
+  it('refuses something that is not a machines file', async () => {
+    const h = harness();
+    await expect(h.machines.importMachines([1, 2])).rejects.toThrow();
+    await expect(h.machines.importMachines({ machines: 'x' })).rejects.toThrow();
+    expect(h.saved).toEqual([]);
+    expect(h.notes.length).toBeGreaterThan(0);
+  });
+
+  it('refuses while the machines file itself cannot be used, so a broken hand edit is not overwritten', async () => {
+    const h = harness({ machinesError: 'machines.json: broken' });
+    await expect(h.machines.importMachines(exported([LATHE]))).rejects.toThrow();
+    expect(h.saved).toEqual([]);
+  });
+
+  it('writes what it imported only after the save went through', async () => {
+    const h = harness();
+    h.failNextSave('disk full');
+    await expect(h.machines.importMachines(exported([LATHE]))).rejects.toThrow('disk full');
+    expect(get(h.machines.list)).toEqual([]);
+  });
+
+  it('keeps the records it does not understand verbatim, and the file valid on the next read', async () => {
+    const h = harness({
+      file: { $version: 1, machines: [{ ...MILL, id: 'keep', name: 'Keep', futureThing: { a: 1 } }], defaults: {}, extra: true },
+    });
+    await h.machines.importMachines(exported([LATHE]));
+    const saved = h.saved[0];
+    expect((saved.machines as Record<string, unknown>[])[0].futureThing).toEqual({ a: 1 });
+    expect(saved.extra).toBe(true);
+    h.machines.load(load({ $version: 1, ...saved }, null));
+    expect(h.machines.problems()).toEqual([]);
   });
 });

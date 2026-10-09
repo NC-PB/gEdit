@@ -44,7 +44,13 @@ Python never merges a machine.
   `where` names the code and its line: `G55 (line 14)`; positions before the first one are
   `No work offset`), each followed by the tools that cut in it, in order of first use
   (`"tool"`: `G55, T2 (line 15)`, the line of the tool call); a program with no offset code
-  lists its tools right after the program rows (`T0101 (line 6)`). Last come the machine
+  lists its tools right after the program rows (`T1 (T0101, line 6)`). A tool is named as the
+  tool list and the program map name it (M13 review, NC-9), followed by the word as written
+  when that differs (`T1 (T010101, line 9)`, `ROUGH (T="ROUGH", line 5)`, `T5 (line 3)`).
+  A program after the first one in the file (a subprogram behind `M30`) starts with no tool
+  and no known position (M13 review, NC-4): what it moves before its own tool call is in the
+  program and offset rows only, and an incremental word before it states the axis is
+  `called-program`. Last come the machine
   positions (`"machine"`). Inside a scope, one row per axis in the order of the profile's
   `addresses.axes` (an incremental twin is not an axis of its own); an axis with neither a
   value nor a position that was not resolved has no row, and one with only the latter has
@@ -89,6 +95,7 @@ finding per code.
 | `distance-unknown` | warning | an axis word before the program (or the power-on state) says absolute or incremental |
 | `diameter-unknown` | warning | an X word while `DIAM90` is in force and the distance mode is not known |
 | `incremental-start` | warning | an incremental word whose start is not known: the start of a run, or after a machine position, a cycle, a frame, a shift or a value that was not resolved |
+| `called-program` | warning | (M13 review, NC-4) an incremental word in a program after the first one in the file, before that program states the axis: it moves from where the calling program left the tool; one finding per program |
 | `frame` | warning | a position inside a coordinate frame (the modal `frame`, §7.4 rule 13: a tilted plane, a rotation, a mirror, a scaling, `TRANSMIT`, polar interpolation); one per position |
 | `unknown-code` | warning | the positions of a block that writes a code under the database's motion letter (`G`) that the database lacks: it may hide a machine position or a frame |
 | `multi-pass` | warning | a cycle start whose words are data (the Fanuc lathe `G71`–`G73`): the control computes its passes; one per block on each axis of the plane |

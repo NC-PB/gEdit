@@ -1,0 +1,14 @@
+{
+  "script": "scale_feed.py",
+  "params": {
+    "percent": 90
+  },
+  "message": "Scaled 2 of 3 feed rates to 90 %; 1 left as a thread pitch. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 26,
+      "severity": "warning",
+      "message": "F2.0 is a thread pitch (G78), not a feed rate, so it is not scaled: scaling it would cut a different thread."
+    }
+  ]
+}

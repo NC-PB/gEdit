@@ -40,7 +40,7 @@ clears its report.
 
 **4. It asks before it does something you may not want.** A transformation that would
 leave a jump pointing at the wrong block or delete its target, renumber only part of a
-Klartext program, or write lower case for a control that reads only upper case, asks first
+Klartext program, or write lower case for a dialect whose controls expect upper case, asks first
 and lets you say no. Remove Empty Lines and Remove Comments, which can leave gaps in
 Klartext's block numbers, say so afterwards and offer to renumber. That offer always
 renumbers the whole program; after a run on a selection it says so and clears the
@@ -301,8 +301,13 @@ the lower-case original — check a program that calls another by name before co
 | **Leave comments as they are** | On by default. Tool names and other text in quotes in the code are always left alone |
 
 It runs on all six shipped dialects; a profile that declares upper and lower case to be
-different code refuses it. Lower case asks first on the two Fanuc profiles, whose controls
-read only upper case: such a program may be refused when it is loaded.
+different code refuses it. **Lower case asks first** on every profile that asks for upper
+case while you type, which is all six shipped ones and every profile of yours that starts
+from one of them and keeps that option: a control that expects upper case may refuse a
+program written any other way when it is loaded, so the question is *"… expects programs in
+upper case … Convert to lower case anyway?"*. Say yes and the program is converted; say no
+and nothing changes. A profile of your own that switches the typing option off
+([Typing options](profiles.md#typing-options-in-a-profile)) is not asked.
 
 A line whose converted form would not read back as the same words is kept as written and
 listed. A word or comment whose conversion would change its length — `ß` becoming `SS`
@@ -312,6 +317,8 @@ the line is listed.
 The **Upper Case** and **Lower Case** buttons on the Home tab are the editor's plain text
 commands: they change the selected text as it is — with nothing selected, the word at the
 cursor — comments and quoted tool names included. Use **Convert Case…** on a program.
+Typing in upper case as you go is a different thing again: it is an option of the dialect, not
+a command. See [Typing](README.md#typing-forced-upper-case-and-no-accidental-joins).
 
 ---
 

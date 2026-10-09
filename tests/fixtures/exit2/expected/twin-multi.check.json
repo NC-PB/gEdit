@@ -1,0 +1,45 @@
+{
+  "about": "X12 (b): \"Check wait codes\" from twin_CH1.nc with twin_CH2.nc open too, under \"Twin 31i multi\". document d1 is twin_CH1.nc, d2 is twin_CH2.nc: each row jumps into its own document.",
+  "machine": "Twin 31i multi",
+  "documents": {
+    "d1": "twin_CH1.nc",
+    "d2": "twin_CH2.nc"
+  },
+  "self": "1",
+  "members": [
+    {
+      "channel": "1",
+      "kind": "file",
+      "docId": "d1",
+      "name": "twin_CH1.nc"
+    },
+    {
+      "channel": "2",
+      "kind": "file",
+      "docId": "d2",
+      "name": "twin_CH2.nc"
+    }
+  ],
+  "title": "Wait codes, Twin 31i multi: 2 to look at",
+  "message": "Checked: Channel 1, Channel 2.",
+  "rows": [
+    {
+      "kind": "missing",
+      "channel": "1",
+      "line": 17,
+      "mark": "50",
+      "other": "2",
+      "document": "d1",
+      "text": "M150 in Channel 1 waits for Channel 2, but Channel 2 has no M150 that waits for Channel 1."
+    },
+    {
+      "kind": "missing",
+      "channel": "2",
+      "line": 16,
+      "mark": "60",
+      "other": "1",
+      "document": "d2",
+      "text": "M160 in Channel 2 waits for Channel 1, but Channel 1 has no M160 that waits for Channel 2."
+    }
+  ]
+}

@@ -86,7 +86,8 @@ scenario('m12-channels-check', { timeout: 420, files: REPO_FILE }, async (h) => 
     19: /M905.*line 19.*M906.*line 22.*other order.*Channel 2/,
     24: /M907.*Channel 1.*not a channel/,
     25: /M908.*names no other channel/,
-    39: /M903.*Channel 2 waits on it 2 times.*Channel 1 1 times/,
+    // M13 review NC-10: "…, Channel 1 has 1; both need the same number." (no "1 times").
+    39: /M903.*Channel 2 waits on it 2 times.*Channel 1 has 1; both need the same number/,
   })
   for (const row of a.rows) {
     h.check(`the finding on line ${row.line} says the right thing (${row.channel})`, kinds[row.line]?.test(row.text) === true, row.text)

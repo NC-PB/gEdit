@@ -119,11 +119,13 @@ export default {
     unknownChannel: '{mark} in {channel} names “{token}”, which is not a channel of this machine.',
     unknownChannels: '{mark} in {channel} names channels this machine does not have: {tokens}.',
     missing: '{mark} in {channel} waits for {other}, but {other} has no {mark} that waits for {channel}.',
-    countMismatch: '{mark}: {channel} waits on it {count} times for {other}, {other} {otherCount} times.',
+    /** `count` is at least 2 here (the other side has at least one), `otherCount` may be 1:
+     *  no noun behind it (M13 review NC-10, "Channel 2 1 times"). */
+    countMismatch: '{mark}: {channel} waits on it {count} times for {other}, {other} has {otherCount}; both need the same number.',
     countMismatchRule: '{rule}: {channel} has {count}, {other} has {otherCount}; both sides need the same number.',
     countMismatchStops: 'Stops and ends: {channel} has {count}, {other} has {otherCount}; both sides need the same number.',
     countNotChecked:
-      '{mark}: {channel} has it {count} times for {other}, {other} {otherCount} times, but it is inside a loop or a jump, so the count is not checked.',
+      '{mark}: {channel} has it {count} times for {other}, {other} has {otherCount}, but it is inside a loop or a jump, so the count is not checked.',
     countNotCheckedRule:
       '{rule}: {channel} has {count}, {other} has {otherCount}, but one of them is inside a loop or a jump, so the count is not checked.',
     countNotCheckedStops:

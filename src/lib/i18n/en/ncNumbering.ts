@@ -87,6 +87,15 @@ export default {
     referenceNotNumberRow: 'This reference is a variable or an expression, not a block number, so it was left as it is.',
     referenceAmbiguousRow:
       'This block carries the same address twice, so which of the two words names a block number cannot be told from the line; both were left as they are.',
+    /**
+     * M13 review NC-8: a reference left as written whose block got another number. The
+     * row names where the value lands now, because a valid block elsewhere is worse than
+     * no block at all: the program still runs.
+     */
+    referenceLandsRow:
+      '{reference} named {target} on line {line}; after this renumber {target} is line {landing} ({block}), so the jump lands there.',
+    referenceGoneRow:
+      '{reference} named {target} on line {line}; after this renumber no block {target} is left, so the control will stop with an alarm.',
     wrappedRow: 'The numbering started over here: this block number is used twice in the program.',
 
     fields: {

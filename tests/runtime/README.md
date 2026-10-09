@@ -81,7 +81,7 @@ tests/runtime/suite.sh tests/runtime/suites/m0.txt   # run a suite and print the
 
 ## On a hosted runner
 
-`harness.yml` runs `sync.sh` and then `suite.sh tests/runtime/suites/m{0..12}.txt` on `macos-14`
+`harness.yml` runs `sync.sh` and then `suite.sh tests/runtime/suites/{m{0..12},rp,m13}.txt` on `macos-14`
 (45 minute limit), always uploads `$GEDIT_RH_DIR/out`, the app logs and the sync logs, and
 caches the build directory. What differs from the owner's Mac, and how the scenarios deal with it:
 
@@ -107,12 +107,31 @@ caches the build directory. What differs from the owner's Mac, and how the scena
 
 ## Suites
 
-One file per milestone, `suites/m0.txt` … `suites/m12.txt`, then `suites/rp.txt` (M12.5, "Real programs, second pass"): one scenario name per line, `#`
+One file per milestone, `suites/m0.txt` … `suites/m12.txt`, then `suites/rp.txt` (M12.5, "Real programs, second pass") and `suites/m13.txt` (M13 and the Phase 2 exit criteria): one scenario name per line, `#`
 starts a comment. A cumulative run is all of them in order:
 
 ```sh
-tests/runtime/suite.sh tests/runtime/suites/{m{0,1,2,3,4,5,6,7,8,9,10,11,12},rp}.txt
+tests/runtime/suite.sh tests/runtime/suites/{m{0,1,2,3,4,5,6,7,8,9,10,11,12},rp,m13}.txt
 ```
+
+The Phase 2 exit criteria (plan §2.2) and where each is proven; `suites/m13.txt` has the same table in its comments:
+
+| Criterion | Scenario |
+|---|---|
+| X1 Fanuc lathe | `exit2-x1` |
+| X2 Okuma and Sinumerik | `exit2-x2` |
+| X3 no lost work | `m6-dock-quit-dirty`, `m6-dock-quit-clean-1/2`, `m7-backup`, `m7-readonly`, `m7-recovery-1/2` |
+| X4 session | `m7-session-1/2` |
+| X5 compare | `exit2-x5` |
+| X6 search | `exit2-x6` |
+| X7 inspector | Phase 3 |
+| X8 checks and transformations | `exit2-x8` |
+| X9 user profiles (the templates half is Phase 3) | `exit2-x9`, `m13-user-profile`; `exit2-x9-ties` holds the owner's rule for a folder rule (a built-in wins every tie; M13 review NC-2) |
+| X10 no regression | the cumulative run `m0`…`m13` |
+| X11 machine configurations and number reading | `exit2-x11-1/2` |
+| X12 channels and wait codes | `exit2-x12` |
+| X13 real programs | `tests/unit/ownerPublic.test.ts`, `tests/python/test_owner_public.py`, `m9-detect` |
+| X1, X2, X5, X6, X8, X12 without Python | `exit2-nopython` |
 
 ## PASS, FLAKY, FAIL, BLOCKED
 
@@ -205,6 +224,15 @@ scenario('m1-example', { timeout: 90 }, async (h) => {
   The `rp-*` scenarios (M12.5) take their programs from `tests/fixtures/nc/uncertain/`, the outline goldens and
   `tests/fixtures/channels/`, or write a short synthetic program into the run folder; they use the helpers above and
   add none.
+  The `exit2-*` scenarios (M13, the Phase 2 exit criteria X1, X2, X5, X6, X8, X9, X11, X12 and the run without Python) read
+  their programs and goldens from `tests/fixtures/exit2/` (its README is the contract) and share
+  `exit2-common.js`: the folder copied once per run (`exitDir`), a golden (`gold`, `goldText`), a script run compared with
+  its golden and undone (`runAndCompare`), hover compared by its words (`checkHovers`), F7 and the program map
+  (`walkTools`, `mapTools`), the tool list (`checkToolList`), a stored report (`checkStoredReport`, `everyRowJumps`),
+  machines made from a golden (`makeMachine`, `useMachine`), the Profiles page (`openProfilesPage`, `profileRows`,
+  `profileAction`) and the run with no interpreter (`expectNoPython`). Each criterion is a function (`runX1`, …) that the
+  scenario of its own and `exit2-nopython` both call. `m13-typing`, `m13-user-profile` and `m13-machines-io` are the
+  scenarios of the milestone itself.
 - Find elements with `h.q('<test id>', { attr: 'value' })`. The test ids are a contract:
   §7.9 of `docs/planning/phase-1-implementation.md` (Phase 1) and §7.12 of
   `docs/planning/phase-2-implementation.md` (from M6 on). A new one goes into the Phase 2

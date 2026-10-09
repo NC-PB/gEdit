@@ -14,6 +14,9 @@ import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import SettingsDialog, {
   CATEGORY_ORDER,
+  MACHINES_TAB,
+  PROFILES_TAB,
+  tabsOf,
   LIST_KEYS,
   changedValues,
   defaultValues,
@@ -98,6 +101,25 @@ describe('i18n of SETTING_FIELDS', () => {
 
   it('the five page headings have messages', () => {
     for (const category of CATEGORY_ORDER) expect(hasKey(`settings.categories.${category}`)).toBe(true);
+  });
+});
+
+describe('the tabs (M13)', () => {
+  it('ends with Machines and then Profiles, the two pages that are not settings', () => {
+    const tabs = tabsOf(pagesOf());
+    expect(tabs.slice(-2)).toEqual([MACHINES_TAB, PROFILES_TAB]);
+    expect(tabs.slice(0, -2)).toEqual(pagesOf().map((page) => page.category));
+  });
+
+  it('has a heading for the Profiles tab', () => {
+    expect(hasKey('settings.categories.profiles')).toBe(true);
+  });
+
+  it('opens on the Profiles tab when asked, and shows its page', () => {
+    const html = render(SettingsDialog, { props: { close: () => {}, initialTab: PROFILES_TAB } }).body;
+    expect(html).toContain('data-testid="settings-profiles"');
+    expect(html).toContain('data-category="profiles"');
+    expect(html).not.toContain('data-testid="settings-machines"');
   });
 });
 

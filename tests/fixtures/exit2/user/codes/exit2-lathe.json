@@ -1,0 +1,12 @@
+{
+  "dialect": "exit2-lathe",
+  "version": 1,
+  "extends": "fanuc-lathe",
+  "codes": [
+    {
+      "code": "M13",
+      "label": "Chip conveyor on",
+      "description": "Starts the chip conveyor. A code of the machine builder on the lathes of this shop, described in the shop's own code file; another lathe may use another code for it, or none."
+    }
+  ]
+}
