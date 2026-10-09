@@ -45,7 +45,7 @@
         "minLine": 20,
         "max": "200",
         "maxLine": 10,
-        "unresolved": 1,
+        "unresolved": 6,
         "line": 10
       },
       {
@@ -57,7 +57,7 @@
         "minLine": 9,
         "max": "200",
         "maxLine": 10,
-        "unresolved": 1,
+        "unresolved": 6,
         "line": 10
       },
       {
@@ -69,7 +69,7 @@
         "minLine": 20,
         "max": "200",
         "maxLine": 10,
-        "unresolved": 1,
+        "unresolved": 6,
         "line": 10
       },
       {
@@ -81,7 +81,7 @@
         "minLine": 9,
         "max": "200",
         "maxLine": 10,
-        "unresolved": 1,
+        "unresolved": 6,
         "line": 10
       },
       {
@@ -93,7 +93,7 @@
         "minLine": 35,
         "max": "200",
         "maxLine": 10,
-        "unresolved": 0,
+        "unresolved": 5,
         "line": 10
       },
       {
@@ -105,7 +105,7 @@
         "minLine": 9,
         "max": "200",
         "maxLine": 10,
-        "unresolved": 0,
+        "unresolved": 5,
         "line": 10
       },
       {
@@ -193,12 +193,12 @@
         "line": 37
       }
     ],
-    "message": "No machine: readings assumed from the profile defaults, and a word whose reading depends on the machine is not resolved. X is a diameter: diameter programming is on (assumed from the profile). 2 positions not resolved; the findings say why.",
+    "message": "No machine: readings assumed from the profile defaults, and a word whose reading depends on the machine is not resolved. X is a diameter: diameter programming is on (assumed from the profile). 12 positions not resolved; the findings say why.",
     "findings": [
       {
-        "line": 31,
+        "line": 32,
         "severity": "warning",
-        "message": "CYCLE83 (line 31), run in 1 block: the positions this cycle works to are in its parameters, which the extents do not compute; they are not resolved (its depth is not in the Z and X (diameter) range).",
+        "message": "CYCLE83 (line 31), run in 6 blocks: the positions this cycle works to are in its parameters, which the extents do not compute; they are not resolved (its depth is not in the Z and X (diameter) range).",
         "reason": "cycle"
       }
     ]

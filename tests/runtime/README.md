@@ -81,7 +81,7 @@ tests/runtime/suite.sh tests/runtime/suites/m0.txt   # run a suite and print the
 
 ## On a hosted runner
 
-`harness.yml` runs `sync.sh` and then `suite.sh tests/runtime/suites/{m{0..12},rp,m13}.txt` on `macos-14`
+`harness.yml` runs `sync.sh` and then `suite.sh tests/runtime/suites/{m{0..12},rp,m13,p3a}.txt` on `macos-14`
 (45 minute limit), always uploads `$GEDIT_RH_DIR/out`, the app logs and the sync logs, and
 caches the build directory. What differs from the owner's Mac, and how the scenarios deal with it:
 
@@ -107,11 +107,11 @@ caches the build directory. What differs from the owner's Mac, and how the scena
 
 ## Suites
 
-One file per milestone, `suites/m0.txt` … `suites/m12.txt`, then `suites/rp.txt` (M12.5, "Real programs, second pass") and `suites/m13.txt` (M13 and the Phase 2 exit criteria): one scenario name per line, `#`
+One file per milestone, `suites/m0.txt` … `suites/m12.txt`, then `suites/rp.txt` (M12.5, "Real programs, second pass"), `suites/m13.txt` (M13 and the Phase 2 exit criteria) and `suites/p3a.txt` (Phase 3, P3a "Understand a block"): one scenario name per line, `#`
 starts a comment. A cumulative run is all of them in order:
 
 ```sh
-tests/runtime/suite.sh tests/runtime/suites/{m{0,1,2,3,4,5,6,7,8,9,10,11,12},rp,m13}.txt
+tests/runtime/suite.sh tests/runtime/suites/{m{0,1,2,3,4,5,6,7,8,9,10,11,12},rp,m13,p3a}.txt
 ```
 
 The Phase 2 exit criteria (plan §2.2) and where each is proven; `suites/m13.txt` has the same table in its comments:
@@ -124,7 +124,7 @@ The Phase 2 exit criteria (plan §2.2) and where each is proven; `suites/m13.txt
 | X4 session | `m7-session-1/2` |
 | X5 compare | `exit2-x5` |
 | X6 search | `exit2-x6` |
-| X7 inspector | Phase 3 |
+| X7 inspector | Phase 3 (`p3-inspector`, below) |
 | X8 checks and transformations | `exit2-x8` |
 | X9 user profiles (the templates half is Phase 3) | `exit2-x9`, `m13-user-profile`; `exit2-x9-ties` holds the owner's rule for a folder rule (a built-in wins every tie; M13 review NC-2) |
 | X10 no regression | the cumulative run `m0`…`m13` |
@@ -132,6 +132,15 @@ The Phase 2 exit criteria (plan §2.2) and where each is proven; `suites/m13.txt
 | X12 channels and wait codes | `exit2-x12` |
 | X13 real programs | `tests/unit/ownerPublic.test.ts`, `tests/python/test_owner_public.py`, `m9-detect` |
 | X1, X2, X5, X6, X8, X12 without Python | `exit2-nopython` |
+
+The Phase 3 criteria that the running app proves (`suites/p3a.txt`, plan `docs/planning/phase-3-implementation.md` §2):
+
+| Criterion | Scenario |
+|---|---|
+| X7 inspector, with the inspector half of X11 (c) | `p3-inspector` |
+| X14 hover in context, with the hover half of X11 (c) | `p3-hover` |
+| X16 motion colours | `p3-colors` (also registered as `p3-colours`) |
+| X17 the budgets at 300,000 lines, the typing budget with the inspector open and the colours on | `p3-perf` |
 
 ## PASS, FLAKY, FAIL, BLOCKED
 
@@ -233,10 +242,16 @@ scenario('m1-example', { timeout: 90 }, async (h) => {
   `profileAction`) and the run with no interpreter (`expectNoPython`). Each criterion is a function (`runX1`, …) that the
   scenario of its own and `exit2-nopython` both call. `m13-typing`, `m13-user-profile` and `m13-machines-io` are the
   scenarios of the milestone itself.
+  The `p3-*` scenarios (Phase 3, P3a) share `p3-common.js`: the inspector read through its test ids (`showInspector`, `inspectLine`,
+  `stateRows`, `wordRows`, `wordRow`, `openEdit`, `typeInPrompt`), the hover read as the paragraphs and table rows Monaco rendered
+  (`hoverOn`, `hoverParts`), the motion marks read from the line-decorations margin (`marksOnScreen`, `markDecorations`,
+  `parseMotionColors`, `clickMotionColors`) and the timing helpers of the 300,000-line scenario (`stallMonitor`, `watchRebuild`,
+  `measureTyping`). Expected wording is `ctx.t(...)`, expected numbers and kinds come from the goldens of `tests/fixtures/modal/**`
+  and `tests/fixtures/motion/**` or from the synthetic programs themselves.
 - Find elements with `h.q('<test id>', { attr: 'value' })`. The test ids are a contract:
   §7.9 of `docs/planning/phase-1-implementation.md` (Phase 1) and §7.12 of
-  `docs/planning/phase-2-implementation.md` (from M6 on). A new one goes into the Phase 2
-  table in the same change.
+  `docs/planning/phase-2-implementation.md` (from M6 on), and §6.8 of `docs/planning/phase-3-implementation.md`
+  (the inspector). A new one goes into the Phase 2 or Phase 3 table in the same change.
 - Read app state through `h.app` (the test hook) where it offers it, and through test
   ids otherwise. Never through visible text.
 - Trigger through real input (`h.nativeKeys`, `h.nativeType`, `h.nativeClick`) or a

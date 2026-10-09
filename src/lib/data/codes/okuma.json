@@ -136,7 +136,7 @@
       "code": "G2",
       "group": "motion",
       "modal": true,
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "arc" },
       "label": "Arc, clockwise",
       "description": "Cuts an arc clockwise in the turning plane. The centre is given by I and K, or the radius by L; with L both X and Z are needed and I and K may not stand in the block.",
       "params": [
@@ -151,7 +151,7 @@
       "code": "G3",
       "group": "motion",
       "modal": true,
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "arc" },
       "label": "Arc, counter-clockwise",
       "description": "Cuts an arc counter-clockwise in the turning plane. The centre is given by I and K, or the radius by L; with L both X and Z are needed and I and K may not stand in the block.",
       "params": [
@@ -686,7 +686,7 @@
       "code": "G102",
       "group": "motion",
       "modal": true,
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "arc" },
       "label": "Contour arc with the C axis, clockwise",
       "description": "Driven-tool contouring: cuts a clockwise arc on the face with X and the C axis together. The arc is given by its radius L and is always the one under 180 degrees, so a longer arc is split into blocks; Z may not move. F is a feed per minute here, whatever feed mode is in force.",
       "params": [
@@ -700,7 +700,7 @@
       "code": "G103",
       "group": "motion",
       "modal": true,
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "arc" },
       "label": "Contour arc with the C axis, counter-clockwise",
       "description": "Driven-tool contouring: cuts a counter-clockwise arc on the face with X and the C axis together. The arc is given by its radius L and is always the one under 180 degrees, so a longer arc is split into blocks; Z may not move. F is a feed per minute here, whatever feed mode is in force.",
       "params": [

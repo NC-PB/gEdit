@@ -97,6 +97,16 @@ help and completion from a code database written for the subset of code CAM syst
 It comes from the code database, not from the program on screen, and a code the database
 does not describe says so rather than guessing.*
 
+**Understanding a block.** Put the cursor in a block and the code inspector (`Cmd/Ctrl+Alt+A`) lists
+each word with what it means on your machine, and what is in force after the block (feed unit,
+plane, work offset, tool, active cycle, speed limit), each with the line that set it or marked
+*assumed*. A number whose value depends on the control shows what it is worth on the machine
+you chose, or every reading when you chose none, and you can change it from there: gEdit writes
+it the way your machine reads it and refuses what it cannot hold exactly, never rounding. The
+hover adds a cycle's parameters and the meaning of a word in its block, and a narrow coloured
+mark beside the line numbers shows which lines are rapids, straight moves, arcs, threads or
+cycles. See [Understanding a block](docs/user/inspector.md).
+
 **NC transformations.** Renumber blocks and remove block numbers, insert or remove the
 spaces between words, remove empty lines, remove comments (keeping the program name and,
 if you ask, your header), convert case. Each one runs on the selection or the whole
@@ -161,8 +171,9 @@ arithmetic on address values, comparing a re-posted program without the noise of
 and number formatting, merging in both directions, search and replace by word value
 (`T1` but not `T10`, `S>2000`), multi-channel programs with a check that the wait codes of the
 channels match, your own profiles and code files, and the typing options such as forced upper
-case (see the [roadmap](docs/planning/roadmap.md)). Phase 3 is next: a code inspector that
-shows what is in force at the cursor, hover help with the modal state, and templates.
+case (see the [roadmap](docs/planning/roadmap.md)). Phase 3 is under way: its first half, the code
+inspector, hover help with the modal state and the motion colours, is built; the second half,
+templates in place of the ready-made code blocks, is next.
 Showing the channels of a program side by side is planned for Phase 4.
 
 ## Documentation
@@ -171,6 +182,7 @@ Showing the channels of a program side by side is planned for Phase 4.
   [dialects](docs/user/dialects.md), [machines](docs/user/machines.md),
   [your own profiles and code files](docs/user/profiles.md),
   [channels](docs/user/channels.md),
+  [understanding a block](docs/user/inspector.md) (the inspector, the hover and the motion colours),
   [transformations](docs/user/transformations.md), [scripts](docs/user/scripts.md) and the
   [keyboard](docs/user/shortcuts.md).
 - **[Planning](docs/planning/README.md)** — scope, roadmap and feature notes.

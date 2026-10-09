@@ -183,8 +183,8 @@ A tapping cycle written as a call
     database entry carries ``pitchFeed`` is one that may take its thread lead from the
     feed **in force** (a tapping cycle without a spindle encoder, where the feed has to be
     the speed times the pitch): that `F` is left exactly as written and reported, whatever
-    line it stands on. A call written behind a keyword of the database's ``cycle`` group
-    (`MCALL CYCLE840(…)`) repeats after every following move until that keyword stands on
+    line it stands on. A call written behind a keyword whose ``sets.cycle`` is
+    ``'call-modal-next'`` (`MCALL CYCLE840(…)`) repeats after every following move until that keyword stands on
     its own again, so every `F` written in between is left too. A cycle whose lead is one
     of its own arguments (a rigid tapping cycle, a thread-turning cycle) carries no
     ``pitchFeed`` and changes nothing here. The walk for these starts at the top of the
@@ -1060,15 +1060,16 @@ Carriers = Dict[Tuple[int, int], Tuple[str, int, str]]
 def cycle_keyword(token: gedit_nc.Token, lookup: gedit_nc.FeedModeTracker) -> Optional[str]:
     """The name of a keyword that makes the call behind it modal, or ``None``.
 
-    That is a keyword of the database's ``cycle`` group which switches nothing itself (no
-    ``sets``): `MCALL CYCLE840(…)` repeats the call after every following move, and `MCALL`
-    on its own ends that. The database says which keyword it is, not this file.
+    That is a keyword whose ``sets.cycle`` is ``'call-modal-next'``: `MCALL CYCLE840(…)`
+    repeats the call after every following move, and `MCALL` on its own ends that. The
+    database says which keyword it is, not this file.
     """
     if token.kind != "keyword":
         return None
     name = (token.address or token.text or "").upper()
     entry = lookup.entry(name)
-    if entry is None or entry.get("group") != "cycle" or entry.get("sets") is not None:
+    sets = entry.get("sets") if entry is not None else None
+    if not isinstance(sets, dict) or sets.get("cycle") != "call-modal-next":
         return None
     return name
 

@@ -86,7 +86,8 @@ const SHIPPED: Declared[] = readdirSync(CONTRIB)
 /**
  * Plan §7.13: the rows of WP10.1 (M10, pinned by P10), of WP11.1 and WP11.3 (M11, pinned by
  * P11), of WP12.5 (M12, pinned by P12) and of WP13.3 and WP13.4 (M13, pinned by P13), with
- * the i18n keys of their titles.
+ * the i18n keys of their titles; Phase 3 plan §6.7: the rows of P3.2b and P3.7 (P3a, pinned by
+ * the Phase 3 prelude).
  */
 const PINNED: { id: string; keys?: Keys; title: string; owner: string; pending?: true }[] = [
   { id: 'nc.blockSkip.add', title: 'ncBlockSkip.add', owner: 'ncBlockSkip.ts' },
@@ -137,10 +138,23 @@ const PINNED: { id: string; keys?: Keys; title: string; owner: string; pending?:
   // `typing.group`, after the Edit group; no default key (a toggle that silently changes what
   // every keystroke does should not be one key press away).
   { id: 'edit.toggleForceUppercase', title: 'typing.toggleForceUppercase', owner: 'typing.ts' },
+  // Phase 3, P3a (pinned by the Phase 3 prelude; Phase 3 plan §6.7). The inspector
+  // (`contrib/inspector.ts`, P3.2b): its toggle on `Mod+Alt+A`, the key the spec names, on the
+  // View tab, group `view.groupPanels`, after the side panel; editing the value at the cursor
+  // has no key (palette, and double-click or Enter on a row). Monaco 0.55.1 binds no
+  // `Mod+Alt+A` (its `A` keys are `Shift+Alt+A` block comment, `Mod+A` select all and, on
+  // macOS, `Ctrl+A` line start); macOS has no system shortcut on `Cmd+Option+A`. On Windows
+  // and Linux `Ctrl+Alt+A` is `AltGr+A` on some layouts (Polish programmer: `ą`): the AltGr
+  // manual check of the Phase 2 plan §13. The motion colours (`contrib/motionColors.ts`,
+  // P3.7): a toggle of the setting `assist.motionColors`, View tab, group `motionColors.group`.
+  { id: 'view.toggleInspector', keys: 'Mod+Alt+A', title: 'inspector.toggle', owner: 'inspector.ts' },
+  { id: 'inspector.editValue', title: 'inspector.editValue', owner: 'inspector.ts' },
+  { id: 'view.toggleMotionColors', title: 'motionColors.toggle', owner: 'motionColors.ts' },
 ];
 /**
  * The ribbon groups of those entries: NC tab (M10, M12 navigation), Home tab (search, M13
- * typing), Tools tab (compare, M12 check, M13 profile tester).
+ * typing), Tools tab (compare, M12 check, M13 profile tester), View tab (P3a: the inspector
+ * beside the panels, the motion colours).
  */
 const PINNED_GROUPS = [
   'ncBlockSkip.group',
@@ -151,6 +165,8 @@ const PINNED_GROUPS = [
   'channels.toolsGroup',
   'userConfig.toolsGroup',
   'typing.group',
+  'view.groupPanels',
+  'motionColors.group',
 ];
 /** The palette categories of those entries. */
 const PINNED_CATEGORIES = [
@@ -162,12 +178,14 @@ const PINNED_CATEGORIES = [
   'userConfig.category',
   'machines.category',
   'typing.category',
+  'inspector.category',
+  'motionColors.category',
 ];
 
 const asDefs = (rows: { id: string; keys?: Keys }[]): CommandDef[] =>
   rows.map((row): CommandDef => ({ id: row.id, keys: row.keys, title: row.id, run: () => {} }));
 
-describe('the commands M10 to M13 pin (plan §7.13; P10 item 2, P11 item 4, P12 item 8, P13)', () => {
+describe('the commands M10 to M13 and P3a pin (plan §7.13; P10 item 2, P11 item 4, P12 item 8, P13; Phase 3 plan §6.7)', () => {
   it('reads the shipped shortcuts it checks against', () => {
     // A sanity floor: F7 and Shift+F7 (navigation), Mod+S (files), F9 (scripts) are there.
     const keys = SHIPPED.map((d) => d.keys).filter((k): k is KeySpec => typeof k === 'string');

@@ -265,7 +265,7 @@ Several checks ask whether a block **cuts**. A block cuts when
   Klartext `FMAX`) and no code whose axis words are data or a machine position; or
 * it runs a cycle: a code with `sets.cycle: 'start'`, a call of the defined cycle, a
   positioning block under a modal cycle, a modal call (`M89`) or a modal call written behind
-  a keyword of the database's `cycle` group (`MCALL CYCLE81(…)`, the rule `scale_feed` uses).
+  a keyword whose `sets.cycle` is `'call-modal-next'` (`MCALL CYCLE81(…)`, the rule `scale_feed` uses).
 
 A spindle is running when one was started by a code of `sets.spindle` / `sets.toolSpindle`
 or by an assignment that names a spindle by its number (`M1=3`, `M2=4`, which is how a
@@ -1101,7 +1101,9 @@ class Facts:
         )
         units = sets.get("units")
         self.units = units if units in ("mm", "inch") else None
-        self.mcall_keyword = group == "cycle" and entry.get("sets") is None
+        # The word that makes the call behind it modal (`MCALL CYCLE81(…)`): the database
+        # says which one with `sets.cycle: 'call-modal-next'`.
+        self.mcall_keyword = cycle == "call-modal-next"
         self.calls = cycle in ("call", "call-modal")
         self.defines = group == "cycle" and not self.calls
         upper = self.code.upper()
@@ -1267,7 +1269,10 @@ def finish_block(run: Run, block: Block, doc: "Document") -> None:
         # The cycle was in force before this block and is still in force after it: a block
         # that starts the cycle itself (`G92 X Z K T1 ...`, a thread cycle that carries a
         # tool word) or cancels it (`G80 T2 M6`) is no tool change inside one.
-        cycle = block.cycle_before if interp.active_cycle is not None else None
+        # A modal call written behind a keyword is named as such, although the interpreter
+        # carries its cycle as the active one too.
+        modal_call = run.mcall is not None and not mcall_opened
+        cycle = block.cycle_before if interp.active_cycle is not None and not modal_call else None
         if cycle is not None:
             cycle_line = as_dict(interp.state.get("activeCycle")).get("line") if interp.active_cycle == cycle else None
             run.add(
@@ -1277,7 +1282,7 @@ def finish_block(run: Run, block: Block, doc: "Document") -> None:
                 "%s: a tool change while the cycle %s%s is in force"
                 % (shown(block.text()), cycle, " (line %d)" % cycle_line if isinstance(cycle_line, int) and cycle_line > 0 else ""),
             )
-        elif run.mcall is not None and not mcall_opened:
+        elif modal_call:
             run.add(
                 "toolChangeInCycle",
                 line,

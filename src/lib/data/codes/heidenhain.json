@@ -229,14 +229,14 @@
       "code": "C",
       "group": "motion",
       "pole": "use",
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "arc" },
       "label": "Arc around the centre",
       "description": "Arc to the end point around the last CC, turning in the direction that DR gives. An end point equal to the start point makes a full circle."
     },
     {
       "code": "CR",
       "group": "motion",
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "arc" },
       "label": "Arc by radius",
       "description": "Arc to the end point with the radius R. A positive R takes the arc shorter than half a circle, a negative R the longer one; DR gives the direction. The chord cannot be longer than the diameter.",
       "params": [
@@ -254,7 +254,7 @@
     {
       "code": "CT",
       "group": "motion",
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "arc" },
       "label": "Tangential arc",
       "description": "Arc to the end point that joins the previous contour element smoothly. It needs at least two positioned blocks before it."
     },
@@ -302,7 +302,7 @@
       "code": "CP",
       "group": "motion",
       "pole": "use",
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "arc" },
       "label": "Arc around the pole, polar",
       "description": "Arc around the pole set with CC, given by the angle PA and the direction DR. With an incremental total angle and a height in the tool axis it becomes a helix."
     },
@@ -310,7 +310,7 @@
       "code": "CTP",
       "group": "motion",
       "pole": "use",
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "arc" },
       "label": "Tangential arc, polar",
       "description": "Arc that leaves the previous element tangentially and ends at a polar point, given by PR and PA."
     },
@@ -338,14 +338,14 @@
     {
       "code": "APPR CT",
       "group": "motion",
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "arc" },
       "label": "Approach on a tangential arc",
       "description": "Moves onto the first contour point along an arc that meets the contour tangentially, given by its radius R and the centre angle CCA."
     },
     {
       "code": "APPR LCT",
       "group": "motion",
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "arc" },
       "label": "Approach on a line and a tangential arc",
       "description": "Moves onto the first contour point along a straight line followed by an arc that meets the contour tangentially."
     },
@@ -366,14 +366,14 @@
     {
       "code": "DEP CT",
       "group": "motion",
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "arc" },
       "label": "Depart on a tangential arc",
       "description": "Leaves the last contour point along an arc that continues the contour tangentially, and cancels the radius compensation."
     },
     {
       "code": "DEP LCT",
       "group": "motion",
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "arc" },
       "label": "Depart on an arc and a line",
       "description": "Leaves the last contour point along a tangential arc followed by a straight line, and cancels the radius compensation."
     },

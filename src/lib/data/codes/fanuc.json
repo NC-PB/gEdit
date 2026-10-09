@@ -124,7 +124,7 @@
       "code": "G2",
       "group": "motion",
       "modal": true,
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "arc" },
       "label": "Circular move, clockwise",
       "description": "Arc to the target in the active plane, turning clockwise. The centre comes from I, J and K measured from the arc start, or from a radius R."
     },
@@ -132,7 +132,7 @@
       "code": "G3",
       "group": "motion",
       "modal": true,
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "arc" },
       "label": "Circular move, counter-clockwise",
       "description": "Arc to the target in the active plane, turning counter-clockwise. The centre comes from I, J and K measured from the arc start, or from a radius R."
     },
@@ -280,19 +280,41 @@
       "code": "G28",
       "group": "nonmodal",
       "axisWords": "machine",
+      "sets": { "motion": "rapid" },
       "conflicts": ["tcp"],
       "label": "Return to the reference point",
-      "description": "Moves to the machine reference point by way of the intermediate point written in the block."
+      "description": "Moves at rapid, first to the intermediate point written in the block (in the program's coordinates, absolute or incremental), then to the machine reference point.",
+      "params": [
+        { "address": "X", "label": "Intermediate point on the way to the reference point, in the program's coordinates" },
+        { "address": "Y", "label": "Intermediate point on the way to the reference point, in the program's coordinates" },
+        { "address": "Z", "label": "Intermediate point on the way to the reference point, in the program's coordinates" },
+        { "address": "U", "label": "Intermediate point on the way to the reference point, in the program's coordinates" },
+        { "address": "V", "label": "Intermediate point on the way to the reference point, in the program's coordinates" },
+        { "address": "W", "label": "Intermediate point on the way to the reference point, in the program's coordinates" },
+        { "address": "A", "label": "Intermediate point on the way to the reference point, in the program's coordinates" },
+        { "address": "B", "label": "Intermediate point on the way to the reference point, in the program's coordinates" },
+        { "address": "C", "label": "Intermediate point on the way to the reference point, in the program's coordinates" }
+      ]
     },
     {
       "code": "G30",
       "group": "nonmodal",
       "axisWords": "machine",
+      "sets": { "motion": "rapid" },
       "conflicts": ["tcp"],
       "label": "Return to the second, third or fourth reference point",
-      "description": "Moves to a further reference point, often the tool change position, by way of the intermediate point written in the block. P says which point; without it the second is meant.",
+      "description": "Moves at rapid to a further reference point, often the tool change position, by way of the intermediate point written in the block (in the program's coordinates, absolute or incremental). P says which point; without it the second is meant.",
       "params": [
-        { "address": "P", "label": "Which reference point: 2, 3 or 4", "min": 2, "max": 4 }
+        { "address": "P", "label": "Which reference point: 2, 3 or 4", "min": 2, "max": 4 },
+        { "address": "X", "label": "Intermediate point on the way to that reference point, in the program's coordinates" },
+        { "address": "Y", "label": "Intermediate point on the way to that reference point, in the program's coordinates" },
+        { "address": "Z", "label": "Intermediate point on the way to that reference point, in the program's coordinates" },
+        { "address": "U", "label": "Intermediate point on the way to that reference point, in the program's coordinates" },
+        { "address": "V", "label": "Intermediate point on the way to that reference point, in the program's coordinates" },
+        { "address": "W", "label": "Intermediate point on the way to that reference point, in the program's coordinates" },
+        { "address": "A", "label": "Intermediate point on the way to that reference point, in the program's coordinates" },
+        { "address": "B", "label": "Intermediate point on the way to that reference point, in the program's coordinates" },
+        { "address": "C", "label": "Intermediate point on the way to that reference point, in the program's coordinates" }
       ]
     },
     {
@@ -504,6 +526,7 @@
       "code": "G53",
       "group": "nonmodal",
       "axisWords": "machine",
+      "sets": { "motion": "rapid" },
       "conflicts": ["tcp"],
       "label": "Machine coordinates for this block",
       "description": "Reads the positions of this block in machine coordinates instead of the work offset. It needs absolute values and is often used to move to a tool change position."

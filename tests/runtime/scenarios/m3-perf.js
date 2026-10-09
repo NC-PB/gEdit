@@ -44,8 +44,18 @@ const KEYPRESS_P95_BUDGET_MS = 50
 const OUTLINE_BUDGET_MS = 200
 const OPEN_BUDGET_MS = 2000
 
-/** How much slower than a small buffer the big document may be: one frame at 60 Hz. */
-const SIZE_COST_BUDGET_MS = 17
+/**
+ * How much slower than a small buffer the big document may be: one frame at 60 Hz, and, since Phase 3 (P3a, an
+ * intentional change), one slice of the modal index. Typing in a 300,000-line program drops the index's
+ * snapshots after the cursor and the index is rebuilt in idle slices of at most 16 ms (`IDLE_BUDGET_MS`,
+ * AD-33: "a keystroke waits for at most one slice"); a small buffer has none to rebuild. Measured on the
+ * development Mac: the drawn p95 is 17 ms before P3a and 23-25 ms with it (the bimodal samples are the keys
+ * that arrived during a slice), and the raf p95 reads 22-30 ms above the small buffer's in about one run in
+ * three. The absolute budget above (under 50 ms on screen) is unchanged and holds with room (40-41 ms);
+ * `p3-perf` holds it again with the inspector open and the colours on.
+ */
+const INDEX_SLICE_MS = 16
+const SIZE_COST_BUDGET_MS = 17 + INDEX_SLICE_MS
 
 /** One frame at 60 Hz, rounded up: the most the compositor can add after the DOM write. */
 const FRAME_MS = 17
@@ -259,7 +269,7 @@ scenario('m3-perf', { timeout: 600 }, async (h) => {
     { also: big.count === KEYSTROKES, strict: true },
   )
   h.checkTime(
-    `and the size costs nothing: drawn in ${big.domP95} ms against ${small.domP95} ms in a ${SMALL.split('\n').length}-line buffer, the larger of the dom and raf p95 differences`,
+    `and the size costs at most a frame and an index slice: drawn in ${big.domP95} ms against ${small.domP95} ms in a ${SMALL.split('\n').length}-line buffer, the larger of the dom and raf p95 differences`,
     Math.max(big.domP95 - small.domP95, big.p95 - small.p95),
     SIZE_COST_BUDGET_MS,
     {

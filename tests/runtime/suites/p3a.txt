@@ -1,0 +1,41 @@
+# P3a: "Understand a block" - the code inspector, the hover in context and the motion colours of
+# Phase 3 (plan docs/planning/phase-3-implementation.md, H3a), and the Phase 3 exit criteria that the
+# running app proves: X7 (inspector, with the inspector half of X11 c), X14 (hover, with the hover half
+# of X11 c), X16 (motion colours) and X17 (the budgets at 300,000 lines).
+# Run with: tests/runtime/suites/m0.txt tests/runtime/suites/m1.txt tests/runtime/suites/m2.txt tests/runtime/suites/m3.txt tests/runtime/suites/m4.txt tests/runtime/suites/m5.txt tests/runtime/suites/m6.txt tests/runtime/suites/m7.txt tests/runtime/suites/m8.txt tests/runtime/suites/m9.txt tests/runtime/suites/m10.txt tests/runtime/suites/m11.txt tests/runtime/suites/m12.txt tests/runtime/suites/rp.txt tests/runtime/suites/m13.txt tests/runtime/suites/p3a.txt
+#
+# Every expected answer comes from a golden (tests/fixtures/modal/**, tests/fixtures/motion/**), from the
+# synthetic programs themselves or from ctx.t(...), never from what the app shows. The wall-clock budgets
+# of p3-perf go through h.checkTime (10 x on a hosted runner).
+#
+# Intentional changes to earlier scenarios, made with this suite (plan "Intentional behaviour changes when
+# P3a lands"): m3-assistant gains checks for the parameter table, the context line and the Motion Colors
+# switch of the Assistance page; m1-layout gains the order of the View tab (Side Panel, Code Inspector,
+# Bottom Panel, Motion Colors); m3-perf's "the size costs nothing" check allows one index slice (16 ms) on
+# top of the frame, because typing in a 300,000-line program now meets the idle rebuild of the modal index
+# (AD-33: a keystroke waits for at most one slice; its own absolute budget, under 50 ms, is unchanged);
+# m12-perf waits for the modal index, as it already waits for the outline, before it measures. No earlier
+# check pinned the old hover text, the old panel list or a count of decorations, so none was changed for
+# those; the Phase 2 text of every hover is still the first paragraph.
+
+# X7: the inspector at the golden lines of l01-turning-a.nc (feed unit, speed unit, tool, active cycle,
+# speed clamp, plane, units and diameter mode with their source lines and assumed marks), Mod+Alt+A and the
+# View tab, editing F in the same number style as one undo step, a code row and a bad value refused, Esc,
+# and X11 (c): X50 under no machine, Lathe IS-B and Lathe calc, 0.0505 refused and 0.051 written as X51.
+p3-inspector
+
+# X14: the parameter tables (G76 in two blocks, a nine-line Klartext definition and its M99 call, Sinumerik
+# CYCLE83 by position, an Okuma thread cycle, a mill G83), the context line of an address word, the readings
+# of a machine-dependent number under no machine, IS-B, calculator and Okuma, system A and B for G94, and a
+# hover that is never stale after an edit.
+p3-hover
+
+# X16: the motion goldens drawn in the line-decorations margin (ten programs, six profiles, both lathe
+# systems), the colours in both themes, the Motion Colors toggle and its setting, an edit, a dialect switch
+# and a machine switch recolouring.
+p3-colors
+
+# X17 at 300,000 lines: the index build and a machine switch never stall the page, the hover at the far end,
+# the inspector open while typing (the Phase 1 typing budget holds, a cursor move shows within one frame),
+# the colours after a scroll with at most 1,000 marks, and nothing stale while the index catches up.
+p3-perf

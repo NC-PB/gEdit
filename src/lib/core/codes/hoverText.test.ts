@@ -14,11 +14,24 @@ import fanucCodesJson from '$lib/data/codes/fanuc.json';
 import heidenhainCodesJson from '$lib/data/codes/heidenhain.json';
 import okumaCodesJson from '$lib/data/codes/okuma.json';
 import sinumerikCodesJson from '$lib/data/codes/sinumerik.json';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { compileProfile } from '$lib/core/profiles/compile';
+import { validateProfile } from '$lib/core/profiles/validate';
+import { applyMachine, effectiveMachine } from '$lib/core/machines/effective';
+import { ModalIndex } from '$lib/core/nc/modal';
+import { tokenizeLine } from '$lib/core/nc/tokenizer';
+import { BUILTIN_CODE_DB_JSON } from '$lib/data/codes';
 import { t } from '$lib/i18n';
+import { expectWithin, fastest } from '../../../../tests/unit/helpers/budget';
+import { profileOf } from '../../../../tests/unit/helpers/profiles';
 import { loadCodeDb } from './load';
 import { lookupCode } from './lookup';
-import { codeAddressesOf, escapeMarkdown, hoverAt, hoverTarget, hoverText } from './hoverText';
+import { resolveCodeDbFiles } from './resolve';
+import { blockRange } from './inspect';
+import { codeAddressesOf, escapeMarkdown, hoverAt, hoverTarget, hoverText, type HoverContext, type WaitCodeLookup } from './hoverText';
+import type { EffectiveMachine, MachineConfig, MachineParams, NumberInput } from '$lib/core/machines/types';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
 import type { NcToken } from '$lib/core/nc/types';
 import type { CodeDb, CodeLookup } from './types';
@@ -435,5 +448,505 @@ describe('hoverText: text the control does not execute (M12.5, §7.16 #179)', ()
   it('says nothing about a `text` token, even where the database describes a word of that spelling', () => {
     const token: NcToken = { kind: 'text', start: 0, end: 4, text: 'M198' };
     expect(hoverText(token, { entry: lookupCode(fanuc, 'M198') } as unknown as CodeLookup, t, { waitCode: () => ({ ruleId: 'w', label: 'W', machineName: 'M' }) })).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P3.3: the hover in context (Phase 3 plan §6.5, X14)
+//
+// Every document here is read by the real modal index (P3.1) with the effective profile, code
+// database and machine made the way the app makes them (`effectiveMachine`, `applyMachine`),
+// and the context is built the way `monaco/providers/hover.ts` builds it. The programs are
+// the synthetic fixtures of `tests/fixtures/nc/` and short programs written here.
+// ---------------------------------------------------------------------------
+
+const ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
+const fixture = (path: string): string => readFileSync(join(ROOT, 'tests/fixtures/nc', path), 'utf8').replace(/\r\n?/g, '\n');
+
+const DBS = resolveCodeDbFiles(BUILTIN_CODE_DB_JSON, (dialect, problem) => {
+  throw new Error(`${dialect}: ${problem.path}: ${problem.message}`);
+});
+
+interface Doc {
+  profile: Profile;
+  cp: CompiledProfile;
+  db: CodeDb;
+  machine: EffectiveMachine;
+  lines: string[];
+  index: ModalIndex;
+}
+
+interface MachineSpec {
+  name?: string;
+  params?: Partial<MachineParams>;
+  /** Detected variants, as variant detection answers them, for a document with no machine. */
+  detected?: Record<string, { value: string; margin: number }>;
+  /** A code database to read instead of the built-in one (a user's file merged over it). */
+  db?: CodeDb;
+}
+
+/** A preset's number input, as a machine stores it. */
+function preset(profileId: string, id: string): NumberInput {
+  const found = profileOf(profileId).machineParams?.numberInput?.presets.find((p) => p.id === id);
+  if (!found) throw new Error(`${profileId}: no preset ${id}`);
+  return found.value;
+}
+
+/** `text` on profile `profileId`, read with `machine` (`null` or no `params`: none chosen), the index built. */
+function openDoc(profileId: string, text: string, machine: MachineSpec | null = null): Doc {
+  const base = profileOf(profileId);
+  const config: MachineConfig | null =
+    machine?.params !== undefined ? { id: 'm', name: machine.name ?? 'Machine', profile: profileId, params: machine.params } : null;
+  const eff = effectiveMachine(base, config, config ? 'document' : 'none', machine?.detected ?? {});
+  const applied = applyMachine(base, eff);
+  const checked = validateProfile(applied.profile, { applied: true });
+  if (!checked.ok) throw new Error(checked.errors.join('; '));
+  const cp = compileProfile(checked.profile);
+  const db = machine?.db ?? loadCodeDb(DBS[applied.codes]);
+  const lines = text.split('\n');
+  const index = new ModalIndex(cp, db);
+  index.reset(lines.length, (n) => lines[n - 1] ?? '');
+  while (!index.buildSome(1_000)) {
+    // until the whole document is read
+  }
+  return { profile: checked.profile, cp, db, machine: eff, lines, index };
+}
+
+/** The context of line `n`, as the provider builds it; `ready: false`: the index has not reached it. */
+function contextAt(doc: Doc, n: number, ready = true): HoverContext {
+  const lineCount = doc.lines.length;
+  const getLine = (k: number): string => doc.lines[k - 1] ?? '';
+  const { first, last } = blockRange({ line: n, lineCount, getLine }, doc.cp);
+  const before = ready ? doc.index.stateAfter(first - 1) : null;
+  return {
+    before,
+    after: before === null ? null : doc.index.stateAfter(last),
+    profile: doc.profile,
+    machine: doc.machine,
+    blockLines: { first, last, line: n, lineCount, getLine },
+  };
+}
+
+interface HoverIn {
+  /** false: no context at all (a diff side, a scratch model). */
+  context?: boolean;
+  ready?: boolean;
+  /** Which occurrence of `at` on the line (0 = the first). */
+  nth?: number;
+  waitCode?: WaitCodeLookup;
+}
+
+/** The hover markdown on line `n` at `at`. Every message the context asks for must exist. */
+function hoverIn(doc: Doc, n: number, at: string, o: HoverIn = {}): string {
+  const line = doc.lines[n - 1];
+  let offset = -1;
+  for (let i = 0; i <= (o.nth ?? 0); i++) offset = line.indexOf(at, offset + 1);
+  if (offset < 0) throw new Error(`"${at}" is not on line ${n}: ${line}`);
+  const prev = n > 1 ? tokenizeLine(doc.lines[n - 2], doc.cp).state : undefined;
+  const context = o.context === false ? undefined : contextAt(doc, n, o.ready !== false);
+  const markdown = hoverAt(line, offset, doc.cp, doc.db, t, prev, { context, waitCode: o.waitCode })?.markdown ?? '';
+  expect(markdown, 'a message key without a text').not.toContain('assistant.');
+  return markdown;
+}
+
+/** The markdown with its escapes removed: what the user reads. */
+const plain = (markdown: string): string => markdown.replace(/\\(.)/g, '$1');
+/** The readable hover. */
+const read = (doc: Doc, n: number, at: string, o: HoverIn = {}): string => plain(hoverIn(doc, n, at, o));
+/** The table rows of a hover: `[word, meaning, written]`, `null` for "not written". */
+function tableOf(text: string): [string, string, string | null][] {
+  return text
+    .split('\n')
+    .filter((row) => row.startsWith('| ') && !row.startsWith('| Word') && !row.startsWith('| ---'))
+    .map((row) => {
+      const [word, meaning, written] = row.slice(2, -2).split(' | ');
+      return [word, meaning, written === '_not written_' ? null : written];
+    });
+}
+const writtenOf = (text: string): Record<string, string | null> => Object.fromEntries(tableOf(text).map(([w, , v]) => [w, v]));
+
+const IS_B = { name: 'Lathe IS-B', params: { numberInput: preset('fanuc-lathe', 'is-b') } };
+const CALCULATOR = { name: 'Lathe calc', params: { numberInput: preset('fanuc-lathe', 'calculator') } };
+
+describe('hoverText in context: absent or not ready, the Phase 2 hover unchanged', () => {
+  const doc = openDoc('fanuc-lathe', fixture('fanuc-lathe/l01-turning-a.nc'));
+
+  it('says exactly what it said without a context while the index has not reached the block', () => {
+    for (const [n, at] of [[14, 'X32.'], [16, 'G71'], [33, 'G76'], [33, 'F1.5'], [12, 'S220'], [11, 'G50'], [50, 'Q3000']] as const) {
+      const phase2 = hoverIn(doc, n, at, { context: false });
+      expect(hoverIn(doc, n, at, { ready: false }), `${n} ${at}`).toBe(phase2);
+      // And in context the Phase 2 text is still the start of the hover.
+      expect(hoverIn(doc, n, at).startsWith(phase2), `${n} ${at}`).toBe(true);
+    }
+  });
+
+  it('adds nothing to a word with nothing to say in context', () => {
+    for (const [n, at] of [[8, 'G21'], [13, 'M08'], [10, 'T0101'], [17, 'N100']] as const) {
+      expect(hoverIn(doc, n, at), `${n} ${at}`).toBe(hoverIn(doc, n, at, { context: false }));
+    }
+  });
+
+  it('keeps the wait code of the machine first, with no context added (M12.5)', () => {
+    const wait = openDoc('fanuc-lathe', 'G00 X30. Z2.\nM198 P1234');
+    const waitCode: WaitCodeLookup = (letter, value) =>
+      letter === 'M' && value === 198 ? { ruleId: 'w', label: 'Wait for the other path', machineName: 'Twin' } : null;
+    const text = read(wait, 2, 'M198', { waitCode });
+    expect(text).toContain('Wait code on this machine (Twin): Wait for the other path');
+    expect(text).toBe(read(wait, 2, 'M198', { waitCode, context: false }));
+  });
+});
+
+describe('hoverText in context: Fanuc lathe, G-code system A (l01-turning-a.nc)', () => {
+  const doc = openDoc('fanuc-lathe', fixture('fanuc-lathe/l01-turning-a.nc'));
+
+  it('gives an X word one context line: target, diameter, absolute', () => {
+    expect(read(doc, 14, 'X32.')).toContain('X — target, diameter (assumed: profile default), absolute');
+    // A position with a point is 32 mm on every Fanuc control: no value line.
+    expect(read(doc, 14, 'X32.')).not.toContain('depends on the machine');
+  });
+
+  it('reads U as incremental X outside a cycle, and as the cycle parameter inside one', () => {
+    const u = openDoc('fanuc-lathe', 'G21 G99\nG00 X30. Z2.\nG01 U-2. F0.1');
+    expect(read(u, 3, 'U-2.')).toContain('U — incremental X, diameter (assumed: profile default)');
+    expect(read(doc, 15, 'U2.')).toMatch(/U — Depth of cut per pass in the first block .*\(G71\)/);
+  });
+
+  it('names the feed mode and the code that set it', () => {
+    expect(read(doc, 16, 'F0.25')).toContain('F — feed per revolution (G99)');
+    expect(read(doc, 18, 'F0.12')).toContain('F — feed per revolution (G99)');
+  });
+
+  it('marks a mode the program never set as assumed, with the source', () => {
+    const bare = openDoc('fanuc-lathe', 'G00 X30. Z2.\nG01 Z-10. F0.2');
+    expect(read(bare, 2, 'F0.2')).toContain('F — feed per revolution (G99, assumed: profile default)');
+    const g98 = openDoc('fanuc-lathe', 'G00 X30. Z2.\nG01 Z-10. F150.', { name: 'Lathe', params: { modalInitial: { feedmode: 'G98' } } });
+    expect(read(g98, 2, 'F150.')).toContain('F — feed per minute (G98, assumed: machine)');
+  });
+
+  it('reads F as the thread lead under a threading cycle, and S as a surface speed with its clamp', () => {
+    expect(read(doc, 33, 'F1.5')).toContain('F — thread lead (G76)');
+    expect(read(doc, 35, 'F1.5')).toContain('F — thread lead (G92)');
+    expect(read(doc, 41, 'F1.5')).toContain('F — thread lead (G32)');
+    expect(read(doc, 12, 'S220')).toContain('S — surface speed (G96), clamp 2500 rpm (line 11)');
+    expect(read(doc, 11, 'S2500')).toContain('S — speed limit, not a speed (G50)');
+    expect(read(doc, 29, 'S1200')).toContain('S — spindle speed in rpm (G97)');
+  });
+
+  it('shows the two blocks of G76 with their own words, and says which block it is', () => {
+    const first = read(doc, 32, 'G76');
+    expect(first).toContain('**Parameters of G76, block 1 of 2**');
+    expect(first).toContain('| Word | Meaning | Written |');
+    expect(writtenOf(first)).toEqual({ P: '020060', Q: '80', R: '0.03', X: null, Z: null, F: null });
+    const second = read(doc, 33, 'G76');
+    expect(second).toContain('**Parameters of G76, block 2 of 2**');
+    expect(writtenOf(second)).toEqual({ P: '920', Q: '250', R: null, X: '18.16', Z: '-18.', F: '1.5' });
+  });
+
+  it('shows the two blocks of G71, and a modal G83 with every parameter, written or not', () => {
+    expect(read(doc, 15, 'G71')).toContain('**Parameters of G71, block 1 of 2**');
+    expect(writtenOf(read(doc, 16, 'G71'))).toEqual({ U: '0.4', R: null, P: '100', Q: '200', W: '0.1', F: '0.25' });
+    const g83 = read(doc, 50, 'G83');
+    expect(g83).toContain('**Parameters of G83**');
+    expect(g83).not.toContain('block 1');
+    expect(writtenOf(g83)).toEqual({ Z: '-15.', R: '2.', Q: '3000', P: null, F: '0.08', K: null });
+  });
+
+  it('names a cycle parameter by its meaning, and lists the readings of a micron word with no machine', () => {
+    expect(read(doc, 50, 'R2.')).toMatch(/R — Distance from the start level to the R point.*\(G83\)/);
+    const q = read(doc, 50, 'Q3000');
+    expect(q).toMatch(/Q — Peck depth.*\(G83\)/);
+    // A micron word reads 3 mm under calculator input too, so the preset is named by its whole
+    // label (as the panel does), never by a bare "As written" next to a converted value.
+    expect(q).toContain('Q3000 — depends on the machine; choose a machine:\n- 3 mm: As written: X50 and X50. are both 50 mm; G74/G75 P and Q, G76 Q and G83/G87 Q are in microns (Q6000 is 6 mm) (profile default)');
+    expect(q).toContain('- 0.3 mm: Increments of 0.0001 mm (IS-C): X50 is 0.0050 mm');
+    expect(q).not.toContain('As written (profile default)');
+  });
+});
+
+describe('hoverText in context: a number whose value depends on the machine (X11 c, the hover half)', () => {
+  const text = 'G21 G99\nG00 X50 Z2.\nG01 X50. F25';
+
+  it('lists every reading with no machine, the profile default first', () => {
+    const x = read(openDoc('fanuc-lathe', text), 2, 'X50');
+    expect(x).toContain('X — target, diameter (assumed: profile default), absolute');
+    expect(x).toContain(
+      ['X50 — depends on the machine; choose a machine:', '- 50 mm: As written (profile default)', '- 0.05 mm: Increments of 0.001 mm (IS-B)', '- 0.005 mm: Increments of 0.0001 mm (IS-C)'].join('\n'),
+    );
+  });
+
+  it('gives the effective value and why under the machine', () => {
+    const isB = openDoc('fanuc-lathe', text, IS_B);
+    expect(read(isB, 2, 'X50')).toContain("X50 — 0.05 mm: no decimal point, increments of 0.001 mm (machine 'Lathe IS-B')");
+    expect(read(isB, 3, 'F25')).toContain("F25 — 0.25 mm/rev: no decimal point, increments of 0.01 mm/rev (machine 'Lathe IS-B')");
+    expect(read(openDoc('fanuc-lathe', text, CALCULATOR), 2, 'X50')).toContain("X50 — 50 mm: as written (machine 'Lathe calc')");
+  });
+
+  it('says nothing about a word every machine reads alike', () => {
+    for (const machine of [null, IS_B, CALCULATOR]) {
+      const x = read(openDoc('fanuc-lathe', text, machine), 3, 'X50.');
+      expect(x).not.toMatch(/X50\. —/);
+      expect(x).toContain('X — target, diameter');
+    }
+  });
+
+  it('on Okuma lists the readings of a word with a point too, and scales it under the machine', () => {
+    const okumaDoc = openDoc('okuma-osp', fixture('okuma/o02-thread.MIN'));
+    expect(read(okumaDoc, 11, 'X27.55')).toContain(
+      ['X27.55 — depends on the machine; choose a machine:', '- 27.55 mm: Unit 1 mm (profile default)', '- 0.02755 mm: Unit 1 µm', '- 0.2755 mm: Unit 10 µm, metric only'].join('\n'),
+    );
+    const tenMicrons = openDoc('okuma-osp', fixture('okuma/o02-thread.MIN'), {
+      name: 'Okuma 10um',
+      params: { numberInput: preset('okuma-osp', 'okuma-10um') },
+    });
+    expect(read(tenMicrons, 11, 'X27.55')).toContain("X27.55 — 0.2755 mm: every number counts in units of 0.01 mm (machine 'Okuma 10um')");
+    expect(read(tenMicrons, 11, 'F2')).toContain("F2 — 0.02 mm/rev: every number counts in units of 0.01 mm/rev (machine 'Okuma 10um')");
+  });
+
+  it('says which machine leaves the reading open when the machine does not set it', () => {
+    const unset = openDoc('fanuc-lathe', text, { name: 'Lathe 2', params: { units: 'mm' } });
+    expect(read(unset, 2, 'X50')).toContain("X50 — depends on how numbers are read, which machine 'Lathe 2' does not set:");
+  });
+});
+
+describe('hoverText in context: Fanuc lathe, G-code system B', () => {
+  const text = 'G21 G40 G90 G94\nG92 S2200\nG96 S200 M03\nG00 X42. Z2.\nG01 X30. F150.\nG91 G01 X-2.';
+
+  it('reads the document with its own database: G94 a feed mode in B, a facing pass in A', () => {
+    const b = openDoc('fanuc-lathe', text, { detected: { gcodeSystem: { value: 'B', margin: 5 } } });
+    expect(read(b, 1, 'G94')).toContain('**G94** — Feed per minute');
+    expect(read(b, 5, 'F150.')).toContain('F — feed per minute (G94)');
+    expect(read(b, 2, 'S2200')).toContain('S — speed limit, not a speed (G92)');
+    expect(read(b, 3, 'S200')).toContain('S — surface speed (G96), clamp 2200 rpm (line 2)');
+    expect(read(b, 4, 'X42.')).toContain('X — target, diameter (assumed: profile default), absolute (G90)');
+    expect(read(b, 6, 'X-2.')).toContain('X — target, diameter (assumed: profile default), incremental (G91)');
+    const a = openDoc('fanuc-lathe', text);
+    expect(read(a, 1, 'G94')).toContain('**G94** — Facing pass');
+  });
+
+  it('reads the S of a system-A G92 block as a clamp, never as a speed (the data question of P3.2a, decided: kept)', () => {
+    // The manual's format of the system-A threading cycle has no S word (Series 30i lathe user
+    // manual, §4.1.2 "G92 X(U)_ Z(W)_ F_ Q_;"), so the flag costs a real system-A program
+    // nothing; it is what keeps a system-B program read as system A from having its
+    // `G92 S` top speed treated as a speed.
+    const a = openDoc('fanuc-lathe', 'G21 G99\nG97 S800 M03\nG00 X24. Z6.\nG92 X19.4 Z-18. F1.5 S2000');
+    expect(read(a, 4, 'F1.5')).toContain('F — thread lead (G92)');
+    expect(read(a, 4, 'S2000')).toContain('S — speed limit, not a speed (G92)');
+    expect(read(a, 4, 'X19.4')).toMatch(/X — Thread diameter of this pass \(G92\), diameter/);
+  });
+});
+
+describe('hoverText in context: Fanuc mill (f01-mill-3tools.nc)', () => {
+  const doc = openDoc('fanuc-gcode', fixture('fanuc/f01-mill-3tools.nc'));
+
+  it('gives a position its distance mode and work offset', () => {
+    expect(read(doc, 15, 'X-15.')).toContain('X — target, absolute (G90), work offset G54');
+    // `G91 G28 Z0.`: the intermediate point, incremental, in the program's coordinates.
+    expect(read(doc, 26, 'Z0.')).toContain("Z — Intermediate point on the way to the reference point, in the program's coordinates (G28), incremental (G91)");
+    expect(read(doc, 26, 'Z0.')).not.toContain('machine coordinates');
+  });
+
+  it('names the feed mode, and a tap feed stays a feed per minute', () => {
+    expect(read(doc, 18, 'F400.')).toContain('F — feed per minute (G94)');
+    expect(read(doc, 55, 'F450.')).toContain('F — feed per minute (G94)');
+    expect(read(doc, 55, 'F450.')).not.toContain('thread lead (G84)');
+  });
+
+  it('shows the cycle table, and reads a position under the modal cycle as its hole position', () => {
+    const g83 = read(doc, 39, 'G83');
+    expect(g83).toContain('**Parameters of G83**');
+    expect(writtenOf(g83)).toEqual({ X: '20.', Y: '60.', Z: '-18.', R: '3.', Q: '4.', F: '240.', K: null });
+    expect(read(doc, 40, 'X80.')).toContain('X — target, absolute (G90), work offset G54, cycle G83 in force (line 39)');
+    // In the cycle's own block the word is its parameter.
+    expect(read(doc, 39, 'X20.')).toContain('X — Hole position X (G83), absolute (G90), work offset G54');
+  });
+
+  it('reads a point-less word by the machine, and lists the readings without one', () => {
+    const text = 'G21 G90 G94 G54\nG0 X50 Y10.';
+    expect(read(openDoc('fanuc-gcode', text), 2, 'X50')).toContain(
+      ['X50 — depends on the machine; choose a machine:', '- 0.05 mm: Increments of 0.001 mm (IS-B) (profile default)'].join('\n'),
+    );
+    const isB = openDoc('fanuc-gcode', text, { name: 'Mill', params: { numberInput: preset('fanuc-gcode', 'is-b') } });
+    expect(read(isB, 2, 'X50')).toContain("X50 — 0.05 mm: no decimal point, increments of 0.001 mm (machine 'Mill')");
+  });
+});
+
+describe('hoverText in context: Heidenhain Klartext (h04-cycle-feeds.h)', () => {
+  const doc = openDoc('heidenhain-klartext', fixture('heidenhain/h04-cycle-feeds.h'));
+
+  it('shows the parameters of a cycle defined over several lines', () => {
+    const def = read(doc, 7, 'CYCL');
+    expect(def).toContain('**Parameters of CYCL DEF 200**');
+    expect(writtenOf(def)).toEqual({ Q200: '2', Q201: '-20', Q206: '180', Q202: '4', Q210: '0', Q203: '+0', Q204: '50', Q211: '0.2', Q395: '0' });
+    // The second definition: its own values, from its own lines.
+    expect(writtenOf(read(doc, 20, 'CYCL'))).toMatchObject({ Q201: '-10', Q202: '10', Q211: '0' });
+  });
+
+  it('names a Q parameter of the definition by its meaning', () => {
+    expect(read(doc, 9, 'Q201')).toContain('Q201 — Depth, negative into the material (CYCL DEF 200)');
+  });
+
+  it('shows the defined cycle on its call, with the line of the definition', () => {
+    const call = read(doc, 17, 'M99');
+    expect(call).toContain('**Parameters of CYCL DEF 200, defined on line 7**');
+    expect(writtenOf(call).Q201).toBe('-20');
+  });
+
+  it('gives a position its context, and no reading: Klartext numbers do not depend on a machine', () => {
+    expect(read(doc, 17, 'X+10')).toContain('X — target, absolute');
+    const inch = openDoc('heidenhain-klartext', fixture('heidenhain/h04-cycle-feeds.h'), { name: 'Mill', params: { units: 'mm' } });
+    expect(read(inch, 17, 'X+10')).not.toContain('depends on');
+    expect(read(inch, 17, 'X+10')).not.toContain("machine 'Mill'");
+  });
+
+  it('reads an I word as incremental by its prefix', () => {
+    const incremental = openDoc('heidenhain-klartext', '0 BEGIN PGM T MM\n1 L X+10 Y+10 R0 FMAX\n2 L IX+5 R0 F200\n3 END PGM T MM');
+    expect(read(incremental, 3, 'IX+5')).toContain('IX — target, incremental');
+  });
+});
+
+describe('hoverText in context: Sinumerik turning (s05-diameter.MPF, s02-drill.MPF)', () => {
+  const doc = openDoc('sinumerik', fixture('sinumerik/s05-diameter.MPF'));
+
+  it('reads X as a diameter or a radius by the diameter mode and the distance mode (AD-19 rule 11)', () => {
+    expect(read(doc, 10, 'X84')).toContain('X — target, diameter (assumed: profile default), absolute (G90), work offset G54');
+    expect(read(doc, 14, 'X40')).toContain('X — target, radius, absolute (G90), work offset G54');
+    expect(read(doc, 18, 'X76')).toContain('X — target, diameter, absolute (G90), work offset G54');
+    expect(read(doc, 19, 'X-1')).toContain('X — target, radius, incremental (G91), work offset G54');
+  });
+
+  it('marks a diameter mode the machine sets as assumed from the machine', () => {
+    const radius = openDoc('sinumerik', fixture('sinumerik/s05-diameter.MPF'), { name: 'Lathe', params: { diameter: 'off' } });
+    expect(read(radius, 10, 'X84')).toContain('X — target, radius (assumed: machine), absolute (G90)');
+  });
+
+  it('reads the clamp of a LIMS word, the speed limit itself, and a dwell F', () => {
+    expect(read(doc, 9, 'S200')).toContain('S — surface speed (G96), clamp 2800 rpm (line 9)');
+    expect(read(doc, 9, 'LIMS')).toContain('LIMS — speed limit, not a speed');
+    expect(read(doc, 22, 'F1.5')).toContain('F — a time in seconds, not a feed (G4)');
+    expect(read(doc, 11, 'F0.3')).toContain('F — feed per revolution (G96)');
+  });
+
+  it('shows a call’s arguments by position, an empty one as not written', () => {
+    const drill = openDoc('sinumerik', fixture('sinumerik/s02-drill.MPF'));
+    const once = read(drill, 12, 'CYCLE83');
+    expect(once).toContain('**Parameters of CYCLE83**');
+    const written = writtenOf(once);
+    expect([written.RTP, written.RFP, written.SDIS, written.DP, written.DPR, written.FDEP, written.VARI]).toEqual(['5', '0', '2', '-30', null, '-8', '0']);
+    expect(writtenOf(read(drill, 24, 'CYCLE83')).DP).toBe('-18');
+    // A position under the modal call, inside the TRANSMIT frame.
+    expect(read(drill, 25, 'X30')).toContain('X — target, radius, absolute (G90), work offset G54, inside TRANSMIT (line 19)');
+  });
+});
+
+describe('hoverText in context: Sinumerik milling (m01-plate.MPF)', () => {
+  const doc = openDoc('sinumerik-mill', fixture('sinumerik-mill/m01-plate.MPF'));
+
+  it('gives a mill position no diameter, and the call its parameters', () => {
+    expect(read(doc, 32, 'X20')).toContain('X — target, absolute (G90), work offset G54');
+    expect(read(doc, 32, 'X20').split('X — ')[1]).not.toMatch(/diameter|radius/);
+    expect(read(doc, 30, 'F240')).toContain('F — feed per minute (G94)');
+    expect(writtenOf(read(doc, 31, 'CYCLE83')).DP).toBe('-18');
+  });
+});
+
+describe('hoverText in context: Okuma (o02-thread.MIN)', () => {
+  const doc = openDoc('okuma-osp', fixture('okuma/o02-thread.MIN'));
+
+  it('shows the one-block thread cycle with its words, and F as its lead', () => {
+    const g71 = read(doc, 11, 'G71');
+    expect(g71).toContain('**Parameters of G71**');
+    expect(g71).not.toContain('block 1 of 2');
+    expect(writtenOf(g71)).toMatchObject({ X: '27.55', Z: '-30', B: '60', D: '0.7', U: '0.1', H: '2.45', L: '2', F: '2', I: null });
+    expect(read(doc, 11, 'F2')).toContain('F — thread lead (G71)');
+    expect(read(doc, 11, 'X27.55')).toContain('X — Final thread diameter (G71), diameter (assumed: profile default), absolute (G90, assumed: profile default)');
+  });
+
+  it('reads the speed limit of G50 and the dwell of G4', () => {
+    expect(read(doc, 6, 'S2000')).toContain('S — speed limit, not a speed (G50)');
+    expect(read(doc, 25, 'F1')).toContain('F — a time in seconds, not a feed (G4)');
+  });
+});
+
+describe('hoverText in context: escaping', () => {
+  it('escapes a label from a user database and a value from the document in the table and the context line', () => {
+    const raw = JSON.parse(JSON.stringify(fanucCodesJson)) as { codes: { code: string; params?: { address: string; label: string }[] }[] };
+    const g83 = raw.codes.find((entry) => entry.code === 'G83');
+    if (!g83?.params) throw new Error('no G83 in the mill database');
+    for (const param of g83.params) if (param.address === 'R') param.label = '**R** | [plane](https://example.com) <b>x</b>';
+    const db = loadCodeDb(raw);
+    const doc = openDoc('fanuc-gcode', 'G21 G90 G94 G54\nG98 G83 X20. Y20. Z-18. R[#1*2] Q4. F240.\nG98 G83 X30. Y20. Z-18. R3. Q4. F240.', { db });
+    const table = hoverIn(doc, 2, 'G83');
+    // The label from the user's database, and the expression from the document.
+    expect(table).toContain('| R | \\*\\*R\\*\\* \\| \\[plane\\]\\(https://example\\.com\\) \\<b\\>x\\</b\\> | \\[\\#1\\*2\\] |');
+    expect(table).not.toContain('[plane](');
+    expect(table).not.toContain('<b>');
+    const line = hoverIn(doc, 3, 'R3.');
+    expect(line).toContain('R — \\*\\*R\\*\\* \\| \\[plane\\]\\(https://example\\.com\\) \\<b\\>x\\</b\\> \\(G83\\)');
+  });
+});
+
+describe('hoverText in context: the budget', () => {
+  it('answers a hover at line 300,000 within 50 ms, the two states included', () => {
+    const block = ['G00 X40. Z2.', 'G01 Z-20. F0.2', 'X42.', 'G00 Z2.'];
+    const lines: string[] = ['G21 G99', 'G50 S2500', 'G96 S200 M03'];
+    while (lines.length < 299_998) lines.push(block[lines.length % block.length]);
+    lines.push('G76 P020060 Q80 R0.03', 'G76 X18.16 Z-18. P920 Q250 F1.5');
+    const doc = openDoc('fanuc-lathe', lines.join('\n'), IS_B);
+    expect(doc.lines.length).toBe(300_000);
+    let text = '';
+    const ms = fastest(5, () => {
+      text = hoverIn(doc, 300_000, 'F1.5');
+    });
+    expect(plain(text)).toContain('F — thread lead (G76)');
+    expectWithin(ms, 50, 'hover with its modal context at line 300,000');
+    const table = fastest(5, () => {
+      text = hoverIn(doc, 300_000, 'G76');
+    });
+    expect(plain(text)).toContain('block 2 of 2');
+    expectWithin(table, 50, 'hover with the cycle table at line 300,000');
+  });
+});
+
+describe('hoverText in context: what the words of special blocks are', () => {
+  it('reads G28 words as an intermediate point in the program frame, absolute or incremental', () => {
+    const mill = openDoc('fanuc-gcode', 'G90 G54 G00 X0. Y0.\nG28 G91 Z0.\nG90 G28 X0. Y0.\nG53 Z0.');
+    const z = read(mill, 2, 'Z0.');
+    expect(z).toContain("Z — Intermediate point on the way to the reference point, in the program's coordinates (G28), incremental (G91)");
+    expect(z).not.toContain('machine coordinates');
+    expect(read(mill, 3, 'X0.')).toContain('(G28), absolute (G90)');
+    expect(read(mill, 4, 'Z0.')).toContain('Z — machine coordinates (G53)');
+  });
+
+  it('calls no value of a cycle block a diameter', () => {
+    const lathe = openDoc('fanuc-lathe', 'G71 U2. R1.\nG71 P10 Q20 U0.5 W0.1 F0.25\nG04 X1.5');
+    // Only what the context adds (the address's own text says what U is in general).
+    const context = (n: number, at: string): string => read(lathe, n, at).slice(read(lathe, n, at, { context: false }).length);
+    // The label says how each block reads U; the reading adds no "diameter" of its own.
+    expect(context(1, 'U2.')).toContain('U — Depth of cut per pass in the first block (a radius value)');
+    expect(context(1, 'U2.')).toMatch(/\(G71\)$/);
+    expect(context(1, 'U2.')).not.toMatch(/, diameter\b|incremental/);
+    expect(context(3, 'X1.5')).not.toMatch(/, diameter\b/);
+  });
+
+  it('names the cycle MCALL made modal at the positions under it', () => {
+    const doc = openDoc('sinumerik-mill', 'G0 X0 Y0 Z5\nMCALL CYCLE81(10,0,2,-5)\nX10 Y10\nMCALL\nX30');
+    expect(read(doc, 3, 'X10')).toContain('cycle CYCLE81 in force (line 2)');
+    expect(read(doc, 5, 'X30')).not.toContain('in force');
+  });
+
+  it('calls a threading move in force a thread pass, not a cycle', () => {
+    const doc = openDoc('sinumerik', 'G90 G18\nG33 Z-30 K1.5\nX20');
+    expect(read(doc, 3, 'X20')).toContain('thread pass G33 in force (line 2)');
+    expect(read(doc, 3, 'X20')).not.toContain('cycle G33');
+  });
+
+  it('lists a cycle feed written as a word as written', () => {
+    const doc = openDoc('heidenhain-klartext', ['5 CYCL DEF 200 DRILLING ~', '  Q200=2 ;SET-UP CLEARANCE ~', '  Q206=FAUTO ;PLUNGING FEED'].join('\n'));
+    expect(writtenOf(read(doc, 1, 'CYCL'))).toMatchObject({ Q200: '2', Q206: 'FAUTO' });
+  });
+
+  it('names the code that gave a feed its unit, never one that says the opposite', () => {
+    expect(read(openDoc('okuma-osp', 'G95\nG101 X40 C90 F100'), 2, 'F100')).toContain('F — feed per minute (G101)');
+    expect(read(openDoc('okuma-osp', 'G94\nG101 X40 C90 F100'), 2, 'F100')).toContain('F — feed per minute (G94)');
   });
 });

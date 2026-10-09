@@ -21,7 +21,7 @@ import type { ChannelMember, ChannelRef, ChannelSet, SyncFinding } from '$lib/co
 import type { CodeDb, CodeEntry, CodeLookup } from '$lib/core/codes/types';
 import type { CompareOptions } from '$lib/core/compare/types';
 import type { FieldSpec } from '$lib/core/forms/types';
-import type { NcToken } from '$lib/core/nc/types';
+import type { ModalState, NcToken } from '$lib/core/nc/types';
 import type { Settings } from '$lib/core/settings/schema';
 import type { OutlineItem } from '$lib/core/profiles/outline';
 import type { CompiledProfile, Profile, ProfileProblem } from '$lib/core/profiles/types';
@@ -1263,6 +1263,47 @@ export interface UserConfigService {
   forget(docId: string): boolean;
 }
 
+/**
+ * Phase 3 (P3a prelude; Phase 3 plan §6.2; P3.1 fills it): `app/modalService.ts` →
+ * `export const modal: ModalService`.
+ *
+ * One `ModalIndex` per open document, built with the document's **effective** compiled
+ * profile and database (`machines.effective(docId)`, AD-31) and rebuilt from scratch when
+ * the effective key changes (the profile, the database, a variant or a machine parameter:
+ * `machines.revision`, `profiles.revision`, a dialect switch). Fed by the document's content
+ * changes: an edit drops the snapshots at and after its first changed line at once and the
+ * rest is rebuilt in idle chunks of at most 16 ms, so typing never waits for the index.
+ *
+ * Readers (the inspector, the hover, the motion colours) never block: a state the index has
+ * not reached yet is `null`, and `changed` tells them to ask again.
+ */
+export interface ModalService {
+  /**
+   * The state after `line` (1-based; 0 is the power-on state) of document `id`, or `null`
+   * while the index has no snapshot within 1,000 lines before it, or for an unknown document.
+   * One call replays at most 999 lines (≤ 15 ms at 300k lines).
+   */
+  stateAfter(id: DocId, line: number): ModalState | null;
+  /**
+   * The states after each of the lines `first`…`last` (`first` ≥ 0, at most 1,000 lines), in
+   * order, or `null` as for `stateAfter`. The motion colours read a viewport with one call.
+   */
+  statesAfter(id: DocId, first: number, last: number): ModalState[] | null;
+  /** Bumps whenever any document's index gains or loses states (an edit, an idle chunk, a rebuild). */
+  readonly changed: Readable<number>;
+  /**
+   * A number per document that changes only when an answer of `stateAfter`/`statesAfter` for
+   * that document can differ from the last one: an edit, a rebuild, or a build slice that made
+   * a line answerable that a reader had asked for and got `null`. A reader that is woken by
+   * `changed` compares it with the number it last saw and does nothing when it is the same
+   * (a slice of another document, or one that moved the build on without reaching anything
+   * the reader waits for). 0 for a document the service does not know.
+   */
+  revisionOf(id: DocId): number;
+  /** Resolves once the index of `id` covers the whole document (tests and the harness). */
+  whenReady(id: DocId): Promise<void>;
+}
+
 export interface AppContext {
   commands: CommandRegistry;
   ribbon: RibbonRegistry;
@@ -1302,6 +1343,8 @@ export interface AppContext {
   channels: ChannelService;
   // P13
   userConfig: UserConfigService;
+  // Phase 3, P3a prelude
+  modal: ModalService;
 }
 
 // ---------------------------------------------------------------------------

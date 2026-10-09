@@ -140,21 +140,23 @@ The exit criteria hold, and these things the original Phase 2 listed were moved 
 
 The release notes of 1.0 repeat this list.
 
-## Phase 3: Understand and write (planned)
+## Phase 3: Understand and write (in progress)
 
-Exit criteria: a user can put the cursor in any block and see what each word means and what is in force there (the code inspector), change a value from the inspector, read a cycle's parameters and the modal context in the hover, and insert parameterized templates in place of the old code blocks. The TypeScript modal interpreter gives the same answers as the Python one on the shared goldens. These are exit criteria X7 (the inspector) and the templates half of X9 of the former Phase 2 plan; X9 keeps the user-profile and code-file half in Phase 2. The designs stay in [phase-2-implementation.md](phase-2-implementation.md#designed-in-phase-2-moved-to-phase-3-understand-a-block-and-templates) as P3.1–P3.6, so their contracts (§7.4 for the TypeScript half, §7.8 for templates) keep a home. A detailed Phase 3 plan will be written when Phase 2 closes.
+Exit criteria: a user can put the cursor in any block and see what each word means and what is in force there (the code inspector), change a value from the inspector, read a cycle's parameters and the modal context in the hover, see at a glance how each line moves (motion colors), and insert parameterized templates in place of the old code blocks. The TypeScript modal interpreter gives the same answers as the Python one, line by line. These are exit criteria X7 (the inspector) and the templates half of X9 of the former Phase 2 plan, plus X14–X18 (hover, parity, motion colors, no regression within the budgets, cycle forms and the template manager); X9 keeps the user-profile and code-file half in Phase 2.
 
-| Area | Item | Size | Delivery | Plan |
-|---|---|---|---|---|
-| NC | [Modal interpreter](nc-transformations.md#nc-tokenizer-and-modal-interpreter), TypeScript half, matching the Python one on the shared goldens | M | Core | P3.1 |
-| Assistant | [Code inspector panel](code-assistant.md#code-inspector-panel), [edit values](code-assistant.md#edit-values-in-the-inspector) | M | Core | P3.2 |
-| Assistant | [Hover with cycle parameters and modal context](code-assistant.md#hover-explanations-for-codes) | S | Core | P3.3 |
-| Assistant | [Parametric templates](code-assistant.md#parametric-templates), [placeholders](code-assistant.md#placeholders), [file-based templates](code-assistant.md#template-files-and-management): the engine | M | Core | P3.4 |
-| Assistant | [Templates in completion](code-assistant.md#templates-in-completion) and in the Insert tab, in place of the blocks JSON | M | Core | P3.5 |
-| Assistant | Template content for the built-in dialects | M | Profile | P3.6 |
-| Assistant | [Cycle forms](code-assistant.md#cycle-forms), [formula parameters](code-assistant.md#formula-parameters), [template manager UI and create from selection](code-assistant.md#template-files-and-management) | M | Core | after P3.6 |
-| Profiles | Motion-mode line coloring from the modal interpreter ([tokenizer and colors](dialect-profiles.md#tokenizer-and-colors)) | M | Core | after P3.1 |
-| Profiles | Form-generated profile editor with a live preview, beside the template manager UI ([phase-2-implementation.md §11 item 1](phase-2-implementation.md#11-deferred-or-cut-items-phase-2--phase-3-or-backlog); D40) | M | Core | with the template manager UI |
+Status: **the plan of record is [phase-3-implementation.md](phase-3-implementation.md)** (2026-10-09), with two milestones: **P3a "Understand a block"** (implemented on `p3a/int`, 2026-10-09: P3.1, P3.2a/b, P3.3 and P3.7 with the user guide; two reviews and a skeptic pass with both fix batches are done, the local runs of the new scenarios pass, and it **lands on `main` next**, with the runtime suite on the GitHub runner after the landing) and **P3b "Write with templates"** (designed; its prelude follows P3a). The designs that the Phase 2 plan kept for Phase 3 moved there.
+
+| Area | Item | Size | Delivery | Plan | Status |
+|---|---|---|---|---|---|
+| NC | [Modal interpreter](nc-transformations.md#nc-tokenizer-and-modal-interpreter), TypeScript half, matching the Python one on the shared goldens, line by line | M | Core | [P3a](phase-3-implementation.md#p3a-understand-a-block): P3.1 | done: reviewed and fixed, on `main` |
+| Assistant | [Code inspector panel](code-assistant.md#code-inspector-panel), [edit values](code-assistant.md#edit-values-in-the-inspector) | M | Core | P3a: P3.2a (reading a word, the rows, editing a value), P3.2b (the panel) | done: reviewed and fixed, on `main` |
+| Assistant | [Hover with cycle parameters and modal context](code-assistant.md#hover-explanations-for-codes) | S | Core | P3a: P3.3 | done: reviewed and fixed, on `main` |
+| Profiles | Motion-mode line coloring from the modal interpreter ([tokenizer and colors](dialect-profiles.md#tokenizer-and-colors)): a colored mark beside each line that moves (rapid, straight, arc, thread, cycle), with a setting | M | Core | P3a: P3.7 | done (AD-34): reviewed and fixed, on `main` |
+| Assistant | [Parametric templates](code-assistant.md#parametric-templates), [placeholders](code-assistant.md#placeholders), [file-based templates](code-assistant.md#template-files-and-management): the engine | M | Core | [P3b](phase-3-implementation.md#p3b-write-with-templates): P3.4 | planned |
+| Assistant | [Templates in completion](code-assistant.md#templates-in-completion) and in the Insert tab, in place of the blocks JSON | M | Core | P3b: P3.5 | planned |
+| Assistant | Template content for the built-in dialects, marked "review pending" until the owner's review | M | Profile | P3b: P3.6 | planned |
+| Assistant | [Cycle forms](code-assistant.md#cycle-forms), [formula parameters](code-assistant.md#formula-parameters), [template manager UI and create from selection](code-assistant.md#template-files-and-management) | M | Core | P3b: P3.8, P3.9 (designed by the P3b prelude) | planned |
+| Profiles | Form-generated profile editor with a live preview, beside the template manager UI ([phase-2-implementation.md §11 item 1](phase-2-implementation.md#11-deferred-or-cut-items-phase-2--phase-3-or-backlog); D40) | M | Core | with the template manager UI | planned |
 
 ## Phase 4: Comfort and geometry
 

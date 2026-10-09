@@ -51,6 +51,11 @@ export interface Settings {
   'editor.rulers': number[];
   'assist.hover': boolean;
   'assist.completion': 'auto' | 'manual' | 'off';
+  /**
+   * Phase 3 (P3a prelude; P3.7): a coloured mark beside every line that moves, by how it
+   * moves (rapid, straight, arc, thread, cycle), read from the modal state.
+   */
+  'assist.motionColors': boolean;
   /** 0-50. */
   'files.recentLength': number;
   /** What happens when a file changes on disk. A dirty document always asks (AD-10). */
@@ -115,6 +120,7 @@ export const DEFAULTS: Settings = freeze({
   'editor.rulers': freeze<number[]>([]),
   'assist.hover': true,
   'assist.completion': 'auto',
+  'assist.motionColors': true,
   'files.recentLength': 15,
   'files.externalChange': 'reload',
   'files.defaultProfile': 'fanuc-gcode',
@@ -215,6 +221,7 @@ export const SETTING_FIELDS: SettingFieldMeta[] = [
     type: 'choice',
     choices: choice('assist.completion', ['auto', 'manual', 'off']),
   }),
+  meta('assist.motionColors', 'assistance', { type: 'bool' }),
 
   // Files
   meta('files.recentLength', 'files', { type: 'integer', min: 0, max: 50 }),

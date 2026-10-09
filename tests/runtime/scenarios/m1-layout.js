@@ -58,6 +58,12 @@ scenario('m1-layout', { timeout: 180 }, async (h) => {
     h.check(`the ${tab} tab renders without making the page scroll`, !pageScrolls() && h.q('ribbon-tab', { tab, 'aria-selected': 'true' }) !== null, perTab[tab])
   }
   h.check('no ribbon group or button may be squeezed: they all have flex-shrink 0', squeezed === 0, { squeezed, perTab })
+  // P3a (intentional change): the View tab gains Code Inspector, between Side Panel and Bottom Panel, and Motion Colors.
+  h.click(h.q('ribbon-tab', { tab: 'view' }))
+  await h.sleep(150)
+  const viewButtons = h.qa('cmd-button').map((e) => e.dataset.command)
+  const at = (/** @type {string} */ command) => viewButtons.indexOf(command)
+  h.check('P3a: the View tab lists Side Panel, Code Inspector and Bottom Panel in that order, and offers Motion Colors', at('view.toggleSidePanel') >= 0 && at('view.toggleSidePanel') < at('view.toggleInspector') && at('view.toggleInspector') < at('view.toggleBottomPanel') && at('view.toggleMotionColors') > at('view.toggleBottomPanel'), viewButtons)
   h.click(h.q('ribbon-tab', { tab: 'home' }))
   await h.sleep(150)
 

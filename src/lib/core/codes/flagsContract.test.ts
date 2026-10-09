@@ -146,6 +146,15 @@ describe('the defined cycle (§7.4)', () => {
     expect(db.codes.map((e) => e.sets?.cycle ?? null)).toEqual(['define', 'call', 'call-modal', 'start', 'cancel', null]);
     expect(problems.map((p) => p.path)).toEqual(['codes[5].sets.cycle']);
   });
+
+  it('accepts the word that makes the cycle written behind it modal', () => {
+    const { db, problems } = load([
+      { code: 'MCALL', label: 'Modal call', group: 'cycle', sets: { cycle: 'call-modal-next' } },
+      { code: 'MCALL2', label: 'Typo', group: 'cycle', sets: { cycle: 'call-modal-later' } },
+    ]);
+    expect(db.codes.map((e) => e.sets?.cycle ?? null)).toEqual(['call-modal-next', null]);
+    expect(problems.map((p) => p.path)).toEqual(['codes[1].sets.cycle']);
+  });
 });
 
 describe('R8: the parameter role (P10, §7.2, §7.16 #106)', () => {
@@ -316,5 +325,23 @@ describe('M10 review: the pole, a program call, a coordinate shift and an axis p
     ]);
     expect(db.codes[4].params?.map((p) => p.axis ?? null)).toEqual(['X', null]);
     expect(problems.map((p) => p.path)).toEqual(['codes[4].params[1].axis', 'codes[5].pole', 'codes[5].call', 'codes[5].shift']);
+  });
+});
+
+describe('the path of a feed move (Phase 3 prelude P3a, plan §6.6; the motion colours of P3.7)', () => {
+  it('carries an arc and a single-pass cycle through the loader and drops any other value', () => {
+    const { db, problems } = load([
+      { code: 'G2', label: 'Arc', group: 'motion', modal: true, sets: { motion: 'feed', path: 'arc' } },
+      { code: 'G1', label: 'Line', group: 'motion', modal: true, sets: { motion: 'feed' } },
+      { code: 'G3', label: 'Arc', group: 'motion', modal: true, sets: { motion: 'feed', path: 'circle' } },
+      { code: 'G90', label: 'Turning pass', group: 'motion', modal: true, sets: { motion: 'feed', path: 'cycle' } },
+    ]);
+    expect(db.codes.map((e) => [e.code, e.sets?.path ?? null, e.sets?.motion ?? null])).toEqual([
+      ['G2', 'arc', 'feed'],
+      ['G1', null, 'feed'],
+      ['G3', null, 'feed'],
+      ['G90', 'cycle', 'feed'],
+    ]);
+    expect(problems.map((p) => p.path)).toEqual(['codes[2].sets.path']);
   });
 });

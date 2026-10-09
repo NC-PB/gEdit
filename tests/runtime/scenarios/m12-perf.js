@@ -201,6 +201,11 @@ scenario('m12-perf', { timeout: 1200 }, async (h) => {
     await h.waitFor(() => ctx.editor.getLineCount(id) === lines.length, { timeout: 120000, interval: 50 })
     await waitChannel(h, (s) => s.present, 30000)
     await ctx.outline.whenReady(id)
+    // Phase 3 (P3a, an intentional change): an opened program is also read by the modal index in idle slices of up to
+    // 16 ms (about 2.4 s at this size), and a measurement that starts while it is still going (section C chooses a
+    // machine next) would time the index's slices as well: first resolution read 437 ms on the first attempt of a
+    // cumulative run, 74 ms on the retry. The steady state is what these budgets are about, as with the outline above.
+    await ctx.modal.whenReady(id)
     await h.idle({ timeout: 60000 })
   })
   if (id === '') throw new Error('the program did not open')

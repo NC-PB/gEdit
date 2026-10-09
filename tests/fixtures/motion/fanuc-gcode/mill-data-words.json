@@ -1,0 +1,25 @@
+{
+  "about": "Axis words that are data, not a move: G10 sets an offset, G92 sets the coordinate system, G52 shifts it. A move in machine coordinates (G53) and a return to the reference point (G28) do move.",
+  "input": [
+    "G90 G0 X0 Y0",
+    "G10 L2 P1 X-100. Y-200.",
+    "G92 X0 Y0",
+    "G52 X10. Y10.",
+    "G53 G0 Z0",
+    "G90",
+    "G1 X5. F100.",
+    "G4 P500",
+    "G4 X1."
+  ],
+  "lines": {
+    "1": "rapid",
+    "2": null,
+    "3": null,
+    "4": null,
+    "5": "rapid",
+    "6": null,
+    "7": "linear",
+    "8": null,
+    "9": null
+  }
+}

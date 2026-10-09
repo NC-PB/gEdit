@@ -118,12 +118,20 @@ export interface CodeSets {
    *     modal call that is in force.
    *   - `'call-modal'`: from this block on, the defined cycle runs after every positioning
    *     block, until a `'call'` or the next `'define'` (`M89`).
+   *
+   * Phase 3 adds one value for a control that makes a cycle modal by a word written **in
+   * front of** the cycle (Sinumerik `MCALL CYCLE81(…)`):
+   *   - `'call-modal-next'`: the cycle started in the same block (a `'start'` entry, written
+   *     as a call or a code) does **not** run in this block; it becomes the active cycle and
+   *     runs after every following positioning block, a rapid one included, until the word
+   *     stands alone (`MCALL`, which ends it) or a block writes it with another cycle (which
+   *     replaces it). Nothing else ends it: neither a motion code nor a cycle cancel.
    * A cycle that takes effect where it is defined (a datum shift, a working-plane tilt)
    * carries none of the three: it is never called and never replaces the defined cycle.
    * The interpreter reads these values and no dialect name; WP9.5 implements them in
    * `_nc_modal.py`, the TypeScript interpreter follows the same goldens in Phase 3.
    */
-  cycle?: 'start' | 'cancel' | 'define' | 'call' | 'call-modal';
+  cycle?: 'start' | 'cancel' | 'define' | 'call' | 'call-modal' | 'call-modal-next';
   /**
    * The `S` word of this block is a spindle-speed **limit**, not a speed (Fanuc A `G50`,
    * B `G92`; Sinumerik `G26`, and `G25` with `speedLimitBound: 'lower'`). Anything that
@@ -172,6 +180,16 @@ export interface CodeSets {
    * path and thread moves, the Klartext path functions). A block cuts only under `'feed'`.
    */
   motion?: 'rapid' | 'feed';
+  /**
+   * Phase 3 (P3a prelude; Phase 3 plan §6.6, P3.7). The path of a `motion: 'feed'` code is
+   * an arc (`G2`, `G3`, Sinumerik `CIP` and `CT`, the Klartext circles `C`, `CR`, `CT`, `CP`,
+   * `CTP` and the circular approach and departure). Absent: a straight line. `'cycle'`: each
+   * block of the code is a whole pass of its own (approach, cut, retract, return; the lathe
+   * single-pass turning and facing cycles, Fanuc system A `G90`, `G94` and system B `G77`,
+   * `G79`), which the colours show as a cycle. Read by the motion colours only; nothing that
+   * judges a program reads it.
+   */
+  path?: 'arc' | 'cycle';
   /** M10 (WP10.2). Cutter or nose radius compensation on (`G41`, `G42`, `RL`, `RR`) or off (`G40`, `R0`). */
   radiusComp?: 'on' | 'off';
   /** M10 (WP10.2). A tool length offset on (`G43`, `G44`, `G43.4`, `G43.5`) or off (`G49`). */

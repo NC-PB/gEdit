@@ -176,11 +176,15 @@ export interface ModalState {
   /** The last clamp value: an `S` in a `sets.speedLimit` block, or a `speedLimitWords` assignment. */
   speedLimit: WordSeen | null;
   /**
-   * The modal cycle that runs at every positioning block (Fanuc `G81` until `G80`, a
-   * Sinumerik `MCALL`), from `sets.cycle: 'start'` / `'cancel'`. P9: on a control that
-   * defines a cycle and calls it later (Klartext), it is the defined cycle while a modal
-   * call (`sets.cycle: 'call-modal'`, `M89`) is in force, and `null` otherwise — the same
-   * meaning, "every positioning block runs this cycle".
+   * The modal cycle that runs at every positioning block (Fanuc `G81` until `G80`), from
+   * `sets.cycle: 'start'` / `'cancel'`. P9: on a control that defines a cycle and calls it
+   * later (Klartext), it is the defined cycle while a modal call (`sets.cycle:
+   * 'call-modal'`, `M89`) is in force, and `null` otherwise — the same meaning, "every
+   * positioning block runs this cycle". Phase 3 (rule 11b): the cycle written behind a
+   * `'call-modal-next'` word (Sinumerik `MCALL CYCLE81(…)`), from that line until the word
+   * stands alone; the `MCALL` line itself runs nothing (`block.cycle` is null there), every
+   * positioning block after it runs the cycle (`block.cycle`). A threading move the
+   * interpreter keeps in force (`G32`, `G33`, rule 3) is here too; it is a move, not a cycle.
    */
   activeCycle: { code: string; line: number; pitchFeed: boolean } | null;
   /**

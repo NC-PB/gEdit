@@ -1,0 +1,38 @@
+{
+  "about": "The same lathe in G-code system B: G90 is absolute positioning and moves nothing, G92 sets the coordinate system (data), G33 is the thread pass, G78 the threading cycle (a lead, so a thread); U and W are incremental. G77 and G79 are its single-pass turning and facing cycles; G28 is a rapid.",
+  "machine": {"variants": {"gcodeSystem": "B"}},
+  "input": [
+    "G90 G92 X100. Z100.",
+    "G0 X60. Z2.",
+    "G1 Z-20. F0.2",
+    "U-2.",
+    "G33 Z-30. F1.5",
+    "G0 X62.",
+    "G78 X48. Z-30. F1.5",
+    "G0 U5. W5.",
+    "G1",
+    "G1 X50. F0.2",
+    "G77 X48. Z-20. F0.2",
+    "X46.",
+    "G79 X20. Z-2. F0.2",
+    "G1 X58.",
+    "G28 U0. W0."
+  ],
+  "lines": {
+    "1": null,
+    "2": "rapid",
+    "3": "linear",
+    "4": "linear",
+    "5": "thread",
+    "6": "rapid",
+    "7": "thread",
+    "8": "rapid",
+    "9": null,
+    "10": "linear",
+    "11": "cycle",
+    "12": "cycle",
+    "13": "cycle",
+    "14": "linear",
+    "15": "rapid"
+  }
+}

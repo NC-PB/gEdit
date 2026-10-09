@@ -214,6 +214,9 @@ describe('the shipped Fanuc databases', () => {
       lengthComp: ['on', 'off'],
       exitSpeed: [],
       language: [],
+      // Phase 3 (P3a prelude; P3.7 sets it on G2 and G3): an arc, for the motion colours; a
+      // single-pass turning or facing cycle (A G90, G94; B G77, G79), a cycle to the colours.
+      path: ['arc', 'cycle'],
     };
     for (const e of entriesOf(dialect)) {
       for (const [member, value] of Object.entries(e.sets ?? {})) {
@@ -314,9 +317,10 @@ describe('the lathe database of G-code system A (§8.2)', () => {
     expect(entry(A, 'G98')?.group).toBe('feedmode');
     expect(entry(A, 'G99')?.group).toBe('feedmode');
     for (const code of ['G90', 'G92', 'G94']) expect(entry(A, code)?.group, code).toBe('motion');
-    // M10 (WP10.2): single cycles cut, so they are feed moves to the program checks.
-    expect(entry(A, 'G90')?.sets).toEqual({ motion: 'feed' });
-    expect(entry(A, 'G94')?.sets).toEqual({ motion: 'feed' });
+    // M10 (WP10.2): single cycles cut, so they are feed moves to the program checks; each
+    // block is a whole pass, which the motion colours show as a cycle (`path: 'cycle'`).
+    expect(entry(A, 'G90')?.sets).toEqual({ motion: 'feed', path: 'cycle' });
+    expect(entry(A, 'G94')?.sets).toEqual({ motion: 'feed', path: 'cycle' });
   });
 
   it('knows that G92 is a thread here and not a coordinate set', () => {

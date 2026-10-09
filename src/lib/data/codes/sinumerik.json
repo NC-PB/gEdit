@@ -104,7 +104,7 @@
       "code": "G2",
       "group": "motion",
       "modal": true,
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "arc" },
       "label": "Arc, clockwise",
       "description": "Cuts an arc clockwise to the end point in the axis words. I, J and K give the centre."
     },
@@ -112,7 +112,7 @@
       "code": "G3",
       "group": "motion",
       "modal": true,
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "arc" },
       "label": "Arc, counter-clockwise",
       "description": "Cuts an arc counter-clockwise, described the same way as G2."
     },
@@ -120,7 +120,7 @@
       "code": "CIP",
       "group": "motion",
       "modal": true,
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "arc" },
       "label": "Arc through a point",
       "description": "Cuts an arc through an intermediate point given with I1=, J1= and K1=.",
       "params": [
@@ -133,7 +133,7 @@
       "code": "CT",
       "group": "motion",
       "modal": true,
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "arc" },
       "label": "Arc, tangential",
       "description": "Cuts an arc that joins the path before it without a corner. Only the end point is given."
     },
@@ -2109,6 +2109,7 @@
     {
       "code": "MCALL",
       "group": "cycle",
+      "sets": { "cycle": "call-modal-next" },
       "label": "Modal cycle call",
       "description": "Makes the cycle or subprogram written after it run after every following block that moves, until MCALL stands on its own."
     },

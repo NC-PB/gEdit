@@ -19,6 +19,7 @@ import { compare } from '$lib/app/compare';
 import { dialogs } from '$lib/app/dialogs';
 import { external } from '$lib/app/external';
 import { files } from '$lib/app/fileOps';
+import { modal } from '$lib/app/modalService';
 import { modals } from '$lib/app/modals';
 import { outline } from '$lib/app/outlineService';
 import { recovery } from '$lib/app/recovery';
@@ -74,4 +75,5 @@ export const ctx: AppContext = {
   recovery,
   channels,
   userConfig,
+  modal,
 };

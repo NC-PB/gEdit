@@ -721,7 +721,7 @@ class Block:
         self.q_args: List[Arg] = []
         #: (entry or None, call token, line) of every call.
         self.calls: List[Tuple[Optional[Dict[str, Any]], gedit_nc.Token, Line]] = []
-        #: A keyword of the database's cycle group that switches nothing (`MCALL`).
+        #: A keyword that makes the call behind it modal (`sets.cycle: 'call-modal-next'`, `MCALL`).
         self.modal_keyword = False
         #: The entries of this block's cycle calls (`CYCL CALL POS`, `M99`).
         self.call_entries: List[Dict[str, Any]] = []
@@ -859,7 +859,7 @@ def read_block(block: Block, entry_of: Any, letters: frozenset) -> None:
                     if entry.get("group") == "cycle":
                         if joined is None and behind >= 0:
                             block.generic_cycle = "%s %s" % (name, number)
-                        if entry.get("sets") is None:
+                        if sets_of(entry).get("cycle") == "call-modal-next":
                             block.modal_keyword = True
                 if behind >= 0:
                     consumed = behind

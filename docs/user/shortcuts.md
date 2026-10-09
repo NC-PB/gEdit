@@ -41,10 +41,17 @@ a broken keyboard.
 |---|---|
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
 | `Cmd/Ctrl+Alt+O` | Switch tab… (pick from a list) |
+| `Cmd/Ctrl+Alt+A` | Code Inspector — show or hide the [inspector](inspector.md) on the left |
 | `F1` | Command palette |
 
+On Windows and Linux, `Ctrl+Alt+A` is `AltGr+A` on some keyboard layouts (a Polish layout types
+`ą` with it). If the key types a letter on your keyboard, use the **Code Inspector** button on the
+View tab (*Panels*) or the palette; they do the same.
+
 The side panel, the bottom panel, the Output panel, the display switches and the zoom are
-on the View tab, without shortcuts.
+on the View tab, without shortcuts. So are **Motion Colors** (View tab, *Lines*) and
+**Edit Value at Cursor…** (palette: *Inspector: Edit Value at Cursor…*), which changes the number
+under the cursor; see [Understanding a block](inspector.md).
 
 ## Moving around the program
 

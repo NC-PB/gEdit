@@ -727,7 +727,7 @@
       "code": "G90",
       "group": "motion",
       "modal": true,
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "cycle" },
       "label": "Turning pass",
       "description": "Cuts one outside or inside turning pass, straight or tapered, and returns to the start point. It belongs to the motion group, so the next G00 or G01 ends it. On a mill and in G-code system B the same number means absolute positions instead.",
       "params": [
@@ -784,7 +784,7 @@
       "code": "G94",
       "group": "motion",
       "modal": true,
-      "sets": { "motion": "feed" },
+      "sets": { "motion": "feed", "path": "cycle" },
       "label": "Facing pass",
       "description": "Cuts one facing pass, square or tapered, and returns to the start point. It belongs to the motion group, so the next G00 or G01 ends it. On a mill and in G-code system B the same number means feed per minute instead; on a lathe in system A the feed modes are G98 and G99.",
       "params": [

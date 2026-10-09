@@ -1,0 +1,38 @@
+/* Motion colours (Phase 3 plan AD-34, §6.6; P3.7). Owner: P3.7.
+
+   Imported by `motionColors.ts`, so the feature carries its own styles.
+
+   A mark is one thin bar in the line-decorations margin, between the line numbers and the
+   text. The class `gedit-motion-mark` is the shape; `gedit-motion-<kind>` is the colour,
+   read from a custom property that `motionColors.ts` sets on the document element from
+   `MOTION_COLORS` whenever the theme changes (the fallbacks are the dark theme's values, for
+   the moment before the first theme is applied).
+
+   Monaco writes the width of the margin into the element's own style, so the width of the
+   bar has to be `!important`. Lines in a row with the same kind form one unbroken stripe. */
+
+.monaco-editor .gedit-motion-mark {
+  width: 3px !important;
+  margin-left: 3px;
+  box-sizing: border-box;
+}
+
+.monaco-editor .gedit-motion-rapid {
+  background-color: var(--gedit-motion-rapid, #e5534b);
+}
+
+.monaco-editor .gedit-motion-linear {
+  background-color: var(--gedit-motion-linear, #3fb950);
+}
+
+.monaco-editor .gedit-motion-arc {
+  background-color: var(--gedit-motion-arc, #58a6ff);
+}
+
+.monaco-editor .gedit-motion-thread {
+  background-color: var(--gedit-motion-thread, #d2a8ff);
+}
+
+.monaco-editor .gedit-motion-cycle {
+  background-color: var(--gedit-motion-cycle, #e3b341);
+}

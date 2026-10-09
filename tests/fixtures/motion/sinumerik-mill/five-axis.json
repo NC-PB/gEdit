@@ -1,0 +1,37 @@
+{
+  "about": "The Sinumerik milling profile: linear and circular moves with a rotary axis, the same codes as the lathe profile; a cycle call written behind MCALL, which drills nothing on its own line; the first move, before any code in force, gets none.",
+  "input": [
+    "%_N_SYNTH_MPF",
+    "G90 G17",
+    "X10 Y10",
+    "G0 X0 Y0 Z50",
+    "G1 Z-2 F200",
+    "X30 A10",
+    "G2 X40 Y10 I=AC(35) J=AC(10)",
+    "G3 X30 Y20 CR=10",
+    "CIP X20 Y30 I1=25 J1=25",
+    "CT X10 Y40",
+    "G0 Z50",
+    "MCALL CYCLE81(50,0,2,-10)",
+    "MCALL",
+    "G1 X0 F100",
+    "TRAFOOF"
+  ],
+  "lines": {
+    "1": null,
+    "2": null,
+    "3": null,
+    "4": "rapid",
+    "5": "linear",
+    "6": "linear",
+    "7": "arc",
+    "8": "arc",
+    "9": "arc",
+    "10": "arc",
+    "11": "rapid",
+    "12": null,
+    "13": null,
+    "14": "linear",
+    "15": null
+  }
+}

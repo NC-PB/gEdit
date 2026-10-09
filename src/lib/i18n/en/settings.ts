@@ -119,6 +119,10 @@ export default {
       help: 'Suggestions for addresses and codes of the current dialect.',
       choices: { auto: 'While typing', manual: 'Only when asked', off: 'Off' },
     },
+    motionColors: {
+      label: 'Color lines by how they move',
+      help: 'A colored mark beside each line that moves: rapid, straight, arc, thread or cycle, read from the codes in force.',
+    },
   },
 
   files: {

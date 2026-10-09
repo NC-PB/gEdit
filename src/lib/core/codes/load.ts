@@ -33,8 +33,9 @@ const SETS_VALUES = {
   distance: ['absolute', 'incremental'],
   units: ['mm', 'inch'],
   plane: ['XY', 'ZX', 'YZ'],
-  // P9: `define`, `call` and `call-modal` are the "defined cycle" of §7.4 (Klartext).
-  cycle: ['start', 'cancel', 'define', 'call', 'call-modal'],
+  // P9: `define`, `call` and `call-modal` are the "defined cycle" of §7.4 (Klartext);
+  // Phase 3: `call-modal-next` makes the cycle written behind it modal (Sinumerik `MCALL`).
+  cycle: ['start', 'cancel', 'define', 'call', 'call-modal', 'call-modal-next'],
   diameter: ['on', 'off', 'absolute-only'],
   // P9: which side a `speedLimit` bounds; checked against `speedLimit` in `readSets`.
   speedLimitBound: ['upper', 'lower'],
@@ -50,6 +51,9 @@ const SETS_VALUES = {
   lengthComp: ['on', 'off'],
   exitSpeed: ['zero'],
   language: ['iso', 'native'],
+  // Phase 3 (P3a prelude, P3.7): an arc rather than a straight line, for the motion colours;
+  // `cycle`: every block of the code is a whole pass (the lathe single-pass cycles).
+  path: ['arc', 'cycle'],
 } as const satisfies Record<string, readonly string[]>;
 
 /** P10: the `sets` members that are flags, `true` or absent (`false` is read as absent). */

@@ -105,7 +105,10 @@ Each row names the owning work package and the feature.
 | `files.ts` | WP1.6 | file commands, close guard, drag and drop, window title |
 | `help.ts` | WP2.4 | About and the shortcut reference |
 | `layoutPersist.ts` | WP2.3 | restores `ui.layout` and then follows it |
+| `inspector.ts` | P3.2b | the code inspector (left panel): `view.toggleInspector` (Mod+Alt+A), `inspector.editValue` (Phase 3, P3a; the prelude pinned them) |
 | `machineSelect.ts` | WP6.10 | machine status item and picker, `file.setMachine`, `machines.manage`, `machines.openFile` |
+| `modal.ts` | P3.1 | starts the modal service (`app/modalService.ts`), which keeps the modal state of every open document for the inspector, the hover and the motion colors (Phase 3, P3a) |
+| `motionColors.ts` | P3.7 | the motion colors beside every line that moves, `view.toggleMotionColors` (Phase 3, P3a; the prelude pinned it) |
 | `navigation.ts` | WP3.5 | `nav.goto` (Ctrl+G), `nav.nextTool` / `nav.prevTool` (F7 / Shift+F7) |
 | `ncBlockSkip.ts` | WP10.1 | NC tab "Block Skip": `nc.blockSkip.add` / `nc.blockSkip.remove` |
 | `ncCleanup.ts` | WP4.3 | NC tab "Cleanup": spaces, empty lines, comments, case |

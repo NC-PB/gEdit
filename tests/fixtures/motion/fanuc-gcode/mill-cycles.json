@@ -1,0 +1,43 @@
+{
+  "about": "Canned cycles on a mill: the line that starts a cycle, and the positions that run it, are cycles; G80 ends it and the lines after it follow the motion code again. A tapping cycle and a threading pass carry a lead, so they are threads; G76 on a mill is a fine boring cycle, a plain cycle. A rapid move cancels a modal cycle.",
+  "input": [
+    "G90 G17 G21",
+    "G0 X0 Y0",
+    "G81 X10. Y10. Z-5. R2. F150.",
+    "X20.",
+    "Y20.",
+    "G80",
+    "G1 X30. F300.",
+    "G83 X40. Y40. Z-20. Q3. R2. F100.",
+    "G0 X50.",
+    "G1 X60.",
+    "G84 X5. Y5. Z-10. R2. F1.25",
+    "X15.",
+    "G80",
+    "G32 Z-10. F1.5",
+    "X5.",
+    "G76 X10. Y10. Z-5. R1. Q0.5 F80.",
+    "G80",
+    "G0 Z100."
+  ],
+  "lines": {
+    "1": null,
+    "2": "rapid",
+    "3": "cycle",
+    "4": "cycle",
+    "5": "cycle",
+    "6": null,
+    "7": "linear",
+    "8": "cycle",
+    "9": "rapid",
+    "10": "linear",
+    "11": "thread",
+    "12": "thread",
+    "13": null,
+    "14": "thread",
+    "15": "thread",
+    "16": "cycle",
+    "17": null,
+    "18": "rapid"
+  }
+}

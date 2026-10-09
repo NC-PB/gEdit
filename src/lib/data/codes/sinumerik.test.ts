@@ -268,11 +268,11 @@ describe('what a code does to the modal state', () => {
     // G63 taps once: the move type in force before it applies again after its block.
     expect(entry('G63')?.group).toBe('nonmodal');
     // None of them is modal: a `CYCLE8x(…)` call drills once, at the position it stands
-    // at, and `MCALL` is what makes the next positioning blocks repeat it. The modal call
-    // is tracked by the interpreter over the block it stands on (§11 item 19), so MCALL
-    // itself neither starts nor cancels a cycle in the data.
+    // at, and `MCALL` is what makes the next positioning blocks repeat it. MCALL neither
+    // starts nor cancels a cycle in the data: it is the word that makes the cycle written
+    // behind it modal (`call-modal-next`, the interpreter's rule 11b), and alone it ends that.
     for (const code of starts) expect(entry(code)?.modal, code).toBeUndefined();
-    expect(entry('MCALL')?.sets).toBeUndefined();
+    expect(entry('MCALL')?.sets).toEqual({ cycle: 'call-modal-next' });
     expect(entry('MCALL')?.group).toBe('cycle');
     expect(codesWith((e) => e.sets?.cycle === 'cancel')).toEqual([]);
   });

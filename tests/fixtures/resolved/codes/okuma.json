@@ -165,7 +165,8 @@
         }
       ],
       "sets": {
-        "motion": "feed"
+        "motion": "feed",
+        "path": "arc"
       }
     },
     {
@@ -199,7 +200,8 @@
         }
       ],
       "sets": {
-        "motion": "feed"
+        "motion": "feed",
+        "path": "arc"
       }
     },
     {
@@ -1325,7 +1327,8 @@
         }
       ],
       "sets": {
-        "motion": "feed"
+        "motion": "feed",
+        "path": "arc"
       }
     },
     {
@@ -1357,7 +1360,8 @@
         }
       ],
       "sets": {
-        "motion": "feed"
+        "motion": "feed",
+        "path": "arc"
       }
     },
     {

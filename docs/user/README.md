@@ -16,6 +16,7 @@ the machine, not for the person who builds the editor — the build and design n
 | [Dialects](dialects.md) | Dialect profiles: what they decide, which six ship, how the dialect is picked |
 | [Machines](machines.md) | Machine configurations: what `X50` is worth on **your** control, how to tell gEdit, and how to move your machines to another computer |
 | [Your own profiles and code files](profiles.md) | Profiles for one shop, machine or folder, and your own G and M codes in the help; the Profiles page; when a profile of yours is used |
+| [Understanding a block](inspector.md) | The code inspector (what each word means on your machine and what is in force at the cursor, and changing a value from it), the hover with a cycle's parameters, and the motion colours |
 | [Transformations](transformations.md) | The NC tab: renumbering, removing block numbers, the five cleanups, block skip and selecting a tool's lines |
 | [Channels](channels.md) | Twin-turret and multi-path programs: finding the channels, the wait codes, and checking that the waits fit |
 | [Scripts](scripts.md) | Running Python scripts, the six that ship (feeds, speeds, tool list, program checks, extents, address arithmetic), and how to write one |
@@ -39,7 +40,7 @@ Across the top is the **ribbon**, with five tabs:
 | **Insert** | The ready-made blocks of the active dialect — Fanuc mill and Klartext only in this version; on a Fanuc lathe, Okuma or Sinumerik program the tab shows no blocks |
 | **NC** | Renumbering, removing block numbers, the cleanups, block skip and selecting a tool segment — see [Transformations](transformations.md) |
 | **Tools** | Compare ([Comparing two programs](#comparing-two-programs)), the scripts — see [Scripts](scripts.md) — and **Test Profile on Document** for [profiles of your own](profiles.md#testing-a-profile-on-a-program) |
-| **View** | The command palette, the panels, folding, display switches, zoom, theme, settings, the shortcut list and About |
+| **View** | The command palette, the panels (Program Map, Code Inspector, Results, Script Output), the motion-colour switch, folding, display switches, zoom, theme, settings, the shortcut list and About |
 
 Below it are the **tabs**, one per open program, then the editor, and at the bottom the
 **status bar**: the file on the left, and on the right the dialect, the machine, the
@@ -56,9 +57,10 @@ A dialect with a question mark (`Fanuc T?`) is a guess: the program fits none of
 well. Click it to keep the guess or to choose the control — see [When gEdit is not
 sure](dialects.md#when-gedit-is-not-sure).
 
-There are three panels:
+There are four panels:
 
 - **Program Map**, on the left (`View ▸ Side Panel`) — the structure of the program.
+- **Inspector**, on the left beside the Program Map, closed until you open it (`View ▸ Panels ▸ Code Inspector`, `Cmd/Ctrl+Alt+A`) — what each word of the block at the cursor means on your machine, and what is in force after it; see [Understanding a block](inspector.md).
 - **Results**, at the bottom — what a transformation skipped, and the tables and findings
   a script reports. A row with a line number jumps there when you click it.
 - **Script Output**, at the bottom (`View ▸ Script Output`) — the raw output of a script
@@ -454,6 +456,8 @@ is that program.
 | A line, or a block number | `Ctrl+G`, then `120` for the line or `N120` for the block |
 | The next or previous tool change | `F7` / `Shift+F7`, wrapping around with a message |
 | The structure of the program | The Program Map panel |
+| What each word of this block means, and what is in force here | The inspector (`Cmd/Ctrl+Alt+A`) — see [Understanding a block](inspector.md) |
+| Which lines are rapids, straight moves, arcs, threads or cycles | The coloured mark beside the line numbers — see [Motion colours](inspector.md#motion-colours) |
 | A place you keep coming back to | A bookmark: `Cmd/Ctrl+F2` to set or clear it, `F2` and `Shift+F2` to step through them |
 | Text | `Cmd/Ctrl+F`, the editor's own find and replace |
 | Every hit of an address, a value or some text, in a list | `Cmd/Ctrl+Shift+F` (Find All…) — see [Searching](#searching) |
@@ -580,6 +584,13 @@ that is exactly the place where scaling a feed would cut a different thread.
 ![The hover on a G code](../screenshots/hover.png)
 
 *`G81`: what it does, that it is a cycle and modal, and that it wants Z, R and F.*
+
+Once gEdit has read the program up to the line, the hover also shows what the word means **in
+this block**: a table of a cycle's parameters with the values written, and one line for an
+address word such as `X` or `F` (target or incremental, diameter or radius, feed per minute or
+per revolution, a thread lead, surface speed and its limit). For a number that depends on your
+machine it shows what the number is worth on the machine chosen for the document, or, with none
+chosen, every reading. See [The hover in context](inspector.md#the-hover-in-context).
 
 Typing offers completions from the same database: the codes of the active dialect with
 their descriptions. Both are switched in `Settings ▸ Assistance`, and completion can be
@@ -850,7 +861,7 @@ in lower case, on every shipped dialect.
 |---|---|
 | **Appearance** | Theme (System, Light or Dark), editor font and size |
 | **Editor** | Tab width, spaces or tabs, whitespace display, word wrap, minimap, line numbers, current-line highlight, sticky scroll, text drag and drop, copy without a selection |
-| **Assistance** | Hover help on or off; completion automatic, manual or off |
+| **Assistance** | Hover help on or off; completion automatic, manual or off; [colouring the lines by how they move](inspector.md#motion-colours) on or off |
 | **Files** | Length of the recent list, what happens when a file changes outside gEdit, the dialect new files start in, and what [Never losing work](#never-losing-work) sets: where the backup copy goes and how many versions to keep, and the switches for crash recovery, session restore and per-file memory |
 | **Scripts** | The Python interpreter, extra script folders, the time limit for a run, whether the bundled scripts are listed — and the path of your own scripts folder |
 | **Machines** | Your machine configurations: add, edit, duplicate, remove, import and export, and which one is the default for a dialect — see [Machines](machines.md) |

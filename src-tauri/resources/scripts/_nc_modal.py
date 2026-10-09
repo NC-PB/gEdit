@@ -460,6 +460,13 @@ class ModalInterpreter:
         ``activeCycle`` is the defined cycle, until a ``'call'`` or the next ``'define'``.
         Nothing else ends a definition — no call, no tool change. A cycle that takes effect
         where it is defined carries none of the three values and touches none of this;
+    11b. **a cycle made modal by the word in front of it** (Phase 3; Sinumerik
+        ``MCALL CYCLE81(…)``). A block that holds a ``'call-modal-next'`` entry ends the
+        modal call in force; a ``'start'`` cycle written in the same block does **not** run
+        there (``block.cycle`` stays empty) but becomes the active cycle (``activeCycle``,
+        its ``pitchFeed`` from the entry) and runs after every following **positioning
+        block** (``block.cycle``), as under rule 11, until the word stands alone or comes
+        with another cycle. Neither a motion code nor a cycle cancel ends it;
     12. a speed limit whose ``sets.speedLimitBound`` is ``'lower'`` (Sinumerik ``G25``)
         marks the block's speed word as no speed (``block.speedLimit``) but is not the
         clamp: ``speedLimit`` is the **upper** limit in force (plan §7.4).
@@ -575,6 +582,14 @@ class ModalInterpreter:
         # is unchanged.
         self._defined_cycle: Optional[Dict[str, Any]] = None
         self._modal_call: Optional[Dict[str, Any]] = None
+        # Rule 11b: the cycle a `'call-modal-next'` word (Sinumerik `MCALL`) made modal, and
+        # whether the block being applied holds such a word. Only a database that has one
+        # looks for it.
+        self._mcall: Optional[Dict[str, Any]] = None
+        self._block_modal_next = False
+        self._has_modal_next = any(
+            _sets_of(entry).get("cycle") == "call-modal-next" for entry in self.codes if isinstance(entry, dict)
+        )
         # P10 (rules 13 and 14): the open coordinate frames, innermost last, and tool centre
         # point control. Both are off at power-on: nothing has opened a frame, and a control
         # that powered on under TCP would be one nobody can read a program for.
@@ -678,7 +693,15 @@ class ModalInterpreter:
         # word is read (rules 4 and 6 both depend on it).
         self._axis_plane = False
         self._read_values(tokens)
-        for code in _codes_in(tokens, self._entries):
+        codes = _codes_in(tokens, self._entries)
+        # Rule 11b: a `'call-modal-next'` word ends the modal call in force; the cycle written
+        # behind it in the same block (if any) becomes the new one.
+        self._block_modal_next = self._has_modal_next and any(
+            _sets_of(self._entries.get(normalize_code(code))).get("cycle") == "call-modal-next" for code in codes
+        )
+        if self._block_modal_next:
+            self._mcall = None
+        for code in codes:
             self._apply_code(code, line)
         if self._axis_plane:
             self._apply_tool_axis(tokens)
@@ -733,6 +756,13 @@ class ModalInterpreter:
         cycle = sets.get("cycle")
         if cycle in ("define", "call", "call-modal"):
             self._apply_defined(cycle, canonical, line, pitch)
+            return
+        if cycle == "call-modal-next":
+            return  # rule 11b: read in `update`
+        if cycle == "start" and self._block_modal_next:
+            # Rule 11b: written behind `MCALL`, the cycle does not run here; it runs after
+            # every following positioning block until the word stands alone.
+            self._mcall = {"code": canonical, "line": line, "pitchFeed": pitch}
             return
         if cycle == "cancel":
             # Rule 2: the cycle is off, and with it the ambiguity it was carrying.
@@ -934,12 +964,19 @@ class ModalInterpreter:
             self._block_run = dict(self._defined_cycle)
 
     def _apply_modal_call(self, tokens: "Sequence[Token]") -> None:
-        """Rule 11: a positioning block under a modal call runs the defined cycle."""
-        if self._modal_call is None or self._defined_cycle is None or self._block_run is not None:
+        """Rule 11: a positioning block under a modal call runs the defined cycle. Rule 11b:
+        one under a cycle a ``'call-modal-next'`` word made modal runs that cycle (not the
+        block that holds the word itself)."""
+        if self._block_run is not None:
             return
-        if not self._positions(tokens):
+        if self._modal_call is not None and self._defined_cycle is not None:
+            if self._positions(tokens):
+                self._block_run = dict(self._defined_cycle)
             return
-        self._block_run = dict(self._defined_cycle)
+        if self._mcall is None or self._block_modal_next:
+            return
+        if self._positions(tokens):
+            self._block_run = dict(self._mcall)
 
     def _positions(self, tokens: "Sequence[Token]") -> bool:
         """Whether the line moves to a position: an axis word with a value, and no code of
@@ -1131,6 +1168,8 @@ class ModalInterpreter:
             return dict(self._active_cycle)
         if self._modal_call is not None and self._defined_cycle is not None:
             return dict(self._defined_cycle)
+        if self._mcall is not None:
+            return dict(self._mcall)
         return None
 
     def _block_state(self) -> Dict[str, Any]:

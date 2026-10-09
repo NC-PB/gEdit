@@ -1,0 +1,29 @@
+{
+  "about": "The reference returns and the machine-coordinate block move at rapid whatever the motion in force (G28, G30 and G53 set no modal motion): after G01 they are rapids, also with G01 written in the same block, and the block after them follows G01 again.",
+  "input": [
+    "O0300 (REFERENCE RETURN)",
+    "G90 G54 G0 X0. Y0. Z50.",
+    "G1 Z-2. F200.",
+    "G28 G91 Z0.",
+    "G90 G1 X40. F200.",
+    "G53 Z0.",
+    "G01 G28 X0.",
+    "X10.",
+    "G30 Z0.",
+    "G28 G01 Z0.",
+    "M30"
+  ],
+  "lines": {
+    "1": null,
+    "2": "rapid",
+    "3": "linear",
+    "4": "rapid",
+    "5": "linear",
+    "6": "rapid",
+    "7": "rapid",
+    "8": "linear",
+    "9": "rapid",
+    "10": "rapid",
+    "11": null
+  }
+}

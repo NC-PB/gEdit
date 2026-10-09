@@ -910,8 +910,8 @@ def tap_speeds(
     Owner decision of 2026-09-27: a tap's speed and feed are tied by the pitch, so the speed
     is left as written (the module docstring, "Tapping"). A block taps when the tracker says
     so (``FeedModeTracker.tapping``: a code of the block, the cycle or the mode in force),
-    while a modal call of a tapping call repeats after every move (a keyword of the
-    database's ``cycle`` group without ``sets`` in front of the call, `MCALL CYCLE840(…)`,
+    while a modal call of a tapping call repeats after every move (a keyword whose
+    ``sets.cycle`` is ``'call-modal-next'`` in front of the call, `MCALL CYCLE840(…)`,
     until it stands alone), and while a block runs a tapping cycle that a **keyword**
     defined (`CYCL DEF 207`: a code of the ``cycle`` group that starts none runs it, and
     the next cycle start defines another cycle). Every speed word of such a block is a tap
@@ -993,7 +993,7 @@ def tap_speeds(
                 runs = True
         keywords = [
             entry for entry, kind in written_codes
-            if kind == "keyword" and entry.get("group") == "cycle" and entry.get("sets") is None
+            if kind == "keyword" and sets_of(entry).get("cycle") == "call-modal-next"
         ]
         calls = [entry for entry, kind in written_codes if kind == "call"]
         if keywords:

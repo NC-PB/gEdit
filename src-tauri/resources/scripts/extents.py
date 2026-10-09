@@ -1334,10 +1334,18 @@ class Extents:
                 self.pos[axis] = None
         self.last_polar = None
         # Where the cycle's positions are its parameters (a defined cycle, a call with
-        # arguments), the depth it works to is in none of the block's axis words.
-        if cycle == "define" or (entry is not None and self.written_as_call(written, running)):
+        # arguments), the depth it works to is in none of the block's axis words. A cycle
+        # that a word in front of it made modal (`MCALL CYCLE83(…)`, rule 11b) runs in the
+        # positioning blocks after it, with the parameters of the line that wrote it.
+        modal = as_dict(state.get("activeCycle"))
+        made_modal = (
+            block.get("cycle") == running
+            and modal.get("code") == running
+            and not any(c == running for _, c, _ in written.entries)
+        )
+        if cycle == "define" or (entry is not None and (self.written_as_call(written, running) or made_modal)):
             defined = state.get("definedCycle") or {}
-            at = defined.get("line") if cycle == "define" else line
+            at = defined.get("line") if cycle == "define" else modal.get("line") if made_modal else line
             self.cycle_miss("%s (line %d)" % (running, at or line), running, line, plane)
 
     def written_as_call(self, written, code: str) -> bool:

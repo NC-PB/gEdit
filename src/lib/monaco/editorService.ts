@@ -124,7 +124,12 @@ export function normalizeToLF(text: string): string {
 /** The lines of `textLF`, 1-based inclusive and clamped to the text. */
 export function linesOf(textLF: string, startLine: number, endLine: number): string[] {
   if (endLine < startLine) return [];
-  const lines = textLF.split('\n');
+  return sliceLines(textLF.split('\n'), startLine, endLine);
+}
+
+/** `linesOf` over text that is split already. */
+function sliceLines(lines: readonly string[], startLine: number, endLine: number): string[] {
+  if (endLine < startLine) return [];
   const from = Math.max(1, startLine);
   const to = Math.min(lines.length, endLine);
   return from > to ? [] : lines.slice(from - 1, to);
@@ -245,6 +250,28 @@ export function createEditorService(deps: EditorServiceDeps): EditorService {
 
   const models = new Map<DocId, ModelEntry>();
   const pending = new Map<DocId, PendingModel>();
+  /**
+   * The normalized, split text of a queued model. Reading a queued document line by line
+   * (the modal index, the inspector, the outline) would otherwise normalize and split the
+   * whole text again for every line; the spec object is replaced whenever its text is, so the
+   * entry is never stale.
+   */
+  const pendingSplit = new WeakMap<PendingModel, string[]>();
+  const splitOf = (spec: PendingModel): string[] => {
+    let lines = pendingSplit.get(spec);
+    if (lines === undefined) {
+      lines = normalizeToLF(spec.textLF).split('\n');
+      pendingSplit.set(spec, lines);
+    }
+    return lines;
+  };
+  /** A queued model with another language or EOL: the text is the same, so is its split. */
+  const respec = (id: DocId, spec: PendingModel, patch: Partial<PendingModel>): void => {
+    const next = { ...spec, ...patch };
+    const split = pendingSplit.get(spec);
+    if (split !== undefined) pendingSplit.set(next, split);
+    pending.set(id, next);
+  };
   const viewStates = new Map<DocId, MonacoApi.editor.ICodeEditorViewState>();
   const editorDisposables: MonacoApi.IDisposable[] = [];
 
@@ -524,14 +551,14 @@ export function createEditorService(deps: EditorServiceDeps): EditorService {
       const entry = models.get(id);
       if (entry) return entry.model.getLineCount();
       const spec = pending.get(id);
-      return spec ? normalizeToLF(spec.textLF).split('\n').length : 0;
+      return spec ? splitOf(spec).length : 0;
     },
 
     getLines(id: DocId, startLine: number, endLine: number): string[] {
       const entry = models.get(id);
       if (!entry) {
         const spec = pending.get(id);
-        return spec ? linesOf(normalizeToLF(spec.textLF), startLine, endLine) : [];
+        return spec ? sliceLines(splitOf(spec), startLine, endLine) : [];
       }
       const last = entry.model.getLineCount();
       const from = Math.max(1, startLine);
@@ -558,7 +585,7 @@ export function createEditorService(deps: EditorServiceDeps): EditorService {
     setLanguage(id: DocId, languageId: string): void {
       const spec = pending.get(id);
       if (spec) {
-        pending.set(id, { ...spec, languageId });
+        respec(id, spec, { languageId });
         return;
       }
       const entry = models.get(id);
@@ -568,7 +595,7 @@ export function createEditorService(deps: EditorServiceDeps): EditorService {
     setModelEol(id: DocId, eol: Eol): void {
       const spec = pending.get(id);
       if (spec) {
-        pending.set(id, { ...spec, eol });
+        respec(id, spec, { eol });
         return;
       }
       const entry = models.get(id);

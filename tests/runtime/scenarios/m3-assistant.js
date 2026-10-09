@@ -17,6 +17,7 @@
 
 import { scenario } from '../lib/index.js'
 import { context, hoverAt, revealLine, suggestAt, suggestShowing } from './m3-common.js'
+import { hoverParts } from './p3-common.js'
 
 /** A Fanuc program with one line per question the hover and the completion must answer. */
 const FANUC = [
@@ -64,6 +65,19 @@ scenario('m3-assistant', { timeout: 300 }, async (h) => {
   h.check('hover on G83 lists the words the cycle needs', /Required:\s*Z,\s*R,\s*Q,\s*F/.test(g83), g83)
   h.check('the hover is rendered markdown, not its source', !g83.includes('**') && !g83.includes('\\.') && !g83.includes('_Cycle'), g83)
 
+  // P3a (intentional change, plan "Intentional behaviour changes when P3a lands"): once the program has been read
+  // (`ctx.modal`), the hover of a cycle word also shows the cycle's parameters with the values of its block,
+  // after the text above, which is unchanged. N10 G83 X10. Y20. Z-5. R2. Q1. F100
+  await ctx.modal.whenReady(fanucId)
+  // (a hover that shows what the widget already holds reads as "nothing here", so look at another word in between)
+  await hoverAt(h, fanucId, 4, 6)
+  const g83Table = await hoverAt(h, fanucId, 3, 6)
+  const g83Parts = hoverParts()
+  const cell = (/** @type {string} */ word) => g83Parts.rows.find((r) => r.word === word)?.written
+  h.check('P3a: with the program read, G83 also shows a table of its parameters, headed by the cycle', g83Parts.heading === ctx.t('assistant.context.table.title', { code: 'G83' }) && g83Parts.rows.length >= 6, g83Parts.heading)
+  h.check('P3a: and the table holds the values of the block: X 10., Y 20., Z -5., R 2., Q 1., F 100', ['X:10.', 'Y:20.', 'Z:-5.', 'R:2.', 'Q:1.', 'F:100'].every((pair) => cell(pair.split(':')[0]) === pair.split(':')[1]), g83Parts.rows.map((r) => `${r.word}=${r.written}`))
+  h.check('P3a: everything the Phase 2 hover said is still there, first', g83Table.includes('Peck drilling cycle') && g83Table.includes('chips clear') && g83Table.indexOf('Peck drilling cycle') < g83Table.indexOf(ctx.t('assistant.context.table.title', { code: 'G83' })), g83Table.slice(0, 200))
+
   const m8 = await hoverAt(h, fanucId, 4, 6)
   h.check('hover on M8 says the coolant goes on', m8.includes('M8') && m8.includes('Coolant on'), m8)
   h.check('hover on M8 is the coolant group, not the cycle group', m8.includes('Coolant') && !m8.includes('Peck'), m8)
@@ -71,6 +85,9 @@ scenario('m3-assistant', { timeout: 300 }, async (h) => {
   // ------------------------------------------------------------ hover: an address, a variable, an unknown code
   const x = await hoverAt(h, fanucId, 3, 10)
   h.check('hover on X10. explains the address', x.includes('X') && x.includes('X axis'), x)
+  // P3a: one context line after it, for the word's place in the modal state (the program has been read).
+  const xContext = hoverParts()
+  h.check('P3a: the explanation is followed by one context line, the last paragraph: X of this block is a parameter of its G83', xContext.last.startsWith('X — ') && xContext.last.includes('(G83)') && xContext.paragraphs.length >= 2 && xContext.paragraphs[0].startsWith('X —'), xContext.paragraphs)
 
   const variable = await hoverAt(h, fanucId, 5, 6)
   h.check('hover on #101 gives its kind and no value', variable.includes('Variable') && variable.includes('Only the control knows the value'), variable)
@@ -191,6 +208,8 @@ scenario('m3-assistant', { timeout: 300 }, async (h) => {
   await h.waitFor(() => !!h.q('settings-page', { category: 'assistance' }), { timeout: 3000 })
   const hoverBox = control(h, 'assist.hover')
   h.check('the Assistance page offers the hover switch and the completion mode', !!hoverBox && !!field(h, 'assist.completion'), h.qa('form-field').map((e) => e.dataset.field))
+  // P3a: the page gained one switch, Motion Colors, on by default.
+  h.check('P3a: and the Motion Colors switch, which is on', !!control(h, 'assist.motionColors') && control(h, 'assist.motionColors')?.checked === true, h.qa('form-field').map((e) => e.dataset.field))
   if (hoverBox) {
     hoverBox.checked = false
     hoverBox.dispatchEvent(new Event('change', { bubbles: true }))

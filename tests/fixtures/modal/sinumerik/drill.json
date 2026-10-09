@@ -1,5 +1,5 @@
 {
-  "about": "Cycles written as calls are codes of their own block: CYCLE83 drills, CYCLE84 taps with the lead and the speed among its own arguments (so its block carries no pitch feed), and MCALL makes the call modal, which the interpreter tracks for the calling block only. A word written with = is a value and never a code: S3=2400 is spindle 3's speed and M3=3 switches spindle 3, so neither is the plain S or the M3 of the spindle this state follows.",
+  "about": "Cycles written as calls are codes of their own block: CYCLE83 drills, CYCLE84 taps with the lead and the speed among its own arguments (so its block carries no pitch feed), and MCALL makes the call modal: the cycle written behind it does not run on the MCALL line, it becomes the active cycle and runs in every positioning block after it, until MCALL stands alone. A word written with = is a value and never a code: S3=2400 is spindle 3's speed and M3=3 switches spindle 3, so neither is the plain S or the M3 of the spindle this state follows.",
   "input": "../../nc/sinumerik/s02-drill.MPF",
   "states": [
     { "line": 5, "after": { "groups": { "diametermode": "DIAMON" }, "diameter": "on", "plane": "ZX" } },
@@ -21,8 +21,11 @@
       "after": { "speed": "1600", "groups": { "spindle": "M5" } }
     },
     { "line": 23, "after": { "feed": "120" } },
-    { "line": 24, "after": { "block": { "cycle": "CYCLE83" }, "activeCycle": null } },
-    { "line": 25, "after": { "block": { "cycle": null } } },
+    { "line": 24, "after": { "block": { "cycle": null, "pitchFeed": false }, "activeCycle": "CYCLE83" } },
+    { "line": 25, "after": { "block": { "cycle": "CYCLE83" }, "activeCycle": "CYCLE83" } },
+    { "line": 27, "after": { "block": { "cycle": "CYCLE83" } } },
+    { "line": 28, "after": { "block": { "cycle": null }, "activeCycle": null } },
+    { "line": 29, "after": { "block": { "cycle": null }, "activeCycle": null } },
     { "line": 34, "after": { "speed": "500", "groups": { "spindle": "M3" } } },
     {
       "line": 36,

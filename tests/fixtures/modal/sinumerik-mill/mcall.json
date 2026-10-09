@@ -1,0 +1,14 @@
+{
+  "about": "Rule 11b: MCALL in front of a cycle call makes the cycle modal. The MCALL line itself drills nothing (block.cycle stays empty) but makes CYCLE83 the active cycle; every positioning block after it runs the cycle, a block with one axis word as well; MCALL alone ends it, and a move after that runs nothing.",
+  "input": "../../nc/sinumerik-mill/m01-plate.MPF",
+  "states": [
+    { "line": 30, "after": { "activeCycle": null, "block": { "cycle": null } } },
+    { "line": 31, "after": { "activeCycle": "CYCLE83", "block": { "cycle": null, "pitchFeed": false } } },
+    { "line": 32, "after": { "activeCycle": "CYCLE83", "block": { "cycle": "CYCLE83", "pitchFeed": false } } },
+    { "line": 33, "after": { "activeCycle": "CYCLE83", "block": { "cycle": "CYCLE83" } } },
+    { "line": 34, "after": { "activeCycle": "CYCLE83", "block": { "cycle": "CYCLE83" } } },
+    { "line": 35, "after": { "activeCycle": "CYCLE83", "block": { "cycle": "CYCLE83" } } },
+    { "line": 36, "after": { "activeCycle": null, "block": { "cycle": null } } },
+    { "line": 37, "after": { "activeCycle": null, "block": { "cycle": null } } }
+  ]
+}

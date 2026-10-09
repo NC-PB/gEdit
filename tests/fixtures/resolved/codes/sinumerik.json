@@ -109,7 +109,8 @@
       "label": "Arc, clockwise",
       "modal": true,
       "sets": {
-        "motion": "feed"
+        "motion": "feed",
+        "path": "arc"
       }
     },
     {
@@ -119,7 +120,8 @@
       "label": "Arc, counter-clockwise",
       "modal": true,
       "sets": {
-        "motion": "feed"
+        "motion": "feed",
+        "path": "arc"
       }
     },
     {
@@ -146,7 +148,8 @@
         }
       ],
       "sets": {
-        "motion": "feed"
+        "motion": "feed",
+        "path": "arc"
       }
     },
     {
@@ -156,7 +159,8 @@
       "label": "Arc, tangential",
       "modal": true,
       "sets": {
-        "motion": "feed"
+        "motion": "feed",
+        "path": "arc"
       }
     },
     {
@@ -2446,7 +2450,10 @@
       "code": "MCALL",
       "description": "Makes the cycle or subprogram written after it run after every following block that moves, until MCALL stands on its own.",
       "group": "cycle",
-      "label": "Modal cycle call"
+      "label": "Modal cycle call",
+      "sets": {
+        "cycle": "call-modal-next"
+      }
     },
     {
       "code": "STOPRE",

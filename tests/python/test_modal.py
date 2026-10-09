@@ -999,6 +999,7 @@ class TestDefinedCycle(ModalTestCase):
         self.assertEqual([self.summary(state)[0] for state in states], ["CYCL DEF 200"] * 3)
         self.assertEqual(states[2]["block"]["cycle"], "CYCL DEF 200")
 
+
     def test_a_defined_cycle_never_makes_a_feed_word_a_lead(self) -> None:
         # The tap's pitch is its own parameter; the F of the block that calls it is the
         # positioning feed. The pitch flag stays on the definition.
@@ -1058,6 +1059,70 @@ class TestDefinedCycle(ModalTestCase):
             seen,
             [("CYCL DEF 207", True, "CYCL DEF 207"), (None, False, None), (None, False, None), (None, False, None)],
         )
+
+
+
+#: A database with a word that makes the cycle written behind it modal (the Sinumerik shape,
+#: as small as rule 11b needs).
+MODAL_NEXT_CODES: List[Dict[str, Any]] = [
+    {"code": "MCALL", "group": "cycle", "label": "modal call", "sets": {"cycle": "call-modal-next"}},
+    {"code": "CYCLE81", "group": "cycle", "label": "drill", "sets": {"cycle": "start"}},
+    {"code": "CYCLE840", "group": "cycle", "label": "tap", "pitchFeed": True, "tapping": True,
+     "sets": {"cycle": "start"}},
+    {"code": "G0", "group": "motion", "modal": True, "label": "rapid", "sets": {"motion": "rapid"}},
+    {"code": "G1", "group": "motion", "modal": True, "label": "line", "sets": {"motion": "feed"}},
+]
+
+
+class TestModalCallPrefix(ModalTestCase):
+    """Rule 11b: a word in front of a cycle makes it modal; it runs in the positioning blocks after it."""
+
+    def run_lines(self, lines: Sequence[str], codes: Sequence[Dict[str, Any]] = MODAL_NEXT_CODES) -> List[Dict[str, Any]]:
+        return self.walk(helpers.effective_context("sinumerik-mill")["profile"], codes, lines)
+
+    @staticmethod
+    def summary(state: Dict[str, Any]) -> tuple:
+        active = state["activeCycle"]
+        return (active["code"] if active else None, state["block"]["cycle"], state["block"]["pitchFeed"])
+
+    def test_the_cycle_runs_after_the_word_not_on_its_line_until_the_word_stands_alone(self) -> None:
+        states = self.run_lines(
+            [
+                "MCALL CYCLE81(10,0,2,-5)",
+                "X10 Y10",
+                "G0 X20",
+                "M8",
+                "MCALL CYCLE840(10,0,2,-20,,0,1)",
+                "X30",
+                "MCALL MYHOLE(1)",
+                "X40",
+                "MCALL CYCLE81(10,0,2,-5)",
+                "MCALL",
+                "X50",
+            ]
+        )
+        self.assertEqual(
+            [self.summary(state) for state in states],
+            [
+                ("CYCLE81", None, False),
+                ("CYCLE81", "CYCLE81", False),
+                ("CYCLE81", "CYCLE81", False),
+                ("CYCLE81", None, False),
+                ("CYCLE840", None, False),
+                ("CYCLE840", "CYCLE840", False),
+                (None, None, False),
+                (None, None, False),
+                ("CYCLE81", None, False),
+                (None, None, False),
+                (None, None, False),
+            ],
+        )
+        self.assertEqual(states[0]["activeCycle"], {"code": "CYCLE81", "line": 1, "pitchFeed": False})
+        self.assertEqual(states[5]["activeCycle"], {"code": "CYCLE840", "line": 5, "pitchFeed": True})
+
+    def test_a_cycle_written_without_the_word_still_runs_in_its_own_block(self) -> None:
+        states = self.run_lines(["CYCLE81(10,0,2,-5)", "X10"])
+        self.assertEqual([self.summary(state) for state in states], [(None, "CYCLE81", False), (None, None, False)])
 
 
 class TestSubBlockJoin(unittest.TestCase):

@@ -79,7 +79,7 @@ exit2-nopython
 # ---- Criteria with no scenario of their own here (they are proven where the plan says):
 #   X3 (no lost work)   m6-dock-quit-dirty, m6-dock-quit-clean-1/2 (suite m6); m7-backup, m7-readonly, m7-recovery-1/2 (suite m7)
 #   X4 (session)        m7-session-1, m7-session-2 (suite m7)
-#   X7 (inspector)      Phase 3, with the TypeScript modal interpreter
+#   X7 (inspector)      Phase 3: p3-inspector (tests/runtime/suites/p3a.txt), with the TypeScript modal interpreter
 #   X10 (no regression) this cumulative run: every scenario of m0..m13 PASS, 0 CSP violations, 0 unexpected
 #                       console errors, plus CI (macOS, Windows, Linux)
 #   X13 (real programs) tests/unit/ownerPublic.test.ts, tests/python/test_owner_public.py, m9-detect

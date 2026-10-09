@@ -10,6 +10,9 @@
 // `group` is free text in the database and a P2 user database may bring its own. Every
 // group the built-in databases use has a message here; one that has none falls back to
 // the raw name, which the caller sees because `t()` answers with the key itself.
+//
+// `context.*` (P3.3) is looked up through one helper in `core/codes/hoverText.ts` with the key
+// built there; `hoverText.test.ts` checks that every key it can build has a message.
 
 import type { Messages } from '../types';
 
@@ -34,6 +37,81 @@ export default {
     syncCodeNoLabel: 'Sync code on this machine ({machine})',
     syncCodeNote: 'The machine settings list this code as a synchronisation code; the code database describes the control\'s own meaning, which this machine does not use.',
     waitCodeNote: 'The machine settings list this code as a wait; the code database describes the control\'s own meaning, which this machine does not use.',
+  },
+  /**
+   * P3.3: what the modal context adds to a hover (`core/codes/hoverText.ts`). A code, a line,
+   * a value, a unit, a parameter's meaning and a machine name in a placeholder are data.
+   */
+  context: {
+    /** The one context line of an address word: `X — target, diameter, absolute (G90)`. */
+    line: '{address} — {parts}',
+    target: 'target',
+    /** `G50 X100.`: the axis word is a value for the code, not a place to move to. */
+    data: 'a value for {code}, not a position',
+    machineCoordinates: 'machine coordinates ({code})',
+    /** `U` on a lathe. */
+    incrementalOf: 'incremental {axis}',
+    incremental: 'incremental',
+    absolute: 'absolute',
+    diameter: 'diameter',
+    radius: 'radius',
+    diameterUnknown: 'diameter or radius: not known while the distance mode is not known',
+    workOffset: 'work offset {code}',
+    frame: 'inside {code} (line {line})',
+    /** A position under a modal cycle. */
+    cycleInForce: 'cycle {code} in force (line {line})',
+    /** A block after a threading move that stays in force (`G33`, `G32`): another pass, not a cycle. */
+    threadInForce: 'thread pass {code} in force (line {line})',
+    /** A parameter of a code in the block: its meaning from the code database, and the code. */
+    param: '{label} ({code})',
+    lead: 'thread lead ({code})',
+    dwell: 'a time in seconds, not a feed ({code})',
+    ambiguousFeed: 'feed or thread lead: {code} is a threading cycle on another control or G-code system',
+    feedUnknown: 'feed unit not known yet',
+    feedPerMinute: 'feed per minute',
+    feedPerRev: 'feed per revolution',
+    feedPerTooth: 'feed per tooth',
+    inverseTime: 'inverse-time feed',
+    surfaceSpeed: 'surface speed',
+    rpm: 'spindle speed in rpm',
+    speedLimit: 'speed limit, not a speed',
+    speedLimitBy: 'speed limit, not a speed ({code})',
+    /** The top spindle speed in force under constant surface speed. */
+    clamp: 'clamp {value} rpm (line {line})',
+    /** A mode and the code that set it: `feed per revolution (G99)`. */
+    withCode: '{what} ({code})',
+    /** A mode the program never set: where the assumption comes from. */
+    assumed: 'assumed: {source}',
+    source: {
+      machine: 'machine',
+      detected: 'detected from the program',
+      profile: 'profile default',
+    },
+    value: {
+      /** The effective value under the document's machine, and why. */
+      machine: "{word} — {value} {unit}: {why} (machine '{name}')",
+      asWritten: 'as written',
+      noPoint: 'no decimal point, increments of {step} {unit}',
+      scaled: 'every number counts in units of {step} {unit}',
+      /** No machine: the list of readings follows, one per line. */
+      readings: '{word} — depends on the machine; choose a machine:',
+      readingsUnset: "{word} — depends on how numbers are read, which machine '{name}' does not set:",
+      reading: '{value} {unit}: {label}',
+      readingDefault: '{value} {unit}: {label} (profile default)',
+      noValue: 'no value: {label}',
+    },
+    /** The parameters of the cycle on a cycle word. */
+    table: {
+      title: 'Parameters of {code}',
+      calls: 'Parameters of {code}, defined on line {line}',
+      withPart: '{title}, {part}',
+      /** A cycle written in two blocks (the lathe `G71`, `G76`). */
+      part: 'block {index} of {of}',
+      word: 'Word',
+      meaning: 'Meaning',
+      written: 'Written',
+      notWritten: 'not written',
+    },
   },
   completion: {
     /** Documentation note on an entry that still carries `verify: true`. */
