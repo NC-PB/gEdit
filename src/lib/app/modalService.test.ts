@@ -248,7 +248,9 @@ describe('the modal service', () => {
   });
 
   it('builds the active document first', () => {
-    const h = harness();
+    // One slice builds one document; a generous budget keeps a slow CI machine from leaving
+    // the active document half built, which is not what this test is about.
+    const h = harness({ budgetMs: 10_000 });
     const a = h.add(program(300), { activate: true });
     const b = h.add(program(300), { activate: true }); // b is active now
     h.idleOnce();
