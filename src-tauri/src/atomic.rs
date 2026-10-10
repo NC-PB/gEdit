@@ -56,7 +56,16 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
 }
 
 fn write_then_rename(temp: &Path, path: &Path, bytes: &[u8]) -> io::Result<()> {
-    let mut file = create_temp(temp, path)?;
+    let mut file = match create_temp(temp, path) {
+        // The name carries our pid and a counter, so a file already under it is a
+        // leftover of a killed process that had the same pid: ours to remove. (One
+        // retry only; a second clash is an error like any other.)
+        Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
+            fs::remove_file(temp)?;
+            create_temp(temp, path)?
+        }
+        created => created?,
+    };
     file.write_all(bytes)?;
     // Before the rename, so that the rename never publishes an empty file.
     file.sync_all()?;
@@ -227,7 +236,9 @@ mod tests {
         let dir = scratch("keep-mode");
         let file = dir.join("settings.json");
         write_atomic(&file, b"{}").unwrap();
-        for mode in [0o600, 0o640, 0o444] {
+        // 664 and 775 are what the umask (022) would cut: the creation mode alone, or a
+        // missing `set_permissions`, shows as 644 and 755.
+        for mode in [0o600, 0o640, 0o444, 0o664, 0o775] {
             fs::set_permissions(&file, fs::Permissions::from_mode(mode)).unwrap();
             write_atomic(&file, b"{\"a\":1}").unwrap();
             let kept = fs::metadata(&file).unwrap().permissions().mode() & 0o777;
@@ -235,6 +246,30 @@ mod tests {
             assert_eq!(fs::read(&file).unwrap(), b"{\"a\":1}");
         }
         assert_eq!(temp_files(&dir), Vec::<String>::new());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A killed gEdit leaves `.name.tmp-<pid>-<n>` behind; a later process with the same
+    /// pid and a fresh counter meets it. That used to fail the save with "File exists"
+    /// (and only the error branch cleaned up, so the next save worked).
+    #[test]
+    fn a_stale_temp_file_with_the_same_name_does_not_fail_the_save() {
+        let dir = scratch("stale-temp");
+        let file = dir.join("settings.json");
+        write_atomic(&file, b"{\"old\":true}").unwrap();
+        let stale = temp_path(&file, &dir);
+        fs::write(&stale, b"left by a killed process").unwrap();
+
+        write_then_rename(&stale, &file, b"{\"new\":true}").unwrap();
+        assert_eq!(fs::read(&file).unwrap(), b"{\"new\":true}");
+        assert_eq!(temp_files(&dir), Vec::<String>::new());
+
+        // And a stale name that cannot be removed is still an error, not a loop.
+        let blocked = temp_path(&file, &dir);
+        fs::create_dir(&blocked).unwrap();
+        fs::write(blocked.join("inside"), b"x").unwrap();
+        assert!(write_then_rename(&blocked, &file, b"{}").is_err());
+        assert_eq!(fs::read(&file).unwrap(), b"{\"new\":true}");
         let _ = fs::remove_dir_all(&dir);
     }
 

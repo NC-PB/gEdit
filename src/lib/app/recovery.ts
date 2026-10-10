@@ -398,12 +398,13 @@ export function createRecoveryService(deps: RecoveryDeps): RecoveryService {
   }
 
   async function restore(entries: RecoveryEntry[]): Promise<DocId[]> {
-    const ids: DocId[] = [];
+    const restored: { entry: RecoveryEntry; id: DocId }[] = [];
     for (const entry of entries) {
       try {
         const textLF = await deps.read(entry.session, entry.key);
-        ids.push(
-          deps.files.restoreDocument({
+        restored.push({
+          entry,
+          id: deps.files.restoreDocument({
             path: entry.path,
             title: entry.title,
             profileId: entry.profileId,
@@ -414,26 +415,35 @@ export function createRecoveryService(deps: RecoveryDeps): RecoveryService {
             textLF,
             diskStamp: entry.diskStamp,
           }),
-        );
+        });
       } catch (err) {
         // One snapshot that cannot be read must not cost the others. It stays on disk
         // and is offered again.
         console.warn(`the recovery snapshot ${entryKey(entry)} could not be restored`, err);
         deps.status.show(t('recovery.restoreFailed', { name: entry.title }), { error: true });
-        continue;
       }
-      // Its text is open now, so this one snapshot is noise. Only this one: the others of
-      // its session are not the user's to lose because of it.
-      try {
-        await deps.discardEntry(entry.session, entry.key);
-      } catch (err) {
-        // The document is open and dirty; the snapshot simply stays. Being offered it
-        // again is the harmless half of this failure.
-        console.warn(`the restored recovery snapshot ${entryKey(entry)} could not be discarded`, err);
+    }
+    // The restored text is open and dirty now, but the *only* copy of it on disk is still
+    // the old snapshot: this session has not written one for the new document yet, and a
+    // crash in the first half minute would find nothing. So the old snapshots go only
+    // after one forced pass has written the new documents' own, and only those whose
+    // document that pass really wrote. When snapshots are failing (the trouble state) or
+    // the feature is off, nothing is discarded and the entries are offered again (B1).
+    if (restored.length > 0) {
+      await after(() => pass(true));
+      for (const { entry, id } of restored) {
+        if (!taken.has(id)) continue;
+        try {
+          await deps.discardEntry(entry.session, entry.key);
+        } catch (err) {
+          // The document is open and dirty; the snapshot simply stays. Being offered it
+          // again is the harmless half of this failure.
+          console.warn(`the restored recovery snapshot ${entryKey(entry)} could not be discarded`, err);
+        }
       }
     }
     await reportKept(entries);
-    return ids;
+    return restored.map(({ id }) => id);
   }
 
   return {

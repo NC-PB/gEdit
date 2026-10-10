@@ -4,7 +4,7 @@
 //
 // The plugin is injected, so nothing here needs a webview.
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createNativeDialogs, errorText, type DialogBackend } from './dialogs';
 import { createProfileRegistry } from '$lib/stores/profiles';
 import { t } from '$lib/i18n';
@@ -322,6 +322,39 @@ describe('whenFree (B1 A4)', () => {
     expect(await dialogs.exclusive(async () => 'x')).toBeUndefined();
     release();
     await held;
+  });
+});
+
+// B1 CODE-09: a `whenFree` called from inside an `exclusive` op waits for itself. The doc
+// comment says not to; a development build also says so after 30 s.
+describe('whenFree called from inside an exclusive op (B1 CODE-09)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('warns once on the console after 30 s of waiting, and stays quiet for a short wait', async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { dialogs } = setup();
+    let release = (): void => {};
+    const first = dialogs.whenFree(() => new Promise<void>((resolve) => (release = resolve)));
+
+    const quick = dialogs.whenFree(async () => 'quick');
+    await vi.advanceTimersByTimeAsync(29_000);
+    expect(warn).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain('whenFree');
+
+    release();
+    await first;
+    expect(await quick).toBe('quick');
+    // A caller that got the lock at once, or in time, sets no warning behind it.
+    warn.mockClear();
+    expect(await dialogs.whenFree(async () => 'free')).toBe('free');
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });
 

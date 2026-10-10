@@ -655,6 +655,59 @@ describe('a stamp the file system cannot tell apart from a rewrite (racy)', () =
     expect(h.messages).toHaveLength(1);
   });
 
+  // B1 CODE-03. The second tick used to take the unchanged stat for "unchanged" (the racy
+  // look only ran while no banner was up) and cleared the banner; the third raised it
+  // again, with the same message: it flapped every two seconds.
+  it('keeps the banner up on every later tick, reads the file once and says it once', async () => {
+    for (const dirty of [false, true]) {
+      const h = harness();
+      const id = h.add({ text: 'O1000', mtimeMs: 1000, dirty });
+      racy(h, id);
+      h.disk.set(PATH, { text: 'O2000', mtimeMs: 1000 });
+
+      const seen: string[] = [];
+      for (let tick = 0; tick < 6; tick++) {
+        await h.service.checkNow();
+        seen.push(h.docs.get(id)?.external ?? '?');
+      }
+
+      expect(seen, `dirty ${dirty}`).toEqual(Array(6).fill('changed'));
+      expect(h.reads).toBe(1);
+      expect(h.messages).toHaveLength(1);
+    }
+  });
+
+  it('clears that banner when the bytes come back with a later time', async () => {
+    const h = harness();
+    const id = h.add({ text: 'O1000', mtimeMs: 1000 });
+    racy(h, id);
+    h.disk.set(PATH, { text: 'O2000', mtimeMs: 1000 });
+    await h.service.checkNow();
+    await h.service.checkNow();
+    expect(h.docs.get(id)?.external).toBe('changed');
+
+    h.disk.set(PATH, { text: 'O1000', mtimeMs: 9000 });
+    await h.service.checkNow();
+
+    expect(h.docs.get(id)?.external).toBe('none');
+  });
+
+  it('reads again when the file moves on while the banner is up', async () => {
+    const h = harness();
+    const id = h.add({ text: 'O1000', mtimeMs: 1000 });
+    racy(h, id);
+    h.disk.set(PATH, { text: 'O2000', mtimeMs: 1000 });
+    await h.service.checkNow();
+    expect(h.reads).toBe(1);
+
+    h.disk.set(PATH, { text: 'O3000', mtimeMs: 7000 });
+    await h.service.checkNow();
+    await h.service.checkNow();
+
+    expect(h.reads).toBe(2);
+    expect(h.docs.get(id)?.external).toBe('changed');
+  });
+
   it('does not read a stamp that is not racy: one stat, as before', async () => {
     const h = harness();
     const id = h.add({ text: 'O1000', mtimeMs: 1000 });

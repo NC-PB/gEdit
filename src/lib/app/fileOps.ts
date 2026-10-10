@@ -88,7 +88,7 @@ export interface FileOpsDeps {
   profiles: ProfileRegistry;
   fs: FileSystemAccess;
   /** `platform/commands.ts` `filesStat`: with `partial`, an `unavailable` answer resolves. */
-  filesStat(paths: string[], o?: { partial?: boolean }): Promise<FileStat[]>;
+  filesStat(paths: string[], o?: { partial?: boolean; canonical?: boolean }): Promise<FileStat[]>;
   /**
    * M7, AD-21: copies the file aside before the write that overwrites it. Answers where
    * the copy went, `null` when there was nothing to copy (`files.backup` is `off`, or the
@@ -267,7 +267,10 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
    * gets `undefined` knows only that it knows nothing, which is the one answer that
    * makes it ask instead of write.
    */
-  async function statOf(paths: string[], o?: { partial?: boolean }): Promise<FileStat[] | undefined> {
+  async function statOf(
+    paths: string[],
+    o?: { partial?: boolean; canonical?: boolean },
+  ): Promise<FileStat[] | undefined> {
     try {
       return await deps.filesStat(paths, o);
     } catch (err) {
@@ -281,8 +284,8 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
    * for an `unavailable` one (a hung share), which looks like "outside
    * the scope" and would otherwise read as "no file there".
    */
-  async function statOne(path: string): Promise<FileStat | undefined> {
-    const stat = (await statOf([path]))?.[0];
+  async function statOne(path: string, o?: { canonical?: boolean }): Promise<FileStat | undefined> {
+    const stat = (await statOf([path], o))?.[0];
     return stat?.unavailable === true ? undefined : stat;
   }
 
@@ -429,7 +432,7 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     // The stat runs BEFORE the read: reading first would mean a multi-gigabyte file is
     // already in the webview by the time its size is known (G8 F4). The same answer is
     // the disk stamp below, so this costs no extra round trip.
-    const answered = (await statOf([path], { partial: true }))?.[0];
+    const answered = (await statOf([path], { partial: true, canonical: true }))?.[0];
     // A share that does not answer: the read would block until the OS
     // gives up, and it cannot be cancelled — while it waits, it holds the file-command
     // lock, so Save, Close and the close button would do nothing, silently, for minutes.
@@ -852,7 +855,9 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     if (tapeDropped) nul = NO_NUL;
     else if (doc.nul.stripped > 0) nul = { ...doc.nul, stripped: 0 };
 
-    const stat = await statOne(path);
+    // The identity is resolved only when the document is bound to another file (Save As);
+    // a plain Save keeps the one it has, so a save does not pay a resolve per folder.
+    const stat = await statOne(path, { canonical: doc.path !== path });
     docs.update(id, {
       path,
       untitledIndex: null,
@@ -867,9 +872,10 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
       metaDirty: false,
       external: 'none',
       disk: restamp(bytes, stat, doc.disk),
-      // Which file this now is. A stat that did not answer keeps what was known, unless
-      // the path changed (Save As): then nothing about the old file applies.
-      canonical: stat ? (stat.canonical ?? null) : doc.path === path ? (doc.canonical ?? null) : null,
+      // Which file this now is. A stat that did not answer, or whose resolve failed this
+      // once, keeps what was known, unless the path changed (Save As): then nothing about
+      // the old file applies.
+      canonical: stat?.canonical ?? (doc.path === path ? (doc.canonical ?? null) : null),
     });
     if (editor.versionId(id) === versionBefore) editor.markClean(id);
     // Before the save event, so whatever listens to it sees the document's new dialect.
@@ -932,7 +938,7 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     // (AD-23): finding out by writing meant a backup of a file that was never replaced,
     // and then a failed write. The same stat is the changed-on-disk guard's when the
     // target is the document's own file.
-    const target = await statOne(path);
+    const target = await statOne(path, { canonical: true });
     // The same file under another spelling (a symlink, a `..`, a mapped drive): found out
     // by what Rust resolved, since the written paths differ.
     const twin = docs.byIdentity(target?.canonical);
@@ -1250,7 +1256,8 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
       // The same rule as after a write: a stat that did not answer may not erase the
       // mtime the document had, or the poll compares sizes alone from then on.
       disk: restamp(bytes, stat, doc.disk),
-      ...(stat ? { canonical: stat.canonical ?? null } : {}),
+      // The identity is not asked for again (and a failed resolve may not erase it).
+      ...(stat?.canonical ? { canonical: stat.canonical } : {}),
       external: 'none',
     });
     status.show(t('files.reloaded', { name: doc.title }));
@@ -1288,7 +1295,7 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
    * `write` asks before it writes (G8 M7).
    */
   async function bindRestored(id: DocId, path: string, diskStamp: DiskStamp | null): Promise<void> {
-    const stat = await statOne(path);
+    const stat = await statOne(path, { canonical: true });
     if (stat?.allowed !== true) return;
     const doc = docs.get(id);
     if (!doc || doc.path !== null || doc.proposedPath !== path) return;

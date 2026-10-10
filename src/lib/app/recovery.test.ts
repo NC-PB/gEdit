@@ -153,9 +153,12 @@ function harness(over: Partial<RecoveryDeps> = {}): Harness {
       versionId: (id) => models.get(id)?.version ?? 0,
     },
     files: {
+      // The real one makes a dirty document with a model, which is what the forced pass
+      // after a restore has to find.
       restoreDocument(o) {
         h.restored.push(o);
-        return `r${++nextRestored}`;
+        nextRestored += 1;
+        return h.add({ dirty: true, text: o.textLF, path: o.path });
       },
       onDidSave(cb) {
         onSave = cb;
@@ -845,7 +848,8 @@ describe('restoring', () => {
     h.listed = [entry({ machineId: 'lathe-2' })];
 
     const ids = await h.service.restore(h.listed);
-    expect(ids).toEqual(['r1']);
+    expect(ids).toEqual(h.docs.all().map((doc) => doc.id));
+    expect(ids).toHaveLength(1);
     expect(h.restored[0]).toEqual({
       path: PATH,
       title: 'prog.nc',
@@ -916,7 +920,7 @@ describe('restoring', () => {
     h.listed = [entry({ key: 'd1' }), entry({ key: 'd2' })];
 
     const ids = await h.service.restore(h.listed);
-    expect(ids).toEqual(['r1']);
+    expect(ids).toHaveLength(1);
     expect(h.restored[0].textLF).toBe('b');
     expect(h.discardedEntries).toEqual(['s-1/d2']);
     expect(h.discarded).toEqual([]);
@@ -931,8 +935,70 @@ describe('restoring', () => {
     h.listed = [entry({ key: 'd1' }), entry({ key: 'd2' })];
 
     const ids = await h.service.restore(h.listed);
-    expect(ids).toEqual(['r1', 'r2']);
+    expect(ids).toHaveLength(2);
     expect(warn).toHaveBeenCalledTimes(2);
+  });
+
+  // B1 CODE-08. A restored snapshot is the only copy on disk of that work until this
+  // session has written the new document's own; a crash in between lost it.
+  it('discards a restored snapshot only after the document own snapshot is written', async () => {
+    const order: string[] = [];
+    const h = harness({
+      async put(meta) {
+        order.push(`put:${meta.key}`);
+      },
+      async discardEntry(session, key) {
+        order.push(`discard:${session}/${key}`);
+      },
+    });
+    h.reads.set('s-1/d1', 'a');
+    h.reads.set('s-1/d2', 'b');
+    h.listed = [entry({ key: 'd1' }), entry({ key: 'd2' })];
+
+    const ids = await h.service.restore(h.listed);
+
+    expect(order).toEqual([`put:${ids[0]}`, `put:${ids[1]}`, 'discard:s-1/d1', 'discard:s-1/d2']);
+  });
+
+  it('keeps every restored snapshot while this session cannot write snapshots', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const h = harness({ put: () => Promise.reject(new Error('disk full')) });
+    h.reads.set('s-1/d1', 'a');
+    h.listed = [entry({ key: 'd1' })];
+
+    const ids = await h.service.restore(h.listed);
+
+    expect(ids).toHaveLength(1);
+    expect(h.discardedEntries).toEqual([]);
+  });
+
+  it('discards only the snapshots whose document got one of its own', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const written: string[] = [];
+    const h = harness({
+      async put(meta) {
+        // The second document's snapshot fails (a document past the size limit, say).
+        if (written.length === 1) throw new Error('too big');
+        written.push(meta.key);
+      },
+    });
+    h.reads.set('s-1/d1', 'a');
+    h.reads.set('s-1/d2', 'b');
+    h.listed = [entry({ key: 'd1' }), entry({ key: 'd2' })];
+
+    await h.service.restore(h.listed);
+
+    expect(written).toHaveLength(1);
+    expect(h.discardedEntries).toEqual(['s-1/d1']);
+  });
+
+  it('keeps the snapshots when recovery is switched off', async () => {
+    const h = harness({ enabled: () => false });
+    h.reads.set('s-1/d1', 'a');
+    h.listed = [entry({ key: 'd1' })];
+    await h.service.restore(h.listed);
+    expect(h.discardedEntries).toEqual([]);
+    expect(h.puts).toEqual([]);
   });
 
   it('discards a whole leftover session on request', async () => {

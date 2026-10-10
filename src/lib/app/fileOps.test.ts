@@ -264,6 +264,10 @@ function createFakeFs(): FileSystemAccess & {
   forbidden: Set<string>;
   /** `FileStat.canonical` per path: which file a spelling is. Absent: Rust gave none. */
   canonical: Map<string, string>;
+  /** Paths whose stat says `canonical: null` (Rust could not resolve them this time). */
+  canonicalFails: Set<string>;
+  /** Paths that exist but whose stat has no size (`size: null`). */
+  unknownSize: Set<string>;
 } {
   const files = new Map<string, Uint8Array>();
   const mtimes = new Map<string, number>();
@@ -274,9 +278,13 @@ function createFakeFs(): FileSystemAccess & {
   const readOnly = new Set<string>();
   const forbidden = new Set<string>();
   const canonical = new Map<string, string>();
+  const canonicalFails = new Set<string>();
+  const unknownSize = new Set<string>();
   let clock = 1000;
   return {
     canonical,
+    canonicalFails,
+    unknownSize,
     files,
     mtimes,
     sizes,
@@ -381,6 +389,8 @@ interface Harness {
   statFails: { now: boolean };
   /** Makes every `files_stat` entry come back `unavailable`, the way a hung share does. */
   statHung: { now: boolean };
+  /** Every `files_stat` call, with whether it asked for the canonical path. */
+  statCalls: Array<{ paths: string[]; canonical: boolean }>;
   put(path: string, rel: string): string;
 }
 
@@ -403,7 +413,11 @@ function setup(o: { isTauri?: boolean; filtersSupported?: boolean } = {}): Harne
 
   const statFails = { now: false };
   const statHung = { now: false };
-  const filesStat: FileOpsDeps['filesStat'] = async (paths) => {
+  // What each call asked for: Rust resolves the canonical path only on request, so the
+  // fake does too, and a caller that forgets to ask loses the twin check.
+  const statCalls: Array<{ paths: string[]; canonical: boolean }> = [];
+  const filesStat: FileOpsDeps['filesStat'] = async (paths, o) => {
+    statCalls.push({ paths, canonical: o?.canonical === true });
     if (statFails.now) throw new Error('files_stat: the IPC call failed');
     return paths.map((path): FileStat => {
       if (statHung.now) {
@@ -429,9 +443,13 @@ function setup(o: { isTauri?: boolean; filtersSupported?: boolean } = {}): Harne
         exists: fs.files.has(path),
         isDir: false,
         mtimeMs: fs.mtimes.get(path) ?? null,
-        size: fs.sizes.get(path) ?? fs.files.get(path)?.length ?? null,
+        size: fs.unknownSize.has(path) ? null : (fs.sizes.get(path) ?? fs.files.get(path)?.length ?? null),
         readonly: fs.readOnly.has(path),
-        ...(fs.canonical.has(path) ? { canonical: fs.canonical.get(path) } : {}),
+        ...(fs.canonicalFails.has(path)
+          ? { canonical: null }
+          : o?.canonical === true && fs.canonical.has(path)
+            ? { canonical: fs.canonical.get(path) }
+            : {}),
       };
     });
   };
@@ -475,6 +493,7 @@ function setup(o: { isTauri?: boolean; filtersSupported?: boolean } = {}): Harne
     external,
     statFails,
     statHung,
+    statCalls,
     put(path, rel) {
       fs.files.set(path, fixture(rel));
       fs.mtimes.set(path, 500);
@@ -817,6 +836,20 @@ describe('open', () => {
       const error = h.dialogs.calls.find((c) => c.kind === 'error');
       expect(error?.args.summary).toBe(t('files.openFailed', { name: 'hung.nc' }));
       expect(String(error?.args.detail)).toBe(t('files.notAnswering', { name: 'hung.nc' }));
+    });
+
+    // The third case of the unknown-size rule: the file is there, its stat has no size.
+    it('refuses a file whose size nobody can say, without reading it', async () => {
+      const path = h.put('/Volumes/dnc/nosize.nc', 'nc/encoding/utf8-lf.nc');
+      h.fs.unknownSize.add(path);
+      const read = vi.spyOn(h.fs, 'readFile');
+
+      expect(await h.files.open([path])).toEqual([]);
+
+      expect(read).not.toHaveBeenCalled();
+      expect(h.docs.all()).toHaveLength(0);
+      const error = h.dialogs.calls.find((c) => c.kind === 'error');
+      expect(String(error?.args.detail)).toBe(t('files.noAnswer', { name: 'nosize.nc' }));
     });
 
     it('opens a file that is exactly at the limit', async () => {
@@ -2627,6 +2660,83 @@ describe('two spellings of one file (B1 A1)', () => {
     expect(await h.files.saveAs(id)).toBe(true);
     expect(h.docs.get(id)?.canonical).toBe('/real/copy.nc');
     expect(h.docs.byIdentity(real)).toBeUndefined();
+  });
+
+  // B1 CODE-07: the canonical path is a lookup per folder level (a network round trip
+  // each on a share). Open, Save As and the restore need it; a Save, a Reload and the
+  // poll do not, and a resolve that failed once must not erase the identity a document has.
+  describe('asking for the canonical path only when it is needed', () => {
+    const askedFor = (): string[] => h.statCalls.filter((call) => call.canonical).flatMap((call) => call.paths);
+
+    it('asks on Open, on Save As and on binding a restored snapshot', async () => {
+      const real = h.put('/real/a.nc', 'nc/encoding/utf8-lf.nc');
+      h.fs.canonical.set(real, real);
+      const [id] = await h.files.open([real]);
+      expect(askedFor()).toContain(real);
+      h.fs.canonical.set('/nc/copy.nc', '/real/copy.nc');
+      h.dialogs.answers.saveFile.push('/nc/copy.nc');
+      await h.files.saveAs(id);
+      expect(askedFor()).toContain('/nc/copy.nc');
+
+      h.fs.files.set('/nc/r.nc', new Uint8Array(0));
+      h.fs.mtimes.set('/nc/r.nc', 500);
+      h.fs.canonical.set('/nc/r.nc', '/real/r.nc');
+      const restored = h.files.restoreDocument({
+        title: 'r.nc',
+        profileId: 'fanuc-gcode',
+        encoding: { encoding: 'utf-8', hasBom: false },
+        eol: 'lf',
+        nul: { leader: 0, trailer: 0, stripped: 0 },
+        textLF: 'G0 X1\n',
+        diskStamp: null,
+        path: '/nc/r.nc',
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(askedFor()).toContain('/nc/r.nc');
+      expect(h.docs.get(restored)?.canonical).toBe('/real/r.nc');
+    });
+
+    it('does not ask on a plain Save, and the document keeps its identity', async () => {
+      const real = h.put('/real/a.nc', 'nc/encoding/utf8-lf.nc');
+      h.fs.canonical.set(real, '/resolved/a.nc');
+      const [id] = await h.files.open([real]);
+      expect(h.docs.get(id)?.canonical).toBe('/resolved/a.nc');
+      h.statCalls.length = 0;
+      h.editor.type(id, 'G0 X9\n');
+
+      expect(await h.files.save(id)).toBe(true);
+
+      expect(h.statCalls.length).toBeGreaterThan(0);
+      expect(askedFor()).toEqual([]);
+      expect(h.docs.get(id)?.canonical).toBe('/resolved/a.nc');
+    });
+
+    it('does not ask on Reload, and the document keeps its identity', async () => {
+      const real = h.put('/real/a.nc', 'nc/encoding/utf8-lf.nc');
+      h.fs.canonical.set(real, '/resolved/a.nc');
+      const [id] = await h.files.open([real]);
+      h.statCalls.length = 0;
+
+      await h.files.reloadFromDisk(id);
+
+      expect(h.statCalls.length).toBeGreaterThan(0);
+      expect(askedFor()).toEqual([]);
+      expect(h.docs.get(id)?.canonical).toBe('/resolved/a.nc');
+    });
+
+    it('keeps a known identity when a stat says the resolve failed this time', async () => {
+      const real = h.put('/real/a.nc', 'nc/encoding/utf8-lf.nc');
+      h.fs.canonical.set(real, '/resolved/a.nc');
+      const [id] = await h.files.open([real]);
+      h.fs.canonicalFails.add(real);
+      h.editor.type(id, 'G0 X9\n');
+
+      expect(await h.files.save(id)).toBe(true);
+      expect(h.docs.get(id)?.canonical).toBe('/resolved/a.nc');
+      await h.files.reloadFromDisk(id);
+      expect(h.docs.get(id)?.canonical).toBe('/resolved/a.nc');
+      expect(h.docs.byIdentity('/resolved/a.nc')?.id).toBe(id);
+    });
   });
 
   it('refuses a Save As onto a file another tab owns under another spelling', async () => {

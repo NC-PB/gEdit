@@ -520,19 +520,79 @@ describe('a restore whose tail is still loading', () => {
     h.setDocs([...h.docs, { id: 'x', path: '/mine.nc' }], 'r0');
     await vi.advanceTimersByTimeAsync(1100);
 
+    // The stored order, with the user's tab where the tab bar will have it (B1 CODE-05).
     const during = h.saved.at(-1);
-    expect(during?.paths.slice().sort()).toEqual(['/a.nc', '/b.nc', '/c.nc', '/d.nc', '/mine.nc']);
-    expect(during?.paths[during.paths.indexOf('/b.nc')]).toBe('/b.nc');
+    expect(during?.paths).toEqual(['/a.nc', '/b.nc', '/c.nc', '/d.nc', '/mine.nc']);
+    expect(during?.paths[during.active ?? -1]).toBe('/b.nc');
 
     release();
     await h.session.settled();
     await vi.advanceTimersByTimeAsync(1100);
 
     const after = h.saved.at(-1);
-    expect(after?.paths.slice().sort()).toEqual(['/a.nc', '/b.nc', '/c.nc', '/d.nc', '/mine.nc']);
-    expect(after?.paths).not.toEqual(during?.paths);
+    expect(after?.paths).toEqual(['/a.nc', '/b.nc', '/c.nc', '/d.nc', '/mine.nc']);
     // The tab in front is still the one the stored index points at.
     expect(after?.paths[after.active ?? -1]).toBe('/b.nc');
+    stop();
+  });
+
+  // B1 CODE-05. Five stored tabs `a b c d e`, `c` in front; the user opens one file while
+  // the tail loads. The write used to be `c, mine, a, b, d, e` (the open tabs first, the
+  // pending ones after), and a quit or crash then stored that order for good.
+  it('writes the stored order while the tail loads, whatever the user does meanwhile', async () => {
+    const h = sessionHarness();
+    h.stored = { paths: ['/a.nc', '/b.nc', '/c.nc', '/d.nc', '/e.nc'], active: 2 };
+    for (const path of h.stored.paths) h.onDisk.add(path);
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    h.holdOpen = async (paths) => {
+      if (paths[0] !== '/c.nc') await gate;
+    };
+
+    await h.session.restore();
+    const stop = h.session.start();
+    h.setDocs([...h.docs, { id: 'x', path: '/mine.nc' }], 'r0');
+    await h.quit();
+
+    const written = h.saved.at(-1);
+    // The user's tab stands behind the tab in front, where the tail's `d e` will go in
+    // front of it: the tab bar ends up `a b c d e mine`, and so does the stored list.
+    expect(written?.paths).toEqual(['/a.nc', '/b.nc', '/c.nc', '/d.nc', '/e.nc', '/mine.nc']);
+    expect(written?.paths[written.active ?? -1]).toBe('/c.nc');
+
+    release();
+    await h.session.settled();
+    expect(h.docs.map((doc) => doc.path)).toEqual(written?.paths);
+    stop();
+  });
+
+  it('keeps the stored order when the user switches or closes tabs during the tail', async () => {
+    const h = sessionHarness();
+    h.stored = { paths: ['/a.nc', '/b.nc', '/c.nc', '/d.nc'], active: 1 };
+    for (const path of h.stored.paths) h.onDisk.add(path);
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    h.holdOpen = async (paths) => {
+      if (paths[0] !== '/b.nc') await gate;
+    };
+
+    await h.session.restore();
+    const stop = h.session.start();
+    // The tab in front is closed and a different file takes its place.
+    h.setDocs([{ id: 'x', path: '/mine.nc' }], 'x');
+    await h.quit();
+
+    const written = h.saved.at(-1);
+    // The pending paths keep their stored order whatever else is open; with the front tab
+    // gone the tail appends what comes after it, and so does the stored list.
+    expect(written?.paths).toEqual(['/a.nc', '/mine.nc', '/c.nc', '/d.nc']);
+    expect(written?.paths[written.active ?? -1]).toBe('/mine.nc');
+    release();
+    await h.session.settled();
     stop();
   });
 

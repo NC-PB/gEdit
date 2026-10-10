@@ -61,6 +61,9 @@ export function errorText(err: unknown): string {
   }
 }
 
+/** How long a `whenFree` waiter may wait before a development build says so. */
+const WHEN_FREE_WARN_MS = 30_000;
+
 export function createNativeDialogs(deps: NativeDialogsDeps): NativeDialogs {
   const { backend } = deps;
   let busy = false;
@@ -192,9 +195,29 @@ export function createNativeDialogs(deps: NativeDialogsDeps): NativeDialogs {
      * of being sent away: for a question that must be asked (the stale-result offer of a
      * script would otherwise be answered "no" by nobody, B1 A4). Callers are served in the
      * order they arrived.
+     *
+     * **Never call it from inside an `exclusive` op (or another `whenFree` one):** it waits
+     * for that very chain to end, and the chain waits for it, so nothing ever runs again and
+     * every later `exclusive` caller (close, save, quit) is sent away as "busy". A question
+     * that is asked from a `mayClose` hook, a modal's dismissal or any other place that may
+     * itself run inside a chain (the Settings "Unsaved changes" question, the template
+     * manager's leave question) therefore must not use it; those stay plain `confirm`s. In a
+     * development build a waiter that has waited more than 30 s says so on the console.
      */
     async whenFree<T>(op: () => Promise<T>): Promise<T> {
-      while (busy) await new Promise<void>((resolve) => waiting.push(resolve));
+      let nag: ReturnType<typeof setTimeout> | undefined;
+      if (busy && import.meta.env.DEV) {
+        nag = setTimeout(() => {
+          console.warn(
+            'dialogs.whenFree has waited 30 s for the chain in front: was it called from inside an `exclusive` op?',
+          );
+        }, WHEN_FREE_WARN_MS);
+      }
+      try {
+        while (busy) await new Promise<void>((resolve) => waiting.push(resolve));
+      } finally {
+        if (nag !== undefined) clearTimeout(nag);
+      }
       busy = true;
       try {
         return await op();

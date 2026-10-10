@@ -156,11 +156,11 @@ export default {
     },
     backupTotalMb: {
       label: 'Most space for earlier versions (MB)',
-      help: 'When the earlier versions of all files together take more than this, the oldest ones are deleted. The newest version of a file that still exists is always kept. 0 means no limit. Only for copies kept in gEdit.',
+      help: 'When the earlier versions of all files together take more than this, the oldest ones are deleted. The newest version of every file is always kept. Earlier versions of a file on a USB stick, a network share or another disk are never deleted because the file seems to be missing. 0 means no limit. Only for copies kept in gEdit.',
     },
     backupOrphanDays: {
       label: 'Delete earlier versions of deleted files after (days)',
-      help: 'Earlier versions of a file that no longer exists are deleted this many days after the last one was made. 0 means keep them for ever. Only for copies kept in gEdit.',
+      help: 'Earlier versions of a file that was deleted (or whose folder was renamed or moved) on this computer\'s own disk are deleted this many days after the last one was made. Files on a USB stick, a network share or another disk are not covered: their earlier versions only go when the space limit above is reached, and the newest one stays. 0 means keep them for ever. Only for copies kept in gEdit.',
     },
     recovery: {
       label: 'Recover unsaved changes after a crash',

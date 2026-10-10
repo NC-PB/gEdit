@@ -156,6 +156,13 @@ export function createSessionService(deps: SessionDeps): SessionService & { sett
    * lingers is a nuisance, a tab list that vanished is a day's work to reconstruct.
    */
   let unreachable: string[] = [];
+  /**
+   * While the background tail of the restore runs: the stored paths still to come and
+   * where they are going, so a session written meanwhile keeps the stored order. `head`
+   * goes in front of every tab, `after` right behind the tab that was put up first
+   * (`front`); that is exactly where the tail's `files.open` calls will put them.
+   */
+  let tailPlan: { head: string[]; after: string[]; front: string } | null = null;
   /** Whether the user has been told, once, that the session list is not being stored. */
   let toldSaveFailed = false;
 
@@ -167,8 +174,23 @@ export function createSessionService(deps: SessionDeps): SessionService & { sett
     // has to take it out of the session — so it stops being carried for good.
     unreachable = unreachable.filter((path) => !open.has(path));
     if (unreachable.length === 0) return snapshot;
-    // Appended, never inserted: `active` is an index into `paths`.
-    return { paths: [...snapshot.paths, ...unreachable], active: snapshot.active };
+    const carried = new Set(unreachable);
+    const head = tailPlan?.head.filter((path) => carried.has(path)) ?? [];
+    const after = tailPlan?.after.filter((path) => carried.has(path)) ?? [];
+    // The paths the tail has still to open stand where the tab bar will have them (the
+    // order they were stored in), not behind the tabs the user opened meanwhile. What
+    // could not be reached at all is appended after everything.
+    const tabs = [...snapshot.paths];
+    if (after.length > 0) {
+      const frontAt = tailPlan === null ? -1 : tabs.indexOf(tailPlan.front);
+      tabs.splice(frontAt < 0 ? tabs.length : frontAt + 1, 0, ...after);
+    }
+    const pending = new Set([...head, ...after]);
+    const paths = [...head, ...tabs, ...unreachable.filter((path) => !pending.has(path))];
+    const front = snapshot.active === null ? undefined : snapshot.paths[snapshot.active];
+    // `active` is an index into `paths`: recomputed from the path that is in front.
+    const at = front === undefined ? -1 : paths.indexOf(front);
+    return { paths, active: at < 0 ? null : at };
   }
 
   function writeNow(): Promise<void> {
@@ -337,6 +359,7 @@ export function createSessionService(deps: SessionDeps): SessionService & { sett
         const at = usable.indexOf(frontPath);
         const head = rest.filter((path) => usable.indexOf(path) < at);
         const after = rest.filter((path) => usable.indexOf(path) > at);
+        tailPlan = { head, after, front: frontPath };
         tail = (async () => {
           try {
             if (head.length > 0) await deps.open(head, { activate: false, index: 0 });
@@ -350,6 +373,7 @@ export function createSessionService(deps: SessionDeps): SessionService & { sett
             // What did not open is not carried any more; the next start tries the stored
             // list once more, which is what the last write before this one held.
             unreachable = skipped;
+            tailPlan = null;
           }
         })();
       }
