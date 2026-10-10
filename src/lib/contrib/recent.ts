@@ -47,8 +47,8 @@ async function offerRemoval(path: string): Promise<void> {
     kind: 'warning',
   });
   if (!remove) return;
-  await recent.remove(path);
-  status.show(t('recent.removed', { name }));
+  // A list that could not be saved has already said so; "Removed" would replace that.
+  if (await recent.remove(path)) status.show(t('recent.removed', { name }));
 }
 
 /** Opens `path`, or asks which entry to open when there is none. */
@@ -85,8 +85,7 @@ async function openRecent(path?: string): Promise<void> {
 }
 
 async function clearRecent(): Promise<void> {
-  await recent.clear();
-  status.show(t('recent.cleared'));
+  if (await recent.clear()) status.show(t('recent.cleared'));
 }
 
 export default {

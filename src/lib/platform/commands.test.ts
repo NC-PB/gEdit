@@ -34,6 +34,7 @@ const {
   recoveryList,
   recoveryRead,
   recoveryDiscard,
+  recoveryDiscardEntry,
   channelSiblings,
   userFilesList,
   userFileCreate,
@@ -302,6 +303,9 @@ describe('the M7 backup, session and recovery commands', () => {
     invoke.mockResolvedValue(undefined);
     await recoveryDiscard('s-17');
     expect(invoke).toHaveBeenCalledWith('recovery_discard', { session: 's-17' });
+
+    await recoveryDiscardEntry('s-17', 'd4');
+    expect(invoke).toHaveBeenCalledWith('recovery_discard_entry', { session: 's-17', key: 'd4' });
   });
 
   it('decodes the raw bytes a snapshot read answers with', async () => {

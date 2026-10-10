@@ -136,6 +136,7 @@ pub fn run() {
             recovery::recovery_list,
             recovery::recovery_read,
             recovery::recovery_discard,
+            recovery::recovery_discard_entry,
             state::ui_state_save,
             state::recent_list,
             state::recent_touch,
