@@ -19,7 +19,25 @@ exports[`the sinumerik grammar > is stable 1`] = `
     "comment",
   ],
   [
-    "^(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*)(N\\d+)([ \\t]+)([A-Za-z_]\\w*:(?!=))",
+    "^(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*(?!\\s))((?:N\\s*\\d+|:\\s*\\d+)?)(\\s*(?!\\s))((?:(?!(?:GOTO|GOTOF|GOTOB|GOTOC):)[A-Za-z_]\\w*:(?!=))?)(\\s*(?!\\s))((?:DEF)(?![A-Za-z0-9_]))",
+    [
+      "",
+      "skip",
+      "",
+      "skip",
+      "",
+      "blockNumber",
+      "",
+      "section",
+      "",
+      {
+        "next": "declare",
+        "token": "keyword",
+      },
+    ],
+  ],
+  [
+    "^(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*)(N\\d+)([ \\t]+)((?!(?:GOTO|GOTOF|GOTOB|GOTOC):)[A-Za-z_]\\w*:(?!=))",
     [
       "",
       "skip",
@@ -30,7 +48,7 @@ exports[`the sinumerik grammar > is stable 1`] = `
     ],
   ],
   [
-    "^(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*)([A-Za-z_]\\w*:(?!=))",
+    "^(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*)((?!(?:GOTO|GOTOF|GOTOB|GOTOC):)[A-Za-z_]\\w*:(?!=))",
     [
       "",
       "skip",
@@ -48,12 +66,40 @@ exports[`the sinumerik grammar > is stable 1`] = `
     ],
   ],
   [
+    "^(\\s*)([/][0-9]?)(\\s*)([/][0-9]?)(\\s*)([/][0-9]?)",
+    [
+      "",
+      "skip",
+      "",
+      "skip",
+      "",
+      "skip",
+    ],
+  ],
+  [
+    "^(\\s*)([/][0-9]?)(\\s*)([/][0-9]?)",
+    [
+      "",
+      "skip",
+      "",
+      "skip",
+    ],
+  ],
+  [
     "^\\s*[/][0-9]?",
     "skip",
   ],
   [
     "N\\s*\\d+",
     "blockNumber",
+  ],
+  [
+    "(GOTO|GOTOF|GOTOB|GOTOC)(\\s+)(?!(?:COMPCURV|ENDWHILE|TRANSMIT|AMIRROR|COMPCAD|DEFAULT|DISPLOF|DISPLON|ENDLOOP|EXTCALL|ORIAXES|ORIVECT|REPEATB|TRAFOOF|ASCALE|ATRANS|COMPOF|COMPON|CUT3DC|DIAM90|DIAMOF|DIAMON|ENDFOR|EXTERN|MIRROR|ORIMKS|ORIWKS|REPEAT|STOPRE|STRING|TRAANG|TRACYL|TRAORI|BLOCK|BRISK|B_AND|B_NOT|B_XOR|CFTCP|CUT2D|ENDIF|FFWOF|FFWON|FRAME|GOTOB|GOTOC|GOTOF|KONTC|KONTT|MCALL|PCALL|SBLOF|SBLON|SCALE|TRANS|UNTIL|WHILE|AROT|AXIS|BOOL|B_OR|CALL|CASE|CFIN|CHAR|ELSE|GOTO|KONT|LOOP|NORM|PROC|REAL|SOFT|SUPA|ACN|ACP|AND|CFC|CIP|DEF|DIV|FOR|INT|MOD|NOT|RET|ROT|RPL|XOR|AC|CT|DC|IC|IF|OF|OR|TO)(?![A-Za-z0-9_]))(?!N\\d+(?![A-Za-z0-9_]))(?!(?:R\\d+)(?![A-Za-z0-9_]))([A-Za-z_][A-Za-z0-9_]*)(?![A-Za-z0-9_])(?!\\s*[(=\\[])",
+    [
+      "keyword",
+      "",
+      "section",
+    ],
   ],
   [
     "(?:\\$[A-Z_][A-Z0-9_]*)",

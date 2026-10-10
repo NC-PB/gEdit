@@ -54,21 +54,29 @@ import {
   addressNames,
   alternation,
   blockSkipPattern,
+  colonWordRule,
   commentMarkers,
   escapeClass,
   escapeLiteral,
+  freeTextRules,
   hasColonProgram,
   keywordPattern,
   letterAddresses,
   lineStart,
   namesPattern,
+  nonCapturing,
   numberPattern,
   operatorClass,
   orderedKeywords,
+  plainTextRule,
+  stackedSkipRules,
+  STATE_EXIT,
   variablePattern,
   variableSigil,
   type GrammarAction,
+  type GrammarEntry,
   type GrammarRule,
+  type GrammarStep,
 } from './shared';
 
 /**
@@ -93,6 +101,35 @@ const SKIP_LEVEL = '[0-9]';
 
 /** A label: a name and its colon, which must not be the `:=` of an assignment (§3.1). */
 const LABEL = '[A-Za-z_]\\w*:(?!=)';
+
+/**
+ * The label of a profile: `LABEL`, except for a jump keyword (`syntax.labelAfter`), which is
+ * never a label — `GOTOF:20` is the jump to the main block `:20`, written without the blank
+ * (B1; `labelSpanOf` in the tokenizer). Read as a label, the colour said a label named
+ * `GOTOF` stood there.
+ */
+function labelPattern(p: Profile): string {
+  const jumps = jumpKeywords(p).filter((name) => /^[A-Za-z_]\w*$/.test(name));
+  return jumps.length === 0 ? LABEL : `(?!(?:${jumps.map(escapeLiteral).join('|')}):)${LABEL}`;
+}
+
+/** The declaring keywords of the profile (`syntax.declareAfter`, `DEF`) that are keywords of it, upper case. */
+function declareKeywords(p: Profile): string[] {
+  const declared = new Set(orderedKeywords(p));
+  return (Array.isArray(p.syntax?.declareAfter) ? p.syntax.declareAfter : [])
+    .filter((name): name is string => typeof name === 'string')
+    .map((name) => name.trim().replace(/\s+/g, ' ').toUpperCase())
+    .filter((name) => /^[A-Z_]\w*$/.test(name) && declared.has(name));
+}
+
+/** The jump keywords of the profile (`syntax.labelAfter`) that are keywords of it, upper case. */
+function jumpKeywords(p: Profile): string[] {
+  const declared = new Set(orderedKeywords(p));
+  return (Array.isArray(p.syntax?.labelAfter) ? p.syntax.labelAfter : [])
+    .filter((name): name is string => typeof name === 'string')
+    .map((name) => name.trim().replace(/\s+/g, ' ').toUpperCase())
+    .filter((name) => declared.has(name));
+}
 
 /**
  * What has to follow an assignment word: an `=` that is not the `==` of a comparison, with
@@ -173,15 +210,70 @@ function skipMark(p: Profile): { pattern: string; before: boolean; after: boolea
  * that always takes part in the match, empty or not, because Monarch reads the length of
  * every group and a group that did not take part has none.
  */
-function headRule(parts: readonly [source: string, role: Role | ''][]): GrammarRule {
+function headRule(parts: readonly [source: string, role: GrammarStep][]): GrammarRule {
   const source = lineStart(parts.map(([part]) => `(${part})`).join(''));
   const action: GrammarAction = parts.map(([, role]) => role);
   return [source, action];
 }
 
+/**
+ * The states a `DEF` line moves through (`syntax.declareAfter`; `declaresNameHere` in the
+ * tokenizer). `declare`: after the keyword, and after a name — a type keyword or a `,` turns
+ * the next identifier into a declared name. `declareName`: an identifier now is a variable,
+ * unless it is a keyword; blanks and keywords leave the state as it is, a size in brackets
+ * (`STRING[32]`) is passed over, anything else gives the position back to `declare`.
+ * `declareNest`: inside brackets and parentheses a `,` separates arguments, not names. Every
+ * state ends at the first character of the next line (`STATE_EXIT`).
+ */
+function declareStates(p: Profile): { declare: GrammarEntry[]; declareName: GrammarEntry[]; declareNest: GrammarEntry[] } {
+  const declaring = new Set(declareKeywords(p));
+  const types = alternation(
+    orderedKeywords(p)
+      .filter((name) => !declaring.has(name))
+      .map(keywordPattern),
+  );
+  const keyword = types === null ? [] : [[`${types}(?![A-Za-z0-9_])`, 'keyword'] as GrammarRule];
+  return {
+    declare: [
+      STATE_EXIT,
+      [',', { token: 'operator', switchTo: 'declareName' }],
+      ...(types === null ? [] : [[`${types}(?![A-Za-z0-9_])`, { token: 'keyword', switchTo: 'declareName' }] as GrammarRule]),
+      ['[(\\[]', { token: 'operator', next: 'declareNest' }],
+      { include: 'root' },
+    ],
+    declareName: [
+      STATE_EXIT,
+      ['\\s+', ''],
+      ...keyword,
+      ['\\[', { token: 'operator', next: 'declareNest' }],
+      ['[A-Za-z_][A-Za-z0-9_]*', { token: 'variable', switchTo: 'declare' }],
+      ['(?=\\S)', { token: '@rematch', switchTo: 'declare' }],
+    ],
+    declareNest: [
+      STATE_EXIT,
+      ['[(\\[]', { token: 'operator', next: 'declareNest' }],
+      ['[)\\]]', { token: 'operator', next: '@pop' }],
+      { include: 'root' },
+    ],
+  };
+}
+
 /** Builds the rules of a `sinumerik` grammar, in the order Monarch tries them. */
 export function sinumerikRules(p: Profile, db: CodeDb): GrammarRule[] {
+  return build(p, db).rules;
+}
+
+/**
+ * The states of a `sinumerik` grammar besides `root`: empty unless the profile declares
+ * names (`syntax.declareAfter`, `DEF`), see `declareStates`.
+ */
+export function sinumerikStates(p: Profile, db: CodeDb): Record<string, GrammarEntry[]> {
+  return build(p, db).states;
+}
+
+function build(p: Profile, db: CodeDb): { rules: GrammarRule[]; states: Record<string, GrammarEntry[]> } {
   const rules: GrammarRule[] = [];
+  const states: Record<string, GrammarEntry[]> = {};
   const point = escapeLiteral(p.syntax?.decimalSeparator ?? '.');
   const gap = p.syntax?.wordSeparatorRequired === true ? '' : '\\s*';
   // The exponent of a number (§3.3): the profile's `syntax.exponentMarker` (`EX`), a sign
@@ -249,15 +341,55 @@ export function sinumerikRules(p: Profile, db: CodeDb): GrammarRule[] {
         ['\\s*', ''],
       ]
     : [['\\s*', '']];
-  if (typeof p.syntax?.labels === 'string' && p.syntax.labels !== '') {
+  const label = labelPattern(p);
+  const hasLabels = typeof p.syntax?.labels === 'string' && p.syntax.labels !== '';
+
+  // `DEF INT COUNTER` (`syntax.declareAfter`, M12.5): on a block that starts with the
+  // keyword — behind its skip mark, block number and label, as `BLOCK_HEAD_KINDS` of the
+  // tokenizer says — each name behind a type keyword or a `,` is a variable. Which name
+  // that is depends on what stood before it on the line, so the keyword enters a state
+  // (`declareStates`) that tracks it and is left at the first character of the next line.
+  // This rule comes first: the head rules below would take a block number and stop.
+  const declaring = declareKeywords(p);
+  const mainMark = p.syntax?.blockNumber?.mainPrefix;
+  if (declaring.length > 0) {
+    const numbers = [
+      !leadingInteger && prefix !== null ? `${prefix}${gap}\\d+` : null,
+      typeof mainMark === 'string' && mainMark !== '' ? `${escapeLiteral(mainMark)}${gap}\\d+` : null,
+      leadingInteger ? '\\d+' : null,
+    ].filter((part): part is string => part !== null);
+    // Every blank run is `\s*(?!\s)`, which splits in exactly one way: with plain `\s*` between
+    // optional parts, a padded line that is no `DEF` line is cut every possible way (G8 M8).
+    const blanks: [string, Role | ''] = ['\\s*(?!\\s)', ''];
+    // Two skip marks (`/1 /3 DEF INT A`) are allowed when the mark takes a level.
+    const mark: [string, Role | ''] = [`(?:${skip?.pattern ?? ''})?`, 'skip'];
+    const defLead: [string, Role | ''][] = !skip?.before
+      ? [blanks]
+      : p.syntax?.blockSkip?.levels === true
+        ? [blanks, mark, blanks, mark, blanks]
+        : [blanks, mark, blanks];
+    rules.push(
+      headRule([
+        ...defLead,
+        [numbers.length === 0 ? '' : `(?:${numbers.join('|')})?`, 'blockNumber'],
+        blanks,
+        [hasLabels ? `(?:${label})?` : '', 'section'],
+        blanks,
+        [`(?:${declaring.map(keywordPattern).join('|')})(?![A-Za-z0-9_])`, { token: 'keyword', next: 'declare' }],
+      ]),
+    );
+    Object.assign(states, declareStates(p));
+  }
+
+  if (hasLabels) {
     // A label behind a block number is separated from it (`N40 LOOP_A:`); without the
     // separator the whole run is the name. The block number is written the way
     // `syntax.labels` writes it, digits right behind the prefix, so the grammar finds a
     // label on exactly the lines the tokenizer and the outline find one.
     if (!leadingInteger && prefix !== null) {
-      rules.push(headRule([...lead, [`${prefix}\\d+`, 'blockNumber'], ['[ \\t]+', ''], [LABEL, 'section']]));
+      rules.push(headRule([...lead, [`${prefix}\\d+`, 'blockNumber'], ['[ \\t]+', ''], [label, 'section']]));
     }
-    rules.push(headRule([...lead, [LABEL, 'section']]));
+    rules.push(headRule([...lead, [label, 'section']]));
   }
   // The main block `:123` stands where a block number stands (§3.1 rule 2), and a leading
   // integer is a block number only there — anywhere else it is a value. The prefix is the
@@ -267,7 +399,7 @@ export function sinumerikRules(p: Profile, db: CodeDb): GrammarRule[] {
   const main = typeof mainPrefix === 'string' && mainPrefix !== '' ? mainPrefix : hasColonProgram(p) ? ':' : null;
   if (main !== null) rules.push(headRule([...lead, [`${escapeLiteral(main)}${gap}\\d+`, 'blockNumber']]));
   if (leadingInteger) rules.push(headRule([...lead, ['\\d+', 'blockNumber']]));
-  if (skip?.before) rules.push([lineStart(`\\s*${skip.pattern}`), 'skip']);
+  if (skip?.before) rules.push(...stackedSkipRules(p, skip.pattern), [lineStart(`\\s*${skip.pattern}`), 'skip']);
   if (skip?.after && blockNumber !== null) {
     rules.push(
       headRule([
@@ -282,6 +414,32 @@ export function sinumerikRules(p: Profile, db: CodeDb): GrammarRule[] {
   // Rule 4 once more: the block number `N123`, anywhere. The target of `GOTOF N200` is the
   // very number renumbering rewrites, so it is painted as the block number it refers to.
   if (blockNumber !== null) rules.push([blockNumber, 'blockNumber']);
+
+  // The M12.5 fields that name text the tokenizer reads in one piece (`freeText`,
+  // `colonWords`), if the profile sets them, and the name behind a jump keyword
+  // (`syntax.labelAfter`): `GOTOF SKIPSIM` is a keyword and the label it names, which is
+  // painted like the label's definition (`LOOP_A:`). `targetBehindKeyword` takes an
+  // identifier that is not a keyword, a block number (`GOTOF N100` keeps its `N` word, which
+  // a renumber rewrites) or a parameter (`GOTOB R10`), and that has no bracket, `(` or `=`
+  // behind it (a call, an assignment, an indexed name).
+  rules.push(...freeTextRules(p, new Set(orderedKeywords(p))));
+  const colonWord = colonWordRule(p, numberPattern(p));
+  if (colonWord !== null) rules.push(colonWord);
+  const jumps = jumpKeywords(p);
+  if (jumps.length > 0) {
+    const ident = '[A-Za-z0-9_]';
+    const words = orderedKeywords(p).filter((name) => /^[A-Za-z_]\w*$/.test(name));
+    const vars = variablePattern(p);
+    const notTarget = [
+      words.length === 0 ? null : `(?!(?:${words.map(escapeLiteral).join('|')})(?!${ident}))`,
+      !leadingInteger && prefix !== null ? `(?!${prefix}\\d+(?!${ident}))` : null,
+      vars === null ? null : `(?!${nonCapturing(vars)}(?!${ident}))`,
+    ];
+    rules.push([
+      `(${jumps.map(keywordPattern).join('|')})(\\s+)${notTarget.filter((guard) => guard !== null).join('')}([A-Za-z_]${ident}*)(?!${ident})(?!\\s*[(=\\[])`,
+      ['keyword', '', 'section'],
+    ]);
+  }
 
   // Rules 6 and 7: system variables and R parameters, including the indirect `R[R2]`
   // (§3.6). Both are the `variable` role: which of them a program may write to is the
@@ -324,6 +482,12 @@ export function sinumerikRules(p: Profile, db: CodeDb): GrammarRule[] {
     rules.push([`${ASSIGNMENT_GUARD}(?:${assignment})${assignment.endsWith(ASSIGNED) ? '' : ASSIGNED}`, 'keyword']);
   }
 
+  // `syntax.plainTextRun` (M12.5): a run of plain letters is one uncoloured piece, in front of
+  // any address that would paint one of its letters.
+  const keywords = alternation(orderedKeywords(p).map(keywordPattern));
+  const plainText = plainTextRule(p, keywords);
+  if (plainText !== null) rules.push(plainText);
+
   // Rule 13: the addresses with a plain number behind them.
   for (const [names, role] of addresses) {
     const pattern = namesPattern(names);
@@ -345,7 +509,6 @@ export function sinumerikRules(p: Profile, db: CodeDb): GrammarRule[] {
   // Rule 15: the keywords, then any other name in **one** neutral token. A tokenizer cannot
   // tell a global user variable from a subprogram called by name (§3.6), and a scatter of
   // coloured letters would claim it could.
-  const keywords = alternation(orderedKeywords(p).map(keywordPattern));
   if (keywords !== null) rules.push([`${keywords}(?![A-Za-z0-9_])`, 'keyword']);
   rules.push(['[A-Za-z_]\\w*', '']);
 
@@ -363,5 +526,5 @@ export function sinumerikRules(p: Profile, db: CodeDb): GrammarRule[] {
   if (operators !== null) rules.push([operators, 'operator']);
   rules.push(['\\s+', '']);
 
-  return rules;
+  return { rules, states };
 }

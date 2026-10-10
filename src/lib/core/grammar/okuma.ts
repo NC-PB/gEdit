@@ -20,17 +20,17 @@
 //   - the bare number last, for the operands of an expression
 //
 // Two differences from `syntax-okuma.md` §3.8 are deliberate and are explained where they
-// happen: the proposal reaches for Monarch states, which the generated grammar does not
-// use (`MonarchGrammar` has a single `root`), and it reserves `invalid` for two error
-// rules, which the generated grammar never emits — marking an error is the linter's job
-// (AD-11), and `grammar.test.ts` holds every built-in to it. A `T` word of the wrong
+// happen: the proposal reaches for Monarch states, which this grammar does not use (only
+// the Sinumerik `DEF` rules need one, see `sinumerik.ts`), and it reserves `invalid` for
+// two error rules, which the generated grammar never emits — marking an error is the
+// linter's job (AD-11), and `grammar.test.ts` holds every built-in to it. A `T` word of the wrong
 // length is therefore left **uncoloured** rather than marked: it still stands out against
 // the tool colour of its neighbours, and nothing claims it is a tool.
 //
 // Everything else comes from the profile and the code database. The literals here are the
-// ones that define the dialect rather than a machine: `G` and `M` as the code letters, `O`
-// as the program-name letter, `CALL`/`MODIN` as the two statements that take a program
-// name, and the 4- and 6-digit lengths of the `T` word (§5.1).
+// ones that define the dialect rather than a machine: `G` and `M` as the code letters and
+// the 4- and 6-digit lengths of the `T` word (§5.1). The statements that take a program
+// name and the shape of the name are the profile's `syntax.callTargets`.
 
 import type { CodeDb } from '$lib/core/codes/types';
 import type { Profile } from '$lib/core/profiles/types';
@@ -40,17 +40,21 @@ import {
   addressNames,
   alternation,
   blockSkipPattern,
+  colonWordRule,
   commentMarkers,
   escapeClass,
   escapeLiteral,
+  freeTextRules,
   hasTapeMarker,
   keywordPattern,
   letterAddresses,
   lineStart,
   namesPattern,
+  nonCapturing,
   numberPattern,
   operatorClass,
   orderedKeywords,
+  plainTextRule,
   variablePattern,
   type GrammarRule,
 } from './shared';
@@ -66,12 +70,6 @@ const CODE_LETTERS: readonly { letter: string; role: Role; digits: number }[] = 
   { letter: 'G', role: 'gcode', digits: 3 },
   { letter: 'M', role: 'mcode', digits: 4 },
 ];
-
-/** The letter a program name starts with (`O1234`, §2.2). */
-const PROGRAM_LETTER = 'O';
-
-/** The statements that are followed by a program name (§7.1). */
-const PROGRAM_CALLERS: readonly string[] = ['CALL', 'MODIN'];
 
 /** The digit counts of a `T` word: `T ttoo` and `T rrttoo` (§5.1). Longest first. */
 const TOOL_DIGITS: readonly number[] = [6, 4];
@@ -110,6 +108,7 @@ function assignmentTail(p: Profile): string | null {
 export function okumaRules(p: Profile, db: CodeDb): GrammarRule[] {
   const rules: GrammarRule[] = [];
   const number = numberPattern(p);
+  const variables = variablePattern(p);
   const packed = p.syntax?.wordSeparatorRequired !== true;
   const gap = packed ? '\\s*' : '';
   const value = `${gap}${number}`;
@@ -132,21 +131,32 @@ export function okumaRules(p: Profile, db: CodeDb): GrammarRule[] {
   // Monarch has no lookbehind and the generated grammar has one state, so "after the
   // sequence name" is one grouped rule per spelling of the name (§3.1 allows `/` in those
   // two places only; anywhere else `/` stays the division operator of §3.5).
-  const prefix = namesPattern(
-    [p.syntax?.blockNumber?.prefix, ...(p.syntax?.blockNumber?.altPrefixes ?? [])].filter(
-      (name): name is string => typeof name === 'string' && name !== '',
-    ),
+  const prefixes = [p.syntax?.blockNumber?.prefix, ...(p.syntax?.blockNumber?.altPrefixes ?? [])].filter(
+    (name): name is string => typeof name === 'string' && name !== '',
   );
-  // `N` + 1–4 characters, in its two spellings: digits only is a sequence *number* and is
-  // what renumbering rewrites; letter-led is a sequence *name*, which is this dialect's
-  // label and must keep its own role (§3.1, AD-24).
+  const prefix = namesPattern(prefixes);
+  // `N` + digits is a sequence *number* and is what renumbering rewrites, however many digits
+  // it has and whatever follows it (`N100G0`); `N` + a letter and up to three more
+  // characters is a sequence *name*, which is this dialect's label and must keep its own
+  // role (§3.1, AD-24) — when a blank or the end of the block stands behind it, and when it
+  // is not a command of the dialect that has the shape of a name (`NOEX`, `NOT`), which the
+  // tokenizer reads as the keyword (M12.5; `scanSequenceName`).
   const named = p.syntax?.sequenceNames === true;
+  const nameShaped = (word: string): boolean =>
+    prefixes.some((lead) => {
+      const rest = word.toUpperCase().startsWith(lead.toUpperCase()) ? word.slice(lead.length) : '';
+      return /^[A-Za-z][A-Za-z0-9]{0,3}$/.test(rest);
+    });
+  const commands = alternation(orderedKeywords(p).filter(nameShaped).map(escapeLiteral));
+  const notCommand = commands === null ? '' : `(?!${commands}(?=\\s|$))`;
   const sequences: { pattern: string; role: Role }[] =
     prefix === null
       ? []
       : [
-          { pattern: `${prefix}\\s*\\d{1,4}(?![0-9A-Za-z])`, role: 'blockNumber' },
-          ...(named ? [{ pattern: `${prefix}[A-Za-z][A-Za-z0-9]{0,3}(?![0-9A-Za-z])`, role: 'section' as Role }] : []),
+          { pattern: `${prefix}\\s*\\d+`, role: 'blockNumber' },
+          ...(named
+            ? [{ pattern: `${notCommand}${prefix}[A-Za-z][A-Za-z0-9]{0,3}(?=\\s|$)`, role: 'section' as Role }]
+            : []),
         ];
   const skip = blockSkipPattern(p);
   if (skip?.before) rules.push([lineStart(`\\s*${skip.pattern}`), 'skip']);
@@ -163,19 +173,28 @@ export function okumaRules(p: Profile, db: CodeDb): GrammarRule[] {
 
   // 7 a program name behind the statement that calls it, as one grouped rule: `CALL` is a
   // keyword and `O1234` the name of the subprogram, not an `O` word with a value (§7.1).
+  // The statements and the shape of the name are the profile's `syntax.callTargets`, so the
+  // grammar follows the tokenizer when a profile allows a longer name (M12.5;
+  // `targetBehindKeyword`). A name that runs on into more letters or digits is no target.
   const declared = new Set(orderedKeywords(p));
-  const callers = alternation(PROGRAM_CALLERS.filter((name) => declared.has(name)).map(escapeLiteral));
-  if (callers !== null) {
-    rules.push([
-      `(${callers})(\\s+)(${escapeLiteral(PROGRAM_LETTER)}[A-Za-z0-9]{1,4})(?![0-9A-Za-z])`,
-      ['keyword', '', 'programMarker'],
-    ]);
+  const targets = p.syntax?.callTargets;
+  const callers =
+    targets && Array.isArray(targets.after) && typeof targets.pattern === 'string' && targets.pattern !== ''
+      ? alternation(targets.after.map((name) => name.trim().toUpperCase()).filter((name) => declared.has(name)).map(keywordPattern))
+      : null;
+  if (callers !== null && targets) {
+    rules.push([`(${callers})(\\s+)(${nonCapturing(targets.pattern)})(?![0-9A-Za-z_])`, ['keyword', '', 'programMarker']]);
   }
 
   // 8 the control statements and the comparison words, before every single-letter address
   // and before the sequence rules — `NE` and `NOT` are operators, not names (§3.5).
+  rules.push(...freeTextRules(p, new Set(orderedKeywords(p))));
+  const colonWord = colonWordRule(p, variables === null ? number : `(?:${number}|[+-]?${variables})`);
+  if (colonWord !== null) rules.push(colonWord);
   const keywords = alternation(orderedKeywords(p).map(keywordPattern));
   if (keywords !== null) rules.push([`${keywords}(?![A-Za-z])`, 'keyword']);
+  const plainText = plainTextRule(p, keywords);
+  if (plainText !== null) rules.push(plainText);
 
   // 9 the sequence number and the sequence name, wherever they stand: at the head of the
   // block they name it, behind `GOTO`, `IF` or `G85`–`G88` they refer to one (§6.4, §7.2).
@@ -184,7 +203,6 @@ export function okumaRules(p: Profile, db: CodeDb): GrammarRule[] {
   // 10 system variables before common variables, and both before the assignment rule.
   const system = p.syntax?.systemVariables;
   if (typeof system === 'string' && system !== '') rules.push([`(?:${system})`, 'variable']);
-  const variables = variablePattern(p);
   if (variables !== null) rules.push([variables, 'variable']);
 
   // 11 a function name in front of its argument bracket (`SIN[30]`, `SQRT[…]`, §3.5),
@@ -246,6 +264,11 @@ export function okumaRules(p: Profile, db: CodeDb): GrammarRule[] {
   // the rules above have not claimed and that is longer than that stays uncoloured — a
   // name we cannot place is better left alone than painted as something it may not be.
   rules.push(['[A-Za-z]{2}[A-Za-z0-9]{0,2}(?![0-9A-Za-z])', 'variable']);
+  // A name the profile gives itself (`syntax.names`) that is longer than that is one
+  // uncoloured piece, as it is one `unknown` token; without the rule its last letters
+  // would be taken for a local variable (`CALRG`: a `C`, then the variable `ALRG`).
+  const names = p.syntax?.names;
+  if (typeof names === 'string' && names !== '') rules.push([`(?:${nonCapturing(names)})`, '']);
 
   // 17 bare numbers, 18 operators — `[ … ]` groups an expression here, `( … )` never does.
   rules.push([numberPattern(p, { signed: false }), 'number']);
