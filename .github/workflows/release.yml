@@ -200,11 +200,11 @@ jobs:
           deb=$(ls "$BUNDLE_DIR"/deb/*.deb | head -n 1)
           dpkg-deb -c "$deb"
           listing=$(dpkg-deb -c "$deb")
-          if ! grep -qE ' \./usr/bin/gedit-nc$' <<< "$listing"; then
+          if ! grep -qE ' (\./)?usr/bin/gedit-nc$' <<< "$listing"; then
             echo "::error::The .deb does not install /usr/bin/gedit-nc."
             exit 1
           fi
-          if grep -qE ' \./usr/bin/gedit$' <<< "$listing"; then
+          if grep -qE ' (\./)?usr/bin/gedit$' <<< "$listing"; then
             echo "::error::The .deb installs /usr/bin/gedit, which is GNOME's editor."
             exit 1
           fi
