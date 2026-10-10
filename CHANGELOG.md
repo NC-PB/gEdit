@@ -2,9 +2,13 @@
 
 What changed in each release of gEdit, written for the person who edits NC programs. The release workflow publishes the entry of a version as the notes of its draft release, so the top of each entry has to make sense on its own.
 
-## Unreleased
+## v1.0.0 (2026-10-10)
 
-Multi-channel programs: this change set lets gEdit know the channels of a twin-turret lathe or a multi-path control, shows the map and the tool list for each channel, and checks that the wait codes of the channels fit each other. It runs nothing and synchronizes nothing. See the new [Channels](docs/user/channels.md) page.
+The first full release, 1.0: gEdit is an editor for the NC programs that come out of a CAM post-processor, for Fanuc milling and turning, Heidenhain Klartext, Okuma turning and Sinumerik 840D turning and milling. It works in three layers, one for each phase of the plan. The editor (Phase 1): open a program, find your way around it, clean it up, renumber it, scale feeds, list the tools, compare it with the last version and save it without changing a byte you did not ask to change. The programs of your posts, safely (Phase 2): they are read right, you run checks before the machine, move a Z shift with the cycle depths, compare and merge two versions, search by the value of a word, and tell gEdit about your machine, your multi-channel control and your own dialect. Understand and write (Phase 3): see what a block means and what is in force, and write cycles from templates. It works offline, and Python is needed only for the script features. The installers are unsigned, as before; see "Installing an unsigned build" under v0.2.0. The built-in templates are marked "review pending": nobody has yet checked their text against a real control, so read what they insert before you send it to a machine.
+
+This is everything since v0.5.0, in five parts.
+
+Multi-channel programs: gEdit knows the channels of a twin-turret lathe or a multi-path control, shows the map and the tool list for each channel, and checks that the wait codes of the channels fit each other. It runs nothing and synchronizes nothing. See the [Channels](docs/user/channels.md) page.
 
 Real programs, second pass: programs from real CAM posts are recognised more reliably, a program that fits no dialect is marked as a guess, and the tool word, channel presets, checks and names follow what real posts write. See [Dialects](docs/user/dialects.md), [Machines](docs/user/machines.md) and [Channels](docs/user/channels.md).
 
@@ -128,6 +132,21 @@ Writing with templates (Phase 3, second half): the Insert tab offers parameteriz
 - No more false alarms from the program checks: `T7 T8 M6` in one block, a bare Klartext `L`, a jump to a computed target (`GOTOF "STEP_"<<COUNTER`), a `%` in a Klartext comment, and the words of a message in a Fanuc block.
 - A Klartext `TOOL CALL "END MILL 10"` with the name at the end of the line is now in the program map and the tool list.
 - No more missing-word or alone-in-block rows on a line that the machine's channel settings count as a wait.
+
+### Known limits
+
+- **The installers are unsigned** (see "Installing an unsigned build" under v0.2.0).
+- **The 49 built-in templates are marked "review pending".** They are written from the manuals and have not been checked against a real control. The same goes for the channel presets (marked *verify*) and for the defaults gEdit assumes until you set up a machine: they are starting points, so check them on a program of your machine that runs.
+- **gEdit reads and writes text.** No backplot, simulation or 3D display; no DNC or machine communication; no program management.
+- **Six dialects.** Milling on an Okuma control is not covered: such a program opens with the Okuma turning profile, which reads some of its codes wrongly. A program for any other control opens with the profile that fits best, marked as a guess.
+- **Channels are read, not run.** A clean wait-code check is no proof that the program runs on the machine. Showing two channels side by side is not there yet; Split into Channel Documents makes copies for reading only.
+- **A profile of your own describes; it does not compute.** It changes how a dialect's programs are recognised, numbered and explained and what typing does; it cannot run code.
+- **Left for later:** advanced renumber options, word-level marking in compare, bookmark names, selecting or extracting a block range, insert and append file and per-profile colours. A numeric tolerance in compare is cut.
+- Python 3.9 or newer is needed for the script features only; without it those commands are disabled with a message, and everything else works. Scripts are ordinary programs running with your rights, and gEdit cannot sandbox them. Run only scripts you have read and trust.
+- On Windows and Linux, logging out or shutting down skips the unsaved-changes prompt; the half-minute snapshot is what catches that work.
+- Every text in the program is English.
+
+The [user guide](https://github.com/NC-PB/gEdit/blob/v1.0.0/docs/user/README.md#what-gedit-does-not-do) lists the limits in full.
 
 ## v0.5.0 (2026-10-05)
 

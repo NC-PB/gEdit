@@ -183,7 +183,7 @@ channels match, your own profiles and code files, and the typing options such as
 case (see the [roadmap](docs/planning/roadmap.md)). Phase 3, "Understand and write", is done: the code
 inspector, hover help with the modal state and the motion colours, and templates with Edit Cycle,
 formulas and a template manager. The built-in templates are still marked "review pending" until
-they have been checked against a machine. The first release, 1.0, is next.
+they have been checked against a machine. The first release, 1.0, is prepared: the owner checks its installers and publishes it.
 Showing the channels of a program side by side is planned for Phase 4.
 
 ## Documentation
