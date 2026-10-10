@@ -29,4 +29,5 @@ export default {
   removeButton: 'Remove',
   removed: 'Removed {name} from the recent files.',
   cleared: 'The recent files were cleared.',
+  saveFailed: 'The list of recent files could not be saved.',
 } as const satisfies Messages;

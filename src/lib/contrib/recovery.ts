@@ -35,6 +35,9 @@ import {
 import { dialogs } from '$lib/app/dialogs';
 import { modals } from '$lib/app/modals';
 import { status } from '$lib/app/status';
+import { docs } from '$lib/stores/documents';
+import RecoveryStatus from '$lib/components/status/RecoveryStatus.svelte';
+import { baseName } from '$lib/utils/platform';
 import { t } from '$lib/i18n';
 import type { Contribution, Disposable, RecoveryEntry } from '$lib/app/types';
 
@@ -79,9 +82,43 @@ async function confirmDiscard(entries: readonly RecoveryEntry[]): Promise<boolea
   return answer === true;
 }
 
+/**
+ * The files among `entries` that another tab already has open (or that an earlier
+ * snapshot of the same restore is about to take): their text is restored all the same
+ * but stays in an untitled tab, because two tabs on one file would each believe they own
+ * it and the second save would discard the first (`fileOps.bindRestored`).
+ *
+ * Said before it happens and not after, from what the document store holds now. A
+ * snapshot whose path is outside the fs scope also stays untitled, but that is the
+ * restore dialog's own "unreachable" row; this is the one case with no warning anywhere.
+ */
+export function takenPaths(entries: readonly RecoveryEntry[]): string[] {
+  const taken: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of entries) {
+    if (entry.path === null) continue;
+    if (docs.byPath(entry.path) !== undefined || seen.has(entry.path)) taken.push(entry.path);
+    seen.add(entry.path);
+  }
+  return taken;
+}
+
 async function restoreThem(entries: RecoveryEntry[]): Promise<void> {
+  const taken = takenPaths(entries);
   const ids = await recovery.restore(entries);
-  if (ids.length > 0) status.show(t('recovery.restored', { count: ids.length }));
+  if (ids.length === 0) return;
+  const restored = t('recovery.restored', { count: ids.length });
+  if (taken.length === 0) {
+    status.show(restored);
+    return;
+  }
+  // One message, because the status bar holds one: the count of restored documents and,
+  // after it, the files whose text could not take the file's place. Sticky, because
+  // what it asks for (Save As under another name) is not done in four seconds.
+  const names = [...new Set(taken.map((path) => baseName(path)))].join(', ');
+  status.show(`${restored} ${t('recovery.pathTaken', { count: taken.length, names })}`, {
+    sticky: true,
+  });
 }
 
 /**
@@ -158,6 +195,8 @@ async function askOnStartup(): Promise<void> {
 
 export default {
   id: 'recovery',
+  // Shown while snapshots cannot be written, and only then (see `RecoveryStatus.svelte`).
+  statusItems: [{ id: 'recovery', side: 'left', order: 20, component: RecoveryStatus }],
   commands: [
     {
       id: 'recovery.showPending',

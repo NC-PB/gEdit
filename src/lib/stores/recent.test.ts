@@ -4,7 +4,7 @@
 // never invent an entry, never reorder one, and never let a failed call break the caller.
 // `touch` reads `files.recentLength` per call, which is the one number this side owns.
 
-import { get } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRecentService, type RecentServiceDeps } from './recent';
 import { DEFAULTS } from '$lib/core/settings/schema';
@@ -97,14 +97,18 @@ describe('touch', () => {
 
   it('clamps a hand-edited cap to the 0-50 of §7.7', async () => {
     for (const [value, expected] of [
-      [-4, 0],
-      [0, 0],
       [7.9, 7],
       [999, 50],
     ] as const) {
       const h = harness({ maxLength: () => value });
       await h.service.touch('/nc/x.nc');
       expect(h.calls.touch[0].max).toBe(expected);
+    }
+    // A cap that clamps to 0 is "off": no call at all (see below).
+    for (const value of [-4, 0]) {
+      const h = harness({ maxLength: () => value });
+      await h.service.touch('/nc/x.nc');
+      expect(h.calls.touch).toEqual([]);
     }
   });
 
@@ -137,5 +141,95 @@ describe('failures', () => {
     await h.service.clear();
     expect(warn).toHaveBeenCalledTimes(4);
     expect(get(h.service.list)).toEqual([]);
+  });
+});
+
+describe('files.recentLength: 0 is off, not a wipe (B1 A2)', () => {
+  it('records nothing and never asks Rust to forget the stored list', async () => {
+    const h = harness({ maxLength: () => 0 });
+    await h.service.refresh();
+    await h.service.touch('/nc/new.nc');
+    // Rust would answer a touch with max 0 by truncating to nothing (it used to);
+    // the stored list is the owner's to keep, so the call is not even made.
+    expect(h.calls.touch).toEqual([]);
+    expect(h.held()).toEqual([A, B]);
+  });
+
+  it('hides the list while it is 0 and brings the same list back when it is not', async () => {
+    const max = writable(15);
+    const h = harness({ maxLength: () => get(max), maxLengthStore: max });
+    await h.service.refresh();
+    expect(get(h.service.list)).toEqual([A, B]);
+    max.set(0);
+    expect(get(h.service.list)).toEqual([]);
+    max.set(10);
+    expect(get(h.service.list)).toEqual([A, B]);
+  });
+
+  it('hides the list without a store too, by the number read at the time', async () => {
+    let max = 15;
+    const h = harness({ maxLength: () => max });
+    await h.service.refresh();
+    max = 0;
+    const seen: RecentEntry[][] = [];
+    const off = h.service.list.subscribe((value) => seen.push(value));
+    off();
+    expect(seen).toEqual([[]]);
+  });
+});
+
+describe('a list that cannot be saved is said so (B1 A2)', () => {
+  it('tells once with the detail, again after a call that worked, and keeps the list', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const told: { text: string; detail: string }[] = [];
+    let failing = true;
+    const h = harness({
+      touch: async (path) => {
+        if (failing) throw new Error('state.json is read-only');
+        return [{ path, exists: true }];
+      },
+      notify: (text, detail) => void told.push({ text, detail }),
+    });
+    await h.service.refresh();
+    await h.service.touch('/nc/x.nc');
+    await h.service.touch('/nc/y.nc');
+    expect(told).toHaveLength(1);
+    expect(told[0].text).toBe('The list of recent files could not be saved.');
+    expect(told[0].detail).toBe('state.json is read-only');
+    expect(get(h.service.list)).toEqual([A, B]);
+
+    failing = false;
+    await h.service.touch('/nc/z.nc');
+    failing = true;
+    await h.service.touch('/nc/w.nc');
+    expect(told).toHaveLength(2);
+  });
+
+  it('answers false for a removal or a clear that failed, and re-reads the list', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const told: string[] = [];
+    let list = 0;
+    const h = harness({
+      list: async () => {
+        list++;
+        return [A];
+      },
+      remove: () => Promise.reject(new Error('read-only')),
+      clear: () => Promise.reject(new Error('read-only')),
+      notify: (text) => void told.push(text),
+    });
+    expect(await h.service.remove('/nc/a.nc')).toBe(false);
+    expect(await h.service.clear()).toBe(false);
+    // One message for both; the mirror was re-read each time.
+    expect(told).toHaveLength(1);
+    expect(list).toBe(2);
+    expect(get(h.service.list)).toEqual([A]);
+  });
+
+  it('answers true when it worked', async () => {
+    const h = harness();
+    await h.service.refresh();
+    expect(await h.service.remove('/nc/a.nc')).toBe(true);
+    expect(await h.service.clear()).toBe(true);
   });
 });

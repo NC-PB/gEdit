@@ -225,6 +225,9 @@ fn key_with_case(path: &str, fold_case: bool) -> String {
 /// Puts `path` at the front of `list`, drops every other spelling of it, and
 /// truncates to `max` entries (never above [`MAX_RECENT`]). Duplicates already
 /// in the list are collapsed too, so a hand-edited file heals itself.
+///
+/// `max == 0` is `files.recentLength: 0`, "stop recording": the list is answered
+/// as it is, so turning the setting back on brings the old entries back (B1 A2).
 fn touch(list: &[String], path: &str, max: usize) -> Vec<String> {
     touch_with(list, path, max, dedupe_key)
 }
@@ -235,10 +238,10 @@ fn touch_with(
     max: usize,
     key: impl Fn(&str) -> String,
 ) -> Vec<String> {
-    let max = max.min(MAX_RECENT);
     if max == 0 {
-        return Vec::new();
+        return list.to_vec();
     }
+    let max = max.min(MAX_RECENT);
     let mut seen = HashSet::from([key(path)]);
     let mut out = vec![path.to_owned()];
     for entry in list {
@@ -448,6 +451,11 @@ pub fn list_recent(dirs: &AppDirs) -> Vec<RecentEntry> {
 /// The body of [`recent_touch`], without the fs-scope check: that one needs the
 /// app handle and is the command's own first step.
 pub fn touch_recent(dirs: &AppDirs, path: &str, max: u32) -> Result<Vec<RecentEntry>, String> {
+    if max == 0 {
+        // `files.recentLength: 0` stops recording; the stored list stays as it is and
+        // nothing is written (B1 A2).
+        return Ok(entries(&read_state(&dirs.state_file()).recent));
+    }
     let recent = update_state(&dirs.state_file(), |state| {
         let recent = touch(&state.recent, path, max as usize);
         Ok((
@@ -465,15 +473,14 @@ pub fn touch_recent(dirs: &AppDirs, path: &str, max: u32) -> Result<Vec<RecentEn
 }
 
 /// The body of [`recent_remove`] and [`recent_clear`]: read, change, write,
-/// answer. A write that fails (a read-only `state.json`, a full disk) is
-/// reported on stderr and the list on disk is answered with, so the menu shows
-/// the truth rather than a change that did not happen.
+/// answer. A write that fails (a read-only `state.json`, a full disk) is an
+/// error the webview shows, instead of a line on stderr nobody sees (B1 A2);
+/// the list on disk is unchanged then, and the webview keeps what it had.
 pub fn change_recent(
     dirs: &AppDirs,
     change: impl FnOnce(&[String]) -> Vec<String>,
-) -> Vec<RecentEntry> {
-    let file = dirs.state_file();
-    let written = update_state(&file, |state| {
+) -> Result<Vec<RecentEntry>, String> {
+    let recent = update_state(&dirs.state_file(), |state| {
         let recent = change(&state.recent);
         Ok((
             StateWrite {
@@ -483,15 +490,8 @@ pub fn change_recent(
             },
             recent,
         ))
-    });
-    match written {
-        Ok(recent) => entries(&recent),
-        Err(err) => {
-            eprintln!("gEdit: {err}");
-            // Nothing was written, so what is on disk is still the answer.
-            entries(&read_state(&file).recent)
-        }
-    }
+    })?;
+    Ok(entries(&recent))
 }
 
 /// Merges `ui` into the `ui` member of `state.json`, leaving `recent` alone.
@@ -527,22 +527,17 @@ pub fn recent_touch(app: AppHandle, path: String, max: u32) -> Result<Vec<Recent
     touch_recent(&paths::app_dirs(&app)?, &path, max)
 }
 
-/// Drops `path` from the list and answers with what is left.
+/// Drops `path` from the list and answers with what is left. Rejects when
+/// `state.json` could not be written.
 #[tauri::command]
-pub fn recent_remove(app: AppHandle, path: String) -> Vec<RecentEntry> {
-    match paths::app_dirs(&app) {
-        Ok(dirs) => change_recent(&dirs, |recent| remove(recent, &path)),
-        Err(_) => Vec::new(),
-    }
+pub fn recent_remove(app: AppHandle, path: String) -> Result<Vec<RecentEntry>, String> {
+    change_recent(&paths::app_dirs(&app)?, |recent| remove(recent, &path))
 }
 
-/// Empties the list.
+/// Empties the list. Rejects when `state.json` could not be written.
 #[tauri::command]
-pub fn recent_clear(app: AppHandle) -> Vec<RecentEntry> {
-    match paths::app_dirs(&app) {
-        Ok(dirs) => change_recent(&dirs, |_| Vec::new()),
-        Err(_) => Vec::new(),
-    }
+pub fn recent_clear(app: AppHandle) -> Result<Vec<RecentEntry>, String> {
+    change_recent(&paths::app_dirs(&app)?, |_| Vec::new())
 }
 
 /// Grants at most [`MAX_GRANTED_ON_STARTUP`] existing recent entries to the fs
@@ -605,8 +600,9 @@ mod tests {
         let before = list(&["/a.nc", "/b.nc", "/c.nc"]);
         assert_eq!(touch(&before, "/n.nc", 2), list(&["/n.nc", "/a.nc"]));
         assert_eq!(touch(&before, "/n.nc", 1), list(&["/n.nc"]));
-        // `files.recentLength` may be 0 (§7.7): the list is then simply off.
-        assert_eq!(touch(&before, "/n.nc", 0), Vec::<String>::new());
+        // `files.recentLength` may be 0 (§7.7): recording stops and the stored list is
+        // kept as it is (B1 A2), not wiped.
+        assert_eq!(touch(&before, "/n.nc", 0), before);
 
         let long: Vec<String> = (0..80).map(|n| format!("/f{n}.nc")).collect();
         let touched = touch(&long, "/n.nc", u32::MAX as usize);
@@ -1067,11 +1063,54 @@ mod tests {
         assert_eq!(paths_of(&list_recent(&dirs)), vec![b.clone(), a.clone()]);
 
         assert_eq!(
-            paths_of(&change_recent(&dirs, |recent| remove(recent, &b))),
+            paths_of(&change_recent(&dirs, |recent| remove(recent, &b)).unwrap()),
             vec![a.clone()]
         );
-        assert_eq!(change_recent(&dirs, |_| Vec::new()), Vec::new());
+        assert_eq!(change_recent(&dirs, |_| Vec::new()).unwrap(), Vec::new());
         assert_eq!(list_recent(&dirs), Vec::new());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// `files.recentLength: 0` stops recording but must not wipe what is stored:
+    /// the owner's choice is that turning it back on brings the list back (B1 A2).
+    #[test]
+    fn a_recent_length_of_zero_keeps_the_stored_list_and_writes_nothing() {
+        let (root, dirs) = scratch_dirs("recent-zero");
+        let a = root.join("a.nc").to_string_lossy().into_owned();
+        let b = root.join("b.nc").to_string_lossy().into_owned();
+        touch_recent(&dirs, &a, 15).unwrap();
+        touch_recent(&dirs, &b, 15).unwrap();
+        let before = fs::read(dirs.state_file()).unwrap();
+
+        let answer = touch_recent(&dirs, "/c.nc", 0).unwrap();
+        assert_eq!(paths_of(&answer), vec![b.clone(), a.clone()]);
+        assert_eq!(paths_of(&list_recent(&dirs)), vec![b, a]);
+        assert_eq!(fs::read(dirs.state_file()).unwrap(), before);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// A removal or a clear whose write fails is an error the webview can show; it
+    /// used to be a line on stderr and an answer that looked like success (B1 A2).
+    #[cfg(unix)]
+    #[test]
+    fn a_failed_write_of_the_recent_list_is_returned_not_printed() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (root, dirs) = scratch_dirs("recent-write-fails");
+        let a = root.join("a.nc").to_string_lossy().into_owned();
+        touch_recent(&dirs, &a, 15).unwrap();
+
+        let folder = dirs.state_file().parent().unwrap().to_path_buf();
+        fs::set_permissions(&folder, fs::Permissions::from_mode(0o555)).unwrap();
+        // root ignores the mode bits, so only assert when the folder really is closed.
+        let closed = fs::write(folder.join("probe"), b"").is_err();
+        if closed {
+            let err = change_recent(&dirs, |_| Vec::new()).expect_err("the write failed");
+            assert!(!err.is_empty());
+            assert!(change_recent(&dirs, |recent| remove(recent, &a)).is_err());
+            assert_eq!(paths_of(&list_recent(&dirs)), vec![a]);
+        }
+        fs::set_permissions(&folder, fs::Permissions::from_mode(0o755)).unwrap();
         let _ = fs::remove_dir_all(&root);
     }
 

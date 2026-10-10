@@ -363,6 +363,14 @@ export function recoveryDiscard(session: string): Promise<void> {
   return invoke<void>('recovery_discard', { session });
 }
 
+/**
+ * Removes one snapshot of a leftover session, which is what a restore does for each
+ * snapshot it has opened. The snapshots beside it stay. Rejects for the running session.
+ */
+export function recoveryDiscardEntry(session: string, key: string): Promise<void> {
+  return invoke<void>('recovery_discard_entry', { session, key });
+}
+
 // ---------------------------------------------------------------------------
 // M12: the sibling lookup (src-tauri/src/channels.rs; plan §7.10, §4, AD-32)
 //

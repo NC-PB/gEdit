@@ -700,6 +700,40 @@ pub fn discard_in(root: &Path, current: Option<&str>, session: &str) -> Result<(
     }
 }
 
+/// The body of [`recovery_discard_entry`]: one snapshot (both halves) of a leftover
+/// session, which is what a restore does for each snapshot it has opened (B1 A2). The
+/// same checks as [`discard_in`] — both names valid, the current session refused,
+/// the session folder a real folder and not a link — so the one snapshot cannot be a
+/// way to reach anything that a whole-session discard could not.
+///
+/// A snapshot or a session that is already gone is not an error (two clicks, one
+/// dialog). A session left with nothing in it is not removed here: it is "spent" and
+/// the next start's prune takes it.
+pub fn discard_entry_in(
+    root: &Path,
+    current: Option<&str>,
+    session: &str,
+    key: &str,
+) -> Result<(), String> {
+    let dir = session_dir(root, session)?;
+    // Before the name check of the key, so a bad key never learns anything about the
+    // session; `drop_in` below checks it again through `snapshot_file`.
+    if !valid_key(key) {
+        return Err(format!("recovery: {key} is not a usable key"));
+    }
+    if current == Some(session) {
+        return Err("recovery: the current session cannot be discarded".to_owned());
+    }
+    match fs::symlink_metadata(&dir) {
+        Ok(stat) if stat.is_dir() => drop_in(root, session, key),
+        Ok(_) => Err(format!("recovery: {session} is not a session folder")),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(format!(
+            "recovery: could not discard {session}/{key} ({err})"
+        )),
+    }
+}
+
 /// Deletes what the folder may not keep: leftovers nobody came back for, leftovers a
 /// clean quit emptied, and — only if the folder is still over its cap — the oldest
 /// leftovers until it is under. Answers with how many sessions went.
@@ -835,6 +869,22 @@ pub fn recovery_discard(app: AppHandle, session: String) -> Result<(), String> {
     )
 }
 
+/// Removes one snapshot of a leftover session: what the restore dialog does for each
+/// snapshot it has opened, so that the ones it did not open stay (B1 A2). The current
+/// session is refused, like [`recovery_discard`].
+#[tauri::command]
+pub fn recovery_discard_entry(app: AppHandle, session: String, key: String) -> Result<(), String> {
+    if !valid_key(&session) || !valid_key(&key) {
+        return Err("recovery: unusable session or key".to_owned());
+    }
+    discard_entry_in(
+        &paths::app_dirs(&app)?.recovery_dir(),
+        current_session().as_deref(),
+        &session,
+        &key,
+    )
+}
+
 /// Creates this run's session folder (owner-only), starts the heartbeat thread and
 /// prunes what is too old or too big. Called from `setup_app`, before the window
 /// appears, because a snapshot may arrive as soon as the first keystroke does.
@@ -943,6 +993,13 @@ mod tests {
                     "discard(app: AppHandle, session: String)"
                 ),
                 "valid_key(&session)",
+            ),
+            (
+                concat!(
+                    "pub fn recovery_",
+                    "discard_entry(app: AppHandle, session: String, key: String)"
+                ),
+                "valid_key(&key)",
             ),
         ] {
             let at = source.find(signature).expect(signature);
@@ -1587,6 +1644,58 @@ mod tests {
         assert!(!theirs.exists());
         // A session that is already gone is not an error: two clicks, one dialog.
         discard_in(&root, Some("s-mine"), "s-theirs").unwrap();
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// B1 A2: a restore takes the snapshots it has opened one by one; the ones it did
+    /// not open stay in the session, and the offer comes again for exactly them.
+    #[test]
+    fn discarding_one_entry_leaves_the_rest_of_its_session() {
+        let root = scratch("discard-entry");
+        let theirs = session_with(
+            &root,
+            "s-theirs",
+            &[snapshot("d1", "G0\n", 1), snapshot("d2", "G1\n", 2)],
+        );
+
+        discard_entry_in(&root, Some("s-mine"), "s-theirs", "d1").unwrap();
+        assert!(!theirs.join("d1.txt").exists() && !theirs.join("d1.json").exists());
+        assert!(theirs.join("d2.txt").is_file() && theirs.join("d2.json").is_file());
+        // Twice, or for a snapshot or a session that is not there: not an error.
+        discard_entry_in(&root, Some("s-mine"), "s-theirs", "d1").unwrap();
+        discard_entry_in(&root, Some("s-mine"), "s-theirs", "never-there").unwrap();
+        discard_entry_in(&root, Some("s-mine"), "s-gone", "d1").unwrap();
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// The checks of `discard_in` hold for one entry too: the running session is
+    /// never touched, and no name can leave the folder.
+    #[test]
+    fn discarding_one_entry_refuses_the_running_session_and_bad_names() {
+        let root = scratch("discard-entry-refused");
+        let mine = session_with(&root, "s-mine", &[snapshot("d1", "G0\n", 1)]);
+        let theirs = session_with(&root, "s-theirs", &[snapshot("d2", "G1\n", 2)]);
+
+        let err = discard_entry_in(&root, Some("s-mine"), "s-mine", "d1")
+            .expect_err("discarded from our own session");
+        assert!(err.contains("current session"), "{err}");
+        assert!(mine.join("d1.txt").is_file());
+
+        for bad in ["..", "../s-theirs", "s 1", ".", "S-1", ""] {
+            assert!(
+                discard_entry_in(&root, None, bad, "d2").is_err(),
+                "session {bad}"
+            );
+            assert!(
+                discard_entry_in(&root, None, "s-theirs", bad).is_err(),
+                "key {bad}"
+            );
+        }
+        assert!(theirs.join("d2.txt").is_file());
+
+        // A session that is a file, or a link, is not a folder of ours.
+        fs::write(root.join("s-file"), b"x").unwrap();
+        assert!(discard_entry_in(&root, None, "s-file", "d2").is_err());
         let _ = fs::remove_dir_all(&root);
     }
 

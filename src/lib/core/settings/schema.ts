@@ -74,6 +74,16 @@ export interface Settings {
   'files.backup': 'off' | 'sibling' | 'history';
   /** 1-50: how many versions `history` keeps per file. */
   'files.backupCount': number;
+  /**
+   * B1 A2: the most the copies of all files together may take, in megabytes; the oldest
+   * go first, and the newest copy of a file that still exists never does. 0 = no limit.
+   */
+  'files.backupTotalMb': number;
+  /**
+   * B1 A2: days after its last copy that the copies of a file that no longer exists are
+   * deleted. 0 = keep them for ever.
+   */
+  'files.backupOrphanDays': number;
   /** M7, AD-21: snapshot dirty documents so a crash or a power cut costs at most 30 s. */
   'files.recovery': boolean;
   /** M7, AD-22: reopen the files that were open when gEdit was last closed. */
@@ -128,6 +138,8 @@ export const DEFAULTS: Settings = freeze({
   // that the bytes a save replaced are still somewhere afterwards (AD-21).
   'files.backup': 'history',
   'files.backupCount': 5,
+  'files.backupTotalMb': 500,
+  'files.backupOrphanDays': 90,
   'files.recovery': true,
   'files.restoreSession': true,
   'files.rememberPerFile': true,
@@ -236,6 +248,8 @@ export const SETTING_FIELDS: SettingFieldMeta[] = [
     choices: choice('files.backup', ['history', 'sibling', 'off']),
   }),
   meta('files.backupCount', 'files', { type: 'integer', min: 1, max: 50 }),
+  meta('files.backupTotalMb', 'files', { type: 'integer', min: 0, max: 1000000 }),
+  meta('files.backupOrphanDays', 'files', { type: 'integer', min: 0, max: 3650 }),
   meta('files.recovery', 'files', { type: 'bool' }),
   meta('files.restoreSession', 'files', { type: 'bool' }),
   meta('files.rememberPerFile', 'files', { type: 'bool' }),

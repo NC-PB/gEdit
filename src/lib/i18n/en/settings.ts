@@ -126,7 +126,7 @@ export default {
   },
 
   files: {
-    recentLength: { label: 'Recent files to remember', help: 'Zero turns the recent list off.' },
+    recentLength: { label: 'Recent files to remember', help: 'Zero turns the recent list off: nothing new is added and the list is hidden. The list is kept and comes back when you set a number again.' },
     externalChange: {
       label: 'When a file changes outside gEdit',
       help: 'A document with unsaved changes always asks, whatever is set here.',
@@ -148,6 +148,14 @@ export default {
     backupCount: {
       label: 'Versions to keep',
       help: 'How many earlier versions of each file gEdit keeps. Only for copies kept in gEdit.',
+    },
+    backupTotalMb: {
+      label: 'Most space for earlier versions (MB)',
+      help: 'When the earlier versions of all files together take more than this, the oldest ones are deleted. The newest version of a file that still exists is always kept. 0 means no limit. Only for copies kept in gEdit.',
+    },
+    backupOrphanDays: {
+      label: 'Delete earlier versions of deleted files after (days)',
+      help: 'Earlier versions of a file that no longer exists are deleted this many days after the last one was made. 0 means keep them for ever. Only for copies kept in gEdit.',
     },
     recovery: {
       label: 'Recover unsaved changes after a crash',

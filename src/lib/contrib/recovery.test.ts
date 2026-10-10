@@ -47,7 +47,9 @@ const fake = vi.hoisted(() => ({
   started: 0,
   decided: 0,
   claimed: 0,
-  shown: [] as { text: string; error: boolean }[],
+  shown: [] as { text: string; error: boolean; sticky: boolean }[],
+  /** Paths another tab has open right now. */
+  openPaths: [] as string[],
 }));
 
 vi.mock('$lib/app/recovery', () => ({
@@ -99,8 +101,14 @@ vi.mock('$lib/app/dialogs', () => ({
 
 vi.mock('$lib/app/status', () => ({
   status: {
-    show: (text: string, o?: { error?: boolean }) =>
-      fake.shown.push({ text, error: o?.error === true }),
+    show: (text: string, o?: { error?: boolean; sticky?: boolean }) =>
+      fake.shown.push({ text, error: o?.error === true, sticky: o?.sticky === true }),
+  },
+}));
+
+vi.mock('$lib/stores/documents', () => ({
+  docs: {
+    byPath: (path: string) => (fake.openPaths.includes(path) ? { id: 'd9' } : undefined),
   },
 }));
 
@@ -122,6 +130,7 @@ beforeEach(() => {
   fake.decided = 0;
   fake.claimed = 0;
   fake.shown = [];
+  fake.openPaths = [];
   fake.restore.mockClear();
   fake.discard.mockClear();
 });
@@ -138,6 +147,8 @@ describe('what it declares', () => {
       title: 'recovery.showPending',
       category: 'recovery.category',
     });
+    // The lasting sign for snapshots that cannot be written (B1 A2).
+    expect(contribution.statusItems.map((item) => item.id)).toEqual(['recovery']);
     expect('keys' in contribution.commands[0]).toBe(false);
   });
 
@@ -187,6 +198,46 @@ describe('the four answers', () => {
     expect(fake.restore).toHaveBeenCalledWith([kept]);
     expect(fake.shown[0].text).toContain('restored');
     expect(fake.discard).not.toHaveBeenCalled();
+  });
+
+  // B1 A2. A snapshot whose file another tab has open still restores, into an untitled
+  // tab (two tabs on one file would each think they own it). Nothing said so: the text
+  // appeared in a tab with the file's name and the first Save went to a Save As dialog.
+  it('says which restored files stayed untitled because another tab has them open', async () => {
+    const taken = entry({ key: 'd2', path: '/nc/open.nc', title: 'open.nc' });
+    fake.leftovers = [entry(), taken];
+    fake.openPaths = ['/nc/open.nc'];
+    fake.answers = [{ action: 'restore', entries: [entry(), taken] }];
+
+    await showLeftovers();
+    expect(fake.shown).toHaveLength(1);
+    const [message] = fake.shown;
+    expect(message.text).toContain('2 documents were restored');
+    expect(message.text).toContain('open.nc is already open in another tab');
+    expect(message.text).toContain('Save As');
+    // The file that nobody else has open is not named.
+    expect(message.text).not.toContain('prog.nc');
+    // What it asks for is not done in four seconds.
+    expect(message.sticky).toBe(true);
+  });
+
+  it('names a file once when two snapshots of it come back together', async () => {
+    const first = entry({ key: 'd1' });
+    const second = entry({ key: 'd2', session: 's-2' });
+    fake.leftovers = [first, second];
+    fake.answers = [{ action: 'restore', entries: [first, second] }];
+
+    await showLeftovers();
+    expect(fake.shown[0].text).toContain('prog.nc is already open in another tab');
+  });
+
+  it('keeps the plain message when no restored file is taken', async () => {
+    fake.leftovers = [entry(), entry({ key: 'd2', path: null, title: 'Untitled-1' })];
+    fake.answers = [{ action: 'restore', entries: fake.leftovers }];
+
+    await showLeftovers();
+    expect(fake.shown[0].text).not.toContain('already open');
+    expect(fake.shown[0].sticky).toBe(false);
   });
 
   it('treats Esc and a click outside as Later: nothing opens, nothing is deleted', async () => {

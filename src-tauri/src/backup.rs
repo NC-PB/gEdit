@@ -58,13 +58,15 @@ use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::{Map, Value};
 use tauri::AppHandle;
 use tauri_plugin_fs::FsExt;
 
+use crate::atomic;
 use crate::config;
+use crate::files;
 use crate::paths::{self, AppDirs, SETTINGS_FILE_NAME};
 
 /// What `files.backup` may be. The three names are the wire values of the setting
@@ -102,6 +104,11 @@ impl BackupMode {
 /// The settings keys this module reads (§7.11).
 pub const KEY_MODE: &str = "files.backup";
 pub const KEY_COUNT: &str = "files.backupCount";
+/// B1 A2: the overall cap on `<data>/backups`, in megabytes. 0 = no limit.
+pub const KEY_TOTAL_MB: &str = "files.backupTotalMb";
+/// B1 A2: how many days the history of a file that no longer exists is kept after its
+/// last backup. 0 = never expire.
+pub const KEY_ORPHAN_DAYS: &str = "files.backupOrphanDays";
 
 /// `files.backupCount` when the setting is absent or unusable (§7.11).
 pub const DEFAULT_BACKUP_COUNT: u32 = 5;
@@ -109,6 +116,15 @@ pub const DEFAULT_BACKUP_COUNT: u32 = 5;
 /// history can neither be emptied by a `0` nor grow without bound.
 pub const MIN_BACKUP_COUNT: u32 = 1;
 pub const MAX_BACKUP_COUNT: u32 = 50;
+
+/// `files.backupTotalMb` when the setting is absent or unusable.
+pub const DEFAULT_TOTAL_MB: u64 = 500;
+/// The largest value the setting takes; a hand edit beyond it is cut to it.
+pub const MAX_TOTAL_MB: u64 = 1_000_000;
+/// `files.backupOrphanDays` when the setting is absent or unusable.
+pub const DEFAULT_ORPHAN_DAYS: u32 = 90;
+/// The largest value the setting takes (ten years).
+pub const MAX_ORPHAN_DAYS: u32 = 3650;
 
 /// What a `sibling` backup is called: the document's own name plus this.
 ///
@@ -189,11 +205,24 @@ pub fn backup_count(value: Option<i64>) -> u32 {
     }
 }
 
+/// A limit setting: `0` is a real value ("no limit"), a negative or missing one is
+/// the default, and anything past `max` is cut to it.
+fn limit(value: Option<i64>, default: u64, max: u64) -> u64 {
+    match value {
+        Some(n) if n >= 0 => (n as u64).min(max),
+        _ => default,
+    }
+}
+
 /// What this module needs out of `settings.json`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BackupSettings {
     pub mode: BackupMode,
     pub count: u32,
+    /// The cap on all histories together, in megabytes; 0 = no limit.
+    pub total_mb: u64,
+    /// Days an orphaned history is kept; 0 = for ever.
+    pub orphan_days: u32,
 }
 
 /// Written out rather than derived: a derived `count` would be **0**, and a 0 tells
@@ -204,6 +233,8 @@ impl Default for BackupSettings {
         Self {
             mode: BackupMode::default(),
             count: DEFAULT_BACKUP_COUNT,
+            total_mb: DEFAULT_TOTAL_MB,
+            orphan_days: DEFAULT_ORPHAN_DAYS,
         }
     }
 }
@@ -223,6 +254,16 @@ impl BackupSettings {
         Self {
             mode: BackupMode::parse(settings.get(KEY_MODE).and_then(Value::as_str)),
             count: backup_count(settings.get(KEY_COUNT).and_then(Value::as_i64)),
+            total_mb: limit(
+                settings.get(KEY_TOTAL_MB).and_then(Value::as_i64),
+                DEFAULT_TOTAL_MB,
+                MAX_TOTAL_MB,
+            ),
+            orphan_days: limit(
+                settings.get(KEY_ORPHAN_DAYS).and_then(Value::as_i64),
+                u64::from(DEFAULT_ORPHAN_DAYS),
+                u64::from(MAX_ORPHAN_DAYS),
+            ) as u32,
         }
     }
 }
@@ -243,12 +284,14 @@ impl BackupSettings {
 pub async fn files_backup(app: AppHandle, path: String) -> Result<Option<String>, String> {
     let scope = app.fs_scope();
     tauri::async_runtime::spawn_blocking(move || {
-        backup_allowed(
-            &paths::app_dirs(&app)?,
-            Path::new(&path),
-            SystemTime::now(),
-            |path| scope.is_allowed(path),
-        )
+        let dirs = paths::app_dirs(&app)?;
+        let answer = backup_allowed(&dirs, Path::new(&path), SystemTime::now(), |path| {
+            scope.is_allowed(path)
+        });
+        if matches!(answer, Ok(Some(_))) {
+            sweep_later(dirs);
+        }
+        answer
     })
     .await
     // The save reads a rejection as "no backup", and does not write.
@@ -313,6 +356,7 @@ pub fn backup(
                 eprintln!("gEdit: {err}");
             }
         }
+        note_folder(dirs, source);
     }
     Ok(Some(target.to_string_lossy().into_owned()))
 }
@@ -644,6 +688,362 @@ fn prune(dir: &Path, keep: u32) -> Result<(), String> {
     }
 }
 
+// --- the global pass: an overall cap and expiry (B1 A2) ----------------------
+//
+// `prune` keeps `files.backupCount` versions per file, which bounds one history and
+// nothing else: fifty versions of a few hundred files, or the histories of every
+// program that was ever opened and has since been deleted, grow without end. After a
+// successful backup a second, global pass therefore applies two limits.
+//
+// **The newest backup of a file that still exists is never deleted by either of them.**
+// It is the one copy a save just made room for, and a limit that is too small for it
+// leaves the folder over the limit rather than take it.
+//
+// To know whether the file still exists the history has to remember where it came
+// from, and its folder name is only a hash. Each `<fnv32>` folder therefore holds a
+// small `.folder` file with the folder path (written best effort after a backup, and
+// only when it changed). A history without one (made before this version), one whose
+// name was shortened (the real name is not known), a path that cannot be checked in
+// time or a folder that cannot be read all count as "the file may exist": nothing of
+// theirs is expired, and their newest backup is kept.
+
+/// The file in `<data>/backups/<fnv32>/` that names the folder the histories in it
+/// belong to. Not a directory and not a stamped entry, so `prune` and the history
+/// listing never see it.
+const FOLDER_NOTE: &str = ".folder";
+
+/// How long the existence check of all source files together may take. A share that
+/// has gone away must not hold the pass for ever; its histories count as present.
+const SWEEP_STAT_BUDGET: Duration = Duration::from_secs(3);
+
+/// One stamped entry of a history.
+#[derive(Debug, Clone)]
+struct Entry {
+    stamp: String,
+    counter: u32,
+    path: PathBuf,
+    bytes: u64,
+}
+
+/// One `<fnv32>/<file name>/` folder.
+#[derive(Debug)]
+struct History {
+    dir: PathBuf,
+    /// The file the history belongs to, when the folder note and the name allow
+    /// saying so.
+    source: Option<PathBuf>,
+    /// Newest first.
+    entries: Vec<Entry>,
+}
+
+/// What [`sweep`] removed.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct SweepReport {
+    /// Entries (backup copies) deleted.
+    pub entries: usize,
+    /// Bytes those entries held.
+    pub bytes: u64,
+    /// Histories that went completely.
+    pub histories: usize,
+}
+
+/// Records which folder the histories under `source`'s folder key belong to. Best
+/// effort and quiet: a backup never fails over its bookkeeping.
+fn note_folder(dirs: &AppDirs, source: &Path) {
+    let Some(folder) = source.parent().filter(|f| !f.as_os_str().is_empty()) else {
+        return;
+    };
+    // A path that is not UTF-8 cannot be written as text and read back exactly, and a
+    // wrong path would make a live file look deleted. No note, no expiry.
+    let Some(text) = folder.to_str() else {
+        return;
+    };
+    let note = dirs
+        .backups_dir()
+        .join(folder_key(folder))
+        .join(FOLDER_NOTE);
+    if fs::read(&note).is_ok_and(|have| have == text.as_bytes()) {
+        return;
+    }
+    if let Err(err) = atomic::write_atomic(&note, text.as_bytes()) {
+        eprintln!("gEdit: could not note the folder of a backup: {err}");
+    }
+}
+
+/// `yyyymmdd-hhmmss.mmm` as milliseconds since the epoch; the inverse of [`stamp`].
+fn stamp_millis(stamp: &str) -> Option<i64> {
+    let number = |range: std::ops::Range<usize>| stamp.get(range)?.parse::<i64>().ok();
+    let (year, month, day) = (number(0..4)?, number(4..6)?, number(6..8)?);
+    let (hour, minute, second, milli) = (
+        number(9..11)?,
+        number(11..13)?,
+        number(13..15)?,
+        number(16..19)?,
+    );
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    // Days from the civil date (the algorithm `civil_from_days` inverts).
+    let y = if month <= 2 { year - 1 } else { year };
+    let era = y.div_euclid(400);
+    let year_of_era = y.rem_euclid(400);
+    let month_position = (month + 9) % 12; // March = 0
+    let day_of_year = (153 * month_position + 2) / 5 + day - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    let days = era * 146_097 + day_of_era - 719_468;
+    Some(((days * 24 + hour) * 60 + minute) * 60_000 + second * 1000 + milli)
+}
+
+/// Every history under `root`, with its entries newest first. Anything that is not
+/// ours (a folder note, an unstamped file, a sub-folder) is left out of the lists and
+/// so is never counted or deleted.
+fn scan(root: &Path) -> Vec<History> {
+    let mut out = Vec::new();
+    let Ok(folders) = fs::read_dir(root) else {
+        return out;
+    };
+    for folder in folders.flatten() {
+        let folder_dir = folder.path();
+        if !fs::symlink_metadata(&folder_dir).is_ok_and(|m| m.is_dir()) {
+            continue;
+        }
+        let note = fs::read_to_string(folder_dir.join(FOLDER_NOTE))
+            .ok()
+            .map(PathBuf::from)
+            .filter(|folder| folder.is_absolute());
+        let Ok(names) = fs::read_dir(&folder_dir) else {
+            continue;
+        };
+        for named in names.flatten() {
+            let dir = named.path();
+            if !fs::symlink_metadata(&dir).is_ok_and(|m| m.is_dir()) {
+                continue;
+            }
+            let document = named.file_name().to_string_lossy().into_owned();
+            let mut entries: Vec<Entry> = fs::read_dir(&dir)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .filter_map(|entry| {
+                    let name = entry.file_name().to_string_lossy().into_owned();
+                    let (stamp, counter) = sort_key(&name, &document)?;
+                    let meta = fs::symlink_metadata(entry.path()).ok()?;
+                    meta.is_file().then(|| Entry {
+                        stamp: stamp.to_owned(),
+                        counter,
+                        path: entry.path(),
+                        bytes: meta.len(),
+                    })
+                })
+                .collect();
+            entries.sort_by(|l, r| r.stamp.cmp(&l.stamp).then(r.counter.cmp(&l.counter)));
+            // A name that `history_name` shortened is not the file's own name: its
+            // length is the budget, give or take a character boundary.
+            let shortened = document.len() + 3 >= MAX_HISTORY_NAME;
+            let source = match (&note, shortened) {
+                (Some(folder), false) => Some(folder.join(&document)),
+                _ => None,
+            };
+            out.push(History {
+                dir,
+                source,
+                entries,
+            });
+        }
+    }
+    out
+}
+
+/// Removes one entry; `true` when it is gone afterwards.
+fn remove_entry(entry: &Entry) -> bool {
+    match fs::remove_file(&entry.path) {
+        Ok(()) => true,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => true,
+        Err(err) => {
+            eprintln!("gEdit: could not remove {}: {err}", entry.path.display());
+            false
+        }
+    }
+}
+
+/// Removes a history folder that no longer holds any entry. `remove_dir` only takes
+/// an empty folder, so anything of the user's in it keeps the folder.
+fn remove_if_empty(dir: &Path) {
+    let _ = fs::remove_dir(dir);
+    if let Some(parent) = dir.parent() {
+        // The `<fnv32>` level goes once nothing but its note is left.
+        let only_note = fs::read_dir(parent).is_ok_and(|names| {
+            names
+                .flatten()
+                .all(|name| name.file_name() == std::ffi::OsStr::new(FOLDER_NOTE))
+        });
+        if only_note {
+            let _ = fs::remove_file(parent.join(FOLDER_NOTE));
+            let _ = fs::remove_dir(parent);
+        }
+    }
+}
+
+/// The global pass, with the existence check injected: `gone(paths)` answers per
+/// path whether the file is **certainly** not there any more (`false` for "there" and
+/// for "cannot tell").
+///
+/// 1. With `orphan_days > 0`, a history whose file is gone and whose newest backup is
+///    older than that is removed whole.
+/// 2. With `total_mb > 0`, entries are removed oldest first, over all histories, until
+///    the total is within the cap. The newest backup of a file that is not known to be
+///    gone is never taken, so the result can stay over the cap.
+pub fn sweep(
+    root: &Path,
+    settings: &BackupSettings,
+    now: SystemTime,
+    gone: impl Fn(&[PathBuf]) -> Vec<bool>,
+) -> SweepReport {
+    let mut report = SweepReport::default();
+    if settings.total_mb == 0 && settings.orphan_days == 0 {
+        return report;
+    }
+    let mut histories = scan(root);
+    let sources: Vec<PathBuf> = histories.iter().filter_map(|h| h.source.clone()).collect();
+    let answers = gone(&sources);
+    let mut answers = answers.into_iter();
+    let mut is_gone = Vec::with_capacity(histories.len());
+    for history in &histories {
+        is_gone.push(history.source.is_some() && answers.next().unwrap_or(false));
+    }
+
+    let now_ms = now
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |since| since.as_millis() as i64);
+
+    if settings.orphan_days > 0 {
+        let cutoff = now_ms - i64::from(settings.orphan_days) * 86_400_000;
+        for (history, gone) in histories.iter_mut().zip(&is_gone) {
+            let Some(newest) = history.entries.first() else {
+                continue;
+            };
+            let old = stamp_millis(&newest.stamp).is_some_and(|ms| ms < cutoff);
+            if !(*gone && old) {
+                continue;
+            }
+            let mut left = Vec::new();
+            for entry in history.entries.drain(..) {
+                if remove_entry(&entry) {
+                    report.entries += 1;
+                    report.bytes += entry.bytes;
+                } else {
+                    left.push(entry);
+                }
+            }
+            history.entries = left;
+            if history.entries.is_empty() {
+                report.histories += 1;
+                remove_if_empty(&history.dir);
+            }
+        }
+    }
+
+    if settings.total_mb > 0 {
+        let cap = settings.total_mb.saturating_mul(1_048_576);
+        let mut total: u64 = histories
+            .iter()
+            .flat_map(|h| &h.entries)
+            .map(|e| e.bytes)
+            .sum();
+        // (history index, entry index); the newest entry of a history that may still
+        // have its file is not a candidate.
+        let mut candidates: Vec<(usize, usize)> = Vec::new();
+        for (h, history) in histories.iter().enumerate() {
+            for e in 0..history.entries.len() {
+                if e == 0 && !is_gone[h] {
+                    continue;
+                }
+                candidates.push((h, e));
+            }
+        }
+        candidates.sort_by(|&(lh, le), &(rh, re)| {
+            let (l, r) = (&histories[lh].entries[le], &histories[rh].entries[re]);
+            l.stamp
+                .cmp(&r.stamp)
+                .then(l.counter.cmp(&r.counter))
+                .then(l.path.cmp(&r.path))
+        });
+        let mut removed_in = vec![0usize; histories.len()];
+        for (h, e) in candidates {
+            if total <= cap {
+                break;
+            }
+            let entry = &histories[h].entries[e];
+            if remove_entry(entry) {
+                total = total.saturating_sub(entry.bytes);
+                report.entries += 1;
+                report.bytes += entry.bytes;
+                removed_in[h] += 1;
+            }
+        }
+        for (h, history) in histories.iter().enumerate() {
+            if removed_in[h] > 0 && removed_in[h] == history.entries.len() {
+                report.histories += 1;
+                remove_if_empty(&history.dir);
+            }
+        }
+    }
+    report
+}
+
+/// Whether a pass is already running; a second one would only repeat its work.
+static SWEEPING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Runs [`sweep`] on a thread of its own, after a backup was made in `history` mode.
+/// Never on the save's own thread: the existence checks touch the shares the other
+/// histories came from, and a save must not wait for a folder it has nothing to do
+/// with. A failure is a line on stderr; the next backup tries again.
+fn sweep_later(dirs: AppDirs) {
+    let settings = BackupSettings::load(&dirs);
+    if settings.mode != BackupMode::History || SWEEPING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let spawned = std::thread::Builder::new()
+        .name("gedit-backup-sweep".into())
+        .spawn(move || {
+            let report = sweep(
+                &dirs.backups_dir(),
+                &settings,
+                SystemTime::now(),
+                gone_on_disk,
+            );
+            if report.entries > 0 {
+                eprintln!(
+                    "gEdit: removed {} old backup copies ({} bytes) from {} histories",
+                    report.entries, report.bytes, report.histories
+                );
+            }
+            SWEEPING.store(false, Ordering::SeqCst);
+        });
+    if spawned.is_err() {
+        SWEEPING.store(false, Ordering::SeqCst);
+    }
+}
+
+/// The real existence check: certainly gone only when the file system says "not
+/// found" within [`SWEEP_STAT_BUDGET`]. Permission errors and a share that does not
+/// answer count as "there".
+fn gone_on_disk(paths: &[PathBuf]) -> Vec<bool> {
+    let keys: Vec<String> = paths
+        .iter()
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect();
+    files::run_bounded(keys, SWEEP_STAT_BUDGET, |path| {
+        matches!(
+            fs::symlink_metadata(path),
+            Err(err) if err.kind() == io::ErrorKind::NotFound
+        )
+    })
+    .into_iter()
+    .map(|answer| answer.unwrap_or(false))
+    .collect()
+}
+
 // --- the copy itself ------------------------------------------------------
 
 /// Makes each temp name unique within the process; the process id makes it unique
@@ -800,7 +1200,9 @@ mod tests {
             BackupSettings::default(),
             BackupSettings {
                 mode: BackupMode::History,
-                count: DEFAULT_BACKUP_COUNT
+                count: DEFAULT_BACKUP_COUNT,
+                total_mb: DEFAULT_TOTAL_MB,
+                orphan_days: DEFAULT_ORPHAN_DAYS,
             }
         );
     }
@@ -886,7 +1288,9 @@ mod tests {
             BackupSettings::load(&dirs),
             BackupSettings {
                 mode: BackupMode::History,
-                count: DEFAULT_BACKUP_COUNT
+                count: DEFAULT_BACKUP_COUNT,
+                total_mb: DEFAULT_TOTAL_MB,
+                orphan_days: DEFAULT_ORPHAN_DAYS,
             }
         );
 
@@ -912,7 +1316,11 @@ mod tests {
             fs::write(dirs.settings_file(), json).unwrap();
             assert_eq!(
                 BackupSettings::load(&dirs),
-                BackupSettings { mode, count },
+                BackupSettings {
+                    mode,
+                    count,
+                    ..BackupSettings::default()
+                },
                 "{json}"
             );
             assert_eq!(BackupSettings::from_object(&settings(json)).mode, mode);
@@ -968,6 +1376,7 @@ mod tests {
         BackupSettings {
             mode: BackupMode::History,
             count,
+            ..BackupSettings::default()
         }
     }
 
@@ -975,6 +1384,7 @@ mod tests {
         BackupSettings {
             mode: BackupMode::Sibling,
             count: 5,
+            ..BackupSettings::default()
         }
     }
 
@@ -1520,6 +1930,7 @@ mod tests {
         let settings = BackupSettings {
             mode: BackupMode::Off,
             count: 5,
+            ..BackupSettings::default()
         };
         assert_eq!(backup(&dirs, settings, &source, at(1_000)), Ok(None));
         assert_eq!(fs::read_dir(dirs.backups_dir()).unwrap().count(), 0);
@@ -1784,6 +2195,245 @@ mod tests {
             assert_eq!(mode, paths::OWNER_ONLY, "{} is {mode:o}", dir.display());
         }
         assert_eq!(by_folder.parent().unwrap(), dirs.backups_dir().as_path());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    // --- the global pass: an overall cap and expiry (B1 A2) --------------------
+
+    const DAY_MS: u64 = 86_400_000;
+    const MIB: usize = 1_048_576;
+    /// 2033-05-18, far from any real file's mtime and well after 1970.
+    const NOW_MS: u64 = 2_000_000_000_000;
+
+    /// Files a history of `source` the way `backup` does (entries named by stamp, the
+    /// folder note), one entry per age in days, each `size` bytes.
+    fn history_with(dirs: &AppDirs, source: &Path, ages_days: &[u64], size: usize) -> PathBuf {
+        let dir = history_dir(dirs, source).unwrap();
+        let name = history_name(file_name(source).unwrap());
+        for age in ages_days {
+            let stamp = stamp(at(NOW_MS - age * DAY_MS));
+            let mut file = OsString::from(format!("{stamp}-"));
+            file.push(&name);
+            fs::write(dir.join(file), vec![b'G'; size]).unwrap();
+        }
+        note_folder(dirs, source);
+        dir
+    }
+
+    fn files_in(dir: &Path) -> usize {
+        fs::read_dir(dir).map_or(0, |entries| entries.flatten().count())
+    }
+
+    /// Existence as the real pass sees it, without the time budget.
+    fn really_gone(paths: &[PathBuf]) -> Vec<bool> {
+        paths.iter().map(|path| !path.exists()).collect()
+    }
+
+    fn limits(total_mb: u64, orphan_days: u32) -> BackupSettings {
+        BackupSettings {
+            total_mb,
+            orphan_days,
+            ..BackupSettings::default()
+        }
+    }
+
+    #[test]
+    fn the_two_limits_are_settings_where_zero_means_no_limit() {
+        let read = |json: &str| BackupSettings::from_object(&settings(json));
+        let default = BackupSettings::default();
+        assert_eq!((default.total_mb, default.orphan_days), (500, 90));
+        assert_eq!(read("{}").total_mb, 500);
+        assert_eq!(read("{}").orphan_days, 90);
+        // Zero is a value, not a missing one.
+        let off = read(r#"{"files.backupTotalMb":0,"files.backupOrphanDays":0}"#);
+        assert_eq!((off.total_mb, off.orphan_days), (0, 0));
+        let own = read(r#"{"files.backupTotalMb":64,"files.backupOrphanDays":30}"#);
+        assert_eq!((own.total_mb, own.orphan_days), (64, 30));
+        // Hand edits that make no sense fall back or are cut, never to "no limit".
+        let odd = read(r#"{"files.backupTotalMb":-3,"files.backupOrphanDays":"x"}"#);
+        assert_eq!((odd.total_mb, odd.orphan_days), (500, 90));
+        let huge = read(r#"{"files.backupTotalMb":99999999999,"files.backupOrphanDays":99999}"#);
+        assert_eq!(
+            (huge.total_mb, huge.orphan_days),
+            (MAX_TOTAL_MB, MAX_ORPHAN_DAYS)
+        );
+    }
+
+    #[test]
+    fn the_settings_keys_and_defaults_match_the_typescript_schema() {
+        let ts = source_scan::lf(include_str!("../../src/lib/core/settings/schema.ts"));
+        for (key, default) in [
+            (KEY_TOTAL_MB, DEFAULT_TOTAL_MB),
+            (KEY_ORPHAN_DAYS, u64::from(DEFAULT_ORPHAN_DAYS)),
+        ] {
+            assert!(
+                ts.contains(&format!("'{key}': {default},")),
+                "the default of {key} in schema.ts is not {default}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_stamp_reads_back_as_the_moment_it_names() {
+        for ms in [0, 1_000, 951_782_400_123, NOW_MS, 4_102_444_799_999] {
+            assert_eq!(stamp_millis(&stamp(at(ms))), Some(ms as i64), "{ms}");
+        }
+        assert_eq!(stamp_millis("20261340-250000.000"), None);
+        assert_eq!(stamp_millis("nonsense"), None);
+    }
+
+    #[test]
+    fn a_backup_notes_the_folder_it_came_from() {
+        let (root, dirs) = scratch("note");
+        let source = program(&root, "welle.nc", "program\n");
+        backup(&dirs, history(5), &source, at(1_000)).unwrap();
+        let note = dirs
+            .backups_dir()
+            .join(folder_key(source.parent().unwrap()))
+            .join(FOLDER_NOTE);
+        assert_eq!(
+            fs::read_to_string(note).unwrap(),
+            source.parent().unwrap().to_str().unwrap()
+        );
+        // And the note is not an entry: the history is still just the one copy.
+        assert_eq!(history_of(&dirs, &source).len(), 1);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// The cap takes the oldest copies of all histories first and stops as soon as
+    /// the total fits.
+    #[test]
+    fn the_total_cap_removes_the_oldest_copies_first() {
+        let (root, dirs) = scratch("cap");
+        let a = program(&root, "a.nc", "a");
+        let b = program(&root, "b.nc", "b");
+        let dir_a = history_with(&dirs, &a, &[1, 5, 9], MIB);
+        let dir_b = history_with(&dirs, &b, &[2, 6], MIB);
+
+        // 5 MiB in total, cap 3: the two oldest of all (9 and 6 days) go.
+        let report = sweep(&dirs.backups_dir(), &limits(3, 90), at(NOW_MS), really_gone);
+        assert_eq!(report.entries, 2);
+        assert_eq!(report.bytes, 2 * MIB as u64);
+        assert_eq!(files_in(&dir_a), 2);
+        assert_eq!(files_in(&dir_b), 1);
+        let left_b = fs::read_dir(&dir_b).unwrap().next().unwrap().unwrap();
+        assert!(left_b
+            .file_name()
+            .to_string_lossy()
+            .starts_with(&stamp(at(NOW_MS - 2 * DAY_MS))));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// A cap that is too small for the newest copies leaves the folder over the cap
+    /// rather than delete the one backup of a file that still exists.
+    #[test]
+    fn the_cap_never_takes_the_newest_copy_of_a_file_that_exists() {
+        let (root, dirs) = scratch("cap-newest");
+        let a = program(&root, "a.nc", "a");
+        let b = program(&root, "b.nc", "b");
+        let dir_a = history_with(&dirs, &a, &[1, 5], MIB);
+        let dir_b = history_with(&dirs, &b, &[2, 6], MIB);
+
+        let report = sweep(&dirs.backups_dir(), &limits(1, 90), at(NOW_MS), really_gone);
+        assert_eq!(report.entries, 2);
+        assert_eq!(files_in(&dir_a), 1);
+        assert_eq!(files_in(&dir_b), 1);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// For a file that is gone, the newest copy is the last thing the cap gives up,
+    /// but it is not protected.
+    #[test]
+    fn the_cap_may_take_every_copy_of_a_file_that_is_gone() {
+        let (root, dirs) = scratch("cap-gone");
+        let kept = program(&root, "kept.nc", "k");
+        let gone = root.join("nc").join("gone.nc");
+        let dir_kept = history_with(&dirs, &kept, &[1], MIB);
+        let dir_gone = history_with(&dirs, &gone, &[3, 4], MIB);
+
+        let report = sweep(&dirs.backups_dir(), &limits(1, 90), at(NOW_MS), really_gone);
+        assert_eq!(report.entries, 2);
+        assert_eq!(report.histories, 1);
+        assert_eq!(files_in(&dir_kept), 1);
+        assert!(!dir_gone.exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_history_of_a_deleted_file_expires_after_the_days_but_not_before() {
+        let (root, dirs) = scratch("orphan");
+        let long_gone = root.join("nc").join("long-gone.nc");
+        let recent_gone = root.join("nc").join("recent-gone.nc");
+        let old_but_there = program(&root, "old-but-there.nc", "x");
+        let d_long = history_with(&dirs, &long_gone, &[100, 120], 10);
+        let d_recent = history_with(&dirs, &recent_gone, &[10, 100], 10);
+        let d_there = history_with(&dirs, &old_but_there, &[400, 500], 10);
+
+        let report = sweep(&dirs.backups_dir(), &limits(0, 90), at(NOW_MS), really_gone);
+        assert_eq!(report.histories, 1);
+        assert_eq!(report.entries, 2);
+        assert!(!d_long.exists(), "a deleted file's old history stayed");
+        assert_eq!(files_in(&d_recent), 2, "a young orphan lost copies");
+        assert_eq!(
+            files_in(&d_there),
+            2,
+            "the history of a file that exists expired"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// What cannot be checked is not touched: no folder note (a history from before
+    /// this version), a path that cannot be told apart, and zero days or zero MB.
+    #[test]
+    fn nothing_is_expired_that_cannot_be_shown_to_be_orphaned() {
+        let (root, dirs) = scratch("orphan-unknown");
+        let gone = root.join("nc").join("gone.nc");
+        let d = history_with(&dirs, &gone, &[400], 10);
+        let note = dirs
+            .backups_dir()
+            .join(folder_key(gone.parent().unwrap()))
+            .join(FOLDER_NOTE);
+
+        // Zero days: never expire.
+        let report = sweep(&dirs.backups_dir(), &limits(0, 0), at(NOW_MS), really_gone);
+        assert_eq!(report, SweepReport::default());
+        assert_eq!(files_in(&d), 1);
+
+        // An existence check that cannot say "gone".
+        let report = sweep(&dirs.backups_dir(), &limits(0, 90), at(NOW_MS), |paths| {
+            vec![false; paths.len()]
+        });
+        assert_eq!(report, SweepReport::default());
+
+        // No note: the file is unknown, so it may well exist.
+        fs::remove_file(&note).unwrap();
+        let report = sweep(&dirs.backups_dir(), &limits(0, 90), at(NOW_MS), really_gone);
+        assert_eq!(report, SweepReport::default());
+        assert_eq!(files_in(&d), 1);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// Only stamped entries are ours: a file the user (or a tool) put into a history
+    /// folder is neither counted nor deleted, and keeps the folder alive.
+    #[test]
+    fn a_foreign_file_in_a_history_folder_is_left_alone() {
+        let (root, dirs) = scratch("foreign");
+        let gone = root.join("nc").join("gone.nc");
+        let d = history_with(&dirs, &gone, &[400], 10);
+        fs::write(d.join("notes.txt"), b"mine").unwrap();
+
+        let report = sweep(&dirs.backups_dir(), &limits(0, 90), at(NOW_MS), really_gone);
+        assert_eq!(report.entries, 1);
+        assert!(d.join("notes.txt").is_file());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_real_existence_check_says_gone_only_for_not_found() {
+        let (root, _dirs) = scratch("gone-on-disk");
+        let there = program(&root, "there.nc", "x");
+        let missing = root.join("nc").join("missing.nc");
+        assert_eq!(gone_on_disk(&[there, missing]), vec![false, true]);
         let _ = fs::remove_dir_all(&root);
     }
 }

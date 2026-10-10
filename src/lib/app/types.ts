@@ -771,8 +771,10 @@ export interface RecentService {
   refresh(): Promise<void>;
   /** Only for a path the fs scope already allows; Rust refuses anything else (AD-9). */
   touch(path: string): Promise<void>;
-  remove(path: string): Promise<void>;
-  clear(): Promise<void>;
+  /** Resolves `false` when the list could not be saved (the status bar has said so). */
+  remove(path: string): Promise<boolean>;
+  /** Resolves `false` when the list could not be saved (the status bar has said so). */
+  clear(): Promise<boolean>;
 }
 
 /** app/external.ts → `export const external: ExternalChangeService` (owner: WP2.3) */
