@@ -73,7 +73,7 @@ Wave B followed the integration of wave A:
 | Package | Model | What it did |
 |---|---|---|
 | **B1-G** Grammar matches tokens | Sonnet | Monarch rules for `freeText`, `colonWords`, `callTargets`, `labelAfter`, `declareAfter`, `plainTextRun`, name-shaped keywords; a differential test of grammar against tokens over the fixtures, plus a test that runs Monaco's own tokenizer |
-| **B2** Faster lexer and detection | Sonnet | A fast path in `_nc_lex.py` (a differential fuzz of 61.6 million reads against the full path, no difference); the Fanuc lathe thread-cycle detection rule made linear; the first build of the program map time-sliced |
+| **B2** Faster lexer and detection | Sonnet | A fast path in `_nc_lex.py` (a differential fuzz of 61.6 million reads against the full path, no difference; the NC review checked it again over the whole clean-room corpus: 0 differences in 4.08 million lines in program order and in 7.66 million distinct-line reads); the Fanuc lathe thread-cycle detection rule made linear; the first build of the program map time-sliced |
 | **B3** Code housekeeping | cheapest model, checked | Dead `config::read_settings`, the `fNotFeed` cast and `settings.machinesEmpty` removed; package descriptions; stale "stub", "prelude" and "Next up" comments in 88 files; `TODO.md` line links refreshed |
 | **B4** Harness | Sonnet | Triage of the 20 scenarios that failed in the hosted spike run (all intended changes except one regression, fixed); 16 new scenarios in the suite `b1` (the cumulative list is now 149 scenarios); the stall check of `p3-perf` re-based on the sliced build |
 | **B5** User docs and records | Sonnet | The user guide, `CHANGELOG.md`, `TODO.md`, `CONTRIBUTING.md`, this page |
