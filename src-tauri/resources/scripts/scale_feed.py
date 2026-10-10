@@ -870,6 +870,8 @@ class Counts:
         self.dwell = 0
         #: `F` words of a block whose words are data (`wordsAreData`: `G65`, `G10`).
         self.data = 0
+        #: B1: `F` words a function of the block owns (`ownWords`: Klartext `M128 F800`).
+        self.function = 0
         #: Written further from the exact scaled value than ROUNDING_NOTICE allows.
         self.rounded = 0
         #: Rounded whole because the dialect's decimal point is significant.
@@ -1251,6 +1253,34 @@ def report_second_feed(token: gedit_nc.Token, line: int, findings: Findings, cou
         "%s is left as written: this run scales only the F word, and an E word is a feed "
         "of its own along a contour definition on some controls, a thread lead or a dwell "
         "on others. Change it by hand if it should follow the other feeds." % token.text.strip(),
+    )
+
+
+def report_function_feed(
+    token: gedit_nc.Token,
+    owner: str,
+    tracker: gedit_nc.FeedModeTracker,
+    line: int,
+    findings: Findings,
+    counts: Counts,
+) -> None:
+    """B1: a feed word a function of its block owns (``ownWords``): reported, never scaled.
+
+    The finding names what the feed is for where the function's entry declares the word as
+    a parameter with a label ("the feed for the compensating moves of M128").
+    """
+    counts.function += 1
+    entry = tracker.entry(owner)
+    label = None
+    for param in (entry or {}).get("params") or []:
+        if isinstance(param, dict) and str(param.get("address") or "").upper() == (token.address or "").upper():
+            label = param.get("label") if isinstance(param.get("label"), str) and param.get("label") else None
+            break
+    what = "%s of %s" % (lower_first(label), owner) if label else "%s itself" % owner
+    findings.add(
+        line,
+        "info",
+        "%s is the %s, not a path feed, so it is left as written." % (token.text.strip(), what if label else "feed of " + what),
     )
 
 
@@ -2023,6 +2053,13 @@ def run(
                 # and it leaves the feed in force as it was (AD-19 rule 6).
                 counts.dwell += 1
                 continue
+            owner = tracker.own_word_of(token)
+            if owner is not None:
+                # B1 (owner decision): the feed of a function written behind it in the block
+                # (`ownWords`: Klartext `M128 F800`, `M140 MB MAX F1000`, `PLANE … F2000`,
+                # `CYCL DEF 19.1 … F1500`) is that function's own feed, not a path feed.
+                report_function_feed(token, owner, tracker, number, findings, counts)
+                continue
             if tracker.data_code is not None:
                 # `wordsAreData` (`G65 P9810 F3000.`, a `G10` block): an argument of the call
                 # or a value the block writes somewhere, not a feed of this program.
@@ -2135,6 +2172,8 @@ def summary(counts: Counts, findings: Findings, params: Params, reading: Reading
         parts.append("%s left as written" % count_text(counts.dwell, "dwell time"))
     if counts.data:
         parts.append("%s left as written" % count_text(counts.data, "argument or data word", "arguments and data words"))
+    if counts.function:
+        parts.append("%s left as written" % count_text(counts.function, "feed of a function", "feeds of functions"))
     if counts.unresolved:
         parts.append(
             "%s scaled without a limit check" % "{:,}".format(counts.unresolved)

@@ -14,7 +14,7 @@ import { validateProfile } from '$lib/core/profiles/validate';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
 import { BUILTIN_CODE_DB_JSON } from '$lib/data/codes';
 import { profileOf } from '../../../../tests/unit/helpers/profiles';
-import { diameterReading, readWord, type WordView } from './wordValue';
+import { diameterReading, inForceEntries, readWord, type WordView } from './wordValue';
 import type { CodeDb } from './types';
 
 const DBS = resolveCodeDbFiles(BUILTIN_CODE_DB_JSON, (dialect, problem) => {
@@ -240,6 +240,35 @@ describe('readWord on a Fanuc mill', () => {
   it('reads a word in the units after its block', () => {
     const inch = state({ ...g94, units: { value: 'inch', line: 1, assumed: false } });
     expect(read(none, inch, 'X1.', 'G20 G0 X1.')).toMatchObject({ value: '1', unit: 'inch' });
+  });
+
+  // B1: a pitch-feed mode in force (G63, the tapping mode, until G64) is a code in force as
+  // the Python scripts read it (`FeedModeTracker.pitch_mode`), not only the cycle and the move.
+  const g63 = state({ ...g94, groups: { ...g94.groups, motion: mv('G1', 2), pathmode: mv('G63', 1) } });
+
+  it('counts the tapping mode G63 among the codes in force', () => {
+    const tokens = tokensOf(none.cp, 'G1 Z-10. F150.');
+    const inForce = inForceEntries(g63, [], none.db).map((entry) => entry.code);
+    expect(inForce).toContain('G63');
+    expect(inForceEntries(g94, [], none.db).map((entry) => entry.code)).not.toContain('G63');
+    // Written in the block it is the block's code, not one in force.
+    const written = inForceEntries(g63, [none.db.codes.find((e) => e.code === 'G63')!], none.db);
+    expect(written.map((entry) => entry.code)).not.toContain('G63');
+    // The shipped G63 declares no feed of its own: a tap's feed stays a feed per minute.
+    expect(readWord(word(tokens, 'F150.'), tokens, g63, none)).toMatchObject({ cls: 'feedPerMin', lead: false });
+  });
+
+  it("reads what G63 declares for the feed word in the blocks it is in force for", () => {
+    // A test-local database whose G63 declares its F as a lead (feed per revolution): what a
+    // mode in force declares holds in the blocks under it, as for a cycle or a move.
+    const db = loadCodeDb({
+      ...DBS[none.profile.codes as string],
+      codes: (DBS[none.profile.codes as string].codes as { code: string }[]).map((entry) =>
+        entry.code === 'G63' ? { ...entry, params: [{ address: 'F', label: 'Lead', unit: 'feedPerRev' }] } : entry,
+      ),
+    });
+    const view = { ...none, db };
+    expect(read(view, g63, 'F1.5', 'G1 Z-10. F1.5')).toMatchObject({ cls: 'feedPerRev', lead: true, unit: 'mm/rev' });
   });
 });
 

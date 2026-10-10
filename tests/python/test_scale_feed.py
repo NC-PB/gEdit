@@ -142,7 +142,7 @@ import json
 import sys
 import unittest
 
-from tests.python import helpers
+from tests.python import helpers, pending_codes
 
 SCRIPT = "scale_feed.py"
 
@@ -222,6 +222,8 @@ REQUIRED_CASES = [
     # The M9 NC review (NC-F1): a value filter that cannot be compared leaves the feed.
     "lathe-filter-other-unit",
     "lathe-filter-no-value",
+    # B1 (owner decision): the F of a Klartext function is no path feed.
+    "klartext-function-feeds",
 ]
 
 #: The addresses this script is allowed to rewrite. Everything else has to come back
@@ -255,7 +257,9 @@ def context_of(case):
     else:
         effective = helpers.effective_context(case.profile_id)
     context["profile"] = effective["profile"]
-    context["codes"] = effective["codes"]
+    # B1: an attribute the shipped database does not have yet (`tests/python/pending_codes.py`).
+    context["codes"] = pending_codes.with_pending(effective["codes"], case.options)
+    pending_codes.strip(context)
     context["machine"] = dict(effective["machine"])
     name = case.options.get("machineName")
     if isinstance(name, str) and name != "":
@@ -903,6 +907,24 @@ class TestCodeDatabase(unittest.TestCase):
         ]
         payload = self.run_with(codes, "G71 Z-10. F200.\nG1 X10. F500.\n")
         self.assertEqual(payload["text"], "G71 Z-10. F100.\nG1 X10. F250.\n")
+
+    def test_the_feed_a_function_owns_is_left_and_a_path_feed_in_front_of_it_is_scaled(self):
+        # B1 (owner decision): `ownWords: ["F"]` on a function's entry (Klartext M128) makes
+        # the F behind it the function's own feed. The database says which code that is,
+        # not a list in the script: here a test-local Fanuc-style M128 does it too.
+        m128 = {"code": "M128", "group": "tcpm", "modal": True, "label": "TCPM", "ownWords": ["F"]}
+        codes = [{"code": "G1", "group": "motion", "modal": True, "label": "Line"}, m128]
+        payload = self.run_with(codes, "G1 X10. F500. M128 F800.\nG1 X20. F600.\n")
+        self.assertEqual(payload["text"], "G1 X10. F250. M128 F800.\nG1 X20. F300.\n")
+        self.assertEqual(
+            [(f["line"], f["message"]) for f in payload["findings"]],
+            [(1, "F800. is the feed of M128 itself, not a path feed, so it is left as written.")],
+        )
+        self.assertIn("1 feed of a function left as written", payload["message"])
+        # Without the attribute it is a feed like any other.
+        plain = [codes[0], {k: v for k, v in m128.items() if k != "ownWords"}]
+        payload = self.run_with(plain, "G1 X10. F500. M128 F800.\n")
+        self.assertEqual(payload["text"], "G1 X10. F250. M128 F400.\n")
 
     def test_a_run_without_a_code_database_says_what_it_could_not_know(self):
         payload = self.run_with([], "G84 X20. Z-12. R3. F625.\n")

@@ -154,14 +154,24 @@ export function blockEntries(tokens: readonly NcToken[], db: CodeDb): CodeEntry[
 
 /**
  * The entries of the codes in force that the block does not write (rule 2): the modal cycle,
- * the cycle the block calls (a defined cycle), the motion code.
+ * the cycle the block calls (a defined cycle), the motion code, and a pitch-feed mode of any
+ * other group (Fanuc `G63`, the tapping mode, in force until `G64`: `pitchFeed` on a modal
+ * code outside the cycle and motion groups), which the Python scripts read off the groups
+ * as `FeedModeTracker.pitch_mode` and hand to `number_class_of` the same way.
  */
 export function inForceEntries(after: ModalState, blockCodes: readonly CodeEntry[], db: CodeDb): CodeEntry[] {
   const out: CodeEntry[] = [];
+  const add = (entry: CodeEntry | null | undefined): void => {
+    if (entry && !blockCodes.includes(entry) && !out.includes(entry)) out.push(entry);
+  };
   for (const code of [after.activeCycle?.code, after.block.cycle, after.groups.motion?.code]) {
     if (typeof code !== 'string' || code === '') continue;
-    const entry = lookupCode(db, code);
-    if (entry && !blockCodes.includes(entry) && !out.includes(entry)) out.push(entry);
+    add(lookupCode(db, code));
+  }
+  for (const [group, value] of Object.entries(after.groups)) {
+    if (group === 'cycle' || group === 'motion' || typeof value?.code !== 'string' || value.code === '') continue;
+    const entry = lookupCode(db, value.code);
+    if (entry?.pitchFeed === true && entry.modal === true) add(entry);
   }
   return out;
 }

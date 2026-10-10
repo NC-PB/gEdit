@@ -1,0 +1,33 @@
+{
+  "about": "B1 (A6): under M89 every positioning block runs the defined cycle, and a polar move is one. LP, CP and CTP (pole: use) write their end point around the pole in PR and PA, not in axis words, so a block such as LP PA+60 moves the tool although it holds no X, Y or Z. The pole itself (CC, pole: set) still moves nothing.",
+  "input": "polar-modal-call.h",
+  "states": [
+    { "line": 16,
+      "about": "The pole before the modal call: no move, no cycle.",
+      "after": { "modalCall": null, "definedCycle": "CYCL DEF 200", "block": { "cycle": null } } },
+    { "line": 17,
+      "about": "Rule 4: M89 runs the cycle in its own block and starts the modal call.",
+      "after": { "modalCall": "M89", "block": { "cycle": "CYCL DEF 200" } } },
+    { "line": 18,
+      "about": "A polar straight line with only an angle is a positioning block.",
+      "after": { "modalCall": "M89", "block": { "cycle": "CYCL DEF 200" } } },
+    { "line": 19,
+      "about": "The same with an incremental angle.",
+      "after": { "modalCall": "M89", "block": { "cycle": "CYCL DEF 200" } } },
+    { "line": 20,
+      "about": "A polar arc ends at a position as well.",
+      "after": { "modalCall": "M89", "block": { "cycle": "CYCL DEF 200" } } },
+    { "line": 21,
+      "about": "So does a tangential polar arc.",
+      "after": { "modalCall": "M89", "block": { "cycle": "CYCL DEF 200" } } },
+    { "line": 22,
+      "about": "A new pole moves nothing, so the cycle does not run, and the modal call stays.",
+      "after": { "modalCall": "M89", "block": { "cycle": null } } },
+    { "line": 23,
+      "about": "M99 on a polar move runs the cycle once and ends the modal call.",
+      "after": { "modalCall": null, "definedCycle": "CYCL DEF 200", "block": { "cycle": "CYCL DEF 200" } } },
+    { "line": 24,
+      "about": "After M99 a polar move runs nothing.",
+      "after": { "modalCall": null, "block": { "cycle": null } } }
+  ]
+}

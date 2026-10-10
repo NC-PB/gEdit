@@ -1,0 +1,25 @@
+{
+  "message": "Scaled 4 feed rates to 50 %; 4 feeds of functions left as written. No machine: profile defaults assumed.",
+  "findings": [
+    {
+      "line": 5,
+      "severity": "info",
+      "message": "F800 is the feed for the compensating moves of M128, not a path feed, so it is left as written."
+    },
+    {
+      "line": 7,
+      "severity": "info",
+      "message": "F1000 is the feed for the retract of M140, not a path feed, so it is left as written."
+    },
+    {
+      "line": 8,
+      "severity": "info",
+      "message": "F2000 is the feed of PLANE SPATIAL itself, not a path feed, so it is left as written."
+    },
+    {
+      "line": 12,
+      "severity": "info",
+      "message": "F1500 is the feed of CYCL DEF 19 itself, not a path feed, so it is left as written."
+    }
+  ]
+}

@@ -179,6 +179,24 @@ describe('codes and words (rules 1-7, 9)', () => {
     expect(mill[1].tool).toEqual({ station: '5', written: 'T5', line: 2 });
   });
 
+  it('rule 7: a tool group that took no part in the match names no tool (B1, no whole-match fallback)', () => {
+    // A variant of the Klartext profile whose tool pattern makes the number optional, so
+    // `TOOL CALL Z S2000` matches without it: the whole match is no station.
+    const base = PROFILES.get('heidenhain-klartext');
+    if (!base) throw new Error('no profile heidenhain-klartext');
+    const variant = {
+      ...base,
+      toolCall: { trigger: '\\bTOOL\\s+CALL\\b', tool: 'TOOL\\s+CALL\\s+(?<tool>\\d+)?', toolFrom: 'same-line' as const },
+    };
+    const checked = validateProfile(variant);
+    if (!checked.ok) throw new Error(checked.errors.join('; '));
+    const c = { cp: compileProfile(checked.profile), db: ctx('heidenhain-klartext').db };
+    const states = walk(c, ['1 TOOL CALL 5 Z S1000', '2 TOOL CALL Z S2000']);
+    expect(states.map((s) => s.tool?.station ?? null)).toEqual(['5', '5']);
+    expect(states[1].tool?.line).toBe(1);
+    expect(states[1].block.toolChange).toBe(true);
+  });
+
   it('rule 9: an unknown code changes nothing', () => {
     expect(last('fanuc-gcode', ['G1 X1. F100.', 'G999'])).toEqual({ ...last('fanuc-gcode', ['G1 X1. F100.', '']) });
   });

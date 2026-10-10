@@ -53,7 +53,7 @@ from __future__ import annotations
 import sys
 import unittest
 
-from tests.python import helpers
+from tests.python import helpers, pending_codes
 
 SCRIPT = "tool_list.py"
 
@@ -99,6 +99,8 @@ REQUIRED_CASES = [
     "channels-multi-file",
     "channels-selection",
     "channels-two-section",
+    # B1 (owner decision): the F of a Klartext function is no feed of the tool.
+    "klartext-function-feeds",
 ]
 
 
@@ -126,7 +128,9 @@ def context_of(case):
     else:
         effective = helpers.effective_context(case.profile_id)
     context["profile"] = effective["profile"]
-    context["codes"] = effective["codes"]
+    # B1: an attribute the shipped database does not have yet (`tests/python/pending_codes.py`).
+    context["codes"] = pending_codes.with_pending(effective["codes"], case.options)
+    pending_codes.strip(context)
     context["machine"] = dict(effective["machine"])
     name = case.options.get("machineName")
     if isinstance(name, str) and name != "":
