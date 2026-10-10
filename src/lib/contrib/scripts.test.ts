@@ -458,6 +458,10 @@ describe('new script names', () => {
     expect(validateScriptName('a\\b')?.key).toBe('scripts.nameInvalid');
     expect(validateScriptName('C:name')?.key).toBe('scripts.nameInvalid');
     expect(validateScriptName('trailing.')?.key).toBe('scripts.nameInvalid');
+    // Windows does not allow these in a file name; a scripts folder is often synced there.
+    for (const bad of ['<', '>', '"', '|', '?', '*']) {
+      expect(validateScriptName(`a${bad}b`)?.key, bad).toBe('scripts.nameInvalid');
+    }
     expect(validateScriptName('a\nb')?.key).toBe('scripts.nameInvalid');
     expect(validateScriptName('gedit_nc')?.key).toBe('scripts.nameReserved');
     expect(validateScriptName('gedit_nc.py')?.key).toBe('scripts.nameReserved');

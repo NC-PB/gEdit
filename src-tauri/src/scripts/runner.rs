@@ -11,12 +11,17 @@
 //!   not extended: an inherited one could shadow `gedit_nc` with anything.
 //! - On Unix the child gets `process_group(0)` and is killed with `killpg`, so a script
 //!   that spawned its own children does not leave grandchildren behind (F19). On Windows
-//!   only the child itself is killed.
+//!   the child is put in a job object ([`super::job`]) that is terminated the same way,
+//!   and that also ends the whole tree if gEdit itself is gone.
 //! - [`POLL`] against the deadline and the cancel flag, then a [`DRAIN_GRACE`] before the
-//!   pipes are given up on.
+//!   pipes are given up on. Output that was still coming when the grace ran out is lost,
+//!   and the outcome says so (`stdoutTruncated`, `stderrTruncated`).
 //! - stdout is capped at [`MAX_STDOUT_BYTES`] and stderr at [`MAX_STDERR_BYTES`]. The
 //!   readers keep draining past the cap — a full pipe would block the child instead of
-//!   ending the run — and set `stdoutTruncated`.
+//!   ending the run — and set `stdoutTruncated` / `stderrTruncated`.
+//! - `PATH`: an app started from Finder gets launchd's short `PATH`, so the script's
+//!   environment gets the login shell's directories added where they are missing
+//!   ([`path_with_login`]); the existing order stays first.
 //! - The context folder is removed by an RAII guard, on every path out.
 //! - Interpreter order: `GEDIT_PYTHON`, then `scripts.python` from the settings file
 //!   (only when it names an existing file), then [`crate::python::interpreter`].
@@ -25,7 +30,8 @@
 //! have been recycled by then and `killpg` would hit a stranger. [`RunState`] keeps the
 //! pid behind a mutex that the runner holds across its `try_wait`, and clears it in the
 //! same breath as the reap — so a pid read out of a [`RunState`] is always still the
-//! child's. That is also why `script_cancel` does not need the child handle.
+//! child's. That is also why `script_cancel` does not need the child handle. (The
+//! Windows job handle sits in the same slot and goes with it.)
 //!
 //! `python_check` runs `<interpreter> -c "<version probe>"` with a 5 s timeout, requires
 //! 3.9 or newer, and reads exit code 9009 on Windows as "Python was not found" (that is
@@ -50,6 +56,7 @@ use tauri::{AppHandle, Manager, State};
 
 use super::context::ContextDir;
 use super::discovery::{self, Resolved};
+use super::meta::{ScriptInput, ScriptMeta, ScriptOutput};
 use super::settings::{ScriptSettings, MAX_TIMEOUT_SECONDS, MIN_TIMEOUT_SECONDS};
 
 /// How often the runner looks at the child, the deadline and the cancel flag.
@@ -82,8 +89,18 @@ pub const MAX_STDERR_BYTES: usize = 1024 * 1024;
 pub const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// How long [`kill_all`] waits for the runners to let go of their children and their
-/// temp folders before the app exits anyway.
-pub const EXIT_GRACE: Duration = Duration::from_millis(1500);
+/// temp folders before the app exits anyway. The kill itself is immediate on both
+/// platforms (`killpg`, `TerminateJobObject`); what is waited for is a runner's context
+/// folder being removed, which takes a few polls. A lost folder is a temp file, so this
+/// is short: quitting must not feel stuck.
+pub const EXIT_GRACE: Duration = Duration::from_millis(300);
+
+/// How long the tests give a runner to wind down after `cancel_all`. This is the
+/// old product grace (1.5 s), not the new one: `EXIT_GRACE` itself is asserted below,
+/// and a test that held the runner to 300 ms flaked on a machine under load (an
+/// idle CI runner does not need the room, a loaded one does).
+#[cfg(test)]
+const TEST_WAIT: Duration = Duration::from_millis(1500);
 
 /// The oldest Python the bundled scripts are written for (plan AD-13, gate G4).
 pub const MIN_PYTHON: (u32, u32) = (3, 9);
@@ -115,7 +132,20 @@ pub struct RunRequest {
     pub context: serde_json::Value,
     /// Overrides the header's `timeout` and `scripts.timeoutSeconds`.
     pub timeout_secs: Option<u64>,
+    /// The `input` mode the webview assumed from its last scan (a header-less script is
+    /// `selection-or-document`). When the header on disk now says something else the run
+    /// is refused with [`HEADER_CHANGED`] so the webview can rescan. `None` skips the check.
+    #[serde(default)]
+    pub input: Option<ScriptInput>,
+    /// The `output` mode the webview assumed, same rule as `input`.
+    #[serde(default)]
+    pub output: Option<ScriptOutput>,
 }
+
+/// The prefix of the error `script_run` answers with when the script's header was
+/// edited since the webview scanned it. The webview matches on it (`scripts.ts`), so it
+/// is part of the contract; the text after it is for a human.
+pub const HEADER_CHANGED: &str = "header-changed:";
 
 /// The outcome of one run (§7.6 `RunResult`). A run that failed to start is an `Err`
 /// instead, so "the script ran and failed" and "nothing ran" stay distinguishable.
@@ -130,8 +160,11 @@ pub struct RunResult {
     pub stderr: String,
     pub timed_out: bool,
     pub cancelled: bool,
-    /// stdout hit the [`MAX_STDOUT_BYTES`] cap; what is above it was dropped.
+    /// stdout hit the [`MAX_STDOUT_BYTES`] cap, or the reader did not finish within the
+    /// [`DRAIN_GRACE`]; what is above it was dropped.
     pub stdout_truncated: bool,
+    /// The same for stderr and [`MAX_STDERR_BYTES`].
+    pub stderr_truncated: bool,
     pub duration_ms: u64,
     /// The interpreter that was used, for the output panel's header line.
     pub interpreter: String,
@@ -157,11 +190,45 @@ pub struct PythonStatus {
 #[derive(Debug, Default)]
 pub struct RunState {
     cancel: AtomicBool,
-    /// The child's process id while it is running and **not yet reaped**. The runner
-    /// holds this mutex across `try_wait`/`wait` and clears the pid before it reaps, so
-    /// whoever reads a pid out of here under the lock knows it is still the child's and
-    /// not some later process that inherited the number.
-    live: Mutex<Option<u32>>,
+    /// The child while it is running and **not yet reaped**. The runner holds this
+    /// mutex across `try_wait`/`wait` and clears it before it reaps, so whoever reads a
+    /// pid out of here under the lock knows it is still the child's and not some later
+    /// process that inherited the number.
+    live: Mutex<Option<Live>>,
+}
+
+/// What it takes to kill a run: the child's pid, and on Windows its job object.
+#[derive(Debug)]
+struct Live {
+    #[cfg(unix)]
+    pid: u32,
+    #[cfg(windows)]
+    job: Option<super::job::Job>,
+}
+
+impl Live {
+    fn of(child: &Child) -> Self {
+        Self {
+            #[cfg(unix)]
+            pid: child.id(),
+            #[cfg(windows)]
+            job: super::job::Job::around(child),
+        }
+    }
+
+    /// Ends the child and everything it started: `killpg` on Unix, the job on Windows.
+    fn kill_group(&self) {
+        kill_group(self);
+    }
+
+    /// The run ended by itself: what the script left running is left alone (Windows
+    /// closes its job without killing; Unix has nothing to do).
+    fn release(self) {
+        #[cfg(windows)]
+        if let Some(job) = self.job {
+            job.release();
+        }
+    }
 }
 
 impl RunState {
@@ -174,15 +241,15 @@ impl RunState {
     /// The runner notices the flag within [`POLL`] either way.
     pub fn cancel(&self) {
         self.cancel.store(true, Ordering::SeqCst);
-        if let Some(pid) = *self.live() {
-            kill_group(pid);
+        if let Some(live) = &*self.live() {
+            live.kill_group();
         }
     }
 
-    /// The pid slot. A poisoned mutex is used anyway: the only thing it holds is a
-    /// number, and refusing to kill a child because another thread panicked is worse
-    /// than reading a value that is still perfectly good.
-    fn live(&self) -> MutexGuard<'_, Option<u32>> {
+    /// The slot of the live child. A poisoned mutex is used anyway: the only thing it
+    /// holds is a pid and a handle, and refusing to kill a child because another thread
+    /// panicked is worse than reading a value that is still perfectly good.
+    fn live(&self) -> MutexGuard<'_, Option<Live>> {
         self.live.lock().unwrap_or_else(|err| err.into_inner())
     }
 }
@@ -339,6 +406,7 @@ pub struct RunOutcome {
     pub timed_out: bool,
     pub cancelled: bool,
     pub stdout_truncated: bool,
+    pub stderr_truncated: bool,
     pub duration_ms: u64,
 }
 
@@ -381,7 +449,7 @@ pub fn execute(plan: &RunPlan, state: &RunState) -> Result<RunOutcome, String> {
     let mut child = command
         .spawn()
         .map_err(|err| format!("Failed to start {} ({err})", plan.program.to_string_lossy()))?;
-    *state.live() = Some(child.id());
+    *state.live() = Some(Live::of(&child));
 
     // stdin goes out on its own thread: a script that writes a lot before it has read
     // all of its input would otherwise deadlock against a full pipe. A script that never
@@ -403,7 +471,7 @@ pub fn execute(plan: &RunPlan, state: &RunState) -> Result<RunOutcome, String> {
     // One grace for both pipes, not one each: the app is waiting on this answer.
     let drained_by = Instant::now() + DRAIN_GRACE;
     let (stdout, stdout_truncated) = collect(stdout, drained_by);
-    let (stderr, _) = collect(stderr, drained_by);
+    let (stderr, stderr_truncated) = collect(stderr, drained_by);
     let watched = watched?;
     Ok(RunOutcome {
         exit_code: watched.exit_code,
@@ -412,6 +480,7 @@ pub fn execute(plan: &RunPlan, state: &RunState) -> Result<RunOutcome, String> {
         timed_out: watched.timed_out,
         cancelled,
         stdout_truncated,
+        stderr_truncated,
         duration_ms: started.elapsed().as_millis() as u64,
     })
 }
@@ -433,7 +502,9 @@ fn watch(child: &mut Child, state: &RunState, deadline: Instant) -> Result<Watch
         let mut live = state.live();
         match child.try_wait() {
             Ok(Some(status)) => {
-                *live = None;
+                if let Some(live) = live.take() {
+                    live.release();
+                }
                 return Ok(Watched {
                     exit_code: status.code(),
                     timed_out: false,
@@ -448,11 +519,12 @@ fn watch(child: &mut Child, state: &RunState, deadline: Instant) -> Result<Watch
 
         let timed_out = Instant::now() >= deadline;
         if timed_out || state.is_cancelled() {
-            if let Some(pid) = *live {
-                kill_group(pid);
+            if let Some(live) = &*live {
+                live.kill_group();
             }
-            // The group kill does not reach the leader on Windows, and costs nothing
-            // on Unix where it has already had its signal.
+            // Makes sure of the leader itself even where the group kill found nothing
+            // to do (a Windows run without a job); costs nothing where it has already
+            // had its signal.
             let _ = child.kill();
             *live = None;
             drop(live);
@@ -470,59 +542,95 @@ fn watch(child: &mut Child, state: &RunState, deadline: Instant) -> Result<Watch
 /// SIGKILLs a process group. Only ever called with a pid that has not been reaped yet
 /// (see [`RunState::live`]), so the number still belongs to our child.
 #[cfg(unix)]
-fn kill_group(pid: u32) {
+fn kill_group(live: &Live) {
     // SAFETY: `killpg` on a pid that is still a live (or zombie) child of this process.
     // The worst it can do is fail with ESRCH, which is ignored.
     unsafe {
-        libc::killpg(pid as libc::pid_t, libc::SIGKILL);
+        libc::killpg(live.pid as libc::pid_t, libc::SIGKILL);
     }
 }
 
-/// Windows has no process groups of this kind; the runner's own `child.kill()` is what
-/// stops the script, and a grandchild it spawned is out of reach (plan AD-13).
-#[cfg(not(unix))]
-fn kill_group(_pid: u32) {}
+/// Ends the job the child is in, which is the child and everything it started since.
+/// Without a job (it could not be made) the runner's own `child.kill()` still stops the
+/// script itself.
+#[cfg(windows)]
+fn kill_group(live: &Live) {
+    if let Some(job) = &live.job {
+        job.terminate();
+    }
+}
+
+/// Neither Unix nor Windows: only the runner's own `child.kill()` stops the script.
+#[cfg(not(any(unix, windows)))]
+fn kill_group(_live: &Live) {}
+
+/// What a pipe's reader has so far, shared with the runner so that a reader that is still
+/// going when the grace ends can be asked for what it has instead of giving up everything.
+#[derive(Default)]
+struct Kept {
+    bytes: Vec<u8>,
+    /// Bytes above the cap were dropped.
+    truncated: bool,
+}
+
+/// A pipe being read on its own thread.
+struct Drained {
+    kept: Arc<Mutex<Kept>>,
+    /// Answers when the reader is done (a closed channel counts: the thread is gone).
+    done: Receiver<()>,
+}
 
 /// Reads a pipe to the end on its own thread, keeping at most `cap` bytes.
 ///
 /// It keeps reading past the cap on purpose: stopping would fill the pipe and block the
 /// child for ever instead of letting it finish.
-fn drain<R: Read + Send + 'static>(mut pipe: R, cap: usize) -> Receiver<(Vec<u8>, bool)> {
-    let (sender, receiver) = mpsc::channel();
+fn drain<R: Read + Send + 'static>(mut pipe: R, cap: usize) -> Drained {
+    let (sender, done) = mpsc::channel();
+    let kept = Arc::new(Mutex::new(Kept::default()));
+    let shared = Arc::clone(&kept);
     std::thread::spawn(move || {
         let mut buffer = [0u8; 64 * 1024];
-        let mut kept: Vec<u8> = Vec::new();
-        let mut truncated = false;
         loop {
             match pipe.read(&mut buffer) {
                 Ok(0) => break,
                 Ok(read) => {
-                    let room = cap.saturating_sub(kept.len());
+                    let mut kept = shared.lock().unwrap_or_else(|err| err.into_inner());
+                    let room = cap.saturating_sub(kept.bytes.len());
                     if room >= read {
-                        kept.extend_from_slice(&buffer[..read]);
+                        kept.bytes.extend_from_slice(&buffer[..read]);
                     } else {
-                        kept.extend_from_slice(&buffer[..room]);
-                        truncated = true;
+                        kept.bytes.extend_from_slice(&buffer[..room]);
+                        kept.truncated = true;
                     }
                 }
                 Err(err) if err.kind() == ErrorKind::Interrupted => {}
                 Err(_) => break,
             }
         }
-        let _ = sender.send((kept, truncated));
+        let _ = sender.send(());
     });
-    receiver
+    Drained { kept, done }
 }
 
 /// Waits for one pipe's reader until `deadline`. Text that is not valid UTF-8 — a
 /// `latin1` comment a script echoed back, or a cut in the middle of a character at the
 /// cap — is decoded lossily rather than losing the whole output.
-fn collect(pipe: Option<Receiver<(Vec<u8>, bool)>>, deadline: Instant) -> (String, bool) {
+///
+/// The flag is true when text is missing: the cap was hit, **or** the reader was still
+/// going when the deadline came (a grandchild that inherited the pipe and keeps it open),
+/// in which case what had arrived by then is returned and the rest is lost.
+fn collect(pipe: Option<Drained>, deadline: Instant) -> (String, bool) {
     let Some(pipe) = pipe else {
         return (String::new(), false);
     };
     let grace = deadline.saturating_duration_since(Instant::now());
-    let (bytes, truncated) = pipe.recv_timeout(grace).unwrap_or_default();
+    let finished = !matches!(
+        pipe.done.recv_timeout(grace),
+        Err(mpsc::RecvTimeoutError::Timeout)
+    );
+    let mut kept = pipe.kept.lock().unwrap_or_else(|err| err.into_inner());
+    let bytes = std::mem::take(&mut kept.bytes);
+    let truncated = kept.truncated || !finished;
     (String::from_utf8_lossy(&bytes).into_owned(), truncated)
 }
 
@@ -669,21 +777,63 @@ pub fn script_env(bundled: Option<&Path>, context_file: &Path) -> Vec<(String, O
     env
 }
 
+/// The `PATH` a script gets: the one the app has, with the login shell's directories that
+/// it is missing added after them. `None` when that changes nothing.
+///
+/// An app started from Finder or the Dock gets launchd's short `PATH`
+/// (`/usr/bin:/bin:/usr/sbin:/sbin`), so a script that calls `git`, `ffmpeg` or a
+/// Homebrew tool by name did not find it, although the same script works from the
+/// Terminal. The existing order stays first — what the app was started with is what it
+/// was started with — and only the directories that are not there at all are appended.
+pub fn path_with_login(
+    existing: Option<&std::ffi::OsStr>,
+    login: Option<&std::ffi::OsStr>,
+) -> Option<OsString> {
+    let login = login?;
+    let mut dirs: Vec<PathBuf> = existing
+        .map(|existing| std::env::split_paths(existing).collect())
+        .unwrap_or_default();
+    let before = dirs.len();
+    for dir in std::env::split_paths(login) {
+        if dir.as_os_str().is_empty() || dirs.contains(&dir) {
+            continue;
+        }
+        dirs.push(dir);
+    }
+    if dirs.len() == before {
+        return None;
+    }
+    std::env::join_paths(dirs).ok()
+}
+
+/// Whether the modes the webview assumed differ from the header on disk now.
+pub fn header_changed(req: &RunRequest, now: Option<&ScriptMeta>) -> bool {
+    let input = now.map_or_else(ScriptInput::default, |meta| meta.input);
+    let output = now.map_or_else(ScriptOutput::default, |meta| meta.output);
+    req.input.is_some_and(|assumed| assumed != input)
+        || req.output.is_some_and(|assumed| assumed != output)
+}
+
 /// The plan for one script, given everything already resolved.
 fn plan_run(
     script: &Resolved,
     interpreter: &Path,
     bundled: Option<&Path>,
     context: &ContextDir,
+    path: Option<OsString>,
     stdin: String,
     timeout: Duration,
 ) -> RunPlan {
+    let mut env = script_env(bundled, &context.context_file());
+    if let Some(path) = path {
+        env.push(("PATH".to_string(), path));
+    }
     RunPlan {
         program: interpreter.to_path_buf(),
         args: vec![script.path.as_os_str().to_os_string()],
         // The script's own folder, so relative imports and data files work.
         cwd: Some(script.folder().to_path_buf()),
-        env: script_env(bundled, &context.context_file()),
+        env,
         stdin,
         timeout,
         stdout_cap: MAX_STDOUT_BYTES,
@@ -709,12 +859,25 @@ pub fn script_run(
     let script = discovery::resolve_id(&roots, &req.script_id)?;
     // The header is read again here rather than trusted from the webview's last
     // `scripts_list`: the file on disk is what is about to run.
-    let from_header = discovery::header_of(&script.path)
-        .meta
-        .and_then(|meta| meta.timeout);
+    let header = discovery::header_of(&script.path);
+    // The webview decides what to send on stdin, whether to ask for a selection and what
+    // to do with the answer from the modes it saw at the last scan. A header edited since
+    // then would run with the new code under the old modes (a `replace` script that is
+    // now `panel`, or the other way round), so the run is refused and the webview rescans.
+    if header_changed(&req, header.meta.as_ref()) {
+        return Err(format!(
+            "{HEADER_CHANGED} the header of {} was changed after the scripts were listed",
+            req.script_id
+        ));
+    }
+    let from_header = header.meta.as_ref().and_then(|meta| meta.timeout);
     let timeout = Duration::from_secs(timeout_secs(req.timeout_secs, from_header, &settings));
 
     let interpreter = interpreter(&settings);
+    let path = path_with_login(
+        std::env::var_os("PATH").as_deref(),
+        crate::python::login_path().as_deref(),
+    );
     let bundled = discovery::bundled_dir(&app);
     // Dropped at the end of this function, whichever way it leaves.
     let context = ContextDir::create(&req.context)?;
@@ -723,6 +886,7 @@ pub fn script_run(
         &interpreter,
         bundled.as_deref(),
         &context,
+        path,
         req.stdin,
         timeout,
     );
@@ -737,6 +901,7 @@ pub fn script_run(
         timed_out: outcome.timed_out,
         cancelled: outcome.cancelled,
         stdout_truncated: outcome.stdout_truncated,
+        stderr_truncated: outcome.stderr_truncated,
         duration_ms: outcome.duration_ms,
         interpreter: interpreter.to_string_lossy().into_owned(),
     })
@@ -764,9 +929,11 @@ pub fn python_check(app: AppHandle) -> PythonStatus {
 /// Stops every script process, called from `on_run_event` on `RunEvent::Exit`
 /// (plan AD-13), so quitting cannot leave a `while True:` script running.
 ///
-/// The kill itself is immediate on Unix. The wait afterwards is what Windows needs — its
-/// children are stopped by their own runner — and it is also what gives every runner
-/// time to remove its context folder before the process goes away.
+/// The kill itself is immediate on both platforms (`killpg`, `TerminateJobObject`). The
+/// wait afterwards, at most [`EXIT_GRACE`], is what gives every runner time to reap its
+/// child and remove its context folder before the process goes away. A script that
+/// somehow outlives the wait on Windows is still ended by the OS: the job closes with
+/// the process.
 pub fn kill_all(app: &AppHandle) {
     let Some(runs) = app.try_state::<RunRegistry>() else {
         return;
@@ -888,6 +1055,207 @@ mod tests {
             assert_eq!(registry.len(), 1);
         }
         assert!(registry.is_empty());
+    }
+
+    // -- PATH, the header check, the pipes and the quit grace --------------
+
+    #[cfg(unix)]
+    fn os(text: &str) -> OsString {
+        OsString::from(text)
+    }
+
+    /// Finder gives an app launchd's short PATH; the login shell's directories that are
+    /// missing are added, behind the ones already there.
+    #[cfg(unix)]
+    #[test]
+    fn the_login_path_adds_the_missing_folders_and_keeps_the_order() {
+        let merged = path_with_login(
+            Some(&os("/usr/bin:/bin:/usr/sbin:/sbin")),
+            Some(&os("/opt/homebrew/bin:/usr/bin:/Users/p/.local/bin:/bin")),
+        );
+        assert_eq!(
+            merged,
+            Some(os(
+                "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/Users/p/.local/bin"
+            ))
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_login_path_changes_nothing_when_it_has_nothing_new_or_is_not_known() {
+        // Nothing new: no override at all, so the child inherits exactly what we have.
+        assert_eq!(
+            path_with_login(Some(&os("/usr/bin:/bin")), Some(&os("/bin:/usr/bin"))),
+            None
+        );
+        // No answer from the shell (Windows, a shell that did not say).
+        assert_eq!(path_with_login(Some(&os("/usr/bin")), None), None);
+        // No PATH of our own: the login one is the whole thing.
+        assert_eq!(
+            path_with_login(None, Some(&os("/opt/homebrew/bin:/usr/bin"))),
+            Some(os("/opt/homebrew/bin:/usr/bin"))
+        );
+    }
+
+    /// The environment reaches the child: a script started from Finder finds a tool that
+    /// is only in the login shell's PATH.
+    #[cfg(unix)]
+    #[test]
+    fn a_script_finds_a_tool_that_only_the_login_path_has() {
+        let dir = std::env::temp_dir().join(format!("gedit-path-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let tool = dir.join("gedit-test-tool");
+        std::fs::write(&tool, "#!/bin/sh\necho found\n").unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let finder_path = os("/usr/bin:/bin");
+        let login_path = os(&format!("/usr/bin:{}", dir.display()));
+        let merged = path_with_login(Some(&finder_path), Some(&login_path)).unwrap();
+
+        let mut plan = RunPlan::probe(
+            Path::new("/bin/sh"),
+            &["-c", "gedit-test-tool"],
+            Duration::from_secs(10),
+        );
+        plan.env = vec![("PATH".to_string(), finder_path.clone())];
+        let without = execute(&plan, &RunState::default()).unwrap();
+        assert!(
+            !without.success(),
+            "found it without the login PATH: {without:?}"
+        );
+        plan.env = vec![("PATH".to_string(), merged)];
+        let with = execute(&plan, &RunState::default()).unwrap();
+        assert_eq!(with.stdout.trim(), "found", "{with:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn request(input: Option<ScriptInput>, output: Option<ScriptOutput>) -> RunRequest {
+        RunRequest {
+            run_id: "r1".to_string(),
+            script_id: "user:a.py".to_string(),
+            stdin: String::new(),
+            context: serde_json::Value::Null,
+            timeout_secs: None,
+            input,
+            output,
+        }
+    }
+
+    fn meta(input: ScriptInput, output: ScriptOutput) -> ScriptMeta {
+        let mut meta: ScriptMeta = serde_json::from_str(r#"{"name":"A"}"#).unwrap();
+        meta.input = input;
+        meta.output = output;
+        meta
+    }
+
+    /// A script edited after the last scan must not run with the modes the webview
+    /// prepared from the old header.
+    #[test]
+    fn a_header_that_changed_since_the_scan_is_noticed() {
+        let now = meta(ScriptInput::Selection, ScriptOutput::Replace);
+        // What the webview saw matches: run.
+        assert!(!header_changed(
+            &request(Some(ScriptInput::Selection), Some(ScriptOutput::Replace)),
+            Some(&now)
+        ));
+        // The output mode was edited (replace -> panel is the dangerous direction).
+        assert!(header_changed(
+            &request(Some(ScriptInput::Selection), Some(ScriptOutput::Panel)),
+            Some(&now)
+        ));
+        // The input mode was edited.
+        assert!(header_changed(
+            &request(Some(ScriptInput::Document), Some(ScriptOutput::Replace)),
+            Some(&now)
+        ));
+        // A header added to a script that had none: the webview assumed the defaults.
+        assert!(header_changed(
+            &request(
+                Some(ScriptInput::SelectionOrDocument),
+                Some(ScriptOutput::Panel)
+            ),
+            Some(&now)
+        ));
+        // A header removed: now the defaults.
+        assert!(header_changed(
+            &request(Some(ScriptInput::Selection), Some(ScriptOutput::Replace)),
+            None
+        ));
+        assert!(!header_changed(
+            &request(
+                Some(ScriptInput::SelectionOrDocument),
+                Some(ScriptOutput::Panel)
+            ),
+            None
+        ));
+        // A request that does not say what it assumed is not compared.
+        assert!(!header_changed(&request(None, None), Some(&now)));
+    }
+
+    #[test]
+    fn the_webview_request_carries_the_modes_in_the_headers_spelling() {
+        let req: RunRequest = serde_json::from_str(
+            r#"{"runId":"r","scriptId":"user:a.py","stdin":"","context":null,
+                "timeoutSecs":null,"input":"selection-or-document","output":"new-document"}"#,
+        )
+        .unwrap();
+        assert_eq!(req.input, Some(ScriptInput::SelectionOrDocument));
+        assert_eq!(req.output, Some(ScriptOutput::NewDocument));
+        // An older caller that sends neither still parses.
+        let req: RunRequest = serde_json::from_str(
+            r#"{"runId":"r","scriptId":"user:a.py","stdin":"","context":null,"timeoutSecs":null}"#,
+        )
+        .unwrap();
+        assert_eq!((req.input, req.output), (None, None));
+    }
+
+    /// A reader that gives one chunk and then does not finish for a while, like a pipe a
+    /// grandchild still holds open.
+    struct StallsAfterOneChunk(bool);
+
+    impl Read for StallsAfterOneChunk {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if !self.0 {
+                self.0 = true;
+                buf[..3].copy_from_slice(b"abc");
+                return Ok(3);
+            }
+            std::thread::sleep(Duration::from_millis(1500));
+            Ok(0)
+        }
+    }
+
+    /// Output that was still coming when the grace ran out is lost, and the outcome says
+    /// so: what had arrived is kept, the flag is set. Before, the whole output was
+    /// dropped silently.
+    #[test]
+    fn a_reader_that_misses_the_grace_is_reported_as_cut_and_keeps_what_it_had() {
+        let pipe = drain(StallsAfterOneChunk(false), 1024);
+        let (text, cut) = collect(Some(pipe), Instant::now() + Duration::from_millis(150));
+        assert_eq!(text, "abc");
+        assert!(cut, "a missed grace must be reported");
+    }
+
+    #[test]
+    fn a_reader_that_finishes_in_time_is_not_reported_as_cut() {
+        let pipe = drain(std::io::Cursor::new(b"abc".to_vec()), 1024);
+        let (text, cut) = collect(Some(pipe), Instant::now() + Duration::from_secs(5));
+        assert_eq!((text.as_str(), cut), ("abc", false));
+        // And a cap is still a cut.
+        let pipe = drain(std::io::Cursor::new(b"abcdef".to_vec()), 3);
+        let (text, cut) = collect(Some(pipe), Instant::now() + Duration::from_secs(5));
+        assert_eq!((text.as_str(), cut), ("abc", true));
+    }
+
+    /// Quit waits for the runners, not for a second and a half: the kill is immediate on
+    /// both platforms and what is waited for is a temp folder being removed.
+    #[test]
+    fn quitting_does_not_wait_longer_than_a_third_of_a_second() {
+        assert!(EXIT_GRACE <= Duration::from_millis(300), "{EXIT_GRACE:?}");
     }
 
     // -- the version probe -------------------------------------------------
@@ -1234,8 +1602,33 @@ mod unix_tests {
         plan.stderr_cap = 10;
         let outcome = run(&plan);
         assert_eq!(outcome.stderr.len(), 10);
-        // A truncated stderr is not what `stdoutTruncated` means.
+        // A truncated stderr is not what `stdoutTruncated` means, and has its own flag.
         assert!(!outcome.stdout_truncated);
+        assert!(outcome.stderr_truncated);
+    }
+
+    /// Something the script started that keeps stderr or stdout open after the script is
+    /// gone makes the runner stop waiting; the text that never arrived is reported as cut
+    /// instead of vanishing.
+    #[test]
+    fn a_grandchild_holding_the_pipes_open_makes_the_output_cut_not_silently_short() {
+        let plan = sh(
+            "echo early; echo early-error >&2; (sleep 3) & exit 0",
+            Duration::from_secs(20),
+        );
+        let started = Instant::now();
+        let outcome = run(&plan);
+        assert!(
+            started.elapsed() < Duration::from_millis(2500),
+            "waited for the grandchild"
+        );
+        assert_eq!(outcome.exit_code, Some(0));
+        assert_eq!(outcome.stdout.trim(), "early");
+        assert_eq!(outcome.stderr.trim(), "early-error");
+        assert!(
+            outcome.stdout_truncated && outcome.stderr_truncated,
+            "{outcome:?}"
+        );
     }
 
     /// The context folder is the run's, and it goes away with it whether the run
@@ -1280,8 +1673,8 @@ mod unix_tests {
 
         assert_eq!(registry.cancel_all(), 1);
         assert!(
-            wait_until_idle(&registry, EXIT_GRACE),
-            "a run was still registered after {EXIT_GRACE:?}"
+            wait_until_idle(&registry, TEST_WAIT),
+            "a run was still registered after {TEST_WAIT:?}"
         );
         let outcome = runner.join().unwrap();
         assert!(outcome.cancelled);
@@ -1344,6 +1737,7 @@ mod unix_tests {
             Path::new("/bin/sh"),
             Some(&bundled),
             &context,
+            None,
             "N10 G0 X1.\n".to_string(),
             Duration::from_secs(seconds),
         );
@@ -1410,11 +1804,10 @@ mod windows_tests {
     //! not it has a Python, and it can be told to hang, to fail and to print more than a
     //! pipe holds, which is what needs proving.
     //!
-    //! These are the Unix siblings above, one for one, minus the one claim Windows cannot
-    //! make. There is no `killpg` here, so [`kill_group`] is a no-op and a *grandchild* a
-    //! script spawned outlives the run (plan AD-13). What is proved instead is that the
-    //! direct child is killed on a timeout and on a cancel, and
-    //! `the_group_kill_is_a_no_op_here` keeps the missing half honest rather than silent.
+    //! These are the Unix siblings above, one for one. There is no `killpg` here; the job
+    //! object of [`super::super::job`] plays its part, and the tests named
+    //! `..._grandchild_...` prove it: a program the script started dies with a timeout, a
+    //! cancel and a quit, and survives a run that simply ends (as it does on Unix).
     //!
     //! **Why every command runs with a `cwd` and names files relative to it.** An absolute
     //! path inside a `cmd /c` argument would have to be quoted, and `std` escapes a `"` in
@@ -1533,8 +1926,7 @@ mod windows_tests {
     ///
     /// `ping` against the loopback address is the delay, because it wants nothing from
     /// stdin or from a console, which is all a script run is given. Killing the run
-    /// mid-sleep leaves at most one `ping.exe` behind — `kill_group` cannot reach a
-    /// grandchild here — and that one exits by itself a second later.
+    /// mid-sleep ends that `ping.exe` with the rest of the job.
     const MARKER_LOOP: &str = "for /l %i in (1,1,600) do @(echo x>>alive&ping -n 2 127.0.0.1 >nul)";
 
     /// The marker's size, or `None` while nothing has been written yet.
@@ -1620,8 +2012,8 @@ mod windows_tests {
     }
 
     /// The Windows half of F19: the run's own child is killed when the deadline passes.
-    /// Its grandchildren are not — [`kill_group`] cannot reach them — which is why this
-    /// test watches `cmd.exe`'s own appends and not a background job's.
+    /// This watches `cmd.exe`'s own appends; the grandchildren have their own tests
+    /// (`a_timeout_kills_the_grandchild_too` and its siblings).
     #[test]
     fn a_timeout_kills_the_child() {
         let dir = scratch("timeout");
@@ -1674,29 +2066,136 @@ mod windows_tests {
         assert!(registry.is_empty());
     }
 
-    /// The group kill is a no-op on Windows and the runner's own `child.kill()` is what
-    /// stops a script. If that ever stops being true — a job object, say — this is the
-    /// test that has to change, and the module docs with it.
-    #[test]
-    fn the_group_kill_is_a_no_op_here() {
-        let mut command = Command::new("ping");
-        command
-            .args(["-n", "30", "127.0.0.1"])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-        crate::python::hidden(&mut command);
-        let mut child = command.spawn().expect("ping did not start");
-
-        kill_group(child.id());
-        std::thread::sleep(Duration::from_millis(200));
-        assert!(
-            matches!(child.try_wait(), Ok(None)),
-            "kill_group stopped the process; Windows has no killpg"
+    /// `cmd.exe` starts a second `cmd.exe` that appends to `alive` about once a second
+    /// for `seconds` seconds: a grandchild of the run, in a batch file so that no
+    /// quoting is needed.
+    fn grandchild_loop(dir: &Path, seconds: u32) {
+        batch(
+            &dir.join("inner.bat"),
+            &[
+                "@echo off",
+                &format!(
+                    "for /l %%i in (1,1,{seconds}) do @(echo x>>alive&ping -n 2 127.0.0.1 >nul)"
+                ),
+            ],
         );
+    }
 
-        child.kill().unwrap();
-        assert!(child.wait().is_ok());
+    /// The run's child waits for that grandchild, so only the run's end can stop either.
+    const RUNS_THE_GRANDCHILD: &str = "cmd /c inner.bat";
+
+    /// The point of the job object: a timeout ends the program the script started, not
+    /// only the script. Without the job the grandchild kept appending for its 30 seconds.
+    #[test]
+    fn a_timeout_kills_the_grandchild_too() {
+        let dir = scratch("job-timeout");
+        grandchild_loop(&dir, 30);
+        let marker = dir.join("alive");
+        let started = Instant::now();
+        let outcome = run(&cmd(RUNS_THE_GRANDCHILD, &dir, Duration::from_millis(3000)));
+        assert!(outcome.timed_out, "{outcome:?}");
+        assert!(started.elapsed() < Duration::from_secs(8));
+        assert!(
+            still_alive(&marker).is_some(),
+            "the grandchild never started"
+        );
+        assert!(
+            !is_still_growing(&marker),
+            "the grandchild outlived the timeout"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_cancel_kills_the_grandchild_too() {
+        let dir = scratch("job-cancel");
+        grandchild_loop(&dir, 30);
+        let marker = dir.join("alive");
+        let state = Arc::new(RunState::default());
+        let asked = Arc::clone(&state);
+        let watched = marker.clone();
+        std::thread::spawn(move || {
+            let up = Instant::now() + Duration::from_secs(10);
+            while still_alive(&watched).is_none() && Instant::now() < up {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            asked.cancel();
+        });
+        let outcome = execute(
+            &cmd(RUNS_THE_GRANDCHILD, &dir, Duration::from_secs(60)),
+            &state,
+        )
+        .unwrap();
+        assert!(outcome.cancelled, "{outcome:?}");
+        assert!(
+            still_alive(&marker).is_some(),
+            "the grandchild never started"
+        );
+        assert!(
+            !is_still_growing(&marker),
+            "the grandchild outlived the cancel"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Quitting ends the program a script started, not only the script.
+    #[test]
+    fn kill_all_kills_the_grandchild_too() {
+        let dir = scratch("job-kill-all");
+        grandchild_loop(&dir, 30);
+        let marker = dir.join("alive");
+        let registry = Arc::new(RunRegistry::default());
+        let plan = cmd(RUNS_THE_GRANDCHILD, &dir, Duration::from_secs(60));
+        let runner = {
+            let registry = Arc::clone(&registry);
+            std::thread::spawn(move || {
+                let (state, _registered) = Registered::start(&registry, "r1");
+                execute(&plan, &state).unwrap()
+            })
+        };
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while still_alive(&marker).is_none() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(still_alive(&marker).is_some(), "the script never started");
+        assert_eq!(registry.cancel_all(), 1);
+        assert!(
+            wait_until_idle(&registry, TEST_WAIT),
+            "a run was still registered after {TEST_WAIT:?}"
+        );
+        assert!(runner.join().unwrap().cancelled);
+        assert!(
+            !is_still_growing(&marker),
+            "the grandchild outlived kill_all"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A run that ends by itself leaves what it started running, as on Unix: closing the
+    /// job must not kill it. (The loop ends by itself after a few seconds.)
+    #[test]
+    fn a_run_that_ends_by_itself_leaves_what_it_started() {
+        let dir = scratch("job-release");
+        grandchild_loop(&dir, 6);
+        let marker = dir.join("alive");
+        // `start /b` returns at once, so the run is over while the loop goes on.
+        let outcome = run(&cmd(
+            "start /b cmd /c inner.bat",
+            &dir,
+            Duration::from_secs(20),
+        ));
+        assert_eq!(outcome.exit_code, Some(0), "{outcome:?}");
+        assert!(!outcome.timed_out && !outcome.cancelled);
+        let up = Instant::now() + Duration::from_secs(10);
+        while still_alive(&marker).is_none() && Instant::now() < up {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(still_alive(&marker).is_some(), "the program never started");
+        assert!(
+            is_still_growing(&marker),
+            "closing the job killed what the script left running"
+        );
+        // Not removed: the loop still has the folder as its working directory.
     }
 
     /// Past the cap the reader keeps draining, or the child would block on a full pipe
@@ -1752,8 +2251,9 @@ mod windows_tests {
         plan.stderr_cap = 10;
         let outcome = run(&plan);
         assert_eq!(outcome.stderr.len(), 10, "{outcome:?}");
-        // A truncated stderr is not what `stdoutTruncated` means.
+        // A truncated stderr is not what `stdoutTruncated` means, and has its own flag.
         assert!(!outcome.stdout_truncated);
+        assert!(outcome.stderr_truncated);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1785,8 +2285,7 @@ mod windows_tests {
         let _ = std::fs::remove_dir_all(&elsewhere);
     }
 
-    /// Quitting must not leave a `while True:` script running (plan AD-13, F19). On
-    /// Windows that promise reaches the script itself, not what the script started.
+    /// Quitting must not leave a `while True:` script running (plan AD-13, F19).
     #[test]
     fn kill_all_leaves_no_live_process() {
         let dir = scratch("kill-all");
@@ -1810,8 +2309,8 @@ mod windows_tests {
 
         assert_eq!(registry.cancel_all(), 1);
         assert!(
-            wait_until_idle(&registry, EXIT_GRACE),
-            "a run was still registered after {EXIT_GRACE:?}"
+            wait_until_idle(&registry, TEST_WAIT),
+            "a run was still registered after {TEST_WAIT:?}"
         );
         let outcome = runner.join().unwrap();
         assert!(outcome.cancelled, "{outcome:?}");
@@ -1890,6 +2389,7 @@ mod windows_tests {
             &interpreter,
             Some(&bundled),
             &context,
+            None,
             "N10 G0 X1.\n".to_string(),
             Duration::from_secs(seconds),
         );

@@ -389,6 +389,12 @@ fn mark_shadowed(scripts: &mut [ScriptEntry]) {
 /// door, [`new_script_name`], refuses the names on **every** platform, because a
 /// script folder gEdit fills on a Mac is one that may be synced to a Windows machine
 /// and must not arrive holding a file nobody there can open.
+///
+/// The same split holds for the characters Windows does not allow in a name
+/// ([`has_windows_reserved_char`]): `< > " | ? *` are ordinary on macOS and Linux and a
+/// wildcard or an error on Windows, where a file called `a|b.py` cannot be opened, so an
+/// id naming one must not resolve there. `:` and the slashes are refused everywhere,
+/// since an id is built with them.
 pub fn is_safe_segment(segment: &str) -> bool {
     !segment.is_empty()
         && !segment.starts_with('.')
@@ -397,6 +403,14 @@ pub fn is_safe_segment(segment: &str) -> bool {
         && !segment.contains(['/', '\\', ':'])
         && !segment.chars().any(char::is_control)
         && !(cfg!(windows) && paths::is_device_name(segment))
+        && !(cfg!(windows) && has_windows_reserved_char(segment))
+}
+
+/// Whether `name` holds one of `< > " | ? *`, which Windows does not allow in a file
+/// name (Microsoft, "Naming Files, Paths, and Namespaces"). `:` and the slashes are
+/// handled by [`is_safe_segment`] on every platform already.
+pub fn has_windows_reserved_char(name: &str) -> bool {
+    name.contains(['<', '>', '"', '|', '?', '*'])
 }
 
 /// `root:name.py` or `root:group/name.py`, checked against the roots.
@@ -557,15 +571,17 @@ fn new_script_name(name: &str) -> Result<(String, String), String> {
     // The new file has to be discoverable and addressable by the same rules as any
     // other script, so it is checked against the id grammar rather than a looser one —
     // plus the device names, which `is_safe_segment` only refuses on Windows (M8).
-    // Here they are refused everywhere: this is the one door gEdit *creates* a file
-    // through, and a scripts folder filled on a Mac is one that gets synced to a
-    // Windows machine, where `NUL.py` swallows the template and reads back empty.
+    // Here they are refused everywhere, and so are `< > " | ? *` (which Windows does not
+    // allow in a file name): this is the one door gEdit *creates* a file through, and a
+    // scripts folder filled on a Mac is one that gets synced to a Windows machine, where
+    // `NUL.py` swallows the template and reads back empty and `a|b.py` cannot be opened.
     // `validateScriptName` in `contrib/scripts.ts` says the same thing in the prompt.
     if stem.is_empty()
         || stem.starts_with('_')
         || stem.ends_with('.')
         || !is_safe_segment(&file_name)
         || paths::is_device_name(&file_name)
+        || has_windows_reserved_char(&file_name)
         || file_name == LIBRARY_FILE_NAME
     {
         return Err(format!("Invalid script name: {name}"));
@@ -1021,6 +1037,32 @@ mod tests {
         for stem in ["console", "com10", "nulled", "conveyor"] {
             assert!(new_script_name(stem).is_ok(), "refused {stem:?}");
         }
+    }
+
+    /// `< > " | ? *` cannot be in a Windows file name, so they are refused when a script
+    /// is created, on every platform (a folder filled on a Mac gets synced to Windows),
+    /// and refused as a segment of an id on Windows, where the file could not be opened.
+    #[test]
+    fn windows_reserved_characters_are_refused_in_new_names_and_in_ids_on_windows() {
+        for bad in ['<', '>', '"', '|', '?', '*'] {
+            let name = format!("a{bad}b");
+            assert!(has_windows_reserved_char(&name), "{name}");
+            assert!(new_script_name(&name).is_err(), "created {name:?}");
+            assert!(
+                new_script_name(&format!("{name}.py")).is_err(),
+                "created {name:?}.py"
+            );
+            // On Windows the file could not be opened; elsewhere it is an ordinary name
+            // that may already be in the folder, and must stay listed.
+            assert_eq!(
+                is_safe_segment(&format!("{name}.py")),
+                !cfg!(windows),
+                "{name}.py as a segment"
+            );
+            assert_eq!(is_safe_segment(&name), !cfg!(windows), "{name} as a folder");
+        }
+        assert!(!has_windows_reserved_char("plain name (2).py"));
+        assert!(new_script_name("plain name (2)").is_ok());
     }
 
     /// Whether a device name may be *listed and addressed* is a question about the

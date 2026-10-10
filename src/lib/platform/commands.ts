@@ -298,16 +298,30 @@ export const RECOVERY_HEADER = 'x-gedit-recovery';
  * difference between "the crash cost nothing" and "the crash cost everything the user
  * typed since the last save".
  *
- * A **lone surrogate** in a path is escaped the same way but does not survive the other
- * end: `serde_json` rejects `\ud800` as invalid JSON, so the snapshot is refused rather
- * than stored (WP7.2). That is the safe failure — a refusal with a message, never a
- * half-written file — and no macOS path can reach it today, since a path arrives here
- * as valid UTF-8 from Rust.
+ * A **lone surrogate** (a Windows file name may hold one) would be escaped the same way
+ * but does not survive the other end: `serde_json` rejects `\ud800` as invalid JSON, so
+ * the whole snapshot — the text the user typed — was refused. Every string in the
+ * header is made well-formed first, the lone half becoming U+FFFD, so the snapshot
+ * lands. The stored path is then not the real one; restore finds no file there and says
+ * so, which is better than no snapshot at all.
  */
 export function recoveryHeader(meta: RecoveryMeta): string {
-  return JSON.stringify(meta).replace(/[^\x20-\x7e]/g, (c) =>
-    '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'),
-  );
+  return JSON.stringify(meta, (_key, value: unknown) =>
+    typeof value === 'string' ? wellFormed(value) : value,
+  ).replace(/[^\x20-\x7e]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+}
+
+/** `text` with every lone surrogate replaced by U+FFFD (what `String.toWellFormed` does). */
+export function wellFormed(text: string): string {
+  if (!/[\ud800-\udfff]/.test(text)) return text;
+  let out = '';
+  // Iterating by code point yields a surrogate pair as one two-unit string and a lone
+  // surrogate as a one-unit string, which is exactly the distinction needed.
+  for (const unit of text) {
+    const code = unit.charCodeAt(0);
+    out += unit.length === 1 && code >= 0xd800 && code <= 0xdfff ? '\ufffd' : unit;
+  }
+  return out;
 }
 
 /**
@@ -530,6 +544,26 @@ export interface RunRequest {
   context: unknown;
   /** Overrides the header's `timeout` and `scripts.timeoutSeconds`. */
   timeoutSecs: number | null;
+  /**
+   * The `input` and `output` modes the webview based this run on (its last scan). Rust
+   * compares them with the header on disk and refuses with `HEADER_CHANGED_PREFIX` when
+   * the script was edited since, so a run never uses the old modes with the new code.
+   * Optional: left out, nothing is compared.
+   */
+  input?: ScriptInputMode;
+  output?: ScriptOutputMode;
+}
+
+/**
+ * What `scriptRun` rejects with, as its first characters, when the script's header was
+ * edited after the last scan. The webview rescans and runs again (`app/scripts.ts`).
+ */
+export const HEADER_CHANGED_PREFIX = 'header-changed:';
+
+/** Whether a `scriptRun` rejection is the "header was edited" refusal. */
+export function isHeaderChanged(err: unknown): boolean {
+  const text = typeof err === 'string' ? err : err instanceof Error ? err.message : '';
+  return text.startsWith(HEADER_CHANGED_PREFIX);
 }
 
 /** The outcome of one run. A run that never started rejects instead. */
@@ -542,8 +576,13 @@ export interface RunResult {
   stderr: string;
   timedOut: boolean;
   cancelled: boolean;
-  /** stdout hit the runner's 64 MiB cap; what came after it was dropped. */
+  /**
+   * stdout hit the runner's 64 MiB cap, or was still being read when the runner stopped
+   * waiting (something the script started holds the pipe); what is missing was dropped.
+   */
   stdoutTruncated: boolean;
+  /** The same for stderr and its 1 MiB cap. */
+  stderrTruncated: boolean;
   durationMs: number;
   /** The interpreter that ran it, for the output panel's header line. */
   interpreter: string;
