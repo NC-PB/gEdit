@@ -2919,6 +2919,25 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
     }
 
+    /// The Windows volume test (B1 intB): the drive letter of the resolved path, a network path is
+    /// never "the same", and what cannot be resolved is not either. Runs on the Windows CI runner only.
+    #[cfg(windows)]
+    #[test]
+    fn the_windows_volume_test_compares_drive_letters() {
+        let (root, _dirs) = scratch("same-volume-windows");
+        let sub = root.join("nc").join("sub");
+        fs::create_dir_all(&sub).unwrap();
+        assert!(same_volume(&root, &sub));
+        assert!(same_volume(&sub, &root));
+        // A share has no drive letter, and a path that is not there cannot be resolved.
+        assert!(!same_volume(
+            Path::new(r"\\gedit-no-such-server\share\x"),
+            &root
+        ));
+        assert!(!same_volume(&root.join("missing"), &root));
+        let _ = fs::remove_dir_all(&root);
+    }
+
     /// A permission error is "cannot tell", which is "there" (a locked folder).
     #[cfg(unix)]
     #[test]

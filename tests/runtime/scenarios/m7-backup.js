@@ -82,7 +82,8 @@ scenario('m7-backup', { timeout: 300 }, async (h) => {
   // `files.backupCount` bounds the history of *this file*. (B1 A2 added a cap on the folder as a whole,
   // `files.backupTotalMb` 500 MB, and an expiry for the copies of deleted files, `files.backupOrphanDays`
   // 90 days; the few small copies of this scenario never reach either default, and the newest copy of an
-  // existing file is always kept.)
+  // existing file is always kept. B1 fixcode: the sweep that applies both runs at most every 10 minutes, only
+  // for histories of this disk and not with a broken settings.json, so nothing here may wait for one.)
   await ctx.settings.save({ 'files.backupCount': 1 })
   await h.waitFor(() => ctx.settings.get('files.backupCount') === 1, { timeout: 5000 })
   const wasC = await saveAs('D')

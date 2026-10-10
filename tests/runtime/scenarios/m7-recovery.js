@@ -227,7 +227,14 @@ scenario('m7-recovery-2', { timeout: 420, vars: { HOME: HOME_2 } }, async (h) =>
   // dead session keeps only the one nobody asked for. (Before, `recovery_drop` could only delete a
   // session whole, so the session was kept with all three and offered the two restored ones again.)
   h.check('the dead session was not discarded: gamma’s snapshot is still in it', (await sessionFolders(h)).includes(dead?.name ?? ''), await sessionFolders(h))
-  const left = await sessionFiles(h, dead?.name ?? '')
+  // B1 fixcode (CODE-08): a restored snapshot is discarded only after the new document's own snapshot is
+  // written (one forced pass at the end of the restore), so the discards come a moment after the documents
+  // appear: wait for them instead of reading the folder at once.
+  const left =
+    (await h.waitFor(async () => {
+      const files = await sessionFiles(h, dead?.name ?? '')
+      return files.keys.length === 1 ? files : null
+    }, { timeout: 10000 })) ?? (await sessionFiles(h, dead?.name ?? ''))
   h.check('and only that one is left: the two restored snapshots were discarded one by one', left.keys.length === 1, left.names)
   const still = await waitForLeftovers(h, 1)
   h.check('so the work nobody asked for is offered again, alone, rather than lost with the work that was restored', still.length === 1 && still[0].path === gamma, still.map((e) => e.path))
