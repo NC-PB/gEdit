@@ -118,8 +118,20 @@ describe('Ribbon', () => {
   it('gives the scrollbar of the button row its own room, so it never lies over the group labels (B1 A9)', () => {
     const source = readFileSync(fileURLToPath(new URL('./Ribbon.svelte', import.meta.url)), 'utf8');
     const css = source.split('<style>')[1] ?? '';
-    // The row scrolls sideways when it is too narrow ...
-    expect(/\.ribbon-body\s*\{[^}]*overflow-x:\s*auto/.test(css)).toBe(true);
+    // The row scrolls sideways when it is too narrow, and the bar is in its box from the
+    // first layout on: `auto` brings it in only once the row overflows, and on the tab drawn
+    // first (File) the bar then lay over the label row (b1-ribbon-narrow, hosted macOS 14) ...
+    expect(/\.ribbon-body\s*\{[^}]*overflow-x:\s*scroll\s*;/.test(css)).toBe(true);
+    // ... the row has no `min-height` of its own, which counts the bar and the padding in and
+    // left the content what remained (the groups carry the minimum) ...
+    expect(/\.ribbon-body\s*\{[^}]*min-height/.test(css)).toBe(false);
+    expect(/\.ribbon-group\s*\{[^}]*min-height:\s*\d+px/.test(css)).toBe(true);
+    // ... room below the labels is the row's own padding ...
+    expect(/\.ribbon-body\s*\{[^}]*padding:\s*\d+px \d+px\s*;/.test(css)).toBe(true);
+    // ... the bar needs a thumb of its own (a styled bar draws none otherwise), and an
+    // invisible track, since the strip is there on a wide window too ...
+    expect(/\.ribbon-body::-webkit-scrollbar-thumb\s*\{[^}]*background:/.test(css)).toBe(true);
+    expect(/\.ribbon-body::-webkit-scrollbar-track\s*\{[^}]*background:\s*transparent/.test(css)).toBe(true);
     // ... with a styled scrollbar, which is never an overlay (WebKit on macOS draws a native
     // thin one over the labels) ...
     expect(/\.ribbon-body::-webkit-scrollbar\s*\{[^}]*height:\s*\d+px/.test(css)).toBe(true);

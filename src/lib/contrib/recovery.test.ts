@@ -54,6 +54,8 @@ const fake = vi.hoisted(() => ({
   openIdentities: [] as string[],
   /** What `files_stat` answers: path -> canonical path. */
   canonical: {} as Record<string, string>,
+  /** The calls `files_stat` got, with the options of each. */
+  statCalls: [] as { paths: string[]; partial?: boolean; canonical?: boolean }[],
   statFails: false,
 }));
 
@@ -120,9 +122,16 @@ vi.mock('$lib/stores/documents', () => ({
 }));
 
 vi.mock('$lib/platform/commands', () => ({
-  filesStat: async (paths: string[]) => {
+  // Like the real command: `canonical` comes back only when the caller asks for it
+  // (`platform/commands.ts`), so a caller that forgets the argument sees no identity.
+  filesStat: async (paths: string[], o: { partial?: boolean; canonical?: boolean } = {}) => {
     if (fake.statFails) throw new Error('no answer');
-    return paths.map((path) => ({ path, exists: true, canonical: fake.canonical[path] ?? null }));
+    fake.statCalls.push({ paths, ...o });
+    return paths.map((path) => ({
+      path,
+      exists: true,
+      ...(o.canonical === true ? { canonical: fake.canonical[path] ?? null } : {}),
+    }));
   },
 }));
 
@@ -147,6 +156,7 @@ beforeEach(() => {
   fake.openPaths = [];
   fake.openIdentities = [];
   fake.canonical = {};
+  fake.statCalls = [];
   fake.statFails = false;
   fake.restore.mockClear();
   fake.discard.mockClear();
@@ -252,6 +262,21 @@ describe('the four answers', () => {
     expect(fake.shown[0].text).toContain('open.nc is already open in another tab');
     expect(fake.shown[0].text).not.toContain('prog.nc');
     expect(fake.shown[0].sticky).toBe(true);
+  });
+
+  // B1 harness (b1-recovery-2): the taken-path check read `canonical` from a `files_stat`
+  // that returns it only when asked, and did not ask: a symlink spelling went unnamed.
+  it('asks files_stat for the real path, because it is not sent unasked', async () => {
+    const taken = entry({ key: 'd2', path: '/link/open.nc', title: 'open.nc' });
+    fake.leftovers = [taken];
+    fake.canonical = { '/link/open.nc': '/real/open.nc' };
+    fake.openIdentities = ['/real/open.nc'];
+    fake.answers = [{ action: 'restore', entries: [taken] }];
+
+    await showLeftovers();
+    expect(fake.statCalls.length).toBeGreaterThan(0);
+    expect(fake.statCalls.every((call) => call.canonical === true)).toBe(true);
+    expect(fake.shown[0].text).toContain('open.nc is already open in another tab');
   });
 
   it('names the second of two snapshots that are one file under two spellings', async () => {

@@ -96,11 +96,12 @@ async function confirmDiscard(entries: readonly RecoveryEntry[]): Promise<boolea
  * "The same file" is decided like `bindRestored` decides it: by the path as written and,
  * since B1 A1, by the file's canonical path as well (`FileStat.canonical`), so a snapshot
  * of `link/prog.nc` is named when `real/prog.nc` is open. The canonical paths come from
- * one `files_stat` for the distinct paths; when that fails the lexical answer stands.
+ * one `files_stat` for the distinct paths, which sends `canonical` only when asked (so it is
+ * asked, `canonical: true`); when that fails the lexical answer stands.
  */
 export async function takenPaths(
   entries: readonly RecoveryEntry[],
-  stat: (paths: string[]) => Promise<FileStat[]> = (paths) => filesStat(paths, { partial: true }),
+  stat: (paths: string[]) => Promise<FileStat[]> = (paths) => filesStat(paths, { partial: true, canonical: true }),
 ): Promise<string[]> {
   const paths = [...new Set(entries.map((e) => e.path).filter((p): p is string => p !== null))];
   const canonical = new Map<string, string>();

@@ -176,26 +176,38 @@
   /* 1366x768: the body scrolls instead of squeezing the buttons (plan AD-6).
 
      The scrollbar has to take its own room below the group labels and never lie over
-     them. A native scrollbar of the thin kind (`scrollbar-width: thin`) is an overlay on
-     macOS (WebKit) with the system setting "automatic", and it then covers the label row
-     of the groups. A styled `::-webkit-scrollbar` is never an overlay, in WebKit and in
-     Chromium (WebView2), so the height is set here and `scrollbar-width` is deliberately
-     left alone (Chromium lets it win over the styled one). */
+     them, on every tab and at every width. Three rules carry that, and a test pins them:
+
+     1. A styled `::-webkit-scrollbar` (never an overlay, in WebKit and in Chromium/WebView2)
+        sets the height; `scrollbar-width` is deliberately left alone, because Chromium
+        lets it win over the styled one and a thin native scrollbar is an overlay on macOS.
+     2. `overflow-x: scroll`, not `auto`: the bar is part of the box from the first layout
+        on. With `auto` it appears only once the row overflows, and on a tab whose height
+        was settled before that (the File tab, the first one drawn after the window was
+        narrowed) the bar was cut out of the box and lay over the label row (B1 round).
+        The track is invisible, so a window that is wide enough shows an empty strip only.
+     3. No `min-height` on the row itself: it counts the bar and the padding in, and then
+        the content got what was left. The groups carry their own minimum height instead,
+        so the row is always the tallest group plus the padding plus the bar. */
   .ribbon-body {
     display: flex;
     align-items: stretch;
-    min-height: 84px;
     padding: 4px 8px;
-    overflow-x: auto;
+    overflow-x: scroll;
     overflow-y: hidden;
   }
   .ribbon-body::-webkit-scrollbar {
     height: 10px;
   }
   .ribbon-body::-webkit-scrollbar-track {
-    background: var(--bg-ribbon);
-    border-left: none;
-    border-top: 1px solid var(--border-color);
+    background: transparent;
+  }
+  .ribbon-body::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 5px;
+  }
+  .ribbon-body::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
   }
   /* A browser without the styled scrollbar: the standard thin one, which leaves room. */
   @supports not selector(::-webkit-scrollbar) {
@@ -209,6 +221,7 @@
     position: relative;
     flex: 0 0 auto;
     flex-direction: column;
+    min-height: 72px;
     padding: 0 8px;
     border-right: 1px solid var(--border-color);
   }
