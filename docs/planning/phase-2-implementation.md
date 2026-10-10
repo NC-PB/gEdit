@@ -2,9 +2,11 @@
 
 Scope: the roadmap's Phase 2 (`docs/planning/roadmap.md`), pruned to what matters for editing CAM output (§2.1), ordered so that the owner's **lathe** work improves first and the known **data-loss** gap closes early. Phase 2 is finished when the exit criteria in §2.2 pass.
 
+> **Status of this document (2026-10-10).** Phase 2 is done and this plan is a record, not a plan to follow: the next plan is [phase-3-implementation.md](phase-3-implementation.md), which is also done. Where the plan and the code differ, the code and the [user guide](../user/README.md) win. The differences are recorded where the plan says something that stopped being true, as *Superseded* notes in place (history is not rewritten): the lathe database (§8.2), Okuma and Sinumerik (§8.4, §8.5), the Fanuc lathe `-b` database (the revision note below), AD-24, AD-31, the fields of §7.1, the rows missing from §7.16, the owner questions of §13, the milestone order (D38, WP8.9) and the push rules of §5. The list of what was deferred is §11, and the roadmap has the status of every row.
+
 Status: this plan combines two earlier drafts that are not in the repository: Plan A (user value first) and Plan B (foundations first). It uses Plan A's scope, milestone order and most of its technical content, and grafts in Plan B's protocol refinements, its explicit modal semantics and its safer recovery and quit-guard details. Scores and grafts are in §0.
 
-**Revision of 2026-09-22 (owner decisions, §10.1):** how the control reads a written number, the Fanuc G-code system and the power-on modes are **machine parameters**, set in named **machine configurations** chosen per document (AD-31, §7.15), not hardcoded per dialect; `fanuc-lathe-b` is gone (one `fanuc-lathe` profile with a G-code-system choice); Sinumerik turning defaults to `DIAMON`; the owner's real programs stay in a gitignored local folder (§9.2); W0 no longer needs a push (§5.1). A review pass on the same day corrected the number model (Okuma's unit system scales every number, with or without a point: a third reading `scale`; the Fanuc lathe defaults to calculator-type input; with no machine, a word whose reading depends on the machine is never converted), and pinned the modal sources, the reload of `machines.json`, the parameter units, the variant scoring and the local-program rules.
+**Revision of 2026-09-22 (owner decisions, §10.1):** how the control reads a written number, the Fanuc G-code system and the power-on modes are **machine parameters**, set in named **machine configurations** chosen per document (AD-31, §7.15), not hardcoded per dialect; `fanuc-lathe-b` is gone (one `fanuc-lathe` profile with a G-code-system choice; *superseded: the system-B variant database `fanuc-lathe-b.json` exists, as §8.2 says, selected by `gcodeSystem: B`; only a second profile is gone*); Sinumerik turning defaults to `DIAMON`; the owner's real programs stay in a gitignored local folder (§9.2); W0 no longer needs a push (§5.1). A review pass on the same day corrected the number model (Okuma's unit system scales every number, with or without a point: a third reading `scale`; the Fanuc lathe defaults to calculator-type input; with no machine, a word whose reading depends on the machine is never converted), and pinned the modal sources, the reload of `machines.json`, the parameter units, the variant scoring and the local-program rules.
 
 **Second revision of 2026-09-22 (owner decision D58, §10.1): multi-channel programs.** How a machine's **channels** are laid out is a property of the machine, exactly like how it reads a number: the channels may sit in **one file** as sections or in **several files**, one document per channel. The channel definition **and** the synchronization marks (wait codes) therefore live in the **machine configuration** and are written by the user; gEdit ships **no machine-builder-specific sync code set** and, in Phase 2, no sync preset at all — the owner has not yet said which wait codes the owner's machines use, and the design does not need to know (AD-32, §7.17, §8.9). Multi-channel becomes a milestone of its own, **M10** [M12 since 2026-09-30], between the program checks (M9) and the inspector; the inspector milestone becomes **M11** and the templates-and-exit milestone **M12** (§6 heading, D63). What lands in M10 is the cheap half: the channel model, the wait-code check, per-channel map and tool list, the channel status item and sync-point navigation. The **side-by-side channel view** goes to Phase 3 [Phase 4 since 2026-09-30] with its reasons written out (§11 item 27, F54–F56, D61).
 
@@ -328,13 +330,14 @@ Each criterion is first proven by its milestone's scenarios on `tests/fixtures/n
 - `DocMeta.readOnly` with a reason: `attribute` (from `files_stat.readonly`) or `user` (the `file.toggleReadOnly` command).
 - The editor applies `readOnly` and `readOnlyMessage` on activation (F32). Save of a read-only document goes to Save As. Unlocking an `attribute` document makes the buffer editable, but Save still goes to Save As (gEdit never changes file attributes). The tab and the status bar show a lock.
 - Writers that go around the editor (transforms, replace scripts, Insert block, Compare's editable side, the line-ending picker) refuse a locked document through `app/readOnlyLock.ts`; `applyLines` is the backstop. Reload from disk is not an edit (§7.16 #30).
-- NUL-heavy files stay refused (P1 AD-7).
+- NUL-heavy files stay refused (P1 AD-7). *Superseded in M7: a NUL-heavy file (more than 10 % NUL bytes between the tape leader and trailer) opens read-only, as it is, and cannot be unlocked; see [Files](../user/README.md#files).*
 
 **AD-24: Tokenizer extensions for Okuma and Sinumerik.**
 - New opt-in `syntax` fields (§7.1): `sequenceNames` (Okuma `NLAP1` is a `label` token, never a block number, so renumber leaves it alone), `assignment` (an address pattern that takes `=` + expression: Okuma `SB=`, Sinumerik `CR=`, `S3=`, `R1=`), `labels` (Sinumerik `NAME:`), `calls` (identifier + `( … )` → one `call` token), `systemVariables` (`$AA_IM`, Okuma `VZOFZ`), `header` (`$NAME.MIN%`, `%_N_NAME_MPF` → `programMarker`). All default off, so the Fanuc and Klartext token goldens are the regression gate.
 - New token kinds `label` and `call` (§7.5). Roles are not extended: labels color as `blockNumber`, calls as `keyword`, so the themes and the WCAG test stay as they are.
 - Two Monarch generators, `okuma` and `sinumerik`, following the rule orders in `syntax-okuma.md` §3.8 and `syntax-sinumerik.md` §3.8, with `defaultToken ''`.
 - Python mirrors every field (`_nc_lex.py`) against the same token goldens.
+- *Superseded: the list of fields is longer (`names` §7.16 #10, `mainPrefix` #50, and more in later rows; `types.ts` is the authority), and roles were extended after all: a label colors as `section` and the program name behind Okuma `CALL`/`MODIN` as `programMarker` (§7.16 #13), not as `blockNumber` and `keyword`.*
 
 **AD-25: NC-aware search is token-based.**
 - A query is either an **address word** (`T1`, `G01`, `S`, `S>12000`, `F<=0`), matched on tokens by decimal value (comments and strings never match; `G1` = `G01` = `G1.`; `T1` ≠ `T10`), or **text/regex** on the raw line with comments optionally masked.
@@ -382,7 +385,7 @@ Each criterion is first proven by its milestone's scenarios on `tests/fixtures/n
   | `diameter` | whether `X` (and `U`) are diameters at program start; Sinumerik `DIAMON` default on (D35) | modal state, hover, extents, address arithmetic | M6 |
   | `modalInitial` | the power-on modal codes per group the profile offers (feed mode `G94`/`G95`, `G98`/`G99`, CSS, plane, distance) | modal interpreter (`reset()`) | M6 |
 
-  **Out of scope, with the reason:** the **tool-word format** (it is detectable for 4- and 3-digit `T` words; only a 1–2-digit lathe `T` word is ambiguous, and it stays a review item, D49; adding it later is data only, a variant with a `toolCall` overlay); **folder → machine rules** (D53); machine M-code tables, numbering and templates (user profiles and code files, M13); machine limits such as the top spindle speed for program checks (backlog); G-code system C (§11).
+  **Out of scope, with the reason:** the **tool-word format** (it is detectable for 4- and 3-digit `T` words; only a 1–2-digit lathe `T` word is ambiguous, and it stays a review item, D49; adding it later is data only, a variant with a `toolCall` overlay; *superseded: the `toolWord` variant shipped in M9 (WP9.4) and was extended in M12.5, §8.8; D49 is decided: a short word is the station alone*); **folder → machine rules** (D53); machine M-code tables, numbering and templates (user profiles and code files, M13); machine limits such as the top spindle speed for program checks (backlog); G-code system C (§11).
 - **Declared by the profile, never hardcoded.** A profile's `machineParams` (§7.1, §8.8) declares which parameters its machines may set, the presets for `numberInput`, the defaults, the modal groups the dialog offers and the `variants` (id, label, default, choices; a choice may name a code database (an AD-17 child), a **profile overlay** limited to `modal`, `toolCall`, `numbering` and `addresses`, and **detection rules**). It is inherited through `extends` like every other field. No code names a dialect: the Fanuc lathe's A/B difference, Okuma's unit table and the Sinumerik `DIAMON` default are all data, reviewed by G10. A profile without `machineParams` (Klartext) has no machine item.
 - **Effective machine, per document** (`effectiveMachine`, P6, §7.15). Every parameter comes from exactly one source, recorded next to it: **`machine`** (the document's machine sets it) → **`detected`** (only without a machine: a variant's detection rules chose it, margin ≥ 3) → **`profile`** (the profile's documented default). The result is always complete, so a consumer never guesses. "None" means every value comes from `detected` or `profile`, and the UI shows it as **assumed**.
 - **Which machine a document uses**, in this order: (1) an explicit choice for the document (the status-bar pick, or the remembered choice from per-file memory, M7), where an explicit "none" counts; (2) the base profile's **default machine** (`machines.json` → `defaults`); (3) none. **An explicit machine always wins over detection.** Variant detection still runs; when it disagrees with the machine by a margin ≥ 3, one status warning per open names both ("looks like G-code system B; machine 'Lathe 2' is set to A") with a "Choose machine…" action; nothing switches by itself.
@@ -472,6 +475,8 @@ Everything in P1 §4 applies: preludes with contracts and stubs, work packages i
 
 ### 5.1 W0: the Windows test-manifest fix (first item, before M6)
 
+*Done: `c18fba2` has long been on `main` (D46 is closed as obsolete, §10.3). The Windows hardening that followed M8 (one spelling per path, long names, device names, the interpreter lookup; roadmap, "Windows pass") had no work package of its own in this plan: it was added as a batch between M7 and M8, commit `052ab9f`, and the Rust tests run on Windows in CI.*
+
 The fix for the Windows CI failure is committed locally (F45) but has run on macOS and in a partial cross-build only, and **the owner has not approved pushing it**. W0 therefore does not push; the fix enters Phase 2 locally and the Windows confirmation follows whenever the owner allows the push.
 1. **Local, no network:** cut `feat/phase-2` **at** `c18fba2` (`git branch feat/phase-2 c18fba2`). `c18fba2` sits directly on `main` @ `21091a0` (F45), so there is no merge commit and the commit keeps its hash. Run the macOS gates G0–G4 on it (fmt, clippy, `cargo test`, `npm test`, Python) and record the result in the P6 commit body.
 2. **Separately, with the owner's OK (D46)** and not blocking any milestone: push `fix/windows-test-manifest` unchanged and open a PR against `main`. Note that `c18fba2` is the first commit of `feat/phase-2` and therefore of every milestone commit: **approving the first milestone push (D44's fast-forward of `main`) also approves publishing the fix**, whether or not D46 has been answered by then. If the owner wants the fix reviewed on its own first, the owner answers D46 before the M6 push; if the owner wants Phase 2 without it, `feat/phase-2` is rebuilt on `main` @ `21091a0` at a milestone boundary (the milestones are squash commits, so this is a rebase of at most a handful of commits) and X10 then needs another Windows fix. `ci.yml` runs on `pull_request`. CI must show, on `Rust (windows-latest)`, step `cargo test --locked`: `Running unittests src\lib.rs` ends `test result: ok` (141 passed and 1 ignored on macOS; the Windows count may differ), and `unittests src\main.rs` and `Doc-tests gedit_lib` are ok. `Debug bundle (windows-latest)` (`npx tauri build --debug`) still succeeds, which proves there is exactly one manifest (a duplicate fails the link with `CVT1100` or `LNK1123`). macOS and Linux jobs are unchanged. Optional: count `Microsoft.Windows.Common-Controls` in `gedit.exe` (expect 1).
@@ -499,7 +504,7 @@ The same step starts the owner's inputs: the machine data of the owner's lathes 
 8. **Fixture intake** (§9.2) is a serial step that runs whenever the owner hands over public files or asks for a G11 run on their local ones; it never blocks a milestone (G11 skips without local programs).
 9. **Windows and Linux** are still CI-only. Each milestone adds its items to the owner's manual smoke list (§13); the milestone does not wait for it.
 10. **Contract deviations** are recorded in §7.16 in the P1 §7.12 format.
-11. **Land each batch on `main` as soon as its gates pass** (third revision, D70, accepted 2026-10-01). A whole milestone, or a smaller increment where a batch is self-contained — a prelude with its own green gates, a Wave A work package that stands alone, a fix batch — is squashed onto `feat/phase-2` and offered to the owner for the fast-forward of `main` (D44) at once, instead of waiting for the end of its milestone. A release (§5.3) still follows only a whole milestone.
+11. **Land each batch on `main` as soon as its gates pass** (third revision, D70, accepted 2026-10-01). A whole milestone, or a smaller increment where a batch is self-contained — a prelude with its own green gates, a Wave A work package that stands alone, a fix batch — is squashed onto `feat/phase-2` and offered to the owner for the fast-forward of `main` (D44) at once, instead of waiting for the end of its milestone. A release (§5.3) still follows only a whole milestone. *Superseded: `feat/phase-2` no longer exists; batches landed on `main` directly, and since 2026-10-09 there is one release at the end of the session (1.0), §5.3. No push, tag or publication happens without the owner's say.*
 12. **The runtime harness on a CI macOS runner (a spike, size S, in the M9 prelude).** P9 item 8 tries `tests/runtime/suite.sh` on a GitHub macOS runner, started by hand. If it works, a follow-up adds the job to `ci.yml`, G6 runs there on every milestone, and the G6 window of rule 6 is no longer needed; if it does not, the commit body says why and G6 stays on the owner's Mac. **Result (M9):** it worked. `harness.yml` runs the suite on macOS 14 on push to `main` and by hand, with a cached build (a cold first run takes longer), and uploads the results as the `harness-results` artifact. Six scenarios had to be made correct on both machines (the order of an alert's buttons, the interpreter timing checks, two performance budgets scaled by `CI_FACTOR`), and the first full run found four that had gone stale since M8. BLOCKED scenarios are not retried by `suite.sh` (`m0-trusted` blocked once on the runner), and `m6-dock-quit-clean-1` raced the exit record against the quit until it waited like its siblings; both are TODO items.
 13. **G7 is measured on the development machine; CI scales the unit tests' tight budgets.** The budgets of G7 (P1 §4.3) are taken on the owner's Mac, and a unit test that asserts one of them is an early warning and not the gate. CI is a small shared VM running many test files in parallel. The first CI run of the M8 dialects measured 7 ms against a 5 ms budget that the Mac meets in 1 to 2, six times slower on a sub-millisecond measurement without a warm-up; the bulk work (tokenizing 300k lines, renumbering 100k) ran at about the Mac's speed in the same log. So a wall-clock assertion whose budget is under about 100 ms, or whose room over the worst value the Mac measures in a full parallel run is less than tenfold, goes through `tests/unit/helpers/budget.ts`: `expectWithin(measured, ms, what)` and `budgetMs(ms)` multiply the budget by `CI_FACTOR` (**5**) when `CI` is set and leave it alone otherwise, so G7 still bites on the development machine and CI catches a gross regression, never the Mac's budget. The factor covers the six-fold slowdown of a tiny measurement once the best of several runs is taken. The test timeout is a wall-clock limit too (`testTimeout` in `vitest.config.ts`, 20 s, because vitest's default 5 s failed the long fixture tests under load), and a scaled budget stays under it. The failure message names the budget and the factor. A test that times a steady state warms up first and keeps the fastest of a few runs (`fastest` in the same file). `BUDGET_LOG=<file>` writes every checked budget with its measured value. A budget with more than tenfold room stays a plain `expect`; a new wall-clock assertion states which of the two it is. Where a count can replace a clock (the outline's re-read lines, the mask fast path), prefer the count. The runtime harness's perf scenarios follow the same rule through `h.checkTime` (budget times 10 on CI; `tests/runtime/README.md`, "On a hosted runner").
 
@@ -892,6 +897,8 @@ Each WP lists: **Owns**, **Depends on**, **Deliver**, **Tests**, **Acceptance** 
 - **Tests:** golden runs on the new fixtures; every earlier golden unchanged.
 
 #### WP8.9 Okuma and Sinumerik checks, extents and search (**only on a D38 swap**, when M9 has already shipped)
+
+*Never used: the swap did not happen (D38, §10.3). Its Okuma and Sinumerik work was done inside M10 and M11.*
 
 - **Owns:** `src-tauri/resources/scripts/{program_checks,extents}.py`, `tests/python/test_{program_checks,extents}.py`, `tests/fixtures/scripts/{program_checks,extents}/{okuma-osp,sinumerik}/**`, and the Okuma/Sinumerik cases in `src/lib/core/search/**` tests.
 - **Depends on:** WP8.3, WP8.5.
@@ -1648,6 +1655,8 @@ These designs were written for the old M11 (without address arithmetic, now WP10
 P1 §7 stays binding: a type is imported only from its home file; a later prelude replaces a placeholder at the same path; a WP keeps a pinned signature and replaces only the body; `app/types.ts` stays the home of the service interfaces. Everything below is **additive** unless §7.14 says otherwise.
 
 ### 7.1 Profile additions: `src/lib/core/profiles/types.ts` (P6, P8, P9, P11, P12, P13)
+
+*Superseded in part: this block is the contract as written by the preludes. Fields were added later and are recorded in §7.16 (`syntax.names` #10, `syntax.blockNumber.mainPrefix` #50, the compare defaults, and more); `src/lib/core/profiles/types.ts` is the authority.*
 
 ```ts
 export type MachineType = 'mill' | 'lathe';
@@ -2657,6 +2666,8 @@ A user script that wants to respect the machine calls `machine_params(load_conte
 Filled at each milestone from the hand-off notes, in the P1 §7.12 format. Every entry is
 **additive or a narrowing**; no §7 signature was replaced.
 
+*Not recorded as rows (found by a read of the data in 2026-10): (a) the M6 deviations of the lathe databases are in §8.2 only; (b) Sinumerik `G25` is a lower speed limit, `sets.speedLimit` with `speedLimitBound: lower` (see #48), where §8.5 lists only `G26` as `speedLimit`; (c) the Okuma detection weights of §8.4 (6, 8, 5, 5, 4, 5, 3, 3, 2) were replaced by a scale of 5000 / 400 / 100 / 20 / 8 (see #68, #88 and #190), and `okuma-osp.json` is the authority.*
+
 | # | Contract | What was done instead | Why | M |
 |---|---|---|---|---|
 | 1 | §7.15 `effectiveKey(profileId, params)` | A third, optional parameter: `effectiveKey(profileId, params, source?)`. `EffectiveMachine.key` is built with it, so it holds the provenance as well as the parameters. A call without it is the key §7.15 describes | The profile the key caches carries `modal.sources`, which `applyMachine` derives from `EffectiveMachine.source` and from nothing else. Two documents can agree on every parameter and disagree about where those parameters came from — one where `gcodeSystem: 'B'` was **detected** in the program, one where a machine states it — and they shared one compiled profile, so the second was told the first one's sources for every value it has to assume. That is the one guarantee `core/machines/effective.ts` exists for (G8 M6) | M6 |
@@ -3307,6 +3318,8 @@ Notes for WP6.2 and the review:
 
 `fanuc-lathe` `remove`: `G43`, `G44`, `G49` (no length offset on a turret lathe), `G81`, `G82`, `G86` (mill cycles), `G91`, `G93`, `G95` (not in system A), `G54.1` **(verify: keep if the owner's control has extended offsets)**.
 
+*Superseded: the shipped `remove` list is `G43`, `G43.4`, `G43.5`, `G44`, `G49`, `G81`, `G82`, `G84.3`, `G86`, `G91`, `G95`. `G93` and `G54.1` are kept (the mill's entries are inherited), and `G85`, `G89` and the system-B `G50` carry no `verify` flag in the data (`fanuc-lathe.json`, `fanuc-lathe-b.json`).*
+
 Replaced or added entries (system A):
 
 | Code | Group | Modal | `sets` / flags | What the label says |
@@ -3326,7 +3339,7 @@ Replaced or added entries (system A):
 | G80 | cycle | ✓ | `cycle: cancel` | Cancel the drilling cycle |
 | G83 / G87 | cycle | ✓ | `cycle: start`; params `Z`/`X`, `R`, `Q`, `P`, `F`, `K` | Drilling on the face / on the side, pecks with `Q` |
 | G84 / G88 | cycle | ✓ | `cycle: start`; `pitchFeed` | Tapping on the face / on the side |
-| G85 / G89 | cycle | ✓ | `cycle: start`; `verify` | Boring on the face / on the side |
+| G85 / G89 | cycle | ✓ | `cycle: start`; ~~`verify`~~ (superseded: no flag in the data) | Boring on the face / on the side |
 | G90 | motion | ✓ | – | One OD/ID turning pass, straight or tapered (system A; Fanuc group 01, so the next `G00` ends it) |
 | G92 | motion | ✓ | `pitchFeed` | One threading pass as a cycle (system A; unambiguous here) |
 | G94 | motion | ✓ | – | One facing pass (system A) |
@@ -3372,7 +3385,7 @@ Addresses (replaced): `X` "position as a diameter"; `U` "incremental X, as a dia
 
 Everything not listed keeps its class from the address (AD-31 step 6).
 
-`fanuc-lathe-b` (the system-B variant database, selected by `gcodeSystem: B`): `G90`/`G91` distance (`sets.distance`); `G77` (turning pass), `G78` (threading pass, `pitchFeed`), `G79` (facing pass) as `motion`; `G92` nonmodal with `speedLimit` (coordinate set / top speed); `G94`/`G95` feed modes; `G98`/`G99` cycle return (as the mill); `G33` threading (`pitchFeed`) instead of `G32`; `remove` `G50` **(verify: not used in the source manuals)**. The multi-pass cycles `G70`–`G76` are inherited unchanged (syntax-fanuc §4.1: "same as A"). Whether `U`/`W` stay incremental in B is parameter-dependent **(verify, question 13)**; if the owner's machines differ, it becomes a variant overlay of `addresses.incremental` (data only). The variant changes no address and no non-numeric word code (tested), so one grammar serves both systems.
+`fanuc-lathe-b` (the system-B variant database, selected by `gcodeSystem: B`): `G90`/`G91` distance (`sets.distance`); `G77` (turning pass), `G78` (threading pass, `pitchFeed`), `G79` (facing pass) as `motion`; `G92` nonmodal with `speedLimit` (coordinate set / top speed); `G94`/`G95` feed modes; `G98`/`G99` cycle return (as the mill); `G33` threading (`pitchFeed`) instead of `G32`; `remove` `G50` **(verify: not used in the source manuals)** *(superseded: B keeps a `G50` entry, "Scaling cancel (G-code system B)", with `speedLimit`, and removes nothing)*. The multi-pass cycles `G70`–`G76` are inherited unchanged (syntax-fanuc §4.1: "same as A"). Whether `U`/`W` stay incremental in B is parameter-dependent **(verify, question 13)**; if the owner's machines differ, it becomes a variant overlay of `addresses.incremental` (data only). The variant changes no address and no non-numeric word code (tested), so one grammar serves both systems.
 
 ### 8.3 The mill database (`fanuc.json`) and Klartext
 
@@ -3423,6 +3436,8 @@ Database essentials (lathe subset, `syntax-okuma.md` §4):
 
 Addresses: `L` radius/chamfer/relief, `D` depth, `E` dwell or lead change, `Q` repeat count / hole count / starts, `U`/`W` finish allowance (**not** incremental), `SB` live-tool speed (not the main spindle), `T` 4 or 6 digits, `P` turret sync code.
 
+*Superseded (source review, M9, M12.5): the shipped `okuma.json` also describes `G136` (coordinate conversion and Y-axis mode off), `G137` (coordinate conversion on), `G138` (Y-axis mode on) and the gear-range codes `M40` to `M44`; the detection weights above are replaced (see §7.16 #190); `M136`/`M137` are not in the data. `okuma.json` is the authority.*
+
 ### 8.5 Sinumerik 840D turning (`sinumerik.json`, `sinumerik.json` database; P8 skeleton, WP8.5)
 
 Profile essentials (from `syntax-sinumerik.md` §2–§8):
@@ -3443,7 +3458,7 @@ Database essentials:
 | G4 | nonmodal, `fNotFeed` | dwell: `F` seconds or `S` revolutions |
 | G9, G60, G64, G641, G642 | path mode | exact stop / continuous path variants |
 | G17, G18, G19 | plane, `sets` | working planes (G18 for turning) |
-| G25, G26 | nonmodal; G26 `speedLimit` | lower / upper spindle speed limit |
+| G25, G26 | nonmodal; `speedLimit` (G25 with `speedLimitBound: lower`) | lower / upper spindle speed limit |
 | G33, G331, G332 | motion, `pitchFeed` | thread cutting; rigid tapping in / out |
 | G40, G41, G42 | compensation | radius compensation |
 | G53, G153, SUPA | nonmodal | suppress offsets for one block |
@@ -3462,6 +3477,8 @@ Database essentials:
 | GOTOF, GOTOB, GOTO, IF, ENDIF, WHILE, ENDWHILE, FOR, ENDFOR, LOOP, ENDLOOP, RET, PROC, DEF, EXTERN, CALL, EXTCALL | program / macro | control flow and calls |
 
 Addresses: `CR` arc radius, `AR` opening angle, `D` cutting edge, `LIMS` clamp, `SF` thread start angle, `T` number or name.
+
+*Superseded: (a) `G25` is a speed limit too (the lower one, `speedLimitBound: lower`, §7.16 #48), not only `G26`; (b) the shipped `sinumerik.json` also lists `M40` to `M45` (gear stages); (c) renumbering does not wrap at 99999: the profile has `numbering.max` 2147483647 with `onOverflow: stop` (the plan's Fanuc-style five-digit wrap does not apply to Sinumerik). `sinumerik.json` (profile and database) is the authority.*
 
 ### 8.6 Templates (Phase 3, P3.6)
 
@@ -3657,7 +3674,7 @@ What a comparison in review mode ignores before the user touches a toggle (AD-26
 
 | # | Question | Decision | Where it lands |
 |---|---|---|---|
-| D69 | The re-cut of the roadmap (the third revision at the top of this plan) | **Accepted**: M9 "Real programs read right" first; address arithmetic with the checks and the extents (M10); compare and search (M11); multi-channel (M12); user profiles, code files, typing options and the exit (M13); the inspector, hover with modal context, the TypeScript modal interpreter and the templates in a new Phase 3 "Understand and write", their designs kept (§6); the roadmap's old Phase 3 is Phase 4 "Comfort and geometry". | The whole plan; [roadmap](roadmap.md#phase-2-real-cam-output-safely-in-progress) |
+| D69 | The re-cut of the roadmap (the third revision at the top of this plan) | **Accepted**: M9 "Real programs read right" first; address arithmetic with the checks and the extents (M10); compare and search (M11); multi-channel (M12); user profiles, code files, typing options and the exit (M13); the inspector, hover with modal context, the TypeScript modal interpreter and the templates in a new Phase 3 "Understand and write", their designs kept (§6); the roadmap's old Phase 3 is Phase 4 "Comfort and geometry". | The whole plan; [roadmap](roadmap.md#phase-2-real-cam-output-safely-done) |
 | D70 | A release after each milestone | **Accepted, v0.2 first**: a new CI workflow builds the bundles for macOS, Windows and Linux on a version tag and attaches them to a **draft** GitHub release that the owner publishes every time; v0.2 = M6–M8 with the fixes, v0.3 = M9, v0.4 = M10, v0.5 = M11, v0.6 = M12, 1.0 = the Phase 2 exit; each with a short owner checklist. It replaces D48's "0.2.0 at the Phase 2 exit" and adds the landing of smaller batches to D44 (§5.2 rule 11). | §5.2 rule 11, §5.3 (W1 first); D44, D48 (§10.3) |
 | R8 | Roadmap R8 (address arithmetic that knows where absolute positions hide), smallest version | **Accepted**: the parameter role "absolute position on the tool axis" on the drilling cycles, and "refuse and list" for every other cycle. | M10 prelude (P10) and WP10.4; §7.2 `CodeParam` |
 | R5 | Roadmap R5 (the wait-code model the manuals describe) | **Accepted: `decode` (`split`, `digits`, `bitmask`) and `whenAbsent`**; the rest of R5 as data-only options. | M12 prelude (P12); §7.17 |
@@ -3770,7 +3787,7 @@ Since the answers of 2026-10-08 (§10.1) one row is left, and it is data rather 
 | D33 | Okuma and Sinumerik depth | **Turning only (OSP-P200L, 840D turning); mill variants through a user profile with `extends`.** |
 | D36 | Feed/speed scaling on lathes | **"Auto": per-revolution feeds and constant surface speed are scaled on a lathe profile, skipped on a mill; clamps and thread leads are never scaled by default.** |
 | D37 | Remove block numbers | **Keeps the numbers a reference points at** (on by default when the profile has references). |
-| D38 | Milestone order | **M6 → M7 → M8 → M9 → M11 → M12; M8 and M9 swap if the owner has neither local Okuma/Sinumerik programs (for G11 on their machine) nor public ones by the end of M7.** A swap cannot simply move M9 forward: WP9.1, WP9.4 and WP9.5 contain Okuma and Sinumerik work that needs those profiles. **On a swap, those parts move into M8 as WP8.9** (Wave B, after WP8.3 and WP8.5), M9's gates and `m9-scripts` cover mill and lathe only, and X2/X8's turning half is proven by `m8-checks`. Without that split the swap is dropped. *Renumbered 2026-09-30:* the swap was never used (M8 ran first), and the third revision (D69) replaces this order with M9 → M13; WP9.1, WP9.4 and WP9.5 are now WP11.1, WP10.2 and WP10.3. |
+| D38 | Milestone order (history: superseded by D69; the swap and WP8.9 were never used) | **M6 → M7 → M8 → M9 → M11 → M12; M8 and M9 swap if the owner has neither local Okuma/Sinumerik programs (for G11 on their machine) nor public ones by the end of M7.** A swap cannot simply move M9 forward: WP9.1, WP9.4 and WP9.5 contain Okuma and Sinumerik work that needs those profiles. **On a swap, those parts move into M8 as WP8.9** (Wave B, after WP8.3 and WP8.5), M9's gates and `m9-scripts` cover mill and lathe only, and X2/X8's turning half is proven by `m8-checks`. Without that split the swap is dropped. *Renumbered 2026-09-30:* the swap was never used (M8 ran first), and the third revision (D69) replaces this order with M9 → M13; WP9.1, WP9.4 and WP9.5 are now WP11.1, WP10.2 and WP10.3. |
 | D39 | Inspector placement | **A tab in the left region, `Mod+Alt+A`.** (Phase 3 since 2026-09-30.) |
 | D40 | Profile editor | **JSON in a tab, validation with JSON paths, "Test profile on this document", the Profiles settings page; no form editor.** |
 | D41 | Compare numeric tolerance | **Cut**; number-format normalization instead. |
@@ -3895,6 +3912,8 @@ Since the answers of 2026-10-08 (§10.1) one row is left, and it is data rather 
 ---
 
 ## 13. Manual checks for the owner (cannot be automated here)
+
+*Superseded in part (2026-10-10): the open owner questions of this list were answered or closed: D46 is closed as obsolete (the push happened long ago), D49 is decided (a short Fanuc lathe `T` word is the station alone), D54 withdrew the Sinumerik IS-B/IS-C presets, and the one release, 1.0, replaces the releases per milestone. What the owner still has to check (the bundles on the three platforms, the review of the template content, D64) is listed in [TODO.md](../../TODO.md). The entries below are the checks as they were planned.*
 
 Carried from Phase 1 (still open):
 - Review the M3 code databases (`fanuc.json`, `heidenhain.json`) and the Phase 1 exit-criteria goldens. The lathe databases extend `fanuc.json`, so do this **before or with** the M6 review.

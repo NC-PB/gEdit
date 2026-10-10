@@ -2,7 +2,7 @@
 
 These documents describe where gEdit is heading: an open-source desktop editor for NC code (Fanuc-style ISO code, Heidenhain Klartext, Okuma OSP and Sinumerik) with first-class scripting. They are working notes, not a promise. Every item has a priority and a rough size so contributors can pick up work.
 
-**Phases 1, 2 and 3 are implemented** (M6–M13 and P3a, P3b are on `main`; Phases 2 and 3 are done; the plan was re-cut on 2026-09-30, see the [roadmap](roadmap.md#phase-2-real-cam-output-safely-done)). These notes therefore describe a mix of what exists and what is still intended — the tag on each item says which (see [Conventions](#conventions-used-in-these-documents)). For what the program actually does today, read the [user guide](../user/README.md) instead; for how Phase 1 was built and where it deviated from its own plan, [phase-1-implementation.md](phase-1-implementation.md); for the plan Phase 2 was built from, [phase-2-implementation.md](phase-2-implementation.md). The open items and the decisions still to be made are collected in [TODO.md](../../TODO.md).
+**Phases 1, 2 and 3 are implemented** (M6–M13 and P3a, P3b are on `main`; Phases 2 and 3 are done; the plan was re-cut on 2026-09-30, see the [roadmap](roadmap.md#phase-2-real-cam-output-safely-done)). These notes therefore describe a mix of what exists and what is still intended — the tag on each item says which (see [Conventions](#conventions-used-in-these-documents)). For what the program actually does today, read the [user guide](../user/README.md) instead; for how Phase 1 was built and where it deviated from its own plan, [phase-1-implementation.md](phase-1-implementation.md); for the plan Phase 2 was built from, [phase-2-implementation.md](phase-2-implementation.md), and for Phase 3, [phase-3-implementation.md](phase-3-implementation.md). The open items and the decisions still to be made are collected in [TODO.md](../../TODO.md).
 
 ## Vision
 
@@ -47,7 +47,7 @@ Not planned for now (full list in [roadmap.md](roadmap.md#not-planned)):
 
 ## Documents
 
-These are design notes. The manual for the program as it stands is [docs/user](../user/README.md).
+These are design notes. The manual for the program as it stands is [docs/user](../user/README.md). The design notes (editor-core, nc-transformations, code-assistant, file-compare, dialect-profiles, scripting, settings-ui) were written in September 2026 and each starts with a status banner and carries a *Status* line per section: where a note and the user guide differ, the guide is right. The two phase plans keep *Superseded* notes in place for what stopped being true; their history is not rewritten.
 
 | Document | Content |
 |---|---|
@@ -56,7 +56,7 @@ These are design notes. The manual for the program as it stands is [docs/user](.
 | [code-assistant.md](code-assistant.md) | Hover help, code inspector, parametric templates, completion, code database format |
 | [file-compare.md](file-compare.md) | Comparing two NC files, NC-aware ignore options, merging |
 | [dialect-profiles.md](dialect-profiles.md) | Profile model and JSON schema with Fanuc and Heidenhain examples |
-| [scripting.md](scripting.md) | Script contract, metadata header, parameters, output modes, bundled library, external commands |
+| [scripting.md](scripting.md) | Script contract, metadata header, parameters, output modes, bundled library (with the status of each script); external commands (cut) and script packages (not built) are kept as design records |
 | [settings-ui.md](settings-ui.md) | Preferences, storage layout, themes, shortcuts, UI layout |
 | [roadmap.md](roadmap.md) | Phases 0 to 4, the Phase 2 milestones and planned releases, backlog and not-planned list |
 | [phase-1-implementation.md](phase-1-implementation.md) | The executed plan for Phase 0 cleanup and Phase 1: architecture, milestones M0–M5, the binding contracts (§7) and where the implementation deviated from them (§7.12), owner decisions, deferred items (§10) |

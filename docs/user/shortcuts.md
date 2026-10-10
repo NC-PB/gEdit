@@ -194,4 +194,4 @@ that is the reason, and the buttons in the comparison do the same. `About gEdit`
 ## Custom shortcuts
 
 Not in this version. The keys above are fixed; being able to change them is planned for a
-later phase (Phase 4 of the roadmap).
+later version.
