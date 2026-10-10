@@ -225,7 +225,7 @@ describe('the arc flag in the code databases', () => {
     fanuc: ['G2', 'G3'],
     'fanuc-lathe': ['G2', 'G3'],
     'fanuc-lathe-b': ['G2', 'G3'],
-    okuma: ['G102', 'G103', 'G2', 'G3'],
+    okuma: ['G102', 'G103', 'G132', 'G133', 'G2', 'G3'],
     sinumerik: ['CIP', 'CT', 'G2', 'G3'],
     heidenhain: ['APPR CT', 'APPR LCT', 'C', 'CP', 'CR', 'CT', 'CTP', 'DEP CT', 'DEP LCT'],
   };

@@ -222,14 +222,25 @@
     {
       "code": "G20",
       "group": "nonmodal",
+      "axisWords": "machine",
+      "sets": { "motion": "rapid" },
+      "review": "pending",
       "label": "Home position return",
-      "description": "Moves to the home position. It is not the inch switch it is on other controls."
+      "description": "Moves at rapid to a home position whose place is set in the machine's parameters, in machine coordinates and not in the program's. HP says which home position. It is not the inch switch it is on other controls.",
+      "params": [
+        { "address": "HP", "label": "Number of the home position, set in the machine's parameters", "min": 1, "unit": "count" }
+      ]
     },
     {
       "code": "G21",
       "group": "nonmodal",
+      "axisWords": "machine",
+      "review": "pending",
       "label": "Tool-change home position return",
-      "description": "Moves to the home position for a tool change. It is not the metric switch it is on other controls."
+      "description": "Moves the turret to a tool-change position whose place is set in the machine's parameters, in machine coordinates and not in the program's. HP says which position. It is not the metric switch it is on other controls.",
+      "params": [
+        { "address": "HP", "label": "Number of the tool-change position, set in the machine's parameters", "min": 1, "unit": "count" }
+      ]
     },
     {
       "code": "G31",
@@ -566,8 +577,9 @@
     {
       "code": "G85",
       "group": "lap",
+      "review": "pending",
       "label": "LAP roughing",
-      "description": "Roughs along the shape whose sequence name follows the code, leaving U and W for finishing. No S, T or M word may stand in the block, and a change of cutting conditions (G84) goes on the lines after it that start with $.",
+      "description": "Roughs along the shape whose sequence name follows the code, leaving U and W for finishing. No S, T or M word may stand in the block except M85, which keeps the tool from going back to the start point afterwards, and a change of cutting conditions (G84) goes on the lines after it that start with $.",
       "params": [
         { "address": "D", "label": "Depth of cut", "min": 0, "unit": "length" },
         { "address": "F", "label": "Roughing feed", "min": 0 },
@@ -578,8 +590,9 @@
     {
       "code": "G86",
       "group": "lap",
+      "review": "pending",
       "label": "LAP copy roughing",
-      "description": "Roughs by copying the shape whose sequence name follows the code, which suits a cast or forged blank. No S, T or M word may stand in the block.",
+      "description": "Roughs by copying the shape whose sequence name follows the code, which suits a cast or forged blank. No S, T or M word may stand in the block except M85, which keeps the tool from going back to the start point afterwards.",
       "params": [
         { "address": "D", "label": "Depth of cut", "min": 0, "unit": "length" },
         { "address": "F", "label": "Roughing feed, until the shape sets one with E", "min": 0 },
@@ -627,6 +640,15 @@
       "sets": { "distance": "incremental" },
       "label": "Incremental positions",
       "description": "Positions are distances from the point before, and X is still written as a diameter. G90 and G91 may not stand in the same block."
+    },
+    {
+      "code": "G93",
+      "group": "feedmode",
+      "modal": true,
+      "sets": { "feedUnit": "inverse-time" },
+      "review": "pending",
+      "label": "Inverse-time feed",
+      "description": "F is no longer a distance per minute or per revolution but an inverse time, which says how quickly the block is to be done. It is an option; the lathe manuals list the code but do not describe the form of its F."
     },
     {
       "code": "G92",
@@ -766,6 +788,43 @@
       "description": "Cuts a thread along a counter-clockwise arc, for example in the shape of a LAP thread. The arc is given by a centre in I and K or a radius in L. F is the lead, never a feed rate, and E changes it per thread.",
       "params": [
         { "address": "F", "label": "Thread lead", "unit": "feedPerRev" }
+      ]
+    },
+    {
+      "code": "G119",
+      "group": "plane",
+      "review": "pending",
+      "label": "Compensation plane C-X-Z, for driven-tool milling on the side",
+      "description": "Cutter radius compensation works on the side of the part, in Z and the C axis, for the contours of G132 and G133. It works only while the C axis is connected, and the plane is changed only while compensation is off (G40). Where the machine's parameters switch the side contour programming on, G119 switches it on as well, and G136, G138, M109 or a reset switches it off."
+    },
+    {
+      "code": "G132",
+      "group": "motion",
+      "modal": true,
+      "sets": { "motion": "feed", "path": "arc" },
+      "review": "pending",
+      "label": "Contour arc on the side with the C axis, clockwise",
+      "description": "Driven-tool contouring on the side of the part: cuts a clockwise arc on the unrolled cylinder surface by moving Z while the C axis turns. The arc is given by its radius L and is always the one under 180 degrees; X has to stay the same from start to end. The format gives F as a feed per minute.",
+      "params": [
+        { "address": "Z", "label": "End point along Z" },
+        { "address": "C", "label": "End point, as a C-axis angle" },
+        { "address": "L", "label": "Arc radius on the side surface", "required": true, "min": 0, "unit": "length" },
+        { "address": "F", "label": "Feed per minute", "unit": "feedPerMin" }
+      ]
+    },
+    {
+      "code": "G133",
+      "group": "motion",
+      "modal": true,
+      "sets": { "motion": "feed", "path": "arc" },
+      "review": "pending",
+      "label": "Contour arc on the side with the C axis, counter-clockwise",
+      "description": "Driven-tool contouring on the side of the part: cuts a counter-clockwise arc on the unrolled cylinder surface by moving Z while the C axis turns. The arc is given by its radius L and is always the one under 180 degrees; X has to stay the same from start to end. The format gives F as a feed per minute.",
+      "params": [
+        { "address": "Z", "label": "End point along Z" },
+        { "address": "C", "label": "End point, as a C-axis angle" },
+        { "address": "L", "label": "Arc radius on the side surface", "required": true, "min": 0, "unit": "length" },
+        { "address": "F", "label": "Feed per minute", "unit": "feedPerMin" }
       ]
     },
     {
@@ -1112,6 +1171,13 @@
       "label": "Driven-tool keyway cutting on the side"
     },
     {
+      "code": "G313",
+      "group": "turret",
+      "review": "pending",
+      "label": "Turret C",
+      "description": "On a machine with three turrets, the blocks that follow are for turret C."
+    },
+    {
       "code": "M0",
       "group": "program",
       "label": "Program stop",
@@ -1327,6 +1393,12 @@
     {
       "code": "M84",
       "label": "Chuck unclamp"
+    },
+    {
+      "code": "M85",
+      "review": "pending",
+      "label": "No return after LAP roughing",
+      "description": "Written in the block that calls LAP roughing (G85 or G86): when the roughing is done, the tool does not go back to the start point of the cycle, and the next block follows from where the cycle ended. It saves the way back when the same tool carries on."
     },
     {
       "code": "M88",

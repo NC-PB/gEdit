@@ -83,6 +83,8 @@
       { "code": "M129", "declared": {"sets": {"tcp": "off"}}, "reads": {"axisWords": null, "frame": null, "speedLimitBound": null, "tcp": "off"} }
     ],
     "okuma": [
+      { "code": "G20", "declared": {"axisWords": "machine"}, "reads": {"axisWords": "machine", "frame": null, "speedLimitBound": null, "tcp": null} },
+      { "code": "G21", "declared": {"axisWords": "machine"}, "reads": {"axisWords": "machine", "frame": null, "speedLimitBound": null, "tcp": null} },
       { "code": "G50", "declared": {"axisWords": "data", "shift": true, "sets": {"speedLimit": true}}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": "upper", "tcp": null} },
       { "code": "G136", "declared": {"frame": "close"}, "reads": {"axisWords": null, "frame": "close", "speedLimitBound": null, "tcp": null} },
       { "code": "G137", "declared": {"frame": "open"}, "reads": {"axisWords": null, "frame": "open", "speedLimitBound": null, "tcp": null} },
