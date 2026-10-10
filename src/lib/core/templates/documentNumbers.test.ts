@@ -103,6 +103,10 @@ describe('what it answers (hand-written program)', () => {
 
 describe('the cost at 300,000 lines', () => {
   const sizes = 300_000;
+  // Each measurement holds the worker for seconds on a slow runner; a macrotask between them lets
+  // the worker answer the runner's messages (a worker that never yields fails the whole run with
+  // "Timeout calling onTaskUpdate", every test passed).
+  const breathe = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
   const program = (cp: string): string[] => {
     const lines: string[] = ['%', 'O1000 (SHOP)'];
     for (let i = 0; lines.length < sizes; i++) {
@@ -115,13 +119,22 @@ describe('the cost at 300,000 lines', () => {
   };
 
   for (const id of ['fanuc-gcode', 'okuma-osp', 'sinumerik']) {
-    it(`${id}: well inside a frame budget and at least three times faster than tokenizing every line`, () => {
+    it(`${id}: well inside a frame budget and at least three times faster than tokenizing every line`, async () => {
       const cp = cpOf(id);
       const lines = program(id);
-      const fast = fastest(3, () => void documentNumbers(lines, cp));
+      documentNumbers(lines, cp);
+      let fast = Infinity;
+      for (let round = 0; round < 3; round++) {
+        await breathe();
+        const started = performance.now();
+        documentNumbers(lines, cp);
+        fast = Math.min(fast, performance.now() - started);
+      }
+      await breathe();
       const slow = fastest(1, () => void documentNumbersByTokens(lines, cp));
       expectWithin(fast, 300, `documentNumbers on ${lines.length} ${id} lines`);
       expect(fast * 3, `fast ${fast.toFixed(0)} ms, tokenizer ${slow.toFixed(0)} ms`).toBeLessThan(slow);
+      await breathe();
       same(lines, cp, `${id} 300k`);
     });
   }
@@ -133,7 +146,7 @@ describe('the cost at 300,000 lines', () => {
     sinumerik: 'N10 G1 X1.5 Z-2. ; contour',
   };
   for (const [id, line] of Object.entries(commented)) {
-    it(`${id}: a gate letter in a comment on every line costs no tokenizer pass`, () => {
+    it(`${id}: a gate letter in a comment on every line costs no tokenizer pass`, async () => {
       const cp = cpOf(id);
       const lines = Array.from({ length: sizes }, (_, i) => `${line.replace('N10', `N${(i + 1) * 10}`)}`);
       // Alternating runs, the best of each: a load that comes and goes (a full test run) hits both sides.
@@ -141,7 +154,9 @@ describe('the cost at 300,000 lines', () => {
       let fast = Infinity;
       let slow = Infinity;
       for (let round = 0; round < 3; round++) {
+        await breathe();
         fast = Math.min(fast, fastest(1, () => void documentNumbers(lines, cp)));
+        await breathe();
         slow = Math.min(slow, fastest(1, () => void documentNumbersByTokens(lines, cp)));
       }
       expect(fast * 2, `fast ${fast.toFixed(0)} ms, tokenizer ${slow.toFixed(0)} ms`).toBeLessThan(slow);
