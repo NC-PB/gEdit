@@ -173,7 +173,7 @@
     },
     {
       "code": "G68",
-      "group": "frame",
+      "group": "turretMirror",
       "frame": "open",
       "label": "Mirror image for the second turret",
       "description": "On a lathe with two opposed turrets, mirrors the moves so that the second turret machines the same shape (mirror image, or symmetric machining). G69 ends it. A machining centre uses the same number for a rotation of the coordinate system."
@@ -191,23 +191,72 @@
         {
           "address": "I",
           "label": "Rotation axis direction, X component (three-dimensional conversion)",
-          "unit": "count"
+          "unit": "count",
+          "decimals": true
         },
         {
           "address": "J",
           "label": "Rotation axis direction, Y component (three-dimensional conversion)",
-          "unit": "count"
+          "unit": "count",
+          "decimals": true
         },
         {
           "address": "K",
           "label": "Rotation axis direction, Z component (three-dimensional conversion)",
-          "unit": "count"
+          "unit": "count",
+          "decimals": true
         }
       ]
     },
     {
-      "code": "G69",
+      "code": "G68.2",
       "group": "frame",
+      "axisWords": "data",
+      "frame": "open",
+      "conflicts": ["tcp", "radiusComp", "lengthComp", "cycle", "surfaceSpeed", "frame:frame", "frame:mirror", "frame:scaling", "frame:polar", "frame:cylindrical"],
+      "label": "Tilted working plane",
+      "description": "Defines a coordinate system tilted against the workpiece and makes it the one the program is written in. X, Y and Z give its origin; I, J and K give the three Euler angles, or with P another way to define the plane (P1 roll-pitch-yaw angles with Q as the order of the turns, P2 three points, P3 two vectors, P4 projection angles). On the lathe G69.1 ends it (G69 ends the mirror image of the second turret). G53.1 in the next block turns the rotary axes to the new tool direction.",
+      "params": [
+        { "address": "P", "label": "How the plane is defined: none Euler angles, 1 to 4 another form", "min": 1, "max": 4 },
+        { "address": "Q", "label": "Order of the turns (P1) or the number of the point or vector (P2, P3)" },
+        { "address": "I", "label": "First angle, or X component of a vector", "unit": "count", "decimals": true },
+        { "address": "J", "label": "Second angle, or Y component of a vector", "unit": "count", "decimals": true },
+        { "address": "K", "label": "Third angle, or Z component of a vector", "unit": "count", "decimals": true },
+        { "address": "R", "label": "Turn about the new Z axis (P2)", "unit": "angle" }
+      ]
+    },
+    {
+      "code": "G68.3",
+      "group": "frame",
+      "axisWords": "data",
+      "frame": "open",
+      "conflicts": ["tcp", "radiusComp", "lengthComp", "cycle", "surfaceSpeed", "frame:frame", "frame:mirror", "frame:scaling", "frame:polar", "frame:cylindrical"],
+      "label": "Tilted working plane from the tool direction",
+      "description": "Makes the coordinate system whose Z axis is the present direction of the tool the one the program is written in. X, Y and Z give its origin in absolute values (the present position when left out); R turns it about its Z axis. On the lathe G69.1 ends it (G69 ends the mirror image of the second turret).",
+      "params": [
+        { "address": "R", "label": "Turn about the new Z axis", "unit": "angle" }
+      ]
+    },
+    {
+      "code": "G68.4",
+      "group": "frame",
+      "axisWords": "data",
+      "frame": "open",
+      "conflicts": ["tcp", "radiusComp", "lengthComp", "cycle", "surfaceSpeed", "frame:frame", "frame:mirror", "frame:scaling", "frame:polar", "frame:cylindrical"],
+      "label": "Tilted working plane, added to the one in force",
+      "description": "Tilts again, relative to the tilted plane that is in force. It is written like G68.2 (P chooses the form), and its origin is given in the coordinates of that plane. Tool length and radius compensation must be off. On the lathe G69.1 ends it (G69 ends the mirror image of the second turret).",
+      "params": [
+        { "address": "P", "label": "How the plane is defined: none Euler angles, 1 to 4 another form", "min": 1, "max": 4 },
+        { "address": "Q", "label": "Order of the turns (P1) or the number of the point or vector (P2, P3)" },
+        { "address": "I", "label": "First angle, or X component of a vector", "unit": "count", "decimals": true },
+        { "address": "J", "label": "Second angle, or Y component of a vector", "unit": "count", "decimals": true },
+        { "address": "K", "label": "Third angle, or Z component of a vector", "unit": "count", "decimals": true },
+        { "address": "R", "label": "Turn about the new Z axis (P2)", "unit": "angle" }
+      ]
+    },
+    {
+      "code": "G69",
+      "group": "turretMirror",
       "frame": "close",
       "label": "Mirror image for the second turret off",
       "description": "Ends the mirror image that G68 started. A machining centre uses the same number to end a rotation of the coordinate system."
@@ -268,7 +317,9 @@
           "label": "Roughing feed (a feed inside the profile blocks is not used)",
           "min": 0,
           "block": 2
-        }
+        },
+        { "address": "S", "label": "Spindle speed for the roughing (an S inside the profile blocks applies to the finishing with G70 only)", "block": 2 },
+        { "address": "T", "label": "Tool for the roughing (a T inside the profile blocks applies to the finishing with G70 only)", "block": 2 }
       ]
     },
     {
@@ -296,7 +347,9 @@
           "label": "Roughing feed (a feed inside the profile blocks is not used)",
           "min": 0,
           "block": 2
-        }
+        },
+        { "address": "S", "label": "Spindle speed for the roughing (an S inside the profile blocks applies to the finishing with G70 only)", "block": 2 },
+        { "address": "T", "label": "Tool for the roughing (a T inside the profile blocks applies to the finishing with G70 only)", "block": 2 }
       ]
     },
     {
@@ -333,7 +386,9 @@
           "label": "Roughing feed (a feed inside the profile blocks is not used)",
           "min": 0,
           "block": 2
-        }
+        },
+        { "address": "S", "label": "Spindle speed for the roughing (an S inside the profile blocks applies to the finishing with G70 only)", "block": 2 },
+        { "address": "T", "label": "Tool for the roughing (a T inside the profile blocks applies to the finishing with G70 only)", "block": 2 }
       ]
     },
     {

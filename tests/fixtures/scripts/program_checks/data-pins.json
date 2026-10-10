@@ -581,6 +581,21 @@
           "radiusComp"
         ]
       },
+      "G17": {
+        "conflicts": [
+          "radiusComp"
+        ]
+      },
+      "G18": {
+        "conflicts": [
+          "radiusComp"
+        ]
+      },
+      "G119": {
+        "conflicts": [
+          "radiusComp"
+        ]
+      },
       "G31": {
         "sets": {
           "motion": "feed"

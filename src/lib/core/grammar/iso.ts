@@ -168,7 +168,8 @@ export function isoRules(p: Profile, db: CodeDb): GrammarRule[] {
   if (blockNumber !== null) rules.push([blockNumber, 'blockNumber']);
   for (const { letter, role, decimals } of CODE_LETTERS) {
     const fraction = decimals ? `(?:${point}\\d{1,2})?` : '';
-    rules.push([`${escapeLiteral(letter)}\\s*\\d{1,3}${fraction}`, role]);
+    // B1 fix NC (NC-11): up to four digits, as the tokenizer reads a code (`G1900`, `M1234`).
+    rules.push([`${escapeLiteral(letter)}\\s*\\d{1,4}${fraction}`, role]);
   }
 
   // 12 to 18: the addresses the profile gives a meaning, then the rest of the database.

@@ -206,11 +206,13 @@
     {
       "code": "G17",
       "group": "plane",
+      "conflicts": ["radiusComp"],
       "label": "Compensation plane XY, for driven-tool milling on the face"
     },
     {
       "code": "G18",
       "group": "plane",
+      "conflicts": ["radiusComp"],
       "label": "Compensation plane ZX, the turning plane",
       "description": "In force at power-on and after a reset, and selected again by M109."
     },
@@ -228,7 +230,7 @@
       "label": "Home position return",
       "description": "Moves at rapid to a home position whose place is set in the machine's parameters, in machine coordinates and not in the program's. HP says which home position. It is not the inch switch it is on other controls.",
       "params": [
-        { "address": "HP", "label": "Number of the home position, set in the machine's parameters", "min": 1, "unit": "count" }
+        { "address": "HP", "label": "Number of the home position, set in the machine's parameters", "min": 1, "max": 8, "unit": "count" }
       ]
     },
     {
@@ -237,9 +239,9 @@
       "axisWords": "machine",
       "review": "pending",
       "label": "Tool-change home position return",
-      "description": "Moves the turret to a tool-change position whose place is set in the machine's parameters, in machine coordinates and not in the program's. HP says which position. It is not the metric switch it is on other controls.",
+      "description": "Moves the turret to a tool-change or return position whose place is set in the machine's parameters, in machine coordinates and not in the program's. HP says which position: HP4 and HP5 are return positions. It is not the metric switch it is on other controls.",
       "params": [
-        { "address": "HP", "label": "Number of the tool-change position, set in the machine's parameters", "min": 1, "unit": "count" }
+        { "address": "HP", "label": "Number of the tool-change or return position, set in the machine's parameters", "min": 1, "max": 5, "unit": "count" }
       ]
     },
     {
@@ -793,6 +795,7 @@
     {
       "code": "G119",
       "group": "plane",
+      "conflicts": ["radiusComp"],
       "review": "pending",
       "label": "Compensation plane C-X-Z, for driven-tool milling on the side",
       "description": "Cutter radius compensation works on the side of the part, in Z and the C axis, for the contours of G132 and G133. It works only while the C axis is connected, and the plane is changed only while compensation is off (G40). Where the machine's parameters switch the side contour programming on, G119 switches it on as well, and G136, G138, M109 or a reset switches it off."
@@ -1398,7 +1401,7 @@
       "code": "M85",
       "review": "pending",
       "label": "No return after LAP roughing",
-      "description": "Written in the block that calls LAP roughing (G85 or G86): when the roughing is done, the tool does not go back to the start point of the cycle, and the next block follows from where the cycle ended. It saves the way back when the same tool carries on."
+      "description": "Only with LAP4. Written in the block that calls LAP roughing (G85 or G86): when the roughing is done, the tool does not go back to the start point of the cycle, and the next block follows from where the cycle ended. It saves the way back when the same tool carries on."
     },
     {
       "code": "M88",

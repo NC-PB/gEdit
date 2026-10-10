@@ -628,3 +628,17 @@ describe('B1: the lathe codes added from the manuals', () => {
     for (const e of ENTRIES.filter((row) => reviewOf(row) !== undefined)) expect(reviewOf(e), e.code).toBe('pending');
   });
 });
+
+describe('B1 fix NC (NC-09): Okuma details', () => {
+  it('names G21 positions as tool-change or return positions, HP up to 5; G20 HP up to 8', () => {
+    expect(entry('G21').description).toMatch(/tool-change or return position/);
+    expect(entry('G21').params?.find((p) => p.address === 'HP')).toMatchObject({ min: 1, max: 5 });
+    expect(entry('G20').params?.find((p) => p.address === 'HP')).toMatchObject({ min: 1, max: 8 });
+  });
+  it('says M85 is LAP4 only', () => {
+    expect(entry('M85').description).toMatch(/LAP4/);
+  });
+  it('refuses a plane change while nose-radius compensation is on (G17, G18, G119)', () => {
+    for (const code of ['G17', 'G18', 'G119']) expect(entry(code).conflicts, code).toEqual(['radiusComp']);
+  });
+});

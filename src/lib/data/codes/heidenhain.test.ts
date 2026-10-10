@@ -137,3 +137,20 @@ describe('B1 (a7s): the Klartext entries from the TNC 640 manuals', () => {
     expect(entry('M140')?.params?.find((p) => p.address === 'F')?.label).toMatch(/retract/);
   });
 });
+
+describe('B1 fix NC (NC-08): cycles 22 and 23, cycle 19', () => {
+  it('leaves Q208 optional on cycles 22 and 23, never negative, and says it may be rapid', () => {
+    for (const code of ['CYCL DEF 22', 'CYCL DEF 23']) {
+      const q208 = entry(code)?.params?.find((p) => p.address === 'Q208');
+      expect(q208?.required, code).toBeUndefined();
+      expect(q208?.min, code).toBe(0);
+      expect(q208?.label, code).toMatch(/FMAX: rapid/);
+    }
+  });
+
+  it('describes ABST of cycle 19 as a clearance, no position', () => {
+    const abst = entry('CYCL DEF 19')?.params?.find((p) => p.address === 'ABST');
+    expect(abst?.label).toMatch(/clearance/i);
+    expect(abst?.position).toBe('none');
+  });
+});

@@ -826,6 +826,35 @@ class TestOwnWords(unittest.TestCase):
         self.assertEqual(self.owned(plain, ["1 L X+10 F400 M128 F800"]), [[]])
 
 
+class TestOwnWordsInTheState(ModalTestCase):
+    """B1 NC-01 (rule 16): a function's own word is no feed in force, with the shipped Klartext database."""
+
+    def run_lines(self, lines: Sequence[str]) -> List[Dict[str, Any]]:
+        context = helpers.effective_context("heidenhain-klartext")
+        return self.walk(context["profile"], context["codes"], lines)
+
+    def test_the_feed_in_force_is_the_path_feed(self) -> None:
+        lines = [
+            "L X+10 Y+10 R0 F500",
+            "M128 F800",
+            "PLANE SPATIAL SPA+0 SPB+30 SPC+0 MOVE DIST50 F2000",
+            "CYCL DEF 19.1 A+0 B+30 F1500",
+            "M140 MB MAX F1000",
+            "L X+50 F600 M128 F900",
+            "L X+60",
+        ]
+        feeds = [(state["feed"] or {}).get("valueText") for state in self.run_lines(lines)]
+        self.assertEqual(feeds, ["500", "500", "500", "500", "500", "600", "600"])
+
+    def test_an_owned_f_does_not_end_a_feed_per_tooth(self) -> None:
+        states = self.run_lines(["L X+10 FZ0.05", "M128 F800", "L X+20"])
+        self.assertEqual([(s["feed"]["valueText"], s["feedUnit"]) for s in states], [("0.05", "per-tooth")] * 3)
+
+    def test_the_owner_lasts_over_a_continued_line_only(self) -> None:
+        states = self.run_lines(["L X+5 F100", "PLANE SPATIAL SPA+0 SPB+30 SPC+0 ~", "  MOVE DIST50 F2000", "L X+10 F300"])
+        self.assertEqual([s["feed"]["valueText"] for s in states], ["100", "100", "100", "300"])
+
+
 class TestFeedModeTrackerIsAWrapper(ModalTestCase):
     """Phase 1's tracker, now reading the same rules (plan §7.10 is unchanged for scripts).
 

@@ -1,0 +1,15 @@
+{
+  "about": "B1 fix NC (NC-02): on the lathe G68/G69 (the mirror image for the second turret, group 04 in the lathe G-code table) and G68.1/G69.1 (the coordinate rotation, group 17) are two groups. G69.1 ends the rotation and leaves the mirror on; G69 ends the mirror and leaves the rotation on.",
+  "input": "frames-mirror.nc",
+  "states": [
+    { "line": 3, "after": { "frame": "G68" } },
+    { "line": 5, "about": "The rotation inside the mirror.", "after": { "frame": "G68.1" } },
+    { "line": 7, "about": "G69.1 ends the rotation; the mirror is still on.", "after": { "frame": "G68" } },
+    { "line": 8, "after": { "frame": "G68" } },
+    { "line": 9, "about": "G69 ends the mirror.", "after": { "frame": null } },
+    { "line": 11, "after": { "frame": "G68.1" } },
+    { "line": 12, "about": "G69 ends no rotation.", "after": { "frame": "G68.1" } },
+    { "line": 13, "after": { "frame": "G68.1" } },
+    { "line": 14, "after": { "frame": null } }
+  ]
+}

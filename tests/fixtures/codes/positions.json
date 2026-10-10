@@ -28,6 +28,7 @@
     "fanuc-lathe-b": [
     ],
     "heidenhain": [
+      { "code": "CYCL DEF 19", "params": [["F", "none"], ["ABST", "none"]] },
       { "code": "CYCL CALL PAT", "params": [["X", "other"], ["Y", "other"], ["Z", "other"]] },
       { "code": "CYCL CALL POS", "params": [["X", "other"], ["Y", "other"], ["Z", "other"]] },
       { "code": "CYCL DEF 200", "params": [["Q200", "none"], ["Q201", "none"], ["Q206", "none"], ["Q202", "none"], ["Q210", "none"], ["Q203", "tool-axis"], ["Q204", "none"], ["Q211", "none"], ["Q395", "none"]] },

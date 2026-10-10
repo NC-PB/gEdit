@@ -44,6 +44,14 @@ export interface CodeParam {
    */
   unit?: NumberClass | 'increment' | 'count';
   /**
+   * B1 (NC-06). Only with `unit: 'count'`: the value is read as written like a count, never
+   * converted, but it is a **real number**, not a whole one (the Euler angles `I`/`J`/`K` of
+   * Fanuc `G68.2`, the tool direction of `G43.5`, the knot and weight of `G6.2`). Every check
+   * that asks for a whole number (the inspector's edit, the cycle form, a template made from a
+   * selection) lets decimals through. The scripts need no change: they never test whole-ness.
+   */
+  decimals?: boolean;
+  /**
    * P10 (roadmap R8, accepted 2026-10-01; plan §7.2, §7.16 #106). What this parameter is to a
    * program shift (address arithmetic, WP10.4), stated per parameter so that nothing is
    * guessed from its name:

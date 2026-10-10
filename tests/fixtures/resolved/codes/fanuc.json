@@ -218,11 +218,13 @@
         },
         {
           "address": "K",
-          "label": "Knot",
+          "decimals": true,
+          "label": "Knot value, a real number",
           "unit": "count"
         },
         {
           "address": "R",
+          "decimals": true,
           "label": "Weight of the control point (1 when left out)",
           "unit": "count"
         },
@@ -737,7 +739,7 @@
     },
     {
       "code": "G41.6",
-      "description": "The control offsets the tool by its radius at right angles to the tool direction, to the left of the path. The blocks write the tool direction at their end point as I, J and K instead of rotary axis positions, so the same program suits a machine with a turning head, a turning table or both. D names the radius offset and Q a tilt angle of the tool in degrees. G40 ends it.",
+      "description": "The control offsets the tool by its radius at right angles to the tool direction, to the left of the path. The blocks write the tool direction at their end point as I, J and K instead of rotary axis positions, so the same program suits a machine with a turning head, a turning table or both: a component left out is 0, and a block that writes none keeps the direction before. D names the radius offset and Q the lead angle, by which the tool leans from the I, J, K direction towards the direction of travel, in degrees. G40 ends it.",
       "group": "compensation",
       "label": "Five-axis cutter radius compensation, left, tool direction by I, J, K",
       "modal": true,
@@ -747,8 +749,26 @@
           "label": "Radius offset register"
         },
         {
+          "address": "I",
+          "decimals": true,
+          "label": "Tool direction at the end of the block, X component",
+          "unit": "count"
+        },
+        {
+          "address": "J",
+          "decimals": true,
+          "label": "Tool direction at the end of the block, Y component",
+          "unit": "count"
+        },
+        {
+          "address": "K",
+          "decimals": true,
+          "label": "Tool direction at the end of the block, Z component",
+          "unit": "count"
+        },
+        {
           "address": "Q",
-          "label": "Tilt angle of the tool, in degrees",
+          "label": "Lead angle: tilt from the I, J, K direction towards the direction of travel, in degrees",
           "unit": "angle"
         }
       ],
@@ -810,7 +830,7 @@
     },
     {
       "code": "G42.6",
-      "description": "The control offsets the tool by its radius at right angles to the tool direction, to the right of the path. The blocks write the tool direction at their end point as I, J and K instead of rotary axis positions, so the same program suits a machine with a turning head, a turning table or both. D names the radius offset and Q a tilt angle of the tool in degrees. G40 ends it.",
+      "description": "The control offsets the tool by its radius at right angles to the tool direction, to the right of the path. The blocks write the tool direction at their end point as I, J and K instead of rotary axis positions, so the same program suits a machine with a turning head, a turning table or both: a component left out is 0, and a block that writes none keeps the direction before. D names the radius offset and Q the lead angle, by which the tool leans from the I, J, K direction towards the direction of travel, in degrees. G40 ends it.",
       "group": "compensation",
       "label": "Five-axis cutter radius compensation, right, tool direction by I, J, K",
       "modal": true,
@@ -820,8 +840,26 @@
           "label": "Radius offset register"
         },
         {
+          "address": "I",
+          "decimals": true,
+          "label": "Tool direction at the end of the block, X component",
+          "unit": "count"
+        },
+        {
+          "address": "J",
+          "decimals": true,
+          "label": "Tool direction at the end of the block, Y component",
+          "unit": "count"
+        },
+        {
+          "address": "K",
+          "decimals": true,
+          "label": "Tool direction at the end of the block, Z component",
+          "unit": "count"
+        },
+        {
           "address": "Q",
-          "label": "Tilt angle of the tool, in degrees",
+          "label": "Lead angle: tilt from the I, J, K direction towards the direction of travel, in degrees",
           "unit": "angle"
         }
       ],
@@ -921,16 +959,19 @@
         },
         {
           "address": "I",
+          "decimals": true,
           "label": "Tool axis direction, X component",
           "unit": "count"
         },
         {
           "address": "J",
+          "decimals": true,
           "label": "Tool axis direction, Y component",
           "unit": "count"
         },
         {
           "address": "K",
+          "decimals": true,
           "label": "Tool axis direction, Z component",
           "unit": "count"
         },
@@ -1011,16 +1052,19 @@
         },
         {
           "address": "I",
+          "decimals": true,
           "label": "Scale factor for X",
           "unit": "count"
         },
         {
           "address": "J",
+          "decimals": true,
           "label": "Scale factor for Y",
           "unit": "count"
         },
         {
           "address": "K",
+          "decimals": true,
           "label": "Scale factor for Z",
           "unit": "count"
         }
@@ -1241,16 +1285,19 @@
         },
         {
           "address": "I",
+          "decimals": true,
           "label": "Rotation axis direction, X component",
           "unit": "count"
         },
         {
           "address": "J",
+          "decimals": true,
           "label": "Rotation axis direction, Y component",
           "unit": "count"
         },
         {
           "address": "K",
+          "decimals": true,
           "label": "Rotation axis direction, Z component",
           "unit": "count"
         }
@@ -1288,16 +1335,19 @@
         },
         {
           "address": "I",
+          "decimals": true,
           "label": "First angle, or X component of a vector",
           "unit": "count"
         },
         {
           "address": "J",
+          "decimals": true,
           "label": "Second angle, or Y component of a vector",
           "unit": "count"
         },
         {
           "address": "K",
+          "decimals": true,
           "label": "Third angle, or Z component of a vector",
           "unit": "count"
         },
@@ -1367,16 +1417,19 @@
         },
         {
           "address": "I",
+          "decimals": true,
           "label": "First angle, or X component of a vector",
           "unit": "count"
         },
         {
           "address": "J",
+          "decimals": true,
           "label": "Second angle, or Y component of a vector",
           "unit": "count"
         },
         {
           "address": "K",
+          "decimals": true,
           "label": "Third angle, or Z component of a vector",
           "unit": "count"
         },

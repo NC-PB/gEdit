@@ -650,7 +650,8 @@ describe('hoverText in context: Fanuc lathe, G-code system A (l01-turning-a.nc)'
 
   it('shows the two blocks of G71, and a modal G83 with every parameter, written or not', () => {
     expect(read(doc, 15, 'G71')).toContain('**Parameters of G71, block 1 of 2**');
-    expect(writtenOf(read(doc, 16, 'G71'))).toEqual({ P: '100', Q: '200', U: '0.4', W: '0.1', F: '0.25' });
+    // B1 fix NC (NC-10): the roughing S and T of the second block are listed too, written or not.
+    expect(writtenOf(read(doc, 16, 'G71'))).toEqual({ P: '100', Q: '200', U: '0.4', W: '0.1', F: '0.25', S: null, T: null });
     const g83 = read(doc, 50, 'G83');
     expect(g83).toContain('**Parameters of G83**');
     expect(g83).not.toContain('block 1');

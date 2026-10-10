@@ -131,6 +131,7 @@ under a Z shift has nothing to change and is not listed.
 | `expression` | a variable or an `=` expression (Okuma `X=V1+2`, Sinumerik `X=R1`); a value function around a plain number is read (M10 review): `Z=AC(3.25)` is an absolute position whatever the distance mode, `Z=IC(2)` an incremental distance (`incremental` on add and subtract, scaled on multiply and divide) |
 | `machine-dependent` | the word has no resolved value (`resolve_value` is `None`), which includes every machine-dependent word while no machine is chosen: "the reading depends on the machine; choose a machine" |
 | `count` | a `count`/`increment` parameter reached through `arcCentres` (`G83 … K3` under multiply) |
+| `fk-point` | (B1 fix NC, NC-03; a **warning**) an absolute point of a Klartext FK contour on a chosen axis (`P1X` … `P3Y`, the centre `CCX`/`CCY`, `P1Z` … `P3Z`): "an absolute point of an FK contour; gEdit does not move it. Check the FK contour" |
 
 `incremental` also covers a distance mode that is **not known** (no code set it before the
 block: a Fanuc or Sinumerik program that never writes `G90`): adding to an incremental word
@@ -252,6 +253,8 @@ and the blocks under it refused (`frame`), a `TRAORI` section judged and a simul
 | `fanuc-rotary-state` | Fanuc mill | (NC-4) +0.5 to `Z`: a `Z` before the first `B` and every `Z` while `B` stands at 90 or 85 refused, `Z` at `B0 C30` moved (C turns no Z), a block under `G43.4` moved, the retract after `G49` at `B30` refused |
 | `fanuc-polar-g16` | Fanuc mill | (NC-5) +5 to `X`, `Y`: `G16` to `G15` is a frame; `G123` alone is listed once (`unknown-code-note`) |
 | `fanuc-multiply-rule` | Fanuc mill | (CODE-8) multiply 2 on `X`, `Y`, `Z`: a `G91` block and a block before `G90` scaled, `G52` refused (`not-scaled`), the `G4` dwell `X` left (`data`) |
+| `lathe-frames` | Fanuc lathe | (B1 fix NC, NC-02) − 0.5 on `Z`: the blocks under the turret mirror `G68` refused (`frame`), the block after `G69` moved, a `G68.1` rotation stays in force across a `G69` (its blocks refused, `frame`) until `G69.1` |
+| `klartext-fk` | Klartext | (B1 fix NC, NC-03) + 5 on `X`: `FPOL`, `FL`, `APPR`, `L` moved; the FK points `CCX`, `P1X`, `P2X` of `FC`, `FLT`, `FCT` left (`fk-point`, warnings) |
 
 The machines of the IS-B and 1 mm cases are written so that they do not equal the profile's
 default preset: the generator names an effective file by the machine's parameters alone,

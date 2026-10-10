@@ -1,0 +1,22 @@
+{
+  "about": "B1 NC-01 (plan 7.4 rule 16): a function's own F (ownWords: the feed of the M128 compensating moves, the M140 retract, the PLANE and cycle 19 tilting move) is skipped as a whole word. It is not the feed in force, and it does not end a feed set by FZ or FU. An F in front of the function stays the path feed of its block.",
+  "input": "function-feeds.h",
+  "states": [
+    { "line": 5, "about": "The path feed.", "after": { "feed": { "valueText": "500", "line": 5 } } },
+    { "line": 6, "about": "M128 F800: the feed of the compensating moves.", "after": { "feed": { "valueText": "500", "line": 5 }, "tcp": "M128" } },
+    { "line": 7, "after": { "feed": "500" } },
+    { "line": 8, "about": "PLANE … MOVE F2000: the feed of the tilting move.", "after": { "feed": "500", "frame": "PLANE SPATIAL" } },
+    { "line": 9, "after": { "feed": "500" } },
+    { "line": 11, "about": "CYCL DEF 19.1 … F1500: the feed of the rotary-axis positioning.", "after": { "feed": "500", "frame": "CYCL DEF 19" } },
+    { "line": 12, "after": { "feed": "500" } },
+    { "line": 13, "about": "F600 in front of M128 is the path feed of the block; F900 behind it is M128's.", "after": { "feed": { "valueText": "600", "line": 13 } } },
+    { "line": 14, "after": { "feed": "600" } },
+    { "line": 15, "about": "M140 MB MAX F1000: the feed of the retract.", "after": { "feed": "600" } },
+    { "line": 16, "after": { "feed": "600" } },
+    { "line": 17, "about": "A feed per tooth, by word.", "after": { "feed": "0.05", "feedUnit": "per-tooth" } },
+    { "line": 18, "about": "M128 F800 does not end the feed per tooth either.", "after": { "feed": { "valueText": "0.05", "line": 17 }, "feedUnit": "per-tooth" } },
+    { "line": 19, "after": { "feed": "0.05", "feedUnit": "per-tooth" } },
+    { "line": 21, "about": "A PLANE block over two lines: the F on the continued line is still PLANE's.", "after": { "feed": { "valueText": "0.05", "line": 17 }, "feedUnit": "per-tooth" } },
+    { "line": 23, "after": { "feed": "0.05", "feedUnit": "per-tooth", "tcp": null } }
+  ]
+}

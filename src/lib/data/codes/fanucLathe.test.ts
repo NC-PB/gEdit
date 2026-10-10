@@ -91,6 +91,8 @@ function tableUnit(dialect: string, code: string, address: string): Unit | undef
   if (code === 'G68.1') return address === 'R' ? 'angle' : ['I', 'J', 'K'].includes(address) ? 'count' : undefined;
   if (code === 'G6.2') return ['P', 'K', 'R'].includes(address) ? 'count' : undefined;
   if ((code === 'G41.6' || code === 'G42.6') && address === 'Q') return 'angle';
+  // B1 fix NC (NC-04): their I, J, K are the tool direction, a plain number like G43.5's.
+  if ((code === 'G41.6' || code === 'G42.6') && ['I', 'J', 'K'].includes(address)) return 'count';
 
   if (dialect === A || dialect === B) {
     // M9 (WP9.2): the other face and side cycles count their dwell and repeats too, like G83 and G87.
@@ -538,6 +540,64 @@ describe('the profile and its databases agree', () => {
         expect(codes, `${profile.id}/${dialect}: modal.initial.${group} = ${code}`).toContain(normalizeCode(code));
         expect(found?.group, `${profile.id}/${dialect}: modal.initial.${group} = ${code}`).toBe(group);
       }
+    }
+  });
+});
+
+describe('B1 fix NC: the lathe frames, turret mirror and two-block words', () => {
+  it('keeps the turret mirror G68/G69 in a group of its own, apart from G68.1/G68.2/G69.1 (NC-02)', () => {
+    for (const dialect of [A, B]) {
+      const mirror = entry(dialect, 'G68');
+      expect(mirror?.group, dialect).toBe('turretMirror');
+      expect(entry(dialect, 'G69')?.group, dialect).toBe('turretMirror');
+      expect(mirror?.frame).toBe('open');
+      expect(entry(dialect, 'G69')?.frame).toBe('close');
+      for (const code of ['G68.1', 'G68.2', 'G68.3', 'G68.4', 'G69.1']) expect(entry(dialect, code)?.group, `${dialect} ${code}`).toBe('frame');
+      expect(mirror?.group).not.toBe(entry(dialect, 'G68.1')?.group);
+    }
+    // The mill keeps G68/G69 as the rotation of the frame group.
+    expect(entry(MILL, 'G68')?.group).toBe('frame');
+  });
+
+  it('says that G69.1 ends the tilted planes on the lathe, not G69 (NC-05)', () => {
+    for (const dialect of [A, B]) {
+      for (const code of ['G68.2', 'G68.3', 'G68.4']) {
+        const text = entry(dialect, code)?.description ?? '';
+        expect(text, `${dialect} ${code}`).toContain('G69.1 ends it');
+        expect(text).not.toMatch(/(^|[^.\d])G69 ends it/);
+      }
+    }
+    expect(entry(MILL, 'G68.2')?.description).toContain('G69 ends it');
+  });
+
+  it('reads the rotation direction of G68.1 as a real number (NC-06)', () => {
+    for (const address of ['I', 'J', 'K']) {
+      expect(entry(A, 'G68.1')?.params?.find((p) => p.address === address)).toMatchObject({ unit: 'count', decimals: true });
+    }
+  });
+
+  it('marks exactly the counts that are real numbers with decimals (NC-06)', () => {
+    const real = new Set<string>();
+    for (const code of ['G43.5', 'G51', 'G68', 'G68.2', 'G68.4', 'G41.6', 'G42.6']) for (const a of ['I', 'J', 'K']) real.add(`${code} ${a}`);
+    real.add('G6.2 K');
+    real.add('G6.2 R');
+    for (const dialect of FANUC_DIALECTS) {
+      for (const e of entriesOf(dialect)) {
+        for (const param of e.params ?? []) {
+          const key = `${e.code} ${param.address}`;
+          // The lathe's own G68 is the turret mirror (no params); its G68.1 rotation direction is real too.
+          const want = real.has(key) || (dialect !== MILL && e.code === 'G68.1' && ['I', 'J', 'K'].includes(param.address));
+          expect(param.decimals === true, `${dialect} ${key}`).toBe(want);
+        }
+      }
+    }
+  });
+
+  it('declares S and T in the second block of G71 to G73 (NC-10)', () => {
+    for (const code of ['G71', 'G72', 'G73']) {
+      const second = (entry(A, code)?.params ?? []).filter((p) => p.block === 2).map((p) => p.address);
+      expect(second, code).toEqual(expect.arrayContaining(['F', 'S', 'T']));
+      expect((entry(A, code)?.params ?? []).filter((p) => p.block === 1).map((p) => p.address), code).not.toContain('S');
     }
   });
 });

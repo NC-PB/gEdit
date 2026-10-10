@@ -268,6 +268,18 @@ describe('the fields (rule 3)', () => {
     expect(at.form.fields.find((f) => f.id === 'K')).toMatchObject({ type: 'integer', default: '' });
   });
 
+  it('types a count that is a real number (`decimals`) as a number, not a whole one (B1 fix NC, NC-06)', () => {
+    const real = (db: CodeDb): CodeDb => ({
+      ...db,
+      codes: db.codes.map((e) => ({ ...e, params: e.params?.map((p) => (p.address === 'K' && p.unit === 'count' ? { ...p, decimals: true } : p)) })),
+    });
+    const view = viewOf('fanuc-gcode', null, real);
+    const doc = docOf(view, F01, 39);
+    const at = cycleFormAt(doc.input, view, doc.after);
+    if (!at?.ok) throw new Error('no form');
+    expect(at.form.fields.find((f) => f.id === 'K')).toMatchObject({ type: 'number' });
+  });
+
   it('shows a value written as a variable, an expression or a word read-only, and keeps it', () => {
     const view = viewOf('fanuc-gcode');
     const lines = ['%', 'O1000', 'N20 G98 G83 X1. Y1. Z#101 R2. Q4. F100. H5'];
