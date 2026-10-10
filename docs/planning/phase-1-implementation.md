@@ -1296,6 +1296,7 @@ H1 updates the M0 scenarios for exactly these changes.
     - `script_run tool_list` on a fixture returns the report JSON
     - timeout and cancel work, and `h_pgrep` then finds nothing
     - ids with `../`, absolute paths and an unknown root are refused
+  - *Superseded (2026-10-10): the list above is the plan. The suite as built, `tests/runtime/suites/m4.txt`, has nine scenarios: `m4-transforms`, `m4-apply` (one undo, the bookmark stays, the save keeps encoding and line ending), `m4-bookmarks`, `m4-editing-cmds`, `m4-scripts-backend`, `m4-python-missing` (a `GEDIT_PYTHON` that points at nothing gives a message, not a hang), `m4-scripts-quit-1` and `-2` (a script still running when the window closes), and `m4-perf-transform`. Later milestones list 6 bundled scripts, not 3.*
 
 **Gates:**
 - G0 to G5, and G6 (`m0` to `m4`).
@@ -2050,6 +2051,8 @@ export function installTestHook(h: GeditTestHook): void;
 | `results-panel`, `results-row`, `results-finding` | results | `data-line`, `data-doc-id` | M4 |
 | `scripts-group`, `script-item` | v2 script UI | `data-script-id` | M5 |
 
+*Superseded (2026-10-10): the table is the Phase 1 set. `profile-select` (the legacy `<select>`, "M0 only") is gone, the ids `scripts-group` and `script-item` survive, and `src/` has many more ids since Phase 2 and Phase 3 (the Machines, Profiles and Channels pages, `compare-*`, `inspector-*`, `template-*`, `recovery-*`, `shortcuts-*`, `about-*` and others); the Phase 2 plan §7.12 lists the ones its milestones added, and `grep data-testid src` is the complete list. `status-item` has more `data-item` values: `machine`, `channel` and `readonly` besides the ones above.*
+
 Harness helper API (`tests/runtime/lib`, pinned in M0 for the `Hn` WPs):
 
 ```js
@@ -2284,7 +2287,7 @@ All fixtures are synthetic, written for gEdit, and marked `-text`.
 | Rounding differences between TS and Python | Formatting on decimal strings, half away from zero, with shared cases. |
 | A dependency breaks the CSP | No new runtime JS dependencies; the `eval` grep gate; 0 violations required in every harness run. |
 | Script processes leak (timeout, cancel, quit) | Rust deadline and cancel; `kill_all` on Exit; Unix process groups; `h_pgrep` checks. |
-| Windows `python` is the Store alias stub | `python_check` treats exit 9009 as "not found"; script features are disabled. |
+| Windows `python` is the Store alias stub | `python_check` treats exit 9009 as "not found"; script features are disabled. *Superseded in the Windows pass (Phase 2): the interpreter lookup (`python.rs`) no longer takes a Microsoft Store placeholder for an interpreter (see [Scripts](../user/scripts.md#what-you-need)); exit 9009 is only the last line of defence when a run starts, reported by `scripts::runner::judge`.* |
 | External-change false positives (own writes, coarse mtime on SMB or FAT) | Stamp after every own write; `(mtime, size)`, then the content hash; a `null` mtime only records; poll only while focused. |
 | The harness pollutes the real config folder | `HOME` isolation per run (F13); an explicit `GEDIT_PYTHON`. |
 | The code database content is wrong for some controls | CAM subset only; `verify: true` entries are left out of hover; unknown codes are shown as unknown; the owner reviews the content at M3. |

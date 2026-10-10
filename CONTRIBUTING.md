@@ -2,7 +2,7 @@
 
 Thanks for helping. gEdit is a small project run by part-time contributors, so focused pull requests with tests are the easiest to review.
 
-Four documents to know about before you start: [docs/user](docs/user/README.md) is what the app does today, from a CNC programmer's point of view; [docs/planning](docs/planning/README.md) is what we plan to build and why; [phase-1-implementation.md](docs/planning/phase-1-implementation.md) is the executed plan for Phase 1 — architecture, the binding contracts in §7, and the decisions behind them; and [phase-2-implementation.md](docs/planning/phase-2-implementation.md) is the plan being executed now (M6–M13, re-cut on 2026-09-30): the contracts it adds (its §7, with the test ids in §7.12 and the deviations in §7.16), the dialect and machine data (§8) and the owner decisions (§10). What is still open, in the code and in the decisions, is collected in [TODO.md](TODO.md).
+Five documents to know about before you start: [docs/user](docs/user/README.md) is what the app does today, from a CNC programmer's point of view; [docs/planning](docs/planning/README.md) is what we plan to build and why; [phase-1-implementation.md](docs/planning/phase-1-implementation.md) is the executed plan for Phase 1 — architecture, the binding contracts in §7, and the decisions behind them; and [phase-3-implementation.md](docs/planning/phase-3-implementation.md) is the last plan that was executed (Phase 3, "Understand and write"; it builds on [phase-2-implementation.md](docs/planning/phase-2-implementation.md), the plan of M6–M13, whose §7 holds the contracts, with the test ids in §7.12 and the deviations in §7.16, and whose §8 holds the dialect and machine data and §10 the owner decisions). Phases 1 to 3 are done and v1.0.0 is prepared as a draft release; Phase 4 has no implementation plan yet (see the [roadmap](docs/planning/roadmap.md#phase-4-comfort-and-geometry)), and the current work is a round of bug fixes and documentation, listed in [TODO.md](TODO.md), which also collects what is still open in the code and in the decisions.
 
 ## Setup
 
@@ -63,7 +63,7 @@ Run what CI runs: `npm run check`, `npm test`, `npm run build`, `npm run license
 - **rust** (macOS, Windows, Linux): `cargo fmt`, `clippy` with warnings as errors, `cargo test`.
 - **bundle** (macOS, Windows, Linux): an unsigned debug build of the installers, uploaded as workflow artifacts for manual smoke tests.
 
-The runtime harness has a workflow of its own, `.github/workflows/harness.yml`: it builds the patched app on a GitHub-hosted macOS 14 runner (which has a live desktop session) and runs the cumulative suite m0 to m12, rp, m13, p3a and p3b (133 scenarios). It is not part of `ci.yml` and does not run on pull requests, because it takes about 25 minutes of macOS runner time; it runs on every push to `main` and on demand (Actions tab, Harness, Run workflow), and uploads the result files and app logs as the `harness-results` artifact.
+The runtime harness has a workflow of its own, `.github/workflows/harness.yml`: it builds the patched app on a GitHub-hosted macOS 14 runner (which has a live desktop session) and runs the cumulative suite m0 to m12, rp, m13, p3a and p3b (133 scenarios). It is not part of `ci.yml` and does not run on pull requests, because it takes about 40 minutes of macOS runner time (measured on the last five runs of `main`, the build included); it runs on every push to `main` and on demand (Actions tab, Harness, Run workflow), and uploads the result files and app logs as the `harness-results` artifact.
 
 ## Releases
 
@@ -161,7 +161,7 @@ What was learned from real programs (counts, the labels of a review's findings, 
 Three audiences, three places. Keep them apart.
 
 - **`docs/user/`** — the user guide, written for a CNC programmer, not for a developer. No file paths, no module names, no milestone numbers. It describes what the shipped app does, and it is honest about what it does not do: the limits section is as much a part of it as the feature list. A pull request that changes behaviour a user can see updates it in the same change.
-- **`docs/planning/`** — design notes and the roadmap: what we intend, why, and what is deferred. [phase-1-implementation.md](docs/planning/phase-1-implementation.md) and [phase-2-implementation.md](docs/planning/phase-2-implementation.md) additionally carry the binding contracts (§7 in each) and the record of where the implementation deviated from them (§7.12 in Phase 1, §7.16 in Phase 2).
+- **`docs/planning/`** — design notes and the roadmap: what we intend, why, and what is deferred. [phase-1-implementation.md](docs/planning/phase-1-implementation.md), [phase-2-implementation.md](docs/planning/phase-2-implementation.md) and [phase-3-implementation.md](docs/planning/phase-3-implementation.md) additionally carry the binding contracts (§7 in the first two, §6 in the third) and the record of where the implementation deviated from them (§7.12 in Phase 1, §7.16 in Phase 2, §7 in Phase 3). The older design notes (`editor-core.md`, `settings-ui.md` and the rest) start with a status banner: what shipped is in the user guide, and the guide wins where they differ.
 - **Module headers** — why this code is shaped this way. They are the first thing to read before changing a module, and the place a decision belongs when it would otherwise be lost.
 
 The generated surfaces are not documentation to maintain by hand: the shortcut dialog is built from the command registry, and the About dialog's notices from `licenses.json`. `docs/user/shortcuts.md` mirrors the dialog for people who want to read it before installing, and adds the editor component's own editing keys, which the dialog lists without a key (the gEdit commands that wrap them deliberately carry none). For every key gEdit assigns, the dialog wins if the two disagree.
@@ -215,7 +215,7 @@ tests/runtime/suite.sh tests/runtime/suites/m0.txt   # run a suite; prints a PAS
 
 Writing scenarios:
 
-- Find elements by `data-testid` (the lists are §7.9 of phase-1-implementation.md and §7.12 of phase-2-implementation.md), never by visible text. If you need a new test id, add it to the Phase 2 table in the same pull request.
+- Find elements by `data-testid` (the lists are §7.9 of phase-1-implementation.md, §7.12 of phase-2-implementation.md and §6.8 of phase-3-implementation.md, and `grep data-testid src` is the complete one), never by visible text. If you need a new test id, add it to the table of the latest plan in the same pull request.
 - Read state through `h.app` (the test hook) rather than by parsing the DOM where the hook offers it.
 - The test hook only exists in builds made with `VITE_GEDIT_TEST=1`. The production bundle must not contain `__gedit`; CI checks this.
 - `tests/runtime/harness/harness.rs` is compiled only inside the patched copy, so `cargo fmt` and `clippy` in `src-tauri/` never see it. Run `rustfmt --edition 2021 tests/runtime/harness/harness.rs` after editing it; CI checks the formatting.

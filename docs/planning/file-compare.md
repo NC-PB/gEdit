@@ -4,20 +4,26 @@ Compare two NC programs side by side, for example a re-posted program against th
 
 Tag format: `Priority · Size · Delivery`.
 
+> **Status.** Design note from 2026-09-19. What shipped is described in the user guide ([Comparing two programs](../user/README.md#comparing-two-programs)); where this note and the guide differ, the guide is right. Status per section: starting a comparison, the review mode with its ignore options, merging in both directions, export and two files on disk shipped (Phase 1 and M11). Not built: a numeric tolerance (cut), word-level marking (deferred to Phase 4) and the aligned diff with merge (Phase 4, only if review mode proves too limited). The `P2` tags below were met in M11, not earlier; the tag `P3` on the aligned diff means Phase 4 (the roadmap says which is which).
+
 ## Starting a comparison
 
 ### Compare with an open document, a file, or the saved version
 `P1 · S · Monaco + Core`
 
+**Status:** shipped in Phase 1 (`Cmd/Ctrl+Alt+C`).
+
 - Active document vs. another open document (chosen from a list if more than two are open).
 - Active document vs. a file on disk (file dialog).
 - Active document vs. its saved version on disk, to show unsaved changes. The [external change prompt](editor-core.md#external-change-detection) uses this too.
-- Two files on disk, neither open yet (P2).
+- Two files on disk, neither open yet (shipped in M11 as *Compare Two Files…*; both are opened as programs).
 
 The comparison opens in the editor area in place of the single editor and uses Monaco's diff editor. Closing the comparison returns to normal tabs. Both documents stay open, and neither is modified by closing.
 
 ### What Monaco's diff editor provides
 `P1 · S · Monaco`
+
+**Status:** as designed; the other side is read-only and the current document editable.
 
 - Side-by-side and inline views, with changed lines and changed characters highlighted.
 - Next/previous difference navigation (shortcuts).
@@ -32,6 +38,8 @@ That covers a useful first version with no custom diff code.
 ### Ignore options
 `P2 · M · Core`
 
+**Status:** shipped in M11 as the buttons of the review bar, with the defaults of each dialect; see [Review mode](../user/README.md#review-mode) for what each option never hides.
+
 Options per profile, adjustable in the compare toolbar:
 
 | Option | Effect |
@@ -41,12 +49,15 @@ Options per profile, adjustable in the compare toolbar:
 | Ignore comments | Uses the profile's comment syntax. A line that is only a comment disappears from the comparison. |
 | Ignore case | `g1 x10` equals `G1 X10` |
 | Ignore number format | Leading zeros, trailing zeros and an explicit plus sign: `X+05.500` equals `X5.5`, `G01` equals `G1` |
-| Numeric tolerance | Values within ± tolerance count as equal, for example 0.001 for rounding differences between post versions |
+| Numeric tolerance | *Cut.* Values within ± tolerance would count as equal. Not built: `X10.0001` and `X10.` are two different values, because an unseen difference of a thousandth is what the check is for. The profile's `compare.tolerance` is ignored |
+| Cycle names | *Added in M11, Klartext only:* the cycle name in the control's dialog language (`CYCL DEF 200 BOHREN` against `... DRILLING`) and the label of an old numbered cycle. Off to begin with |
 
 The decimal point needs care. On Fanuc-style controls, `X10` and `X10.` can mean different values ([syntax-fanuc.md](syntax/syntax-fanuc.md)). When the profile marks the decimal point as significant, number normalization keeps the presence of the point.
 
 ### NC-aware review mode
 `P2 · S · Core`
+
+**Status:** shipped in M11. Merging is available in the raw view only, as designed.
 
 First implementation of the ignore options, at low cost. Both texts are normalized line by line (normalizing each word through the tokenizer) and the normalized texts are shown in a read-only Monaco diff editor. A toggle switches back to the raw view. Line numbers in the normalized view map to the original lines, so "go to this line in the document" still works. Normalization code is shared with scripts through the [tokenizer](nc-transformations.md#nc-tokenizer-and-modal-interpreter).
 
@@ -55,10 +66,14 @@ Limitation: merging is only available in the raw view.
 ### Aligned NC-aware diff with merge
 `P3 · L · Core`
 
+**Status:** not built (Phase 4, only if review mode proves too limited).
+
 The full version: compute the line diff on the normalized lines (a Myers or patience diff in TypeScript), then show the **original** text in two synced editors. Differences are decorations, and view zones fill gaps so matching lines stay level. Merging copies original lines. Needed only if review mode plus raw merge turns out to be too limiting.
 
 ### Word-level marking
 `P2 · S · Core`
+
+**Status:** not built (deferred to Phase 4).
 
 Inside a changed line, mark the whole NC word that differs (`F1200` → `F1000` highlights both words completely), not single digits. Uses the tokenizer on both lines. It applies to review mode and later to the aligned diff.
 
@@ -67,6 +82,8 @@ Inside a changed line, mark the whole NC word that differs (`F1200` → `F1000` 
 ### Copy differences in both directions
 `P2 · M · Core`
 
+**Status:** shipped in M11 (`Cmd/Ctrl+Alt+Right`, `Cmd/Ctrl+Alt+Left`, the buttons ← and →, Shift+click for one line).
+
 Copy the current difference block from left to right or right to left (shortcuts and gutter buttons). Monaco only reverts from original to modified. The other direction is added with edits on the left model. Each merge is one undo step in the target document. An option jumps to the next difference after a merge. A single-line mode copies only the line at the cursor instead of the whole block.
 
 ## Output
@@ -74,10 +91,14 @@ Copy the current difference block from left to right or right to left (shortcuts
 ### Export differences
 `P2 · S · Core`
 
+**Status:** shipped in M11 as a unified diff in a new tab (raw or review text); the two-column listing and a file export were not built.
+
 Save a unified diff (raw or normalized) or a simple two-column listing as a text file, or open it in a new tab. Use: change record for program revisions and approvals.
 
 ### Compare colors
 `P2 · S · Core`
+
+**Status:** as designed: the diff colors follow the theme.
 
 Colors for inserted, removed and changed lines and changed words come from the theme and have light and dark variants ([settings-ui.md](settings-ui.md#themes-and-colors)).
 

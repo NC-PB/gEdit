@@ -899,7 +899,7 @@ Being clear about this saves disappointment on the shop floor.
   paths) gEdit can show the channels apart and check that the wait codes fit each other. It
   does not know what a wait does at the machine, it reorders and synchronizes nothing, and a
   clean check is no proof that the program runs. Showing two channels **side by side** is not
-  there; it is a Phase 4 item, and today you step between the channels. **Split into Channel
+  there; it is planned for a later version, and today you step between the channels. **Split into Channel
   Documents** makes copies for reading: nothing you change in them comes back into the
   program. See [Channels](channels.md).
 - **A profile of your own describes; it does not compute.** It changes how a dialect's
