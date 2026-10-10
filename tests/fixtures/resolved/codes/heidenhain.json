@@ -64,6 +64,42 @@
       "description": "Z part of the surface normal vector in an LN block. CAM writes all three parts.",
       "label": "Surface normal Z"
     },
+    "P1X": {
+      "description": "In PLANE POINTS, the X coordinate of the first of the three points that define the tilted plane. In a free-contour (FK) block, the X coordinate of a point the line or arc passes through.",
+      "label": "Point 1, X coordinate"
+    },
+    "P1Y": {
+      "description": "In PLANE POINTS, the Y coordinate of the first of the three points that define the tilted plane. In a free-contour (FK) block, the Y coordinate of a point the line or arc passes through.",
+      "label": "Point 1, Y coordinate"
+    },
+    "P1Z": {
+      "description": "In PLANE POINTS, the Z coordinate of the first of the three points that define the tilted plane.",
+      "label": "Point 1, Z coordinate"
+    },
+    "P2X": {
+      "description": "In PLANE POINTS, the X coordinate of the second of the three points that define the tilted plane. In a free-contour (FK) block, the X coordinate of a point the line or arc passes through.",
+      "label": "Point 2, X coordinate"
+    },
+    "P2Y": {
+      "description": "In PLANE POINTS, the Y coordinate of the second of the three points that define the tilted plane. In a free-contour (FK) block, the Y coordinate of a point the line or arc passes through.",
+      "label": "Point 2, Y coordinate"
+    },
+    "P2Z": {
+      "description": "In PLANE POINTS, the Z coordinate of the second of the three points that define the tilted plane.",
+      "label": "Point 2, Z coordinate"
+    },
+    "P3X": {
+      "description": "In PLANE POINTS, the X coordinate of the third point, which lies on the side the tilted secondary axis points to. In a free-contour (FK) arc block, the X coordinate of a third point the arc passes through.",
+      "label": "Point 3, X coordinate"
+    },
+    "P3Y": {
+      "description": "In PLANE POINTS, the Y coordinate of the third point, which lies on the side the tilted secondary axis points to. In a free-contour (FK) arc block, the Y coordinate of a third point the arc passes through.",
+      "label": "Point 3, Y coordinate"
+    },
+    "P3Z": {
+      "description": "In PLANE POINTS, the Z coordinate of the third point, which lies on the side the tilted secondary axis points to.",
+      "label": "Point 3, Z coordinate"
+    },
     "PA": {
       "description": "Angle of the point around the pole that CC set.",
       "label": "Polar angle"
@@ -119,6 +155,10 @@
     "V": {
       "description": "Extra linear axis parallel to Y.",
       "label": "V axis"
+    },
+    "VC": {
+      "description": "In FUNCTION TURNDATA SPIN, VC:120 is the cutting speed the turning spindle keeps while constant cutting speed is on (VCONST:ON).",
+      "label": "Cutting speed (turning)"
     },
     "W": {
       "description": "Extra linear axis parallel to Z.",
@@ -470,6 +510,15 @@
       "label": "Feed from the tool call"
     },
     {
+      "code": "VC",
+      "description": "VC:120 in FUNCTION TURNDATA SPIN gives the cutting speed of the turning spindle while constant cutting speed is on (VCONST:ON); the control changes the spindle speed with the distance of the cutting edge from the turning centre.",
+      "label": "Cutting speed (turning)",
+      "review": "pending",
+      "sets": {
+        "speedUnit": "surface"
+      }
+    },
+    {
       "code": "LBL",
       "description": "Marks a jump target, given as a number or a name in quotes. LBL 0 marks the end of a subprogram and may appear many times; every other label may be set once.",
       "group": "subprogram",
@@ -566,7 +615,18 @@
         "C"
       ],
       "group": "tilt",
-      "label": "Working plane (older tilt cycle)"
+      "label": "Working plane (older tilt cycle)",
+      "ownWords": [
+        "F"
+      ],
+      "params": [
+        {
+          "address": "F",
+          "label": "Feed for positioning the rotary axes automatically",
+          "min": 0
+        }
+      ],
+      "review": "pending"
     },
     {
       "axisWords": "data",
@@ -1420,6 +1480,1069 @@
       }
     },
     {
+      "code": "CYCL DEF 251",
+      "description": "Mills a rectangular pocket: roughing, finishing or both. When the cycle is called, the tool stands at the pocket's centre or at one of its corners, as Q367 says; the cycle positions itself in the tool axis. Q439 is written by newer software only.",
+      "group": "cycle",
+      "label": "Rectangular pocket",
+      "params": [
+        {
+          "address": "Q215",
+          "label": "Machining scope: 0 roughing and finishing, 1 roughing only, 2 finishing only",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q218",
+          "label": "First side length, parallel to the main axis of the plane",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q219",
+          "label": "Second side length, parallel to the secondary axis of the plane",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q220",
+          "label": "Corner radius, 0 the tool radius",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q368",
+          "label": "Finishing allowance on the side",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q224",
+          "label": "Angle the whole pocket is turned by, about the position the tool stands at when the cycle is called",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q367",
+          "label": "Where the tool stands when the cycle is called: 0 the pocket centre, 1 the lower left corner, 2 the lower right, 3 the upper right, 4 the upper left",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q207",
+          "label": "Milling feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q351",
+          "label": "Milling direction: +1 climb, -1 conventional",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q201",
+          "label": "Depth, negative into the material",
+          "max": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q202",
+          "label": "Infeed depth per cut",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q369",
+          "label": "Finishing allowance on the floor",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q206",
+          "label": "Plunging feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q338",
+          "label": "Infeed for finishing in the tool axis, 0 in one cut",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q200",
+          "label": "Safety clearance above the surface",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q203",
+          "label": "Workpiece surface in the tool axis",
+          "position": "tool-axis",
+          "required": true
+        },
+        {
+          "address": "Q204",
+          "label": "Second clearance for retracting",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q370",
+          "label": "Path overlap: this factor times the tool radius is the side step",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q366",
+          "label": "Plunging: 0 straight down, 1 on a helix, 2 back and forth",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q385",
+          "label": "Finishing feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q439",
+          "label": "What the programmed rates refer to: 0 the tool centre path, 1 the cutting edge when finishing the side, 2 the cutting edge when finishing side and floor, 3 always the cutting edge",
+          "position": "none"
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "cycle": "define"
+      }
+    },
+    {
+      "code": "CYCL DEF 252",
+      "description": "Mills a circular pocket around the position the tool stands at when the cycle is called: roughing, finishing or both. The cycle positions itself in the tool axis. Q439 is written by newer software only.",
+      "group": "cycle",
+      "label": "Circular pocket",
+      "params": [
+        {
+          "address": "Q215",
+          "label": "Machining scope: 0 roughing and finishing, 1 roughing only, 2 finishing only",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q223",
+          "label": "Diameter of the finished pocket",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q368",
+          "label": "Finishing allowance on the side",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q207",
+          "label": "Milling feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q351",
+          "label": "Milling direction: +1 climb, -1 conventional",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q201",
+          "label": "Depth, negative into the material",
+          "max": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q202",
+          "label": "Infeed depth per cut",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q369",
+          "label": "Finishing allowance on the floor",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q206",
+          "label": "Plunging feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q338",
+          "label": "Infeed for finishing in the tool axis, 0 in one cut",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q200",
+          "label": "Safety clearance above the surface",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q203",
+          "label": "Workpiece surface in the tool axis",
+          "position": "tool-axis",
+          "required": true
+        },
+        {
+          "address": "Q204",
+          "label": "Second clearance for retracting",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q370",
+          "label": "Path overlap: this factor times the tool radius is the side step",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q366",
+          "label": "Plunging: 0 straight down, 1 on a helix",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q385",
+          "label": "Finishing feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q439",
+          "label": "What the programmed rates refer to: 0 the tool centre path, 1 the cutting edge when finishing the side, 2 the cutting edge when finishing side and floor, 3 always the cutting edge",
+          "position": "none"
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "cycle": "define"
+      }
+    },
+    {
+      "code": "CYCL DEF 253",
+      "description": "Mills a straight slot: roughing, finishing or both. When the cycle is called, the tool stands at the slot's centre or at one of its ends, as Q367 says. Q439 is written by newer software only.",
+      "group": "cycle",
+      "label": "Slot milling",
+      "params": [
+        {
+          "address": "Q215",
+          "label": "Machining scope: 0 roughing and finishing, 1 roughing only, 2 finishing only",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q218",
+          "label": "Slot length, parallel to the main axis of the plane",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q219",
+          "label": "Slot width, parallel to the secondary axis of the plane; equal to the tool diameter, the slot is roughed only",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q368",
+          "label": "Finishing allowance on the side",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q374",
+          "label": "Angle the whole slot is turned by, about the position the tool stands at when the cycle is called",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q367",
+          "label": "Where the tool stands when the cycle is called: 0 the slot centre, 1 the left end, 2 the centre of the left end circle, 3 the centre of the right end circle, 4 the right end",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q207",
+          "label": "Milling feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q351",
+          "label": "Milling direction: +1 climb, -1 conventional",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q201",
+          "label": "Depth, negative into the material",
+          "max": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q202",
+          "label": "Infeed depth per cut",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q369",
+          "label": "Finishing allowance on the floor",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q206",
+          "label": "Plunging feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q338",
+          "label": "Infeed for finishing in the tool axis, 0 in one cut",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q200",
+          "label": "Safety clearance above the surface",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q203",
+          "label": "Workpiece surface in the tool axis",
+          "position": "tool-axis",
+          "required": true
+        },
+        {
+          "address": "Q204",
+          "label": "Second clearance for retracting",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q366",
+          "label": "Plunging: 0 straight down, 1 or 2 back and forth",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q385",
+          "label": "Finishing feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q439",
+          "label": "What the programmed rates refer to: 0 the tool centre path, 1 the cutting edge when finishing the side, 2 the cutting edge when finishing side and floor, 3 always the cutting edge",
+          "position": "none"
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "cycle": "define"
+      }
+    },
+    {
+      "code": "CYCL DEF 254",
+      "description": "Mills a slot on a pitch circle, or several of them one angle step apart. The circle centre is Q216, Q217 when Q367 is 0; otherwise the position the tool stands at when the cycle is called. Q439 is written by newer software only.",
+      "group": "cycle",
+      "label": "Circular slot",
+      "params": [
+        {
+          "address": "Q215",
+          "label": "Machining scope: 0 roughing and finishing, 1 roughing only, 2 finishing only",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q219",
+          "label": "Slot width; equal to the tool diameter, the slot is roughed only",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q368",
+          "label": "Finishing allowance on the side",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q375",
+          "label": "Diameter of the pitch circle",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q367",
+          "label": "Where the slot lies: 0 by the centre Q216, Q217 and the start angle; 1 the tool stands at the centre of the left end circle, 2 at the middle of the slot, 3 at the centre of the right end circle",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q216",
+          "label": "Centre of the pitch circle on the main axis of the plane, as an absolute position; used when Q367 is 0",
+          "position": "other",
+          "required": true
+        },
+        {
+          "address": "Q217",
+          "label": "Centre of the pitch circle on the secondary axis of the plane, as an absolute position; used when Q367 is 0",
+          "position": "other",
+          "required": true
+        },
+        {
+          "address": "Q376",
+          "label": "Polar angle of the start point",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q248",
+          "label": "Opening angle of the slot",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q378",
+          "label": "Angle step from one slot to the next, about the circle centre",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q377",
+          "label": "Number of slots on the pitch circle",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q207",
+          "label": "Milling feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q351",
+          "label": "Milling direction: +1 climb, -1 conventional",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q201",
+          "label": "Depth, negative into the material",
+          "max": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q202",
+          "label": "Infeed depth per cut",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q369",
+          "label": "Finishing allowance on the floor",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q206",
+          "label": "Plunging feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q338",
+          "label": "Infeed for finishing in the tool axis, 0 in one cut",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q200",
+          "label": "Safety clearance above the surface",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q203",
+          "label": "Workpiece surface in the tool axis",
+          "position": "tool-axis",
+          "required": true
+        },
+        {
+          "address": "Q204",
+          "label": "Second clearance for retracting",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q366",
+          "label": "Plunging: 0 straight down, 1 or 2 back and forth",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q385",
+          "label": "Finishing feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q439",
+          "label": "What the programmed rates refer to: 0 the tool centre path, 1 the cutting edge when finishing the side, 2 the cutting edge when finishing side and floor, 3 always the cutting edge",
+          "position": "none"
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "cycle": "define"
+      }
+    },
+    {
+      "code": "CYCL DEF 256",
+      "description": "Mills a rectangular stud out of the stock sizes Q424 and Q425, around the position the tool stands at when the cycle is called, or from one of its corners as Q367 says. Q215, Q369, Q338 and Q385 are written by newer software only.",
+      "group": "cycle",
+      "label": "Rectangular stud",
+      "params": [
+        {
+          "address": "Q218",
+          "label": "First side length of the stud, parallel to the main axis of the plane",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q424",
+          "label": "Stock size on the first side, larger than Q218",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q219",
+          "label": "Second side length of the stud, parallel to the secondary axis of the plane",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q425",
+          "label": "Stock size on the second side, larger than Q219",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q220",
+          "label": "Corner radius (positive) or chamfer length (negative)",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q368",
+          "label": "Finishing allowance on the side",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q224",
+          "label": "Angle the whole stud is turned by, about the position the tool stands at when the cycle is called",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q367",
+          "label": "Where the tool stands when the cycle is called: 0 the stud centre, 1 the lower left corner, 2 the lower right, 3 the upper right, 4 the upper left",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q207",
+          "label": "Milling feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q351",
+          "label": "Milling direction: +1 climb, -1 conventional",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q201",
+          "label": "Depth, negative into the material",
+          "max": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q202",
+          "label": "Infeed depth per cut",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q206",
+          "label": "Plunging feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q200",
+          "label": "Safety clearance above the surface",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q203",
+          "label": "Workpiece surface in the tool axis",
+          "position": "tool-axis",
+          "required": true
+        },
+        {
+          "address": "Q204",
+          "label": "Second clearance for retracting",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q370",
+          "label": "Path overlap: this factor times the tool radius is the side step",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q437",
+          "label": "Where the tool approaches: 0 right of the stud, 1 the lower left corner, 2 the lower right, 3 the upper right, 4 the upper left",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q215",
+          "label": "Machining scope: 0 roughing and finishing, 1 roughing only, 2 finishing only",
+          "position": "none"
+        },
+        {
+          "address": "Q369",
+          "label": "Finishing allowance on the floor",
+          "position": "none"
+        },
+        {
+          "address": "Q338",
+          "label": "Infeed for finishing in the tool axis, 0 in one cut",
+          "position": "none"
+        },
+        {
+          "address": "Q385",
+          "label": "Finishing feed",
+          "min": 0,
+          "position": "none"
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "cycle": "define"
+      }
+    },
+    {
+      "code": "CYCL DEF 257",
+      "description": "Mills a circular stud out of the stock diameter Q222, around the position the tool stands at when the cycle is called. Q215, Q369, Q338 and Q385 are written by newer software only.",
+      "group": "cycle",
+      "label": "Circular stud",
+      "params": [
+        {
+          "address": "Q223",
+          "label": "Diameter of the finished stud",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q222",
+          "label": "Stock diameter, larger than Q223",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q368",
+          "label": "Finishing allowance on the side",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q207",
+          "label": "Milling feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q351",
+          "label": "Milling direction: +1 climb, -1 conventional",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q201",
+          "label": "Depth, negative into the material",
+          "max": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q202",
+          "label": "Infeed depth per cut",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q206",
+          "label": "Plunging feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q200",
+          "label": "Safety clearance above the surface",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q203",
+          "label": "Workpiece surface in the tool axis",
+          "position": "tool-axis",
+          "required": true
+        },
+        {
+          "address": "Q204",
+          "label": "Second clearance for retracting",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q370",
+          "label": "Path overlap: this factor times the tool radius is the side step",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q376",
+          "label": "Polar angle about the stud centre the tool approaches from; -1 the control works it out",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q215",
+          "label": "Machining scope: 0 roughing and finishing, 1 roughing only, 2 finishing only",
+          "position": "none"
+        },
+        {
+          "address": "Q369",
+          "label": "Finishing allowance on the floor",
+          "position": "none"
+        },
+        {
+          "address": "Q338",
+          "label": "Infeed for finishing in the tool axis, 0 in one cut",
+          "position": "none"
+        },
+        {
+          "address": "Q385",
+          "label": "Finishing feed",
+          "min": 0,
+          "position": "none"
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "cycle": "define"
+      }
+    },
+    {
+      "code": "CYCL DEF 14",
+      "description": "Lists, in sub-block 14.1, the labels of up to 12 subprograms whose contours are laid over each other into one contour for the SL cycles that follow (21 to 25). It acts from its definition on and is never called.",
+      "group": "cycle",
+      "label": "Contour",
+      "review": "pending",
+      "sets": {}
+    },
+    {
+      "code": "CYCL DEF 21",
+      "description": "Drills the plunging points for a later clearing-out with a tool that cannot cut over its centre. The depth, the allowances, the surface and the clearances come from cycle 20 CONTOUR DATA, defined before it; the contour from cycle 14.",
+      "group": "cycle",
+      "label": "Pilot drilling (SL)",
+      "params": [
+        {
+          "address": "Q10",
+          "label": "Infeed depth per cut, negative when working towards minus",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q11",
+          "label": "Plunging feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q13",
+          "label": "Clearing-out tool the points are drilled for: its number (QS13 for its name), 0 the tool in the spindle",
+          "position": "none",
+          "required": true
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "cycle": "define"
+      }
+    },
+    {
+      "code": "CYCL DEF 22",
+      "description": "Clears out the contour from the inside out, depth by depth, around its islands. With a tool that roughed before (Q18), only what that tool left is cleared. The depth, the allowances, the surface and the clearances come from cycle 20 CONTOUR DATA, defined before it; the contour from cycle 14. Q401 and Q404 are written by newer software only.",
+      "group": "cycle",
+      "label": "Clearing out (SL)",
+      "params": [
+        {
+          "address": "Q10",
+          "label": "Infeed depth per cut",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q11",
+          "label": "Plunging feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q12",
+          "label": "Milling feed in the plane",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q18",
+          "label": "Tool that roughed before: its number (QS18 for its name), 0 none",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q19",
+          "label": "Feed when plunging back and forth",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q208",
+          "label": "Retract feed, 0 the milling feed",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q401",
+          "label": "Percentage the milling rate drops to while the tool cuts with its whole circumference",
+          "position": "none"
+        },
+        {
+          "address": "Q404",
+          "label": "Rework strategy: 0 move along the contour at depth between the areas, 1 retract to the safety clearance between them",
+          "position": "none"
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "cycle": "define"
+      }
+    },
+    {
+      "code": "CYCL DEF 23",
+      "description": "Finishes the floor allowance that the clearing-out left. The depth, the allowances, the surface and the clearances come from cycle 20 CONTOUR DATA, defined before it; the contour from cycle 14.",
+      "group": "cycle",
+      "label": "Floor finishing (SL)",
+      "params": [
+        {
+          "address": "Q11",
+          "label": "Plunging feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q12",
+          "label": "Milling feed in the plane",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q208",
+          "label": "Retract feed, 0 the milling feed",
+          "position": "none",
+          "required": true
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "cycle": "define"
+      }
+    },
+    {
+      "code": "CYCL DEF 24",
+      "description": "Finishes the side allowance, each part contour on its own. The depth, the allowances, the surface and the clearances come from cycle 20 CONTOUR DATA, defined before it; the contour from cycle 14.",
+      "group": "cycle",
+      "label": "Side finishing (SL)",
+      "params": [
+        {
+          "address": "Q9",
+          "label": "Direction: +1 counter-clockwise, -1 clockwise",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q10",
+          "label": "Infeed depth per cut",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q11",
+          "label": "Plunging feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q12",
+          "label": "Milling feed in the plane",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q14",
+          "label": "Side allowance left after finishing, smaller than the one of cycle 20",
+          "position": "none",
+          "required": true
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "cycle": "define"
+      }
+    },
+    {
+      "code": "CYCL DEF 25",
+      "description": "Mills along the first contour of cycle 14, open or closed, in one or several infeeds. It needs no cycle 20: the depth, the surface and the clearance height are its own parameters. Q18, Q446, Q447 and Q448 are written by newer software only.",
+      "group": "cycle",
+      "label": "Contour train",
+      "params": [
+        {
+          "address": "Q1",
+          "label": "Milling depth, negative into the material",
+          "max": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q3",
+          "label": "Finishing allowance on the side",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q5",
+          "label": "Workpiece surface in the tool axis",
+          "position": "tool-axis",
+          "required": true
+        },
+        {
+          "address": "Q7",
+          "label": "Clearance height in the tool axis, as an absolute position, for moves in between and the retract at the end",
+          "position": "tool-axis",
+          "required": true
+        },
+        {
+          "address": "Q10",
+          "label": "Infeed depth per cut",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q11",
+          "label": "Plunging feed",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q12",
+          "label": "Milling feed in the plane",
+          "min": 0,
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q15",
+          "label": "Milling direction: +1 climb, -1 conventional, 0 alternating with several infeeds",
+          "position": "none",
+          "required": true
+        },
+        {
+          "address": "Q18",
+          "label": "Tool that roughed before: its number (QS18 for its name), 0 none",
+          "position": "none"
+        },
+        {
+          "address": "Q446",
+          "label": "Residual material accepted, in mm",
+          "position": "none"
+        },
+        {
+          "address": "Q447",
+          "label": "Largest distance between two areas to rework that is travelled at depth without lifting",
+          "position": "none"
+        },
+        {
+          "address": "Q448",
+          "label": "Extension of the tool path at the start and the end of the contour",
+          "position": "none"
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "cycle": "define"
+      }
+    },
+    {
       "code": "CYCL DEF 247",
       "description": "Makes a line of the preset table, Q339, the new datum. Datum shift, mirror image, rotation and scaling that were in force are reset by it. It acts where it is defined and is never called.",
       "frame": "close",
@@ -1447,11 +2570,22 @@
       ],
       "group": "tilt",
       "label": "Tilt the working plane by spatial angles",
+      "ownWords": [
+        "F"
+      ],
+      "params": [
+        {
+          "address": "F",
+          "label": "Feed for the tilting move",
+          "min": 0
+        }
+      ],
       "requires": [
         "MOVE",
         "TURN",
         "STAY"
-      ]
+      ],
+      "review": "pending"
     },
     {
       "code": "PLANE PROJECTED",
@@ -1464,11 +2598,22 @@
       ],
       "group": "tilt",
       "label": "Tilt the working plane by projection angles",
+      "ownWords": [
+        "F"
+      ],
+      "params": [
+        {
+          "address": "F",
+          "label": "Feed for the tilting move",
+          "min": 0
+        }
+      ],
       "requires": [
         "MOVE",
         "TURN",
         "STAY"
-      ]
+      ],
+      "review": "pending"
     },
     {
       "code": "PLANE EULER",
@@ -1481,11 +2626,22 @@
       ],
       "group": "tilt",
       "label": "Tilt the working plane by Euler angles",
+      "ownWords": [
+        "F"
+      ],
+      "params": [
+        {
+          "address": "F",
+          "label": "Feed for the tilting move",
+          "min": 0
+        }
+      ],
       "requires": [
         "MOVE",
         "TURN",
         "STAY"
-      ]
+      ],
+      "review": "pending"
     },
     {
       "code": "PLANE VECTOR",
@@ -1493,11 +2649,22 @@
       "frame": "open",
       "group": "tilt",
       "label": "Tilt the working plane by two vectors",
+      "ownWords": [
+        "F"
+      ],
+      "params": [
+        {
+          "address": "F",
+          "label": "Feed for the tilting move",
+          "min": 0
+        }
+      ],
       "requires": [
         "MOVE",
         "TURN",
         "STAY"
-      ]
+      ],
+      "review": "pending"
     },
     {
       "code": "PLANE POINTS",
@@ -1505,11 +2672,22 @@
       "frame": "open",
       "group": "tilt",
       "label": "Tilt the working plane through three points",
+      "ownWords": [
+        "F"
+      ],
+      "params": [
+        {
+          "address": "F",
+          "label": "Feed for the tilting move",
+          "min": 0
+        }
+      ],
       "requires": [
         "MOVE",
         "TURN",
         "STAY"
-      ]
+      ],
+      "review": "pending"
     },
     {
       "code": "PLANE RELATIV",
@@ -1517,11 +2695,22 @@
       "frame": "open",
       "group": "tilt",
       "label": "Tilt the working plane further by one angle",
+      "ownWords": [
+        "F"
+      ],
+      "params": [
+        {
+          "address": "F",
+          "label": "Feed for the tilting move",
+          "min": 0
+        }
+      ],
       "requires": [
         "MOVE",
         "TURN",
         "STAY"
-      ]
+      ],
+      "review": "pending"
     },
     {
       "axisWords": "data",
@@ -1530,11 +2719,22 @@
       "frame": "open",
       "group": "tilt",
       "label": "Tilt the working plane by axis angles",
+      "ownWords": [
+        "F"
+      ],
+      "params": [
+        {
+          "address": "F",
+          "label": "Feed for the tilting move",
+          "min": 0
+        }
+      ],
       "requires": [
         "MOVE",
         "TURN",
         "STAY"
-      ]
+      ],
+      "review": "pending"
     },
     {
       "code": "PLANE RESET",
@@ -1542,11 +2742,22 @@
       "frame": "close",
       "group": "tilt",
       "label": "Reset the tilted working plane",
+      "ownWords": [
+        "F"
+      ],
+      "params": [
+        {
+          "address": "F",
+          "label": "Feed for the tilting move",
+          "min": 0
+        }
+      ],
       "requires": [
         "MOVE",
         "TURN",
         "STAY"
-      ]
+      ],
+      "review": "pending"
     },
     {
       "code": "FUNCTION TCPM",
@@ -1759,6 +2970,9 @@
       "group": "tcpm",
       "label": "Keep the tool tip on the path",
       "modal": true,
+      "ownWords": [
+        "F"
+      ],
       "params": [
         {
           "address": "F",
@@ -1766,6 +2980,7 @@
           "min": 0
         }
       ],
+      "review": "pending",
       "sets": {
         "tcp": "on"
       }
@@ -1805,6 +3020,9 @@
       "description": "Pulls the tool back along its own axis by the distance after MB, or to the travel limit with MB MAX. It counts for this block only.",
       "group": "program",
       "label": "Retract along the tool axis",
+      "ownWords": [
+        "F"
+      ],
       "params": [
         {
           "address": "MB",
@@ -1816,7 +3034,8 @@
           "label": "Feed for the retract",
           "min": 0
         }
-      ]
+      ],
+      "review": "pending"
     },
     {
       "code": "MOVE",

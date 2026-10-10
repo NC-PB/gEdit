@@ -378,6 +378,15 @@ export interface CodeEntry {
   /** M10 (WP10.2). The block of this code has to write at least one of these addresses or keywords (Klartext `PLANE …` one of `MOVE`, `TURN`, `STAY`). */
   requires?: string[];
   /**
+   * B1 (A6, owner decision of 2026-10-10). Addresses this code takes as words of its own when they
+   * stand **behind** it in its block: the words written there belong to the code, not to the
+   * path. Klartext `M128 F800` is the feed of the compensating moves, `PLANE … MOVE … F2000`
+   * the feed of the tilting move, cycle 19's `F` the feed of the rotary axes — none of them is
+   * a path feed. A word in front of the code is not its own (`L X+10 F500 M128 F800`: `F500`
+   * is the path feed). Read by the scripts (`gedit_nc.FeedModeTracker.own_word_of`).
+   */
+  ownWords?: string[];
+  /**
    * M10 (WP10.2). The blocks from an `'open'` code to its `'close'` describe a contour a later
    * cycle machines (the Okuma LAP shape between `G81`/`G82`/`G83` and `G80`); they do not move.
    */

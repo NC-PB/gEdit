@@ -4,13 +4,13 @@
     {
       "line": 8,
       "severity": "warning",
-      "message": "N70 CYCLE61(50,0,2,-1,-10,-10,130,90,2,40,0,900,31,0): CYCLE61 is not in the code database, so nobody reviewed its positions.",
+      "message": "N70 CYCLE76(50,0,2,-1,-10,-10,130,90,2,40,0,900,31,0): CYCLE76 is not in the code database, so nobody reviewed its positions.",
       "reason": "cycle-not-reviewed"
     },
     {
       "line": 10,
       "severity": "warning",
-      "message": "N90 POCKET4(10,0,2,-8,40,20,10,10,1,0.1,0.1,200,100,0,0,0,0…: POCKET4 is not in the code database, so nobody reviewed its positions.",
+      "message": "N90 CYCLE77(10,0,2,-8,40,20,10,10,1,0.1,0.1,200,100,0,0,0,0…: CYCLE77 is not in the code database, so nobody reviewed its positions.",
       "reason": "cycle-not-reviewed"
     }
   ]

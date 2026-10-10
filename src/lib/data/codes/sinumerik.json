@@ -167,6 +167,30 @@
       "description": "Stops at the end of every block until another path mode replaces it, so each corner is cut sharp."
     },
     {
+      "code": "G601",
+      "group": "exactstop",
+      "modal": true,
+      "review": "pending",
+      "label": "Exact stop criterion: fine",
+      "description": "The next block starts once every axis of the move is inside its fine exact-stop window. It only acts while G60 or G9 is in force."
+    },
+    {
+      "code": "G602",
+      "group": "exactstop",
+      "modal": true,
+      "review": "pending",
+      "label": "Exact stop criterion: coarse",
+      "description": "The next block starts once every axis of the move is inside its coarse exact-stop window. It only acts while G60 or G9 is in force."
+    },
+    {
+      "code": "G603",
+      "group": "exactstop",
+      "modal": true,
+      "review": "pending",
+      "label": "Exact stop criterion: end of interpolation",
+      "description": "The next block starts as soon as the control has brought the set speed of every axis to zero, while the axes still lag behind; corners come out slightly rounded. It only acts while G60 or G9 is in force."
+    },
+    {
       "code": "G64",
       "group": "pathmode",
       "modal": true,
@@ -188,10 +212,28 @@
       "description": "Rounds a corner within the tolerance each axis is allowed. Programs written by CAM often carry it."
     },
     {
+      "code": "G643",
+      "group": "pathmode",
+      "modal": true,
+      "review": "pending",
+      "label": "Continuous path, rounded by tolerance within the block",
+      "description": "Rounds a corner within the defined tolerances like G642, but without a rounding block of its own: the rounding moves are put inside the blocks, axis by axis, and the rounding distance may differ from one axis to the next."
+    },
+    {
+      "code": "G644",
+      "group": "pathmode",
+      "modal": true,
+      "review": "pending",
+      "label": "Continuous path, rounded with the most dynamics",
+      "description": "Rounds a corner as fast as the axes allow. With a kinematic transformation active the control uses G642 instead."
+    },
+    {
       "code": "G645",
       "group": "pathmode",
       "modal": true,
-      "label": "Continuous path, rounded on tangential corners too"
+      "review": "pending",
+      "label": "Continuous path, rounded on tangential corners too",
+      "description": "Rounds corners like G642, and also inserts rounding at a tangential transition where the curvature of an axis jumps."
     },
     {
       "code": "G17",
@@ -1363,12 +1405,675 @@
       ]
     },
     {
+      "code": "CYCLE61",
+      "group": "cycle",
+      "sets": { "cycle": "start" },
+      "review": "pending",
+      "label": "Face milling cycle",
+      "description": "Mills a rectangular face from the stock height down to the finished height, roughing or finishing, in one direction or back and forth along the first or the second axis of the plane. The face lies between two corner points; its feed is argument 12.",
+      "params": [
+        {
+          "address": "_RTP",
+          "label": "Retraction plane, as an absolute position",
+          "position": "tool-axis"
+        },
+        {
+          "address": "_RFP",
+          "label": "Reference point on the tool axis: the stock height, as an absolute position",
+          "position": "tool-axis"
+        },
+        {
+          "address": "_SDIS",
+          "label": "Safety distance above the reference point, written without a sign",
+          "position": "none"
+        },
+        {
+          "address": "_DP",
+          "label": "Height of the finished face: an absolute position, or a depth from the reference point when the ones digit of _AMODE is 1",
+          "position": "tool-axis"
+        },
+        {
+          "address": "_PA",
+          "label": "Corner 1 on the first axis of the plane, as an absolute position",
+          "position": "other"
+        },
+        {
+          "address": "_PO",
+          "label": "Corner 1 on the second axis of the plane, as an absolute position",
+          "position": "other"
+        },
+        {
+          "address": "_LENG",
+          "label": "Corner 2 on the first axis: measured from corner 1, or an absolute position when the thousands digit of _AMODE is 1",
+          "position": "none"
+        },
+        {
+          "address": "_WID",
+          "label": "Corner 2 on the second axis: measured from corner 1, or an absolute position when the ten-thousands digit of _AMODE is 1",
+          "position": "none"
+        },
+        {
+          "address": "_MID",
+          "label": "Largest infeed in depth",
+          "position": "none"
+        },
+        {
+          "address": "_MIDA",
+          "label": "Largest step in the plane: a length, or a percentage of the tool diameter when the tens digit of _AMODE is 1",
+          "position": "none"
+        },
+        {
+          "address": "_FALD",
+          "label": "Finishing allowance in depth",
+          "position": "none"
+        },
+        {
+          "address": "_FFP1",
+          "label": "Machining feed",
+          "position": "none"
+        },
+        {
+          "address": "_VARI",
+          "label": "Kind of machining: ones 1 roughing, 2 finishing; tens the direction, 1 or 3 along the first axis, 2 or 4 along the second, 3 and 4 back and forth",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_LIM",
+          "label": "Limits, one digit each, 1 on: ones the first axis minus, tens the first axis plus, hundreds the second axis minus, thousands the second axis plus",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_DMODE",
+          "label": "Display mode, digit by digit: ones the plane while the cycle runs (0 the plane in force, 1 G17, 2 G18, 3 G19)",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_AMODE",
+          "label": "Alternative mode, digit by digit: whether the finished height and the second corner are absolute or measured, and the unit of _MIDA; 0 the reading of the parameters above",
+          "unit": "count",
+          "position": "mode"
+        }
+      ]
+    },
+    {
+      "code": "POCKET3",
+      "group": "cycle",
+      "sets": { "cycle": "start" },
+      "review": "pending",
+      "label": "Rectangular pocket milling cycle",
+      "description": "Mills a rectangular pocket with corner radii: roughing, finishing, finishing the edge only or chamfering, as _VARI says. The pocket stands at the reference point _PA, _PO in the plane, turned by _STA. Its feeds are its own arguments (_FFP1 in the plane, _FFD in depth). Older cycle versions take the first 23 arguments only.",
+      "params": [
+        {
+          "address": "_RTP",
+          "label": "Retraction plane, as an absolute position",
+          "position": "tool-axis"
+        },
+        {
+          "address": "_RFP",
+          "label": "Reference point on the tool axis, as an absolute position",
+          "position": "tool-axis"
+        },
+        {
+          "address": "_SDIS",
+          "label": "Safety distance above the reference point, written without a sign",
+          "position": "none"
+        },
+        {
+          "address": "_DP",
+          "label": "Pocket depth: an absolute position, or a depth from the reference point when the ones digit of _AMODE is 1",
+          "position": "tool-axis"
+        },
+        {
+          "address": "_LENG",
+          "label": "Pocket length, with a sign when the pocket is dimensioned from a corner",
+          "position": "none"
+        },
+        {
+          "address": "_WID",
+          "label": "Pocket width, with a sign when the pocket is dimensioned from a corner",
+          "position": "none"
+        },
+        {
+          "address": "_CRAD",
+          "label": "Corner radius of the pocket",
+          "position": "none"
+        },
+        {
+          "address": "_PA",
+          "label": "Reference point of the pocket on the first axis of the plane, as an absolute position",
+          "position": "other"
+        },
+        {
+          "address": "_PO",
+          "label": "Reference point of the pocket on the second axis of the plane, as an absolute position",
+          "position": "other"
+        },
+        {
+          "address": "_STA",
+          "label": "Angle between the pocket's length and the first axis of the plane",
+          "position": "none"
+        },
+        {
+          "address": "_MID",
+          "label": "Largest infeed in depth",
+          "position": "none"
+        },
+        {
+          "address": "_FAL",
+          "label": "Finishing allowance on the pocket wall",
+          "position": "none"
+        },
+        {
+          "address": "_FALD",
+          "label": "Finishing allowance on the pocket floor",
+          "position": "none"
+        },
+        {
+          "address": "_FFP1",
+          "label": "Feed in the plane",
+          "position": "none"
+        },
+        {
+          "address": "_FFD",
+          "label": "Feed for the infeed in depth",
+          "position": "none"
+        },
+        {
+          "address": "_CDIR",
+          "label": "Milling direction: 0 climb, 1 conventional (older versions also 2 with G2, 3 with G3)",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_VARI",
+          "label": "Kind of machining: ones 1 roughing, 2 finishing, 4 finishing the edge, 5 chamfering; tens how it plunges, 0 straight down with G0 into a pocket made before, 1 straight down with G1, 2 on a helix, 3 back and forth along the pocket",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_MIDA",
+          "label": "Largest step in the plane: a length, or a percentage of the tool diameter when the tens digit of _AMODE is 1",
+          "position": "none"
+        },
+        {
+          "address": "_AP1",
+          "label": "Length of the pocket made before (incremental)",
+          "position": "none"
+        },
+        {
+          "address": "_AP2",
+          "label": "Width of the pocket made before (incremental)",
+          "position": "none"
+        },
+        {
+          "address": "_AD",
+          "label": "Depth of the pocket made before (incremental)",
+          "position": "none"
+        },
+        {
+          "address": "_RAD1",
+          "label": "Radius of the helix when plunging on a helix, or the largest plunging angle when plunging back and forth",
+          "position": "none"
+        },
+        {
+          "address": "_DP1",
+          "label": "Depth per turn when plunging on a helix",
+          "position": "none"
+        },
+        {
+          "address": "_UMODE",
+          "label": "Reserved, written as 0 or left empty",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_FS",
+          "label": "Chamfer width",
+          "position": "none"
+        },
+        {
+          "address": "_ZFS",
+          "label": "Depth of the tool tip when chamfering: an absolute position, or measured when the hundreds digit of _AMODE is 1",
+          "position": "tool-axis"
+        },
+        {
+          "address": "_GMODE",
+          "label": "Geometry mode, digit by digit: hundreds machining or only the start point, thousands dimensioned from the centre or from a corner, ten-thousands complete or rework machining",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_DMODE",
+          "label": "Display mode, digit by digit: ones the plane while the cycle runs (0 the plane in force, 1 G17, 2 G18, 3 G19), tens whether the two feeds take the G94 or G95 in force",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_AMODE",
+          "label": "Alternative mode, digit by digit: whether the depth and the chamfering depth are absolute or measured, and the unit of _MIDA; 0 the reading of the parameters above",
+          "unit": "count",
+          "position": "mode"
+        }
+      ]
+    },
+    {
+      "code": "POCKET4",
+      "group": "cycle",
+      "sets": { "cycle": "start" },
+      "review": "pending",
+      "label": "Circular pocket milling cycle",
+      "description": "Mills a circular pocket: roughing, finishing, finishing the edge only or chamfering, as _VARI says, plane by plane or on a helix. The pocket's centre is _PA, _PO in the plane. Argument 5 is the radius unless the hundreds digit of _DMODE is 1, which makes it the diameter. Its feeds are its own arguments (_FFP1 in the plane, _FFD in depth). Older cycle versions take the first 19 arguments only.",
+      "params": [
+        {
+          "address": "_RTP",
+          "label": "Retraction plane, as an absolute position",
+          "position": "tool-axis"
+        },
+        {
+          "address": "_RFP",
+          "label": "Reference point on the tool axis, as an absolute position",
+          "position": "tool-axis"
+        },
+        {
+          "address": "_SDIS",
+          "label": "Safety distance above the reference point, written without a sign",
+          "position": "none"
+        },
+        {
+          "address": "_DP",
+          "label": "Pocket depth: an absolute position, or a depth from the reference point when the ones digit of _AMODE is 1",
+          "position": "tool-axis"
+        },
+        {
+          "address": "_CDIAM",
+          "label": "Pocket radius, or its diameter when the hundreds digit of _DMODE is 1",
+          "position": "none"
+        },
+        {
+          "address": "_PA",
+          "label": "Centre of the pocket on the first axis of the plane, as an absolute position",
+          "position": "other"
+        },
+        {
+          "address": "_PO",
+          "label": "Centre of the pocket on the second axis of the plane, as an absolute position",
+          "position": "other"
+        },
+        {
+          "address": "_MID",
+          "label": "Largest infeed in depth, or the largest helix pitch when machining on a helix",
+          "position": "none"
+        },
+        {
+          "address": "_FAL",
+          "label": "Finishing allowance on the pocket wall",
+          "position": "none"
+        },
+        {
+          "address": "_FALD",
+          "label": "Finishing allowance on the pocket floor",
+          "position": "none"
+        },
+        {
+          "address": "_FFP1",
+          "label": "Feed for machining in the plane",
+          "position": "none"
+        },
+        {
+          "address": "_FFD",
+          "label": "Feed for the infeed in depth",
+          "position": "none"
+        },
+        {
+          "address": "_CDIR",
+          "label": "Milling direction: 0 climb, 1 conventional (older versions also 2 with G2, 3 with G3)",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_VARI",
+          "label": "Kind of machining: ones 1 roughing, 2 finishing, 4 finishing the edge, 5 chamfering; tens how it plunges, 0 straight down with G0 into a pocket made before, 1 straight down with G1, 2 on a helix; thousands 0 plane by plane, 1 on a helix",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_MIDA",
+          "label": "Largest step in the plane: a length, or a percentage of the tool diameter when the tens digit of _AMODE is 1; 0 is 0.8 times the tool diameter",
+          "position": "none"
+        },
+        {
+          "address": "_AP1",
+          "label": "Radius of the pocket made before, or its diameter when the hundreds digit of _DMODE is 1 (incremental)",
+          "position": "none"
+        },
+        {
+          "address": "_AD",
+          "label": "Depth of the pocket made before (incremental)",
+          "position": "none"
+        },
+        {
+          "address": "_RAD1",
+          "label": "Radius of the helix when plunging on a helix",
+          "position": "none"
+        },
+        {
+          "address": "_DP1",
+          "label": "Depth per turn when plunging on a helix",
+          "position": "none"
+        },
+        {
+          "address": "_UMODE",
+          "label": "Reserved, written as 0 or left empty",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_FS",
+          "label": "Chamfer width",
+          "position": "none"
+        },
+        {
+          "address": "_ZFS",
+          "label": "Depth of the tool tip when chamfering: an absolute position, or measured when the hundreds digit of _AMODE is 1",
+          "position": "tool-axis"
+        },
+        {
+          "address": "_GMODE",
+          "label": "Geometry mode, digit by digit: hundreds machining or only the start point, ten-thousands complete or rework machining",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_DMODE",
+          "label": "Display mode, digit by digit: ones the plane while the cycle runs (0 the plane in force, 1 G17, 2 G18, 3 G19), tens whether the two feeds take the G94 or G95 in force, hundreds 1 when _CDIAM and _AP1 are diameters",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_AMODE",
+          "label": "Alternative mode, digit by digit: whether the depth and the chamfering depth are absolute or measured, and the unit of _MIDA; 0 the reading of the parameters above",
+          "unit": "count",
+          "position": "mode"
+        }
+      ]
+    },
+    {
+      "code": "SLOT1",
+      "group": "cycle",
+      "sets": { "cycle": "start" },
+      "review": "pending",
+      "label": "Slot milling cycle",
+      "description": "In the current cycle version it mills one straight slot whose reference point is _CPA, _CPO, turned by STA1; several slots are milled with MCALL on a position pattern. Older versions mill NUM slots on a circle around _CPA, _CPO with radius RAD, so the meaning of some arguments depends on the version the program was written for. Its feeds are its own arguments. Older versions take the first 24 arguments only.",
+      "params": [
+        {
+          "address": "RTP",
+          "label": "Retraction plane, as an absolute position",
+          "position": "tool-axis"
+        },
+        {
+          "address": "RFP",
+          "label": "Reference point on the tool axis, as an absolute position",
+          "position": "tool-axis"
+        },
+        {
+          "address": "SDIS",
+          "label": "Safety distance above the reference point, written without a sign",
+          "position": "none"
+        },
+        {
+          "address": "_DP",
+          "label": "Slot depth, as an absolute position",
+          "position": "tool-axis"
+        },
+        {
+          "address": "_DPR",
+          "label": "Slot depth measured from the reference point, written without a sign",
+          "position": "none"
+        },
+        {
+          "address": "NUM",
+          "label": "Number of slots: 1 in the current version, the slots on the circle in older ones",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "LENG",
+          "label": "Slot length",
+          "position": "none"
+        },
+        {
+          "address": "WID",
+          "label": "Slot width",
+          "position": "none"
+        },
+        {
+          "address": "_CPA",
+          "label": "Reference point of the slot on the first axis of the plane (older versions: the centre of the circle), as an absolute position",
+          "position": "other"
+        },
+        {
+          "address": "_CPO",
+          "label": "Reference point of the slot on the second axis of the plane (older versions: the centre of the circle), as an absolute position",
+          "position": "other"
+        },
+        {
+          "address": "RAD",
+          "label": "Reserved in the current version; the radius of the circle in older ones",
+          "position": "none"
+        },
+        {
+          "address": "STA1",
+          "label": "Angle the slot is turned by (older versions: the start angle on the circle)",
+          "position": "none"
+        },
+        {
+          "address": "INDA",
+          "label": "Reserved in the current version; the angle from one slot to the next in older ones",
+          "position": "none"
+        },
+        {
+          "address": "FFD",
+          "label": "Feed for the infeed in depth",
+          "position": "none"
+        },
+        {
+          "address": "FFP1",
+          "label": "Feed in the plane",
+          "position": "none"
+        },
+        {
+          "address": "_MID",
+          "label": "Largest infeed in depth",
+          "position": "none"
+        },
+        {
+          "address": "CDIR",
+          "label": "Milling direction: 0 climb, 1 conventional (older versions also 2 with G2, 3 with G3)",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_FAL",
+          "label": "Finishing allowance on the slot wall",
+          "position": "none"
+        },
+        {
+          "address": "VARI",
+          "label": "Kind of machining: ones 1 roughing, 2 finishing, 4 finishing the edge, 5 chamfering (older versions 0 complete machining); tens how it plunges, 0 straight down with G0 into a slot made before, 1 straight down with G1, 2 on a helix, 3 back and forth",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_MIDF",
+          "label": "Reserved in the current version; the largest infeed for finishing in older ones",
+          "position": "none"
+        },
+        {
+          "address": "FFP2",
+          "label": "Reserved in the current version; the feed for finishing in older ones",
+          "position": "none"
+        },
+        {
+          "address": "SSF",
+          "label": "Reserved in the current version; the spindle speed for finishing in older ones",
+          "position": "none"
+        },
+        {
+          "address": "_FALD",
+          "label": "Finishing allowance on the slot floor",
+          "position": "none"
+        },
+        {
+          "address": "_STA2",
+          "label": "Radius of the helix when plunging on a helix, or the largest plunging angle when plunging back and forth (older versions: the angle only)",
+          "position": "none"
+        },
+        {
+          "address": "_DP1",
+          "label": "Depth per turn when plunging on a helix",
+          "position": "none"
+        },
+        {
+          "address": "_UMODE",
+          "label": "Reserved, written as 0 or left empty",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_FS",
+          "label": "Chamfer width",
+          "position": "none"
+        },
+        {
+          "address": "_ZFS",
+          "label": "Depth of the tool tip when chamfering: an absolute position, or measured when the hundreds digit of _AMODE is 1",
+          "position": "tool-axis"
+        },
+        {
+          "address": "_GMODE",
+          "label": "Geometry mode, digit by digit: hundreds machining or only the start point, thousands where the reference point lies on the slot",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_DMODE",
+          "label": "Display mode, digit by digit: ones the plane while the cycle runs (0 the plane in force, 1 G17, 2 G18, 3 G19), thousands 1 for the current cycle version",
+          "unit": "count",
+          "position": "mode"
+        },
+        {
+          "address": "_AMODE",
+          "label": "Alternative mode, digit by digit: ones whether the depth is measured (1) or absolute (2), hundreds whether the chamfering depth is measured; 0 the reading of the parameters above",
+          "unit": "count",
+          "position": "mode"
+        }
+      ]
+    },
+    {
       "code": "CYCLE93",
       "group": "cycle",
       "sets": { "cycle": "start" },
-      "verify": true,
+      "review": "pending",
       "label": "Grooving cycle",
-      "description": "Cuts a groove on the outside, the inside or the face. The name is recognised; the parameters are not described yet."
+      "description": "Cuts a symmetric or asymmetric groove, along or across, outside or inside, on any straight contour element, from the start point SPD, SPL. It needs a tool with two cutting edges in two consecutive D numbers. It has no feed among its arguments.",
+      "params": [
+        {
+          "address": "SPD",
+          "label": "Start point on the transverse axis, written without a sign",
+          "position": "other"
+        },
+        {
+          "address": "SPL",
+          "label": "Start point on the longitudinal axis",
+          "position": "other"
+        },
+        {
+          "address": "WIDG",
+          "label": "Groove width, written without a sign",
+          "position": "none"
+        },
+        {
+          "address": "DIAG",
+          "label": "Groove depth, written without a sign",
+          "position": "none"
+        },
+        {
+          "address": "STA1",
+          "label": "Angle between the contour and the longitudinal axis, 0 to 180 degrees",
+          "position": "none"
+        },
+        {
+          "address": "ANG1",
+          "label": "Flank angle on the side of the start point",
+          "position": "none"
+        },
+        {
+          "address": "ANG2",
+          "label": "Flank angle on the other side",
+          "position": "none"
+        },
+        {
+          "address": "RCO1",
+          "label": "Radius (positive) or chamfer (negative) at the groove edge, on the side of the start point",
+          "position": "none"
+        },
+        {
+          "address": "RCO2",
+          "label": "Radius (positive) or chamfer (negative) at the groove edge, on the other side",
+          "position": "none"
+        },
+        {
+          "address": "RCI1",
+          "label": "Radius (positive) or chamfer (negative) at the groove bottom, on the side of the start point",
+          "position": "none"
+        },
+        {
+          "address": "RCI2",
+          "label": "Radius (positive) or chamfer (negative) at the groove bottom, on the other side",
+          "position": "none"
+        },
+        {
+          "address": "FAL1",
+          "label": "Finishing allowance at the groove bottom",
+          "position": "none"
+        },
+        {
+          "address": "FAL2",
+          "label": "Finishing allowance on the flanks",
+          "position": "none"
+        },
+        {
+          "address": "IDEP",
+          "label": "Infeed depth, written without a sign",
+          "position": "none"
+        },
+        {
+          "address": "DTB",
+          "label": "Dwell at the groove bottom, in seconds",
+          "unit": "dwell",
+          "position": "none"
+        },
+        {
+          "address": "VARI",
+          "label": "Kind of machining, 1 to 8 (along or across, outside or inside, which side the start point is on), plus 10 when a chamfer value is read as with CHR instead of CHF",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_VRT",
+          "label": "Retract distance from the contour, 0 for 1 mm",
+          "position": "none"
+        },
+        {
+          "address": "_DN",
+          "label": "D number of the second cutting edge; empty for the next one after the active edge",
+          "unit": "count",
+          "position": "none"
+        }
+      ]
     },
     {
       "code": "CYCLE95",
@@ -1443,9 +2148,100 @@
       "code": "CYCLE97",
       "group": "cycle",
       "sets": { "cycle": "start" },
-      "verify": true,
+      "review": "pending",
       "label": "Thread cutting cycle",
-      "description": "Cuts a thread in several passes. The lead is one of its arguments, not the feed in force. The parameters are not described yet."
+      "description": "Cuts a cylindrical or tapered thread, along or across, outside or inside, in several passes. The lead is one of its arguments (PIT, or the metric size MPIT), not the feed in force; the spindle direction decides right- or left-hand.",
+      "params": [
+        {
+          "address": "PIT",
+          "label": "Thread pitch, as a length written without a sign",
+          "position": "none"
+        },
+        {
+          "address": "MPIT",
+          "label": "Thread size, as a metric nominal diameter from 3 to 60",
+          "position": "none"
+        },
+        {
+          "address": "SPL",
+          "label": "Start point of the thread on the longitudinal axis",
+          "position": "other"
+        },
+        {
+          "address": "FPL",
+          "label": "End point of the thread on the longitudinal axis",
+          "position": "other"
+        },
+        {
+          "address": "DM1",
+          "label": "Thread diameter at the start point",
+          "position": "other"
+        },
+        {
+          "address": "DM2",
+          "label": "Thread diameter at the end point",
+          "position": "other"
+        },
+        {
+          "address": "APP",
+          "label": "Run-in length, written without a sign",
+          "position": "none"
+        },
+        {
+          "address": "ROP",
+          "label": "Run-out length, written without a sign",
+          "position": "none"
+        },
+        {
+          "address": "TDEP",
+          "label": "Thread depth, written without a sign",
+          "position": "none"
+        },
+        {
+          "address": "FAL",
+          "label": "Finishing allowance, written without a sign",
+          "position": "none"
+        },
+        {
+          "address": "IANG",
+          "label": "Infeed angle: positive along one flank, negative alternating between the flanks, 0 straight in",
+          "position": "none"
+        },
+        {
+          "address": "NSP",
+          "label": "Start point offset of the first thread, in degrees",
+          "position": "none"
+        },
+        {
+          "address": "NRC",
+          "label": "Number of roughing cuts",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "NID",
+          "label": "Number of idle passes",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "VARI",
+          "label": "Kind of machining: 1 outside, 2 inside, with a constant infeed; 3 outside, 4 inside, with a constant cutting area",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "NUMT",
+          "label": "Number of thread starts; 0 or empty for a single thread",
+          "unit": "count",
+          "position": "none"
+        },
+        {
+          "address": "_VRT",
+          "label": "Retract distance above the start diameter, 0 for 1 mm",
+          "position": "none"
+        }
+      ]
     },
     {
       "code": "CYCLE99",
@@ -2095,6 +2891,18 @@
       "description": "SVC=100 gives the cutting speed of the active milling or drilling tool in metres per minute, feet in an inch program; the control works out the spindle speed from the tool radius. Without an index it is meant for the master spindle, SVC[2]= for spindle 2. An S word ends it, and so do G96 and SPOS."
     },
     {
+      "code": "CTOL",
+      "review": "pending",
+      "label": "Contour tolerance",
+      "description": "CTOL=0.02 sets the contour tolerance for the compressor functions and for rounding (all kinds except G641 and G644), in the unit of the program, until the next CTOL=, the end of the program or a reset. A negative value goes back to the tolerance the machine is set up with."
+    },
+    {
+      "code": "OTOL",
+      "review": "pending",
+      "label": "Orientation tolerance",
+      "description": "OTOL=0.5 sets the tolerance of the tool orientation in degrees for the compressor functions, orientation smoothing and rounding (all kinds except G641, G644 and OSD), until the next OTOL=, the end of the program or a reset. A negative value goes back to the tolerance the machine is set up with."
+    },
+    {
       "code": "SETMS",
       "group": "spindle",
       "label": "Choose the master spindle",
@@ -2105,6 +2913,55 @@
       "group": "program",
       "label": "Operator message",
       "description": "Shows the text in the brackets on the control. MSG() with nothing inside clears it."
+    },
+    {
+      "code": "WAITM",
+      "group": "program",
+      "review": "pending",
+      "label": "Wait for a mark in other channels",
+      "description": "WAITM(1,1,2) sets wait mark 1 in this channel and waits until channels 1 and 2 have reached the same mark; the block before it ends with an exact stop. The first number is the mark, the others are channels."
+    },
+    {
+      "code": "WAITMC",
+      "group": "program",
+      "review": "pending",
+      "label": "Wait for a mark, braking only when needed",
+      "description": "Like WAITM, but the axes only brake to an exact stop when the other channels have not reached the mark yet. The first number is the mark, the others are channels."
+    },
+    {
+      "code": "WAITE",
+      "group": "program",
+      "review": "pending",
+      "label": "Wait for the end of other channels",
+      "description": "WAITE(2) waits until the program in channel 2 has ended. The numbers are channels."
+    },
+    {
+      "code": "SETM",
+      "group": "program",
+      "review": "pending",
+      "label": "Set wait marks",
+      "description": "SETM(3) sets wait mark 3 for the channel coordination without waiting; this channel carries on. A mark set this way stays set over a channel reset and an NC start."
+    },
+    {
+      "code": "CLEARM",
+      "group": "program",
+      "review": "pending",
+      "label": "Clear wait marks",
+      "description": "CLEARM(3) clears wait mark 3 of this channel without waiting; CLEARM() clears all of them. It stays in effect over a channel reset and an NC start."
+    },
+    {
+      "code": "INIT",
+      "group": "program",
+      "review": "pending",
+      "label": "Select a program for a channel",
+      "description": "INIT(2,\"NAME\") selects the program a channel is to run; START runs it."
+    },
+    {
+      "code": "START",
+      "group": "program",
+      "review": "pending",
+      "label": "Start the program of other channels",
+      "description": "START(2) starts the program selected in channel 2."
     },
     {
       "code": "MCALL",
@@ -2255,6 +3112,12 @@
       "label": "Compressor on, for surface programs"
     },
     {
+      "code": "COMPSURF",
+      "review": "pending",
+      "label": "Compressor on, COMPSURF",
+      "description": "Switches on the compressor function COMPSURF, which joins short straight blocks into a smooth path within the tolerances set. It stays on until COMPOF or another compressor function."
+    },
+    {
       "code": "COMPOF",
       "label": "Compressor off"
     },
@@ -2265,6 +3128,18 @@
     {
       "code": "CUT3DC",
       "label": "Three-dimensional radius compensation, circumference"
+    },
+    {
+      "code": "CUT3DCC",
+      "review": "pending",
+      "label": "3D radius compensation, circumference milling with a limit surface",
+      "description": "3D cutter radius compensation for circumference milling with a cylindrical tool that keeps to a limit surface; the program describes the contour on the machined surface. It is chosen in the block with G41 or G42, and the normal of the limit surface is written with A4=, B4=, C4= at the start and A5=, B5=, C5= at the end of the block."
+    },
+    {
+      "code": "CUT3DCCD",
+      "review": "pending",
+      "label": "3D radius compensation, circumference milling with a limit surface and a differential tool",
+      "description": "3D cutter radius compensation for circumference milling that keeps to the limit surface the programmed standard tool would have reached; the program describes the centre path of that standard tool, and the real tool may differ from it a little. It is chosen in the block with G41 or G42."
     },
     {
       "code": "CFC",

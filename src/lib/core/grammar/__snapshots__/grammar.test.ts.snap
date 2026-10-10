@@ -297,7 +297,7 @@ exports[`generateGrammar > heidenhain-klartext: is stable 1`] = `
         "blockNumber",
       ],
       [
-        "(?:REFPNT\\s+CENTER-CENTER|FUNCTION\\s+RESET\\s+TCPM|REFPNT\\s+TIP-CENTER|PATHCTRL\\s+VECTOR|PLANE\\s+PROJECTED|REFPNT\\s+TIP-TIP|CYCL\\s+CALL\\s+PAT|CYCL\\s+CALL\\s+POS|FUNCTION\\s+TCPM|PATHCTRL\\s+AXIS|PLANE\\s+RELATIV|PLANE\\s+SPATIAL|PLANE\\s+POINTS|PLANE\\s+VECTOR|PLANE\\s+AXIAL|PLANE\\s+EULER|PLANE\\s+RESET|TRANS\\s+DATUM|AXIS\\s+SPAT|BEGIN\\s+PGM|COORD\\s+ROT|CYCL\\s+CALL|TABLE\\s+ROT|TOOL\\s+CALL|APPR\\s+LCT|AXIS\\s+POS|BLK\\s+FORM|CALL\\s+LBL|CALL\\s+PGM|CYCL\\s+DEF|TOOL\\s+DEF|APPR\\s+CT|APPR\\s+LN|APPR\\s+LT|DEP\\s+LCT|END\\s+PGM|SEL\\s+PGM|DEP\\s+CT|DEP\\s+LN|DEP\\s+LT|F\\s+CONT|F\\s+TCP|FAUTO|FMAX|INCH|MOVE|SEQ\\+|SEQ-|STAY|STOP|TURN|CHF|CTP|LBL|MAX|REP|RND|CC|CP|CR|CT|FN|LN|LP|MB|MM|R0|RL|RR)(?![A-Za-z])",
+        "(?:REFPNT\\s+CENTER-CENTER|FUNCTION\\s+RESET\\s+TCPM|REFPNT\\s+TIP-CENTER|PATHCTRL\\s+VECTOR|PLANE\\s+PROJECTED|REFPNT\\s+TIP-TIP|CYCL\\s+CALL\\s+PAT|CYCL\\s+CALL\\s+POS|FUNCTION\\s+TCPM|PATHCTRL\\s+AXIS|PLANE\\s+RELATIV|PLANE\\s+SPATIAL|PLANE\\s+POINTS|PLANE\\s+VECTOR|PLANE\\s+AXIAL|PLANE\\s+EULER|PLANE\\s+RESET|TRANS\\s+DATUM|AXIS\\s+SPAT|BEGIN\\s+PGM|COORD\\s+ROT|CYCL\\s+CALL|TABLE\\s+ROT|TOOL\\s+CALL|APPR\\s+LCT|AXIS\\s+POS|BLK\\s+FORM|CALL\\s+LBL|CALL\\s+PGM|CYCL\\s+DEF|TOOL\\s+DEF|APPR\\s+CT|APPR\\s+LN|APPR\\s+LT|DEP\\s+LCT|END\\s+PGM|SEL\\s+PGM|DEP\\s+CT|DEP\\s+LN|DEP\\s+LT|F\\s+CONT|F\\s+TCP|FAUTO|FMAX|INCH|MOVE|SEQ\\+|SEQ-|STAY|STOP|TURN|CHF|CTP|LBL|MAX|REP|RND|CC|CP|CR|CT|FN|LN|LP|MB|MM|R0|RL|RR|VC)(?![A-Za-z])",
         "keyword",
       ],
       [
@@ -329,7 +329,7 @@ exports[`generateGrammar > heidenhain-klartext: is stable 1`] = `
         "variable",
       ],
       [
-        "(?:I)?(?:CCA|DR2|LEN|REP|DL|DR|MB|NX|NY|NZ|PA|PR|TX|TY|TZ|R)(?:(?:[+-]?(?:\\d+[.,]?\\d*|[.,]\\d+)|[+-]?(?:Q[LRS]?\\d+)))",
+        "(?:I)?(?:CCA|DR2|LEN|P1X|P1Y|P1Z|P2X|P2Y|P2Z|P3X|P3Y|P3Z|REP|DL|DR|MB|NX|NY|NZ|PA|PR|TX|TY|TZ|VC|R)(?:(?:[+-]?(?:\\d+[.,]?\\d*|[.,]\\d+)|[+-]?(?:Q[LRS]?\\d+)))",
         "number",
       ],
       [

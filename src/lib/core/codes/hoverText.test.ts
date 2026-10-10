@@ -283,13 +283,13 @@ describe('hoverText: the turning dialects', () => {
   it('explains a call the database describes by its name', () => {
     expect(siemensHover('N30 MSG("OD ROUGH")', 'MSG')).toContain('**MSG** — Operator message');
     expect(siemensHover('N290 SETMS(3)', 'SETMS')).toContain('**SETMS** — Choose the master spindle');
-    // The manual confirms CYCLE83, so its hover says what it does; CYCLE97, which the 4.92
-    // cycle list does not describe, still carries `verify: true` and stays out of hover.
+    // The manual confirms CYCLE83, so its hover says what it does. B1 (a7s): CYCLE97, which the
+    // 4.92 cycle list leaves out, is described from the 2008 cycles manual and hovers too.
     const cycle = siemensHover('N80 CYCLE83(5,0,2,-30,,-8,,2,0,0.5,1,0)', 'CYCLE83') as string;
     expect(cycle).toContain('**CYCLE83** — Deep\\-hole drilling cycle');
     const old = siemensHover('N90 CYCLE97(1.5,,0,-20,40,40,3,2,0.92,0.1,0,0,5,1,3,1)', 'CYCLE97') as string;
-    expect(old).toContain('**CYCLE97**');
-    expect(old).toContain('does not describe this word yet');
+    expect(old).toContain('**CYCLE97** — Thread cutting cycle');
+    expect(old).not.toContain('does not describe this word yet');
     expect(hoverAt('N80 CYCLE83(5,0,2,-30)', 10, sinumerikProfile, sinumerik, t)).toMatchObject({ start: 4, end: 22 });
   });
 
