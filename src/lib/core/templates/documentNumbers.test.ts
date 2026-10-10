@@ -159,7 +159,10 @@ describe('the cost at 300,000 lines', () => {
         await breathe();
         slow = Math.min(slow, fastest(1, () => void documentNumbersByTokens(lines, cp)));
       }
-      expect(fast * 2, `fast ${fast.toFixed(0)} ms, tokenizer ${slow.toFixed(0)} ms`).toBeLessThan(slow);
+      // That no line goes to the tokenizer is pinned by count in documentNumbers.calls.test.ts; here the
+      // time, against the frame budget. A ratio to the tokenizer (2x) is noise on a shared runner: 1.9x
+      // there failed the release run of v1.0.0 while the call count stayed 0.
+      expectWithin(fast, 300, `documentNumbers on ${lines.length} commented ${id} lines (tokenizer ${slow.toFixed(0)} ms)`);
       same(lines.slice(0, 5000), cp, `${id} commented`);
     });
   }
