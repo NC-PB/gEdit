@@ -2,7 +2,7 @@
 
 Thanks for helping. gEdit is a small project run by part-time contributors, so focused pull requests with tests are the easiest to review.
 
-Five documents to know about before you start: [docs/user](docs/user/README.md) is what the app does today, from a CNC programmer's point of view; [docs/planning](docs/planning/README.md) is what we plan to build and why; [phase-1-implementation.md](docs/planning/phase-1-implementation.md) is the executed plan for Phase 1 — architecture, the binding contracts in §7, and the decisions behind them; and [phase-3-implementation.md](docs/planning/phase-3-implementation.md) is the last plan that was executed (Phase 3, "Understand and write"; it builds on [phase-2-implementation.md](docs/planning/phase-2-implementation.md), the plan of M6–M13, whose §7 holds the contracts, with the test ids in §7.12 and the deviations in §7.16, and whose §8 holds the dialect and machine data and §10 the owner decisions). Phases 1 to 3 are done and v1.0.0 is prepared as a draft release; Phase 4 has no implementation plan yet (see the [roadmap](docs/planning/roadmap.md#phase-4-comfort-and-geometry)), and the current work is a round of bug fixes and documentation, listed in [TODO.md](TODO.md), which also collects what is still open in the code and in the decisions.
+Five documents to know about before you start: [docs/user](docs/user/README.md) is what the app does today, from a CNC programmer's point of view; [docs/planning](docs/planning/README.md) is what we plan to build and why; [phase-1-implementation.md](docs/planning/phase-1-implementation.md) is the executed plan for Phase 1 — architecture, the binding contracts in §7, and the decisions behind them; and [phase-3-implementation.md](docs/planning/phase-3-implementation.md) is the last plan that was executed (Phase 3, "Understand and write"; it builds on [phase-2-implementation.md](docs/planning/phase-2-implementation.md), the plan of M6–M13, whose §7 holds the contracts, with the test ids in §7.12 and the deviations in §7.16, and whose §8 holds the dialect and machine data and §10 the owner decisions). Phases 1 to 3 are done and v1.0.0 is prepared as a draft release; Phase 4 has no implementation plan yet (see the [roadmap](docs/planning/roadmap.md#phase-4-comfort-and-geometry)), and the current work is a round of bug fixes and documentation, recorded in [bugfix-round-1.md](docs/planning/bugfix-round-1.md) and listed in [TODO.md](TODO.md), which also collects what is still open in the code and in the decisions.
 
 ## Setup
 
@@ -49,6 +49,15 @@ cargo test --locked
 Python tests (the bundled scripts and their shared library): `python3 -m unittest discover -s tests/python -t .`
 
 A unit test that asserts a wall-clock budget goes through `tests/unit/helpers/budget.ts`: the budget is measured on the development machine, and CI multiplies it by a fixed factor (see [phase-2-implementation.md](docs/planning/phase-2-implementation.md) §5.2, rule 13).
+
+### Running the tests lightly
+
+The full test suite and the Rust and Python suites load every core for minutes, and the runtime harness drives the real mouse and keyboard, so run only as much as the change needs while you work, and the whole set once at the end:
+
+- Put `taskpolicy -b` in front of every test or build command on macOS (`taskpolicy -b npx vitest run …`), so a long run does not make the machine unusable. On Linux `nice -n 19` does the same.
+- Run the test files that belong to your change: `npx vitest run src/lib/core/transforms/renumber.test.ts --maxWorkers=4`, `cargo test files::` for one Rust module, `python3 -S -m unittest tests.python.test_modal` for one Python file. Python needs only the newest interpreter locally; CI runs 3.9 and 3.12.
+- Run `npm test` in full once, when the work is finished. Tests that assert a wall-clock budget can fail on a machine that is busy with something else and pass alone; run the file alone before you suspect your change, and never loosen a budget to make a busy machine pass.
+- Leave the runtime harness to CI (the Harness workflow) unless a maintainer asks for a local run.
 
 ### Before you open a pull request
 

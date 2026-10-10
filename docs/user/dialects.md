@@ -435,6 +435,20 @@ scripts read a turning program by the same rules.
 of the finishing profile with `P` and `Q`, and renumbering rewrites them — see
 [transformations.md](transformations.md#renumber-blocks).
 
+**The roughing, pecking and threading cycles `G71` to `G76` are written in two blocks, and
+are read per block.** The same letter means something else in each: the first `U` of `G71` is
+the depth of cut, the second the finishing allowance. The inspector's table and the hover say
+*block 1 of 2* or *block 2 of 2* and give every word the meaning it has in that block; gEdit
+tells the blocks apart by their words (`P` and `Q` make a `G71` block the second one), also for
+a second block written alone, when the first block's values are set in the machine's parameters.
+The thread height `P` of the second block of `G76` is shown as written and never converted.
+Edit Cycle still refuses a two-block cycle ([templates.md](templates.md#edit-cycle)).
+
+**The turret mirror and the coordinate rotation are two things.** `G68`/`G69` (mirror image
+for the second turret) and `G68.1`/`G69.1` (coordinate rotation) are separate groups on the
+lathe: a `G69` does not end a `G68.1` rotation in the state panel, and address arithmetic keeps
+leaving the blocks under a rotation alone until `G69.1`.
+
 **Thread leads are protected, whichever system the file is read in.** In `G32`, `G33` and
 `G76`, in the tapping cycles `G84` and `G88`, and in `G92` (system A) or `G78` (system B),
 the `F` word is a lead rather than a feed rate. The hover says so, and the scaling script
@@ -475,6 +489,11 @@ program map lists every name, renumbering leaves names alone, and the highlighti
 them like section headings. **Remove Spaces keeps the space after a sequence number or
 name**, which the control needs; what else it keeps, and why a packed program needs
 checking, is in [transformations.md](transformations.md#remove-spaces).
+
+**Program names.** `CALL` and the program lines read a name of up to 16 characters: the `O`
+and then letters and digits (`CALL OSUBPROGRAM12`), or the `O` and then digits only (`O1234`).
+A name that starts with digits and goes on with letters (`O1000ABC`) is not a program name.
+The control itself takes four characters unless an option allows longer subprogram names.
 
 **Block skip** is a `/` at the very start of the block or directly after the sequence
 number. The control has no numbered skip levels.
@@ -802,9 +821,10 @@ the tool list moved every tool's feed and speed one row down.
 high-speed milling: `CYCLE800` (swivel), `CYCLE832` (high-speed settings), `TRAORI` and
 `TRAFOOF`, `TRANSMIT`, `TRACYL`, `G75` (a fixed-point approach), the `ORI…` orientation words
 and the `DYN…` dynamic words, `TRANS`, `ROT`, `SCALE` and `MIRROR` and their additive forms.
-It does not describe the milling cycles themselves (`CYCLE61`, `POCKET3` …), `CUT3DCC`,
-`COMPSURF`, `G601`–`G603`, `G643`/`G644` or the tolerance words `CTOL=`, `OTOL=` and `FP=`:
-those are coloured and listed as calls and have no code help. The profile lists `A`, `B` and
+The milling cycles `CYCLE61`, `POCKET3`, `POCKET4` and `SLOT1`, `CUT3DCC`, `COMPSURF`,
+`G601`–`G603`, `G643`–`G645` and the tolerance words `CTOL=` and `OTOL=` are described too
+([below](#codes-added-from-the-control-manuals)); the feed word `FP=` is not, and is coloured
+and listed as a call without code help. The profile lists `A`, `B` and
 `C` as axes and as angles, so the scripts read the rotary axes of a five-axis machine in
 degrees. `TRAORI` is tool centre point control and not a coordinate frame; `TRAFOOF` ends it
 and `TRANSMIT`, `TRACYL` and `TRAANG` too; `CYCLE800` is a tilted plane, which is a frame.
@@ -841,6 +861,9 @@ read correctly now:
   program named `Test` keeps `Test`.
 - The colon words `VCONST`, `VC` and `HSC-MODE` are known: `FUNCTION TURNDATA SPIN
   VCONST:ON VC:120` and `CYCL DEF 32.2 HSC-MODE:1 TA0.5` raise no unknown marks.
+- `PLANE POINTS P1X+0 P1Y+0 … P3Z+32.5` and the auxiliary points of an FK contour
+  (`FC … P1X+70 P1Y+60`) are words with a value, no longer unknown text. Double-clicking
+  `241,781` selects the whole number, decimal comma included.
 - A `%` in a comment (`; INPUT 50...150 %`) is a percent sign. Klartext has no tape marker,
   so the program check *Tape marker* does not report it.
 - An empty `CYCL DEF 19.1`, the one that names no angle, **ends the tilt**, like `19.1` with
@@ -885,6 +908,53 @@ What is still not read as a name, and shows as unknown: the machine data words o
 (`GUD` qualifiers, `AA<n>`, `_N<n>`), `WORK`, `PS` and `LC` on Okuma, and the text behind
 `//` on Siemens.
 
+**The colours follow the same reading.** The syntax colours now agree with what gEdit reads
+from the same line. In Klartext the name of a cycle, the program name in `BEGIN`/`END PGM` and
+the paths of `CALL PGM` and `FN 16:` are one uncoloured piece of text (before, the digits and
+words inside them took code colours); `VCONST:ON`, `VC:120`, `HSC-MODE:1` and `#5` are one word
+each in the colour of other addresses; `R0,5` is a radius. In Fanuc programs free text outside
+parentheses (`M797 SPINDLE ONE DONE`) is not coloured as code, and a four-digit G or M code
+(`G1900`) is coloured whole. In Okuma programs the target of a `CALL` can be 16 characters,
+a block number such as `N10000` is one piece, and a command such as `NOEX` is a command even in
+front of a `/`. In Sinumerik programs the name behind `GOTO`, `GOTOF`, `GOTOB` and `GOTOC` has
+the colour of a label, `GOTOF:20` is a keyword, a colon and a number, and the names a `DEF`
+declares have the colour of a variable. Stacked skip marks (`/1 /3`) are both coloured as skip
+marks.
+
+## Codes added from the control manuals
+
+This version fills in code help, labels and parameters from the manufacturers' manuals for
+the four control families. They are written in the project's own words, and every one is marked
+inside the project as **waiting for the owner's review**; gEdit does not show the mark in the
+hover, so read them with your manual at hand and tell the project where one is wrong. What was
+added:
+
+- **Fanuc.** `G5.4`, `G6.2` (NURBS, with the knot and the weight as real numbers), `G29` and
+  `G30.1` (read like `G28`/`G30`: positions to go to through a stored intermediate point, listed
+  apart by Extents and left alone by address arithmetic), `G41.2`–`G42.6` (five-axis cutter
+  compensation; `G41.6`/`G42.6` take the tool direction in `I`, `J`, `K` and a lead angle in
+  `Q`), `G43.1`, `G92.1`. On the lathe, `G50.3`, `G68.1` and `G69.1`, and the two-block cycles
+  `G71` to `G76` with the words of each block. `G81` on the lathe stays out (it exists there only
+  in the Series 15 program format).
+- **Sinumerik.** `CYCLE61`, `POCKET3`, `POCKET4` and `SLOT1` with their arguments in call order
+  (the feed arguments are labelled, so Scale Feed lists them), and the arguments of `CYCLE93` and
+  `CYCLE97`; `G601`–`G603` as their own group (exact-stop criterion), `G643`–`G645`; `CUT3DCC`,
+  `CUT3DCCD`, `COMPSURF`; the tolerances `CTOL=` and `OTOL=`; and the channel commands `WAITM`,
+  `WAITMC`, `WAITE`, `SETM`, `CLEARM`, `INIT`, `START`. `SLOT1` changed meaning between versions
+  of the cycle; the labels say both.
+- **Heidenhain Klartext.** Cycles 251, 252, 253, 254, 256 and 257 (milling), the contour cycles
+  14 and 21 to 25, the cutting speed `VC`, the points `P1X` to `P3Z`, and labels for the feed of
+  the `PLANE` functions and of cycle 19 (*Feed for the tilting move*). Cycle 20 and the pattern
+  cycles 220 and 221 are not described yet.
+- **Okuma.** `G93` (inverse-time feed), `G119` (the C-X-Z plane), `G132` and `G133` (contour arcs
+  on the cylinder surface), `G313` (turret C) and `M85` (with LAP). `G20` and `G21` are read as
+  moves to machine positions (`HP` says which); `G17`, `G18` and `G119` written while radius
+  compensation is on are reported as refused in that state.
+
+The motion colours follow: `G132`/`G133` are arcs, `G6.2` is a straight feed move, `G29` and
+`G30.1` are rapids. Where the manuals disagree, or say nothing, the entry says less rather than
+guess (`G21` claims no motion, `G93` does not convert its `F`).
+
 ## What the checks and the arithmetic read from a dialect
 
 The program checks, the extents and address arithmetic ([Scripts](scripts.md)) have no
@@ -895,9 +965,9 @@ the dialects give them:
 |---|---|
 | **Fanuc mill** | Which codes start and stop the spindle and which moves are rapid; the states the control refuses a code in (`G28`, `G53`, the drilling cycles and `G68` under tool centre point control; `G53.1` outside a tilted plane); `G65` as a program call that hands its arguments over, and a word limit of eight digits. `G15` and `G16` (polar coordinates) are described and count as a frame, like `G51` (scaling), `G51.1` (mirror), `G12.1` (polar interpolation), `G7.1` (cylindrical interpolation) and `G68` (rotation). The drilling cycles `G73`, `G74`, `G76`, `G81` to `G89` carry the `R` plane that a Z shift moves |
 | **Fanuc lathe** | The same, except that it has no `G43.4` or `G43.5`; its cycles are not shifted by address arithmetic (a lathe's `R` may be incremental or absolute by a machine parameter), they are refused and listed |
-| **Heidenhain Klartext** | Cycles 200 to 209, 240 and 262 hold `Q203`, the surface, which a Z shift moves; **202** (boring), **208** (bore milling) and **262** (thread milling) are described. The pole `CC` is shifted with an `X` or `Y` shift. `PLANE` needs `MOVE`, `TURN` or `STAY`, and `TOOL CALL` and `M91`/`M92` are refused while `M128` is on. The tool axis comes from `TOOL CALL`, which decides the plane. `END PGM` is the closing record and takes no skip mark. Cycle 19 and `PLANE SPATIAL` with all angles zero never end the tilted plane for the scripts, so everything after one is treated as inside a frame |
-| **Okuma OSP lathe** | A limit of eight M codes in a block; `G96` and `G97` need `S`; `M110` stands alone; `G140`, `G141`, `G15` and `G16` are refused under constant surface speed or nose-radius compensation; the LAP shape between `G81` and `G80` is not a cut. No cycle is shifted by address arithmetic |
-| **Sinumerik 840D** | `CYCLE81` to `CYCLE89` and `CYCLE840` carry `RTP`, `RFP`, `DP` (and `FDEP` of `CYCLE83`) for a Z shift, with the trailing mode arguments described; `G290` and `G291` switch the control between its own language and ISO mode; `G75` is refused under radius compensation. A program that never writes `G90` is not known to be absolute (see [Machines](machines.md#the-power-on-distance-mode)) |
+| **Heidenhain Klartext** | Cycles 200 to 209, 240 and 262 hold `Q203`, the surface, which a Z shift moves; **202** (boring), **208** (bore milling) and **262** (thread milling) are described. The pole `CC` is shifted with an `X` or `Y` shift. `PLANE` needs `MOVE`, `TURN` or `STAY`, and `TOOL CALL` and `M91`/`M92` are refused while `M128` is on. A modal call (`M89`) runs on polar moves (`LP`, `CP`, `CTP`) as well as on `L` moves. The tool axis comes from `TOOL CALL`, which decides the plane. Address arithmetic leaves the absolute points of an FK contour as written and warns. `END PGM` is the closing record and takes no skip mark. Cycle 19 and `PLANE SPATIAL` with all angles zero never end the tilted plane for the scripts, so everything after one is treated as inside a frame |
+| **Okuma OSP lathe** | A limit of eight M codes in a block; `G96` and `G97` need `S`; `M110` stands alone; `G140`, `G141`, `G15` and `G16` are refused under constant surface speed or nose-radius compensation, and `G17`, `G18` and `G119` under radius compensation; the LAP shape between `G81` and `G80` is not a cut. No cycle is shifted by address arithmetic |
+| **Sinumerik 840D** | `CYCLE81` to `CYCLE89` and `CYCLE840` carry `RTP`, `RFP`, `DP` (and `FDEP` of `CYCLE83`) for a Z shift, with the trailing mode arguments described; `CYCLE61`, `POCKET3`, `POCKET4` and `SLOT1` are described but refused by address arithmetic, because their points in the plane are positions of their own; `G290` and `G291` switch the control between its own language and ISO mode; `G75` is refused under radius compensation. A program that never writes `G90` is not known to be absolute (see [Machines](machines.md#the-power-on-distance-mode)) |
 
 Where the data is missing the scripts say so, once, and do not flag every line: a code the
 database lacks under the move letter makes a block "not reviewed" for the arithmetic and

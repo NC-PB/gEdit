@@ -36,6 +36,17 @@ a shell profile reaches it only when gEdit is started from that shell, not from 
 Finder; on Windows, set it as a user environment variable. gEdit looks again when you
 change the interpreter setting; after installing Python while gEdit runs, restart it.
 
+**The PATH a script runs with.** A program started from Finder or the Dock gets only the
+system's short `PATH`, so a script that runs a tool of yours (a formatter, `git`) could fail
+with "not found" although the tool works in your terminal. On macOS and Linux gEdit therefore
+asks your login shell once for its `PATH` and adds the folders the script's own `PATH` is
+missing, behind the ones it has. gEdit does not read `~/.zshrc` or any other file only an
+interactive shell reads: something that is set up only there is still not found, and the way
+out is to put its folder on the login `PATH` or to name the interpreter in
+`Settings ▸ Scripts ▸ Python interpreter`. When `GEDIT_PYTHON` is set, or the interpreter
+setting names a file, gEdit never starts your login shell at all, and the script keeps the
+`PATH` gEdit was started with.
+
 **If no interpreter is found — or only one older than 3.9 — the commands that run a script
 are disabled and say so. Everything else in gEdit keeps working**, writing and editing
 scripts included. On Windows that covers the case that looks least like it: a
@@ -76,6 +87,13 @@ A run that takes longer than the time limit is stopped. The limit is
 `Settings ▸ Scripts ▸ Script timeout` (60 seconds by default) unless the script's own
 header sets one. A stopped or cancelled run changes nothing.
 
+**Stopping ends what the script started.** The **Stop** button, the time limit and quitting
+gEdit end the script and the programs it started: on macOS and Linux as a group, on Windows
+because gEdit binds the script and its children together (a Job Object), so a program the
+script started — a formatter that hangs, say — dies with it. A program the script left
+running on purpose after it finished by itself is not touched. Quitting gEdit waits at most
+a third of a second for a running script to end.
+
 ### What comes back
 
 | The script declares | What gEdit does with its output |
@@ -97,9 +115,13 @@ not whatever failed first:
 1. **You cancelled it.**
 2. **It ran out of time.**
 3. **It ended with an error** (a non-zero exit code, or it was killed). Whatever it wrote
-   on its error output is shown.
-4. **Its output was cut off** at the size cap. A prefix of a program is a program that
-   ends in the middle of a cut, so it is refused rather than applied.
+   on its error output is shown. When that text was cut at the size cap, the outcome line of
+   the **Script Output** panel says *Error messages cut off*, so a short message is not
+   mistaken for the whole of it.
+4. **Its output was cut off** at the size cap, or the script left the output open (a
+   program it started kept the pipe) so that gEdit stopped waiting for it. A prefix of a
+   program is a program that ends in the middle of a cut, so it is refused rather than
+   applied, and the reason is shown.
 5. **It did not return a usable result**: a `report` whose JSON is not a report, or an
    envelope whose JSON is not `{"text", …}`.
 6. **It produced nothing**, in `replace` mode. Otherwise a broken script would silently
@@ -201,6 +223,16 @@ lead before this rule existed.
 **The words of a `G65`/`G66` macro call and a `G10` offset block are arguments or data, not
 feeds.** They are reported and left, whatever letter they are written under.
 
+**A function's own `F` is not a path feed.** In Klartext the `F` behind `M128` (the feed of the
+compensating moves), behind `M140` (the retract), in a `PLANE … MOVE` or `TURN` line (the
+tilting move) and in cycle 19 (positioning the rotary axes) belongs to that function. It is
+left as written with an information finding — *F800 is the feed for the compensating moves of
+M128, not a path feed, so it is left as written.* — and the summary counts them (*N feeds of a
+function left as written*). An `F` in front of the code in the same block (`L X+50 F600 M128
+F900`) is the path feed and is scaled; the `F900` is not. The tool list leaves such a word out
+of its feed range too, and so do the inspector's *Feed* row and the hover: the feed in force
+stays the feed of the path.
+
 **A dwell is not a feed.** In a dwell block the `F` word is a time — Okuma `G04 F2`,
 Sinumerik `G4 F2` — so it is never scaled and not counted as a feed rate; the summary says
 how many dwells it left as written.
@@ -283,6 +315,12 @@ is a different decision from scaling an rpm — and one you should make delibera
 leaves them alone, and reports them, on a milling one. On Sinumerik, `SVC=` and `SVC[n]=`
 follow the same choice: the tool's cutting speed on the master spindle, or the spindle the
 index names.
+
+**A Klartext cutting speed is read too.** `VC:120` (behind `FUNCTION TURNDATA SPIN VCONST:ON`)
+is the cutting speed of the tool, a constant surface speed like `SVC=`: it follows the
+**Also scale constant surface speeds** choice. *Automatically* leaves it alone on the milling
+Klartext profile and says so (*VC:120 is the cutting speed of the tool (VC), so it is not
+scaled.*); with *yes* it is scaled (`VC:120` at 120 % is `VC:144`), and the `VC:` stays.
 
 **A speed limit is not a speed.** The `S` of the block that clamps the top speed for
 constant surface speed — `G50 S` on a Fanuc lathe in G-code system A and on an Okuma,
@@ -444,7 +482,7 @@ data the dialect does not have is not run; the general checks run on every diale
 | **Machine reading** | info | A dimension word without a decimal point whose value depends on how the machine reads numbers, see below |
 | **Tape marker** | error | A `%` inside a comment, which ends the program when the tape is read in. Not on Klartext, which has no tape marker: `; INPUT 50...150 %` is fine |
 | **Comment** | error | A comment opened and not closed on its line |
-| **Brackets** | error | Brackets or quotes that are not balanced in a block, or a `)` with no `(` |
+| **Brackets** | error | Brackets or quotes that are not balanced in a block, or a `)` with no `(`. An unclosed string or `[` runs to the end of its line, so a comment behind it is read as part of it: *a string is opened with " and not closed on its line*, *a [ is opened and not closed on its line*, and on Sinumerik *a ( is opened and not closed on its line* |
 | **Lower case** | info | Lower-case addresses outside comments and strings, on a control that reads upper case |
 | **Characters** | warning, error | Characters outside ASCII outside comments (warning); blocks longer than the control takes (error) |
 | **Stop** | info | Every program stop and optional stop, as a list |
@@ -492,7 +530,8 @@ information; what is kept stays in line order, and a note says how many were lef
 error on the last line of a very long program is still there.
 
 **It takes time on a long program.** Tokenizing and following the modal state are most of
-the cost: a 300,000-line program takes a minute or more on a busy machine. The three
+the cost: a 300,000-line program takes about a minute on a busy machine, roughly a third
+less than before the tokenizer was made faster. The three
 scripts of this section ask for 300 seconds in their headers, which wins over
 `Settings ▸ Scripts ▸ Script timeout`.
 
@@ -643,11 +682,18 @@ per refused block, with the block as written and the reason in plain words.
 - **A rotary axis without tool centre point control**, see the next section.
 - **A cycle it has no role for**: every lathe and Okuma cycle, a Fanuc `G65` that hands a
   chosen address a number, a Sinumerik or Klartext cycle the database has not reviewed, and
-  **a call it does not know that has a number among its arguments** (`CYCLE61(50,0,2,-1,…)`,
-  `POCKET4(…)`, a subprogram `MYSUB(10)`), since its depth could be an absolute position
-  nobody described. A call with no number (`MYSUB`, `CYCLE832()`) is not a cycle with
-  positions and is not touched. Until the database describes the standard milling cycles,
-  this listing is the guard.
+  **a call it does not know that has a number among its arguments** (`CYCLE76(…)`, a
+  subprogram `MYSUB(10)`), since its depth could be an absolute position nobody described.
+  A call with no number (`MYSUB`, `CYCLE832()`) is not a cycle with positions and is not
+  touched. The Sinumerik milling cycles `CYCLE61`, `POCKET3`, `POCKET4` and `SLOT1` and the
+  Klartext cycle 254 are known, but their points in the plane are positions of their own that a
+  shift cannot judge, so such a call is refused with *has positions of its own*.
+- **An FK contour point**: the absolute points of a Klartext FK contour (`P1X`, `P1Y`, `P1Z`,
+  `P2X` … `P3Z`, and the circle centre `CCX`, `CCY`) are **left as written and listed with a
+  warning** — *CCX+50: an absolute point of an FK contour; gEdit does not move it. Check the
+  FK contour.* — when you shift or scale the axis they belong to, while the ordinary moves
+  around them move. The summary counts them (*N FK contour points*). Look at the FK contour
+  yourself before it goes to the machine.
 - **A cycle with positions it cannot move**: Klartext `CYCL CALL POS` (its tool-axis
   position acts as a second datum shift on top of `Q203`, so moving both would move the hole
   twice) and `CYCL CALL PAT` (the points stand outside the block), and the points of
@@ -727,11 +773,13 @@ That is the editor's number format for the dialect, not something this script ch
 
 #### Not covered yet
 
-There is no entry for the standard Sinumerik milling cycles (`CYCLE61`, `POCKET4`,
-`SLOT1`) with their position roles, so a call to one is refused and listed. A Klartext
-cycle the database lacks (`CYCL DEF 251`) does not replace the earlier definition in the
-modal state, so address arithmetic refuses it with its calls. The fix for both is database
-content, not the script.
+The Sinumerik milling cycles `CYCLE61`, `POCKET3`, `POCKET4` and `SLOT1` and the Klartext
+cycle 254 are refused as a whole because their positions in the plane have no role in the
+database (a Z shift would otherwise move the depth and leave the positions). Klartext cycles
+251 to 253, 256 and 257 move together with their call like cycles 200 to 209. A Klartext cycle the
+database still lacks does not replace the earlier definition in the modal state, so address
+arithmetic refuses it with its calls; the same goes for cycle 20 and the pattern cycles 220 and
+221. The fix for these is database content, not the script.
 
 ## Where scripts live
 
@@ -752,11 +800,19 @@ Rules worth knowing:
 - A folder that is missing — an unmounted share, say — is not an error: its scripts are
   simply not listed until it is back and the list is read again (**Rescan**, or a restart),
   and the rest of the list works.
-- **The list is read once, not at every run.** After you change a script's header — in
-  gEdit or outside it — or add a script outside gEdit, use **Rescan**: the name, the
-  description, the dialects, the input, the form and the output mode are all read when the
-  list is built. Of the header, only `timeout` is read again at every run; the code itself
-  always runs as it is saved.
+- **The list is read when it is built, and the header is checked again at every run.** After
+  you add a script outside gEdit, use **Rescan**. If you change a script's `input` or
+  `output` — in gEdit or outside it — and run it without a Rescan, gEdit notices, says
+  *<script> was changed since the script list was loaded. Reloading the list and running it
+  again.*, reloads the list and runs the script with its new header (the parameter form
+  opens again, with what you had just entered). A script switched to `panel` can no longer
+  replace the document with its old mode. The name, the description, the dialects and the form
+  are only read when the list is built, so **Rescan** after changing those; `timeout` is read
+  again at every run, and the code itself always runs as it is saved.
+- **A script's file name** is a plain name: **New Script** refuses `/`, `\`, `:`, `<`, `>`,
+  `"`, `|`, `?` and `*` ("Use a plain file name: none of / \ : < > " | ? * and no leading _
+  or ."). On Windows a file that carries one of these characters is not offered as a script
+  either.
 
 The script commands also include **New Script** (writes a commented template into your
 folder, opens it for editing and lists it) and **Edit Script** (opens the source of a
@@ -1167,8 +1223,9 @@ Four habits keep it safe:
 
 - **A list of arguments, never `shell=True`.** A file name or a program fragment must never
   be read as a command line.
-- **A timeout on the child, shorter than the script's own.** Stopping a script on Windows
-  ends the script but not a program it started, so a child that hangs is yours to bound.
+- **A timeout on the child, shorter than the script's own.** Stopping a script ends the
+  programs it started as well, but a child that hangs should fail with a clear message of
+  its own instead of waiting for the script's limit.
 - **A failure ends the script with an error.** A non-zero exit means gEdit applies nothing
   and shows what the script wrote on its error output; an empty result in `replace` mode is
   refused too. Never print half an answer.
@@ -1195,8 +1252,9 @@ What gEdit does guarantee:
 - **Bundled scripts are never writable.** The scripts that ship with gEdit are the scripts
   that run.
 - **A run is bounded**: a time limit, a **Stop** button, capped output (64 MiB of result,
-  1 MiB of error output), and it is killed when the app exits. On macOS and Linux the
-  processes the script started are stopped with it; on Windows only the script itself is.
+  1 MiB of error output), and it is killed when the app exits. The processes the script
+  started are stopped with it, on Windows too; only a program the script left running after
+  it finished by itself stays.
 
 What that does **not** mean: it bounds *which file* runs, for how long and how much it may
 say — it says nothing about what is **in** that file. The interpreter and the script
@@ -1216,5 +1274,7 @@ are short, and they are meant to be read.
 | A script is not on the Tools or Scripts tab | It may be for other dialects (`profiles` in its header), it may be hidden behind a file of the same name in a later folder, its name or its subfolder's name starts with `_` or `.`, it sits more than one folder deep, or the bundled scripts are hidden. Use **Rescan** after adding it |
 | It appears under its file name, and the tooltip says the header could not be read | gEdit refused the header (see [The header](#the-header)); it then runs in panel mode and shows raw output only. Fix it, then **Rescan** |
 | *The program changed while the script ran* | You typed in the document while it ran, so nothing was applied. Run it again, or take **Open in new tab** |
+| *<script> was changed since the script list was loaded* | You edited the script's `input` or `output` and ran it without Rescan. gEdit reloads the list and runs it again with the new header; nothing to do |
+| New Script says *Use a plain file name* | The name has one of `/ \ : < > " | ? *` or starts with `_` or `.` |
 | It is stopped every time | It needs longer than the time limit: raise `Settings ▸ Scripts ▸ Script timeout` (up to an hour), or set `timeout` in the script's header (up to a day) |
 | Nothing comes back at all | Look in the **Script Output** panel: whatever the script wrote to its error output is there |

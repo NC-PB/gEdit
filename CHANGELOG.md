@@ -1,6 +1,72 @@
 # Changelog
 
-What changed in each release of gEdit, written for the person who edits NC programs. The release workflow publishes the entry of a version as the notes of its draft release, so the top of each entry has to make sense on its own.
+What changed in each release of gEdit, written for the person who edits NC programs. The release workflow publishes the entry of a version as the notes of its draft release, so the top of each entry has to make sense on its own. The entry called `Unreleased` is what has been fixed or added on `main` since v1.0.0 was prepared; it has no date and no release of its own yet.
+
+## Unreleased
+
+A round of fixes after the v1.0.0 preparation: files, recovery and backups report and bound themselves honestly, scripts behave on Windows and when started from the Dock, the ribbon has seven tabs, the code help is filled in from the control manuals for all four control families, and a number of small readings of Klartext, Sinumerik, Okuma and Fanuc programs are corrected. The plan of record is [bugfix-round-1.md](docs/planning/bugfix-round-1.md); the guide pages are linked below.
+
+### New
+
+- **Ribbon with seven tabs:** File · Edit · Insert · NC · Tools · Scripts · View. The old Home tab is gone: New, Open, Save, Close and the recent list are on File, the editing, search, Go To and typing commands on Edit, the scripts that come with gEdit under Tools (group *Built-in Scripts*), and Run, Stop, your own scripts (*My Scripts*), New Script, Edit Script, Rescan and Add Folder on Scripts. Program start is on the Insert tab only. See [The window](docs/user/README.md#the-window).
+- **Reload** on the File tab reads the open file again from disk; with unsaved changes it asks first, and the reload is one undo step. See [Reload from disk](docs/user/README.md#reload-from-disk).
+- **Two settings for the backup history** (Settings, Files): *Most space for earlier versions (MB)* (default 500, 0 for no limit) and *Delete earlier versions of deleted files after (days)* (default 90, 0 to keep for ever). The newest version of every file is always kept. See [Before a save](docs/user/README.md#before-a-save-the-backup-copy).
+- **A status item *Crash recovery is not saving*** stays on the left of the status bar while snapshots cannot be written; click it to try again.
+- **Settings asks before losing input:** *Unsaved changes — Discard changes* when you close the dialog, press Open settings file or Save, or click another page while a value is typed or a machine form is half filled in.
+- **Shortcuts:** the commands without a key are hidden behind *Show commands without a key*, and a line says how many are hidden.
+- **Machines:** a preset that is not yet checked against a machine says *(unconfirmed)* in the choice; the notice that a program and its machine disagree has a *Choose Machine…* button; the name (64) and notes (500) have length limits in the form. See [Machines](docs/user/machines.md).
+- **Scale Speed scales the Klartext cutting speed `VC:`** (`FUNCTION TURNDATA SPIN VCONST:ON VC:120`) under the constant-surface-speed choice, like `SVC=`.
+- **Scale Feed leaves the `F` of a function** — Klartext `M128 F…`, `M140 … F…`, `PLANE … F…` and cycle 19 — as written and says so; the tool list does not count it as a feed, and the inspector keeps showing the feed of the path.
+- **Code help from the control manuals, marked for review** (see [Codes added from the control manuals](docs/user/dialects.md#codes-added-from-the-control-manuals)): Fanuc `G5.4`, `G6.2`, `G29`, `G30.1`, `G41.2`–`G42.6`, `G43.1`, `G92.1` and on the lathe `G50.3`, `G68.1`, `G69.1`; Sinumerik `CYCLE61`, `POCKET3`, `POCKET4`, `SLOT1`, the arguments of `CYCLE93` and `CYCLE97`, `G601`–`G603`, `G643`–`G645`, `CUT3DCC`, `COMPSURF`, `CTOL=`, `OTOL=` and the channel commands `WAITM`, `WAITE`, `SETM`, `CLEARM`; Klartext cycles 251–254, 256, 257, 14 and 21–25, `VC` and the points `P1X`–`P3Z`; Okuma `G93`, `G119`, `G132`/`G133`, `G313` and `M85`. gEdit does not show the review mark in the hover: read them with your manual.
+- **Lathe cycles `G71`–`G76` are read per block:** the inspector and the hover say which of the two blocks a line is (also a second block written alone) and give every word the meaning it has there; code files can say `"block": 1` or `2` for a word. See [Understanding a block](docs/user/inspector.md#cycles).
+- **Klartext `PLANE POINTS P1X+0 …` and the FK points** are words with a value, not unknown text; double-clicking `241,781` selects the whole number.
+- **Linux:** the installed program is `gedit-nc` (`/usr/bin/gedit-nc`), so it does not clash with the GNOME text editor `gedit`; macOS and Windows are unchanged.
+- **Scripts started from the Dock or Finder** get the folders of your login shell's `PATH` added to their own (not when `GEDIT_PYTHON` or the interpreter setting is set); a program started by a script ends with the script on Windows too (Stop, timeout, Quit).
+
+### Changed
+
+- **Convert Case keeps program names and numbers** (`<name>`, `O1234`, `:1234`, file headers, the target of an Okuma `CALL`): the control may tell upper from lower case in them. Converting to upper case leaves an `o1001` as it is, and the results panel says so. See [Convert Case](docs/user/transformations.md#convert-case).
+- **A file under two spellings is one tab** (a symbolic link, a `..` path, on Windows a mapped drive or a short name); Save As onto a file another tab holds is refused whatever its spelling.
+- **A restored session shows the tab you were on first** and opens the others in the background in their old order.
+- **Saving compares content** when the file's size and time are unchanged, so a program another tool rewrote on a USB stick inside the two-second step is noticed.
+- **Open and Reload refuse a file whose size the file system will not tell** (*The file system did not answer for …*).
+- **Backups of files on a USB stick, a network share or another disk are never deleted because the file seems to be missing;** only the oldest copies beyond the space limit go, and the newest copy of every file stays. The folder is looked at at most every 10 minutes, and not at all while `settings.json` cannot be read.
+- **Recovery:** a restored snapshot is deleted only after the restored document has its own new snapshot, so a partial restore offers only what is missing; a restore onto a file another tab holds goes to an untitled tab with a message that stays.
+- **`files.recentLength: 0`** stops recording and hides the list but keeps it; a failed write of the list is reported.
+- **Replace on `machines.json`** always keeps the old file as `machines.json.bak` (or with the date in its name), is not offered for a file from a newer gEdit, and the settings-file rescue copy no longer overwrites an older `.bak`.
+- **Scripts:** editing a script's `input` or `output` header and running it without Rescan reloads the list and runs it with the new header; quitting waits a third of a second for a running script instead of one and a half; error output that was cut is marked *Error messages cut off*; a script whose output was cut is refused with a reason; `/ \ : < > " | ? *` are not allowed in a new script's name.
+- **Hover placement:** a hover opens above the word, or below when there is no room, so near the top it can be drawn over the ribbon; the tips of the search box buttons are no longer cut off. No colour swatch is drawn for `#101=5`. The ribbon scrollbar sits below the group names, and there is no second title row inside the window.
+- **Program checks, Brackets:** an unclosed string or `[` runs to the end of its line and the finding says *a string is opened with " and not closed on its line* / *a [ is opened and not closed on its line*.
+- **Okuma:** a `$` line is never numbered by Renumber, even with `$` removed from the skip list; the program map lists `G171`–`G176` as calls and names up to 16 characters (`O1000ABC` is not a name); `G17`, `G18` and `G119` under radius compensation are reported; `G20` and `G21` are moves to machine positions.
+- **Fanuc lathe:** the turret mirror (`G68`/`G69`) and the coordinate rotation (`G68.1`/`G69.1`) are separate, so `G69` no longer ends a rotation in the state or in address arithmetic.
+- **Klartext:** a modal cycle call (`M89`) runs on polar moves (`LP`, `CP`, `CTP`) too; address arithmetic leaves the absolute FK points as written and warns; cycles 22 and 23 no longer demand `Q208`.
+- **Inspector and cycle form accept decimals** for words that are real numbers although the database counts them (Euler angles and direction components of `G68.2`, `G43.5`, `G41.6`, the knots of `G6.2`).
+- **Colours match the reading:** Klartext cycle names, program names and paths are one piece of text, `VC:120` and `#5` are one word, Fanuc free text and four-digit G/M codes are coloured right, Okuma names and block numbers are whole, and the Sinumerik jump target and `DEF` names are coloured.
+- **The Fanuc mill's *As written* preset** is labelled *As written: X50 and X50. are both 50 mm*; the Machines page no longer promises a backup that it did not always make.
+- **Faster scripts:** the lexer is about a third faster, so Program checks, Extents and the tool list take about two thirds of the time on a 300,000-line program; the program map is built in short slices that keep typing smooth.
+- **The program map scrolls to the cursor's row;** an expanding completion carries the snippet icon.
+
+### Fixed
+
+- **Two tabs could own one file** (a link, a `..`, a mapped drive) and the later save overwrote the earlier.
+- **A same-size rewrite on FAT32 or exFAT** was not noticed before a save.
+- **A transform of 1,000 or more separate edits moved bookmarks and folds,** on the run and on Undo; they now stay where they are, and one Undo still takes the whole run back.
+- **Recovery:** failing snapshots had one message and no lasting sign; a partial restore offered the restored snapshots again; a lone surrogate in a Windows file name lost that document's snapshot.
+- **`state.json` write errors** went to the console only; a saved config file lost a narrowed `chmod`; the backups had no overall bound.
+- **Settings lost typed input** on Open settings file and on Save with a half-filled machine form; a machine note over 500 characters made the machine unusable at the next start.
+- **Sinumerik `GOTOF:20`** was read as a label named `GOTOF`; Remove Block Numbers wrote no row for `GOTOB :20`; the Klartext `PLANE POINTS` word was unknown text.
+- **A wrong status message** appeared when a machine of another control was picked through *Other machines…*; the stale-result dialog could be skipped when another dialog was open; a failed save showed two messages.
+- **Windows:** what a script started survived Stop, timeout and Quit.
+- **A script switched to `panel`** could still replace the document until Rescan.
+- **The first build of the program map** stalled the window for 90 to 150 ms at a time on a big program; the longest stall is now about 50 ms. A Fanuc lathe detection rule took 34 ms on a very long line.
+- **The feed in force** showed the `F` of `M128`, `M140`, `PLANE` or cycle 19 as the path feed.
+
+### Known limits
+
+- A file with CRLF line endings that holds a single stray CR is saved with a CRLF there, so that one spot is not byte for byte; the guide says so under [Files](docs/user/README.md#files).
+- The Windows and Linux changes (the job object, the file-name rules, a mapped drive, the `gedit-nc` name) are proved by the project's builds only and not yet tried on a real machine. The ribbon scrollbar on a Mac with overlay scrollbars has not been looked at.
+- The code entries listed under *New* are marked for review inside the project; a wrong hover text or label is a bug to report.
+- Absolute FK points are left as written when you shift an axis; they are not moved.
 
 ## v1.0.0 (2026-10-10)
 

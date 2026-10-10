@@ -37,13 +37,18 @@ Across the top is the **ribbon**, with seven tabs:
 
 | Tab | What it holds |
 |---|---|
-| **File** | New, Open, Save, Save As, Save All, Close, **Reload** (read the file again from disk) · the recent-files list |
-| **Edit** | Undo, redo, find, replace, comment, duplicate, move, delete line, select all, upper and lower case (plain text commands; on a program use **Convert Case…** on the NC tab) · **Find All…**, **Replace All…**, **Find Whole Address…** ([Searching](#searching)) · **Go to Line or Block…** · **Typing**: **Upper-Case Typing** switches [upper case while you type](#typing-forced-upper-case-and-no-accidental-joins) off or on for this session |
+| **File** | New, Open, Save, Save As, Save All, Close, **Reload** (read the file again from disk, [below](#reload-from-disk)) · the recent-files list |
+| **Edit** | Undo, redo, find, replace, comment, duplicate, move, delete line, select all, upper and lower case (plain text commands; on a program use **Convert Case…** on the NC tab) · **Find All…**, **Replace All…**, **Find Whole Address…** ([Searching](#searching)) · **Go to Line or Block…** (group *Go To*) · **Typing**: **Upper-Case Typing** switches [upper case while you type](#typing-forced-upper-case-and-no-accidental-joins) off or on for this session |
 | **Insert** | The **templates** of the active program — **Program start** (the first lines of a program, in the dialect's own style) and end, tool change, drilling, tapping, turning and threading cycles, for all six dialects — as buttons and lists, **Favorites** first; **Edit Cycle…** for the cycle at the cursor; **Manage Templates…** and **New Template from Selection…** for your own. See [Writing with templates](templates.md) |
 | **NC** | Renumbering, removing block numbers, the cleanups, block skip and selecting a tool segment — see [Transformations](transformations.md) |
-| **Tools** | Compare ([Comparing two programs](#comparing-two-programs)) · the scripts that come with gEdit — **Program checks**, **Scale feed rates**, **Scale spindle speeds**, **Tool list**, **Extents**, **Address arithmetic** (see [Scripts](scripts.md)) · **Check Wait Codes** for [channels](channels.md#check-wait-codes) · **Test Profile on Document** for [profiles of your own](profiles.md#testing-a-profile-on-a-program) |
+| **Tools** | Compare ([Comparing two programs](#comparing-two-programs)) · the scripts that come with gEdit, in the **Built-in Scripts** group — **Program checks**, **Scale feed rates**, **Scale spindle speeds**, **Tool list**, **Extents**, **Address arithmetic** (see [Scripts](scripts.md)) · **Check Wait Codes** for [channels](channels.md#check-wait-codes) · **Test Profile on Document** for [profiles of your own](profiles.md#testing-a-profile-on-a-program) |
 | **Scripts** | Run a script, stop it, your own scripts (**My Scripts**), **New Script**, **Edit Script**, **Rescan**, **Add Folder** — see [Scripts](scripts.md) |
 | **View** | The command palette, the panels (Program Map, Code Inspector, Results, Script Output), the motion-colour switch, folding, display switches, zoom, theme, settings, the shortcut list and About |
+
+The ribbon starts at the top of the window. The program's name is in the window's own title bar
+(with a dot in front of it while the program has unsaved changes); there is no second title row
+inside the window. When the window is too narrow for a tab, the ribbon scrolls sideways, and its
+scrollbar sits below the group names instead of over them.
 
 Below it are the **tabs**, one per open program, then the editor, and at the bottom the
 **status bar**: the file on the left, and on the right the dialect, the machine, the
@@ -84,12 +89,17 @@ entry of the command palette. The macOS menu bar holds only the standard system 
 the first 50 open, with a message. You can also drag files onto the window from Finder or
 Explorer; folders are ignored with a message.
 
-A file that is already open is brought forward instead of being opened twice — also when
-it is spelled differently: in other capitals on Windows and macOS, and on Windows with `/`
-for `\` or with `\\?\` in front. Two different routes to one file — a mapped drive and its
-`\\server\share` name, a symbolic link, a short `PROGRA~1` name — are not recognised and
-give two tabs: do not edit the program in both. Save As onto a file that another tab has
-open is refused.
+A file that is already open is brought forward instead of being opened twice, and the status
+bar says *<name> is already open*. gEdit asks the file system for the file's real path, so
+one tab holds one file however you reach it: in other capitals on Windows and macOS, through
+a symbolic link, with a `..` in the path, and on Windows with `/` for `\` or with `\\?\` in
+front, through a mapped drive or its `\\server\share` name, or through a short `PROGRA~1`
+name. (The Windows cases have not been tried on a real Windows machine yet.) If the file
+system gives no real path — a share that does not answer, say — gEdit falls back to comparing
+the spelling, and two different routes to one file can then give two tabs: do not edit the
+program in both. Save As onto a file that another tab has open, under whatever spelling, is
+refused with *Another tab already holds <name>. Close it first or pick a different file.*;
+the tab's own file under another spelling is fine.
 
 gEdit reads the file as bytes and works out three things for itself:
 
@@ -107,7 +117,9 @@ gEdit reads the file as bytes and works out three things for itself:
 trailer. They are kept out of the text, counted, and written back unchanged. NULs in the
 middle are removed, and the status bar says how many — save the file to write that change.
 A file whose NUL bytes *inside* the program — between the leader and the trailer — are more
-than 10 % of those bytes is data, not a program. It opens **read-only**, exactly as it is, and the status bar says why. Transforms and scripts do not run on it, it cannot be unlocked, and Save As cannot write over the same file; choose another name to save a copy. A file above 50 MB is refused.
+than 10 % of those bytes is data, not a program. It opens **read-only**, exactly as it is, and the status bar says why. Transforms and scripts do not run on it, it cannot be unlocked, and Save As cannot write over the same file; choose another name to save a copy. A file above 50 MB is refused. So is a file whose size the file system will not tell — on a
+share or a stick that does not answer — with *The file system did not answer for <name>, so
+gEdit cannot tell how large it is. Try again.*, rather than reading it blind.
 
 **Save As** to a file you may not write goes back to the dialog before anything is copied or
 written. Saved under another extension, a file that had a name has its dialect detected
@@ -117,6 +129,13 @@ again (see [Dialects](dialects.md#which-dialect-a-file-gets)).
 back. A program you open and save without editing is byte-for-byte the file you started
 with. Before it writes, gEdit copies the version that is on disk aside — see
 [Never losing work](#never-losing-work).
+
+There is one rare exception to "byte-for-byte". A file whose lines end in CRLF but which holds a
+single stray CR — a carriage return with no line feed behind it — in the middle of a line is read
+as having mixed line endings: the stray CR counts as a line break, and it is written back as CRLF
+like the others, so that one spot gains a line feed. The status bar shows *CRLF (mixed)* and says
+when you open the file that it *has mixed line endings and will be saved with CRLF*. If you need
+the CR exactly as it is, do not save that file from gEdit.
 
 If the text holds a character the file's encoding cannot store — Windows-1252 has no `⌀`,
 for example — the save stops and asks whether to write the file as UTF-8 instead
@@ -155,7 +174,21 @@ count. If the CAM system re-posts a program you have open:
   as modified, and your text stays. Saving writes it back.
 
 Saving over a file that changed on disk since you opened or last saved it always asks
-first: **Overwrite** or **Cancel**.
+first: **Overwrite** or **Cancel**. gEdit judges that from the file's size and time. Some file
+systems (FAT32 and exFAT on a USB stick, some shares) date a file only to the nearest two
+seconds, or by another clock, so a program rewritten with the same size inside that time
+would look untouched. When size and time agree, gEdit therefore also compares the content
+before it saves, and asks if the bytes differ. The check every two seconds does the same for
+a file that was changed only a moment before gEdit last looked at it.
+
+### Reload from disk
+
+**Reload** (File tab, or *File: Reload* in the command palette) reads the open file again from
+disk. With unsaved changes it asks first — *Reload <name> from disk? The changes you made since
+the last save are replaced. Undo brings them back.* — because the reload is one undo step:
+`Cmd/Ctrl+Z` brings your text back. A document that was never saved to a file has nothing to
+reload and says so. A file whose size the file system will not tell is not read; the box *Could
+not reload <name>* gives the reason and your text is not touched.
 
 ### Recent files
 
@@ -163,7 +196,10 @@ The File tab has the recent-files list (the **Recent…** drop-down), and **Open
 the command palette (**F1**; listed as *File: Open Recent…*) opens the same list as a
 picker. Entries that no longer exist are marked; opening one offers to drop it from the
 list. The drop-down's last entry, **Clear recent files**, empties the list. Its length is
-`Settings ▸ Files ▸ Recent files to remember` (0 to 50, default 15; 0 turns the list off).
+`Settings ▸ Files ▸ Recent files to remember` (0 to 50, default 15). With 0 gEdit stops
+recording and hides the list, but it keeps the list it had: the list comes back when you set a
+number again. If the list cannot be written to disk, the status bar says *The list of recent
+files could not be saved.*
 Saving a file moves it to the top, and so does reopening the last session — see
 [Coming back where you left off](#coming-back-where-you-left-off).
 
@@ -207,11 +243,25 @@ yours alone. On macOS and Linux the `.bak` copy is given the same permissions as
 program it was made from, so a program only you can read does not get a copy beside it
 that everyone can.
 
-**How many.** `Settings ▸ Files ▸ Versions to keep` (1 to 50, default 5) is how many
-earlier versions gEdit keeps **per file**: save the same program six times and the oldest
-of the six goes. It bounds each file, not the folder as a whole — a thousand programs
-saved five times each are five thousand copies, and nothing deletes them for you. The
-`.bak` setting keeps exactly one, so the second save overwrites the copy the first made.
+**How many, and how much.** `Settings ▸ Files ▸ Versions to keep` (1 to 50, default 5) is how
+many earlier versions gEdit keeps **per file**: save the same program six times and the oldest
+of the six goes. The `.bak` setting keeps exactly one, so the second save overwrites the copy
+the first made. Two more settings on the same page bound the folder as a whole. Both apply
+only to copies kept in gEdit, not to `.bak` files:
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Most space for earlier versions (MB)** | 500; 0 means no limit | When the earlier versions of all files together take more than this, the oldest ones are deleted first. The newest version of every file is always kept, so the folder can stay over the limit |
+| **Delete earlier versions of deleted files after (days)** | 90; 0 means keep for ever | Earlier versions of a file that was deleted (or whose folder was renamed or moved) on this computer's own disk are deleted this many days after the last one was made |
+
+**What never expires.** Earlier versions of a file on a USB stick, a network share or another
+disk are never deleted because the file seems to be missing: a stick that is not plugged in
+looks just like a deleted file, and so does a second stick with the same name. Only the oldest
+copies beyond the space limit go, and the newest copy of every file is always kept. Copies
+made before these settings existed are treated the same way until the file is saved from
+gEdit once more. gEdit looks for copies to delete at most every 10 minutes, after a backup
+was made, and not at all while `settings.json` cannot be read — so a typing mistake in that
+file never turns a limit you had switched off back on.
 
 **Where they are.** Under `<data>/backups`: a folder per program folder, a folder per file
 name, one file per version.
@@ -223,7 +273,9 @@ name, one file per version.
 `3f1a9c04` is a short code for the folder the program lives in — two folders can both hold
 `WELLE.NC`, so the folder has to be part of the name. What you search for is the file
 name, which is the folder inside it. The time stamp is **UTC**, so the names keep sorting
-in order across a clock change; it is not your local time.
+in order across a clock change; it is not your local time. A small hidden file `.folder`
+in that folder notes where the program was; leave it where it is, the cleanup of old copies
+reads it.
 
 A backup is an ordinary copy of the file. Open one with **Open** (`Cmd/Ctrl+O`) — on macOS
 the Library folder is hidden in that dialog: press `Cmd+Shift+G` and type the path — or
@@ -312,9 +364,11 @@ document with what restoring it would do to the file on disk:
 **Restoring writes nothing.** Every document in the list is ticked; untick what you do not
 want back, and **Restore all** (or **Restore N selected**) reopens the rest in the editor as
 unsaved documents — no file on disk is touched until you save it yourself. What you left
-unticked is offered again next time, and so is everything else from the same run, the
-documents you restored included: a run's snapshots are deleted only once all of them have
-been restored. **Later** (or `Esc`, or a click outside the dialog) leaves everything where
+unticked is offered again next time. A snapshot you restored is deleted once the restored
+document has been written into the new snapshot of this run (a moment later), so a partial
+restore offers only what is still missing, not what you already have back. If crash
+recovery is switched off, or the new snapshot cannot be written, the old one stays and is
+offered again. **Later** (or `Esc`, or a click outside the dialog) leaves everything where
 it is and asks again next time. **Discard** deletes all the work in the list — ticked or
 not — for good, after one more question (**Delete it**, or **Cancel**, which brings the
 list back).
@@ -337,23 +391,30 @@ offered back.
 from the window costs you nothing: it adds a snapshot rather than postponing the next one.
 
 **If a snapshot cannot be written at all** — the disk is full, the recovery folder cannot
-be made, or the document has grown past 64 MB — gEdit says so in the status bar, once per
-run, because a crash net that is quietly off is worse than none. Save to a file when you
-see it.
+be made, or the document has grown past 64 MB — gEdit says so, because a crash net that is
+quietly off is worse than none: a message once, and then an item **Crash recovery is not
+saving** on the left of the status bar for as long as it lasts (hover it to see which
+documents). Click it to try again at once. It goes when the snapshots are written again, or
+when you save or close the documents concerned. Save to a file when you see it.
 
 **If the file is already open again.** At start, the last session is reopened only after
 you have answered the dialog, so this happens only when the dialog comes late — the second
 look after a quick restart, or `Show Recovered Work`. The program is then usually open
 already, and the recovered text comes back in an *untitled* tab named after the file: the
 work is all there, but Save asks where to put it, and gEdit will not save it onto a file
-that another tab holds. Close the program's other tab first, then use Save As on the
+that another tab holds. A message that stays on screen names the file: *<name> is already open
+in another tab, so its recovered text is in an untitled tab. Use Save As to keep it under
+another name.* The same happens when the other tab holds the file under another spelling (a
+link, a path with `..`). Close the program's other tab first, then use Save As on the
 recovered tab, which offers the program's path. To get the text back on the file itself,
 choose **Later**, close the program's tab, and use `Show Recovered Work`.
 
 ### Coming back where you left off
 
 **Reopen the last files at start.** The programs that were open when gEdit was last closed
-come back, up to 50 of them, with the one you were on in front. A file gEdit cannot reach
+come back, up to 50 of them, with the one you were on in front. That tab opens first and
+alone, so you can start working in it at once; the other files then open in the background and
+take their places in the order they had. A file gEdit cannot reach
 at that moment is skipped, with one line in the status bar next to the count of files that
 did open, rather than one dialog per file; hover it to see which files were skipped.
 
@@ -476,7 +537,8 @@ carries it.
 
 The **Program Map** lists what the dialect's profile says is worth listing: the program
 start, tool calls, section headings, comments, labels, program stops, subprogram calls and
-the program end. Click an entry to jump to it. It follows the program as you type.
+the program end. Click an entry to jump to it. It follows the program as you type, and scrolls so that the
+entry the cursor is in stays in view as you move through the program.
 
 On a program of a machine with [channels](channels.md), the map groups its tools and wait
 codes by channel, the status bar says which channel the cursor is in, and `Alt+F7` /
@@ -586,6 +648,14 @@ belongs to, whether it stays active until something replaces it, and which addre
 needs. Where the feed carries a thread pitch rather than a feed rate, the hover says so —
 that is exactly the place where scaling a feed would cut a different thread.
 
+The hover opens above the word, or below it when there is no room above in the window. For a
+word on one of the first lines it can therefore be drawn over the tab bar and the ribbon while
+it is shown. The tips of the buttons in the search box at the top right of the editor are
+not cut off at the edge of the editor any more either.
+
+gEdit draws no colour swatches in the editor: a line such as `#101=5` has no coloured square in
+front of the number, whatever the number looks like.
+
 ![The hover on a G code](../screenshots/hover.png)
 
 *`G81`: what it does, that it is a cycle and modal, and that it wants Z, R and F.*
@@ -599,7 +669,8 @@ chosen, every reading. See [The hover in context](inspector.md#the-hover-in-cont
 
 Typing offers completions from the same database: the codes of the active dialect with
 their descriptions, and, on a line with nothing before the word, the
-[templates](templates.md#templates-in-completion) of the program. Both are switched in `Settings ▸ Assistance`, and completion can be
+[templates](templates.md#templates-in-completion) of the program. A completion that inserts more
+than the code itself — a cycle with its words — shows the snippet icon; a plain code does not. Both are switched in `Settings ▸ Assistance`, and completion can be
 set to appear automatically, only when you ask for it, or not at all.
 
 The descriptions are written by the project, in its own words, for the subset of code that
@@ -615,7 +686,10 @@ entry the project has written but not yet checked against a control's documentat
 **not shown in the hover at all** — the hover says the database does not describe the word,
 which is the honest answer while nobody has confirmed it; the completion list shows it with
 a "Not verified yet" note instead. **Your control's manual is the authority, not this
-editor.**
+editor.** The codes added in this version from the control manuals
+([listed in Dialects](dialects.md#codes-added-from-the-control-manuals)) are marked inside the
+project as waiting for a review, but gEdit does not show that mark: read them with the manual
+at hand.
 
 ## Checking a program before the machine
 
@@ -868,10 +942,19 @@ in lower case, on every shipped dialect.
 | **Appearance** | Theme (System, Light or Dark), editor font and size |
 | **Editor** | Tab width, spaces or tabs, whitespace display, word wrap, minimap, line numbers, current-line highlight, sticky scroll, text drag and drop, copy without a selection |
 | **Assistance** | Hover help on or off; completion automatic, manual or off; [colouring the lines by how they move](inspector.md#motion-colours) on or off |
-| **Files** | Length of the recent list, what happens when a file changes outside gEdit, the dialect new files start in, and what [Never losing work](#never-losing-work) sets: where the backup copy goes and how many versions to keep, and the switches for crash recovery, session restore and per-file memory |
+| **Files** | Length of the recent list, what happens when a file changes outside gEdit, the dialect new files start in, and what [Never losing work](#never-losing-work) sets: where the backup copy goes, how many versions to keep, the most space they may take and when the earlier versions of deleted files go, and the switches for crash recovery, session restore and per-file memory |
 | **Scripts** | The Python interpreter, extra script folders, the time limit for a run, whether the bundled scripts are listed — and the path of your own scripts folder |
 | **Machines** | Your machine configurations: add, edit, duplicate, remove, import and export, and which one is the default for a dialect — see [Machines](machines.md) |
 | **Profiles** | Your own profiles and code files: new, open, import, export, remove, test on the open program — see [Your own profiles and code files](profiles.md). **Manage Profiles…** in the palette opens the dialog on this page |
+
+**Closing the dialog with something unsaved asks first.** If you typed a new value and leave
+without **Save** — **Cancel**, `Esc`, a click outside the dialog, or **Open settings file** —
+gEdit asks *Unsaved changes: The changes you made in Settings are not saved. Leave without
+saving them?* and offers **Discard changes**. The same question comes while a machine on the
+Machines page is half filled in (*The machine you are adding or editing is not saved yet. Leave
+without saving it?*): when you close the dialog, press **Open settings file** or **Save**, and
+also when you click another page of the dialog, because the page you leave drops the form.
+With nothing typed, nothing is asked.
 
 The Machines and Profiles pages are not pages of settings. Machine configurations are
 records with names of their own, and they live in their own file (`machines.json`), not in
@@ -964,3 +1047,8 @@ therefore narrows both, and every folder it makes inside them, to your account a
 puts that back on the two at every start; on Windows they sit in your own profile. A
 snapshot is a plain text file, so you can copy your work out by hand if gEdit will not
 start.
+
+**Starting it from a terminal.** On macOS and Windows the program is called gEdit. On Linux
+the installed program is `gedit-nc` (`/usr/bin/gedit-nc`; the entry in the application menu is
+still *gEdit*), so that it does not clash with the GNOME text editor, which is also called
+`gedit`.
