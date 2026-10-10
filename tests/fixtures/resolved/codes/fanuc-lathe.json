@@ -203,6 +203,51 @@
       ]
     },
     {
+      "code": "G5.4",
+      "description": "Switches the high-response servo control HRV3 or HRV4 on or off. The manuals at hand list the code but not the words it is written with, so gEdit describes none of them.",
+      "group": "nonmodal",
+      "label": "HRV3 or HRV4 servo control, on or off",
+      "review": "pending"
+    },
+    {
+      "code": "G6.2",
+      "conflicts": [
+        "radiusComp"
+      ],
+      "description": "Cuts along a NURBS curve that the program gives as control points, weights and knots, instead of many short lines. Each block holds a knot K and a control point X, Y, Z with an optional weight R; the first block may give the order of the curve with P, and the curve ends with as many blocks of a knot alone as its order. The curve starts at the first control point and ends at the last; the points in between shape it and need not lie on it. Like G01 it stays in force until another code of the motion group. Cutter radius compensation has to be off.",
+      "group": "motion",
+      "label": "NURBS interpolation",
+      "modal": true,
+      "params": [
+        {
+          "address": "P",
+          "label": "Order of the curve, 2 to 4 (4, a cubic curve, when left out); in the first block only",
+          "max": 4,
+          "min": 2,
+          "unit": "count"
+        },
+        {
+          "address": "K",
+          "label": "Knot",
+          "unit": "count"
+        },
+        {
+          "address": "R",
+          "label": "Weight of the control point (1 when left out)",
+          "unit": "count"
+        },
+        {
+          "address": "F",
+          "label": "Feed",
+          "min": 0
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "motion": "feed"
+      }
+    },
+    {
       "aliases": [
         "G107"
       ],
@@ -377,6 +422,55 @@
     },
     {
       "axisWords": "machine",
+      "code": "G29",
+      "description": "Moves at rapid from the reference point, by way of the intermediate point the last G28, G30 or G30.1 stored, to the position written in the block. The axis words are that position in the program's coordinates; an incremental value counts from the intermediate point. Only the axes written move.",
+      "group": "nonmodal",
+      "label": "Return from the reference point",
+      "params": [
+        {
+          "address": "X",
+          "label": "Position to go to from the reference point, in the program's coordinates (incremental: from the intermediate point)"
+        },
+        {
+          "address": "Y",
+          "label": "Position to go to from the reference point, in the program's coordinates (incremental: from the intermediate point)"
+        },
+        {
+          "address": "Z",
+          "label": "Position to go to from the reference point, in the program's coordinates (incremental: from the intermediate point)"
+        },
+        {
+          "address": "U",
+          "label": "Position to go to from the reference point, in the program's coordinates (incremental: from the intermediate point)"
+        },
+        {
+          "address": "V",
+          "label": "Position to go to from the reference point, in the program's coordinates (incremental: from the intermediate point)"
+        },
+        {
+          "address": "W",
+          "label": "Position to go to from the reference point, in the program's coordinates (incremental: from the intermediate point)"
+        },
+        {
+          "address": "A",
+          "label": "Position to go to from the reference point, in the program's coordinates (incremental: from the intermediate point)"
+        },
+        {
+          "address": "B",
+          "label": "Position to go to from the reference point, in the program's coordinates (incremental: from the intermediate point)"
+        },
+        {
+          "address": "C",
+          "label": "Position to go to from the reference point, in the program's coordinates (incremental: from the intermediate point)"
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "motion": "rapid"
+      }
+    },
+    {
+      "axisWords": "machine",
       "code": "G30",
       "conflicts": [
         "tcp"
@@ -428,6 +522,55 @@
           "label": "Intermediate point on the way to that reference point, in the program's coordinates"
         }
       ],
+      "sets": {
+        "motion": "rapid"
+      }
+    },
+    {
+      "axisWords": "machine",
+      "code": "G30.1",
+      "description": "Moves at rapid, first to the intermediate point written in the block (in the program's coordinates, absolute or incremental), then to the floating reference point: a tool change position stored on the machine that can be moved to suit the part. Cancel radius and length compensation before it.",
+      "group": "nonmodal",
+      "label": "Return to the floating reference point",
+      "params": [
+        {
+          "address": "X",
+          "label": "Intermediate point on the way to the floating reference point, in the program's coordinates"
+        },
+        {
+          "address": "Y",
+          "label": "Intermediate point on the way to the floating reference point, in the program's coordinates"
+        },
+        {
+          "address": "Z",
+          "label": "Intermediate point on the way to the floating reference point, in the program's coordinates"
+        },
+        {
+          "address": "U",
+          "label": "Intermediate point on the way to the floating reference point, in the program's coordinates"
+        },
+        {
+          "address": "V",
+          "label": "Intermediate point on the way to the floating reference point, in the program's coordinates"
+        },
+        {
+          "address": "W",
+          "label": "Intermediate point on the way to the floating reference point, in the program's coordinates"
+        },
+        {
+          "address": "A",
+          "label": "Intermediate point on the way to the floating reference point, in the program's coordinates"
+        },
+        {
+          "address": "B",
+          "label": "Intermediate point on the way to the floating reference point, in the program's coordinates"
+        },
+        {
+          "address": "C",
+          "label": "Intermediate point on the way to the floating reference point, in the program's coordinates"
+        }
+      ],
+      "review": "pending",
       "sets": {
         "motion": "rapid"
       }
@@ -528,6 +671,169 @@
       "group": "compensation",
       "label": "Nose radius compensation, tool right",
       "modal": true,
+      "sets": {
+        "radiusComp": "on"
+      }
+    },
+    {
+      "code": "G41.2",
+      "description": "Three-dimensional cutter radius compensation for five-axis machining: the control works out the tool direction from the rotary axis positions the blocks write and offsets the tool by its radius, at right angles to that direction, to the left of the path. D names the radius offset. G40 ends it. Where a machine parameter asks for the older codes, a machine with a turning table writes G41.4 and one with a turning head and a turning table G41.5 instead.",
+      "group": "compensation",
+      "label": "Five-axis cutter radius compensation, left",
+      "modal": true,
+      "params": [
+        {
+          "address": "D",
+          "label": "Radius offset register"
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "radiusComp": "on"
+      }
+    },
+    {
+      "code": "G41.3",
+      "description": "On a machine whose head tilts the tool, offsets the tool by its radius so that it cuts with the edge that leads in the direction of travel. The block holds only D (and a block number) and is allowed under G00 or G01 only; the block after it has to move, and not along the tool axis. A tool direction written as I, J and K cannot be used with it. G40 ends it.",
+      "group": "compensation",
+      "label": "Five-axis cutter compensation on the leading edge",
+      "modal": true,
+      "params": [
+        {
+          "address": "D",
+          "label": "Radius offset register"
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "radiusComp": "on"
+      }
+    },
+    {
+      "code": "G41.4",
+      "description": "The code a machine with a turning table writes for G41.2 when a machine parameter asks for the older (FS16i-compatible) codes; it means the same there. On another machine, or without that parameter, the control refuses it. G40 ends it.",
+      "group": "compensation",
+      "label": "Five-axis cutter radius compensation, left, older code for a machine with a turning table",
+      "modal": true,
+      "params": [
+        {
+          "address": "D",
+          "label": "Radius offset register"
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "radiusComp": "on"
+      }
+    },
+    {
+      "code": "G41.5",
+      "description": "The code a machine with a turning head and a turning table writes for G41.2 when a machine parameter asks for the older (FS16i-compatible) codes; it means the same there. On another machine, or without that parameter, the control refuses it. G40 ends it.",
+      "group": "compensation",
+      "label": "Five-axis cutter radius compensation, left, older code for a machine with a turning head and a turning table",
+      "modal": true,
+      "params": [
+        {
+          "address": "D",
+          "label": "Radius offset register"
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "radiusComp": "on"
+      }
+    },
+    {
+      "code": "G41.6",
+      "description": "The control offsets the tool by its radius at right angles to the tool direction, to the left of the path. The blocks write the tool direction at their end point as I, J and K instead of rotary axis positions, so the same program suits a machine with a turning head, a turning table or both. D names the radius offset and Q a tilt angle of the tool in degrees. G40 ends it.",
+      "group": "compensation",
+      "label": "Five-axis cutter radius compensation, left, tool direction by I, J, K",
+      "modal": true,
+      "params": [
+        {
+          "address": "D",
+          "label": "Radius offset register"
+        },
+        {
+          "address": "Q",
+          "label": "Tilt angle of the tool, in degrees",
+          "unit": "angle"
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "radiusComp": "on"
+      }
+    },
+    {
+      "code": "G42.2",
+      "description": "Three-dimensional cutter radius compensation for five-axis machining: the control works out the tool direction from the rotary axis positions the blocks write and offsets the tool by its radius, at right angles to that direction, to the right of the path. D names the radius offset. G40 ends it. Where a machine parameter asks for the older codes, a machine with a turning table writes G42.4 and one with a turning head and a turning table G42.5 instead.",
+      "group": "compensation",
+      "label": "Five-axis cutter radius compensation, right",
+      "modal": true,
+      "params": [
+        {
+          "address": "D",
+          "label": "Radius offset register"
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "radiusComp": "on"
+      }
+    },
+    {
+      "code": "G42.4",
+      "description": "The code a machine with a turning table writes for G42.2 when a machine parameter asks for the older (FS16i-compatible) codes; it means the same there. On another machine, or without that parameter, the control refuses it. G40 ends it.",
+      "group": "compensation",
+      "label": "Five-axis cutter radius compensation, right, older code for a machine with a turning table",
+      "modal": true,
+      "params": [
+        {
+          "address": "D",
+          "label": "Radius offset register"
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "radiusComp": "on"
+      }
+    },
+    {
+      "code": "G42.5",
+      "description": "The code a machine with a turning head and a turning table writes for G42.2 when a machine parameter asks for the older (FS16i-compatible) codes; it means the same there. On another machine, or without that parameter, the control refuses it. G40 ends it.",
+      "group": "compensation",
+      "label": "Five-axis cutter radius compensation, right, older code for a machine with a turning head and a turning table",
+      "modal": true,
+      "params": [
+        {
+          "address": "D",
+          "label": "Radius offset register"
+        }
+      ],
+      "review": "pending",
+      "sets": {
+        "radiusComp": "on"
+      }
+    },
+    {
+      "code": "G42.6",
+      "description": "The control offsets the tool by its radius at right angles to the tool direction, to the right of the path. The blocks write the tool direction at their end point as I, J and K instead of rotary axis positions, so the same program suits a machine with a turning head, a turning table or both. D names the radius offset and Q a tilt angle of the tool in degrees. G40 ends it.",
+      "group": "compensation",
+      "label": "Five-axis cutter radius compensation, right, tool direction by I, J, K",
+      "modal": true,
+      "params": [
+        {
+          "address": "D",
+          "label": "Radius offset register"
+        },
+        {
+          "address": "Q",
+          "label": "Tilt angle of the tool, in degrees",
+          "unit": "angle"
+        }
+      ],
+      "review": "pending",
       "sets": {
         "radiusComp": "on"
       }
@@ -924,51 +1230,69 @@
     },
     {
       "code": "G69.1",
-      "description": "The way a lathe control writes the end of a tilted plane or a three-dimensional rotation; a machining centre writes G69.",
+      "description": "Ends G68.1 (the rotation or the three-dimensional conversion) and the tilted working plane of G68.2, and goes back to the coordinates of the program. It may stand in a block with other words; the first move after it has to be absolute.",
       "frame": "close",
       "group": "frame",
-      "label": "Tilted working plane off, lathe spelling"
+      "label": "Coordinate system rotation off",
+      "review": "pending"
     },
     {
       "axisWords": "data",
       "blocks": 2,
       "code": "G73",
-      "description": "Walks the profile again and again, each time a little closer to the finished shape. It suits a blank that is already near the final form, such as a casting or a forging. Two blocks: the stock to remove and the number of passes first, then the profile range and the allowances.",
+      "description": "Walks the profile again and again, each time a little closer to the finished shape. It suits a blank that is already near the final form, such as a casting or a forging. Written in two blocks: the relief on X and Z and the number of passes first, then the profile range, the allowances and the feed. The block with P and Q runs the cycle. The first block's values are machine parameters that the block overwrites, so they stay in force until written again. The addresses are those of the usual ZX plane (G18); in another plane the control reads other ones.",
       "group": "cycle",
       "label": "Pattern repeating cycle",
       "params": [
         {
           "address": "U",
-          "label": "Stock to remove on X in the first block, allowance on X in the second"
+          "block": 1,
+          "label": "Relief on X: how far the first pass stands off the finished shape, a radius value with sign"
         },
         {
           "address": "W",
-          "label": "Stock to remove on Z in the first block, allowance on Z in the second"
+          "block": 1,
+          "label": "Relief on Z: how far the first pass stands off the finished shape, with sign"
         },
         {
           "address": "R",
-          "label": "Number of passes in the first block",
+          "block": 1,
+          "label": "Number of roughing passes",
           "min": 0,
           "unit": "count"
         },
         {
           "address": "P",
+          "block": 2,
           "label": "Block number of the first profile block",
           "min": 0,
           "unit": "count"
         },
         {
           "address": "Q",
+          "block": 2,
           "label": "Block number of the last profile block",
           "min": 0,
           "unit": "count"
         },
         {
+          "address": "U",
+          "block": 2,
+          "label": "Finishing allowance on X, read like X (a diameter value when X is a diameter); its sign gives the side"
+        },
+        {
+          "address": "W",
+          "block": 2,
+          "label": "Finishing allowance on Z; its sign gives the side"
+        },
+        {
           "address": "F",
-          "label": "Roughing feed",
+          "block": 2,
+          "label": "Roughing feed (a feed inside the profile blocks is not used)",
           "min": 0
         }
       ],
+      "review": "pending",
       "sets": {
         "cycle": "start"
       }
@@ -976,41 +1300,63 @@
     {
       "blocks": 2,
       "code": "G74",
-      "description": "Drills or grooves into the face in pecks, pulling back by R between them so the chips clear. Written in two blocks: the retract first, then the end point and the steps. On a lathe it is not a tapping cycle, so F is an ordinary feed — but the same number is the left-hand tapping cycle on a mill, where F is the pitch. gEdit scales neither the F of such a block nor the spindle speed it runs at: refusing a real pecking feed costs one edit by hand, scaling a pitch or the speed of a tap cuts a different thread.",
+      "description": "Drills or grooves into the face in pecks along Z, backing off between them so the chips break. Written in two blocks: the back-off amount first, then the end point, the steps, the relief at the bottom and the feed. The block with an axis word runs the cycle; R means the back-off in the first block and the relief at the bottom in the second. Without X (U) and P it only pecks along Z: a deep-hole drilling cycle. On a lathe it is not a tapping cycle, so F is an ordinary feed, but the same number is the left-hand tapping cycle on a mill, where F is the pitch. gEdit scales neither the F of such a block nor the spindle speed it runs at: refusing a real pecking feed costs one edit by hand, scaling a pitch or the speed of a tap cuts a different thread.",
       "group": "cycle",
       "label": "Face pecking cycle",
       "params": [
         {
           "address": "R",
-          "label": "Retract between the pecks, in the first block"
+          "block": 1,
+          "label": "Back-off after each peck, a radius value without sign"
         },
         {
           "address": "X",
-          "label": "End diameter of the last groove; leave it out for a hole on centre"
+          "block": 2,
+          "label": "End point on X: the position of the last groove"
+        },
+        {
+          "address": "U",
+          "block": 2,
+          "label": "End point on X, as a distance from the start point"
         },
         {
           "address": "Z",
-          "label": "Depth along Z"
+          "block": 2,
+          "label": "End point on Z: the depth"
+        },
+        {
+          "address": "W",
+          "block": 2,
+          "label": "End point on Z, as a distance from the start point"
         },
         {
           "address": "P",
-          "label": "Step on X between the grooves, in least increments without a point (µm on a metric IS-B machine)",
+          "block": 2,
+          "label": "Step on X between the grooves, a radius value in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
           "unit": "increment"
         },
         {
           "address": "Q",
-          "label": "Peck along Z, in least increments without a point (µm on a metric IS-B machine)",
+          "block": 2,
+          "label": "Depth of each peck along Z, in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
           "unit": "increment"
         },
         {
+          "address": "R",
+          "block": 2,
+          "label": "Relief at the bottom of the cut, a radius value; normally positive, with X and P left out its sign gives the direction"
+        },
+        {
           "address": "F",
+          "block": 2,
           "label": "Feed",
           "min": 0
         }
       ],
       "pitchFeedAmbiguous": true,
+      "review": "pending",
       "sets": {
         "cycle": "start"
       },
@@ -1019,36 +1365,71 @@
     {
       "blocks": 2,
       "code": "G76",
-      "description": "Cuts a thread in several passes, taking less material each time. Written in two blocks: the finishing passes, the pull-out chamfer and the insert angle packed into P, the smallest cut depth and the finish allowance first; then the thread end, the taper, the thread height, the first cut depth and the lead. F is the thread lead per revolution, not a feed rate. P means two different things in the two blocks and one entry cannot tell them apart, so gEdit counts it rather than measuring it: the packed six digits of the first block are never converted, and the thread height of the second is shown as written.",
+      "description": "Cuts a thread in several passes, taking less material each time. Written in two blocks: the finishing passes, the pull-out chamfer and the insert angle packed into P, the smallest depth of cut and the finishing allowance first; then the end point, the taper, the thread height, the depth of the first cut and the lead. The block with X (U) and Z (W) runs the cycle; P, Q and R mean different things in the two blocks, and each of them stays in force until it is written again. F is the thread lead per revolution, not a feed rate. gEdit shows both P values as written: the packed digits of the first block must never be converted.",
       "group": "cycle",
       "label": "Multi-pass threading cycle",
       "params": [
         {
           "address": "P",
-          "label": "Finishing passes, chamfer and insert angle packed into six digits in the first block; thread height in microns in the second. Counted, not measured: the packed digits must never be converted, and one entry cannot tell the two blocks apart",
+          "block": 1,
+          "label": "Six digits packed: number of finishing passes (01-99), pull-out chamfer in tenths of the lead (00-99), insert angle (80, 60, 55, 30, 29 or 00 degrees); P010060 is one pass, no chamfer, 60°. Counted, never converted",
           "min": 0,
           "unit": "count"
         },
         {
           "address": "Q",
-          "label": "Smallest cut depth in the first block, first cut depth in the second, both in least increments without a point (µm on a metric IS-B machine)",
+          "block": 1,
+          "label": "Smallest depth of cut, a radius value in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
           "unit": "increment"
         },
         {
           "address": "R",
-          "label": "Finish allowance in the first block, taper in the second"
+          "block": 1,
+          "label": "Finishing allowance, a radius value"
         },
         {
           "address": "X",
-          "label": "Thread end diameter at the root"
+          "block": 2,
+          "label": "End point of the thread on X (at the root)"
+        },
+        {
+          "address": "U",
+          "block": 2,
+          "label": "End point of the thread on X, as a distance from the start point"
         },
         {
           "address": "Z",
-          "label": "Thread end along Z"
+          "block": 2,
+          "label": "End point of the thread on Z"
+        },
+        {
+          "address": "W",
+          "block": 2,
+          "label": "End point of the thread on Z, as a distance from the start point"
+        },
+        {
+          "address": "R",
+          "block": 2,
+          "label": "Taper: the difference in radius between the start and the end of the thread, with sign; 0 for a straight thread"
+        },
+        {
+          "address": "P",
+          "block": 2,
+          "label": "Thread height, a radius value in least increments without a point (µm on a metric IS-B machine); shown as written",
+          "min": 0,
+          "unit": "count"
+        },
+        {
+          "address": "Q",
+          "block": 2,
+          "label": "Depth of the first cut, a radius value in least increments without a point (µm on a metric IS-B machine)",
+          "min": 0,
+          "unit": "increment"
         },
         {
           "address": "F",
+          "block": 2,
           "label": "Thread lead per revolution",
           "min": 0,
           "required": true,
@@ -1056,6 +1437,7 @@
         }
       ],
       "pitchFeed": true,
+      "review": "pending",
       "sets": {
         "cycle": "start"
       }
@@ -1899,6 +2281,46 @@
       "label": "Print as binary"
     },
     {
+      "axisWords": "data",
+      "code": "G50.3",
+      "description": "Puts the work coordinate system back where its work offset says, after a manual move or a shift has displaced it. The block names the axes to reset, each with 0; an axis it does not name keeps its coordinates. This is the G-code system A spelling; systems B and C write G92.1.",
+      "group": "nonmodal",
+      "label": "Work coordinate system preset",
+      "review": "pending",
+      "shift": true
+    },
+    {
+      "axisWords": "data",
+      "code": "G68.1",
+      "description": "Turns the coordinates of the following blocks about a centre in the selected plane by the angle R, positive counter-clockwise (absolute, unless a machine parameter makes it incremental). The two axis words of the plane give the centre, always absolute; without them the tool position is the centre, and without R a machine parameter gives the angle. With X, Y, Z and I, J, K the same code starts a three-dimensional coordinate conversion about the direction I, J, K. G69.1 ends both. The first move after G68.1 and after G69.1 has to be absolute.",
+      "frame": "open",
+      "group": "frame",
+      "label": "Coordinate system rotation",
+      "params": [
+        {
+          "address": "R",
+          "label": "Rotation angle, positive counter-clockwise",
+          "unit": "angle"
+        },
+        {
+          "address": "I",
+          "label": "Rotation axis direction, X component (three-dimensional conversion)",
+          "unit": "count"
+        },
+        {
+          "address": "J",
+          "label": "Rotation axis direction, Y component (three-dimensional conversion)",
+          "unit": "count"
+        },
+        {
+          "address": "K",
+          "label": "Rotation axis direction, Z component (three-dimensional conversion)",
+          "unit": "count"
+        }
+      ],
+      "review": "pending"
+    },
+    {
       "code": "G70",
       "description": "Runs the finishing pass along the profile blocks from P to Q, taking the feed and speed written inside those blocks. It follows a roughing cycle that left an allowance.",
       "group": "cycle",
@@ -1927,40 +2349,52 @@
       "axisWords": "data",
       "blocks": 2,
       "code": "G71",
-      "description": "Roughs an outside or inside contour in passes along Z and leaves an allowance for the finishing cycle. It is written in two blocks: depth of cut and retract first, then the profile range and the allowances.",
+      "description": "Roughs an outside or inside contour in passes along Z and leaves a finishing allowance for G70. Written in two blocks: the depth of cut and the retract first, then the profile range, the allowances and the feed. The block with P and Q runs the cycle; the same U means the depth of cut in the first block and the allowance on X in the second. The first block's values are machine parameters that the block overwrites, so they stay in force until written again. The addresses are those of the usual ZX plane (G18); in another plane the control reads other ones.",
       "group": "cycle",
       "label": "Roughing cycle along Z",
       "params": [
         {
           "address": "U",
-          "label": "Depth of cut per pass in the first block (a radius value), allowance on X in the second (a diameter, its sign says outside or inside)"
+          "block": 1,
+          "label": "Depth of cut per pass, a radius value without sign"
         },
         {
           "address": "R",
-          "label": "Retract between the passes, in the first block"
+          "block": 1,
+          "label": "Retract after each pass, a radius value without sign"
         },
         {
           "address": "P",
+          "block": 2,
           "label": "Block number of the first profile block",
           "min": 0,
           "unit": "count"
         },
         {
           "address": "Q",
+          "block": 2,
           "label": "Block number of the last profile block",
           "min": 0,
           "unit": "count"
         },
         {
+          "address": "U",
+          "block": 2,
+          "label": "Finishing allowance on X, read like X (a diameter value when X is a diameter); its sign gives the side"
+        },
+        {
           "address": "W",
-          "label": "Allowance on Z"
+          "block": 2,
+          "label": "Finishing allowance on Z; its sign gives the side"
         },
         {
           "address": "F",
-          "label": "Roughing feed",
+          "block": 2,
+          "label": "Roughing feed (a feed inside the profile blocks is not used)",
           "min": 0
         }
       ],
+      "review": "pending",
       "sets": {
         "cycle": "start"
       }
@@ -1969,40 +2403,52 @@
       "axisWords": "data",
       "blocks": 2,
       "code": "G72",
-      "description": "The same as G71, but the passes run along X, so it roughs a face instead of a diameter. The depth of cut in the first block is a W value.",
+      "description": "The same as G71, but the passes run along X, so it roughs a face instead of a diameter. Written in two blocks: the depth of cut (W) and the retract first, then the profile range, the allowances and the feed. The block with P and Q runs the cycle; the same W means the depth of cut in the first block and the allowance on Z in the second. The first block's values are machine parameters that the block overwrites, so they stay in force until written again. The addresses are those of the usual ZX plane (G18); in another plane the control reads other ones.",
       "group": "cycle",
       "label": "Roughing cycle along X (facing)",
       "params": [
         {
           "address": "W",
-          "label": "Depth of cut per pass in the first block, allowance on Z in the second"
+          "block": 1,
+          "label": "Depth of cut per pass, a radius value without sign"
         },
         {
           "address": "R",
-          "label": "Retract between the passes, in the first block"
+          "block": 1,
+          "label": "Retract after each pass, a radius value without sign"
         },
         {
           "address": "P",
+          "block": 2,
           "label": "Block number of the first profile block",
           "min": 0,
           "unit": "count"
         },
         {
           "address": "Q",
+          "block": 2,
           "label": "Block number of the last profile block",
           "min": 0,
           "unit": "count"
         },
         {
           "address": "U",
-          "label": "Allowance on X (a diameter, its sign says outside or inside)"
+          "block": 2,
+          "label": "Finishing allowance on X, read like X (a diameter value when X is a diameter); its sign gives the side"
+        },
+        {
+          "address": "W",
+          "block": 2,
+          "label": "Finishing allowance on Z; its sign gives the side"
         },
         {
           "address": "F",
-          "label": "Roughing feed",
+          "block": 2,
+          "label": "Roughing feed (a feed inside the profile blocks is not used)",
           "min": 0
         }
       ],
+      "review": "pending",
       "sets": {
         "cycle": "start"
       }
@@ -2010,40 +2456,62 @@
     {
       "blocks": 2,
       "code": "G75",
-      "description": "The same as G74 turned through ninety degrees: it pecks into a diameter and steps along Z, which is how a wide groove is cut with a narrow insert.",
+      "description": "The same as G74 turned through ninety degrees: it pecks into a diameter along X and steps along Z, which is how a wide groove is cut with a narrow insert. Written in two blocks: the back-off amount first, then the end point, the steps, the relief at the bottom and the feed. The block with an axis word runs the cycle; R means the back-off in the first block and the relief at the bottom in the second. Without Z (W) and Q it cuts one groove, or parts off.",
       "group": "cycle",
       "label": "Grooving cycle along X",
       "params": [
         {
           "address": "R",
-          "label": "Retract between the pecks, in the first block"
+          "block": 1,
+          "label": "Back-off after each peck, a radius value without sign"
         },
         {
           "address": "X",
-          "label": "Groove bottom diameter"
+          "block": 2,
+          "label": "End point on X: the bottom of the groove"
+        },
+        {
+          "address": "U",
+          "block": 2,
+          "label": "End point on X, as a distance from the start point"
         },
         {
           "address": "Z",
-          "label": "End point of the last groove along Z"
+          "block": 2,
+          "label": "End point on Z: the position of the last groove"
+        },
+        {
+          "address": "W",
+          "block": 2,
+          "label": "End point on Z, as a distance from the start point"
         },
         {
           "address": "P",
-          "label": "Peck on X, in least increments without a point (µm on a metric IS-B machine)",
+          "block": 2,
+          "label": "Depth of each peck on X, a radius value in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
           "unit": "increment"
         },
         {
           "address": "Q",
+          "block": 2,
           "label": "Step along Z between the grooves, in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
           "unit": "increment"
         },
         {
+          "address": "R",
+          "block": 2,
+          "label": "Relief at the bottom of the cut, a radius value; normally positive, with Z and Q left out its sign gives the direction"
+        },
+        {
           "address": "F",
+          "block": 2,
           "label": "Feed",
           "min": 0
         }
       ],
+      "review": "pending",
       "sets": {
         "cycle": "start"
       }

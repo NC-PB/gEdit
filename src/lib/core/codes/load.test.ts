@@ -614,3 +614,85 @@ describe('the database against the rest of the app', () => {
     expect(text.toLowerCase()).toContain('degrees per minute');
   });
 });
+
+describe('B1: the block of a two-block cycle (CodeParam.block) and the review mark', () => {
+  const g71 = (params: unknown[], extra: Record<string, unknown> = {}): unknown => ({
+    dialect: 'x',
+    version: 1,
+    codes: [{ code: 'G71', label: 'Roughing', blocks: 2, ...extra, params }],
+  });
+
+  it('keeps one declaration of an address per block, each with its own label', () => {
+    const { db, problems } = load(
+      g71([
+        { address: 'U', label: 'Depth of cut', block: 1 },
+        { address: 'U', label: 'Allowance on X', block: 2 },
+        { address: 'P', label: 'First profile block', unit: 'count', block: 2 },
+        { address: 'F', label: 'Feed' },
+      ]),
+    );
+    expect(problems).toEqual([]);
+    expect(db.codes[0].params?.map((p) => [p.address, p.label, p.block ?? null])).toEqual([
+      ['U', 'Depth of cut', 1],
+      ['U', 'Allowance on X', 2],
+      ['P', 'First profile block', 2],
+      ['F', 'Feed', null],
+    ]);
+  });
+
+  it('drops a block that is not 1 or 2, and a block on an entry that is no two-block cycle', () => {
+    const { db, problems } = load({
+      dialect: 'x',
+      version: 1,
+      codes: [
+        { code: 'G71', label: 'Roughing', blocks: 2, params: [{ address: 'U', label: 'u', block: 3 }] },
+        { code: 'G83', label: 'Drilling', params: [{ address: 'Q', label: 'q', block: 2 }] },
+      ],
+    });
+    expect(problems.map((p) => p.path)).toEqual(['codes[0].params[0].block', 'codes[1].params[0].block']);
+    expect(problems[1].message).toContain('"blocks": 2');
+    // The parameter stays, without the block it cannot have.
+    expect(db.codes.map((e) => e.params?.[0].block ?? null)).toEqual([null, null]);
+  });
+
+  it('refuses a second declaration for the same block, and one whose reading differs from the other block', () => {
+    const { db, problems } = load(
+      g71([
+        { address: 'U', label: 'Depth of cut', block: 1 },
+        { address: 'U', label: 'Again', block: 1 },
+        { address: 'R', label: 'Retract' },
+        { address: 'R', label: 'Retract of the second block', block: 2 },
+        { address: 'P', label: 'Packed', unit: 'count', block: 1 },
+        { address: 'P', label: 'Height', unit: 'increment', block: 2 },
+      ]),
+    );
+    expect(problems.map((p) => p.path)).toEqual(['codes[0].params[1]', 'codes[0].params[3]', 'codes[0].params[5].unit']);
+    expect(problems[2].message).toContain('same unit in both blocks');
+    expect(db.codes[0].params?.map((p) => p.label)).toEqual(['Depth of cut', 'Retract', 'Packed']);
+  });
+
+  it('reads review: "pending" and drops any other value', () => {
+    const { db, problems } = load({
+      dialect: 'x',
+      version: 1,
+      codes: [
+        { code: 'G29', label: 'Return', review: 'pending' },
+        { code: 'G30', label: 'Return 2', review: 'done' },
+      ],
+    });
+    expect(db.codes.map((e) => e.review ?? null)).toEqual(['pending', null]);
+    expect(problems.map((p) => p.path)).toEqual(['codes[1].review']);
+  });
+
+  it('marks every entry the B1 manual pass wrote or changed for the owner\'s review', () => {
+    const marked = (dialect: string): string[] =>
+      (BUILTIN_CODE_DB_JSON[dialect] as { codes: { code: string; review?: string }[] }).codes
+        .filter((e) => e.review === 'pending')
+        .map((e) => e.code);
+    expect(marked('fanuc')).toEqual([
+      'G5.4', 'G6.2', 'G29', 'G30.1', 'G41.2', 'G41.3', 'G41.4', 'G41.5', 'G41.6', 'G42.2', 'G42.4', 'G42.5', 'G42.6', 'G43.1', 'G92.1',
+    ]);
+    expect(marked('fanuc-lathe')).toEqual(['G50.3', 'G68.1', 'G69.1', 'G71', 'G72', 'G73', 'G74', 'G75', 'G76']);
+    expect(marked('fanuc-lathe-b')).toEqual(['G92.1']);
+  });
+});

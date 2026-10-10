@@ -86,6 +86,11 @@ function tableUnit(dialect: string, code: string, address: string): Unit | undef
   if (['G43.5', 'G51', 'G68', 'G68.2', 'G68.4'].includes(code) && ['I', 'J', 'K'].includes(address)) return 'count';
   if (code === 'G43.5' && address === 'Q') return 'angle';
   if (['G68', 'G68.2', 'G68.3', 'G68.4'].includes(code) && address === 'R') return 'angle';
+  // B1 (the 30i manuals): the lathe's coordinate rotation, NURBS (order, knots and weights are
+  // plain numbers no reading touches) and the tilt angle of the five-axis compensation G41.6/G42.6.
+  if (code === 'G68.1') return address === 'R' ? 'angle' : ['I', 'J', 'K'].includes(address) ? 'count' : undefined;
+  if (code === 'G6.2') return ['P', 'K', 'R'].includes(address) ? 'count' : undefined;
+  if ((code === 'G41.6' || code === 'G42.6') && address === 'Q') return 'angle';
 
   if (dialect === A || dialect === B) {
     // M9 (WP9.2): the other face and side cycles count their dwell and repeats too, like G83 and G87.
@@ -373,12 +378,17 @@ describe('the lathe database of G-code system A (§8.2)', () => {
     expect(entry(A, 'G75')?.pitchFeedAmbiguous).toBeUndefined();
     // G8 M6 (the same review, recorded as a decision rather than a fix): `G76`'s `P` is
     // six packed digits in the first block of the cycle and the thread height in microns
-    // in the second, and one entry cannot tell the two blocks apart. It stays a `count`,
-    // so the packed digits can never be converted and the thread height is only ever
-    // shown as written — a missing value, which is the safe half of the trade.
-    const p76 = entry(A, 'G76')?.params?.find((param) => param.address === 'P');
-    expect(p76?.unit).toBe('count');
-    expect(p76?.label).toContain('Counted, not measured');
+    // in the second. B1: each block has its own `P` with its own label (`CodeParam.block`),
+    // and both stay a `count` (the two blocks' units have to agree), so the packed digits
+    // can never be converted and the thread height is only ever shown as written — a
+    // missing value, which is the safe half of the trade.
+    const p76 = entry(A, 'G76')?.params?.filter((param) => param.address === 'P') ?? [];
+    expect(p76.map((p) => [p.block, p.unit])).toEqual([
+      [1, 'count'],
+      [2, 'count'],
+    ]);
+    expect(p76[0].label).toContain('Counted, never converted');
+    expect(p76[1].label).toMatch(/^Thread height.*shown as written$/);
     // Tapping and threading are the only lathe entries that carry it. The source review
     // (2026-09) added the variable-lead thread G34 and the older-format rigid tap G84.2,
     // both in the lathe's own G-code list, and the 2026-09 scaling pass the tapping mode
@@ -498,8 +508,9 @@ describe('the system-B variant database (§8.2)', () => {
     const changed = [...new Set([...codesOf(A), ...codesOf(B)])].filter(
       (code) => JSON.stringify(entry(A, code)) !== JSON.stringify(entry(B, code)),
     );
-    expect(changed.every((code) => /^G\d+$/.test(code)), changed.join(', ')).toBe(true);
-    expect(changed.sort()).toEqual(['G33', 'G50', 'G77', 'G78', 'G79', 'G90', 'G91', 'G92', 'G94', 'G95', 'G98', 'G99']);
+    expect(changed.every((code) => /^G\d+(\.\d+)?$/.test(code)), changed.join(', ')).toBe(true);
+    // B1: the work coordinate system preset is G50.3 in system A and G92.1 in system B.
+    expect(changed.sort()).toEqual(['G33', 'G50', 'G50.3', 'G77', 'G78', 'G79', 'G90', 'G91', 'G92', 'G92.1', 'G94', 'G95', 'G98', 'G99']);
   });
 });
 

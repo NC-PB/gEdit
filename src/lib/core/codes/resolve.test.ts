@@ -75,6 +75,21 @@ describe('resolveCodeDbFiles', () => {
     expect(notices).toEqual(['G98 modal true>false']);
   });
 
+  // B1: the owner's review mark is text for a reader, not a change of meaning.
+  it('does not report a review mark as a change of meaning', () => {
+    const files = {
+      parent: PARENT,
+      kid: { dialect: 'kid', version: 1, extends: 'parent', codes: [{ code: 'G98', review: 'pending' }] },
+    };
+    const notices: string[] = [];
+    const merged = resolveCodeDbFiles(files, undefined, {
+      memberMerge: (dialect) => dialect === 'kid',
+      onMerge: (n) => notices.push(`${n.code} ${n.member}`),
+    }).kid;
+    expect((merged.codes as Record<string, unknown>[]).find((entry) => entry.code === 'G98')?.review).toBe('pending');
+    expect(notices).toEqual([]);
+  });
+
   it('keeps the parent order and appends what the child adds', () => {
     const files = {
       parent: PARENT,

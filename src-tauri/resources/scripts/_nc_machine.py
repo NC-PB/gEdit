@@ -357,7 +357,12 @@ def _feed_class_of(unit: Any) -> Optional[str]:
 
 
 def _declared_unit(codes: "Sequence[Dict[str, Any]]", word: str) -> Optional[str]:
-    """The ``unit`` one of ``codes`` declares for ``word`` among its parameters, or ``None``."""
+    """The ``unit`` one of ``codes`` declares for ``word`` among its parameters, or ``None``.
+
+    B1: a two-block cycle (``G71``, ``G76``) may declare an address once per block, with its
+    own label in each; the two declarations have the same ``unit`` (the loader refuses a
+    database where they differ), so the first one answers for either block.
+    """
     for entry in codes:
         params = entry.get("params")
         for param in params if isinstance(params, list) else []:
