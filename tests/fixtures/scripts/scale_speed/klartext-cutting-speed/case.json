@@ -1,0 +1,12 @@
+{
+  "profile": "heidenhain-klartext",
+  "extraCodes": [
+    {
+      "code": "VC",
+      "group": "spindle",
+      "sets": { "speedUnit": "surface" },
+      "label": "Cutting speed",
+      "description": "Test-local entry until the shipped Klartext database has its own VC entry (B1, package A7)."
+    }
+  ]
+}

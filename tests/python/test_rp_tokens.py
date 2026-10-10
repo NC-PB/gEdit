@@ -142,7 +142,10 @@ class TestTheEdgesOfTheNewRules(unittest.TestCase):
         marker = code_tokens(gedit_nc.tokenize_line("MODIN O12 Q3", self.okuma)[0])[1]
         self.assertEqual((marker.kind, marker.text, marker.address, marker.value_text), ("programMarker", "O12", None, None))
         self.assertEqual(pairs("CALL OSUB (ROUGH)", self.okuma), ["keyword:CALL", "programMarker:OSUB", "comment:(ROUGH)"])
-        self.assertEqual(kinds("CALL O12345", self.okuma), ["keyword", "word"])
+        # B1: a subprogram name may run to 16 characters (the control's optional parameter);
+        # one longer than that runs on and is no name.
+        self.assertEqual(pairs("CALL OSUBPROGRAM12345", self.okuma)[1], "programMarker:OSUBPROGRAM12345")
+        self.assertEqual(kinds("CALL O12345678901234567", self.okuma), ["keyword", "word"])
         self.assertNotIn("programMarker", kinds("GOTO OABCD", self.okuma))
 
     def test_jump_targets(self):

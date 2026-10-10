@@ -41,7 +41,7 @@ exports[`the okuma grammar > is stable 1`] = `
     ],
   ],
   [
-    "^\\s*O(?<name>[A-Z0-9]{1,4})\\s*$",
+    "^\\s*O(?<name>[A-Z0-9]{1,16})\\s*$",
     "programMarker",
   ],
   [

@@ -694,7 +694,12 @@ export class ModalInterpreter {
     if (this.positions(tokens, codes)) s.blockRun = { ...s.mcall };
   }
 
-  /** Whether the line moves to a position: an axis word with a value, and no code that makes the axis words data. */
+  /**
+   * Whether the line moves to a position: an axis word with a value, or a code that moves
+   * around the pole (`pole: 'use'`: Klartext `LP PR+30 PA+45`, `CP IPA+90`, whose end point
+   * is written in polar words), and no code that makes the axis words data. The pole itself
+   * (`CC`, `pole: 'set'`) moves nothing.
+   */
   private positions(tokens: readonly NcToken[], codes: readonly string[]): boolean {
     if (this.axes.size === 0) return false;
     let found = false;
@@ -704,6 +709,7 @@ export class ModalInterpreter {
         break;
       }
     }
+    if (!found) found = codes.some((code) => this.entryOf(code)?.pole === 'use');
     if (!found) return false;
     for (const code of codes) if (axisWordsAreData(this.entryOf(code))) return false;
     return true;
@@ -779,11 +785,12 @@ export class ModalInterpreter {
     let found: Tool | null = null;
     if (isTool || this.toolFromLast) {
       const match = re.tool.exec(masked);
-      if (match !== null) {
-        const written = match[0].trim();
-        let station = match.groups?.tool;
-        if (station === undefined || station.trim() === '') station = written;
-        found = { station: station.trim(), written, line };
+      // B1: no fallback to the whole match. A `tool` group that took no part in the match is
+      // one the pattern made optional, and the whole match would turn "no tool" into a
+      // garbage station (the program map and the tool list already read it this way).
+      const station = match?.groups?.tool;
+      if (match !== null && station !== undefined && station.trim() !== '') {
+        found = { station: station.trim(), written: match[0].trim(), line };
       }
     }
     if (found !== null) s.lastTool = found;

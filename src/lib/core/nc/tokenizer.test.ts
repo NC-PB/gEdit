@@ -1424,7 +1424,10 @@ describe('a program named behind a call (`callTargets`)', () => {
   });
 
   it('takes no name that runs on, and nothing behind another keyword', () => {
-    expect(kindsOf('CALL O12345', okuma)).toEqual(['keyword', 'word']);
+    // B1: a subprogram name may run to 16 characters (the control's optional parameter);
+    // one longer than that runs on and is no name.
+    expect(pairsOf('CALL OSUBPROGRAM12345', okuma)).toEqual(['keyword:CALL', 'programMarker:OSUBPROGRAM12345']);
+    expect(kindsOf('CALL O12345678901234567', okuma)).toEqual(['keyword', 'word']);
     expect(kindsOf('GOTO OABCD', okuma)).not.toContain('programMarker');
   });
 

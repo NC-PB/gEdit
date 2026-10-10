@@ -1,0 +1,9 @@
+{
+  "profile": "heidenhain-klartext",
+  "codeAttributes": {
+    "M128": { "ownWords": ["F"] },
+    "M140": { "ownWords": ["F"] },
+    "PLANE SPATIAL": { "ownWords": ["F"] },
+    "CYCL DEF 19": { "ownWords": ["F"] }
+  }
+}

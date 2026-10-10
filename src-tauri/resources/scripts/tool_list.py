@@ -1085,6 +1085,11 @@ def collect(
     for token in tokens:
         if token.kind != "word" or token.address is None:
             continue
+        if tracker.own_word_of(token) is not None:
+            # B1 (owner decision): a word a function of the block owns (`ownWords`: Klartext
+            # `M128 F800`, `M140 MB MAX F1000`, `PLANE … F2000`) is that function's value,
+            # not a feed the tool cuts with, so it joins no range.
+            continue
         main = gedit_nc.names_main_spindle(token, spec.spindle_address, spec.main_spindle)
         if token.index is not None and not main:
             # `S[2]=500`, `LIMS[2]=1800` (`syntax.assignmentIndex`): the index names another
