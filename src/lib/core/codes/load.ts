@@ -255,6 +255,11 @@ function readParams(
         report({ path: `${at}.unit`, message: `unit has to be one of ${PARAM_UNITS.join(', ')}` });
       }
     }
+    // B1 (NC-06): a count that is a real number; it means nothing without `unit: 'count'`.
+    if (flag(item.decimals, `${at}.decimals`, report)) {
+      if (param.unit === 'count') param.decimals = true;
+      else report({ path: `${at}.decimals`, message: 'decimals needs "unit": "count"' });
+    }
     // P10 (R8): an unknown role is dropped and reported, and the parameter is then "not
     // reviewed", which address arithmetic refuses: a typo can only make it refuse more.
     const position = oneOf(item.position, POSITIONS, `${at}.position`, report);

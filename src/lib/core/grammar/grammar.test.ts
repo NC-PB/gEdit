@@ -163,6 +163,13 @@ describe('the iso grammar', () => {
     expect(at(line)).toEqual(expected);
   });
 
+  it('takes a G or M code of four digits whole (B1 fix NC, NC-11)', () => {
+    expect(at('G1900 X10.')).toEqual(['gcode:G1900', 'axis:X10.']);
+    expect(at('M1234')).toEqual(['mcode:M1234']);
+    expect(at('G1234.1')).toEqual(['gcode:G1234.1']);
+    expect(roles(byId('fanuc-lathe').grammar, 'M1234 G1900')).toEqual(['mcode:M1234', 'gcode:G1900']);
+  });
+
   it('keeps a comment on one line, closed or not', () => {
     expect(at('(A) X10. (B)')).toEqual(['comment:(A)', 'axis:X10.', 'comment:(B)']);
     expect(at('(UNCLOSED HEADER COMMENT')).toEqual(['comment:(UNCLOSED HEADER COMMENT']);

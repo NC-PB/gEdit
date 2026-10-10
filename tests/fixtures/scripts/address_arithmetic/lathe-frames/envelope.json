@@ -1,0 +1,41 @@
+{
+  "message": "Subtracted 0.5 from Z in 3 words on 3 blocks. Left 6 blocks as written: 6 inside a frame. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 7,
+      "severity": "warning",
+      "message": "G68: opens a coordinate frame (G68): what a shift of the program's coordinates does there cannot be judged.",
+      "reason": "frame"
+    },
+    {
+      "line": 8,
+      "severity": "warning",
+      "message": "G0 X50. Z5.: inside the coordinate frame of G68 (line 7): what a shift of the program's coordinates does there cannot be judged.",
+      "reason": "frame"
+    },
+    {
+      "line": 11,
+      "severity": "warning",
+      "message": "G68.1 X0 Z0 R30.: opens a coordinate frame (G68.1): what a shift of the program's coordinates does there cannot be judged.",
+      "reason": "frame"
+    },
+    {
+      "line": 12,
+      "severity": "warning",
+      "message": "G1 Z-10. F0.2: inside the coordinate frame of G68.1 (line 11): what a shift of the program's coordinates does there cannot be judged.",
+      "reason": "frame"
+    },
+    {
+      "line": 14,
+      "severity": "warning",
+      "message": "G1 Z-12.: inside the coordinate frame of G68.1 (line 11): what a shift of the program's coordinates does there cannot be judged.",
+      "reason": "frame"
+    },
+    {
+      "line": 15,
+      "severity": "warning",
+      "message": "G0 X50. Z2.: inside the coordinate frame of G68.1 (line 11): what a shift of the program's coordinates does there cannot be judged.",
+      "reason": "frame"
+    }
+  ]
+}

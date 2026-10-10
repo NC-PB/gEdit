@@ -200,8 +200,8 @@
           "max": 4,
           "unit": "count"
         },
-        { "address": "K", "label": "Knot", "unit": "count" },
-        { "address": "R", "label": "Weight of the control point (1 when left out)", "unit": "count" },
+        { "address": "K", "label": "Knot value, a real number", "unit": "count", "decimals": true },
+        { "address": "R", "label": "Weight of the control point (1 when left out)", "unit": "count", "decimals": true },
         { "address": "F", "label": "Feed", "min": 0 }
       ]
     },
@@ -577,10 +577,13 @@
       "sets": { "radiusComp": "on" },
       "review": "pending",
       "label": "Five-axis cutter radius compensation, left, tool direction by I, J, K",
-      "description": "The control offsets the tool by its radius at right angles to the tool direction, to the left of the path. The blocks write the tool direction at their end point as I, J and K instead of rotary axis positions, so the same program suits a machine with a turning head, a turning table or both. D names the radius offset and Q a tilt angle of the tool in degrees. G40 ends it.",
+      "description": "The control offsets the tool by its radius at right angles to the tool direction, to the left of the path. The blocks write the tool direction at their end point as I, J and K instead of rotary axis positions, so the same program suits a machine with a turning head, a turning table or both: a component left out is 0, and a block that writes none keeps the direction before. D names the radius offset and Q the lead angle, by which the tool leans from the I, J, K direction towards the direction of travel, in degrees. G40 ends it.",
       "params": [
         { "address": "D", "label": "Radius offset register" },
-        { "address": "Q", "label": "Tilt angle of the tool, in degrees", "unit": "angle" }
+        { "address": "I", "label": "Tool direction at the end of the block, X component", "unit": "count", "decimals": true },
+        { "address": "J", "label": "Tool direction at the end of the block, Y component", "unit": "count", "decimals": true },
+        { "address": "K", "label": "Tool direction at the end of the block, Z component", "unit": "count", "decimals": true },
+        { "address": "Q", "label": "Lead angle: tilt from the I, J, K direction towards the direction of travel, in degrees", "unit": "angle" }
       ]
     },
     {
@@ -626,10 +629,13 @@
       "sets": { "radiusComp": "on" },
       "review": "pending",
       "label": "Five-axis cutter radius compensation, right, tool direction by I, J, K",
-      "description": "The control offsets the tool by its radius at right angles to the tool direction, to the right of the path. The blocks write the tool direction at their end point as I, J and K instead of rotary axis positions, so the same program suits a machine with a turning head, a turning table or both. D names the radius offset and Q a tilt angle of the tool in degrees. G40 ends it.",
+      "description": "The control offsets the tool by its radius at right angles to the tool direction, to the right of the path. The blocks write the tool direction at their end point as I, J and K instead of rotary axis positions, so the same program suits a machine with a turning head, a turning table or both: a component left out is 0, and a block that writes none keeps the direction before. D names the radius offset and Q the lead angle, by which the tool leans from the I, J, K direction towards the direction of travel, in degrees. G40 ends it.",
       "params": [
         { "address": "D", "label": "Radius offset register" },
-        { "address": "Q", "label": "Tilt angle of the tool, in degrees", "unit": "angle" }
+        { "address": "I", "label": "Tool direction at the end of the block, X component", "unit": "count", "decimals": true },
+        { "address": "J", "label": "Tool direction at the end of the block, Y component", "unit": "count", "decimals": true },
+        { "address": "K", "label": "Tool direction at the end of the block, Z component", "unit": "count", "decimals": true },
+        { "address": "Q", "label": "Lead angle: tilt from the I, J, K direction towards the direction of travel, in degrees", "unit": "angle" }
       ]
     },
     {
@@ -686,9 +692,9 @@
       "description": "Keeps the tool tip on the programmed path while the tool tilts; the block writes the direction of the tool axis as I, J and K instead of rotary positions, and the length offset register H. The move of this block itself only applies the length offset, and the control starts after it. G49 ends it.",
       "params": [
         { "address": "H", "label": "Length offset register", "required": true, "min": 0 },
-        { "address": "I", "label": "Tool axis direction, X component", "unit": "count" },
-        { "address": "J", "label": "Tool axis direction, Y component", "unit": "count" },
-        { "address": "K", "label": "Tool axis direction, Z component", "unit": "count" },
+        { "address": "I", "label": "Tool axis direction, X component", "unit": "count", "decimals": true },
+        { "address": "J", "label": "Tool axis direction, Y component", "unit": "count", "decimals": true },
+        { "address": "K", "label": "Tool axis direction, Z component", "unit": "count", "decimals": true },
         { "address": "Q", "label": "Tilt of the tool in the direction of travel", "unit": "angle" }
       ]
     },
@@ -746,9 +752,9 @@
       "description": "Enlarges or reduces the programmed shape. The axis words give the centre of the scaling, P the factor for all axes or I, J and K a factor per axis; G50 ends it. Positions written after it are not the positions the tool reaches.",
       "params": [
         { "address": "P", "label": "Scale factor for all axes" },
-        { "address": "I", "label": "Scale factor for X", "unit": "count" },
-        { "address": "J", "label": "Scale factor for Y", "unit": "count" },
-        { "address": "K", "label": "Scale factor for Z", "unit": "count" }
+        { "address": "I", "label": "Scale factor for X", "unit": "count", "decimals": true },
+        { "address": "J", "label": "Scale factor for Y", "unit": "count", "decimals": true },
+        { "address": "K", "label": "Scale factor for Z", "unit": "count", "decimals": true }
       ]
     },
     {
@@ -925,9 +931,9 @@
       "description": "Turns the coordinate system. In the selected plane the axis words give the centre of the rotation and R the angle; with I, J and K it is a three-dimensional rotation about that direction. G69 ends it. On a lathe with two turrets the same number is a mirror image instead.",
       "params": [
         { "address": "R", "label": "Rotation angle", "unit": "angle" },
-        { "address": "I", "label": "Rotation axis direction, X component", "unit": "count" },
-        { "address": "J", "label": "Rotation axis direction, Y component", "unit": "count" },
-        { "address": "K", "label": "Rotation axis direction, Z component", "unit": "count" }
+        { "address": "I", "label": "Rotation axis direction, X component", "unit": "count", "decimals": true },
+        { "address": "J", "label": "Rotation axis direction, Y component", "unit": "count", "decimals": true },
+        { "address": "K", "label": "Rotation axis direction, Z component", "unit": "count", "decimals": true }
       ]
     },
     {
@@ -941,9 +947,9 @@
       "params": [
         { "address": "P", "label": "How the plane is defined: none Euler angles, 1 to 4 another form", "min": 1, "max": 4 },
         { "address": "Q", "label": "Order of the turns (P1) or the number of the point or vector (P2, P3)" },
-        { "address": "I", "label": "First angle, or X component of a vector", "unit": "count" },
-        { "address": "J", "label": "Second angle, or Y component of a vector", "unit": "count" },
-        { "address": "K", "label": "Third angle, or Z component of a vector", "unit": "count" },
+        { "address": "I", "label": "First angle, or X component of a vector", "unit": "count", "decimals": true },
+        { "address": "J", "label": "Second angle, or Y component of a vector", "unit": "count", "decimals": true },
+        { "address": "K", "label": "Third angle, or Z component of a vector", "unit": "count", "decimals": true },
         { "address": "R", "label": "Turn about the new Z axis (P2)", "unit": "angle" }
       ]
     },
@@ -970,9 +976,9 @@
       "params": [
         { "address": "P", "label": "How the plane is defined: none Euler angles, 1 to 4 another form", "min": 1, "max": 4 },
         { "address": "Q", "label": "Order of the turns (P1) or the number of the point or vector (P2, P3)" },
-        { "address": "I", "label": "First angle, or X component of a vector", "unit": "count" },
-        { "address": "J", "label": "Second angle, or Y component of a vector", "unit": "count" },
-        { "address": "K", "label": "Third angle, or Z component of a vector", "unit": "count" },
+        { "address": "I", "label": "First angle, or X component of a vector", "unit": "count", "decimals": true },
+        { "address": "J", "label": "Second angle, or Y component of a vector", "unit": "count", "decimals": true },
+        { "address": "K", "label": "Third angle, or Z component of a vector", "unit": "count", "decimals": true },
         { "address": "R", "label": "Turn about the new Z axis (P2)", "unit": "angle" }
       ]
     },

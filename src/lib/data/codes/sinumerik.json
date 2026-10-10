@@ -1825,7 +1825,7 @@
         },
         {
           "address": "_DP",
-          "label": "Slot depth, as an absolute position",
+          "label": "Slot depth: an absolute position, or a depth from the reference point when the ones digit of _AMODE is 1",
           "position": "tool-axis"
         },
         {
@@ -1982,7 +1982,7 @@
       "params": [
         {
           "address": "SPD",
-          "label": "Start point on the transverse axis, written without a sign",
+          "label": "Start point on the transverse axis, written without a sign, in the unit of the X word: a diameter while diameter programming is on",
           "position": "other"
         },
         {

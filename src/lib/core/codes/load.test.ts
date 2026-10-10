@@ -255,8 +255,11 @@ describe('built-in code databases', () => {
     // cycle functions") names as added to cycles 22, 25, 251–254, 256 and 257; and the `F` of
     // cycle 19, a word of its 19.1 sub-block, not a parameter line.
     const LATER: Record<string, string[]> = {
-      'CYCL DEF 19': ['F'],
-      'CYCL DEF 22': ['Q401', 'Q404'],
+      // B1 fix NC (NC-08): ABST is a word of the 19.1 sub-block too; the manual's own
+      // contour-formula example writes cycles 22 and 23 without Q208.
+      'CYCL DEF 19': ['F', 'ABST'],
+      'CYCL DEF 22': ['Q208', 'Q401', 'Q404'],
+      'CYCL DEF 23': ['Q208'],
       'CYCL DEF 25': ['Q18', 'Q446', 'Q447', 'Q448'],
       'CYCL DEF 251': ['Q439'],
       'CYCL DEF 252': ['Q439'],
@@ -751,5 +754,31 @@ describe('B1: the words a code owns (`ownWords`, package A6)', () => {
     for (const code of owning) expect(lookupCode(heidenhain.db, code)?.ownWords, code).toEqual(['F']);
     // FUNCTION TCPM's `F TCP` is a keyword, not a value: it owns nothing.
     expect(lookupCode(heidenhain.db, 'FUNCTION TCPM')?.ownWords).toBeUndefined();
+  });
+});
+
+describe('B1 NC-06: a count that is a real number (`decimals`)', () => {
+  it('keeps decimals on a count and reports it anywhere else', () => {
+    const { db, problems } = load({
+      dialect: 'x',
+      version: 1,
+      codes: [
+        {
+          code: 'G68.2',
+          label: 'Tilted plane',
+          params: [
+            { address: 'I', label: 'Euler angle', unit: 'count', decimals: true },
+            { address: 'X', label: 'Origin', decimals: true },
+            { address: 'K', label: 'Repeat', unit: 'count', decimals: 'yes' },
+            { address: 'P', label: 'Count', unit: 'count', decimals: false },
+          ],
+        },
+      ],
+    });
+    expect(db.codes[0].params?.map((p) => p.decimals ?? null)).toEqual([true, null, null, null]);
+    expect(problems.map((p) => [p.path, p.message])).toEqual([
+      ['codes[0].params[1].decimals', 'decimals needs "unit": "count"'],
+      ['codes[0].params[2].decimals', 'decimals has to be true or false'],
+    ]);
   });
 });

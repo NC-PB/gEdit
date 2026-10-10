@@ -623,7 +623,13 @@
         {
           "address": "F",
           "label": "Feed for positioning the rotary axes automatically",
-          "min": 0
+          "min": 0,
+          "position": "none"
+        },
+        {
+          "address": "ABST",
+          "label": "Set-up clearance for positioning the rotary axes automatically, an incremental distance along the tool axis",
+          "position": "none"
         }
       ],
       "review": "pending"
@@ -2363,9 +2369,9 @@
         },
         {
           "address": "Q208",
-          "label": "Retract feed, 0 the milling feed",
-          "position": "none",
-          "required": true
+          "label": "Retract feed (0: the milling feed; 99999.9999 or FMAX: rapid)",
+          "min": 0,
+          "position": "none"
         },
         {
           "address": "Q401",
@@ -2405,9 +2411,9 @@
         },
         {
           "address": "Q208",
-          "label": "Retract feed, 0 the milling feed",
-          "position": "none",
-          "required": true
+          "label": "Retract feed (0: the milling feed; 99999.9999 or FMAX: rapid)",
+          "min": 0,
+          "position": "none"
         }
       ],
       "review": "pending",

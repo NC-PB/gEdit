@@ -448,6 +448,16 @@ class TestConflicts(unittest.TestCase):
         written_with = program("O1", "T1 M6", "S1000 M3", "G41 G68.2 X0 Y0 Z0 I0 J45. K0", "M30")
         self.assertEqual(lines_of(run_text(written_with), "stateConflicts"), [5])
 
+    def test_an_okuma_plane_change_under_nose_radius_compensation_is_reported(self) -> None:
+        # B1 fix NC (NC-09, owner question 15): OSP-P200L, cutter radius compensation: G17, G18
+        # or G119 written while G41/G42 is in force is an alarm.
+        text = program("O1", "G0 X50. Z5.", "G41 G1 X40. Z0 F0.2", "G17", "G40 G0 X60. Z5.", "G18", "M02")
+        # Line 1 is the marker: the G17 under G41 is line 5; the G18 after G40 is no conflict.
+        self.assertEqual(lines_of(run_text(text, "okuma-osp"), "stateConflicts"), [5])
+        for code in ("G18", "G119"):
+            text = program("O1", "G0 X50. Z5.", "G42 G1 X40. Z0 F0.2", code, "G40 G0 X60. Z5.", "M02")
+            self.assertEqual(lines_of(run_text(text, "okuma-osp"), "stateConflicts"), [5], code)
+
     def test_the_frame_a_code_opens_itself_is_not_its_own_conflict(self) -> None:
         text = program("O1", "T1 M6", "S1000 M3", "G68.2 X0 Y0 Z0 I0 J45. K0", "G53.1", "G69", "M30")
         self.assertEqual(lines_of(run_text(text), "stateConflicts"), [])

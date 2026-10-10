@@ -95,7 +95,7 @@
       "DRAW",
       "CLEAR"
     ],
-    "callTargets": { "after": ["CALL", "MODIN"], "pattern": "O[A-Z0-9]{1,16}" },
+    "callTargets": { "after": ["CALL", "MODIN"], "pattern": "O(?:[A-Z][A-Z0-9]{0,15}|\\d{1,16})(?![A-Z0-9])" },
     "maxLineLength": 158,
     "maxMCodes": 8
   },
@@ -116,15 +116,15 @@
     "toolFrom": "same-line"
   },
   "program": {
-    "start": ["^\\s*O(?<name>[A-Z0-9]{1,16})\\s*$"],
+    "start": ["^\\s*O(?<name>[A-Z][A-Z0-9]{0,15}|\\d{1,16})\\s*$"],
     "end": ["(?<![A-Z])M0*(?:2|30)(?!\\d)", "(?<![A-Z])RTS(?![A-Z0-9])"]
   },
   "outline": [
-    { "kind": "program", "pattern": "^\\s*O(?<name>[A-Z0-9]{1,16})\\s*$" },
+    { "kind": "program", "pattern": "^\\s*O(?<name>[A-Z][A-Z0-9]{0,15}|\\d{1,16})\\s*$" },
     { "kind": "comment", "pattern": "^\\s*(?:N[A-Z0-9]{1,4}[ \\t]+)?\\((?<text>[^)]*)\\)\\s*$" },
     { "kind": "end", "pattern": "^\\s*(?:/\\s*)?(?<text>N[A-Z][A-Z0-9]{0,3}[ \\t].*?(?<![A-Z])(?:M0*(?:2|30)(?!\\d)|RTS(?![A-Z0-9])))" },
     { "kind": "label", "pattern": "^\\s*(?:/\\s*)?(?<text>N(?<name>[A-Z][A-Z0-9]{0,3}))(?=[ \\t]|$)" },
-    { "kind": "subprogram-call", "pattern": "(?<![A-Z])(?<text>(?:CALL|MODIN)[ \\t]+O[A-Z0-9]{1,16}|G0*(?:16[1-9]|17[0-6]|20[5-9]|21[0-4])(?![\\d.]))" },
+    { "kind": "subprogram-call", "pattern": "(?<![A-Z])(?<text>(?:CALL|MODIN)[ \\t]+O(?:[A-Z][A-Z0-9]{0,15}|\\d{1,16})(?![A-Z0-9])|G0*(?:16[1-9]|17[0-6]|20[5-9]|21[0-4])(?![\\d.]))" },
     { "kind": "stop", "pattern": "(?<![A-Z])M0*[01](?!\\d)" },
     { "kind": "end", "pattern": "(?<![A-Z])(?:M0*(?:2|30)(?!\\d)|RTS(?![A-Z0-9]))" }
   ],

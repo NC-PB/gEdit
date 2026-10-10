@@ -41,11 +41,11 @@ exports[`the okuma grammar > is stable 1`] = `
     ],
   ],
   [
-    "^\\s*O(?<name>[A-Z0-9]{1,16})\\s*$",
+    "^\\s*O(?<name>[A-Z][A-Z0-9]{0,15}|\\d{1,16})\\s*$",
     "programMarker",
   ],
   [
-    "((?:CALL|MODIN))(\\s+)(O[A-Z0-9]{1,16})(?![0-9A-Za-z_])",
+    "((?:CALL|MODIN))(\\s+)(O(?:[A-Z][A-Z0-9]{0,15}|\\d{1,16})(?![A-Z0-9]))(?![0-9A-Za-z_])",
     [
       "keyword",
       "",

@@ -39,6 +39,7 @@ import { MAX_SNIFF_LINES, detectProfile, detectResult } from '$lib/core/profiles
 import { validateProfile } from '$lib/core/profiles/validate';
 import { OutlineIndex } from '$lib/core/profiles/outline';
 import { maskComments } from '$lib/core/nc/mask';
+import { tokenizeLine } from '$lib/core/nc/tokenizer';
 import { parseNumber } from '$lib/core/nc/numbers';
 import { modalGroupsOf } from '$lib/core/codes/resolve';
 import { applyMachine, effectiveMachine, noMachine } from '$lib/core/machines/effective';
@@ -953,5 +954,32 @@ describe('the profile around its syntax', () => {
     expect(raw.syntax.sequenceNames).toBe(true);
     expect(raw.syntax.header).toBe('^\\$[^%]*%');
     expect(raw.syntax.maxLineLength).toBe(158);
+  });
+});
+
+describe('B1 fix NC (NC-09): what a call names', () => {
+  const marked = (line: string) =>
+    tokenizeLine(line, okuma).tokens.filter((t) => t.kind === 'programMarker').map((t) => t.text);
+
+  it('takes a name that starts with a letter, or digits only, as the call target', () => {
+    expect(marked('CALL OAB12')).toEqual(['OAB12']);
+    expect(marked('CALL O1234')).toEqual(['O1234']);
+    expect(marked('CALL O1234 Q2')).toEqual(['O1234']);
+    expect(marked('CALL OSUBPROGRAM12345')).toEqual(['OSUBPROGRAM12345']);
+  });
+
+  it('takes no digit-first name with letters behind it (the manual allows digits only there)', () => {
+    expect(marked('CALL O1000ABC=1')).toEqual([]);
+    expect(marked('CALL O1000ABC')).toEqual([]);
+  });
+
+  it('lists neither such a call nor such a program start in the map', () => {
+    const index = new OutlineIndex(okuma);
+    index.reset(['O1000ABC', 'O1000', 'CALL O1000ABC', 'CALL O2000', 'OAB12']);
+    expect(index.items().map((item) => `${item.kind}@${item.line}: ${item.text}`)).toEqual([
+      'program@2: O1000',
+      'subprogram-call@4: CALL O2000',
+      'program@5: OAB12',
+    ]);
   });
 });

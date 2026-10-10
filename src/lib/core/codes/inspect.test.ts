@@ -722,6 +722,63 @@ describe('Klartext words that are no numbers', () => {
   });
 });
 
+describe("a function's own F (B1 NC-01)", () => {
+  it('keeps the path feed in the state row after CYCL DEF 19.1 … F1500, M128 F800 and PLANE … F2000', () => {
+    const text = [
+      'BEGIN PGM A MM',
+      'TOOL CALL 1 Z S2000 F300',
+      'L X+10 Y+10 R0 F500',
+      'CYCL DEF 19.0 WORKING PLANE',
+      'CYCL DEF 19.1 A+0 B+30 F1500',
+      'M128 F800',
+      'PLANE SPATIAL SPA+0 SPB+30 SPC+0 MOVE DIST50 F2000',
+      'L X+50 F600 M128 F900',
+    ].join('\n');
+    const feedAt = (line: number) => inspectReal('heidenhain-klartext', text, line).state.find((s) => s.key === 'feed');
+    for (const line of [5, 6, 7]) expect(feedAt(line), `line ${line}`).toMatchObject({ value: 'F500', line: 3, setHere: false });
+    // F600 in front of M128 is the block's path feed; F900 behind it is M128's.
+    expect(feedAt(8)).toMatchObject({ value: 'F600', line: 8, setHere: true });
+  });
+});
+
+describe('B1 NC-06: a count that is a real number takes decimals in the edit', () => {
+  const cases: [string, string, string][] = [
+    ['G90 G0 X0 Y0\nG68.2 X0 Y0 Z0 I30. J45. K0.', 'J45.', '45.5'],
+    ['G90 G0 X0 Y0\nG6.2 P4 X0 Y0 K0.5 R1.', 'K0.5', '0.75'],
+    ['G90 G0 X0 Y0\nG43.5 X0 Y0 Z10. I0.707 J0 K0.707 H1', 'I0.707', '0.5'],
+    ['G90 G0 X0 Y0\nG68 X0 Y0 R30. I0 J0 K1.', 'K1.', '0.5'],
+    ['G90 G0 X0 Y0\nG51 X0 Y0 Z0 I1.5 J1.5 K1.', 'I1.5', '0.75'],
+    ['G90 G0 X0 Y0\nG41.6 X10. Y5. I0 J0 K1. D1 Q2.', 'K1.', '0.5'],
+  ];
+  for (const [text, word, typed] of cases) {
+    it(`accepts ${typed} for ${word} of ${text.split('\n')[1]}`, () => {
+      const view = viewOf('fanuc-gcode');
+      const w = row(inspectReal('fanuc-gcode', text, 2), word);
+      expect(w.param?.unit).toBe('count');
+      expect(w.param?.decimals).toBe(true);
+      expect(checkValue(w, typed, view)).toBeNull();
+    });
+  }
+
+  it('still refuses a fraction for a real count (the repeat count K of G81)', () => {
+    const view = viewOf('fanuc-gcode');
+    const k = row(inspectReal('fanuc-gcode', 'G90 G0 X0 Y0\nG81 X10. Y10. Z-5. R2. F100 K3', 2), 'K3');
+    expect(checkValue(k, '2.5', view)).toEqual({ key: 'inspector.why.wholeNumber' });
+  });
+});
+
+describe('B1 NC-04: I, J, K of G41.6 are the tool direction', () => {
+  it('labels them as the tool direction, without the least-increment note of an arc centre', () => {
+    const r = inspectReal('fanuc-gcode', 'G90 G0 X0 Y0\nG41.6 X10. Y5. I0 J0 K1. D1 Q2.', 2);
+    for (const word of ['I0', 'J0', 'K1.']) {
+      const w = row(r, word);
+      expect(w.param?.label, word).toMatch(/^Tool direction at the end of the block/);
+      expect(keys(w.notes).some((k) => /point|increment/i.test(k)), `${word}: ${keys(w.notes).join(', ')}`).toBe(false);
+    }
+    expect(row(r, 'Q2.').param?.label).toMatch(/^Lead angle/);
+  });
+});
+
 describe('the code a feed unit comes from', () => {
   it('never names a feed-unit code that says the opposite of the class (Okuma G101 under G95)', () => {
     const f = row(inspectReal('okuma-osp', 'G95\nG101 X40 C90 F100', 2), 'F100');
@@ -767,7 +824,8 @@ describe('the two blocks of a lathe cycle over a comment or a blank line', () =>
     expect(row(first, 'U2.').meaning).toMatch(/^Depth of cut per pass, a radius value/);
     expect(row(second, 'U0.5').meaning).toMatch(/^Finishing allowance on X, read like X/);
     expect(first.cycle?.params.map((p) => p.param.address)).toEqual(['U', 'R']);
-    expect(second.cycle?.params.map((p) => p.param.address)).toEqual(['P', 'Q', 'U', 'W', 'F']);
+    // B1 fix NC (NC-10): the second block also takes the roughing S and T.
+    expect(second.cycle?.params.map((p) => p.param.address)).toEqual(['P', 'Q', 'U', 'W', 'F', 'S', 'T']);
     // A first block without R (its retract stays in force) is still the first: U alone.
     expect(inspectReal('fanuc-lathe', 'G71 U1.5', 1).cycle?.part).toEqual({ index: 1, of: 2 });
   });

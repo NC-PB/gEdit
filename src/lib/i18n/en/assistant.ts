@@ -142,6 +142,8 @@ export default {
     mirror: 'Mirror image',
     polar: 'Polar coordinate interpolation',
     cylindrical: 'Cylindrical interpolation',
+    /** B1 (NC-02): Fanuc lathe G68/G69, a modal group of its own apart from G68.1/G69.1. */
+    turretMirror: 'Mirror image for the second turret',
     /** M10 review (NC-5): Fanuc G15/G16, end points as a radius and an angle. */
     polarCommand: 'Polar coordinate command',
     /** WP8.5: exact stop against continuous path (Sinumerik G60, G64, G641, G642, G645). */

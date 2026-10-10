@@ -315,8 +315,10 @@ describe('what the flags decide (the reasons are in the entries and in the G10 t
     // relief and the finishing allowances, never an incremental X or Z move.
     // B1: G50.3 (the preset, system A's spelling of G92.1) and the lathe's G68.1 rotation, whose
     // two axis words are the centre.
-    expect(codesWith('fanuc-lathe', (e) => e.axisWords === 'data')).toEqual(['G4', 'G50', 'G50.3', 'G68.1', 'G71', 'G72', 'G73']);
-    expect(codesWith('fanuc-lathe', (e) => e.frame !== undefined)).toEqual(['G68', 'G68.1', 'G69', 'G69.1']);
+    // B1 fix NC (NC-05): the lathe states G68.2-G68.4 itself, only to say that G69.1 ends them;
+    // their flags are the mill's.
+    expect(codesWith('fanuc-lathe', (e) => e.axisWords === 'data')).toEqual(['G4', 'G50', 'G50.3', 'G68.1', 'G68.2', 'G68.3', 'G68.4', 'G71', 'G72', 'G73']);
+    expect(codesWith('fanuc-lathe', (e) => e.frame !== undefined)).toEqual(['G68', 'G68.1', 'G68.2', 'G68.3', 'G68.4', 'G69', 'G69.1']);
     expect(codesWith('fanuc-lathe-b', (e) => e.axisWords === 'data')).toEqual(['G50', 'G92', 'G92.1']);
     // System A's G92 is the threading cycle: its X and Z are positions.
     expect(loadedEntry('fanuc-lathe', 'G92').axisWords).toBeUndefined();

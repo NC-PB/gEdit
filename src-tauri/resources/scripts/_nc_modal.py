@@ -537,7 +537,16 @@ class ModalInterpreter:
         with another cycle. Neither a motion code nor a cycle cancel ends it;
     12. a speed limit whose ``sets.speedLimitBound`` is ``'lower'`` (Sinumerik ``G25``)
         marks the block's speed word as no speed (``block.speedLimit``) but is not the
-        clamp: ``speedLimit`` is the **upper** limit in force (plan §7.4).
+        clamp: ``speedLimit`` is the **upper** limit in force (plan §7.4);
+    16. **a word a function owns** (B1, NC-01): a code whose entry names addresses in
+        ``ownWords`` takes the words of those addresses that stand **behind** it in its block
+        (continued lines included) as values of its own — Klartext ``M128 F800`` (the feed
+        of the compensating moves), ``M140 MB MAX F1000``, ``PLANE … MOVE F2000``,
+        ``CYCL DEF 19.1 … F1500``. Such a word is skipped as a whole: it is neither the feed
+        in force nor a return to the modal feed unit, so an ``FZ`` feed stays per tooth. A
+        word in front of the code (``L X+50 F600 M128 F900``: ``F600``) and an assignment
+        word are not owned. :meth:`owner_of` answers it per word; :class:`FeedModeTracker`
+        (scale-feed, the tool list) reads the same marks.
 
     A defined cycle never makes a block's feed word a lead (``block.pitchFeed``,
     :attr:`pitch_feed`): it takes its values from its own parameters (``Q206``, ``Q239``),
@@ -616,6 +625,16 @@ class ModalInterpreter:
         #: M12.5 (`frameEmptyCloses`): the same walk reads the sub-block number of each
         #: keyword code (`CYCL DEF 19.1` is sub-block 1 of cycle 19).
         self._has_empty_closes = any(_empty_closes_of(entry) is not None for entry in self.codes)
+        #: Rule 16: the codes that own words, by entry, and the first letters of their
+        #: written forms; a database without any (every ISO one) never walks a block for it.
+        self._owners: Dict[int, Tuple[str, FrozenSet[str]]] = {}
+        for entry in self._entries.values():
+            words = _own_words_of(entry)
+            if words:
+                self._owners[id(entry)] = (str(entry.get("code") or ""), words)
+        self._owner_heads = frozenset(
+            _head_of(key) for key, entry in self._entries.items() if id(entry) in self._owners
+        )
         self.reset()
 
     # -- the power-on state -------------------------------------------------
@@ -673,6 +692,9 @@ class ModalInterpreter:
         #: was written with, by normalized code (``CYCL DEF 19`` -> ``"1"`` for ``19.1``).
         self._block_subs: Dict[str, str] = {}
         self._modal_ambiguous: Optional[str] = None
+        #: Rule 16: the words of the line just applied that a code of its block owns, by
+        #: ``id(token)`` -> the owner's code.
+        self._owned: Dict[int, str] = {}
         # Before the power-on codes below, which are applied through `_apply_sets` and may
         # touch the block's flags.
         self._clear_block()
@@ -774,6 +796,12 @@ class ModalInterpreter:
         if self._axis_plane:
             self._apply_tool_axis(tokens)
         self._apply_modal_call(tokens)
+        if self._owners:
+            # Rule 16: only a block with an owner in force or a code that owns words is walked.
+            if self._block_owner is not None or any(self._is_owner(code) for code in codes):
+                self._mark_owned(tokens)
+            else:
+                self._owned = {}
         self._apply_words(tokens, line)
         if masked:
             self._apply_tool(masked, line)
@@ -792,6 +820,67 @@ class ModalInterpreter:
         #: Rule 12: the block's speed limits, by bound.
         self._block_upper_limit = False
         self._block_lower_limit = False
+        #: Rule 16: the last code of the block that owns words, and those addresses; it
+        #: lasts to the end of the block, continued lines included.
+        self._block_owner: Optional[Tuple[str, FrozenSet[str]]] = None
+
+    def _mark_owned(self, tokens: "Sequence[Token]") -> None:
+        """Rule 16: marks the words of the line that a code of its block owns.
+
+        Walks the line in written order: a word under an address the owner in force names is
+        owned (and is no code itself); a code whose entry owns words becomes the owner for
+        the rest of the block. The TypeScript twin is ``markOwned`` in ``core/nc/modal.ts``.
+        """
+        owned: Dict[int, str] = {}
+        owner = self._block_owner
+        heads = self._owner_heads
+        entries = self._entries
+        count = len(tokens)
+        for i, token in enumerate(tokens):
+            kind = token.kind
+            if kind == "word":
+                address = token.address or ""
+                if address == "" or is_assignment(token):
+                    continue
+                if owner is not None and address.upper() in owner[1]:
+                    owned[id(token)] = owner[0]
+                    continue
+                if _head_of(address.upper()) not in heads:
+                    continue
+                entry = entries.get(normalize_code(address + (token.value_text or "")))
+            elif kind == "call":
+                name = token.address or ""
+                if name == "" or _head_of(name.upper()) not in heads:
+                    continue
+                entry = entries.get(normalize_code(name))
+            elif kind == "keyword":
+                name = token.address or token.text
+                if _head_of(name.strip().upper()) not in heads:
+                    continue
+                number = token.value_text
+                if number is None:
+                    nxt = _next_code_token(tokens, i + 1, count)
+                    if nxt is not None and nxt.address is None and nxt.value_text is not None:
+                        number = nxt.value_text
+                joined = _joined_code(name, number, entries)
+                entry = entries.get(normalize_code(joined if joined is not None else name))
+            else:
+                continue
+            if entry is not None:
+                found = self._owners.get(id(entry))
+                if found is not None:
+                    owner = found
+        self._block_owner = owner
+        self._owned = owned
+
+    def _is_owner(self, code: str) -> bool:
+        """Rule 16: whether a written code of the block is one that owns words."""
+        entry = self._entries.get(normalize_code(code))
+        return entry is not None and id(entry) in self._owners
+
+    def owner_of(self, token: Token) -> Optional[str]:
+        """Rule 16: the code that owns ``token``, a word of the line just applied, or ``None``."""
+        return self._owned.get(id(token)) if self._owned else None
 
     def _apply_code(self, code: str, line: int) -> None:
         entry = self._entries.get(normalize_code(code))
@@ -1106,11 +1195,16 @@ class ModalInterpreter:
 
     def _apply_words(self, tokens: "Sequence[Token]", line: int) -> None:
         """The address words of the block: the feed, the speed and the clamp."""
+        owned = self._owned
         for token in tokens:
             if token.kind != "word":
                 continue
             address = (token.address or "").upper()
             if address == "":
+                continue
+            if owned and id(token) in owned:
+                # Rule 16: a function's own word (`M128 F800`) is skipped as a whole: no
+                # feed in force and no return to the modal feed unit either.
                 continue
             main = names_main_spindle(token, self._speed_address, self._main_spindle)
             if token.index is not None and not main:
@@ -1487,9 +1581,10 @@ class FeedModeTracker:
         # written code is normalized once.
         self._heads = frozenset(_head_of(key) for key in self._entries)
         #: B1: whether any entry names words of its own (``ownWords``); without one the
-        #: walk of a line asks nothing more than it did.
-        self._own_words = any(_own_words_of(entry) for entry in self._interp.codes if isinstance(entry, dict))
-        self._owned: Dict[int, str] = {}
+        #: walk of a line asks nothing more than it did. Which words are owned is the
+        #: interpreter's answer (its rule 16), so scale-feed, the tool list and the modal
+        #: state read one rule.
+        self._own_words = bool(self._interp._owners)
         self._memo: Dict[str, Optional[Dict[str, Any]]] = {}
         #: group -> canonical code -> entry, for the modes `_mode_with` looks for.
         self._mode_groups: Dict[str, Dict[str, Dict[str, Any]]] = {}
@@ -1520,9 +1615,6 @@ class FeedModeTracker:
         """Forgets what the last block said about itself: its tapping code and its data code."""
         self._block_tapping: Optional[str] = None
         self._block_data: Optional[str] = None
-        #: B1: the last code of the block that names words of its own, and those addresses.
-        self._block_owner: Optional[Tuple[str, FrozenSet[str]]] = None
-        self._owned = {}
 
     def entry(self, code: str) -> Optional[Dict[str, Any]]:
         """The database entry for a written code, following aliases, or ``None``."""
@@ -1547,24 +1639,20 @@ class FeedModeTracker:
         list does not count it. A word in front of the code keeps its own meaning
         (``L X+10 F500 M128 F800``: ``F500`` is the path feed). ``None`` for any other word.
         """
-        return self._owned.get(id(token)) if self._owned else None
+        return self._interp.owner_of(token)
 
     def _written(self, tokens: Sequence[Token]) -> List[Tuple[Dict[str, Any], str]]:
         """The entries of the codes a line writes, with the token kind (:func:`_written_codes`).
 
-        B1: on the way it marks the words a code of the block owns (:meth:`own_word_of`).
+        B1: a word a code of the block owns (:meth:`own_word_of`) is no code of its own.
         """
         out: List[Tuple[Dict[str, Any], str]] = []
-        own = self._own_words
-        owner = self._block_owner if own else None
-        if own:
-            self._owned = {}
+        owned = self._interp._owned if self._own_words else None
         for i, token in enumerate(tokens):
             kind = token.kind
             if kind == "word":
                 address = token.address
-                if owner is not None and address and address.upper() in owner[1] and not is_assignment(token):
-                    self._owned[id(token)] = owner[0]
+                if owned and id(token) in owned:
                     continue
                 if not address or address.upper() not in self._heads or is_assignment(token):
                     continue
@@ -1578,12 +1666,6 @@ class FeedModeTracker:
                 continue
             if entry is not None:
                 out.append((entry, kind))
-                if own:
-                    words = _own_words_of(entry)
-                    if words:
-                        owner = (str(entry.get("code") or ""), words)
-        if own:
-            self._block_owner = owner
         return out
 
     def update(self, tokens: Sequence[Token], continued: bool = False) -> None:

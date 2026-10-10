@@ -135,6 +135,21 @@ function axisWordsAreData(entry: CodeEntry | null): boolean {
   return entry.wordsAreData === true || entry.axisWords === 'data';
 }
 
+/** `_head_of`: the letters a code starts with (`G` of `G84.2`, `CYCL` of `CYCL DEF 207`), upper case. */
+function headOf(code: string): string {
+  const text = code.trim().toUpperCase();
+  let end = 0;
+  while (end < text.length) {
+    const c = text.charCodeAt(end);
+    if (c < 65 || c > 90) break;
+    end++;
+  }
+  return text.slice(0, end);
+}
+
+/** Rule 16: a code that owns words behind it (`ownWords`), and those addresses, upper case. */
+type Owner = { readonly code: string; readonly words: ReadonlySet<string> };
+
 function seen(token: NcToken, line: number): WordSeen {
   return { valueText: token.valueText ?? '', line, variable: token.value === undefined || token.value === null };
 }
@@ -190,6 +205,8 @@ interface Inner {
   blockDefined: Cycle | null;
   blockUpper: boolean;
   blockLower: boolean;
+  /** Rule 16: the last code of the block that owns words; it lasts to the end of the block. */
+  blockOwner: Owner | null;
 }
 
 function emptyBlock(): Block {
@@ -253,6 +270,12 @@ export class ModalInterpreter {
   private readonly heads: Set<string>;
   /** Written code → entry (or null), for the codes `heads` lets through. */
   private readonly memo = new Map<string, CodeEntry | null>();
+  /** Rule 16: the entries that own words; empty for a database without any (every ISO one). */
+  private readonly owners = new Map<CodeEntry, Owner>();
+  /** Rule 16: the first letters of the owners' written forms. */
+  private readonly ownerHeads = new Set<string>();
+  /** Rule 16: the words of the line just applied that a code of its block owns. */
+  private owned: Map<NcToken, string> | null = null;
   private s!: Inner;
 
   // Per block, filled by `readValues` and read in the same `update` only (`_read_values`).
@@ -288,10 +311,15 @@ export class ModalInterpreter {
     this.hasModalNext = codes.some((e) => e.sets?.cycle === 'call-modal-next');
     this.heads = new Set();
     for (const entry of codes) {
+      const words = Array.isArray(entry.ownWords)
+        ? entry.ownWords.filter((w): w is string => typeof w === 'string' && w.trim() !== '').map((w) => w.trim().toUpperCase())
+        : [];
+      if (words.length > 0) this.owners.set(entry, { code: entry.code ?? '', words: new Set(words) });
       for (const code of [entry.code, ...(entry.aliases ?? [])]) {
         if (typeof code !== 'string' || code === '') continue;
         const key = normalizeCode(code);
         if (key !== '') this.heads.add(key[0]);
+        if (words.length > 0 && key !== '') this.ownerHeads.add(headOf(key));
       }
     }
     this.reset();
@@ -349,7 +377,9 @@ export class ModalInterpreter {
       blockDefined: null,
       blockUpper: false,
       blockLower: false,
+      blockOwner: null,
     };
+    this.owned = null;
     const fromOf = (key: string): ParamSource | undefined => {
       const source = sources[key];
       return typeof source === 'string' ? (source as ParamSource) : undefined;
@@ -414,6 +444,11 @@ export class ModalInterpreter {
     for (const code of codes) this.applyCode(code, line);
     if (this.axisPlane) this.applyToolAxis(tokens);
     this.applyModalCall(tokens, codes);
+    if (this.owners.size > 0) {
+      // Rule 16: only a block with an owner in force or a code that owns words is walked.
+      if (s.blockOwner !== null || codes.some((code) => this.isOwner(code))) this.markOwned(tokens);
+      else this.owned = null;
+    }
     this.applyWords(tokens, line);
     if (masked !== '') this.applyTool(masked, line);
   }
@@ -432,6 +467,67 @@ export class ModalInterpreter {
     s.blockDefined = null;
     s.blockUpper = false;
     s.blockLower = false;
+    s.blockOwner = null;
+  }
+
+  /**
+   * Rule 16 (B1, NC-01; `_mark_owned`): marks the words of the line that a code of its block
+   * owns. In written order: a word under an address the owner in force names is owned (and no
+   * code itself); a code whose entry has `ownWords` becomes the owner for the rest of the block,
+   * continued lines included. A word in front of the code and an assignment word are not owned.
+   */
+  private markOwned(tokens: readonly NcToken[]): void {
+    const s = this.s;
+    let owned: Map<NcToken, string> | null = null;
+    let owner = s.blockOwner;
+    const heads = this.ownerHeads;
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      let entry: CodeEntry | null = null;
+      if (token.kind === 'word') {
+        const address = token.address ?? '';
+        if (address === '' || isAssignment(token)) continue;
+        const upper = address.toUpperCase();
+        if (owner !== null && owner.words.has(upper)) {
+          (owned ??= new Map()).set(token, owner.code);
+          continue;
+        }
+        if (!heads.has(headOf(upper))) continue;
+        entry = this.entryOf(address + (token.valueText ?? ''));
+      } else if (token.kind === 'call') {
+        const name = token.address ?? '';
+        if (name === '' || !heads.has(headOf(name))) continue;
+        entry = this.entryOf(name);
+      } else if (token.kind === 'keyword') {
+        const name = token.address || token.text;
+        if (!heads.has(headOf(name))) continue;
+        let number = token.valueText;
+        if (number === undefined) {
+          const next = nextCodeToken(tokens, i + 1);
+          if (next !== undefined && next.address === undefined && next.valueText !== undefined) number = next.valueText;
+        }
+        entry = this.entryOf(this.joinedCode(name, number) ?? name);
+      } else {
+        continue;
+      }
+      if (entry !== null) {
+        const found = this.owners.get(entry);
+        if (found !== undefined) owner = found;
+      }
+    }
+    s.blockOwner = owner;
+    this.owned = owned;
+  }
+
+  /** Rule 16: whether a written code of the block is one that owns words. */
+  private isOwner(code: string): boolean {
+    const entry = this.entryOf(code);
+    return entry !== null && this.owners.has(entry);
+  }
+
+  /** Rule 16: the code that owns `token`, a word of the line just applied, or null. */
+  ownerOf(token: NcToken): string | null {
+    return this.owned?.get(token) ?? null;
   }
 
   /**
@@ -744,10 +840,14 @@ export class ModalInterpreter {
   /** The address words of the block: the feed, the speed and the clamp. */
   private applyWords(tokens: readonly NcToken[], line: number): void {
     const s = this.s;
+    const owned = this.owned;
     for (const token of tokens) {
       if (token.kind !== 'word') continue;
       let address = (token.address ?? '').toUpperCase();
       if (address === '') continue;
+      // Rule 16: a function's own word (`M128 F800`) is skipped as a whole: no feed in force,
+      // and no return to the modal feed unit either.
+      if (owned !== null && owned.has(token)) continue;
       const main = namesMainSpindle(token, this.speedAddress, this.mainSpindle);
       // `S[2]=500`, `LIMS[2]=1800`: another spindle's (or axis's) word, not the speed in force.
       if (token.index !== undefined && !main) continue;

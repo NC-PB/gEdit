@@ -1,0 +1,47 @@
+{
+  "message": "Added 5 to X in 5 words on 5 blocks. Left 7 words as written: 2 data words, 5 FK contour points. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 4,
+      "severity": "info",
+      "message": "X+0: a value of BLK FORM, not a position of this program.",
+      "reason": "data"
+    },
+    {
+      "line": 5,
+      "severity": "info",
+      "message": "X+100: a value of BLK FORM, not a position of this program.",
+      "reason": "data"
+    },
+    {
+      "line": 13,
+      "severity": "warning",
+      "message": "CCX+50: an absolute point of an FK contour; gEdit does not move it. Check the FK contour.",
+      "reason": "fk-point"
+    },
+    {
+      "line": 13,
+      "severity": "warning",
+      "message": "P1X+70: an absolute point of an FK contour; gEdit does not move it. Check the FK contour.",
+      "reason": "fk-point"
+    },
+    {
+      "line": 14,
+      "severity": "warning",
+      "message": "P1X+20: an absolute point of an FK contour; gEdit does not move it. Check the FK contour.",
+      "reason": "fk-point"
+    },
+    {
+      "line": 15,
+      "severity": "warning",
+      "message": "P1X+30: an absolute point of an FK contour; gEdit does not move it. Check the FK contour.",
+      "reason": "fk-point"
+    },
+    {
+      "line": 15,
+      "severity": "warning",
+      "message": "P2X+40: an absolute point of an FK contour; gEdit does not move it. Check the FK contour.",
+      "reason": "fk-point"
+    }
+  ]
+}

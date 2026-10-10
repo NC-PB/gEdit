@@ -228,11 +228,13 @@
         },
         {
           "address": "K",
-          "label": "Knot",
+          "decimals": true,
+          "label": "Knot value, a real number",
           "unit": "count"
         },
         {
           "address": "R",
+          "decimals": true,
           "label": "Weight of the control point (1 when left out)",
           "unit": "count"
         },
@@ -745,7 +747,7 @@
     },
     {
       "code": "G41.6",
-      "description": "The control offsets the tool by its radius at right angles to the tool direction, to the left of the path. The blocks write the tool direction at their end point as I, J and K instead of rotary axis positions, so the same program suits a machine with a turning head, a turning table or both. D names the radius offset and Q a tilt angle of the tool in degrees. G40 ends it.",
+      "description": "The control offsets the tool by its radius at right angles to the tool direction, to the left of the path. The blocks write the tool direction at their end point as I, J and K instead of rotary axis positions, so the same program suits a machine with a turning head, a turning table or both: a component left out is 0, and a block that writes none keeps the direction before. D names the radius offset and Q the lead angle, by which the tool leans from the I, J, K direction towards the direction of travel, in degrees. G40 ends it.",
       "group": "compensation",
       "label": "Five-axis cutter radius compensation, left, tool direction by I, J, K",
       "modal": true,
@@ -755,8 +757,26 @@
           "label": "Radius offset register"
         },
         {
+          "address": "I",
+          "decimals": true,
+          "label": "Tool direction at the end of the block, X component",
+          "unit": "count"
+        },
+        {
+          "address": "J",
+          "decimals": true,
+          "label": "Tool direction at the end of the block, Y component",
+          "unit": "count"
+        },
+        {
+          "address": "K",
+          "decimals": true,
+          "label": "Tool direction at the end of the block, Z component",
+          "unit": "count"
+        },
+        {
           "address": "Q",
-          "label": "Tilt angle of the tool, in degrees",
+          "label": "Lead angle: tilt from the I, J, K direction towards the direction of travel, in degrees",
           "unit": "angle"
         }
       ],
@@ -818,7 +838,7 @@
     },
     {
       "code": "G42.6",
-      "description": "The control offsets the tool by its radius at right angles to the tool direction, to the right of the path. The blocks write the tool direction at their end point as I, J and K instead of rotary axis positions, so the same program suits a machine with a turning head, a turning table or both. D names the radius offset and Q a tilt angle of the tool in degrees. G40 ends it.",
+      "description": "The control offsets the tool by its radius at right angles to the tool direction, to the right of the path. The blocks write the tool direction at their end point as I, J and K instead of rotary axis positions, so the same program suits a machine with a turning head, a turning table or both: a component left out is 0, and a block that writes none keeps the direction before. D names the radius offset and Q the lead angle, by which the tool leans from the I, J, K direction towards the direction of travel, in degrees. G40 ends it.",
       "group": "compensation",
       "label": "Five-axis cutter radius compensation, right, tool direction by I, J, K",
       "modal": true,
@@ -828,8 +848,26 @@
           "label": "Radius offset register"
         },
         {
+          "address": "I",
+          "decimals": true,
+          "label": "Tool direction at the end of the block, X component",
+          "unit": "count"
+        },
+        {
+          "address": "J",
+          "decimals": true,
+          "label": "Tool direction at the end of the block, Y component",
+          "unit": "count"
+        },
+        {
+          "address": "K",
+          "decimals": true,
+          "label": "Tool direction at the end of the block, Z component",
+          "unit": "count"
+        },
+        {
           "address": "Q",
-          "label": "Tilt angle of the tool, in degrees",
+          "label": "Lead angle: tilt from the I, J, K direction towards the direction of travel, in degrees",
           "unit": "angle"
         }
       ],
@@ -871,16 +909,19 @@
         },
         {
           "address": "I",
+          "decimals": true,
           "label": "Scale factor for X",
           "unit": "count"
         },
         {
           "address": "J",
+          "decimals": true,
           "label": "Scale factor for Y",
           "unit": "count"
         },
         {
           "address": "K",
+          "decimals": true,
           "label": "Scale factor for Z",
           "unit": "count"
         }
@@ -1087,7 +1128,7 @@
       "code": "G68",
       "description": "On a lathe with two opposed turrets, mirrors the moves so that the second turret machines the same shape (mirror image, or symmetric machining). G69 ends it. A machining centre uses the same number for a rotation of the coordinate system.",
       "frame": "open",
-      "group": "frame",
+      "group": "turretMirror",
       "label": "Mirror image for the second turret"
     },
     {
@@ -1105,7 +1146,7 @@
         "frame:polar",
         "frame:cylindrical"
       ],
-      "description": "Defines a coordinate system tilted against the workpiece and makes it the one the program is written in. X, Y and Z give its origin; I, J and K give the three Euler angles, or with P another way to define the plane (P1 roll-pitch-yaw angles with Q as the order of the turns, P2 three points, P3 two vectors, P4 projection angles). G69 ends it. G53.1 in the next block turns the rotary axes to the new tool direction.",
+      "description": "Defines a coordinate system tilted against the workpiece and makes it the one the program is written in. X, Y and Z give its origin; I, J and K give the three Euler angles, or with P another way to define the plane (P1 roll-pitch-yaw angles with Q as the order of the turns, P2 three points, P3 two vectors, P4 projection angles). On the lathe G69.1 ends it (G69 ends the mirror image of the second turret). G53.1 in the next block turns the rotary axes to the new tool direction.",
       "frame": "open",
       "group": "frame",
       "label": "Tilted working plane",
@@ -1122,16 +1163,19 @@
         },
         {
           "address": "I",
+          "decimals": true,
           "label": "First angle, or X component of a vector",
           "unit": "count"
         },
         {
           "address": "J",
+          "decimals": true,
           "label": "Second angle, or Y component of a vector",
           "unit": "count"
         },
         {
           "address": "K",
+          "decimals": true,
           "label": "Third angle, or Z component of a vector",
           "unit": "count"
         },
@@ -1157,7 +1201,7 @@
         "frame:polar",
         "frame:cylindrical"
       ],
-      "description": "Makes the coordinate system whose Z axis is the present direction of the tool the one the program is written in. X, Y and Z give its origin in absolute values (the present position when left out); R turns it about its Z axis. G69 ends it.",
+      "description": "Makes the coordinate system whose Z axis is the present direction of the tool the one the program is written in. X, Y and Z give its origin in absolute values (the present position when left out); R turns it about its Z axis. On the lathe G69.1 ends it (G69 ends the mirror image of the second turret).",
       "frame": "open",
       "group": "frame",
       "label": "Tilted working plane from the tool direction",
@@ -1184,7 +1228,7 @@
         "frame:polar",
         "frame:cylindrical"
       ],
-      "description": "Tilts again, relative to the tilted plane that is in force. It is written like G68.2 (P chooses the form), and its origin is given in the coordinates of that plane. Tool length and radius compensation must be off. G69 ends it.",
+      "description": "Tilts again, relative to the tilted plane that is in force. It is written like G68.2 (P chooses the form), and its origin is given in the coordinates of that plane. Tool length and radius compensation must be off. On the lathe G69.1 ends it (G69 ends the mirror image of the second turret).",
       "frame": "open",
       "group": "frame",
       "label": "Tilted working plane, added to the one in force",
@@ -1201,16 +1245,19 @@
         },
         {
           "address": "I",
+          "decimals": true,
           "label": "First angle, or X component of a vector",
           "unit": "count"
         },
         {
           "address": "J",
+          "decimals": true,
           "label": "Second angle, or Y component of a vector",
           "unit": "count"
         },
         {
           "address": "K",
+          "decimals": true,
           "label": "Third angle, or Z component of a vector",
           "unit": "count"
         },
@@ -1225,7 +1272,7 @@
       "code": "G69",
       "description": "Ends the mirror image that G68 started. A machining centre uses the same number to end a rotation of the coordinate system.",
       "frame": "close",
-      "group": "frame",
+      "group": "turretMirror",
       "label": "Mirror image for the second turret off"
     },
     {
@@ -1290,6 +1337,16 @@
           "block": 2,
           "label": "Roughing feed (a feed inside the profile blocks is not used)",
           "min": 0
+        },
+        {
+          "address": "S",
+          "block": 2,
+          "label": "Spindle speed for the roughing (an S inside the profile blocks applies to the finishing with G70 only)"
+        },
+        {
+          "address": "T",
+          "block": 2,
+          "label": "Tool for the roughing (a T inside the profile blocks applies to the finishing with G70 only)"
         }
       ],
       "review": "pending",
@@ -2304,16 +2361,19 @@
         },
         {
           "address": "I",
+          "decimals": true,
           "label": "Rotation axis direction, X component (three-dimensional conversion)",
           "unit": "count"
         },
         {
           "address": "J",
+          "decimals": true,
           "label": "Rotation axis direction, Y component (three-dimensional conversion)",
           "unit": "count"
         },
         {
           "address": "K",
+          "decimals": true,
           "label": "Rotation axis direction, Z component (three-dimensional conversion)",
           "unit": "count"
         }
@@ -2392,6 +2452,16 @@
           "block": 2,
           "label": "Roughing feed (a feed inside the profile blocks is not used)",
           "min": 0
+        },
+        {
+          "address": "S",
+          "block": 2,
+          "label": "Spindle speed for the roughing (an S inside the profile blocks applies to the finishing with G70 only)"
+        },
+        {
+          "address": "T",
+          "block": 2,
+          "label": "Tool for the roughing (a T inside the profile blocks applies to the finishing with G70 only)"
         }
       ],
       "review": "pending",
@@ -2446,6 +2516,16 @@
           "block": 2,
           "label": "Roughing feed (a feed inside the profile blocks is not used)",
           "min": 0
+        },
+        {
+          "address": "S",
+          "block": 2,
+          "label": "Spindle speed for the roughing (an S inside the profile blocks applies to the finishing with G70 only)"
+        },
+        {
+          "address": "T",
+          "block": 2,
+          "label": "Tool for the roughing (a T inside the profile blocks applies to the finishing with G70 only)"
         }
       ],
       "review": "pending",

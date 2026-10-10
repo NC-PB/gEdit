@@ -1148,7 +1148,7 @@ function numberText(n: number): string {
 /**
  * What was typed for a row, checked before anything is written: a decimal number (a decimal
  * comma is read as the point), a whole number for the tool word, `D` and `H` written as plain
- * register numbers and every `unit: 'count'` parameter, the parameter's `min`/`max` (against
+ * register numbers and every `unit: 'count'` parameter without `decimals`, the parameter's `min`/`max` (against
  * the typed, effective value). `null` when it may be written; the message otherwise. Never
  * corrects the value.
  */
@@ -1165,7 +1165,7 @@ export function checkValue(word: InspectedWord, typed: string, view: InspectView
     (word.value?.cls ?? null) === null &&
     word.token.value?.hasPoint !== true &&
     ((tool !== '' && address === tool) || WHOLE_NUMBER_ADDRESSES.includes(address));
-  if ((word.param?.unit === 'count' || plainRegister) && fraction !== '') {
+  if (((word.param?.unit === 'count' && word.param.decimals !== true) || plainRegister) && fraction !== '') {
     return { key: 'inspector.why.wholeNumber' };
   }
   // A tool, `D` or `H` register number is never negative (`-0` neither: no sign at all).

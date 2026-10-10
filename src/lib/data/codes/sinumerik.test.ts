@@ -550,3 +550,12 @@ describe('B1 (a7s): the codes taken from the 840D sl manuals', () => {
     expect(entry('CLEARM')?.description).toMatch(/CLEARM\(\) clears all/);
   });
 });
+
+describe('B1 fix NC (NC-07): CYCLE93 SPD and SLOT1 _DP labels', () => {
+  it('says SPD of CYCLE93 is a diameter under diameter programming', () => {
+    expect(entry('CYCLE93')?.params?.find((p) => p.address === 'SPD')?.label).toMatch(/diameter/);
+  });
+  it('says _DP of SLOT1 becomes a depth through _AMODE', () => {
+    expect(entry('SLOT1')?.params?.find((p) => p.address === '_DP')?.label).toMatch(/_AMODE/);
+  });
+});
