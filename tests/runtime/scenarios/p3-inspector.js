@@ -128,7 +128,7 @@ scenario('p3-inspector', { timeout: 600 }, async (h) => {
   h.check('the inspector is not open at the start: the left region shows the program map', !inspectorPanel(h) && !!h.q('panel', { region: 'left', panel: 'programMap' }), h.qa('panel').map((e) => `${e.dataset.region}/${e.dataset.panel}`))
   await ribbonTab(h, 'view')
   h.check('the View tab offers Code Inspector and Motion Colors', !!h.q('cmd-button', { command: 'view.toggleInspector' }) && !!h.q('cmd-button', { command: 'view.toggleMotionColors' }), h.qa('cmd-button').map((e) => e.dataset.command))
-  await ribbonTab(h, 'home')
+  await ribbonTab(h, 'file')
 
   const { id } = await openFixture(h, L01)
   h.check('l01-turning-a.nc opens as a Fanuc lathe program', ctx.docs.get(id)?.profileId === 'fanuc-lathe', ctx.docs.get(id)?.profileId)
@@ -144,7 +144,7 @@ scenario('p3-inspector', { timeout: 600 }, async (h) => {
   h.click(h.q('cmd-button', { command: 'view.toggleInspector' }))
   await h.waitFor(() => inspectorPanel(h), { timeout: 5000 })
   h.check('the View tab button shows it too', !!inspectorPanel(h) && !!h.q('inspector-panel'))
-  await ribbonTab(h, 'home')
+  await ribbonTab(h, 'file')
 
   // ============================================================ B. X7: the state at every golden line
   const goldenPath = await h.fixture('modal/fanuc-lathe/turning-a.json')

@@ -3,12 +3,13 @@
 // program's own block numbers as one undo step, completion offers the templates on an empty line, and a star puts a
 // template first. The blocks of Phase 1 are gone.
 //
-//   A. The ribbon. The Home tab's "Program" group holds the program-start template; no `insert.block:*` command, no
-//      "Blocks" group and no "More Blocks…" list is left on any tab; the Insert tab reads Templates, Cycles, Manage.
+//   A. The ribbon. The seven tabs (B1 A9: no Home tab); the program-start template has one button, on the Insert tab
+//      (B1 A9: the Home tab's "Program" group is gone); no `insert.block:*` command, no "Blocks" group and no
+//      "More Blocks…" list is left on any tab; the Insert tab reads Templates, Cycles, Manage.
 //      On a Fanuc lathe program the template blocks are the lathe code set's groups, the buttons its `toolbar`
 //      templates, the rest in each group's "More Templates…" list, every one marked "review pending"; a mill program
 //      shows the mill set and none of the lathe's. (Expected: `src/lib/data/codes/*.json`, read through `{repo}`.)
-//   B. Program start from the Home tab on an empty new program and on one that is numbered below the cursor: the
+//   B. Program start from the Insert tab on an empty new program and on one that is numbered below the cursor: the
 //      golden `templates/fanuc/program-start` (numbered) and the same text without its block numbers (a program with
 //      no number anywhere is not numbered by a template). The form has the fields of the data, with their defaults.
 //   C. Tool start on a numbered lathe program (X9t): the form (fields, defaults, the "review pending" note, a live
@@ -152,18 +153,27 @@ scenario('p3-templates', { timeout: 900, files: REPO_FILE }, async (h) => {
   await guard(h, 'A. the ribbon', async () => {
     const first = ctx.docs.getActiveId() ?? ''
     h.check('the first program is a Fanuc mill program', ctx.docs.get(first)?.profileId === 'fanuc-gcode', ctx.docs.get(first)?.profileId)
-    await ribbonTab(h, 'home')
-    const groups = ribbonGroups(h)
-    const program = groups.find((g) => g.label === ctx.t('templates.groupProgram'))
-    h.check('Home tab: the group "Program" holds exactly the program-start template', program?.commands.join() === 'insert.template:program-start', groups.map((g) => `${g.label}: ${g.commands.join(' ')}`))
+    // B1 A9 (owner decision): the Home tab is gone and Program start is offered on the Insert tab only,
+    // in the Templates group. The ribbon has the seven tabs File, Edit, Insert, NC, Tools, Scripts, View.
+    const tabIds = h.qa('ribbon-tab').map((e) => e.dataset.tab)
+    h.check('the ribbon has the seven tabs File, Edit, Insert, NC, Tools, Scripts and View, and no Home tab', JSON.stringify(tabIds) === JSON.stringify(['file', 'edit', 'insert', 'nc', 'tools', 'scripts', 'view']), tabIds)
+    /** @type {string[]} */
+    const programStartOn = []
+    for (const tab of tabIds) {
+      await ribbonTab(h, /** @type {string} */ (tab))
+      if (h.q('cmd-button', { command: 'insert.template:program-start' })) programStartOn.push(/** @type {string} */ (tab))
+      if (ribbonGroups(h).some((g) => g.label === 'Program')) programStartOn.push(`${tab}: a group called Program`)
+    }
+    h.check('Program start has one button, on the Insert tab, and no group "Program" on any other tab', programStartOn.join() === 'insert', programStartOn)
+    await ribbonTab(h, 'insert')
     const button = h.q('cmd-button', { command: 'insert.template:program-start' })
     h.check('and its button is enabled and reads the template\'s own label', !!button && !(/** @type {HTMLButtonElement} */ (button).disabled) && button.querySelector('.btn-label')?.textContent?.trim() === byId(fanuc, 'program-start').label, button?.textContent)
     const ids = ctx.commands.list().map((c) => c.id)
     h.check('no Phase 1 block is left: not one insert.block:* command is registered', ids.every((id) => !id.startsWith('insert.block:')) && ids.includes('insert.template:program-start'), ids.filter((id) => id.startsWith('insert.')))
     /** @type {string[]} */
     const leftovers = []
-    for (const tab of ['home', 'insert', 'tools', 'view']) {
-      await ribbonTab(h, tab)
+    for (const tab of tabIds) {
+      await ribbonTab(h, /** @type {string} */ (tab))
       for (const b of h.qa('cmd-button')) if ((b.dataset.command ?? '').startsWith('insert.block:')) leftovers.push(`${tab}: ${b.dataset.command}`)
       for (const g of ribbonGroups(h)) if (['Blocks', 'More Blocks…'].includes(g.label)) leftovers.push(`${tab}: group ${g.label}`)
       for (const o of document.querySelectorAll('.ribbon-body option')) if (/More Blocks/.test(o.textContent ?? '')) leftovers.push(`${tab}: ${o.textContent}`)
@@ -184,14 +194,14 @@ scenario('p3-templates', { timeout: 900, files: REPO_FILE }, async (h) => {
     h.check('the lathe\'s Program start is the lathe\'s (one button, the lathe text)', templateBlocks(h).find((b) => b.key === 'Program')?.buttons.filter((b) => b.id === 'program-start').length === 1 && ctx.templates.list(doc).find((t) => t.id === 'program-start')?.machineType === 'lathe')
   })
 
-  // ============================================================ B. Program start on the Home tab
+  // ============================================================ B. Program start on the Insert tab
   await guard(h, 'B. Program start', async () => {
     const g = await golden(h, 'templates/fanuc/program-start')
     const def = byId(fanuc, 'program-start')
     // 1. An empty new program: no block number anywhere, so the template writes none.
     const empty = await newDoc(h, '', 'fanuc-gcode')
     await revealLine(h, empty, 1, 1)
-    await ribbonTab(h, 'home')
+    await ribbonTab(h, 'insert')
     const button = h.q('cmd-button', { command: 'insert.template:program-start' })
     if (!button) throw new Error('no Program start button')
     await h.window.ensureFront()
@@ -211,7 +221,7 @@ scenario('p3-templates', { timeout: 900, files: REPO_FILE }, async (h) => {
     // 2. A program that is numbered below the cursor: the template numbers its blocks from the start (golden).
     const numbered = await newDoc(h, '\nN10 G0 X0. Y0.\nM30', 'fanuc-gcode')
     await revealLine(h, numbered, 1, 1)
-    await ribbonTab(h, 'home')
+    await ribbonTab(h, 'insert')
     h.click(h.q('cmd-button', { command: 'insert.template:program-start' }))
     await waitForm(h)
     state = formNow(h)
@@ -454,7 +464,7 @@ scenario('p3-templates', { timeout: 900, files: REPO_FILE }, async (h) => {
     const program = ['', 'N10 G0 X0 Z0', 'M30']
     const id = await newDoc(h, program.join('\n'), 'sinumerik')
     await revealLine(h, id, 1, 1)
-    await ribbonTab(h, 'home')
+    await ribbonTab(h, 'insert')
     h.click(h.q('cmd-button', { command: 'insert.template:program-start' }))
     await waitForm(h)
     let state = formNow(h)

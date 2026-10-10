@@ -81,7 +81,7 @@ tests/runtime/suite.sh tests/runtime/suites/m0.txt   # run a suite and print the
 
 ## On a hosted runner
 
-`harness.yml` runs `sync.sh` and then `suite.sh tests/runtime/suites/{m{0..12},rp,m13,p3a,p3b}.txt` on `macos-14`
+`harness.yml` runs `sync.sh` and then `suite.sh tests/runtime/suites/{m{0..12},rp,m13,p3a,p3b,b1}.txt` on `macos-14`
 (45 minute limit), always uploads `$GEDIT_RH_DIR/out`, the app logs and the sync logs, and
 caches the build directory. What differs from the owner's Mac, and how the scenarios deal with it:
 
@@ -107,11 +107,11 @@ caches the build directory. What differs from the owner's Mac, and how the scena
 
 ## Suites
 
-One file per milestone, `suites/m0.txt` … `suites/m12.txt`, then `suites/rp.txt` (M12.5, "Real programs, second pass"), `suites/m13.txt` (M13 and the Phase 2 exit criteria), `suites/p3a.txt` (Phase 3, P3a "Understand a block") and `suites/p3b.txt` (Phase 3, P3b "Write with templates"): one scenario name per line, `#`
+One file per milestone, `suites/m0.txt` … `suites/m12.txt`, then `suites/rp.txt` (M12.5, "Real programs, second pass"), `suites/m13.txt` (M13 and the Phase 2 exit criteria), `suites/p3a.txt` (Phase 3, P3a "Understand a block"), `suites/p3b.txt` (Phase 3, P3b "Write with templates") and `suites/b1.txt` (the bug-fix round B1): one scenario name per line, `#`
 starts a comment. A cumulative run is all of them in order:
 
 ```sh
-tests/runtime/suite.sh tests/runtime/suites/{m{0,1,2,3,4,5,6,7,8,9,10,11,12},rp,m13,p3a,p3b}.txt
+tests/runtime/suite.sh tests/runtime/suites/{m{0,1,2,3,4,5,6,7,8,9,10,11,12},rp,m13,p3a,p3b,b1}.txt
 ```
 
 The Phase 2 exit criteria (plan §2.2) and where each is proven; `suites/m13.txt` has the same table in its comments:
@@ -144,6 +144,20 @@ The Phase 3 criteria that the running app proves (`suites/p3a.txt` and `suites/p
 | X9t templates in the window (the templates half of X9), the Insert tab, the form, completion, stars, the cost of the form's live text, of opening it and of the Insert at 300,000 lines (unnumbered and numbered) | `p3-templates` |
 | X18 a, b Edit Cycle: read back, changed, nothing else touched, one Undo; insert mode with the renumber | `p3-cycleforms` |
 | X18 c the template manager and New Template from Selection, unsaved edits asked about | `p3-template-manager` |
+
+The bug-fix round B1 (`suites/b1.txt`) adds one scenario or pair for each behaviour only the running app can prove:
+
+| Package | Scenario |
+|---|---|
+| A1 one file under two spellings (a symbolic link, `folder/../`): one tab, Save As onto the other spelling refused, a same-size rewrite noticed at Save | `b1-files-spellings` |
+| A1 a restored session shows the front tab first | `b1-session-1`, `b1-session-2` |
+| A4, A9 Settings asks before it loses typed input and before leaving the Machines tab with an open form | `b1-settings-leave` |
+| A4 a transform of 1,500 lines: bookmarks stay, one undo; the program map scrolls to the cursor | `b1-edits-1000`, `b1-map-scroll` |
+| A5 Convert Case keeps program names and lists them | `b1-convert-case` |
+| A9 no colour box on `#101=5`; a hover on the first lines fully visible | `b1-colorbox`, `b1-hover-line1` |
+| A9 the seven ribbon tabs and their groups; the scrollbar below the group labels at a narrow width | `b1-ribbon-tabs`, `b1-ribbon-narrow` |
+| A2 the recovery warning while snapshots fail; the recent-files list that cannot be saved; a restore onto a file another tab holds | `b1-recovery-status`, `b1-recovery-1`, `b1-recovery-2` |
+| A3, B4 the login shell's PATH behind the app's own; not asked for when `scripts.python` is set | `b1-py3-loginpath`, `b1-py3-setting` |
 
 ## PASS, FLAKY, FAIL, BLOCKED
 
@@ -257,6 +271,9 @@ scenario('m1-example', { timeout: 90 }, async (h) => {
   `clicks`; a scenario fails if one fell back to a DOM click), the quick pick and the suggest widget (`pickRows`, `pickByLabel`,
   `suggestItems`), and the goldens and code databases read back (`golden`, `codeFile`, with `files: REPO_FILE` for `{repo}`). Expected
   text comes from `tests/fixtures/templates/**` and `tests/fixtures/cycleforms/**`, never from what the app shows.
+  The B1 scenarios (`b1-*`) share `b1-common.js`: the seven ribbon tabs (`TABS`), a symbolic link made outside the app (`symlink`), the
+  visible hover as a rectangle (`hoverBox`) and whether a row is inside its scrolling panel (`rowVisible`); a folder made read-only
+  with `osOp(h, 'chmod', …)` is made writable again in a `finally`.
 - Find elements with `h.q('<test id>', { attr: 'value' })`. The test ids are a contract:
   §7.9 of `docs/planning/phase-1-implementation.md` (Phase 1) and §7.12 of
   `docs/planning/phase-2-implementation.md` (from M6 on), and §6.8 of `docs/planning/phase-3-implementation.md`

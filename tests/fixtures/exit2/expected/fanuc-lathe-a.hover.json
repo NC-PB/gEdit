@@ -7,14 +7,14 @@
       "column": 1,
       "word": "G71",
       "lineText": "G71 U1.5 R0.5",
-      "markdown": "**G71** — Roughing cycle along Z\n\nRoughs an outside or inside contour in passes along Z and leaves an allowance for the finishing cycle\\. It is written in two blocks: depth of cut and retract first, then the profile range and the allowances\\.\n\n_Cycle_"
+      "markdown": "**G71** — Roughing cycle along Z\n\nRoughs an outside or inside contour in passes along Z and leaves a finishing allowance for G70\\. Written in two blocks: the depth of cut and the retract first, then the profile range, the allowances and the feed\\. The block with P and Q runs the cycle; the same U means the depth of cut in the first block and the allowance on X in the second\\. The first block's values are machine parameters that the block overwrites, so they stay in force until written again\\. The addresses are those of the usual ZX plane \\(G18\\); in another plane the control reads other ones\\.\n\n_Cycle_"
     },
     {
       "line": 46,
       "column": 1,
       "word": "G76",
       "lineText": "G76 X18.16 Z-22. P920 Q300 F1.5",
-      "markdown": "**G76** — Multi\\-pass threading cycle\n\nCuts a thread in several passes, taking less material each time\\. Written in two blocks: the finishing passes, the pull\\-out chamfer and the insert angle packed into P, the smallest cut depth and the finish allowance first; then the thread end, the taper, the thread height, the first cut depth and the lead\\. F is the thread lead per revolution, not a feed rate\\. P means two different things in the two blocks and one entry cannot tell them apart, so gEdit counts it rather than measuring it: the packed six digits of the first block are never converted, and the thread height of the second is shown as written\\.\n\nThe feed carries the thread pitch here, so changing it changes the thread\\.\n\n_Cycle_\n\nRequired: F"
+      "markdown": "**G76** — Multi\\-pass threading cycle\n\nCuts a thread in several passes, taking less material each time\\. Written in two blocks: the finishing passes, the pull\\-out chamfer and the insert angle packed into P, the smallest depth of cut and the finishing allowance first; then the end point, the taper, the thread height, the depth of the first cut and the lead\\. The block with X \\(U\\) and Z \\(W\\) runs the cycle; P, Q and R mean different things in the two blocks, and each of them stays in force until it is written again\\. F is the thread lead per revolution, not a feed rate\\. gEdit shows both P values as written: the packed digits of the first block must never be converted\\.\n\nThe feed carries the thread pitch here, so changing it changes the thread\\.\n\n_Cycle_\n\nRequired: F"
     },
     {
       "line": 20,

@@ -154,7 +154,7 @@ scenario('m4-transforms', { timeout: 420 }, async (h) => {
 
   // ==================================================================== A. the NC tab
   const tabs = h.qa('ribbon-tab').map((e) => e.dataset.tab)
-  h.check('the ribbon has an NC tab between Insert and Tools', JSON.stringify(tabs) === '["home","insert","nc","tools","view"]', tabs)
+  h.check('the ribbon has an NC tab between Insert and Tools (B1 A9: the seven tabs File, Edit, Insert, NC, Tools, Scripts, View)', JSON.stringify(tabs) === '["file","edit","insert","nc","tools","scripts","view"]', tabs)
 
   await ribbonTab(h, 'nc')
   const allNcButtons = h.qa('cmd-button').map((e) => e.dataset.command).filter((id) => id?.startsWith('nc.'))

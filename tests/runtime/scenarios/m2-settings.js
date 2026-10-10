@@ -117,13 +117,28 @@ scenario('m2-settings', { timeout: 300, files: { [`${CONFIG}/settings.json`]: BR
   h.check('no file dialog was needed', h.dialogs.calls().length === dialogCalls, h.dialogs.calls().slice(dialogCalls))
   h.check('the unreadable file was rescued as settings.json.bak', (await h.disk.read(`${paths.settingsFile}.bak`)) === BROKEN, await h.disk.stat(`${paths.settingsFile}.bak`))
 
-  // ------------------------------------------------------------ Esc throws the edit away
+  // ------------------------------------------------------------ Esc throws the edit away, after asking
+  // B1 A4: leaving with something typed asks first ("Unsaved changes"); Cancel keeps the dialog and the
+  // typed value, "Discard changes" closes it and drops the value. (Before, Esc closed it at once.)
   await openDialog(false)
   await goTo('editor')
   setInput(control(h, 'editor.tabWidth'), '8')
   await h.nativeKeys([{ key: 'Escape' }])
+  const leave = await h.alert.wait({ timeout: 5000 })
+  h.check('Esc with a value typed asks first: "Unsaved changes", Discard changes or Cancel', !!leave && (leave?.texts ?? []).join(' ').includes(ctx.t('settings.leave.title')) && (leave?.buttons ?? []).includes(ctx.t('settings.leave.ok')) && (leave?.buttons ?? []).includes('Cancel'), leave)
+  await h.alert.click('Cancel')
+  await h.idle()
+  h.check('Cancel keeps the dialog open with the typed value in it', !!dialog() && control(h, 'editor.tabWidth')?.value === '8' && ctx.settings.get('editor.tabWidth') === 2, { open: !!dialog(), typed: control(h, 'editor.tabWidth')?.value, setting: ctx.settings.get('editor.tabWidth') })
+  await h.nativeKeys([{ key: 'Escape' }])
+  await h.alert.wait({ timeout: 5000 })
+  await h.alert.click(ctx.t('settings.leave.ok'))
   await h.waitFor(() => !dialog(), { timeout: 5000 })
-  h.check('Esc closes the dialog and discards what was typed', !dialog() && ctx.settings.get('editor.tabWidth') === 2, ctx.settings.get('editor.tabWidth'))
+  h.check('Discard changes closes the dialog and discards what was typed', !dialog() && ctx.settings.get('editor.tabWidth') === 2, ctx.settings.get('editor.tabWidth'))
+  // Nothing typed: Esc closes at once, no question.
+  await openDialog(false)
+  await h.nativeKeys([{ key: 'Escape' }])
+  await h.waitFor(() => !dialog(), { timeout: 5000 })
+  h.check('Esc with nothing typed closes at once, without a question', !dialog() && (await h.alert.visible()) === null)
 
   // ------------------------------------------------------------ Reset category
   await openDialog(false)

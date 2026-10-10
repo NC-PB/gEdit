@@ -258,7 +258,8 @@ export const ticked = (h, field) => /** @type {HTMLInputElement | null} */ (h.q(
 // ---------------------------------------------------------------- running a script
 
 /**
- * Runs a report script from the Tools tab, the way a user does: the tab, the script's
+ * Runs a report script from the ribbon, the way a user does (B1 A9: a built-in one from the Tools tab, one
+ * of the user's own from the Scripts tab): the tab, the script's
  * button, the form if it has one, OK. Waits until the Results panel has a report that is not
  * the one from before, and answers it.
  *
@@ -279,9 +280,11 @@ export const ticked = (h, field) => /** @type {HTMLInputElement | null} */ (h.q(
  */
 export async function runFromTools(h, scriptId, fill, timeout = 60000) {
   const ctx = context(h)
-  await ribbonTab(h, 'tools')
+  // B1 A9: the built-in scripts are on the Tools tab, a script of the user's folders on the Scripts tab.
+  const tab = scriptId.startsWith('bundled:') ? 'tools' : 'scripts'
+  await ribbonTab(h, tab)
   const item = await h.waitFor(() => h.q('script-item', { scriptId }), { timeout: 10000 })
-  if (!item) throw new Error(`the Tools tab offers no ${scriptId}; it offers ${JSON.stringify(menuScriptIds(h))}`)
+  if (!item) throw new Error(`the ${tab} tab offers no ${scriptId}; it offers ${JSON.stringify(menuScriptIds(h))}`)
   const before = read(ctx.results.current)
   const arrived = () => {
     const current = read(ctx.results.current)

@@ -21,7 +21,10 @@
 //!   ending the run — and set `stdoutTruncated` / `stderrTruncated`.
 //! - `PATH`: an app started from Finder gets launchd's short `PATH`, so the script's
 //!   environment gets the login shell's directories added where they are missing
-//!   ([`path_with_login`]); the existing order stays first.
+//!   ([`path_with_login`]); the existing order stays first. **Not when the interpreter
+//!   is configured** (`GEDIT_PYTHON` or `scripts.python`): that setting is how a user whose
+//!   login shell is broken or slow keeps gEdit from starting it, so the shell is not asked
+//!   and the script keeps the `PATH` the app has ([`login_path_for`]).
 //! - The context folder is removed by an RAII guard, on every path out.
 //! - Interpreter order: `GEDIT_PYTHON`, then `scripts.python` from the settings file
 //!   (only when it names an existing file), then [`crate::python::interpreter`].
@@ -660,6 +663,27 @@ pub fn interpreter_with(from_env: Option<OsString>, settings: &ScriptSettings) -
         .unwrap_or_else(crate::python::interpreter)
 }
 
+/// The login shell's `PATH` for a script run, or `None` when the user has configured the
+/// interpreter (`GEDIT_PYTHON` or a `scripts.python` that names a file).
+///
+/// Configuring the interpreter is the way out for a login shell that is broken, slow or
+/// unwanted, so it must also mean that gEdit never starts that shell: not for the
+/// interpreter and not for the `PATH`. Such a script keeps the `PATH` the app was
+/// started with; a tool that only the user's profile puts on the `PATH` is not found then.
+/// `ask` is the login-shell lookup, passed in so a test can see that it is not called.
+pub fn login_path_for(
+    from_env: Option<&std::ffi::OsStr>,
+    settings: &ScriptSettings,
+    ask: impl FnOnce() -> Option<OsString>,
+) -> Option<OsString> {
+    let configured = from_env.is_some_and(|value| !value.is_empty()) || settings.python.is_some();
+    if configured {
+        None
+    } else {
+        ask()
+    }
+}
+
 /// Runs the version probe and judges the answer.
 pub fn probe(interpreter: &Path) -> PythonStatus {
     let plan = RunPlan::probe(interpreter, &["-c", VERSION_PROBE], PROBE_TIMEOUT);
@@ -874,10 +898,12 @@ pub fn script_run(
     let timeout = Duration::from_secs(timeout_secs(req.timeout_secs, from_header, &settings));
 
     let interpreter = interpreter(&settings);
-    let path = path_with_login(
-        std::env::var_os("PATH").as_deref(),
-        crate::python::login_path().as_deref(),
+    let login = login_path_for(
+        std::env::var_os("GEDIT_PYTHON").as_deref(),
+        &settings,
+        crate::python::login_path,
     );
+    let path = path_with_login(std::env::var_os("PATH").as_deref(), login.as_deref());
     let bundled = discovery::bundled_dir(&app);
     // Dropped at the end of this function, whichever way it leaves.
     let context = ContextDir::create(&req.context)?;
@@ -1364,6 +1390,37 @@ mod tests {
         assert_eq!(env.len(), 5);
         // A dev build without the resource still gets a usable environment.
         assert_eq!(script_env(None, Path::new("/tmp/x/context.json")).len(), 4);
+    }
+
+    /// A configured interpreter means the login shell is not started for the `PATH` either
+    /// (B1 B4: the spike run found A3 asking it even then, which broke the way out for a
+    /// broken login shell).
+    #[test]
+    fn a_configured_interpreter_never_asks_the_login_shell_for_the_path() {
+        let asked = std::cell::Cell::new(0);
+        let ask = || {
+            asked.set(asked.get() + 1);
+            Some(OsString::from("/opt/homebrew/bin"))
+        };
+        let configured = ScriptSettings {
+            python: Some(PathBuf::from("/from/settings")),
+            ..ScriptSettings::default()
+        };
+        let none = ScriptSettings::default();
+        let env = OsString::from("/from/env");
+        assert_eq!(login_path_for(Some(&env), &none, ask), None);
+        assert_eq!(login_path_for(None, &configured, ask), None);
+        assert_eq!(asked.get(), 0, "the shell must not be started");
+        // An empty variable is not a configuration, and neither is no setting.
+        assert_eq!(
+            login_path_for(Some(std::ffi::OsStr::new("")), &none, ask),
+            Some(OsString::from("/opt/homebrew/bin"))
+        );
+        assert_eq!(
+            login_path_for(None, &none, ask),
+            Some(OsString::from("/opt/homebrew/bin"))
+        );
+        assert_eq!(asked.get(), 2);
     }
 
     /// AD-13's order: the environment variable, then the setting, then the resolver.

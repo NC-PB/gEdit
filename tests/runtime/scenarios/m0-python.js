@@ -230,7 +230,10 @@ scenario('m0-py3-stub', { timeout: 120, env: 'finder', python: null, vars: { SHE
   // startup probe next to the first `script_run`. Left asserting the real claim rather
   // than the current behaviour: the shell is meant to be asked once per app.
   const log = await h.disk.read(`${h.cfg.run}/fakeshell.log`).catch(() => '')
-  const asked = log.trim() === '' ? 0 : log.trim().split('\n').length
+  // B1 A3: the same one login shell call also prints the shell's PATH, so the command line is longer than it
+  // was, and the fake shell's `echo` (sh) expands the `\n` in it: count the calls (lines that start with
+  // "args:"), not the lines.
+  const asked = log.split('\n').filter((line) => line.startsWith('args: ')).length
   h.check('the login shell was asked once, without an interactive session', /args: -l -c echo; command -v python3/.test(log) && asked === 1, {
     asked,
     log,
@@ -238,11 +241,16 @@ scenario('m0-py3-stub', { timeout: 120, env: 'finder', python: null, vars: { SHE
       ? 'the login shell was asked more than once: src-tauri/src/python.rs `interpreter()` resolves outside `OnceLock::get_or_init`, so the startup probe and the first run can race'
       : undefined,
   })
+  // B1 A3: the same call asks for the PATH as well, in one go (no second shell for it).
+  h.check('and that one call also asks for the PATH', /GEDIT_LOGIN_PATH=/.test(log), log)
 })
 
 scenario('m0-py3-override', { timeout: 120, env: 'finder', python: '{run}/alt/python3', vars: { SHELL: '{run}/fakeshell.sh' }, files: files({ 'fakeshell.sh': { text: FAKE_SHELL, mode: 0o755 } }) }, async (h) => {
   await installProbe(h)
   const run = await runScript(h)
   h.check('GEDIT_PYTHON is used as it is', run.success && run.data.via === 'override' && run.data.geditPython === `${h.cfg.run}/alt/python3`, run)
-  h.check('the login shell is never asked, not even by the startup probe', (await h.disk.stat(`${h.cfg.run}/fakeshell.log`)) === null)
+  // B1 B4 (a regression the first hosted run found in A3): `GEDIT_PYTHON` or `scripts.python` is the way out for a
+  // user whose login shell is broken or slow, so the shell is not started for the script's PATH either. The run
+  // above is a script run, which is where A3 asks for the PATH.
+  h.check('the login shell is never asked, not even by the startup probe or by a script run', (await h.disk.stat(`${h.cfg.run}/fakeshell.log`)) === null)
 })

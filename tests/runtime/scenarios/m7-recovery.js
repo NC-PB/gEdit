@@ -22,12 +22,11 @@
 //      would. Its row says `changed` before anything is opened, the restore still
 //      writes nothing, and the P1 external-change banner is up over the recovered tab
 //      before the user can save over the newer file.
-//   2. **A partial restore keeps the rest.** `gamma.nc` is left unticked; its snapshot
-//      is still on disk afterwards and is offered again, instead of disappearing with
-//      the session its neighbours were restored from. The session is kept *whole* —
-//      §7.10 has no per-entry drop for a dead session — so the two that were restored
-//      are offered a second time as well; that is the shape of the guarantee and the
-//      scenario says so rather than wishing it were tidier.
+//   2. **A partial restore keeps the rest, and only the rest.** `gamma.nc` is left unticked;
+//      its snapshot is still on disk afterwards and is offered again, instead of
+//      disappearing with the session its neighbours were restored from. (B1 A2: the
+//      snapshots that were restored are discarded one by one, so the dialog no longer
+//      offers them a second time; before, the dead session was kept whole.)
 //   3. **A save drops the snapshot it makes pointless**, and only that one.
 //   4. **Discard really deletes**, after the one irreversible question in this feature,
 //      and it deletes the snapshot and not the program.
@@ -224,17 +223,14 @@ scenario('m7-recovery-2', { timeout: 420, vars: { HOME: HOME_2 } }, async (h) =>
   h.check('and its tab carries the marker', h.q('doc-tab', { docId: restoredBeta.id })?.dataset.external === 'changed', h.q('doc-tab', { docId: restoredBeta.id })?.dataset.external)
 
   // =============================================================== F. the rest is kept
-  // A leftover session is deleted whole or not at all: `recovery_drop` addresses the
-  // *current* session (§7.10), so the only way to forget one restored snapshot of a dead
-  // one would be to delete the folder it sits in and its neighbours with it. The service
-  // therefore keeps the session as soon as anything in it was not restored — and the
-  // price is that the two that *were* restored are still in there and will be offered
-  // again. Nothing is lost either way, which is the direction this milestone errs in.
-  h.check('the dead session was not discarded with the two that were restored', (await sessionFolders(h)).includes(dead?.name ?? ''), await sessionFolders(h))
+  // B1 A2: each snapshot that was restored is discarded on its own (`recovery_discard_entry`), so the
+  // dead session keeps only the one nobody asked for. (Before, `recovery_drop` could only delete a
+  // session whole, so the session was kept with all three and offered the two restored ones again.)
+  h.check('the dead session was not discarded: gamma’s snapshot is still in it', (await sessionFolders(h)).includes(dead?.name ?? ''), await sessionFolders(h))
   const left = await sessionFiles(h, dead?.name ?? '')
-  h.check('and it is kept whole, snapshots and all', left.keys.length === 3, left.names)
-  const still = await waitForLeftovers(h, 3)
-  h.check('so the work nobody asked for is offered again rather than lost with the work that was', still.some((e) => e.path === gamma), still.map((e) => e.path))
+  h.check('and only that one is left: the two restored snapshots were discarded one by one', left.keys.length === 1, left.names)
+  const still = await waitForLeftovers(h, 1)
+  h.check('so the work nobody asked for is offered again, alone, rather than lost with the work that was restored', still.length === 1 && still[0].path === gamma, still.map((e) => e.path))
 
   // =============================================================== G. a save drops one
   await ctx.recovery.flushNow()
@@ -253,7 +249,7 @@ scenario('m7-recovery-2', { timeout: 420, vars: { HOME: HOME_2 } }, async (h) =>
 
   // =============================================================== H. discard
   const second = await openRestoreDialog(h)
-  h.check('the dialog offers the session again, the snapshot nobody asked for included', recoveryRows(h).length === 3 && recoveryRows(h).some((r) => r.path === gamma), recoveryRows(h).map((r) => r.path))
+  h.check('the dialog offers only the snapshot nobody asked for', recoveryRows(h).length === 1 && recoveryRows(h)[0].path === gamma, recoveryRows(h).map((r) => r.path))
 
   h.click(/** @type {HTMLElement} */ (recoveryAction(h, 'discard')))
   const question = await h.alert.wait({ timeout: 15000 })

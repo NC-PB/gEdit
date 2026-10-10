@@ -85,8 +85,9 @@ pub fn interpreter() -> PathBuf {
 /// The `PATH` of the user's login shell, from the same cached lookup as
 /// [`interpreter`], or `None` when there is none (Windows, or a shell that did not say).
 ///
-/// This asks the shell the first time even when the interpreter comes from a setting or
-/// `GEDIT_PYTHON`: a script needs the user's tools whichever Python runs it.
+/// The caller decides whether to ask: `scripts::runner::script_run` does not when the
+/// interpreter is configured (`GEDIT_PYTHON`, `scripts.python`), because that setting is
+/// how a user keeps gEdit from starting a broken or slow login shell at all.
 pub fn login_path() -> Option<OsString> {
     cached_or(imp::lookup).login_path
 }

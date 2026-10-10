@@ -10,7 +10,8 @@
 
 import { scenario } from '../lib/index.js'
 
-const TABS = ['home', 'insert', 'tools', 'view']
+// B1 A9: the seven tabs (no Home tab; Edit, NC and Scripts are tabs of their own).
+const TABS = ['file', 'edit', 'insert', 'nc', 'tools', 'scripts', 'view']
 
 scenario('m1-layout', { timeout: 180 }, async (h) => {
   const ctx = /** @type {import('$lib/app/types').AppContext} */ (h.app.ctx)
@@ -64,7 +65,7 @@ scenario('m1-layout', { timeout: 180 }, async (h) => {
   const viewButtons = h.qa('cmd-button').map((e) => e.dataset.command)
   const at = (/** @type {string} */ command) => viewButtons.indexOf(command)
   h.check('P3a: the View tab lists Side Panel, Code Inspector and Bottom Panel in that order, and offers Motion Colors', at('view.toggleSidePanel') >= 0 && at('view.toggleSidePanel') < at('view.toggleInspector') && at('view.toggleInspector') < at('view.toggleBottomPanel') && at('view.toggleMotionColors') > at('view.toggleBottomPanel'), viewButtons)
-  h.click(h.q('ribbon-tab', { tab: 'home' }))
+  h.click(h.q('ribbon-tab', { tab: 'file' }))
   await h.sleep(150)
 
   // A real overflow, on the strip that does overflow at this width: the tab bar. It is

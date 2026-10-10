@@ -60,9 +60,19 @@ scenario('m2-about', { timeout: 180 }, async (h) => {
 
   // ------------------------------------------------------------ the shortcut reference
   await openFromRibbon('help.shortcuts', 'shortcuts')
-  const rows = h.qa('shortcuts-row')
+  // B1 A4: commands without a key are hidden until "Show commands without a key" is ticked, and a line
+  // says how many are hidden.
   const registered = ctx.commands.list()
-  h.check('every registered command has a row', rows.length === registered.length, { rows: rows.length, commands: registered.length })
+  const withKey = registered.filter((/** @type {any} */ c) => c.keys !== undefined)
+  const withoutKey = registered.filter((/** @type {any} */ c) => c.keys === undefined)
+  const hiddenCount = () => Number(/^\d+/.exec(h.q('shortcuts-hidden')?.textContent?.trim() ?? '')?.[0] ?? NaN)
+  const shown = h.qa('shortcuts-row')
+  h.check('every registered command that has a key has a row, and no row has no keys', shown.length === withKey.length && shown.every((r) => !!r.dataset.keys), { rows: shown.length, withKey: withKey.length })
+  h.check('the others are hidden, and a line says how many', withoutKey.length > 0 && hiddenCount() === withoutKey.length && /** @type {HTMLInputElement} */ (h.q('shortcuts-show-unbound')).checked === false, { hidden: h.q('shortcuts-hidden')?.textContent, expected: withoutKey.length })
+  h.click(h.q('shortcuts-show-unbound'))
+  await h.waitFor(() => h.qa('shortcuts-row').length === registered.length, { timeout: 3000 })
+  const rows = h.qa('shortcuts-row')
+  h.check('every registered command has a row once the box is ticked, and the "hidden" line is gone', rows.length === registered.length && !h.q('shortcuts-hidden'), { rows: rows.length, commands: registered.length })
   h.check('the rows are grouped by category', h.qa('shortcuts-group').length > 1 && h.qa('shortcuts-group').every((g) => (g.dataset.group ?? '').length > 0), h.qa('shortcuts-group').map((g) => g.dataset.group))
   h.check('a row carries the command id and its platform keys', h.q('shortcuts-row', { command: 'file.save' })?.dataset.keys === '⌘S', h.q('shortcuts-row', { command: 'file.save' })?.dataset.keys)
   h.check('the two M2 bindings of §7.11 are shown the macOS way', h.q('shortcuts-row', { command: 'compare.with' })?.dataset.keys === '⌥⌘C' && h.q('shortcuts-row', { command: 'settings.open' })?.dataset.keys === '⌘,', {
@@ -70,9 +80,9 @@ scenario('m2-about', { timeout: 180 }, async (h) => {
     settings: h.q('shortcuts-row', { command: 'settings.open' })?.dataset.keys,
   })
   const unbound = rows.filter((r) => !r.dataset.keys)
-  h.check('a command without a shortcut is listed too, without keys', unbound.length > 0 && unbound.length === registered.filter((/** @type {any} */ c) => c.keys === undefined).length, {
+  h.check('a command without a shortcut is listed too (with the box ticked), without keys', unbound.length > 0 && unbound.length === withoutKey.length, {
     unbound: unbound.length,
-    expected: registered.filter((/** @type {any} */ c) => c.keys === undefined).length,
+    expected: withoutKey.length,
   })
 
   setInput(h.q('shortcuts-filter'), 'compare')
