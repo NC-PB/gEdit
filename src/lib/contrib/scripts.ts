@@ -171,6 +171,9 @@ export function validateScriptName(value: string): Msg | null {
     stem.startsWith('.') ||
     stem.endsWith('.') ||
     /[/\\:]/.test(stem) ||
+    // Characters Windows does not allow in a file name; a folder of scripts is often
+    // synced to a Windows machine (Rust refuses them too, on every platform).
+    /[<>"|?*]/.test(stem) ||
     // Control characters, which `is_safe_segment` refuses too.
     [...stem].some((ch) => ch < ' ' || ch === '\u007f');
   return unsafe ? { key: 'scripts.nameInvalid' } : null;

@@ -85,7 +85,7 @@ export default {
   newTitle: 'Name for the new script',
   newPlaceholder: 'scale_feed',
   nameEmpty: 'Enter a name',
-  nameInvalid: 'Use a plain file name: no / \\ : and no leading _ or .',
+  nameInvalid: 'Use a plain file name: none of / \\ : < > " | ? * and no leading _ or .',
   nameReserved: 'gedit_nc.py is the script library and cannot be used as a name',
   nameDevice: 'CON, PRN, AUX, NUL, COM0-COM9 and LPT0-LPT9 name Windows devices, not files',
   created: 'Created {name}',
@@ -138,6 +138,7 @@ export default {
   staleMessage:
     '{script} finished, but the program was edited while it ran, so nothing was applied. The result can still be opened in a new tab.',
   staleOpen: 'Open in new tab',
+  headerChanged: '{script} was changed since the script list was loaded. Reloading the list and running it again.',
   staleDiscarded: '{script}: the result was discarded',
 
   // -------------------------------------------------------------------------
@@ -165,6 +166,7 @@ export default {
   outputTimedOut: 'Timed out',
   outputCancelled: 'Stopped',
   outputTruncated: 'Output cut off',
+  outputStderrTruncated: 'Error messages cut off',
   outputNoStdout: 'The script printed nothing on stdout.',
   outputCut_one: '… 1 more character, not shown here.',
   outputCut_other: '… {count} more characters, not shown here.',

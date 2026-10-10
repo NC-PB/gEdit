@@ -51,6 +51,7 @@ import { transformScope } from '$lib/core/transforms/scope';
 import { applyLines as applyLinesToModel } from '$lib/monaco/applyLines';
 import { editor as appEditor } from '$lib/monaco/editorService';
 import {
+  isHeaderChanged,
   pythonCheck,
   scriptCancel,
   scriptRun,
@@ -160,6 +161,7 @@ const MSG = {
   staleMessage: (script: string): Msg => ({ key: 'scripts.staleMessage', params: { script } }),
   staleOpen: (): Msg => ({ key: 'scripts.staleOpen' }),
   staleDiscarded: (script: string): Msg => ({ key: 'scripts.staleDiscarded', params: { script } }),
+  headerChanged: (script: string): Msg => ({ key: 'scripts.headerChanged', params: { script } }),
 } as const;
 
 /**
@@ -190,6 +192,7 @@ export const SCRIPT_STATUS_KEYS: readonly string[] = [
   'scripts.staleMessage',
   'scripts.staleOpen',
   'scripts.staleDiscarded',
+  'scripts.headerChanged',
 ];
 
 // ---------------------------------------------------------------------------
@@ -423,7 +426,7 @@ export function createScriptService(deps: ScriptDeps): ScriptService {
     }
     starting = true;
     try {
-      await runClaimed(scriptId, o);
+      await runClaimed(scriptId, o, true);
     } finally {
       starting = false;
     }
@@ -442,7 +445,8 @@ export function createScriptService(deps: ScriptDeps): ScriptService {
   /** `run` with the slot already claimed; every way out of it releases it. */
   async function runClaimed(
     scriptId: string,
-    o?: { params?: Record<string, unknown>; skipForm?: boolean },
+    o: { params?: Record<string, unknown>; skipForm?: boolean } | undefined,
+    mayRescan: boolean,
   ): Promise<void> {
     const entry = get(scriptList).find((candidate) => candidate.id === scriptId);
     if (entry === undefined) {
@@ -551,6 +555,11 @@ export function createScriptService(deps: ScriptDeps): ScriptService {
       // The header's `timeout` and `scripts.timeoutSeconds` are Rust's to resolve (§7.6);
       // nothing in the UI overrides them in P1.
       timeoutSecs: null,
+      // The modes this run was prepared with (what stdin holds, whether a selection was
+      // required, what the answer will be allowed to do). Rust compares them with the
+      // header on disk and refuses the run when the script was edited since the last scan.
+      input: entry.meta?.input ?? 'selection-or-document',
+      output: entry.meta?.output ?? 'panel',
     };
 
     resetScriptOutput();
@@ -571,6 +580,16 @@ export function createScriptService(deps: ScriptDeps): ScriptService {
     } catch (err) {
       runningScript.set(null);
       cancelRequested = null;
+      // The header was edited after the last scan: what this run was prepared with is
+      // out of date. Nothing has run. Scan again and start over once, so the script runs
+      // with the header it has now (the parameter form is asked again, pre-filled with
+      // what was just entered, because the new header may have other parameters).
+      if (mayRescan && isHeaderChanged(err)) {
+        say(MSG.headerChanged(label));
+        await rescan();
+        await runClaimed(scriptId, o, false);
+        return;
+      }
       say(MSG.runFailed(label), { error: true, detail: detail(err) });
       deps.layout.show(SCRIPT_OUTPUT_PANEL);
       return;
@@ -652,6 +671,32 @@ export function createScriptService(deps: ScriptDeps): ScriptService {
     }
   }
 
+  /** Never rejects: the list's own error is a store the UI reads, not an exception. */
+  async function rescan(): Promise<void> {
+    if (!deps.isDesktop()) {
+      scriptList.set([]);
+      scriptFolders.set([]);
+      scriptListError.set(null);
+      return;
+    }
+    try {
+      const listed = await deps.backend.list();
+      scriptList.set(listed.scripts);
+      scriptFolders.set(listed.folders);
+      scriptListError.set(null);
+    } catch (err) {
+      scriptList.set([]);
+      scriptFolders.set([]);
+      scriptListError.set(detail(err));
+    }
+    // `ui.lastScript` survives a restart; this is where the session's mirror catches up
+    // with it, once, so `script.runLast` works before anything has run in this window.
+    if (get(lastScriptId) === null) {
+      const remembered = get(deps.uiState.state).lastScript;
+      if (remembered !== null) lastScriptId.set(remembered);
+    }
+  }
+
   /** The summary, plus the script's own message when it sent one (data, untranslated). */
   function sayResult(msg: Msg, message: string | undefined): void {
     const summary = tr(msg);
@@ -705,31 +750,7 @@ export function createScriptService(deps: ScriptDeps): ScriptService {
     python: derived(pythonStatus, (v) => v),
     running: derived(runningScript, (v) => v),
 
-    /** Never rejects: the list's own error is a store the UI reads, not an exception. */
-    async rescan(): Promise<void> {
-      if (!deps.isDesktop()) {
-        scriptList.set([]);
-        scriptFolders.set([]);
-        scriptListError.set(null);
-        return;
-      }
-      try {
-        const listed = await deps.backend.list();
-        scriptList.set(listed.scripts);
-        scriptFolders.set(listed.folders);
-        scriptListError.set(null);
-      } catch (err) {
-        scriptList.set([]);
-        scriptFolders.set([]);
-        scriptListError.set(detail(err));
-      }
-      // `ui.lastScript` survives a restart; this is where the session's mirror catches up
-      // with it, once, so `script.runLast` works before anything has run in this window.
-      if (get(lastScriptId) === null) {
-        const remembered = get(deps.uiState.state).lastScript;
-        if (remembered !== null) lastScriptId.set(remembered);
-      }
-    },
+    rescan,
 
     run,
 

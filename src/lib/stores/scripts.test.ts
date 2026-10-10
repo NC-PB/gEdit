@@ -30,6 +30,7 @@ const RESULT: RunResult = {
   timedOut: false,
   cancelled: false,
   stdoutTruncated: false,
+  stderrTruncated: false,
   durationMs: 42,
   interpreter: '/usr/bin/python3',
 };
@@ -47,6 +48,13 @@ describe('script stores', () => {
     expect(isScriptRunning()).toBe(true);
     runningScript.set(null);
     expect(isScriptRunning()).toBe(false);
+  });
+
+  it('carries the stderr cut flag to the panel', () => {
+    expect(outputFromRun('user:x.py', 'x', RESULT).stderrTruncated).toBe(false);
+    expect(outputFromRun('user:x.py', 'x', { ...RESULT, stderrTruncated: true }).stderrTruncated).toBe(
+      true,
+    );
   });
 
   it('keeps stderr and the timings of a finished run for the panel', () => {

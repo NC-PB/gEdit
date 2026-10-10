@@ -98,6 +98,7 @@ function result(over: Partial<RunResult> = {}): RunResult {
     timedOut: false,
     cancelled: false,
     stdoutTruncated: false,
+    stderrTruncated: false,
     durationMs: 12,
     interpreter: '/usr/bin/python3',
     ...over,
@@ -1221,6 +1222,66 @@ describe('ScriptService.runLast', () => {
     await h.service.runLast();
     expect(lastStatus(h).error).toBe(true);
     expect(h.requests).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A header edited after the last scan
+// ---------------------------------------------------------------------------
+
+describe('ScriptService.run: the header was edited since the scan', () => {
+  it('sends the modes it prepared the run with', async () => {
+    const h = await ready({
+      entries: [entry('user:a.py', { meta: meta({ input: 'document', output: 'new-document' }) })],
+    });
+    await h.service.run('user:a.py');
+    expect(h.requests[0]).toMatchObject({ input: 'document', output: 'new-document' });
+  });
+
+  it('sends the defaults for a script with no header', async () => {
+    const h = await ready({ entries: [entry('user:plain.py', { meta: null })] });
+    await h.service.run('user:plain.py');
+    expect(h.requests[0]).toMatchObject({ input: 'selection-or-document', output: 'panel' });
+  });
+
+  // The webview used to run an edited script under the modes cached at the last scan: a
+  // script changed from `replace` to `panel` would have its report applied as new program
+  // text, until the user happened to press Rescan.
+  it('rescans and runs again with the header the file has now', async () => {
+    const h = await ready({ entries: [entry('user:a.py', { meta: meta({ output: 'replace' }) })] });
+    // The file was edited: the list Rust now gives says `panel`.
+    h.entries = [entry('user:a.py', { meta: meta({ output: 'panel' }) })];
+    h.runs = [
+      new Error('header-changed: the header of user:a.py was changed after the scripts were listed'),
+      result({ stdout: 'a report, not a program' }),
+    ];
+    await h.service.run('user:a.py');
+
+    expect(h.requests.map((r) => r.output)).toEqual(['replace', 'panel']);
+    expect(get(scriptList)[0].meta?.output).toBe('panel');
+    // Nothing was applied to the program, and the user was told what happened.
+    expect(h.applied).toHaveLength(0);
+    expect(h.status.map((s) => s.text)).toContain('scripts.headerChanged {"script":"Scale feed rates"}');
+    expect(h.status.some((s) => s.text.startsWith('scripts.runFailed'))).toBe(false);
+    expect(get(runningScript)).toBeNull();
+  });
+
+  it('gives up after one rescan instead of looping', async () => {
+    const h = await ready();
+    const changed = () => new Error('header-changed: again');
+    h.runs = [changed(), changed(), changed()];
+    await h.service.run('bundled:scale_feed.py');
+    expect(h.requests).toHaveLength(2);
+    expect(lastStatus(h)).toMatchObject({ error: true });
+    expect(lastStatus(h).text).toContain('scripts.runFailed');
+    expect(get(runningScript)).toBeNull();
+  });
+
+  it('does not treat any other failure as a changed header', async () => {
+    const h = await ready();
+    h.runs = [new Error('Script not found: bundled:scale_feed.py')];
+    await h.service.run('bundled:scale_feed.py');
+    expect(h.requests).toHaveLength(1);
   });
 });
 

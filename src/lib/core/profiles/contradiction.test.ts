@@ -560,6 +560,7 @@ describe('the script runner', () => {
             timedOut: false,
             cancelled: false,
             stdoutTruncated: false,
+            stderrTruncated: false,
             durationMs: 1,
             interpreter: 'python3',
           });

@@ -76,6 +76,8 @@ export interface ScriptOutput {
   timedOut: boolean;
   cancelled: boolean;
   stdoutTruncated: boolean;
+  /** stderr was cut at its cap, or was still being read when the runner stopped waiting. */
+  stderrTruncated: boolean;
   durationMs: number;
   interpreter: string;
 }
@@ -176,6 +178,7 @@ export function outputFromRun(
     timedOut: r.timedOut,
     cancelled: r.cancelled,
     stdoutTruncated: r.stdoutTruncated,
+    stderrTruncated: r.stderrTruncated,
     durationMs: r.durationMs,
     interpreter: r.interpreter,
   };
