@@ -2,13 +2,29 @@
 //
 // One `OutlineIndex` (core/profiles/outline.ts) per open document. The first build runs
 // after the first render, in slices of at most `BUILD_BUDGET_MS` (8 ms, the budget of the
-// modal index) that start when the app is idle (`runWhenIdle`), so opening a 10 MB program
-// never blocks a frame: a slice reads a few hundred lines at a time and looks at the clock
-// between two of them (B1 B2; it was 20,000 lines a slice, which is 150 ms and more on a
-// slow engine). A machine switch rebuilds the same way. Every content change is fed into
-// `applyChange`, and only the *published* items are debounced by 150 ms. `toolLines()` and `itemAt()` answer from the index directly,
+// modal index), so opening a 10 MB program never blocks a frame (B1 B2; it was 20,000
+// lines a slice, which is 150 ms and more on a slow engine). A machine switch rebuilds the
+// same way. Every content change is fed into `applyChange`, and only the *published* items
+// are debounced by 150 ms. `toolLines()` and `itemAt()` answer from the index directly,
 // because F7 pressed right after a keystroke must not step to a stale line.
 //
+// **How the slices follow each other** (B1 fixperf). B2 scheduled every slice with
+// `runWhenIdle`, and where there is no `requestIdleCallback` (the macOS webview) that is a
+// timer 16 ms away: 8 ms of work, 16 ms of waiting, so the map was ready three to four times
+// later than with the 20,000-line steps (Fanuc 300k: 1.46 s to 4.1 s) and folding and the
+// symbol providers wait for it. Now one *pump* runs the slices of every document:
+//  - the first slice of a build waits for idle time (opening a document never classifies
+//    inside the event that created it);
+//  - the next slices follow in the next turn of the event loop (`nextTurn`, a message, not a
+//    timer), as long as no input is waiting (`inputPending`, where the engine can say so;
+//    the input event that arrives meanwhile is served between two slices either way). After
+//    input the pump goes back to idle time; every `CHAIN_MS` of chained work it also takes
+//    one timer turn, so timers and painting are never starved;
+//  - the run of lines between two looks at the clock grows with the measured cost per line,
+//    inside the slice's deadline (`maxChunkLines`), and is never below `chunkLines`;
+//  - the active document's build goes first, and nothing is built for `switchQuietMs` after
+//    a switch to a document that is already known, so a tab switch is not taxed by a build
+//    of another document (the switch onto the 10 MB program measured 49 ms, then 80 ms).
 // A document is indexed once, not once per tab switch: the M1 program map re-parsed on
 // every switch and paid ~36 ms on a 10 MB program (G7). Here the panel only swaps which
 // store it subscribes to.
@@ -46,13 +62,21 @@ import type { Disposable, DocId, DocumentStore, EditorService, OutlineService } 
  * a slice holds the main thread is the budget plus one run.
  */
 export const CHUNK_LINES = 250;
+/** The most lines one run reads once the cost per line is known (B1 fixperf); the deadline still ends the slice. */
+export const MAX_CHUNK_LINES = 1000;
+/** How much of what is left of a slice's budget the next run is sized to use (the rest is margin). */
+const RUN_SHARE = 0.7;
+/** Chained slices (no idle gap) may run this long (ms of work) before the pump takes one timer turn. */
+export const CHAIN_MS = 24;
+/** After a switch to a document that is already open, no slice runs for this long (ms). */
+export const SWITCH_QUIET_MS = 150;
 /** The most one slice of the first build spends, the modal index's budget (B1 B2). */
 export const BUILD_BUDGET_MS = IDLE_BUDGET_MS;
 /** How long the published items wait after the last change (AD-12). */
 export const AGGREGATE_DELAY_MS = 150;
 
 export interface OutlineServiceDeps {
-  docs: Pick<DocumentStore, 'get' | 'list'>;
+  docs: Pick<DocumentStore, 'get' | 'list' | 'activeId' | 'getActiveId'>;
   editor: Pick<EditorService, 'hasModel' | 'getLineCount' | 'getLines' | 'onDidChangeContent' | 'onDidCreateModel'>;
   /**
    * The document's **effective** compiled profile and the key it was built from (AD-31),
@@ -86,10 +110,22 @@ export interface OutlineServiceDeps {
   /** `setTimeout`, as a canceller; `ms` of 0 means "after this frame". */
   schedule(fn: () => void, ms: number): Disposable;
   /**
-   * Runs `fn` when the app is idle (`runWhenIdle`): the scheduler of the first build's slices
-   * (B1 B2). Absent, they are `schedule(fn, 0)`.
+   * Runs `fn` when the app is idle (`runWhenIdle`): where the first slice of a build starts,
+   * and where the build goes on after input (B1 B2). Absent, it is `schedule(fn, 0)`.
    */
   idle?(fn: () => void): Disposable;
+  /**
+   * Runs `fn` in the next turn of the event loop, without a timer's delay (a message): how a
+   * slice follows the one before it (B1 fixperf). Absent, the slices wait on `idle` like the
+   * first one.
+   */
+  nextTurn?(fn: () => void): Disposable;
+  /** True while the user's input is waiting for the main thread (`isInputPending`); absent: never known. */
+  inputPending?(): boolean;
+  /** `SWITCH_QUIET_MS` when absent; 0 switches the pause off. */
+  switchQuietMs?: number;
+  /** The most lines a run reads once the cost per line is known; absent: `chunkLines`, a fixed run. */
+  maxChunkLines?: number;
   /** The clock of the slice budget (`performance.now`). Absent, `performance.now`. */
   now?(): number;
   /** The most one slice spends, in ms; `BUILD_BUDGET_MS` when absent. */
@@ -106,8 +142,8 @@ interface Entry {
   cp: CompiledProfile;
   index: OutlineIndex;
   store: Writable<OutlineItem[]>;
-  /** The chunked first build, or null once it has finished. */
-  build: { next: number; cancel: Disposable } | null;
+  /** The chunked first build (`next` is the first line it has not read), or null once it has finished. */
+  build: { next: number } | null;
   ready: Promise<void>;
   markReady: () => void;
   /** The pending aggregation. */
@@ -379,8 +415,18 @@ export function createOutlineService(deps: OutlineServiceDeps): OutlineServiceIn
   let installed = false;
   const now = deps.now ?? (() => performance.now());
   const budget = deps.budgetMs ?? BUILD_BUDGET_MS;
-  /** The scheduler of the build's slices: idle time, or the next turn where the deps give no idle clock. */
+  const quietMs = deps.switchQuietMs ?? SWITCH_QUIET_MS;
+  const maxRun = Math.max(deps.chunkLines, deps.maxChunkLines ?? deps.chunkLines);
+  /** The scheduler of a slice that waits for idle time: the idle clock, or the next turn where the deps give none. */
   const later = (fn: () => void): Disposable => (deps.idle !== undefined ? deps.idle(fn) : deps.schedule(fn, 0));
+  /** The pump that runs the slices, or null while none is waiting. */
+  let pump: Disposable | null = null;
+  /** No slice runs before this time (a tab switch is on its way). */
+  let quietUntil = -Infinity;
+  /** ms of work since the pump last took a timer turn or idle time. */
+  let chained = 0;
+  /** What a line costs to read, in ms (a running average; 0 = not measured yet). */
+  let perLine = 0;
 
   function install(): void {
     if (installed) return;
@@ -405,6 +451,19 @@ export function createOutlineService(deps: OutlineServiceDeps): OutlineServiceIn
         entry.index.applyChange(change.startLine, change.endLineOld, deps.editor.getLines(id, change.startLine, change.endLineNew));
         schedulePublish(entry);
       }),
+      // A switch to a document that is already open must not share the main thread with a
+      // build (B1 fixperf): the slices wait until it is over. A document that is opened
+      // for the first time has no index yet and loses nothing.
+      (() => {
+        let first = true;
+        return deps.docs.activeId.subscribe((id) => {
+          if (first) {
+            first = false;
+            return;
+          }
+          if (quietMs > 0 && id !== null && entries.has(id)) quietUntil = now() + quietMs;
+        });
+      })(),
       // A fresh Monaco model replaces the text the index was built from.
       deps.editor.onDidCreateModel((id) => {
         const entry = entries.get(id);
@@ -468,7 +527,7 @@ export function createOutlineService(deps: OutlineServiceDeps): OutlineServiceIn
   }
 
   function drop(id: DocId, entry: Entry): void {
-    entry.build?.cancel();
+    entry.build = null;
     entry.publish?.();
     // Nothing is going to build this document any more, so a waiter must not hang.
     entry.markReady();
@@ -506,21 +565,29 @@ export function createOutlineService(deps: OutlineServiceDeps): OutlineServiceIn
     }, deps.delayMs);
   }
 
+  /** Lines the next run reads: `chunkLines` until the cost of a line is known, then as many as fit in `left` ms. */
+  function runLines(left: number): number {
+    if (maxRun <= deps.chunkLines || perLine <= 0 || left <= 0) return deps.chunkLines;
+    return Math.min(maxRun, Math.max(deps.chunkLines, Math.floor((left * RUN_SHARE) / perLine)));
+  }
+
   /**
-   * One slice of the first build: reads `chunkLines` lines at a time until the budget is spent
-   * (it always reads one run, so the build moves on), then hands the main thread back and
-   * continues when the app is idle again. The slice that reads the last line finishes the
-   * build and publishes at once.
+   * One slice of the first build of `entry`: reads runs of lines until the budget is spent (at
+   * least one run, so the build moves on), then hands the main thread back. The slice that
+   * reads the last line finishes the build and publishes at once. Answers the ms it took.
    */
-  function step(id: DocId, entry: Entry): void {
+  function step(entry: Entry): number {
     const build = entry.build;
-    if (build === null) return;
+    if (build === null) return 0;
+    const id = entry.id;
     const started = now();
+    let at = started;
     for (;;) {
       const total = deps.editor.getLineCount(id);
-      const end = Math.min(total, build.next + deps.chunkLines - 1);
-      if (end >= build.next) {
-        entry.index.applyChange(build.next, build.next - 1, deps.editor.getLines(id, build.next, end));
+      const from = build.next;
+      const end = Math.min(total, from + runLines(budget - (at - started)) - 1);
+      if (end >= from) {
+        entry.index.applyChange(from, from - 1, deps.editor.getLines(id, from, end));
         build.next = end + 1;
       }
       if (build.next > total) {
@@ -529,11 +596,58 @@ export function createOutlineService(deps: OutlineServiceDeps): OutlineServiceIn
         entry.publish = null;
         publishNow(entry);
         entry.markReady();
+        return at - started;
+      }
+      const after = now();
+      if (end >= from && after > at) {
+        const sample = (after - at) / (end - from + 1);
+        perLine = perLine === 0 ? sample : (perLine + sample) / 2;
+      }
+      at = after;
+      if (at - started >= budget) return at - started;
+    }
+  }
+
+  /** The build to work on: the active document's, else the first one waiting. */
+  function nextBuild(): Entry | null {
+    const active = deps.docs.getActiveId();
+    const own = active === null ? undefined : entries.get(active);
+    if (own !== undefined && own.build !== null) return own;
+    for (const entry of entries.values()) if (entry.build !== null) return entry;
+    return null;
+  }
+
+  /** Runs one slice, then queues the next the way the situation asks for (see the header). */
+  function runPump(): void {
+    pump = null;
+    if (quietMs > 0) {
+      const left = quietUntil - now();
+      if (left > 0) {
+        pump = deps.schedule(runPump, Math.ceil(left));
         return;
       }
-      if (now() - started >= budget) break;
     }
-    build.cancel = later(() => step(id, entry));
+    const entry = nextBuild();
+    if (entry === null) {
+      chained = 0;
+      return;
+    }
+    chained += step(entry);
+    if (nextBuild() === null) {
+      chained = 0;
+      return;
+    }
+    if (deps.inputPending?.() === true) {
+      chained = 0;
+      pump = later(runPump);
+    } else if (deps.nextTurn === undefined) {
+      pump = later(runPump);
+    } else if (chained >= CHAIN_MS) {
+      chained = 0;
+      pump = deps.schedule(runPump, 0);
+    } else {
+      pump = deps.nextTurn(runPump);
+    }
   }
 
   function rebuild(id: DocId, entry: Entry): void {
@@ -543,11 +657,14 @@ export function createOutlineService(deps: OutlineServiceDeps): OutlineServiceIn
     // drop every fold arrow. A rebuild that interrupts an unfinished build keeps the
     // promise that is still pending — re-arming it there would strand its waiters.
     if (entry.build === null) arm(entry);
-    entry.build?.cancel();
     entry.index.reset([]);
-    // The first chunk waits for the next turn as well, so opening a document never
-    // classifies 20k lines inside the event that created it.
-    entry.build = { next: 1, cancel: later(() => step(id, entry)) };
+    // The first slice waits for idle time as well, so opening a document never
+    // classifies a run of lines inside the event that created it.
+    entry.build = { next: 1 };
+    if (pump === null) {
+      chained = 0;
+      pump = later(runPump);
+    }
     schedulePublish(entry);
   }
 
@@ -621,6 +738,8 @@ export function createOutlineService(deps: OutlineServiceDeps): OutlineServiceIn
         installed = false;
         for (const stop of stops.reverse()) stop();
         stops = [];
+        pump?.();
+        pump = null;
         for (const [id, entry] of [...entries]) drop(id, entry);
       };
     },
@@ -647,6 +766,41 @@ const EMPTY_PROFILE: CompiledProfile = {
   keywords: [],
 };
 
+let turnChannel: MessageChannel | null = null;
+const turnQueue: { fn: () => void; cancelled: boolean }[] = [];
+
+/**
+ * Runs `fn` in the next turn of the event loop, without the delay of a timer (a message on a
+ * channel of our own; a timer is clamped to at least 1 ms and, nested, to 4). Input that has
+ * arrived is served between this and the turn before. Without `MessageChannel` it is a
+ * timer of 0.
+ */
+export function nextTurn(fn: () => void): Disposable {
+  if (typeof MessageChannel !== 'function') {
+    const handle = setTimeout(fn, 0);
+    return () => clearTimeout(handle);
+  }
+  if (turnChannel === null) {
+    turnChannel = new MessageChannel();
+    turnChannel.port1.onmessage = () => {
+      const task = turnQueue.shift();
+      if (task !== undefined && !task.cancelled) task.fn();
+    };
+  }
+  const task = { fn, cancelled: false };
+  turnQueue.push(task);
+  turnChannel.port2.postMessage(null);
+  return () => {
+    task.cancelled = true;
+  };
+}
+
+/** Is the user's input waiting? Only some engines can say (`navigator.scheduling.isInputPending`); the others: no. */
+export function inputPending(): boolean {
+  const scheduling = (globalThis.navigator as { scheduling?: { isInputPending?: () => boolean } } | undefined)?.scheduling;
+  return scheduling?.isInputPending?.() === true;
+}
+
 /** The application-wide outline service. */
 export const outline: OutlineServiceInternals = createOutlineService({
   docs: appDocs,
@@ -667,7 +821,10 @@ export const outline: OutlineServiceInternals = createOutlineService({
     return () => clearTimeout(handle);
   },
   idle: runWhenIdle,
+  nextTurn,
+  inputPending,
   now: () => performance.now(),
   chunkLines: CHUNK_LINES,
+  maxChunkLines: MAX_CHUNK_LINES,
   delayMs: AGGREGATE_DELAY_MS,
 });

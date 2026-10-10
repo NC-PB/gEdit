@@ -27,10 +27,20 @@
 // avoid the allocation storm a formatter can cause, and every bookmark, fold and cursor
 // between the first and the last of them then moves. So the narrow edits go to the model
 // in **several calls of at most `MAX_OPERATIONS_PER_CALL`** (999), the last batch first so
-// the line numbers of the earlier ones stay true, all between the same two
-// `pushStackElement()` calls, which keeps it one undo step (B1 A4; before that, a plan of
-// 1000 or more narrow edits fell back to one whole hunk and a bookmark on an untouched
-// line moved).
+// the line numbers of the earlier ones stay true (B1 A4; before that, a plan of 1000 or
+// more narrow edits fell back to one whole hunk and a bookmark on an untouched line moved).
+//
+// **Undo has the same limit, and joining the batches in one stack element walks into it**
+// (B1 fixperf). Monaco's undo element keeps *one* list of the changes of everything pushed
+// into it (`compressConsecutiveTextChanges`), and `undo()` hands the whole list to one
+// `applyEdits` — so 1,500 narrow edits, applied in two calls, were taken back as 1,500
+// operations in one call, collapsed into one edit from the first to the last, and the
+// bookmarks and folds in between landed elsewhere (3, 1501, 2999 became 2, 930, 1836; the
+// text itself came back exactly). Redo has the same shape. So each batch is **its own undo
+// element**, and the elements share one undo *group*, which Monaco's undo/redo service
+// takes back as one step (`pushEditOperations`' fourth argument; the service undoes the
+// group's elements newest first, each of at most 999 changes). One Cmd+Z, one Cmd+Shift+Z,
+// every mark where it belongs. A plan of one batch needs no group and is pushed as before.
 //
 // Above ~20k changed lines, switch to chunked whole-line hunks (AD-12): past that point
 // per-line edits cost more than they save, and Monaco's edit application is the bottleneck
@@ -96,7 +106,32 @@ export interface EditableModel {
     beforeCursorState: null,
     operations: LineOperation[],
     cursorStateComputer: () => null,
+    group?: UndoGroup,
   ): unknown;
+}
+
+/**
+ * What Monaco's undo/redo service reads from an `UndoRedoGroup` (`platform/undoRedo`):
+ * the elements pushed with the same `id` are undone, and redone, together. The class itself
+ * is not imported (this module keeps Monaco out of the initial bundle); `realModel.ts` and
+ * `applyLinesUndo.test.ts` run the real service, so a Monaco that reads more than this
+ * fails a test.
+ */
+export interface UndoGroup {
+  readonly id: number;
+  nextOrder(): number;
+}
+
+/**
+ * Monaco numbers its own groups 1, 2, 3, ... (0 is "no group"); ours start far above, so a
+ * group of ours never equals one of its own.
+ */
+let nextGroupId = 1_000_000_000;
+
+/** A fresh undo group: the elements pushed with it undo as one step, in the order pushed. */
+export function newUndoGroup(): UndoGroup {
+  let order = 1;
+  return { id: nextGroupId++, nextOrder: () => order++ };
 }
 
 /** What `planLineEdits` worked out: the operations, and what the summary reports. */
@@ -341,15 +376,19 @@ export function applyLinesTo(
   });
   if (plan.operations.length === 0) return { changedLines: 0 };
 
-  // One undo step, whatever the plan turned out to be (AD-12): the calls between the two
-  // stack elements join the same one. Last batch first, so the ranges of the earlier ones
-  // still point at the lines they were computed for.
+  // One undo step, whatever the plan turned out to be (AD-12). Last batch first, so the
+  // ranges of the earlier ones still point at the lines they were computed for. A plan of
+  // one batch is one undo element between the two stack elements. A longer plan puts every
+  // batch into an element of its own and ties them with a group, because Monaco takes back
+  // an element's changes in one call and would collapse 1000 of them (see the header).
   const batches = batchOperations(plan.operations);
+  const group = batches.length > 1 ? newUndoGroup() : undefined;
   model.pushStackElement();
   for (let i = batches.length - 1; i >= 0; i--) {
-    model.pushEditOperations(null, batches[i], () => null);
+    model.pushEditOperations(null, batches[i], () => null, group);
+    if (group !== undefined) model.pushStackElement();
   }
-  model.pushStackElement();
+  if (group === undefined) model.pushStackElement();
   return { changedLines: plan.changedLines };
 }
 

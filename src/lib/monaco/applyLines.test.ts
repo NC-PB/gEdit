@@ -28,6 +28,7 @@ import {
   MONACO_REDUCES_AT,
   batchOperations,
   type EditableModel,
+  type UndoGroup,
   type LineOperation,
 } from './applyLines';
 
@@ -37,6 +38,10 @@ class FakeModel implements EditableModel {
   stackElements = 0;
   /** Every `pushEditOperations` batch, so "one call" can be asserted. */
   batches: LineOperation[][] = [];
+  /** The undo group each batch was pushed with (`undefined` for none). */
+  groups: (UndoGroup | undefined)[] = [];
+  /** Where in the sequence of calls each `pushStackElement` happened (index into `batches`). */
+  stackAt: number[] = [];
 
   constructor(text: string) {
     this.lines = text.split('\n');
@@ -60,10 +65,12 @@ class FakeModel implements EditableModel {
 
   pushStackElement(): void {
     this.stackElements++;
+    this.stackAt.push(this.batches.length);
   }
 
-  pushEditOperations(_before: null, operations: LineOperation[]): unknown {
+  pushEditOperations(_before: null, operations: LineOperation[], _cursor?: () => null, group?: UndoGroup): unknown {
     this.batches.push(operations);
+    this.groups.push(group);
     const spans = operations
       .map((op) => {
         const range = this.validateRange(op.range);
@@ -397,11 +404,17 @@ describe('planLineEdits: chunking', () => {
     const model = new FakeModel(oldLines.join('\n'));
     applyLinesTo(model, 1, size, newLines);
     expect(linesOf(model.text)).toEqual(newLines);
-    // No call reaches the number Monaco collapses at; all of them sit between one pair of
-    // stack elements, so it is one undo step; the last lines went first.
+    // No call reaches the number Monaco collapses at; the last lines went first.
     expect(model.batches.map((batch) => batch.length)).toEqual([502, 999, 999]);
     expect(Math.max(...model.batches.map((batch) => batch.length))).toBeLessThan(MONACO_REDUCES_AT);
-    expect(model.stackElements).toBe(2);
+    // Every batch is an undo element of its own (a stack element before it and after the
+    // last), tied by one group, so Monaco takes each back in a call of its own and the whole
+    // as one step (B1 fixperf; `applyLinesUndo.test.ts` runs the real undo stack).
+    expect(model.stackAt).toEqual([0, 1, 2, 3]);
+    const group = model.groups[0];
+    expect(group).toBeDefined();
+    expect(model.groups.every((g) => g === group)).toBe(true);
+    expect(group!.id).toBeGreaterThan(1_000_000);
     const firstLines = model.batches.map((batch) => batch[0].range.startLineNumber);
     expect(firstLines).toEqual([...firstLines].sort((x, y) => y - x));
   });
@@ -437,7 +450,26 @@ describe('planLineEdits: chunking', () => {
     expect(linesOf(model.text)).toEqual(newLines);
     expect(model.batches.length).toBeGreaterThan(1);
     expect(model.batches.every((batch) => batch.length <= MAX_OPERATIONS_PER_CALL)).toBe(true);
-    expect(model.stackElements).toBe(2);
+    expect(model.stackElements).toBe(model.batches.length + 1);
+  });
+
+  it('leaves a plan of one call as it was: two stack elements, no group', () => {
+    const oldLines = Array.from({ length: 999 }, (_, i) => `N${i} G1 X${i}.`);
+    const newLines = oldLines.map((line) => line.replace('G1', 'G01'));
+    const model = new FakeModel(oldLines.join('\n'));
+    applyLinesTo(model, 1, 999, newLines);
+    expect(model.batches).toHaveLength(1);
+    expect(model.stackAt).toEqual([0, 1]);
+    expect(model.groups).toEqual([undefined]);
+  });
+
+  it('gives every transform its own group', () => {
+    const oldLines = Array.from({ length: 2000 }, (_, i) => `N${i} G1 X${i}.`);
+    const model = new FakeModel(oldLines.join('\n'));
+    applyLinesTo(model, 1, 2000, oldLines.map((line) => line.replace('G1', 'G01')));
+    applyLinesTo(model, 1, 2000, oldLines);
+    const ids = new Set(model.groups.map((g) => g!.id));
+    expect(ids.size).toBe(2);
   });
 
   it('names the threshold Monaco actually uses', () => {

@@ -12,7 +12,7 @@ import { compileProfile } from '$lib/core/profiles/compile';
 import { validateProfile } from '$lib/core/profiles/validate';
 import { createDocumentStore } from '$lib/stores/documents';
 import { cpOf, profileOf } from '../../../tests/unit/helpers/profiles';
-import { computeJumpLines, createOutlineService, groupByChannel, reuseRows, SYNC_ROWS_MAX, type OutlineServiceDeps, type OutlineServiceInternals } from './outlineService';
+import { CHAIN_MS, computeJumpLines, createOutlineService, groupByChannel, nextTurn, reuseRows, SYNC_ROWS_MAX, type OutlineServiceDeps, type OutlineServiceInternals } from './outlineService';
 import { expectWithin, fastest } from '../../../tests/unit/helpers/budget';
 import type { CompiledProfile } from '$lib/core/profiles/types';
 import type { ChannelParams, ChannelSet } from '$lib/core/channels/types';
@@ -68,6 +68,19 @@ interface Harness {
   clock: Clock;
   /** The slices queued on the idle scheduler (only with `idleQueue`). */
   idleTasks: Task[];
+  /** The slices queued for the next turn of the event loop (only with `turnQueue`). */
+  turnTasks: Task[];
+  /** `inputPending()` answers this (only with `turnQueue`). */
+  input: { pending: boolean };
+  /** Every `getLines(from, to)` the build asked, in order. */
+  reads: [number, number][];
+  /**
+   * Runs the next slice the way the event loop would and says where it came from: the idle
+   * scheduler, the next turn, or a zero timer. `null` when none is queued.
+   */
+  nextSlice(): 'idle' | 'turn' | 'timer' | null;
+  /** The timers queued with `ms > 0` that are not the 150 ms publish: what the pause is made of. */
+  waits(): number[];
   stop: Disposable;
 }
 
@@ -87,11 +100,14 @@ const META: NewDocMeta = {
   readOnlyReason: null,
 };
 
-function harness(over: Partial<OutlineServiceDeps> & { idleQueue?: boolean } = {}): Harness {
-  const { idleQueue = false, ...overrides } = over;
+function harness(over: Partial<OutlineServiceDeps> & { idleQueue?: boolean; turnQueue?: boolean } = {}): Harness {
+  const { idleQueue = false, turnQueue = false, ...overrides } = over;
   const docs = createDocumentStore({ caseInsensitivePaths: false });
   const clock: Clock = { tick: 10, at: 0, reads: 0, perLine: 0 };
   const idleTasks: Task[] = [];
+  const turnTasks: Task[] = [];
+  const input = { pending: false };
+  const reads: [number, number][] = [];
   const lines = new Map<DocId, string[]>();
   const tasks: Task[] = [];
   let onContent: (id: DocId, change: ContentChange) => void = () => {};
@@ -105,6 +121,7 @@ function harness(over: Partial<OutlineServiceDeps> & { idleQueue?: boolean } = {
       getLineCount: (id) => lines.get(id)?.length ?? 0,
       getLines: (id, from, to) => {
         const read = (lines.get(id) ?? []).slice(Math.max(1, from) - 1, to);
+        reads.push([from, to]);
         clock.at += clock.perLine * read.length;
         return read;
       },
@@ -151,6 +168,18 @@ function harness(over: Partial<OutlineServiceDeps> & { idleQueue?: boolean } = {
           },
         }
       : {}),
+    ...(turnQueue
+      ? {
+          nextTurn: (fn: () => void): Disposable => {
+            const task: Task = { fn, ms: -2, cancelled: false };
+            turnTasks.push(task);
+            return () => {
+              task.cancelled = true;
+            };
+          },
+          inputPending: () => input.pending,
+        }
+      : {}),
     chunkLines: 4,
     delayMs: 150,
     ...overrides,
@@ -174,15 +203,38 @@ function harness(over: Partial<OutlineServiceDeps> & { idleQueue?: boolean } = {
 
   /** The slices of the build: on the idle scheduler when the test gave one, on a zero timer otherwise. */
   function runChunks(): number {
-    const queued = idleTasks.splice(0, idleTasks.length).filter((task) => !task.cancelled);
+    const queued = [...idleTasks.splice(0, idleTasks.length), ...turnTasks.splice(0, turnTasks.length)].filter((task) => !task.cancelled);
     for (const task of queued) task.fn();
     return queued.length + run(0);
+  }
+
+  function nextSlice(): 'idle' | 'turn' | 'timer' | null {
+    for (const [queue, name] of [[idleTasks, 'idle'], [turnTasks, 'turn']] as const) {
+      const at = queue.findIndex((task) => !task.cancelled);
+      if (at >= 0) {
+        const [task] = queue.splice(at, 1);
+        task.fn();
+        return name;
+      }
+    }
+    const at = tasks.findIndex((task) => !task.cancelled && task.ms === 0);
+    if (at >= 0) {
+      const [task] = tasks.splice(at, 1);
+      task.fn();
+      return 'timer';
+    }
+    return null;
   }
 
   return {
     docs,
     outline,
     stop: outline.start(),
+    turnTasks,
+    input,
+    reads,
+    nextSlice,
+    waits: () => tasks.filter((task) => !task.cancelled && task.ms !== 0 && task.ms !== 150).map((task) => task.ms),
     add(text, profileId = FANUC) {
       const id = docs.add({ ...META, profileId });
       lines.set(id, text.split('\n'));
@@ -213,7 +265,7 @@ function harness(over: Partial<OutlineServiceDeps> & { idleQueue?: boolean } = {
     },
     flush() {
       let total = 0;
-      for (let i = 0; i < 1000 && (tasks.some((task) => !task.cancelled) || idleTasks.some((task) => !task.cancelled)); i++) {
+      for (let i = 0; i < 1000 && (tasks.some((task) => !task.cancelled) || idleTasks.some((task) => !task.cancelled) || turnTasks.some((task) => !task.cancelled)); i++) {
         total += runChunks();
         total += run();
       }
@@ -223,7 +275,11 @@ function harness(over: Partial<OutlineServiceDeps> & { idleQueue?: boolean } = {
     clock,
     idleTasks,
     pending() {
-      return tasks.filter((task) => !task.cancelled).length + idleTasks.filter((task) => !task.cancelled).length;
+      return (
+        tasks.filter((task) => !task.cancelled).length +
+        idleTasks.filter((task) => !task.cancelled).length +
+        turnTasks.filter((task) => !task.cancelled).length
+      );
     },
   };
 }
@@ -337,6 +393,178 @@ describe('the first build', () => {
       expect(h.outline.toolLines(id)).toEqual([3, 7]);
       h.flush();
       expect(h.outline.toolLines(id)).toEqual(ALL);
+    });
+  });
+
+  // B1 fixperf: B2's slices each waited for idle time, which on the macOS webview is a timer
+  // 16 ms away, so 8 ms of work cost 24 ms and the map was ready three to four times later.
+  describe('how the slices follow each other (B1 fixperf)', () => {
+    const MANY = Array.from({ length: 400 }, (_, i) => (i % 10 === 2 ? `T${i} M6` : `G1 X${i}.`)).join('\n');
+    const slicesOf = (h: Harness): string[] => {
+      const seen: string[] = [];
+      for (let i = 0; i < 2000; i++) {
+        const from = h.nextSlice();
+        if (from === null) break;
+        seen.push(from);
+      }
+      return seen;
+    };
+
+    it('starts on idle time and then chains the slices without idle gaps', () => {
+      const h = harness({ idleQueue: true, turnQueue: true, switchQuietMs: 0 });
+      h.clock.tick = 0;
+      h.clock.perLine = 1; // a slice is 2 runs of 4 lines = 8 ms
+      const id = h.add(MANY);
+      const seen = slicesOf(h);
+      expect(seen[0]).toBe('idle');
+      expect(seen.filter((from) => from === 'idle')).toHaveLength(1);
+      expect(seen.filter((from) => from === 'turn').length).toBeGreaterThan(30);
+      expect(h.outline.toolLines(id)).toHaveLength(40);
+    });
+
+    it('takes a timer turn after CHAIN_MS of chained work, so timers and painting are not starved', () => {
+      const h = harness({ idleQueue: true, turnQueue: true, switchQuietMs: 0 });
+      h.clock.tick = 0;
+      h.clock.perLine = 1;
+      h.add(MANY);
+      const seen = slicesOf(h);
+      expect(seen).toContain('timer');
+      // 8 ms a slice: the third chained slice reaches CHAIN_MS (24) and is followed by a timer turn.
+      let run = 0;
+      let longest = 0;
+      for (const from of seen.slice(1)) {
+        run = from === 'timer' ? 0 : run + 1;
+        longest = Math.max(longest, run);
+      }
+      expect(longest).toBeLessThanOrEqual(Math.ceil(CHAIN_MS / 8));
+    });
+
+    it('goes back to idle time while input is waiting, and chains again when it is served', () => {
+      const h = harness({ idleQueue: true, turnQueue: true, switchQuietMs: 0 });
+      h.clock.tick = 0;
+      h.clock.perLine = 1;
+      h.add(MANY);
+      expect(h.nextSlice()).toBe('idle');
+      expect(h.nextSlice()).toBe('turn');
+      h.input.pending = true;
+      expect(h.nextSlice()).toBe('turn'); // the slice that was already queued
+      expect(h.nextSlice()).toBe('idle'); // it saw the input: the next one waits for idle time
+      expect(h.nextSlice()).toBe('idle');
+      h.input.pending = false;
+      expect(h.nextSlice()).toBe('idle'); // still the one queued while input was waiting
+      expect(h.nextSlice()).toBe('turn');
+    });
+
+    it('chains only where the engine can do it: without a next-turn scheduler every slice waits for idle time', () => {
+      const h = harness({ idleQueue: true, switchQuietMs: 0 });
+      h.clock.tick = 0;
+      h.clock.perLine = 1;
+      h.add(MANY);
+      const seen = slicesOf(h);
+      expect(new Set(seen)).toEqual(new Set(['idle']));
+    });
+
+    it('builds the active document first, and the others when it is ready', () => {
+      const h = harness({ turnQueue: true, switchQuietMs: 0 });
+      h.clock.tick = 0;
+      h.clock.perLine = 1;
+      const first = h.add(MANY); // active once added...
+      const second = h.add(MANY); // ...until this one is
+      expect(h.docs.getActiveId()).toBe(second);
+      h.nextSlice();
+      h.nextSlice();
+      expect(h.outline.toolLines(second).length).toBeGreaterThan(0);
+      expect(h.outline.toolLines(first)).toEqual([]);
+      // Back to the first one: its build goes in front of the second's from now on.
+      h.docs.activate(first);
+      let spent = 0;
+      while (h.outline.toolLines(first).length < 40 && spent++ < 500) {
+        // the pause after a switch is off here
+        h.nextSlice();
+      }
+      expect(h.outline.toolLines(first)).toHaveLength(40);
+      expect(h.outline.toolLines(second).length).toBeLessThan(40);
+      h.flush();
+      expect(h.outline.toolLines(second)).toHaveLength(40);
+    });
+
+    it('does not build while a tab switch is on its way, and goes on after it', () => {
+      const h = harness({ turnQueue: true, switchQuietMs: 100 });
+      h.clock.tick = 0;
+      h.clock.perLine = 1;
+      const a = h.add(MANY);
+      const b = h.add(MANY);
+      h.nextSlice(); // b is active
+      const before = h.reads.length;
+      // The switch to a document that is open already.
+      h.docs.activate(a);
+      expect(h.nextSlice()).toBe('turn'); // the slice that was queued finds the pause and waits on a timer
+      expect(h.reads.length).toBe(before);
+      expect(h.waits().length).toBe(1);
+      expect(h.waits()[0]).toBeGreaterThan(0);
+      expect(h.waits()[0]).toBeLessThanOrEqual(100);
+      // Nothing builds while the clock has not got there.
+      expect(h.reads.length).toBe(before);
+      h.clock.at += 200;
+      h.flush();
+      expect(h.outline.toolLines(a)).toHaveLength(40);
+      expect(h.outline.toolLines(b)).toHaveLength(40);
+    });
+
+    it('does not hold back a document that is opened for the first time', () => {
+      const h = harness({ turnQueue: true, switchQuietMs: 100 });
+      h.clock.tick = 0;
+      h.clock.perLine = 1;
+      h.add(MANY);
+      h.add(MANY);
+      const before = h.reads.length;
+      h.nextSlice();
+      expect(h.reads.length).toBeGreaterThan(before); // it ran at once, no wait
+      expect(h.waits()).toEqual([]);
+    });
+
+    it('sizes the runs by the measured cost of a line, between chunkLines and maxChunkLines, inside the budget', () => {
+      const h = harness({ turnQueue: true, switchQuietMs: 0, chunkLines: 4, maxChunkLines: 64 });
+      h.clock.tick = 0;
+      h.clock.perLine = 0.1;
+      const long = Array.from({ length: 3000 }, (_, i) => (i % 10 === 2 ? `T${i} M6` : `G1 X${i}.`)).join('\n');
+      const id = h.add(long);
+      // One slice: a first run of 4 lines to learn the cost, then runs sized to what is left of 8 ms.
+      const at = h.clock.at;
+      h.nextSlice();
+      const sizes = h.reads.map(([from, to]) => to - from + 1);
+      expect(sizes[0]).toBe(4);
+      expect(Math.max(...sizes)).toBeGreaterThan(4);
+      expect(Math.max(...sizes)).toBeLessThanOrEqual(64);
+      expect(Math.min(...sizes)).toBeGreaterThanOrEqual(4);
+      expect(h.clock.at - at).toBeLessThanOrEqual(8 + 4 * 0.1 + 1e-9); // the budget plus at most one smallest run
+      h.flush();
+      expect(h.outline.toolLines(id)).toHaveLength(300);
+      // The runs follow one another with no gap and no overlap.
+      let next = 1;
+      for (const [from, to] of h.reads) {
+        expect(from).toBe(next);
+        next = to + 1;
+      }
+    });
+
+    it('keeps runs of chunkLines when it is not told it may read more', () => {
+      const h = harness({ turnQueue: true, switchQuietMs: 0 });
+      h.clock.tick = 0;
+      h.clock.perLine = 0.1;
+      h.add(MANY);
+      h.flush();
+      expect(new Set(h.reads.map(([from, to]) => to - from + 1))).toEqual(new Set([4]));
+    });
+
+    it('runs a callback in the next turn, in order, and not a cancelled one', async () => {
+      const order: number[] = [];
+      nextTurn(() => order.push(1));
+      const cancel = nextTurn(() => order.push(2));
+      nextTurn(() => order.push(3));
+      cancel();
+      await new Promise<void>((resolve) => nextTurn(resolve));
+      expect(order).toEqual([1, 3]);
     });
   });
 
