@@ -26,9 +26,11 @@ import {
   addressNames,
   alternation,
   blockSkipPattern,
+  colonWordRule,
   commentMarkers,
   escapeClass,
   escapeLiteral,
+  freeTextRules,
   keywordPattern,
   letterAddresses,
   lineStart,
@@ -125,13 +127,34 @@ export function klartextRules(p: Profile, db: CodeDb): GrammarRule[] {
   }
   rules.push([lineStart(`\\s*${blockNumber}(?=\\s|$)`), 'blockNumber']);
 
-  // 7 keywords: the multi-character names first, then the one-character path functions,
-  // which need a separator behind them.
   const codeWords = wordCodes(db, [M_FUNCTION.letter]);
   const keywords = orderedKeywords(p, codeWords);
+
+  // 6b the text the control keeps and does not execute (`syntax.freeText`: a cycle name, a
+  // program name, a path) is one uncoloured piece, and the colon words (`VCONST:ON`,
+  // `VC:120`) one word each. Both go in front of the keywords: the first holds keywords
+  // of its own in its prefix, and `VC` is a code of the database as well. The tokenizer
+  // asks in the same order (M12.5).
+  rules.push(...freeTextRules(p, new Set(keywords)));
+  const colonWord = colonWordRule(p, value);
+  if (colonWord !== null) rules.push(colonWord);
+  // `syntax.symbolAddresses` (`#5`, `#Q5`, the datum-table row of `CYCL DEF 7.1`): the mark
+  // and its value are one word, as the tokenizer reads them when they fill a chunk.
+  const symbols = (Array.isArray(p.syntax?.symbolAddresses) ? p.syntax.symbolAddresses : []).filter(
+    (mark): mark is string => typeof mark === 'string' && mark.length === 1,
+  );
+  if (symbols.length > 0) {
+    const ends = ['\\s', '$', '"', ...commentMarkers(p).map((marker) => escapeLiteral(marker.start))];
+    rules.push([`[${escapeClass(symbols.join(''))}]${value}(?=${ends.join('|')})`, 'number']);
+  }
+
+  // 7 keywords: the multi-character names first, then the one-character path functions,
+  // which need a separator behind them.
   const long = alternation(keywords.filter((keyword) => keyword.length > 1).map(keywordPattern));
   const short = alternation(keywords.filter((keyword) => keyword.length === 1).map(keywordPattern));
-  if (long !== null) rules.push([`${long}(?![A-Za-z])`, 'keyword']);
+  // A word code of the database that is also the start of a number (`R0` in `R0,5`, the
+  // radius 0.5) is that number, not the code with a stray fraction behind it.
+  if (long !== null) rules.push([`${long}(?![A-Za-z])(?!${marks.atom}\\d)`, 'keyword']);
   if (short !== null) rules.push([`${short}(?=\\s|$)`, 'keyword']);
 
   // 8 M functions, 9 the rotation direction (`DR+` counter-clockwise, `DR-` clockwise;

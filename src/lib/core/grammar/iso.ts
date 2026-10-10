@@ -26,9 +26,11 @@ import {
   addressNames,
   alternation,
   blockSkipPattern,
+  colonWordRule,
   commentMarkers,
   escapeClass,
   escapeLiteral,
+  freeTextRules,
   hasColonProgram,
   hasTapeMarker,
   keywordPattern,
@@ -38,6 +40,8 @@ import {
   numberPattern,
   operatorClass,
   orderedKeywords,
+  plainTextRule,
+  stackedSkipRules,
   variablePattern,
   variableSigil,
   wholeLine,
@@ -132,7 +136,7 @@ export function isoRules(p: Profile, db: CodeDb): GrammarRule[] {
   const blockNumber =
     p.syntax?.blockNumber?.mode === 'leading-integer' ? '\\d+' : prefix === null ? null : `${prefix}\\s*\\d+`;
   const skip = blockSkipPattern(p);
-  if (skip?.before) rules.push([lineStart(`\\s*${skip.pattern}`), 'skip']);
+  if (skip?.before) rules.push(...stackedSkipRules(p, skip.pattern), [lineStart(`\\s*${skip.pattern}`), 'skip']);
   if (skip?.after && blockNumber !== null) {
     rules.push([lineStart(`(\\s*)(${blockNumber})(\\s*)(${skip.pattern})`), ['', 'blockNumber', '', 'skip']]);
   }
@@ -146,9 +150,19 @@ export function isoRules(p: Profile, db: CodeDb): GrammarRule[] {
 
   // 7 keywords, before every single-letter address. 8 a function call before a bracket,
   // bounded in length so a long run of letters stays linear (`FUNCTION_NAME`).
+  //
+  // In front of them, the M12.5 fields that name text the tokenizer reads in one piece
+  // (`freeText`, `colonWords`), if the profile sets them; behind them, the run of plain
+  // letters (`plainTextRun`, Fanuc: `M797 SPINDLE ONE DONE`), which has to be taken before
+  // any address rule can paint a letter of it.
+  rules.push(...freeTextRules(p, new Set(orderedKeywords(p))));
+  const colonWord = colonWordRule(p, variables === null ? number : `(?:${number}|[+-]?${variables})`);
+  if (colonWord !== null) rules.push(colonWord);
   const keywords = alternation(orderedKeywords(p).map(keywordPattern));
   if (keywords !== null) rules.push([`${keywords}(?![A-Za-z])`, 'keyword']);
   rules.push([FUNCTION_NAME, 'keyword']);
+  const plainText = plainTextRule(p, keywords);
+  if (plainText !== null) rules.push(plainText);
 
   // 9 block number, 10 and 11 the code letters
   if (blockNumber !== null) rules.push([blockNumber, 'blockNumber']);
