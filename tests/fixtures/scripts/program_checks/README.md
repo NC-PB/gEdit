@@ -100,7 +100,7 @@ not run and is not listed; the general checks run on every profile.
 | `machineReading` | info | a length or angle word without a point whose value depends on the machine (AD-31): with a machine that reads increments, the value it is read as and what it would be with a point; none with calculator or `scale` input; with no machine, the readings of the presets, the assumed default first — one row per word where only point-less words differ, one row for the program where every number does (a unit system) | `machine_params`, `resolve_value`, `number_class_of` |
 | `tapeMarkerInComment` | error | a `%` inside a comment (it ends the program when the tape is read in) | as `programFrame`'s tape marker |
 | `unclosedComments` | error | a comment opened and not closed on its line | `syntax.comments` with an `end` |
-| `brackets` | error | `( )` where they are syntax (not a comment), `[ ]` and `"` unbalanced in a block, and a `)` with no `(` | `syntax.comments`, `syntax.strings` |
+| `brackets` | error | `( )` where they are syntax (not a comment), `[ ]` and `"` unbalanced in a block, and a `)` with no `(`; an unclosed string or `[` runs to the end of its line, a comment marker included (B1), and is reported as "opened and not closed on its line" | `syntax.comments`, `syntax.strings` |
 | `lowerCase` | info | lower-case addresses outside comments and strings | `editing.forceUppercase` |
 | `characters` | warning, error | non-ASCII characters outside comments and strings (warning); blocks longer than `syntax.maxLineLength` (error) | `syntax.maxLineLength` |
 | `stops` | info | every program stop and optional stop, as a list | the outline's `stop` rules |

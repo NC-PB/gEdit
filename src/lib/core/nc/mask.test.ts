@@ -179,6 +179,18 @@ describe('maskComments and the tokenizer', () => {
     [sinumerik, 'T="DRILL_D8" D1'],
     [sinumerik, 'MSG("A;B'],
     [sinumerik, 'CYCLE83(50,0,2,-25,,-5)'],
+    // B1: a bracket expression is read whole, an unclosed one to the line end, and the
+    // comment marker inside it is no comment to either of the two.
+    [fanuc, '#1=[#2+1 (NOTE)'],
+    [fanuc, '#1=[#2 (A) +1] (B)'],
+    [fanuc, 'IF [#1 EQ 2 GOTO 10 (X)'],
+    [fanuc, 'G65 <SUB_1> A[#1 (X) B2'],
+    [fanuc, '#1=[#2+1] (NOTE) #3=[#4'],
+    [okuma, 'V1=[V2+1 (NOTE)'],
+    [sinumerik, 'R1=[R2+3 ;NOTE'],
+    [sinumerik, 'MSG("A[;B") ;C'],
+    [sinumerik, 'X=[R1 "Q;" ;C'],
+    [klartext, '5 L X+10 [ ; NOTE'],
   ];
 
   /** True for a program marker that is a program name (`<SHAFT_T12>`), not `O1234` or `%`. */

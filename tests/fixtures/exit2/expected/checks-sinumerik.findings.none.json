@@ -92,7 +92,7 @@
         "check": "Brackets",
         "checkId": "brackets",
         "severity": "error",
-        "message": "R1=(R2+3: 1 ( is not closed"
+        "message": "R1=(R2+3: a ( is opened and not closed on its line"
       },
       {
         "line": 48,

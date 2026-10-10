@@ -78,6 +78,7 @@ export default {
     skippedNotNumbered: 'Skipped: the block had no number and only numbered blocks are renumbered.',
     skippedStopped: 'Skipped: numbering stopped at the maximum.',
     skippedProgramMarker: 'Skipped: this is a program marker, not a block.',
+    skippedContinued: 'Skipped: this line continues the block above it.',
     referenceKeptRow:
       'This dialect never rewrites this reference: it may name a block of the calling program or of another program, or be a turning cycle read with a milling profile. It was left as it is.',
     referenceMissingRow: 'This line points at a block number that this program does not have, so it was left as it is.',

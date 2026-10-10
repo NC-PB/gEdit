@@ -154,7 +154,7 @@
         "check": "Brackets",
         "checkId": "brackets",
         "severity": "error",
-        "message": "VC1=[VC2+1: 1 [ is not closed"
+        "message": "VC1=[VC2+1: a [ is opened and not closed on its line"
       },
       {
         "line": 54,

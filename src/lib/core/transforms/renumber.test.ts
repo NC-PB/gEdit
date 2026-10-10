@@ -525,6 +525,23 @@ describe('sequence numbers that are names (G10 M8)', () => {
     );
   });
 
+  // B1: the `$` lines of an Okuma block were kept only by the editable skip list. With `$`
+  // taken out of it, `N30 $ H1.8 …` took the mark off the head of the line and cut the line
+  // off its block; `syntax.continuationStart` now keeps it whatever the list says.
+  it('never numbers a line that continues the block above, with or without $ in the skip list', () => {
+    const lines = ['O1001', 'N5 G00 X100 Z50', 'N6 G01 X50 Z0 F0.2', '$ H1.8 Z-20', 'N7 M02'];
+    for (const skipStartingWith of ['% O (', '$ % O (']) {
+      const result = renumber.run(lines, context(okuma, { ...FREE, skipStartingWith }));
+      expect(result.lines, skipStartingWith).toEqual(['O1001', 'N10 G00 X100 Z50', 'N20 G01 X50 Z0 F0.2', '$ H1.8 Z-20', 'N30 M02']);
+      expect(result.skipped.map((s) => [s.line, s.severity]), skipStartingWith).toEqual([
+        [1, 'info'],
+        [4, 'info'],
+      ]);
+    }
+    const free = renumber.run(lines, context(okuma, { ...FREE, skipStartingWith: '% O (' }));
+    expect(free.skipped[1].message).toBe('Skipped: this line continues the block above it.');
+  });
+
   it('moves a jump whose block keeps its number but not its text', () => {
     // N0010 becomes N10: the same number, another name. Left alone, GOTO N0010 would
     // point at nothing, and the run used to say nothing about it.

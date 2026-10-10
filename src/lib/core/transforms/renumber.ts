@@ -70,6 +70,7 @@
 //
 // A line is left exactly as it was when it is a Klartext continuation line, when it is
 // empty and `skipEmpty` is set, when it starts with one of `skipStartingWith`, when it
+// continues the block above by its leading mark (`syntax.continuationStart`, Okuma `$`), when it
 // carries a block *name* instead of a number, when `onlyNumbered` is set and it has no
 // number, and once numbering has stopped at `max`.
 //
@@ -1083,6 +1084,7 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
   const namePrefixes = blockNumber.mode === 'leading-integer' ? [] : [prefixOut, ...settings.altPrefixes];
   const main = mainPrefixOf(cp);
   const marks = settings.skipStartingWith;
+  const continuedLine = cp.re.continuationStart;
 
   // One lookup per run instead of one per skipped line (`Located.message` is display text).
   const reason = {
@@ -1091,6 +1093,7 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
     notNumbered: t('ncNumbering.renumber.skippedNotNumbered'),
     stopped: t('ncNumbering.renumber.skippedStopped'),
     programMarker: t('ncNumbering.renumber.skippedProgramMarker'),
+    continued: t('ncNumbering.renumber.skippedContinued'),
     wrapped: t('ncNumbering.renumber.wrappedRow'),
   };
 
@@ -1150,6 +1153,13 @@ function runRenumber(lines: string[], ctx: TransformContext): TransformResult {
     }
     if (marks.length > 0 && marks.some((mark) => matchesAt(line, head.leadEnd, mark, caseSensitive))) {
       skip(i, reason.prefix);
+      continue;
+    }
+    // B1: a line that continues the block above by its leading mark (`syntax.continuationStart`,
+    // Okuma `$`) is no block of its own, whatever the editable skip list says: `N30 $ H1.8`
+    // would take the mark off the head of the line and cut the line off its block.
+    if (continuedLine?.test(line) === true) {
+      skip(i, reason.continued);
       continue;
     }
     // `restStart` is where the block's text starts, which is where a block *name* would

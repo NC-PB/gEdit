@@ -19,7 +19,7 @@ import os
 import re
 import unittest
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from tests.python import helpers
 
@@ -370,6 +370,47 @@ class TestSpindle(unittest.TestCase):
     def test_a_check_switched_off_writes_no_row(self) -> None:
         text = program("O1", "T1 M6", "G1 X10. F100.", "M30")
         self.assertEqual(lines_of(run_text(text, params={"toolChangeSpindle": False})), [])
+
+
+class TestUnclosedStringsAndBrackets(unittest.TestCase):
+    """B1: an unclosed string or ``[`` runs to the end of its line in both tokenizers and in
+    the mask, and the report says so in plain words, never as a stray ``)`` of the comment
+    the bracket swallowed."""
+
+    def messages(self, profile_id: str, *lines: str) -> List[Tuple[int, str]]:
+        report = run_text(program(*lines), profile_id)
+        return [(row["line"], row["message"]) for row in findings(report, "brackets")]
+
+    def test_an_unclosed_bracket_with_a_comment_behind_it_on_fanuc(self) -> None:
+        self.assertEqual(
+            self.messages("fanuc-gcode", "O1", "#1=[#2+1 (NOTE)", "#3=[#4 (A) +1] (B)", "G1 X10)", "M30"),
+            [
+                (3, "#1=[#2+1 (NOTE): a [ is opened and not closed on its line"),
+                (5, "G1 X10): a ) with no ( before it"),
+            ],
+        )
+
+    def test_two_unclosed_brackets_are_counted(self) -> None:
+        self.assertEqual(
+            self.messages("fanuc-gcode", "O1", "#1=[[#2+1", "M30"),
+            [(3, "#1=[[#2+1: 2 [ are opened and not closed on its line")],
+        )
+
+    def test_an_unclosed_bracket_and_string_on_sinumerik(self) -> None:
+        self.assertEqual(
+            self.messages("sinumerik", "R1=[R2+3 ;NOTE", 'MSG("A;B', "R1=(R2+3", "M30"),
+            [
+                (2, "R1=[R2+3 ;NOTE: a [ is opened and not closed on its line"),
+                (3, 'MSG("A;B: a string is opened with " and not closed on its line'),
+                (4, "R1=(R2+3: a ( is opened and not closed on its line"),
+            ],
+        )
+
+    def test_an_unclosed_string_on_klartext(self) -> None:
+        self.assertEqual(
+            self.messages("heidenhain-klartext", "0 BEGIN PGM T MM", '1 TOOL CALL "D10 Z S1000 ; NOTE', "2 END PGM T MM"),
+            [(3, '1 TOOL CALL "D10 Z S1000 ; NOTE: a string is opened with " and not closed on its line')],
+        )
 
 
 class TestToolWordsAndMoves(unittest.TestCase):

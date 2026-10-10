@@ -28,6 +28,10 @@
 //    about (G8 M4).
 //  - Every rewritten line is tokenized again: same kinds, same spans, or the line is kept
 //    and listed in the results panel.
+//  - A program name or number (`programMarker`: Fanuc `<mac_f1>`, `O1234`, `:1234`, an
+//    Okuma `CALL Oabcd` target, a file header) is left as written, and the results panel
+//    says how many (owner decision of B1). The control may tell `<mac_f1>` from `<MAC_F1>`,
+//    and a call converted without the program it calls would point at nothing.
 //
 // **Lower case on a control that only reads upper case.** Where the profile sets
 // `editing.forceUppercase`, the control refuses a program written any other way —
@@ -158,6 +162,8 @@ export const convertCase: TransformDef = {
     const toLower = ctx.options.case === 'lower';
     const excludeComments = ctx.options.excludeComments !== false;
     const unconverted = t('ncCleanup.convertCase.lengthChanged');
+    const nameKept = t('ncCleanup.convertCase.programNameKept');
+    let namesKept = 0;
     const strings = ctx.cp.profile.syntax?.strings === true;
     const out: string[] = new Array<string>(lines.length);
     const skipped: Located[] = [];
@@ -175,11 +181,20 @@ export const convertCase: TransformDef = {
 
       const patches: Patch[] = [];
       let lengthChanged = false;
+      let keptName = false;
       for (const token of tokens) {
         // M12.5 (§7.16 #179): a `text` token (a Klartext program or cycle name, a path) is
         // the control's text, which no transform rewrites — kept like a string.
         if (token.kind === 'whitespace' || token.kind === 'string' || token.kind === 'text') continue;
         if (token.kind === 'comment' && excludeComments) continue;
+        // B1: a program name or number keeps its case, and is counted when it would have changed.
+        if (token.kind === 'programMarker') {
+          if (convertText(token.text, toLower) !== token.text) {
+            namesKept++;
+            keptName = true;
+          }
+          continue;
+        }
         // A quote keeps its text only where the token can hold a string. A comment (and a
         // Klartext structure block, which reads as one) is prose: its quotes are marks of
         // inches or of emphasis, and the text around them converts with the rest.
@@ -196,6 +211,7 @@ export const convertCase: TransformDef = {
         }
         patches.push({ start: token.start, end: token.end, text });
       }
+      if (keptName) skipped.push({ line: ctx.firstLine + i, message: nameKept, severity: 'info' });
       if (lengthChanged) skipped.push({ line: ctx.firstLine + i, message: unconverted, severity: 'info' });
       if (patches.length === 0) {
         out[i] = line;
@@ -217,7 +233,7 @@ export const convertCase: TransformDef = {
       lines: out,
       summary: changed === 0 ? { key: 'ncCleanup.convertCase.summaryNone' } : { key, params: { count: changed } },
       skipped,
-      warnings: [],
+      warnings: namesKept === 0 ? [] : [{ key: 'ncCleanup.convertCase.programNamesKept', params: { count: namesKept } }],
     };
   },
 };

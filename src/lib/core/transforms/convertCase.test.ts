@@ -16,6 +16,7 @@ import { noMachine } from '$lib/core/machines/effective';
 import type { CodeDb } from '$lib/core/codes/types';
 import fanucJson from '$lib/data/profiles/fanuc-gcode.json';
 import heidenhainJson from '$lib/data/profiles/heidenhain-klartext.json';
+import okumaJson from '$lib/data/profiles/okuma-osp.json';
 import sinumerikJson from '$lib/data/profiles/sinumerik.json';
 import { compileProfile } from '$lib/core/profiles/compile';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
@@ -25,6 +26,7 @@ import type { TransformContext } from './types';
 const fanuc = compileProfile(fanucJson as unknown as Profile);
 const klartext = compileProfile(heidenhainJson as unknown as Profile);
 const sinumerik = compileProfile(sinumerikJson as unknown as Profile);
+const okuma = compileProfile(okumaJson as unknown as Profile);
 const NO_CODES: CodeDb = { dialect: 'test', version: 1, addresses: {}, codes: [] };
 
 const CASES = fileURLToPath(new URL('../../../../tests/fixtures/transforms/convert-case/', import.meta.url));
@@ -182,6 +184,29 @@ describe('convertCase rules', () => {
     expect(run('n40 msg("Rough") ; say "done"', upper, sinumerik)).toBe('N40 MSG("Rough") ; SAY "DONE"');
     // And with comments excluded, which is the default, none of it is touched.
     expect(run('5 ; mill "d10" roughing', { case: 'upper' }, klartext)).toBe('5 ; mill "d10" roughing');
+  });
+
+  // B1 (owner decision): a program name or number keeps its case — the control may tell
+  // `<mac_f1>` from `<MAC_F1>`, and a call converted without its program points at nothing —
+  // and the results panel says how many were left as written.
+  it('leaves program names and numbers as written and says how many', () => {
+    const upper = convertCase.run(['o1234 (part)', 'm98 <mac_f1> l2', 'n10 g0 x0', 'm30'], context(fanuc, { case: 'upper' }));
+    expect(upper.lines).toEqual(['o1234 (part)', 'M98 <mac_f1> L2', 'N10 G0 X0', 'M30']);
+    expect(upper.warnings).toEqual([{ key: 'ncCleanup.convertCase.programNamesKept', params: { count: 2 } }]);
+    expect(upper.skipped.map((row) => [row.line, row.message, row.severity])).toEqual([
+      [1, 'Program name left as written: the control may tell upper from lower case in it.', 'info'],
+      [2, 'Program name left as written: the control may tell upper from lower case in it.', 'info'],
+    ]);
+    const lower = convertCase.run(['O1234', '<MAC_F1>', 'M98 <MAC_F1>', 'M30'], context(fanuc, { case: 'lower' }));
+    expect(lower.lines).toEqual(['O1234', '<MAC_F1>', 'm98 <MAC_F1>', 'm30']);
+    expect(lower.warnings).toEqual([{ key: 'ncCleanup.convertCase.programNamesKept', params: { count: 3 } }]);
+    // A name already in the asked case is nothing to report.
+    const same = convertCase.run(['O1234', 'n10 g0'], context(fanuc, { case: 'upper' }));
+    expect(same.warnings).toEqual([]);
+    expect(same.skipped).toEqual([]);
+    // The file header and the Okuma call target name a program too.
+    expect(run('%_N_part_MPF', { case: 'upper' }, sinumerik)).toBe('%_N_part_MPF');
+    expect(run('n10 call Oabcd', { case: 'upper' }, okuma)).toBe('N10 CALL Oabcd');
   });
 
   it('leaves a token whose conversion would change its length', () => {

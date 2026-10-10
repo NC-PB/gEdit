@@ -81,5 +81,10 @@ export default {
       '{profile} expects programs in upper case, and a control that expects it may refuse a program written any other way. Convert to lower case anyway?',
     /** Results row: `ß` → `SS` and the like, where the conversion would change the length. */
     lengthChanged: 'Left as written: converting the case of this text would change its length, and the offsets behind it.',
+    /** Results row: a program name or number on this line keeps its case (B1). */
+    programNameKept: 'Program name left as written: the control may tell upper from lower case in it.',
+    /** Results panel: how many program names and numbers kept their case (B1). */
+    programNamesKept_one: '1 program name or number was left as written.',
+    programNamesKept_other: '{count} program names and numbers were left as written.',
   },
 } as const satisfies Messages;

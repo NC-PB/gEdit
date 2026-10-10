@@ -98,6 +98,13 @@
 // and one rule without a field: a sequence name that is exactly a keyword (Okuma `NOEX`,
 // `NOT`) is the keyword.
 //
+// The bug-fix round B1 adds three more rules without a field: a `syntax.labelAfter` jump is
+// never a label definition (`GOTOF:20` is the jump to the main block `:20`); where words are
+// separated, an address may carry digits in front of one axis letter when a signed value
+// follows (`P1X+0`, `P3Z+32.5`: the points of Klartext `PLANE POINTS` and of FK); and an
+// unclosed string or `[` runs to the end of the line, which `mask.ts` and the program checks
+// follow.
+//
 // Token shapes that the contract in `types.ts` leaves open, decided here:
 //
 //   - A value without an address (`GOTO 100`'s target, `LBL 1`'s number, `BLK FORM 0.1`'s
@@ -657,7 +664,10 @@ export function commentEndAt(line: string, p: number, limit: number, marker: Com
   return limit;
 }
 
-/** Where the string that starts at `p` ends (exclusive); an unclosed one runs to `limit`. */
+/**
+ * Where the string that starts at `p` ends (exclusive); an unclosed one runs to `limit`, as
+ * it does in `mask.ts`, and `program_checks.py` reports it (B1).
+ */
 function stringEndAt(line: string, p: number, limit: number): number {
   for (let i = p + 1; i < limit; i++) if (line.charCodeAt(i) === QUOTE) return i + 1;
   return limit;
@@ -836,8 +846,15 @@ function argumentsEndAt(line: string, p: number, limit: number, spec: LexSpec): 
   return limit;
 }
 
-/** Where the bracket expression that starts at `p` ends (exclusive); brackets may nest. */
-function expressionEndAt(line: string, p: number, limit: number): number {
+/**
+ * Where the bracket expression that starts at `p` ends (exclusive); brackets may nest. An
+ * unclosed `[` runs to `limit`, comment markers and all (owner default of B1: the control
+ * refuses the block anyway, and `program_checks.py` reports the bracket); `mask.ts` reads
+ * the same span as code, so the two never disagree on where a comment begins.
+ *
+ * @internal Shared with `mask.ts`.
+ */
+export function expressionEndAt(line: string, p: number, limit: number): number {
   let depth = 0;
   for (let i = p; i < limit; i++) {
     const code = line.charCodeAt(i);
@@ -1056,6 +1073,10 @@ function scanSequenceName(line: string, p: number, limit: number, spec: LexSpec)
  * block-number prefix (`NEXT_PART:`) and has to be recognised before it. One `exec` per
  * line answers both positions a label may stand in: in front of a block number and behind
  * one.
+ *
+ * A jump keyword (`syntax.labelAfter`) is never a label: `GOTOF:20` is the jump `GOTOF` to
+ * the main block `:20`, written without the blank, exactly as `GOTOF :20` is (B1). Read as
+ * a label, hover explained a label named `GOTOF` and the outline listed one.
  */
 function labelSpanOf(line: string, spec: LexSpec): { start: number; end: number; name: string } | null {
   if (!spec.labels) return null;
@@ -1064,6 +1085,7 @@ function labelSpanOf(line: string, spec: LexSpec): { start: number; end: number;
   const at = match.indices?.groups?.name;
   const name = match.groups?.name;
   if (!at || typeof name !== 'string' || name === '') return null;
+  if (spec.labelAfter.size > 0 && spec.labelAfter.has(spec.caseSensitive ? name : name.toUpperCase())) return null;
   return { start: at[0], end: match[0].length, name };
 }
 
@@ -1255,11 +1277,19 @@ function pushSpace(tokens: NcToken[], line: string, p: number, limit: number): n
  *
  * The incremental prefix is only taken off a coordinate word — one or two letters behind
  * the prefix and a value behind those (`IX+10`, `IPA+360`) — so a program name such as
- * `INCHJOB` keeps all of its letters.
+ * `INCHJOB` keeps all of its letters, and an address with a digit behind its first letter
+ * (`I2+5`, B1) keeps its `I`.
  */
 function describeWord(token: NcToken, address: string, spec: LexSpec, value: ValueRead | null): void {
   let name = spec.caseSensitive ? address : address.toUpperCase();
-  if (spec.incremental !== NO_CHAR && value && name.length >= 2 && name.length <= 3 && toUpper(name.charCodeAt(0)) === spec.incremental) {
+  if (
+    spec.incremental !== NO_CHAR &&
+    value &&
+    name.length >= 2 &&
+    name.length <= 3 &&
+    toUpper(name.charCodeAt(0)) === spec.incremental &&
+    isLetter(name.charCodeAt(1))
+  ) {
     name = name.slice(1);
     token.incremental = true;
   }
@@ -1723,6 +1753,20 @@ export function tokenizeLine(line: string, cp: CompiledProfile, prev?: LineState
           found = value;
           split = s;
           break;
+        }
+      }
+      // B1: the points of `PLANE POINTS` and of the FK helper points carry their number
+      // inside the address, in front of one axis letter: `P1X+0`, `P3Z+32.5` (TNC 640
+      // user's manual, PLANE POINTS and FK auxiliary points). Only with a signed value, as
+      // for `DR2+0.05`, so `P1X` alone or `P1XY+1` stays what it was.
+      if (!found && digits > letters && digits + 1 < chunkEnd && isLetter(line.charCodeAt(digits))) {
+        const sign = line.charCodeAt(digits + 1);
+        if (sign === PLUS || sign === MINUS) {
+          const value = readValue(line, digits + 1, chunkEnd, spec, false);
+          if (value && value.end === chunkEnd) {
+            found = value;
+            split = digits + 1;
+          }
         }
       }
       if (found) {
