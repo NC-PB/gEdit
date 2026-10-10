@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "heidenhain",
+  "profile": "heidenhain-klartext",
+  "template": "drill",
+  "values": {},
+  "env": {
+    "prevBlockNumber": 4,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "5 CYCL DEF 200 DRILLING ~\n    Q200=2 ;CLEARANCE ~\n    Q201=-15 ;DEPTH ~\n    Q206=250 ;PLUNGE FEED ~\n    Q202=5 ;PECK ~\n    Q210=0 ;DWELL TOP ~\n    Q203=0 ;SURFACE ~\n    Q204=100 ;2ND CLEARANCE ~\n    Q211=0.1 ;DWELL BOTTOM ~\n    Q395=0 ;DEPTH REF\n6 L X+30 Y+20 R0 FMAX M99"
+}

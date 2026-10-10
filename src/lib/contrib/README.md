@@ -94,11 +94,11 @@ Each row names the owning work package and the feature.
 | File | Owner | Feature |
 | --- | --- | --- |
 | `assistant.ts` | WP3.6 | hover and completion providers over the code database |
-| `blocks.ts` | WP1.5 | Insert tab, built from the blocks JSON |
 | `bookmarks.ts` | WP4.4 | `bookmark.toggle` / `next` / `prev` / `clear` and the F2 removals |
 | `channels.ts` | WP12.5 | multi-channel programs: channel status item, sync-point navigation (`Alt+F7`, `Shift+Alt+F7`, `Mod+Alt+P`), `channels.checkSync`, `channels.assign`, `channels.splitToDocuments`, the `togglePreserveCase` removal |
 | `compare.ts` | WP2.5 | compare with a document, a file or the saved version (overlay) |
 | `cursor.ts` | WP1.2 | cursor status item |
+| `cycleForms.ts` | P3.5 | Edit Cycle: the form of the cycle at the cursor, or a new cycle, `nc.editCycle` (Phase 3, P3b; the prelude pinned it; engine `core/templates/cycleForm.ts`, P3.8) |
 | `editing.ts` | WP4.4 | Home "Edit" and View-tab wrappers around Monaco actions |
 | `encoding.ts` | WP1.6 | encoding and EOL status items and pickers |
 | `externalChange.ts` | WP2.3 | the external-change banner and the poll |
@@ -127,6 +127,8 @@ Each row names the owning work package and the feature.
 | `session.ts` | WP7.5 | session restore at start, and the per-file memory that follows the tabs |
 | `settings.ts` | WP2.7 | the settings dialog, `settings.open` (Mod+,), `profile.manage` (Settings on the Profiles page, no key; M13 integration), reload on save |
 | `tabs.ts` | WP1.2 | next/previous/switch tab |
+| `templates.ts` | P3.5 | the Insert tab's templates of the active document's effective database, `insert.template:<id>` per template, `templates.insert`, the Home tab's program start, templates in completion (Phase 3, P3b; the prelude pinned them) |
+| `templateManager.ts` | P3.9 | the template manager and New Template from Selection: `templates.manage`, `templates.fromSelection` (Phase 3, P3b; the prelude pinned them) |
 | `theme.ts` | WP2.6 | `view.setTheme`, the settings → editor-option bridge |
 | `typing.ts` | WP13.4 | upper-case typing and no join of two blocks (AD-30), `edit.toggleForceUppercase` (M13; P13 pinned it) |
 | `userConfig.ts` | WP13.3 | the user's own profiles and code files: `profile.*`, `machines.import` / `machines.export`, the reload after a save in either folder (M13; P13 pinned them) |

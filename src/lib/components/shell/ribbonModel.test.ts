@@ -25,7 +25,7 @@ describe('tabsOf', () => {
   it('keeps only the tabs that have entries, in AD-6 order', () => {
     const entries: RibbonEntry[] = [
       item('view', 'view.groupPanels', 'view.toggleSidePanel', 10),
-      item('insert', 'blocks.groupBlocks', 'insert.block:start', 10),
+      item('insert', 'templates.groupTemplates', 'insert.template:program-start', 10),
     ];
     expect(tabsOf(entries)).toEqual(['home', 'insert', 'view']);
   });
@@ -40,11 +40,11 @@ describe('groupsOf', () => {
     const entries: RibbonEntry[] = [
       item('home', 'files.group', 'file.open', 10),
       item('home', 'files.group', 'file.save', 20),
-      item('home', 'blocks.groupProgram', 'insert.block:start', 20),
+      item('home', 'templates.groupProgram', 'insert.template:program-start', 20),
       item('view', 'view.groupPanels', 'view.toggleSidePanel', 10),
     ];
     const groups = groupsOf(entries, 'home');
-    expect(groups.map((g) => g.key)).toEqual(['files.group', 'blocks.groupProgram']);
+    expect(groups.map((g) => g.key)).toEqual(['files.group', 'templates.groupProgram']);
     expect(groups[0].items.map((i) => i.command)).toEqual(['file.open', 'file.save']);
   });
 

@@ -46,7 +46,7 @@
     },
     "P": {
       "label": "Block reference, dwell, step or program number",
-      "description": "First profile block with G70 to G73, a dwell in milliseconds with G4, a step in microns with G74 and G75, the packed thread data of G76, or the program number with M98."
+      "description": "First profile block with G70 to G73, a dwell in least time increments with G4 (1 ms on IS-B), a step in least increments with G74 and G75, the packed thread data of G76, or the program number with M98."
     },
     "Q": {
       "label": "Block reference, peck or cut depth",
@@ -62,7 +62,7 @@
     },
     "D": {
       "label": "D address",
-      "description": "Not used for turning on the source controls: the nose radius and the tip direction come from the tool offset the T word selects. Magazine-type machines may use it as an offset register."
+      "description": "Usually not used for turning: the nose radius and the tip direction come from the tool offset the T word selects. Magazine-type machines may use it as an offset register."
     }
   },
   "codes": [
@@ -87,7 +87,7 @@
         },
         {
           "address": "P",
-          "label": "Dwell time in milliseconds",
+          "label": "Dwell time (least time increments: 1 ms on IS-B)",
           "min": 0,
           "unit": "count"
         }
@@ -200,6 +200,7 @@
     {
       "code": "G71",
       "group": "cycle",
+      "blocks": 2,
       "axisWords": "data",
       "sets": { "cycle": "start" },
       "label": "Roughing cycle along Z",
@@ -239,6 +240,7 @@
     {
       "code": "G72",
       "group": "cycle",
+      "blocks": 2,
       "axisWords": "data",
       "sets": { "cycle": "start" },
       "label": "Roughing cycle along X (facing)",
@@ -278,6 +280,7 @@
     {
       "code": "G73",
       "group": "cycle",
+      "blocks": 2,
       "axisWords": "data",
       "sets": { "cycle": "start" },
       "label": "Pattern repeating cycle",
@@ -319,6 +322,7 @@
     {
       "code": "G74",
       "group": "cycle",
+      "blocks": 2,
       "pitchFeedAmbiguous": true,
       "tappingElsewhere": true,
       "sets": { "cycle": "start" },
@@ -339,13 +343,13 @@
         },
         {
           "address": "P",
-          "label": "Step on X between the grooves, in microns on the source controls",
+          "label": "Step on X between the grooves, in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
           "unit": "increment"
         },
         {
           "address": "Q",
-          "label": "Peck along Z, in microns on the source controls",
+          "label": "Peck along Z, in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
           "unit": "increment"
         },
@@ -359,6 +363,7 @@
     {
       "code": "G75",
       "group": "cycle",
+      "blocks": 2,
       "sets": { "cycle": "start" },
       "label": "Grooving cycle along X",
       "description": "The same as G74 turned through ninety degrees: it pecks into a diameter and steps along Z, which is how a wide groove is cut with a narrow insert.",
@@ -377,13 +382,13 @@
         },
         {
           "address": "P",
-          "label": "Peck on X, in microns on the source controls",
+          "label": "Peck on X, in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
           "unit": "increment"
         },
         {
           "address": "Q",
-          "label": "Step along Z between the grooves, in microns on the source controls",
+          "label": "Step along Z between the grooves, in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
           "unit": "increment"
         },
@@ -397,6 +402,7 @@
     {
       "code": "G76",
       "group": "cycle",
+      "blocks": 2,
       "pitchFeed": true,
       "sets": { "cycle": "start" },
       "label": "Multi-pass threading cycle",
@@ -410,7 +416,7 @@
         },
         {
           "address": "Q",
-          "label": "Smallest cut depth in the first block, first cut depth in the second, both in microns on the source controls",
+          "label": "Smallest cut depth in the first block, first cut depth in the second, both in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
           "unit": "increment"
         },
@@ -491,13 +497,13 @@
         },
         {
           "address": "Q",
-          "label": "Peck depth, in microns on the source controls",
+          "label": "Peck depth in least increments, without a point (µm on a metric IS-B machine)",
           "min": 0,
           "unit": "increment"
         },
         {
           "address": "P",
-          "label": "Dwell at the bottom in milliseconds",
+          "label": "Dwell at the bottom (least time increments: 1 ms on IS-B)",
           "min": 0,
           "unit": "count"
         },
@@ -536,7 +542,7 @@
         },
         {
           "address": "P",
-          "label": "Dwell at the bottom in milliseconds",
+          "label": "Dwell at the bottom (least time increments: 1 ms on IS-B)",
           "min": 0,
           "unit": "count"
         },
@@ -584,7 +590,7 @@
         },
         {
           "address": "P",
-          "label": "Dwell at the bottom in milliseconds",
+          "label": "Dwell at the bottom (least time increments: 1 ms on IS-B)",
           "min": 0,
           "unit": "count"
         },
@@ -622,13 +628,13 @@
         },
         {
           "address": "Q",
-          "label": "Peck depth, in microns on the source controls",
+          "label": "Peck depth in least increments, without a point (µm on a metric IS-B machine)",
           "min": 0,
           "unit": "increment"
         },
         {
           "address": "P",
-          "label": "Dwell at the bottom in milliseconds",
+          "label": "Dwell at the bottom (least time increments: 1 ms on IS-B)",
           "min": 0,
           "unit": "count"
         },
@@ -667,7 +673,7 @@
         },
         {
           "address": "P",
-          "label": "Dwell at the bottom in milliseconds",
+          "label": "Dwell at the bottom (least time increments: 1 ms on IS-B)",
           "min": 0,
           "unit": "count"
         },
@@ -705,7 +711,7 @@
         },
         {
           "address": "P",
-          "label": "Dwell at the bottom in milliseconds",
+          "label": "Dwell at the bottom (least time increments: 1 ms on IS-B)",
           "min": 0,
           "unit": "count"
         },
@@ -844,6 +850,710 @@
       "group": "tool",
       "label": "Tool change on a magazine machine",
       "description": "Changes to the tool that T selects on a machine with a tool magazine. A turret indexes on the T word alone and does not use M6."
+    }
+  ],
+  "templates": [
+    {
+      "id": "program-start",
+      "label": "Program start",
+      "group": "Program",
+      "description": "Tape mark, program number, a safe-start line (units, no nose radius compensation, feed per revolution with G99) and both axes to the reference point.",
+      "toolbar": true,
+      "machineType": "lathe",
+      "review": "pending",
+      "body": "%\nO{{prog}} {{title}}\n{{N}}{{units}} G40 G99\n{{N}}G28 U0. W0.",
+      "params": [
+        {
+          "id": "prog",
+          "label": "Program number",
+          "type": "integer",
+          "help": "The number after O, written with at least four digits. O0 is not allowed.",
+          "required": true,
+          "min": 1,
+          "max": 99999999,
+          "default": 1000,
+          "digits": 4
+        },
+        {
+          "id": "title",
+          "label": "Program name",
+          "type": "text",
+          "default": "NEW PROGRAM",
+          "comment": true
+        },
+        {
+          "id": "units",
+          "label": "Units",
+          "type": "choice",
+          "required": true,
+          "choices": [
+            { "label": "Millimetres (G21)", "value": "G21" },
+            { "label": "Inches (G20)", "value": "G20" }
+          ],
+          "default": "G21"
+        }
+      ]
+    },
+    {
+      "id": "tool-start",
+      "label": "Tool start",
+      "group": "Tool change",
+      "description": "The speed limit (G50 S), the turret station with its offset and a comment, constant cutting speed with the spindle direction, the approach and coolant.",
+      "toolbar": true,
+      "machineType": "lathe",
+      "review": "pending",
+      "body": "{{N}}G50 S{{smax}}\n{{N}}T{{t}}{{o}} {{name}}\n{{N}}G96 S{{vc}} {{dir}}\n{{N}}G0 X{{x}} Z{{z}} {{coolant}}",
+      "params": [
+        {
+          "id": "smax",
+          "label": "Highest spindle speed (rpm)",
+          "type": "integer",
+          "help": "The speed limit for constant cutting speed; the spindle never turns faster.",
+          "required": true,
+          "min": 1,
+          "max": 99999,
+          "default": 2500
+        },
+        {
+          "id": "t",
+          "label": "Turret station",
+          "type": "integer",
+          "required": true,
+          "min": 1,
+          "max": 99,
+          "default": 1,
+          "digits": 2
+        },
+        {
+          "id": "o",
+          "label": "Offset number",
+          "type": "integer",
+          "required": true,
+          "min": 0,
+          "max": 99,
+          "default": 1,
+          "digits": 2
+        },
+        {
+          "id": "name",
+          "label": "Tool description",
+          "type": "text",
+          "default": "OD ROUGH",
+          "comment": true
+        },
+        {
+          "id": "vc",
+          "label": "Cutting speed (m/min)",
+          "type": "integer",
+          "help": "Constant cutting speed: the control changes the spindle speed with the diameter.",
+          "required": true,
+          "min": 1,
+          "max": 9999,
+          "default": 220
+        },
+        {
+          "id": "dir",
+          "label": "Spindle direction",
+          "type": "choice",
+          "required": true,
+          "choices": [
+            { "label": "Clockwise (M3)", "value": "M3" },
+            { "label": "Counter-clockwise (M4)", "value": "M4" }
+          ],
+          "default": "M3"
+        },
+        {
+          "id": "x",
+          "label": "Approach diameter (X)",
+          "type": "number",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "34",
+          "decimals": "min1"
+        },
+        {
+          "id": "z",
+          "label": "Approach position (Z)",
+          "type": "number",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "2",
+          "decimals": "min1"
+        },
+        {
+          "id": "coolant",
+          "label": "Coolant",
+          "type": "choice",
+          "choices": [
+            { "label": "Coolant on (M8)", "value": "M8" },
+            { "label": "No coolant", "value": "" }
+          ],
+          "default": "M8"
+        }
+      ]
+    },
+    {
+      "id": "rough-finish",
+      "label": "Roughing and finishing (G71, G70)",
+      "group": "Turning",
+      "description": "Moves to the cycle start point, roughs along Z in two blocks, the contour between the two numbered blocks, and the finishing pass over the same blocks. The start point must lie outside the stock. Write the rest of the contour between them; the finishing pass takes the feed and speed written in the contour.",
+      "toolbar": true,
+      "machineType": "lathe",
+      "review": "pending",
+      "body": "{{N}}G0 X{{xs}} Z{{zs}}\n{{N}}G71 U{{doc}} R{{e}}\n{{N}}G71 P{{ns}} Q{{nf}} U{{u}} W{{w}} F{{f}}\nN{{ns}} G0 X{{x_first}}\nN{{nf}} G1 X{{x_last}}\n{{N}}G70 P{{ns}} Q{{nf}}",
+      "params": [
+        {
+          "id": "xs",
+          "label": "Cycle start point X (diameter)",
+          "type": "number",
+          "help": "Outside the stock and above the contour with its allowance; G70 returns here.",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "40",
+          "decimals": "min1"
+        },
+        {
+          "id": "zs",
+          "label": "Cycle start point Z",
+          "type": "number",
+          "help": "In front of the face, outside the stock.",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "2",
+          "decimals": "min1"
+        },
+        {
+          "id": "doc",
+          "label": "Depth of cut per pass (radius)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "max": 99999.999,
+          "default": "1.5",
+          "decimals": "min1"
+        },
+        {
+          "id": "e",
+          "label": "Retract between passes",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "max": 99999.999,
+          "default": "0.5",
+          "decimals": "min1"
+        },
+        {
+          "id": "ns",
+          "label": "Block number of the first contour block",
+          "type": "integer",
+          "help": "P and Q name these blocks, and each number may stand only once in the program. The form offers numbers the program does not use yet.",
+          "required": true,
+          "min": 1,
+          "max": 99999,
+          "default": 100
+        },
+        {
+          "id": "nf",
+          "label": "Block number of the last contour block",
+          "type": "integer",
+          "required": true,
+          "min": 1,
+          "max": 99999,
+          "default": 200
+        },
+        {
+          "id": "u",
+          "label": "Finishing allowance on X (diameter)",
+          "type": "number",
+          "help": "Positive for an outside contour, negative for an inside one.",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "0.4",
+          "decimals": "min1"
+        },
+        {
+          "id": "w",
+          "label": "Finishing allowance on Z",
+          "type": "number",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "0.1",
+          "decimals": "min1"
+        },
+        {
+          "id": "f",
+          "label": "Roughing feed (mm/rev)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "max": 99,
+          "default": "0.25",
+          "decimals": "min1"
+        },
+        {
+          "id": "x_first",
+          "label": "First contour point (X)",
+          "type": "number",
+          "help": "The first contour block has to move in X only, with G0 or G1.",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "16",
+          "decimals": "min1"
+        },
+        {
+          "id": "x_last",
+          "label": "Last contour point (X)",
+          "type": "number",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "34",
+          "decimals": "min1"
+        }
+      ]
+    },
+    {
+      "id": "threading",
+      "label": "Threading (G76)",
+      "group": "Threading",
+      "description": "Multi-pass threading in two blocks: finishing passes, chamfer and insert angle packed into P with the smallest cut and the allowance first; then the thread end, height, first cut and lead. The sample values are the 30i manual's example.",
+      "toolbar": true,
+      "machineType": "lathe",
+      "review": "pending",
+      "body": "{{N}}G97 S{{s}} {{dir}}\n{{N}}G0 X{{xs}} Z{{zs}}\n{{N}}G76 P{{m}}{{r}}{{a}} Q{{dmin}} R{{d}}\n{{N}}G76 X{{x}} Z{{z}} {{i}} P{{k}} Q{{d1}} F{{lead}}",
+      "params": [
+        {
+          "id": "s",
+          "label": "Spindle speed (rpm)",
+          "type": "integer",
+          "help": "Threads are cut at a fixed speed (G97).",
+          "required": true,
+          "min": 1,
+          "max": 99999,
+          "default": 500
+        },
+        {
+          "id": "dir",
+          "label": "Spindle direction",
+          "type": "choice",
+          "required": true,
+          "choices": [
+            { "label": "Clockwise (M3)", "value": "M3" },
+            { "label": "Counter-clockwise (M4)", "value": "M4" }
+          ],
+          "default": "M3"
+        },
+        {
+          "id": "xs",
+          "label": "Start point X (diameter)",
+          "type": "number",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "80",
+          "decimals": "min1"
+        },
+        {
+          "id": "zs",
+          "label": "Start point Z",
+          "type": "number",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "130",
+          "decimals": "min1"
+        },
+        {
+          "id": "m",
+          "label": "Finishing passes",
+          "type": "integer",
+          "required": true,
+          "min": 1,
+          "max": 99,
+          "default": 1,
+          "digits": 2
+        },
+        {
+          "id": "r",
+          "label": "Chamfer at the thread end (tenths of the lead)",
+          "type": "integer",
+          "help": "00 to 99: 10 is a pull-out of one lead.",
+          "required": true,
+          "min": 0,
+          "max": 99,
+          "default": 10,
+          "digits": 2
+        },
+        {
+          "id": "a",
+          "label": "Insert angle",
+          "type": "choice",
+          "required": true,
+          "choices": [
+            { "label": "60°", "value": "60" },
+            { "label": "55°", "value": "55" },
+            { "label": "80°", "value": "80" },
+            { "label": "30°", "value": "30" },
+            { "label": "29°", "value": "29" },
+            { "label": "0°", "value": "00" }
+          ],
+          "default": "60"
+        },
+        {
+          "id": "dmin",
+          "label": "Smallest depth of cut (least increments)",
+          "type": "integer",
+          "help": "Written without a point: 100 is 0.1 mm on a machine with 0.001 mm increments.",
+          "required": true,
+          "min": 0,
+          "max": 99999999,
+          "default": 100
+        },
+        {
+          "id": "d",
+          "label": "Finishing allowance",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "max": 99999.999,
+          "default": "0.2",
+          "decimals": "min1"
+        },
+        {
+          "id": "x",
+          "label": "Thread root diameter (X)",
+          "type": "number",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "60.64",
+          "decimals": "min1"
+        },
+        {
+          "id": "z",
+          "label": "Thread end (Z)",
+          "type": "number",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "25",
+          "decimals": "min1"
+        },
+        {
+          "id": "i",
+          "label": "Taper (radius difference)",
+          "type": "number",
+          "help": "Leave empty for a straight thread.",
+          "min": -99999.999,
+          "max": 99999.999,
+          "prefix": "R",
+          "decimals": "min1"
+        },
+        {
+          "id": "k",
+          "label": "Thread height (least increments)",
+          "type": "integer",
+          "help": "Written without a point, as a radius: 3680 is 3.68 mm on a machine with 0.001 mm increments.",
+          "required": true,
+          "min": 0,
+          "max": 99999999,
+          "default": 3680
+        },
+        {
+          "id": "d1",
+          "label": "First depth of cut (least increments)",
+          "type": "integer",
+          "help": "Written without a point, as a radius.",
+          "required": true,
+          "min": 0,
+          "max": 99999999,
+          "default": 1800
+        },
+        {
+          "id": "lead",
+          "label": "Thread lead (mm)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "max": 999,
+          "default": "6",
+          "decimals": "min1"
+        }
+      ]
+    },
+    {
+      "id": "grooving",
+      "label": "Grooving (G75)",
+      "group": "Turning",
+      "description": "Plunges into the diameter in pecks and steps along Z for a wide groove. Two blocks: the retract first, then the groove bottom, the last position and the steps.",
+      "machineType": "lathe",
+      "review": "pending",
+      "body": "{{N}}G0 X{{xs}} Z{{zs}}\n{{N}}G75 R{{e}}\n{{N}}G75 X{{x}} {{z}} P{{di}} {{dk}} F{{f}}",
+      "params": [
+        {
+          "id": "xs",
+          "label": "Start point X (diameter)",
+          "type": "number",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "42",
+          "decimals": "min1"
+        },
+        {
+          "id": "zs",
+          "label": "Start point Z",
+          "type": "number",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "-20",
+          "decimals": "min1"
+        },
+        {
+          "id": "e",
+          "label": "Retract after each peck",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "max": 99999.999,
+          "default": "0.5",
+          "decimals": "min1"
+        },
+        {
+          "id": "x",
+          "label": "Groove bottom diameter (X)",
+          "type": "number",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "30",
+          "decimals": "min1"
+        },
+        {
+          "id": "z",
+          "label": "Last groove position (Z)",
+          "type": "number",
+          "help": "Leave empty, with the step, for a single plunge.",
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "-30",
+          "prefix": "Z",
+          "decimals": "min1"
+        },
+        {
+          "id": "di",
+          "label": "Peck depth on X (least increments)",
+          "type": "integer",
+          "help": "Written without a point, as a radius: 2000 is 2 mm on a machine with 0.001 mm increments.",
+          "required": true,
+          "min": 0,
+          "max": 99999999,
+          "default": 2000
+        },
+        {
+          "id": "dk",
+          "label": "Step along Z (least increments)",
+          "type": "integer",
+          "help": "Written without a point; not wider than the insert.",
+          "min": 0,
+          "max": 99999999,
+          "default": 2500,
+          "prefix": "Q"
+        },
+        {
+          "id": "f",
+          "label": "Feed (mm/rev)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "max": 99,
+          "default": "0.05",
+          "decimals": "min1"
+        }
+      ]
+    },
+    {
+      "id": "face-drill",
+      "label": "Drilling on the face (G83)",
+      "group": "Drilling",
+      "description": "Drills on centre along Z in pecks of Q and cancels the cycle with G80. With a driven tool the C-axis clamp code of the machine goes into the cycle block as well.",
+      "machineType": "lathe",
+      "review": "pending",
+      "body": "{{N}}G97 S{{s}} {{dir}}\n{{N}}G0 X0. Z{{zs}} {{coolant}}\n{{N}}G83 Z{{z}} R{{r}} {{q}} {{p}} F{{f}}\n{{N}}G80",
+      "params": [
+        {
+          "id": "s",
+          "label": "Spindle speed (rpm)",
+          "type": "integer",
+          "required": true,
+          "min": 1,
+          "max": 99999,
+          "default": 1000
+        },
+        {
+          "id": "dir",
+          "label": "Spindle direction",
+          "type": "choice",
+          "required": true,
+          "choices": [
+            { "label": "Clockwise (M3)", "value": "M3" },
+            { "label": "Counter-clockwise (M4)", "value": "M4" }
+          ],
+          "default": "M3"
+        },
+        {
+          "id": "zs",
+          "label": "Start level (Z)",
+          "type": "number",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "5",
+          "decimals": "min1"
+        },
+        {
+          "id": "coolant",
+          "label": "Coolant",
+          "type": "choice",
+          "choices": [
+            { "label": "Coolant on (M8)", "value": "M8" },
+            { "label": "No coolant", "value": "" }
+          ],
+          "default": "M8"
+        },
+        {
+          "id": "z",
+          "label": "Hole bottom (Z)",
+          "type": "number",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "-40",
+          "decimals": "min1"
+        },
+        {
+          "id": "r",
+          "label": "R point, measured from the start level",
+          "type": "number",
+          "help": "Incremental: negative when the R point is nearer the part than the start level.",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "-5",
+          "decimals": "min1"
+        },
+        {
+          "id": "q",
+          "label": "Peck depth (least increments)",
+          "type": "integer",
+          "help": "Written without a point: 5000 is 5 mm on a machine with 0.001 mm increments. Empty: no pecking.",
+          "min": 0,
+          "max": 99999999,
+          "default": 5000,
+          "prefix": "Q"
+        },
+        {
+          "id": "p",
+          "label": "Dwell at the bottom (least time increments: 1 ms on IS-B)",
+          "type": "integer",
+          "min": 0,
+          "max": 99999999,
+          "prefix": "P"
+        },
+        {
+          "id": "f",
+          "label": "Feed (mm/rev)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "max": 99999,
+          "default": "0.1",
+          "decimals": "min1"
+        }
+      ]
+    },
+    {
+      "id": "tool-end",
+      "label": "Tool end",
+      "group": "Tool change",
+      "description": "Back to the tool change position at rapid with the offset cancelled (station and 00), coolant off and an optional stop.",
+      "machineType": "lathe",
+      "review": "pending",
+      "body": "{{N}}G0 X{{x}} Z{{z}} T{{t}}00\n{{N}}M9\n{{N}}{{stop}}",
+      "params": [
+        {
+          "id": "x",
+          "label": "Tool change position X (diameter)",
+          "type": "number",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "100",
+          "decimals": "min1"
+        },
+        {
+          "id": "z",
+          "label": "Tool change position Z",
+          "type": "number",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "100",
+          "decimals": "min1"
+        },
+        {
+          "id": "t",
+          "label": "Turret station",
+          "type": "integer",
+          "required": true,
+          "min": 1,
+          "max": 99,
+          "default": 1,
+          "digits": 2
+        },
+        {
+          "id": "stop",
+          "label": "Stop after the tool",
+          "type": "choice",
+          "choices": [
+            { "label": "Optional stop (M1)", "value": "M1" },
+            { "label": "Program stop (M0)", "value": "M0" },
+            { "label": "No stop", "value": "" }
+          ],
+          "default": "M1"
+        }
+      ]
+    },
+    {
+      "id": "program-end",
+      "label": "Program end",
+      "group": "Program",
+      "description": "Spindle off, end of program and the closing tape mark.",
+      "toolbar": true,
+      "machineType": "lathe",
+      "review": "pending",
+      "body": "{{N}}M5\n{{N}}{{end}}\n%",
+      "params": [
+        {
+          "id": "end",
+          "label": "End of program",
+          "type": "choice",
+          "required": true,
+          "choices": [
+            { "label": "End and rewind (M30)", "value": "M30" },
+            { "label": "End (M2)", "value": "M2" }
+          ],
+          "default": "M30"
+        }
+      ]
     }
   ]
 }

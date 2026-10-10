@@ -1,0 +1,22 @@
+{
+  "$format": 1,
+  "codes": "heidenhain",
+  "profile": "heidenhain-klartext",
+  "template": "line",
+  "values": {
+    "x": "10",
+    "y": "-5",
+    "z": "2"
+  },
+  "env": {
+    "prevBlockNumber": 4,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "5 L X+10 Y-5 Z+2 R0 FMAX"
+}

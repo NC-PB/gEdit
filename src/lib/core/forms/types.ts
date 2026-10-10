@@ -58,4 +58,10 @@ export interface FieldSpec {
   decimals?: number;
   /** The options of a `choice` or `address-list` field. */
   choices?: FieldChoice[];
+  /**
+   * Phase 3 (P3b prelude; Phase 3 plan §7 #226). Shown but not typed into: a template's formula
+   * parameter (P3.8), whose value the form's `live` hook computes from the other fields.
+   * `validateFields` skips it; `initialValues` gives it its `default` (usually none).
+   */
+  readOnly?: boolean;
 }

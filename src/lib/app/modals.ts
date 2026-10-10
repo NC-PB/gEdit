@@ -15,7 +15,7 @@ import type { Component } from 'svelte';
 import FormDialog from '$lib/components/forms/FormDialog.svelte';
 import PromptInput from '$lib/components/common/PromptInput.svelte';
 import type { FieldSpec } from '$lib/core/forms/types';
-import type { Modals, Msg, QuickPickItem } from '$lib/app/types';
+import type { FormLiveResult, ModalOptions, Modals, Msg, QuickPickItem } from '$lib/app/types';
 
 /** What ModalHost renders. `resolve` closes the modal and settles the caller's promise. */
 export type ModalRequest =
@@ -30,6 +30,10 @@ export type ModalRequest =
       kind: 'component';
       component: Component<Record<string, unknown>>;
       props: Record<string, unknown>;
+      /** A wide panel (`ModalOptions.wide`). */
+      wide?: boolean;
+      /** Asked before the host dismisses the dialog by itself (`ModalOptions.mayClose`). */
+      mayClose?: () => boolean | Promise<boolean>;
       resolve(value?: unknown): void;
     };
 
@@ -102,6 +106,9 @@ export const modals: Modals = {
     values?: Record<string, unknown>;
     okLabel?: string;
     context?: { addresses?: string[] };
+    live?: (values: Record<string, unknown>) => FormLiveResult;
+    note?: string;
+    marker?: { testid: string; data: Record<string, string> };
   }): Promise<Record<string, unknown> | undefined> {
     return openModal<Record<string, unknown>>((resolve) => ({
       kind: 'component',
@@ -112,6 +119,9 @@ export const modals: Modals = {
         values: o.values,
         okLabel: o.okLabel,
         context: o.context,
+        live: o.live,
+        note: o.note,
+        marker: o.marker,
       },
       resolve,
     }));
@@ -120,17 +130,52 @@ export const modals: Modals = {
   open<P extends Record<string, unknown>, R>(
     c: Component<P & { close: (r?: R) => void }>,
     props: P,
+    options?: ModalOptions,
   ): Promise<R | undefined> {
     return openModal<R>((resolve) => ({
       kind: 'component',
       component: c as unknown as Component<Record<string, unknown>>,
       props,
+      wide: options?.wide,
+      mayClose: options?.mayClose,
       resolve,
     }));
   },
 
   isOpen: derived(request, (r) => r !== null),
 };
+
+/** True while the open dialog is being asked whether it may close, so a second Esc or press waits. */
+let asking = false;
+
+/**
+ * The host's own dismissal (Esc with the focus outside the panel, a press outside it): closes the
+ * open modal unless its `mayClose` hook says no. A modal without the hook closes at once, as before.
+ * A hook that throws keeps the dialog open (nothing is lost on an error). Resolves true when the
+ * modal was closed.
+ */
+export async function dismissModal(): Promise<boolean> {
+  const current = openRequest;
+  if (current === null || asking) return false;
+  const hook = current.kind === 'component' ? current.mayClose : undefined;
+  if (hook === undefined) {
+    current.resolve(undefined);
+    return true;
+  }
+  asking = true;
+  try {
+    if (!(await hook())) return false;
+  } catch (err) {
+    console.error('mayClose failed', err);
+    return false;
+  } finally {
+    asking = false;
+  }
+  // The dialog may have closed itself while it was being asked.
+  if (openRequest !== current) return false;
+  current.resolve(undefined);
+  return true;
+}
 
 /** Test seam: closes whatever is open (the caller's promise resolves to undefined). */
 export function closeModalForTest(): void {

@@ -1,0 +1,14 @@
+{
+  "$format": 1,
+  "about": "With no machine the Okuma readings differ (as written, or scaled by 1 or 10 um): the feed is not changed, never guessed.",
+  "input": "../../nc/okuma/o03-live-tool.MIN",
+  "line": 15,
+  "values": {
+    "F": "100"
+  },
+  "expected": {
+    "errors": {
+      "F": "inspector.why.needsMachine"
+    }
+  }
+}

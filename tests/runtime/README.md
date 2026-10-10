@@ -81,7 +81,7 @@ tests/runtime/suite.sh tests/runtime/suites/m0.txt   # run a suite and print the
 
 ## On a hosted runner
 
-`harness.yml` runs `sync.sh` and then `suite.sh tests/runtime/suites/{m{0..12},rp,m13,p3a}.txt` on `macos-14`
+`harness.yml` runs `sync.sh` and then `suite.sh tests/runtime/suites/{m{0..12},rp,m13,p3a,p3b}.txt` on `macos-14`
 (45 minute limit), always uploads `$GEDIT_RH_DIR/out`, the app logs and the sync logs, and
 caches the build directory. What differs from the owner's Mac, and how the scenarios deal with it:
 
@@ -107,11 +107,11 @@ caches the build directory. What differs from the owner's Mac, and how the scena
 
 ## Suites
 
-One file per milestone, `suites/m0.txt` … `suites/m12.txt`, then `suites/rp.txt` (M12.5, "Real programs, second pass"), `suites/m13.txt` (M13 and the Phase 2 exit criteria) and `suites/p3a.txt` (Phase 3, P3a "Understand a block"): one scenario name per line, `#`
+One file per milestone, `suites/m0.txt` … `suites/m12.txt`, then `suites/rp.txt` (M12.5, "Real programs, second pass"), `suites/m13.txt` (M13 and the Phase 2 exit criteria), `suites/p3a.txt` (Phase 3, P3a "Understand a block") and `suites/p3b.txt` (Phase 3, P3b "Write with templates"): one scenario name per line, `#`
 starts a comment. A cumulative run is all of them in order:
 
 ```sh
-tests/runtime/suite.sh tests/runtime/suites/{m{0,1,2,3,4,5,6,7,8,9,10,11,12},rp,m13,p3a}.txt
+tests/runtime/suite.sh tests/runtime/suites/{m{0,1,2,3,4,5,6,7,8,9,10,11,12},rp,m13,p3a,p3b}.txt
 ```
 
 The Phase 2 exit criteria (plan §2.2) and where each is proven; `suites/m13.txt` has the same table in its comments:
@@ -133,14 +133,17 @@ The Phase 2 exit criteria (plan §2.2) and where each is proven; `suites/m13.txt
 | X13 real programs | `tests/unit/ownerPublic.test.ts`, `tests/python/test_owner_public.py`, `m9-detect` |
 | X1, X2, X5, X6, X8, X12 without Python | `exit2-nopython` |
 
-The Phase 3 criteria that the running app proves (`suites/p3a.txt`, plan `docs/planning/phase-3-implementation.md` §2):
+The Phase 3 criteria that the running app proves (`suites/p3a.txt` and `suites/p3b.txt`, plan `docs/planning/phase-3-implementation.md` §2):
 
 | Criterion | Scenario |
 |---|---|
 | X7 inspector, with the inspector half of X11 (c) | `p3-inspector` |
 | X14 hover in context, with the hover half of X11 (c) | `p3-hover` |
 | X16 motion colours | `p3-colors` (also registered as `p3-colours`) |
-| X17 the budgets at 300,000 lines, the typing budget with the inspector open and the colours on | `p3-perf` |
+| X17 the budgets at 300,000 lines, the typing budget with the inspector open and the colours on, the 8 ms index slices (and a 300,000-line Klartext program) | `p3-perf`, `m3-perf`, `m12-perf` |
+| X9t templates in the window (the templates half of X9), the Insert tab, the form, completion, stars, the cost of the form's live text, of opening it and of the Insert at 300,000 lines (unnumbered and numbered) | `p3-templates` |
+| X18 a, b Edit Cycle: read back, changed, nothing else touched, one Undo; insert mode with the renumber | `p3-cycleforms` |
+| X18 c the template manager and New Template from Selection, unsaved edits asked about | `p3-template-manager` |
 
 ## PASS, FLAKY, FAIL, BLOCKED
 
@@ -248,10 +251,16 @@ scenario('m1-example', { timeout: 90 }, async (h) => {
   `parseMotionColors`, `clickMotionColors`) and the timing helpers of the 300,000-line scenario (`stallMonitor`, `watchRebuild`,
   `measureTyping`). Expected wording is `ctx.t(...)`, expected numbers and kinds come from the goldens of `tests/fixtures/modal/**`
   and `tests/fixtures/motion/**` or from the synthetic programs themselves.
+  The P3b scenarios (`p3-templates`, `p3-cycleforms`, `p3-template-manager`) share `p3b-common.js`: the Insert tab read as ribbon
+  groups and template blocks (`ribbonGroups`, `templateBlocks`, `runFromInsertTab`), the form dialog read whole (`formState`,
+  `typeInField`, `waitForm`), the dialogs' buttons pressed with a real click that is counted (`press`, `pressOk`, `pressCancel`,
+  `clicks`; a scenario fails if one fell back to a DOM click), the quick pick and the suggest widget (`pickRows`, `pickByLabel`,
+  `suggestItems`), and the goldens and code databases read back (`golden`, `codeFile`, with `files: REPO_FILE` for `{repo}`). Expected
+  text comes from `tests/fixtures/templates/**` and `tests/fixtures/cycleforms/**`, never from what the app shows.
 - Find elements with `h.q('<test id>', { attr: 'value' })`. The test ids are a contract:
   §7.9 of `docs/planning/phase-1-implementation.md` (Phase 1) and §7.12 of
   `docs/planning/phase-2-implementation.md` (from M6 on), and §6.8 of `docs/planning/phase-3-implementation.md`
-  (the inspector). A new one goes into the Phase 2 or Phase 3 table in the same change.
+  (the inspector, the templates, the manager). A new one goes into the Phase 2 or Phase 3 table in the same change.
 - Read app state through `h.app` (the test hook) where it offers it, and through test
   ids otherwise. Never through visible text.
 - Trigger through real input (`h.nativeKeys`, `h.nativeType`, `h.nativeClick`) or a

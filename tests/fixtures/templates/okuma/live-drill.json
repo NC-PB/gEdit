@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "okuma",
+  "profile": "okuma-osp",
+  "template": "live-drill",
+  "values": {},
+  "env": {
+    "prevBlockNumber": 100,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "N110 M110\nN120 G0 X60 Z5 C0\nN130 SB=400 M13\nN140 G94\nN150 G181 X60 Z-10 C0 K3 F40\nN160 G180\nN170 G0 X600 Z400\nN180 M12\nN190 G95\nN200 M109"
+}

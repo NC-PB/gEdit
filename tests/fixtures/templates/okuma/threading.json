@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "okuma",
+  "profile": "okuma-osp",
+  "template": "threading",
+  "values": {},
+  "env": {
+    "prevBlockNumber": 100,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "N110 G97 S800 M3\nN120 G0 X24 Z5\nN130 G71 X18.16 Z-25 B60 D0.4 U0.1 H1.84 F1.5 M32"
+}

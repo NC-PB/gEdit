@@ -86,3 +86,18 @@ describe('default translator', () => {
     expect(hasKey('common.nothingHere')).toBe(false);
   });
 });
+
+describe('the development warning for a missing message', () => {
+  it('names a key that is missing, once, and stays quiet for a text with blanks (a template label used as a title)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(t('Program start')).toBe('Program start');
+      expect(warn).not.toHaveBeenCalled();
+      t('demo.nowhere.once');
+      t('demo.nowhere.once');
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});

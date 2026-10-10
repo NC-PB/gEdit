@@ -12,8 +12,22 @@ Your own dialects and codes (the end of Phase 2): you can write profiles and cod
 
 Understanding a block (Phase 3, first half): a code inspector for the block at the cursor, hover help with a cycle's parameters and what the word means in its block, and a coloured mark beside every line that moves. It reads and explains; the one thing it writes is a value you change yourself. See the new [Understanding a block](docs/user/inspector.md) page.
 
+Writing with templates (Phase 3, second half): the Insert tab offers parameterized templates (a program start, a tool change, a drilling or turning cycle) for all six dialects instead of the old fixed code blocks, written with the dialect's number style and the block numbers carried on; **Edit Cycle** changes a cycle in a form; a field can be a formula; and you can keep templates of your own. The templates that ship are marked "review pending": check what they insert against your machine. See the new [Writing with templates](docs/user/templates.md) page.
+
 ### New
 
+- **Templates in the Insert tab:** the templates of the program you are in, by group, as buttons and a *More Templates…* list, with *Insert Template…* and one command for each template in the palette. A short form asks for the values and shows the text that will be written; it is inserted after the block the cursor is in (it replaces an empty line) as one undo step. Values are written exactly as typed in the form the template says, refused with the reason when they do not fit, and never rounded.
+- **Program start on the Home tab** writes the first lines of a program in the dialect's own style (it replaces the old Program Header button).
+- **49 built-in templates**, every one marked *Review pending* ("Not yet reviewed" in the tooltip, a note in the form): Fanuc mill (drilling, peck drilling, chip breaking, rigid tapping, boring), Fanuc lathe (tool start, roughing and finishing, threading, grooving, face drilling) with its own version for G-code system B, Heidenhain Klartext (cycles 200, 203, 207, 240, tool call, moves), Okuma (threading, LAP, face and driven-tool drilling) and Sinumerik turning and milling (`CYCLE81`–`84`, `CYCLE95`, `CYCLE99`).
+- **Block numbers continue** from the nearest number above the cursor in the program's step, and stay off in an unnumbered program. In Klartext every block is numbered and the blocks behind the insertion are renumbered in the same edit. In the other dialects the blocks behind keep their numbers.
+- **Templates in completion:** on a line with nothing before the word, type the start of a template's name (`peck`) and accept it with `Tab`; a template with values opens its form.
+- **Favorites:** star the templates you use most; they form a first group on the Insert tab.
+- **Edit Cycle…** (Insert tab, or the palette): the cycle at the cursor in a form of its parameters with the values as written. Only the words you change are rewritten, each in its own number form; nothing changed means nothing written; a cycle word you clear is taken out; Klartext `Q` lines and Sinumerik arguments are handled by their own rules. A lathe cycle written in two blocks (`G71`–`G76`), a position line under a modal cycle, and a value that is a variable are refused with the reason. With no cycle at the cursor it inserts a new one. One undo step.
+- **Formula fields:** a field can be worked out from the others (the rigid tapping feed is the pitch times the speed). The language is small (`+ - * / %`, brackets, `abs floor ceil round sign sqrt ln log sin cos tan asin acos atan` in degrees), exact on decimal digits (`0.1 + 0.2` is `0.3`), rounded only to the field's own decimals, and never run as code.
+- **Template manager** (*Manage Templates…*): the templates of the program's code set with a search box; the built-in ones read-only; **New**, **Duplicate**, **Change a copy** (a copy with the same id replaces the built-in template; deleting it brings the built-in back), **Delete**, move up and down, a text box with buttons for the block number, the system values and each field, a form for every setting of a field, and a live preview. **Save** checks everything, refuses all of it with the places of the problems when one is wrong, and then writes the `templates` list of your code file (`<config>/codes/`), through the file's tab with a backup and one undo step; a file with unsaved changes is refused. Closing the manager with unsaved changes asks first.
+- **New Template from Selection…:** the selected lines become a draft in the manager; block numbers become the next block number, and you tick the numbers that should become values (a value written twice becomes one field). Codes, comments, calls and expressions stay as they are.
+- **Your templates are in your code files** (`templates` list); an id that matches a built-in template replaces it, a template gEdit cannot read is left out and listed with its place in the file, and it never hides the built-in template.
+- **Faster typing in large programs:** the modal index is now built in slices of 8 ms (was 16 ms), so a keystroke waits for at most one of them.
 - **Code inspector** (`Cmd/Ctrl+Alt+A`, View tab, Panels, or the palette): a panel beside the Program Map that lists the words of the block at the cursor with what each one means, and what is in force after the block (motion, plane, distance, units, work offset, tool, spindle, speed, feed, coolant, compensation, active cycle), each with the line that set it. It is closed until you open it.
 - **Assumed values say where the assumption comes from:** *machine*, *detected from the program* or *profile default*; *set here* marks what the block itself changed; a mode the program never set is shown as at power-on.
 - **A number that depends on the machine** shows its effective value on the document's machine (`X50` is `0.05 mm` on an IS-B lathe), and with no machine it lists every reading and picks none.
@@ -71,6 +85,7 @@ Understanding a block (Phase 3, first half): a code inspector for the block at t
 
 ### Changed
 
+- **Fanuc mill, `Q` of the peck and shift cycles** (`G73`, `G76`, `G83`, `G84`, `G87`) is a length: a `Q` without a decimal point depends on the machine (input increments), so with no machine chosen the inspector lists every reading, and on a machine in IS-B `Q4000` is 4 mm. The lathe's `Q` is unchanged.
 - **Fanuc mill:** in a block with two `T` words and `M6` (`T01 T00 M6`) the first `T` is the tool loaded, so the program map and the tool list show tool 1 there.
 - **Sinumerik:** a program that never writes `G90` starts in absolute positions (assumed, a machine can say otherwise), so address arithmetic and extents read it instead of refusing every word.
 - **Klartext:** cycle 19 and `PLANE SPATIAL`, `PROJECTED` or `EULER` with every angle at zero end the tilt, so address arithmetic and extents no longer treat the rest of the program as tilted.
@@ -87,6 +102,10 @@ Understanding a block (Phase 3, first half): a code inspector for the block at t
 - **Fanuc:** the machine-builder range `M900-M999` is now named as one builder's range in the two- and three-path presets, and the `_<n>` file-name presets warn that a version file such as `SHAFT_2.NC` is read as a path too.
 - **Convert Case to lower case asks first on every built-in profile** (before: only on Fanuc), because the control expects upper case.
 - **Program checks, tool list and extents:** a subprogram written behind the main program is charged to no tool (it was charged to the main program's last tool); the extents label a tool as it is written (`T1 (T010101, line 9)`); a thread's `F` that is not its lead is said so; a feed range in another unit than the program's says which.
+
+### Removed
+
+- **The Phase 1 code blocks** (the *Program Header* button, the drilling block and the Klartext header on the Insert tab, and their `insert.block:*` commands) are replaced by the templates, which cover the same ground for all six dialects. There is no setting to bring the old blocks back.
 
 ### Fixed
 

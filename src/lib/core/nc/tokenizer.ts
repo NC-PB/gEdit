@@ -1919,3 +1919,99 @@ export function blockNumberOf(line: string, cp: CompiledProfile): BlockNumberInf
   const text = line.slice(block.digitsStart, block.end);
   return { value: Number.parseInt(text, 10), text, start: block.start, end: block.end };
 }
+
+const NO_LABELS: readonly string[] = [];
+
+/** What `blockHeadOf` reads from the head of a line. */
+export interface BlockHead {
+  /** The digits of the block number `tokenizeLine` reads at the head, as written, or null. */
+  number: string | null;
+  /** The text of every `label` token the head holds (a sequence name `NLAP1`, a label `LOOP_A`), as written. */
+  labels: readonly string[];
+  /** Where the head ends: the position `tokenizeLine` has reached before it reads the block's words. */
+  end: number;
+  /** The line ends with the continuation marker, so the next one is its tail (the `state` of `tokenizeLine`). */
+  continues: boolean;
+}
+
+/**
+ * The head of a line as `tokenizeLine` reads it (header, label, sequence name, block number,
+ * block skips), without building a single token: the block number and the labels of the head
+ * and the position where the words of the block begin. `prevContinues` is the `continues` of
+ * the line above. This repeats the first part of `tokenizeLine` with the same helpers in the
+ * same order; `tokenizer.test.ts` holds the two to the same answer on random lines of every
+ * profile. A template form that needs the block numbers of a 300,000-line program reads them
+ * with it instead of tokenizing every line (`core/templates/blockNumbers.ts`).
+ */
+export function blockHeadOf(line: string, cp: CompiledProfile, prevContinues: boolean): BlockHead {
+  return headWith(lexSpec(cp), line, prevContinues);
+}
+
+/** `blockHeadOf` for one profile, the profile's reading rules looked up once (300,000 lines ask for them 300,000 times). */
+export function blockHeadReader(cp: CompiledProfile): (line: string, prevContinues: boolean) => BlockHead {
+  const spec = lexSpec(cp);
+  return (line, prevContinues) => headWith(spec, line, prevContinues);
+}
+
+function headWith(spec: LexSpec, line: string, prevContinues: boolean): BlockHead {
+  let limit = line.length;
+  let continues = false;
+  if (spec.continuation) {
+    const match = spec.continuation.exec(line);
+    if (match) {
+      continues = true;
+      limit = match.index;
+    }
+  }
+  let labels: readonly string[] = NO_LABELS;
+  let number: string | null = null;
+  let p = skipSpace(line, 0, limit);
+  let atHead = !prevContinues;
+
+  if (atHead && spec.header && p === 0) {
+    const match = spec.header.exec(line);
+    if (match && match.index === 0 && match[0].length > 0) {
+      const end = Math.min(match[0].length, limit);
+      if (end > 0) {
+        p = skipSpace(line, end, limit);
+        atHead = false;
+      }
+    }
+  }
+
+  if (atHead) {
+    const skipsAt = (from: number): number => {
+      let at = from;
+      for (;;) {
+        const end = scanSkip(line, at, limit, spec);
+        if (end === at) return at;
+        at = skipSpace(line, end, limit);
+        if (spec.skip?.levels !== true) return at;
+      }
+    };
+    if (spec.skip?.before === true) p = skipsAt(p);
+    const label = labelSpanOf(line, spec);
+    if (label && label.start === p) {
+      labels = [line.slice(label.start, label.end)];
+      p = skipSpace(line, label.end, limit);
+    } else {
+      const named = scanSequenceName(line, p, limit, spec);
+      const block = named ? null : scanBlockNumber(line, p, limit, spec);
+      if (named) {
+        labels = [line.slice(named.start, named.end)];
+        p = skipSpace(line, named.end, limit);
+      } else if (block) {
+        number = line.slice(block.digitsStart, block.end);
+        p = skipSpace(line, block.end, limit);
+      }
+      if (named || block) {
+        if (spec.skip?.after === true) p = skipsAt(p);
+        if (label && label.start === p) {
+          labels = labels === NO_LABELS ? [line.slice(label.start, label.end)] : [...labels, line.slice(label.start, label.end)];
+          p = skipSpace(line, label.end, limit);
+        }
+      }
+    }
+  }
+  return { number, labels, end: p, continues };
+}

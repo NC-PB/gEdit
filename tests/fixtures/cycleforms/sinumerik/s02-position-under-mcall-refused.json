@@ -1,0 +1,13 @@
+{
+  "$format": 1,
+  "about": "A position under MCALL runs the cycle written on line 24: the form edits that line.",
+  "input": "../../nc/sinumerik/s02-drill.MPF",
+  "line": 25,
+  "values": {},
+  "expected": {
+    "refused": "cycleForm.refused.elsewhere",
+    "params": {
+      "line": 24
+    }
+  }
+}

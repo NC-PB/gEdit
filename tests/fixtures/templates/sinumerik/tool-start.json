@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "sinumerik",
+  "profile": "sinumerik",
+  "template": "tool-start",
+  "values": {},
+  "env": {
+    "prevBlockNumber": 100,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "N110 T=\"ROUGH_OD\" D1\nN120 G96 S220 LIMS=2500 M4\nN130 G0 X80 Z2 M8"
+}

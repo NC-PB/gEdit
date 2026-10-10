@@ -118,7 +118,7 @@ function fieldProblem(field: FieldSpec, value: unknown): Msg | null {
 /**
  * One message per field that fails, keyed by `FieldSpec.id`. An empty record means the
  * form may be submitted. Values without a field are ignored, so a remembered parameter
- * set from an older script header cannot block the form.
+ * set from an older script header cannot block the form. A `readOnly` field is skipped.
  */
 export function validateFields(
   fields: FieldSpec[],
@@ -126,6 +126,9 @@ export function validateFields(
 ): Record<string, Msg> {
   const errors: Record<string, Msg> = {};
   for (const field of fields) {
+    // A read-only field shows a computed value (a template's formula); nothing was typed, so
+    // there is nothing to check here (Phase 3 plan §7 #226). Its own error comes from `live`.
+    if (field.readOnly === true) continue;
     const problem = fieldProblem(field, values[field.id]);
     if (problem) errors[field.id] = problem;
   }

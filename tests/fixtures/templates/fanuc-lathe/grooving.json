@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "fanuc-lathe",
+  "profile": "fanuc-lathe",
+  "template": "grooving",
+  "values": {},
+  "env": {
+    "prevBlockNumber": 100,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "N110 G0 X42. Z-20.\nN120 G75 R0.5\nN130 G75 X30. Z-30. P2000 Q2500 F0.05"
+}

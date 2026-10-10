@@ -1,0 +1,20 @@
+{
+  "$format": 1,
+  "codes": "heidenhain",
+  "profile": "heidenhain-klartext",
+  "template": "tool-call",
+  "values": {
+    "name": "D10 END MILL"
+  },
+  "env": {
+    "prevBlockNumber": 4,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "5 TOOL CALL 1 Z S3200 ;D10 END MILL\n6 L Z+100 R0 FMAX M13"
+}

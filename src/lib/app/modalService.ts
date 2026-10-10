@@ -5,7 +5,7 @@
 //   1. one `ModalIndex` (`core/nc/modal.ts`) per open document, built with the document's
 //      effective compiled profile and database (`machines.effective(docId)`, AD-31);
 //   2. an edit calls `applyChange(firstChangedLine, …)` at once (it only drops snapshots),
-//      and the rest is rebuilt by `buildSome(16)` from `requestIdleCallback` (a `setTimeout`
+//      and the rest is rebuilt by `buildSome(8)` from `requestIdleCallback` (a `setTimeout`
 //      where there is none, which is the shipped macOS webview), one document per idle
 //      callback, the active one first;
 //   3. a change of the effective key (`machines.revision`, `profiles.revision`, a dialect
@@ -43,8 +43,8 @@ import type { ModalState } from '$lib/core/nc/types';
 import type { CompiledProfile } from '$lib/core/profiles/types';
 import type { Disposable, DocId, DocumentStore, EditorService, ModalService } from '$lib/app/types';
 
-/** The most one idle callback spends on building (AD-33, X17: "idle chunks of ≤ 16 ms"). */
-export const IDLE_BUDGET_MS = 16;
+/** The most one idle callback spends on building (AD-33, X17: "idle chunks of ≤ 8 ms"). */
+export const IDLE_BUDGET_MS = 8;
 /** How long after the last edit the document's effective key is read again. */
 export const KEY_CHECK_DELAY_MS = 300;
 

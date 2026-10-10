@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "sinumerik",
+  "profile": "sinumerik-mill",
+  "template": "peck-drill",
+  "values": {},
+  "env": {
+    "prevBlockNumber": 100,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "N110 F150\nN120 MCALL CYCLE83(50,0,2,-25,,-5,,3,0,0,1,0)\nN130 X20 Y20\nN140 MCALL"
+}

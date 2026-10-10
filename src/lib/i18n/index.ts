@@ -75,7 +75,8 @@ const warned = new Set<string>();
 const en = createTranslator(namespaces, 'en', {
   onMissing(key) {
     // Dynamic keys (command and panel titles) are not covered by keys.test.ts, so dev builds say so once.
-    if (import.meta.env.DEV && !warned.has(key)) {
+    // A text with a blank in it is data shown as it is (a template's label as a command title), not a key.
+    if (import.meta.env.DEV && !/\s/.test(key) && !warned.has(key)) {
       warned.add(key);
       console.warn(`i18n: no message for "${key}"`);
     }

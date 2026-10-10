@@ -51,6 +51,9 @@ const M13_SERVICES = ['userConfig'] as const;
 /** What the Phase 3 prelude (P3a) adds (Phase 3 plan §6.2). The singleton is a stub on `p3/base`; the key is not. */
 const P3A_SERVICES = ['modal'] as const;
 
+/** What the P3b prelude adds (Phase 3 plan §6.11). The singleton is a stub on `p3b/base`; the key is not. */
+const P3B_SERVICES = ['templates'] as const;
+
 const SERVICES = [
   ...M1_SERVICES,
   ...M2_SERVICES,
@@ -62,10 +65,11 @@ const SERVICES = [
   ...M12_SERVICES,
   ...M13_SERVICES,
   ...P3A_SERVICES,
+  ...P3B_SERVICES,
 ];
 
 describe('app context', () => {
-  it('exposes every M1 to M7, M12, M13 and P3a service', () => {
+  it('exposes every M1 to M7, M12, M13, P3a and P3b service', () => {
     expect(Object.keys(ctx).sort()).toEqual([...SERVICES].sort());
   });
 

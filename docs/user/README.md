@@ -17,6 +17,7 @@ the machine, not for the person who builds the editor — the build and design n
 | [Machines](machines.md) | Machine configurations: what `X50` is worth on **your** control, how to tell gEdit, and how to move your machines to another computer |
 | [Your own profiles and code files](profiles.md) | Profiles for one shop, machine or folder, and your own G and M codes in the help; the Profiles page; when a profile of yours is used |
 | [Understanding a block](inspector.md) | The code inspector (what each word means on your machine and what is in force at the cursor, and changing a value from it), the hover with a cycle's parameters, and the motion colours |
+| [Writing with templates](templates.md) | The Insert tab: program starts, tool changes and cycles from a form, templates in completion, Edit Cycle, formulas, favourites, the template manager, New Template from Selection, and where your templates are kept |
 | [Transformations](transformations.md) | The NC tab: renumbering, removing block numbers, the five cleanups, block skip and selecting a tool's lines |
 | [Channels](channels.md) | Twin-turret and multi-path programs: finding the channels, the wait codes, and checking that the waits fit |
 | [Scripts](scripts.md) | Running Python scripts, the six that ship (feeds, speeds, tool list, program checks, extents, address arithmetic), and how to write one |
@@ -36,8 +37,8 @@ Across the top is the **ribbon**, with five tabs:
 
 | Tab | What it holds |
 |---|---|
-| **Home** | New, Open, Save, Save As, Save All, Close · the recent-files list · **Program Header** (Fanuc mill and Klartext only) · undo, redo, find, replace, **Find All…**, **Replace All…**, **Find Whole Address…** ([Searching](#searching)), comment, duplicate, move, delete line, select all, upper and lower case (plain text commands; on a program use **Convert Case…** on the NC tab) · **Typing**: **Upper-Case Typing** switches [upper case while you type](#typing-forced-upper-case-and-no-accidental-joins) off or on for this session |
-| **Insert** | The ready-made blocks of the active dialect — Fanuc mill and Klartext only in this version; on a Fanuc lathe, Okuma or Sinumerik program the tab shows no blocks |
+| **Home** | New, Open, Save, Save As, Save All, Close · the recent-files list · **Program start** (the first lines of a program, in the dialect's own style; see [Writing with templates](templates.md)) · undo, redo, find, replace, **Find All…**, **Replace All…**, **Find Whole Address…** ([Searching](#searching)), comment, duplicate, move, delete line, select all, upper and lower case (plain text commands; on a program use **Convert Case…** on the NC tab) · **Typing**: **Upper-Case Typing** switches [upper case while you type](#typing-forced-upper-case-and-no-accidental-joins) off or on for this session |
+| **Insert** | The **templates** of the active program — program start and end, tool change, drilling, tapping, turning and threading cycles, for all six dialects — as buttons and lists, **Favorites** first; **Edit Cycle…** for the cycle at the cursor; **Manage Templates…** and **New Template from Selection…** for your own. See [Writing with templates](templates.md) |
 | **NC** | Renumbering, removing block numbers, the cleanups, block skip and selecting a tool segment — see [Transformations](transformations.md) |
 | **Tools** | Compare ([Comparing two programs](#comparing-two-programs)), the scripts — see [Scripts](scripts.md) — and **Test Profile on Document** for [profiles of your own](profiles.md#testing-a-profile-on-a-program) |
 | **View** | The command palette, the panels (Program Map, Code Inspector, Results, Script Output), the motion-colour switch, folding, display switches, zoom, theme, settings, the shortcut list and About |
@@ -411,8 +412,8 @@ keyboard shortcut for it: an accidental one would look like a broken keyboard. W
 tab is locked, Save goes to Save As as well. The lock lasts as long as the tab: reopen the
 file or restart gEdit and it opens unlocked.
 
-**Both locks cover everything that would change the text.** Typing, pasting, a code
-block from the Insert tab, every command on the NC tab, a script whose result replaces the
+**Both locks cover everything that would change the text.** Typing, pasting, a
+template or Edit Cycle from the Insert tab, every command on the NC tab, a script whose result replaces the
 text, a change of line endings in the status bar and the revert arrows in a comparison are
 all refused, and the status bar says which lock stopped them and how to lift it. A
 transformation or a script is refused before it runs, so nothing is computed and thrown
@@ -456,6 +457,8 @@ is that program.
 | A line, or a block number | `Ctrl+G`, then `120` for the line or `N120` for the block |
 | The next or previous tool change | `F7` / `Shift+F7`, wrapping around with a message |
 | The structure of the program | The Program Map panel |
+| A program start, a tool change or a cycle written for you | The Insert tab, or a word typed on an empty line — see [Writing with templates](templates.md) |
+| Change one value of a cycle in a form | **Edit Cycle…** on the Insert tab — see [Edit Cycle](templates.md#edit-cycle) |
 | What each word of this block means, and what is in force here | The inspector (`Cmd/Ctrl+Alt+A`) — see [Understanding a block](inspector.md) |
 | Which lines are rapids, straight moves, arcs, threads or cycles | The coloured mark beside the line numbers — see [Motion colours](inspector.md#motion-colours) |
 | A place you keep coming back to | A bookmark: `Cmd/Ctrl+F2` to set or clear it, `F2` and `Shift+F2` to step through them |
@@ -593,7 +596,8 @@ machine it shows what the number is worth on the machine chosen for the document
 chosen, every reading. See [The hover in context](inspector.md#the-hover-in-context).
 
 Typing offers completions from the same database: the codes of the active dialect with
-their descriptions. Both are switched in `Settings ▸ Assistance`, and completion can be
+their descriptions, and, on a line with nothing before the word, the
+[templates](templates.md#templates-in-completion) of the program. Both are switched in `Settings ▸ Assistance`, and completion can be
 set to appear automatically, only when you ask for it, or not at all.
 
 The descriptions are written by the project, in its own words, for the subset of code that
@@ -940,7 +944,7 @@ Being clear about this saves disappointment on the shop floor.
 | Machine configurations | `<config>/machines.json` |
 | Your own scripts | `<config>/scripts/` |
 | Your own profiles | `<config>/profiles/` |
-| Your own code files | `<config>/codes/` |
+| Your own code files, with your own templates | `<config>/codes/` |
 | Recent files, panel sizes, remembered form values, the last script you ran, the last session, and your place in each file | `<data>/state.json` |
 | Window size and position | `<config>/.window-state.json` |
 | The copies made before a save | `<data>/backups/` |

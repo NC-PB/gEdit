@@ -1,0 +1,20 @@
+{
+  "$format": 1,
+  "codes": "okuma",
+  "profile": "okuma-osp",
+  "template": "program-start",
+  "values": {
+    "file": "PART1"
+  },
+  "env": {
+    "prevBlockNumber": null,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "$PART1.MIN%\nO1001\n(NEW PROGRAM)\nN10 G50 S2500"
+}

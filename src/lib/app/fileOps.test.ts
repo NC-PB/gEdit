@@ -145,6 +145,7 @@ function createFakeEditor(docs: DocumentStore): FakeEditor {
       change(id, textLF);
     },
     insertText: never,
+    insertSnippet: never,
     focus() {
       editor.focusCount++;
     },
@@ -523,6 +524,13 @@ describe('open', () => {
     expect(h.docs.all().map((d) => d.title)).toEqual(['a.nc', 'b.h', 'c.nc']);
     expect(h.docs.getActiveId()).toBe(ids[2]);
     expect(h.editor.focusCount).toBeGreaterThan(0);
+  });
+
+  it('keeps the untouched scratch buffer for a caller that works on the file behind the scenes (keepScratch, CODE-07)', async () => {
+    const scratch = h.files.newUntitled({ text: '% \nO1000\n%' });
+    const [opened] = await h.files.open([h.put('/nc/a.nc', 'nc/fanuc/f01-mill-3tools.nc')], { keepScratch: true });
+    expect(h.docs.all().map((d) => d.id)).toEqual([scratch, opened]);
+    expect(h.docs.get(scratch)?.path).toBeNull();
   });
 
   it('keeps an edited scratch buffer', async () => {

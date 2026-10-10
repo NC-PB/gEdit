@@ -352,6 +352,15 @@ code file of its own that `extends` the database, named by a profile of yours; i
 reaches a database that a profile of another machine type reads, gEdit says so in a note.
 A profile's `codes` has to name a database that exists, or the profile is reported.
 
+### Templates in a code file
+
+A code file can also hold a `templates` list: the program starts, tool changes and cycles of the
+Insert tab. They follow the same rules as the codes: a file named after a built-in set adds
+to that set's templates (an id of yours that matches a built-in one replaces it whole), and a
+set of your own starts from the templates of the set it `extends`. You do not have to write
+the list by hand: the template manager makes and saves it. See
+[Writing with templates](templates.md#where-your-templates-are-kept).
+
 ## Testing a profile on a program
 
 Open a program, then **Test on document** on the Profiles page, or **Test Profile on

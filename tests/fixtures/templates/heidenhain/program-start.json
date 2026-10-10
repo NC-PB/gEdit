@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "heidenhain",
+  "profile": "heidenhain-klartext",
+  "template": "program-start",
+  "values": {},
+  "env": {
+    "prevBlockNumber": null,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "0 BEGIN PGM NEW MM\n1 BLK FORM 0.1 Z X-50 Y-40 Z-20\n2 BLK FORM 0.2 X+50 Y+40 Z0"
+}

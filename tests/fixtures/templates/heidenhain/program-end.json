@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "heidenhain",
+  "profile": "heidenhain-klartext",
+  "template": "program-end",
+  "values": {},
+  "env": {
+    "prevBlockNumber": 40,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "41 L Z+100 R0 FMAX M9\n42 M30\n43 END PGM NEW MM"
+}

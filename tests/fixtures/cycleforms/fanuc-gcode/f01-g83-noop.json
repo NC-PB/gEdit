@@ -1,0 +1,22 @@
+{
+  "$format": 1,
+  "about": "Confirming the form as it was read gives the block back byte for byte: no edit.",
+  "input": "../../nc/fanuc/f01-mill-3tools.nc",
+  "line": 39,
+  "values": {
+    "X": "20.",
+    "Y": "60.",
+    "Z": "-18.",
+    "R": "3.",
+    "Q": "4.",
+    "F": "240.",
+    "K": ""
+  },
+  "expected": {
+    "first": 39,
+    "last": 39,
+    "lines": [
+      "G98 G83 X20. Y60. Z-18. R3. Q4. F240."
+    ]
+  }
+}

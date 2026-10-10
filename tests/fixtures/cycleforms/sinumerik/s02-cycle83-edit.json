@@ -1,0 +1,42 @@
+{
+  "$format": 1,
+  "about": "CYCLE83 of s02 line 12 by position: DP (4th) changed, _VRT (15th) set beyond the twelve written arguments, the list extended with empty ones.",
+  "input": "../../nc/sinumerik/s02-drill.MPF",
+  "line": 12,
+  "form": {
+    "values": {
+      "RTP": "5",
+      "RFP": "0",
+      "SDIS": "2",
+      "DP": "-30",
+      "DPR": "",
+      "FDEP": "-8",
+      "FDPR": "",
+      "_DAM": "2",
+      "DTB": "0",
+      "DTS": "0.5",
+      "FRF": "1",
+      "VARI": "0",
+      "_AXN": "",
+      "_MDEP": "",
+      "_VRT": "",
+      "_DTD": "",
+      "_DIS1": "",
+      "_GMODE": "",
+      "_DMODE": "",
+      "_AMODE": ""
+    },
+    "kept": []
+  },
+  "values": {
+    "DP": "-32",
+    "_VRT": "0.5"
+  },
+  "expected": {
+    "first": 12,
+    "last": 12,
+    "lines": [
+      "N80 CYCLE83(5,0,2,-32,,-8,,2,0,0.5,1,0,,,0.5)"
+    ]
+  }
+}

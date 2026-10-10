@@ -13,7 +13,7 @@
       "label": "C axis"
     },
     "D": {
-      "description": "Not used for turning on the source controls: the nose radius and the tip direction come from the tool offset the T word selects. Magazine-type machines may use it as an offset register.",
+      "description": "Usually not used for turning: the nose radius and the tip direction come from the tool offset the T word selects. Magazine-type machines may use it as an offset register.",
       "label": "D address"
     },
     "E": {
@@ -61,7 +61,7 @@
       "label": "Program number"
     },
     "P": {
-      "description": "First profile block with G70 to G73, a dwell in milliseconds with G4, a step in microns with G74 and G75, the packed thread data of G76, or the program number with M98.",
+      "description": "First profile block with G70 to G73, a dwell in least time increments with G4 (1 ms on IS-B), a step in least increments with G74 and G75, the packed thread data of G76, or the program number with M98.",
       "label": "Block reference, dwell, step or program number"
     },
     "Q": {
@@ -169,7 +169,7 @@
         },
         {
           "address": "P",
-          "label": "Dwell time in milliseconds",
+          "label": "Dwell time (least time increments: 1 ms on IS-B)",
           "min": 0,
           "unit": "count"
         }
@@ -941,6 +941,7 @@
     },
     {
       "axisWords": "data",
+      "blocks": 2,
       "code": "G73",
       "description": "Walks the profile again and again, each time a little closer to the finished shape. It suits a blank that is already near the final form, such as a casting or a forging. Two blocks: the stock to remove and the number of passes first, then the profile range and the allowances.",
       "group": "cycle",
@@ -983,6 +984,7 @@
       }
     },
     {
+      "blocks": 2,
       "code": "G74",
       "description": "Drills or grooves into the face in pecks, pulling back by R between them so the chips clear. Written in two blocks: the retract first, then the end point and the steps. On a lathe it is not a tapping cycle, so F is an ordinary feed — but the same number is the left-hand tapping cycle on a mill, where F is the pitch. gEdit scales neither the F of such a block nor the spindle speed it runs at: refusing a real pecking feed costs one edit by hand, scaling a pitch or the speed of a tap cuts a different thread.",
       "group": "cycle",
@@ -1002,13 +1004,13 @@
         },
         {
           "address": "P",
-          "label": "Step on X between the grooves, in microns on the source controls",
+          "label": "Step on X between the grooves, in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
           "unit": "increment"
         },
         {
           "address": "Q",
-          "label": "Peck along Z, in microns on the source controls",
+          "label": "Peck along Z, in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
           "unit": "increment"
         },
@@ -1025,6 +1027,7 @@
       "tappingElsewhere": true
     },
     {
+      "blocks": 2,
       "code": "G76",
       "description": "Cuts a thread in several passes, taking less material each time. Written in two blocks: the finishing passes, the pull-out chamfer and the insert angle packed into P, the smallest cut depth and the finish allowance first; then the thread end, the taper, the thread height, the first cut depth and the lead. F is the thread lead per revolution, not a feed rate. P means two different things in the two blocks and one entry cannot tell them apart, so gEdit counts it rather than measuring it: the packed six digits of the first block are never converted, and the thread height of the second is shown as written.",
       "group": "cycle",
@@ -1038,7 +1041,7 @@
         },
         {
           "address": "Q",
-          "label": "Smallest cut depth in the first block, first cut depth in the second, both in microns on the source controls",
+          "label": "Smallest cut depth in the first block, first cut depth in the second, both in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
           "unit": "increment"
         },
@@ -1096,13 +1099,13 @@
         },
         {
           "address": "Q",
-          "label": "Peck depth, in microns on the source controls",
+          "label": "Peck depth in least increments, without a point (µm on a metric IS-B machine)",
           "min": 0,
           "unit": "increment"
         },
         {
           "address": "P",
-          "label": "Dwell at the bottom in milliseconds",
+          "label": "Dwell at the bottom (least time increments: 1 ms on IS-B)",
           "min": 0,
           "unit": "count"
         },
@@ -1141,7 +1144,7 @@
         },
         {
           "address": "P",
-          "label": "Dwell at the bottom in milliseconds",
+          "label": "Dwell at the bottom (least time increments: 1 ms on IS-B)",
           "min": 0,
           "unit": "count"
         },
@@ -1195,7 +1198,7 @@
         },
         {
           "address": "P",
-          "label": "Dwell at the bottom in milliseconds",
+          "label": "Dwell at the bottom (least time increments: 1 ms on IS-B)",
           "min": 0,
           "unit": "count"
         },
@@ -1235,13 +1238,13 @@
         },
         {
           "address": "Q",
-          "label": "Peck depth, in microns on the source controls",
+          "label": "Peck depth in least increments, without a point (µm on a metric IS-B machine)",
           "min": 0,
           "unit": "increment"
         },
         {
           "address": "P",
-          "label": "Dwell at the bottom in milliseconds",
+          "label": "Dwell at the bottom (least time increments: 1 ms on IS-B)",
           "min": 0,
           "unit": "count"
         },
@@ -1280,7 +1283,7 @@
         },
         {
           "address": "P",
-          "label": "Dwell at the bottom in milliseconds",
+          "label": "Dwell at the bottom (least time increments: 1 ms on IS-B)",
           "min": 0,
           "unit": "count"
         },
@@ -1322,7 +1325,7 @@
         },
         {
           "address": "P",
-          "label": "Dwell at the bottom in milliseconds",
+          "label": "Dwell at the bottom (least time increments: 1 ms on IS-B)",
           "min": 0,
           "unit": "count"
         },
@@ -1865,6 +1868,7 @@
     },
     {
       "axisWords": "data",
+      "blocks": 2,
       "code": "G71",
       "description": "Roughs an outside or inside contour in passes along Z and leaves an allowance for the finishing cycle. It is written in two blocks: depth of cut and retract first, then the profile range and the allowances.",
       "group": "cycle",
@@ -1906,6 +1910,7 @@
     },
     {
       "axisWords": "data",
+      "blocks": 2,
       "code": "G72",
       "description": "The same as G71, but the passes run along X, so it roughs a face instead of a diameter. The depth of cut in the first block is a W value.",
       "group": "cycle",
@@ -1946,6 +1951,7 @@
       }
     },
     {
+      "blocks": 2,
       "code": "G75",
       "description": "The same as G74 turned through ninety degrees: it pecks into a diameter and steps along Z, which is how a wide groove is cut with a narrow insert.",
       "group": "cycle",
@@ -1965,13 +1971,13 @@
         },
         {
           "address": "P",
-          "label": "Peck on X, in microns on the source controls",
+          "label": "Peck on X, in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
           "unit": "increment"
         },
         {
           "address": "Q",
-          "label": "Step along Z between the grooves, in microns on the source controls",
+          "label": "Step along Z between the grooves, in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
           "unit": "increment"
         },
@@ -2099,5 +2105,1430 @@
     }
   ],
   "dialect": "fanuc-lathe-b",
+  "templates": [
+    {
+      "body": "%\nO{{prog}} {{title}}\n{{N}}{{units}} G40 G95\n{{N}}G91 G28 X0. Z0.\n{{N}}G90",
+      "description": "G-code system B: tape mark, program number, a safe-start line (units, no nose radius compensation, feed per revolution with G95), both axes to the reference point and back to absolute positions (G90).",
+      "group": "Program",
+      "id": "program-start",
+      "label": "Program start",
+      "machineType": "lathe",
+      "params": [
+        {
+          "default": 1000,
+          "digits": 4,
+          "help": "The number after O, written with at least four digits. O0 is not allowed.",
+          "id": "prog",
+          "label": "Program number",
+          "max": 99999999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "comment": true,
+          "default": "NEW PROGRAM",
+          "id": "title",
+          "label": "Program name",
+          "type": "text"
+        },
+        {
+          "choices": [
+            {
+              "label": "Millimetres (G21)",
+              "value": "G21"
+            },
+            {
+              "label": "Inches (G20)",
+              "value": "G20"
+            }
+          ],
+          "default": "G21",
+          "id": "units",
+          "label": "Units",
+          "required": true,
+          "type": "choice"
+        }
+      ],
+      "review": "pending",
+      "toolbar": true
+    },
+    {
+      "body": "{{N}}T{{t}} M6 {{name}}\n{{N}}G0 G90 {{x}} {{y}} S{{s}} {{dir}}\n{{N}}G43 Z{{z}} H{{h}} {{coolant}}",
+      "description": "Changes to the tool with M6, starts the spindle at the start position and comes down to the approach height with the tool length offset (G43 H).",
+      "group": "Tool change",
+      "id": "tool-change",
+      "label": "Tool change",
+      "machineType": "mill",
+      "params": [
+        {
+          "default": 1,
+          "id": "t",
+          "label": "Tool number",
+          "max": 99999999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "comment": true,
+          "default": "D10 END MILL",
+          "id": "name",
+          "label": "Tool description",
+          "type": "text"
+        },
+        {
+          "decimals": "min1",
+          "default": "0",
+          "id": "x",
+          "label": "Start position X",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "X",
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "0",
+          "id": "y",
+          "label": "Start position Y",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "Y",
+          "type": "number"
+        },
+        {
+          "default": 3000,
+          "id": "s",
+          "label": "Spindle speed (rpm)",
+          "max": 99999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "choices": [
+            {
+              "label": "Clockwise (M3)",
+              "value": "M3"
+            },
+            {
+              "label": "Counter-clockwise (M4)",
+              "value": "M4"
+            }
+          ],
+          "default": "M3",
+          "id": "dir",
+          "label": "Spindle direction",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "min1",
+          "default": "25",
+          "help": "The first Z move, made with the tool length offset.",
+          "id": "z",
+          "label": "Approach height (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "default": 1,
+          "digits": 2,
+          "help": "Usually the same number as the tool.",
+          "id": "h",
+          "label": "Length offset number (H)",
+          "max": 999,
+          "min": 0,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "choices": [
+            {
+              "label": "Coolant on (M8)",
+              "value": "M8"
+            },
+            {
+              "label": "Mist coolant on (M7)",
+              "value": "M7"
+            },
+            {
+              "label": "No coolant",
+              "value": ""
+            }
+          ],
+          "default": "M8",
+          "id": "coolant",
+          "label": "Coolant",
+          "type": "choice"
+        }
+      ],
+      "review": "pending",
+      "toolbar": true
+    },
+    {
+      "body": "{{N}}{{ret}} G81 {{x}} {{y}} Z{{z}} R{{r}} F{{f}}\n{{N}}G80",
+      "description": "Feeds to the hole bottom and pulls out at rapid. Add more hole positions between the cycle block and G80; each one drills another hole.",
+      "group": "Drilling",
+      "id": "drill",
+      "label": "Drilling (G81)",
+      "machineType": "mill",
+      "params": [
+        {
+          "choices": [
+            {
+              "label": "Back to the start level (G98)",
+              "value": "G98"
+            },
+            {
+              "label": "Back to the R level (G99)",
+              "value": "G99"
+            }
+          ],
+          "default": "G98",
+          "help": "G98 clears clamps between the holes, G99 is faster.",
+          "id": "ret",
+          "label": "Return after each hole",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "min1",
+          "default": "10",
+          "help": "Leave empty to drill where the tool stands.",
+          "id": "x",
+          "label": "Hole position X",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "X",
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "10",
+          "id": "y",
+          "label": "Hole position Y",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "Y",
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "-18",
+          "id": "z",
+          "label": "Hole bottom (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "2",
+          "help": "Where the feed starts; the tool comes down to it at rapid.",
+          "id": "r",
+          "label": "R level (Z, absolute)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "150",
+          "id": "f",
+          "label": "Feed (mm/min)",
+          "max": 99999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending",
+      "toolbar": true
+    },
+    {
+      "body": "{{N}}{{ret}} G82 {{x}} {{y}} Z{{z}} R{{r}} {{p}} F{{f}}\n{{N}}G80",
+      "description": "Like G81, with a dwell at the hole bottom for a clean flat bottom or a counterbore. P is in least time increments: 1 ms on an IS-B control.",
+      "group": "Drilling",
+      "id": "drill-dwell",
+      "label": "Drilling with dwell (G82)",
+      "machineType": "mill",
+      "params": [
+        {
+          "choices": [
+            {
+              "label": "Back to the start level (G98)",
+              "value": "G98"
+            },
+            {
+              "label": "Back to the R level (G99)",
+              "value": "G99"
+            }
+          ],
+          "default": "G98",
+          "help": "G98 clears clamps between the holes, G99 is faster.",
+          "id": "ret",
+          "label": "Return after each hole",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "min1",
+          "default": "10",
+          "help": "Leave empty to drill where the tool stands.",
+          "id": "x",
+          "label": "Hole position X",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "X",
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "10",
+          "id": "y",
+          "label": "Hole position Y",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "Y",
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "-18",
+          "id": "z",
+          "label": "Hole bottom (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "2",
+          "help": "Where the feed starts; the tool comes down to it at rapid.",
+          "id": "r",
+          "label": "R level (Z, absolute)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "default": 300,
+          "id": "p",
+          "label": "Dwell at the bottom (least time increments: 1 ms on IS-B)",
+          "max": 99999999,
+          "min": 0,
+          "prefix": "P",
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "decimals": "min1",
+          "default": "150",
+          "id": "f",
+          "label": "Feed (mm/min)",
+          "max": 99999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}{{ret}} G83 {{x}} {{y}} Z{{z}} R{{r}} {{q}} F{{f}}\n{{N}}G80",
+      "description": "Drills in pecks and pulls out to the R level after each one, so the chips leave the hole.",
+      "group": "Drilling",
+      "id": "peck-drill",
+      "label": "Peck drilling (G83)",
+      "machineType": "mill",
+      "params": [
+        {
+          "choices": [
+            {
+              "label": "Back to the start level (G98)",
+              "value": "G98"
+            },
+            {
+              "label": "Back to the R level (G99)",
+              "value": "G99"
+            }
+          ],
+          "default": "G98",
+          "help": "G98 clears clamps between the holes, G99 is faster.",
+          "id": "ret",
+          "label": "Return after each hole",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "min1",
+          "default": "10",
+          "help": "Leave empty to drill where the tool stands.",
+          "id": "x",
+          "label": "Hole position X",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "X",
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "10",
+          "id": "y",
+          "label": "Hole position Y",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "Y",
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "-18",
+          "id": "z",
+          "label": "Hole bottom (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "2",
+          "help": "Where the feed starts; the tool comes down to it at rapid.",
+          "id": "r",
+          "label": "R level (Z, absolute)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "3",
+          "help": "Each peck goes this deep, then the drill pulls out to the R level.",
+          "id": "q",
+          "label": "Peck depth",
+          "max": 99999.999,
+          "min": 0,
+          "prefix": "Q",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "150",
+          "id": "f",
+          "label": "Feed (mm/min)",
+          "max": 99999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}{{ret}} G73 {{x}} {{y}} Z{{z}} R{{r}} {{q}} F{{f}}\n{{N}}G80",
+      "description": "Drills in pecks and backs off a short way between them to break the chip.",
+      "group": "Drilling",
+      "id": "chip-break-drill",
+      "label": "Chip-breaking drilling (G73)",
+      "machineType": "mill",
+      "params": [
+        {
+          "choices": [
+            {
+              "label": "Back to the start level (G98)",
+              "value": "G98"
+            },
+            {
+              "label": "Back to the R level (G99)",
+              "value": "G99"
+            }
+          ],
+          "default": "G98",
+          "help": "G98 clears clamps between the holes, G99 is faster.",
+          "id": "ret",
+          "label": "Return after each hole",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "min1",
+          "default": "10",
+          "help": "Leave empty to drill where the tool stands.",
+          "id": "x",
+          "label": "Hole position X",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "X",
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "10",
+          "id": "y",
+          "label": "Hole position Y",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "Y",
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "-18",
+          "id": "z",
+          "label": "Hole bottom (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "2",
+          "help": "Where the feed starts; the tool comes down to it at rapid.",
+          "id": "r",
+          "label": "R level (Z, absolute)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "3",
+          "help": "Each peck goes this deep; the drill backs off only a little to break the chip.",
+          "id": "q",
+          "label": "Peck depth",
+          "max": 99999.999,
+          "min": 0,
+          "prefix": "Q",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "150",
+          "id": "f",
+          "label": "Feed (mm/min)",
+          "max": 99999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}M29 S{{s}}\n{{N}}{{ret}} G84 {{x}} {{y}} Z{{z}} R{{r}} F{{f}}\n{{N}}G80",
+      "description": "Switches rigid tapping on with M29 and the speed, then taps. F has to be the pitch times the speed, so the template computes it. Feed per minute: G94 must be in force here (Program start writes it). Which M code switches rigid tapping on is a machine setting; M29 is the usual one.",
+      "group": "Tapping",
+      "id": "tapping",
+      "label": "Rigid tapping (G84)",
+      "machineType": "mill",
+      "params": [
+        {
+          "default": 1000,
+          "id": "s",
+          "label": "Spindle speed (rpm)",
+          "max": 99999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "1",
+          "help": "Used for the feed only; it is not written into the program.",
+          "id": "pitch",
+          "label": "Thread pitch (program units)",
+          "max": 99,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "Back to the start level (G98)",
+              "value": "G98"
+            },
+            {
+              "label": "Back to the R level (G99)",
+              "value": "G99"
+            }
+          ],
+          "default": "G98",
+          "id": "ret",
+          "label": "Return after each hole",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "min1",
+          "default": "10",
+          "id": "x",
+          "label": "Hole position X",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "X",
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "10",
+          "id": "y",
+          "label": "Hole position Y",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "Y",
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "-15",
+          "id": "z",
+          "label": "Hole bottom (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "5",
+          "id": "r",
+          "label": "R level (Z, absolute)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "formula": "pitch * s",
+          "help": "Feed per minute (G94): the pitch times the spindle speed. Under G95 the feed would be the pitch itself.",
+          "id": "f",
+          "label": "Feed (pitch × speed, per minute)",
+          "type": "formula"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}{{ret}} G85 {{x}} {{y}} Z{{z}} R{{r}} F{{f}}\n{{N}}G80",
+      "description": "Feeds to the hole bottom and feeds back out, which leaves a cleaner wall than a rapid retract.",
+      "group": "Drilling",
+      "id": "boring",
+      "label": "Boring (G85)",
+      "machineType": "mill",
+      "params": [
+        {
+          "choices": [
+            {
+              "label": "Back to the start level (G98)",
+              "value": "G98"
+            },
+            {
+              "label": "Back to the R level (G99)",
+              "value": "G99"
+            }
+          ],
+          "default": "G98",
+          "help": "G98 clears clamps between the holes, G99 is faster.",
+          "id": "ret",
+          "label": "Return after each hole",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "min1",
+          "default": "10",
+          "help": "Leave empty to drill where the tool stands.",
+          "id": "x",
+          "label": "Hole position X",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "X",
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "10",
+          "id": "y",
+          "label": "Hole position Y",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "Y",
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "-18",
+          "id": "z",
+          "label": "Hole bottom (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "2",
+          "help": "Where the feed starts; the tool comes down to it at rapid.",
+          "id": "r",
+          "label": "R level (Z, absolute)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "100",
+          "id": "f",
+          "label": "Feed (mm/min)",
+          "max": 99999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}G0 X{{x}} Z{{z}} T{{t}}00\n{{N}}M9\n{{N}}{{stop}}",
+      "description": "Back to the tool change position at rapid with the offset cancelled (station and 00), coolant off and an optional stop.",
+      "group": "Tool change",
+      "id": "tool-end",
+      "label": "Tool end",
+      "machineType": "lathe",
+      "params": [
+        {
+          "decimals": "min1",
+          "default": "100",
+          "id": "x",
+          "label": "Tool change position X (diameter)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "100",
+          "id": "z",
+          "label": "Tool change position Z",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "default": 1,
+          "digits": 2,
+          "id": "t",
+          "label": "Turret station",
+          "max": 99,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "choices": [
+            {
+              "label": "Optional stop (M1)",
+              "value": "M1"
+            },
+            {
+              "label": "Program stop (M0)",
+              "value": "M0"
+            },
+            {
+              "label": "No stop",
+              "value": ""
+            }
+          ],
+          "default": "M1",
+          "id": "stop",
+          "label": "Stop after the tool",
+          "type": "choice"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}M5\n{{N}}{{end}}\n%",
+      "description": "Spindle off, end of program and the closing tape mark.",
+      "group": "Program",
+      "id": "program-end",
+      "label": "Program end",
+      "machineType": "lathe",
+      "params": [
+        {
+          "choices": [
+            {
+              "label": "End and rewind (M30)",
+              "value": "M30"
+            },
+            {
+              "label": "End (M2)",
+              "value": "M2"
+            }
+          ],
+          "default": "M30",
+          "id": "end",
+          "label": "End of program",
+          "required": true,
+          "type": "choice"
+        }
+      ],
+      "review": "pending",
+      "toolbar": true
+    },
+    {
+      "body": "{{N}}G92 S{{smax}}\n{{N}}T{{t}}{{o}} {{name}}\n{{N}}G96 S{{vc}} {{dir}}\n{{N}}G0 X{{x}} Z{{z}} {{coolant}}",
+      "description": "G-code system B: the speed limit (G92 S), the turret station with its offset and a comment, constant cutting speed with the spindle direction, the approach and coolant.",
+      "group": "Tool change",
+      "id": "tool-start",
+      "label": "Tool start",
+      "machineType": "lathe",
+      "params": [
+        {
+          "default": 2500,
+          "help": "The speed limit for constant cutting speed; the spindle never turns faster.",
+          "id": "smax",
+          "label": "Highest spindle speed (rpm)",
+          "max": 99999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "default": 1,
+          "digits": 2,
+          "id": "t",
+          "label": "Turret station",
+          "max": 99,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "default": 1,
+          "digits": 2,
+          "id": "o",
+          "label": "Offset number",
+          "max": 99,
+          "min": 0,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "comment": true,
+          "default": "OD ROUGH",
+          "id": "name",
+          "label": "Tool description",
+          "type": "text"
+        },
+        {
+          "default": 220,
+          "help": "Constant cutting speed: the control changes the spindle speed with the diameter.",
+          "id": "vc",
+          "label": "Cutting speed (m/min)",
+          "max": 9999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "choices": [
+            {
+              "label": "Clockwise (M3)",
+              "value": "M3"
+            },
+            {
+              "label": "Counter-clockwise (M4)",
+              "value": "M4"
+            }
+          ],
+          "default": "M3",
+          "id": "dir",
+          "label": "Spindle direction",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "min1",
+          "default": "34",
+          "id": "x",
+          "label": "Approach diameter (X)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "2",
+          "id": "z",
+          "label": "Approach position (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "Coolant on (M8)",
+              "value": "M8"
+            },
+            {
+              "label": "No coolant",
+              "value": ""
+            }
+          ],
+          "default": "M8",
+          "id": "coolant",
+          "label": "Coolant",
+          "type": "choice"
+        }
+      ],
+      "review": "pending",
+      "toolbar": true
+    },
+    {
+      "body": "{{N}}G0 X{{xs}} Z{{zs}}\n{{N}}G71 U{{doc}} R{{e}}\n{{N}}G71 P{{ns}} Q{{nf}} U{{u}} W{{w}} F{{f}}\nN{{ns}} G0 X{{x_first}}\nN{{nf}} G1 X{{x_last}}\n{{N}}G70 P{{ns}} Q{{nf}}",
+      "description": "Moves to the cycle start point, roughs along Z in two blocks, the contour between the two numbered blocks, and the finishing pass over the same blocks. The start point must lie outside the stock. Write the rest of the contour between them; the finishing pass takes the feed and speed written in the contour.",
+      "group": "Turning",
+      "id": "rough-finish",
+      "label": "Roughing and finishing (G71, G70)",
+      "machineType": "lathe",
+      "params": [
+        {
+          "decimals": "min1",
+          "default": "40",
+          "help": "Outside the stock and above the contour with its allowance; G70 returns here.",
+          "id": "xs",
+          "label": "Cycle start point X (diameter)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "2",
+          "help": "In front of the face, outside the stock.",
+          "id": "zs",
+          "label": "Cycle start point Z",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "1.5",
+          "id": "doc",
+          "label": "Depth of cut per pass (radius)",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "0.5",
+          "id": "e",
+          "label": "Retract between passes",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "default": 100,
+          "help": "P and Q name these blocks, and each number may stand only once in the program. The form offers numbers the program does not use yet.",
+          "id": "ns",
+          "label": "Block number of the first contour block",
+          "max": 99999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "default": 200,
+          "id": "nf",
+          "label": "Block number of the last contour block",
+          "max": 99999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "decimals": "min1",
+          "default": "0.4",
+          "help": "Positive for an outside contour, negative for an inside one.",
+          "id": "u",
+          "label": "Finishing allowance on X (diameter)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "0.1",
+          "id": "w",
+          "label": "Finishing allowance on Z",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "0.25",
+          "id": "f",
+          "label": "Roughing feed (mm/rev)",
+          "max": 99,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "16",
+          "help": "The first contour block has to move in X only, with G0 or G1.",
+          "id": "x_first",
+          "label": "First contour point (X)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "34",
+          "id": "x_last",
+          "label": "Last contour point (X)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending",
+      "toolbar": true
+    },
+    {
+      "body": "{{N}}G97 S{{s}} {{dir}}\n{{N}}G0 X{{xs}} Z{{zs}}\n{{N}}G76 P{{m}}{{r}}{{a}} Q{{dmin}} R{{d}}\n{{N}}G76 X{{x}} Z{{z}} {{i}} P{{k}} Q{{d1}} F{{lead}}",
+      "description": "Multi-pass threading in two blocks: finishing passes, chamfer and insert angle packed into P with the smallest cut and the allowance first; then the thread end, height, first cut and lead. The sample values are the 30i manual's example.",
+      "group": "Threading",
+      "id": "threading",
+      "label": "Threading (G76)",
+      "machineType": "lathe",
+      "params": [
+        {
+          "default": 500,
+          "help": "Threads are cut at a fixed speed (G97).",
+          "id": "s",
+          "label": "Spindle speed (rpm)",
+          "max": 99999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "choices": [
+            {
+              "label": "Clockwise (M3)",
+              "value": "M3"
+            },
+            {
+              "label": "Counter-clockwise (M4)",
+              "value": "M4"
+            }
+          ],
+          "default": "M3",
+          "id": "dir",
+          "label": "Spindle direction",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "min1",
+          "default": "80",
+          "id": "xs",
+          "label": "Start point X (diameter)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "130",
+          "id": "zs",
+          "label": "Start point Z",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "default": 1,
+          "digits": 2,
+          "id": "m",
+          "label": "Finishing passes",
+          "max": 99,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "default": 10,
+          "digits": 2,
+          "help": "00 to 99: 10 is a pull-out of one lead.",
+          "id": "r",
+          "label": "Chamfer at the thread end (tenths of the lead)",
+          "max": 99,
+          "min": 0,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "choices": [
+            {
+              "label": "60°",
+              "value": "60"
+            },
+            {
+              "label": "55°",
+              "value": "55"
+            },
+            {
+              "label": "80°",
+              "value": "80"
+            },
+            {
+              "label": "30°",
+              "value": "30"
+            },
+            {
+              "label": "29°",
+              "value": "29"
+            },
+            {
+              "label": "0°",
+              "value": "00"
+            }
+          ],
+          "default": "60",
+          "id": "a",
+          "label": "Insert angle",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "default": 100,
+          "help": "Written without a point: 100 is 0.1 mm on a machine with 0.001 mm increments.",
+          "id": "dmin",
+          "label": "Smallest depth of cut (least increments)",
+          "max": 99999999,
+          "min": 0,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "decimals": "min1",
+          "default": "0.2",
+          "id": "d",
+          "label": "Finishing allowance",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "60.64",
+          "id": "x",
+          "label": "Thread root diameter (X)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "25",
+          "id": "z",
+          "label": "Thread end (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "help": "Leave empty for a straight thread.",
+          "id": "i",
+          "label": "Taper (radius difference)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "R",
+          "type": "number"
+        },
+        {
+          "default": 3680,
+          "help": "Written without a point, as a radius: 3680 is 3.68 mm on a machine with 0.001 mm increments.",
+          "id": "k",
+          "label": "Thread height (least increments)",
+          "max": 99999999,
+          "min": 0,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "default": 1800,
+          "help": "Written without a point, as a radius.",
+          "id": "d1",
+          "label": "First depth of cut (least increments)",
+          "max": 99999999,
+          "min": 0,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "decimals": "min1",
+          "default": "6",
+          "id": "lead",
+          "label": "Thread lead (mm)",
+          "max": 999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending",
+      "toolbar": true
+    },
+    {
+      "body": "{{N}}G0 X{{xs}} Z{{zs}}\n{{N}}G75 R{{e}}\n{{N}}G75 X{{x}} {{z}} P{{di}} {{dk}} F{{f}}",
+      "description": "Plunges into the diameter in pecks and steps along Z for a wide groove. Two blocks: the retract first, then the groove bottom, the last position and the steps.",
+      "group": "Turning",
+      "id": "grooving",
+      "label": "Grooving (G75)",
+      "machineType": "lathe",
+      "params": [
+        {
+          "decimals": "min1",
+          "default": "42",
+          "id": "xs",
+          "label": "Start point X (diameter)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "-20",
+          "id": "zs",
+          "label": "Start point Z",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "0.5",
+          "id": "e",
+          "label": "Retract after each peck",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "30",
+          "id": "x",
+          "label": "Groove bottom diameter (X)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "-30",
+          "help": "Leave empty, with the step, for a single plunge.",
+          "id": "z",
+          "label": "Last groove position (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "Z",
+          "type": "number"
+        },
+        {
+          "default": 2000,
+          "help": "Written without a point, as a radius: 2000 is 2 mm on a machine with 0.001 mm increments.",
+          "id": "di",
+          "label": "Peck depth on X (least increments)",
+          "max": 99999999,
+          "min": 0,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "default": 2500,
+          "help": "Written without a point; not wider than the insert.",
+          "id": "dk",
+          "label": "Step along Z (least increments)",
+          "max": 99999999,
+          "min": 0,
+          "prefix": "Q",
+          "type": "integer"
+        },
+        {
+          "decimals": "min1",
+          "default": "0.05",
+          "id": "f",
+          "label": "Feed (mm/rev)",
+          "max": 99,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}G97 S{{s}} {{dir}}\n{{N}}G0 X0. Z{{zs}} {{coolant}}\n{{N}}G83 Z{{z}} R{{r}} {{q}} {{p}} F{{f}}\n{{N}}G80",
+      "description": "Drills on centre along Z in pecks of Q and cancels the cycle with G80. With a driven tool the C-axis clamp code of the machine goes into the cycle block as well.",
+      "group": "Drilling",
+      "id": "face-drill",
+      "label": "Drilling on the face (G83)",
+      "machineType": "lathe",
+      "params": [
+        {
+          "default": 1000,
+          "id": "s",
+          "label": "Spindle speed (rpm)",
+          "max": 99999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "choices": [
+            {
+              "label": "Clockwise (M3)",
+              "value": "M3"
+            },
+            {
+              "label": "Counter-clockwise (M4)",
+              "value": "M4"
+            }
+          ],
+          "default": "M3",
+          "id": "dir",
+          "label": "Spindle direction",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "min1",
+          "default": "5",
+          "id": "zs",
+          "label": "Start level (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "Coolant on (M8)",
+              "value": "M8"
+            },
+            {
+              "label": "No coolant",
+              "value": ""
+            }
+          ],
+          "default": "M8",
+          "id": "coolant",
+          "label": "Coolant",
+          "type": "choice"
+        },
+        {
+          "decimals": "min1",
+          "default": "-40",
+          "id": "z",
+          "label": "Hole bottom (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "min1",
+          "default": "-5",
+          "help": "Incremental: negative when the R point is nearer the part than the start level.",
+          "id": "r",
+          "label": "R point, measured from the start level",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "default": 5000,
+          "help": "Written without a point: 5000 is 5 mm on a machine with 0.001 mm increments. Empty: no pecking.",
+          "id": "q",
+          "label": "Peck depth (least increments)",
+          "max": 99999999,
+          "min": 0,
+          "prefix": "Q",
+          "type": "integer"
+        },
+        {
+          "id": "p",
+          "label": "Dwell at the bottom (least time increments: 1 ms on IS-B)",
+          "max": 99999999,
+          "min": 0,
+          "prefix": "P",
+          "type": "integer"
+        },
+        {
+          "decimals": "min1",
+          "default": "0.1",
+          "id": "f",
+          "label": "Feed (mm/rev)",
+          "max": 99999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending"
+    }
+  ],
   "version": 1
 }

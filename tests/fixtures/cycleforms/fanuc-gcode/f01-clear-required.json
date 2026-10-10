@@ -1,0 +1,15 @@
+{
+  "$format": 1,
+  "about": "Clearing a required word (the feed) is refused; nothing is written.",
+  "input": "../../nc/fanuc/f01-mill-3tools.nc",
+  "line": 39,
+  "values": {
+    "F": "",
+    "Q": "5"
+  },
+  "expected": {
+    "errors": {
+      "F": "cycleForm.refused.required"
+    }
+  }
+}

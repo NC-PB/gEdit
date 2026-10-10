@@ -467,7 +467,7 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     return id;
   }
 
-  async function open(paths?: string[]): Promise<DocId[]> {
+  async function open(paths?: string[], opts?: { keepScratch?: boolean }): Promise<DocId[]> {
     if (!haveDisk()) return [];
     let wanted = paths;
     if (!wanted) {
@@ -515,8 +515,9 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
       }
     }
 
-    // Only once something took its place, and never when it is what the user asked for.
-    if (created > 0 && scratch !== null && !opened.includes(scratch)) drop(scratch);
+    // Only once something took its place, and never when it is what the user asked for (or when the
+    // caller opens a file only to work on it behind the scenes: the template manager's Save).
+    if (created > 0 && scratch !== null && !opened.includes(scratch) && opts?.keepScratch !== true) drop(scratch);
 
     if (refusals.length > 0) {
       // One alert for the whole Open, listing every file and why. The programs that did

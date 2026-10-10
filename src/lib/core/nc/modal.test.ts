@@ -633,27 +633,27 @@ describe('ModalIndex', () => {
       return clock++;
     });
     try {
-      expect(index.buildSome(16)).toBe(false);
+      expect(index.buildSome(8)).toBe(false);
     } finally {
       spy.mockRestore();
     }
-    // One read for the deadline, one after each line: sixteen lines in a 16 ms budget.
-    expect(reads).toBe(17);
-    expect(index.stateAfter(16)).not.toBeNull();
+    // One read for the deadline, one after each line: eight lines in an 8 ms budget.
+    expect(reads).toBe(9);
+    expect(index.stateAfter(8)).not.toBeNull();
   });
 
-  it('returns from buildSome(16) within its budget plus one line (wall clock, median of seven)', () => {
+  it('returns from buildSome(8) within its budget plus one line (wall clock, median of seven)', () => {
     const lines = program(300_000);
     const index = indexOver(lines, SNAPSHOT_EVERY);
     index.buildSome(1); // warm up (regexes compile on first use)
     const runs: number[] = [];
     for (let i = 0; i < 7; i++) {
       const started = performance.now();
-      index.buildSome(16);
+      index.buildSome(8);
       runs.push(performance.now() - started);
     }
     expect(index.ready()).toBe(false);
     runs.sort((a, b) => a - b);
-    expectWithin(runs[3], 16 + 4, 'buildSome(16), median of seven');
+    expectWithin(runs[3], 8 + 4, 'buildSome(8), median of seven');
   });
 });

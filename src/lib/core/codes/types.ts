@@ -1,6 +1,7 @@
 // The code database contract (plan §7.4; file format: `docs/planning/code-assistant.md`,
 // "Code database format", without `templates` in P1). Written by the M3 prelude (P3);
-// binding.
+// binding. Phase 3 (P3b prelude): `templates` (read by `core/templates/load.ts`) and
+// `CodeEntry.blocks`.
 //
 // One database per dialect, in `$lib/data/codes/<dialect>.json`. A profile points at its
 // database with `profile.codes`, so several profiles can share one (a Fanuc mill and a
@@ -15,6 +16,7 @@
 //     it is confirmed.
 
 import type { NumberClass } from '$lib/core/machines/types';
+import type { TemplateDef } from '$lib/core/templates/types';
 
 /**
  * One word that belongs to a code, e.g. `Z` of `G81` or `Q201` of `CYCL DEF 200`.
@@ -204,6 +206,14 @@ export interface CodeSets {
 export interface CodeEntry {
   /** Canonical form, without zero padding: `G1`, `M8`, `G54.1`, `CYCL DEF 200`, `L`. */
   code: string;
+  /**
+   * Phase 3 (P3b prelude; Phase 3 plan §7 #227; the first half of the NC-14 flag). `2`: the cycle
+   * is written in two blocks with the same code (the lathe roughing and threading cycles in their
+   * two-block form, `G71 U… R…` then `G71 P… Q… U… W… F…`). The cycle form (P3.8) refuses such a
+   * cycle, because nothing says yet which parameter belongs to which block (`CodeParam.block`,
+   * backlog); the inspector keeps its pairing heuristic. Set by P3.6 from the manuals.
+   */
+  blocks?: 2;
   /** Other spellings that mean the same, e.g. `['G01']`. */
   aliases?: string[];
   /** Free text, but the known groups drive sorting and the modal state: `motion`, `plane`,
@@ -409,6 +419,14 @@ export interface CodeDb {
   /** Address letter → what it means, e.g. `X`, `F`, `S`. */
   addresses: Record<string, { label: string; description?: string }>;
   codes: CodeEntry[];
+  /**
+   * Phase 3 (P3b prelude; Phase 2 plan §7.8, AD-28; Phase 3 plan §6.11). The templates of the
+   * database, its parents' merged in by id (`resolve.ts`) and the user's file laid over them
+   * (M13), each one checked by `loadTemplates`. Absent when no file of the chain has any. A
+   * document's templates are those of its **effective** database (`machines.effective(docId)
+   * .codes`), filtered by its profile's machine type (`templatesForMachine`).
+   */
+  templates?: TemplateDef[];
 }
 
 /**
@@ -428,6 +446,8 @@ export interface CodeDbFile {
   remove?: string[];
   addresses?: CodeDb['addresses'];
   codes: unknown[];
+  /** Phase 3 (P3b prelude): the file's templates, as written; merged by `id` (a child's replaces the parent's). */
+  templates?: unknown[];
 }
 
 /**

@@ -145,6 +145,21 @@ are on the Tools tab and in the palette; so is each bundled script, **Program ch
 **Edit Script** on a bundled script offers the same copy (*Copy and edit*). See
 [scripts.md](scripts.md).
 
+## Templates
+
+None of these has a key, on purpose; each is on the Insert tab and in the palette (`F1`). See
+[Writing with templates](templates.md).
+
+- **Insert Template…** lists the templates of the program, favourites first, and inserts the
+  one you pick. Each template also has a command of its own, *Insert: <template name>*.
+- **Program start** (Home tab, *Program*) is the first of them.
+- **Edit Cycle…** (Insert tab, *Cycles*) changes the cycle at the cursor in a form, or inserts a
+  new one.
+- **Manage Templates…** and **New Template from Selection…** (Insert tab, *Manage*; palette
+  category *Templates*) open the [template manager](templates.md#the-template-manager).
+- In completion, `Tab` accepts a template on a line with nothing before the word (`Enter`
+  goes to a new line there, as it does for the codes).
+
 ## Typing, profiles and machines
 
 None of these has a key; they are on the ribbon or in the palette (`F1`).

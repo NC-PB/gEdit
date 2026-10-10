@@ -26,6 +26,7 @@ import { recovery } from '$lib/app/recovery';
 import { scripts } from '$lib/app/scripts';
 import { session } from '$lib/app/session';
 import { status } from '$lib/app/status';
+import { templates } from '$lib/app/templateService';
 import { transforms } from '$lib/app/transforms';
 import { userConfig } from '$lib/app/userConfig';
 import { bookmarks } from '$lib/monaco/bookmarks';
@@ -76,4 +77,5 @@ export const ctx: AppContext = {
   channels,
   userConfig,
   modal,
+  templates,
 };

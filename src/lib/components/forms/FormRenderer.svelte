@@ -164,13 +164,20 @@
       {/if}
     </fieldset>
   {:else}
-    <div class="form-field" data-testid="form-field" data-field={field.id} data-error={error?.key}>
+    <div
+      class="form-field"
+      data-testid="form-field"
+      data-field={field.id}
+      data-error={error?.key}
+      data-readonly={field.readOnly === true ? 'true' : undefined}
+    >
       {#if field.type === 'bool'}
         <label class="form-check">
           <input
             id={controlId(field)}
             type="checkbox"
             checked={values[field.id] === true}
+            disabled={field.readOnly === true}
             aria-describedby={describedBy(field)}
             onchange={(e) => onChange(field.id, e.currentTarget.checked)}
           />
@@ -183,6 +190,7 @@
             id={controlId(field)}
             class="form-control"
             value={selectedIndex(field)}
+            disabled={field.readOnly === true}
             aria-required={field.required ? 'true' : undefined}
             aria-invalid={error ? 'true' : undefined}
             aria-describedby={describedBy(field)}
@@ -206,6 +214,7 @@
             autocomplete="off"
             spellcheck="false"
             value={numericText(field)}
+            readonly={field.readOnly === true}
             aria-required={field.required ? 'true' : undefined}
             aria-invalid={error ? 'true' : undefined}
             aria-describedby={describedBy(field)}
@@ -220,6 +229,7 @@
               autocomplete="off"
               spellcheck="false"
               value={textOf(field)}
+              readonly={field.readOnly === true}
               aria-required={field.required ? 'true' : undefined}
               aria-invalid={error ? 'true' : undefined}
               aria-describedby={describedBy(field)}
@@ -242,6 +252,8 @@
             autocomplete="off"
             spellcheck="false"
             value={textOf(field)}
+            readonly={field.readOnly === true}
+            aria-readonly={field.readOnly === true ? 'true' : undefined}
             aria-required={field.required ? 'true' : undefined}
             aria-invalid={error ? 'true' : undefined}
             aria-describedby={describedBy(field)}
@@ -299,6 +311,14 @@
   .form-control:focus {
     border-color: var(--accent);
     outline: none;
+  }
+
+  /* A computed value (a template's formula): shown, not typed into. */
+  .form-control[readonly],
+  .form-control:disabled {
+    color: var(--text-muted);
+    background: transparent;
+    border-style: dashed;
   }
 
   .form-control[aria-invalid='true'] {

@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "okuma",
+  "profile": "okuma-osp",
+  "template": "tool-start",
+  "values": {},
+  "env": {
+    "prevBlockNumber": 100,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "N110 G0 X600 Z400\nN120 T010101 (OD ROUGH)\nN130 G96 S180 M3\nN140 G0 X72 Z3 M8"
+}

@@ -3,7 +3,7 @@
 //
 // It declares nothing a user sees: it starts `app/modalService.ts`, which keeps one modal
 // index per open document, fed by the editor's content changes and built in idle slices of at
-// most 16 ms, and drops them all when the contributions are torn down. The inspector, the
+// most 8 ms, and drops them all when the contributions are torn down. The inspector, the
 // hover and the motion colours read the service (`ctx.modal`) and need it running whether or
 // not a panel is open, which is why it starts here and not in a panel, as `programMap.ts`
 // starts the outline.

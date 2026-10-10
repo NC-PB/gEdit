@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "heidenhain",
+  "profile": "heidenhain-klartext",
+  "template": "rigid-tap",
+  "values": {},
+  "env": {
+    "prevBlockNumber": 4,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "5 CYCL DEF 207 RIGID TAPPING ~\n    Q200=2 ;CLEARANCE ~\n    Q201=-20 ;THREAD DEPTH ~\n    Q239=+1 ;PITCH ~\n    Q203=0 ;SURFACE ~\n    Q204=50 ;2ND CLEARANCE\n6 L X+30 Y+20 R0 FMAX M99"
+}

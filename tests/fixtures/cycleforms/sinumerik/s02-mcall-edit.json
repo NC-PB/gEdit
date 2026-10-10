@@ -1,0 +1,16 @@
+{
+  "$format": 1,
+  "about": "The MCALL CYCLE83 of line 24 is edited like any other: SDIS changed, MCALL kept.",
+  "input": "../../nc/sinumerik/s02-drill.MPF",
+  "line": 24,
+  "values": {
+    "SDIS": "3"
+  },
+  "expected": {
+    "first": 24,
+    "last": 24,
+    "lines": [
+      "N200 MCALL CYCLE83(5,0,3,-18,,-5,,2,0,0.5,1,0)"
+    ]
+  }
+}

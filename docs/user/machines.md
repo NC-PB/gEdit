@@ -136,8 +136,10 @@ documentation the project worked from describes one machine on which `X50` is 50
 the peck `Q6000` is 6 mm, so "as written" is a statement about positions and not about the
 micron parameters of a cycle. The Fanuc "as written" preset therefore names an increment of
 0.001 mm for those parameters, and its label says so. The Fanuc mill profile has no such
-parameters: there the `Q` of `G73` and `G83` belongs to no class at all and never gets a
-value, whichever preset is chosen.
+parameters: there the `Q` of `G73`, `G76`, `G83`, `G84` and `G87` (the peck depth, the shift at
+the hole bottom) is an ordinary **length**. Written with a decimal point it is what it says; a `Q`
+without a point follows the machine's input increment like any other point-less length (`Q4000` is
+4 mm on an IS-B machine), and with no machine chosen it has no value.
 
 A spindle speed is never converted, on any control: `S` is revolutions per minute, or a
 cutting speed under constant surface speed, whatever the machine's number settings are.
@@ -173,7 +175,7 @@ What that leaves with a value depends on the dialect:
 
 | | With a value, even with no machine | Without a value until you choose a machine |
 |---|---|---|
-| Fanuc mill | every word written with a point; point-less feeds per minute | point-less lengths, angles and dwells (`X50`, `C90000`, `G04 X2500`), point-less feeds per revolution; the `Q` of `G73`/`G83` has no value with any machine |
+| Fanuc mill | every word written with a point; point-less feeds per minute | point-less lengths, angles and dwells (`X50`, `C90000`, `G04 X2500`), point-less feeds per revolution, and the point-less `Q` of `G73`/`G83` and the other drilling cycles |
 | Fanuc lathe | every word written with a point; point-less feeds per minute | point-less lengths, angles and dwells (`X50`, `C90000`, `G04 X2500`), point-less feeds per revolution, and the cycle steps counted in microns (`G83 … Q6000`, `G74`/`G75` `P`/`Q`, `G76 Q`) |
 | Okuma OSP lathe | nothing that has a unit: no length, feed, angle or dwell | every length, feed, angle and dwell, `X64.` included |
 | Sinumerik 840D (turning) | every word: the control's own language reads a number as written, with or without a point | nothing |

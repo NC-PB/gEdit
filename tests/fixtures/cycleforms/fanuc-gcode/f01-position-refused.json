@@ -1,0 +1,13 @@
+{
+  "$format": 1,
+  "about": "X80. under the modal G83 of line 39 runs the cycle: the form edits line 39, and says so.",
+  "input": "../../nc/fanuc/f01-mill-3tools.nc",
+  "line": 40,
+  "values": {},
+  "expected": {
+    "refused": "cycleForm.refused.elsewhere",
+    "params": {
+      "line": 39
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "sinumerik",
+  "profile": "sinumerik",
+  "template": "stock-removal",
+  "values": {},
+  "env": {
+    "prevBlockNumber": 100,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "N110 CYCLE95(\"CONTOUR_1\",2,0.1,0.2,,0.3,0.15,0.1,9,,,0)"
+}

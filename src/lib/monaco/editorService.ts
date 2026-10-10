@@ -656,6 +656,31 @@ export function createEditorService(deps: EditorServiceDeps): EditorService {
       model.pushStackElement();
     },
 
+    insertSnippet(template: string, at?: { line: number; replace: boolean }): void {
+      if (!instance) return;
+      const model = instance.getModel();
+      if (!model) return;
+      // The snippet controller is Monaco's own contribution (`snippetController2`); it is the
+      // one place that knows tab stops, placeholders and the indentation of the lines it adds.
+      const controller = instance.getContribution('snippetController2') as unknown as { insert(template: string): void } | null;
+      if (!controller) return;
+      let text = template;
+      if (at) {
+        const line = Math.min(Math.max(Math.trunc(at.line) || 1, 1), model.getLineCount());
+        const end = model.getLineMaxColumn(line);
+        if (at.replace) {
+          instance.setSelection({ startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: end });
+        } else {
+          instance.setPosition({ lineNumber: line, column: end });
+          text = `\n${template}`;
+        }
+      }
+      model.pushStackElement();
+      controller.insert(text);
+      model.pushStackElement();
+      instance.focus();
+    },
+
     focus(): void {
       instance?.focus();
     },

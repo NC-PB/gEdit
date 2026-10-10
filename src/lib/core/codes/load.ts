@@ -1,8 +1,10 @@
 // Loading a code database (plan §7.4). Owner: WP3.3.
 //
-// The file format is `docs/planning/code-assistant.md`, "Code database format", without
-// `templates` (P2). A built-in database goes through this function exactly like a user
-// database from `<config>/codes/` will, so the built-ins are checked by the same rules.
+// The file format is `docs/planning/code-assistant.md`, "Code database format". A built-in
+// database goes through this function exactly like a user database from `<config>/codes/`, so
+// the built-ins are checked by the same rules. Phase 3 (P3b prelude): the `templates` member is
+// read by `core/templates/load.ts` (`loadTemplates`), its problems reported here with the path
+// `templates[i]…`; `blocks: 2` marks a two-block cycle.
 //
 // Two levels of strictness, because a bad user database must not stop the app:
 //   - the file itself has to be a database — an object with a `dialect` and a `codes`
@@ -16,6 +18,7 @@
 // spelling and the duplicate check sees the same key the lookup will.
 
 import { normalizeCode } from './lookup';
+import { loadTemplates } from '$lib/core/templates/load';
 import type { CodeDb, CodeEntry, CodeParam, CodeSets } from './types';
 import type { NumberClass } from '$lib/core/machines/types';
 
@@ -385,6 +388,11 @@ function readEntry(
   if (flag(raw.call, `${path}.call`, report)) entry.call = true;
   if (flag(raw.shift, `${path}.shift`, report)) entry.shift = true;
   if (flag(raw.verify, `${path}.verify`, report)) entry.verify = true;
+  // Phase 3 (P3b prelude): a cycle written in two blocks (the cycle form refuses it).
+  if (raw.blocks !== undefined) {
+    if (raw.blocks === 2) entry.blocks = 2;
+    else report({ path: `${path}.blocks`, message: 'blocks has to be 2 (a cycle written in two blocks) or absent' });
+  }
   const description = str(raw.description);
   if (description) entry.description = description;
   const params = readParams(raw.params, `${path}.params`, report);
@@ -468,7 +476,12 @@ export function loadCodeDb(raw: unknown, onProblem?: (p: CodeDbProblem) => void)
     codes.push(entry);
   });
 
-  return { dialect, version: version ?? 1, addresses, codes };
+  const db: CodeDb = { dialect, version: version ?? 1, addresses, codes };
+  // Phase 3 (P3b prelude): absent stays absent, so a database without templates is unchanged.
+  if (raw.templates !== undefined) {
+    db.templates = loadTemplates(raw.templates, (p) => report({ path: `templates${p.path}`, message: p.message }));
+  }
+  return db;
 }
 
 /** A database with nothing in it, for a dialect that has no file (or a broken one). */

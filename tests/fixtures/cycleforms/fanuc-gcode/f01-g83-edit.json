@@ -1,0 +1,29 @@
+{
+  "$format": 1,
+  "about": "G83 of f01 line 39: the peck depth Q changed (its point kept), the optional repeat count K added after the last parameter word, G98 kept.",
+  "input": "../../nc/fanuc/f01-mill-3tools.nc",
+  "line": 39,
+  "form": {
+    "values": {
+      "X": "20.",
+      "Y": "60.",
+      "Z": "-18.",
+      "R": "3.",
+      "Q": "4.",
+      "F": "240.",
+      "K": ""
+    },
+    "kept": []
+  },
+  "values": {
+    "Q": "5",
+    "K": "2"
+  },
+  "expected": {
+    "first": 39,
+    "last": 39,
+    "lines": [
+      "G98 G83 X20. Y60. Z-18. R3. Q5. F240. K2"
+    ]
+  }
+}

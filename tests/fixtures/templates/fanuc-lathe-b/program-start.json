@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "fanuc-lathe-b",
+  "profile": "fanuc-lathe",
+  "template": "program-start",
+  "values": {},
+  "env": {
+    "prevBlockNumber": null,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "%\nO1000 (NEW PROGRAM)\nN10 G21 G40 G95\nN20 G91 G28 X0. Z0.\nN30 G90"
+}

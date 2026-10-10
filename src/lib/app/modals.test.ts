@@ -6,7 +6,7 @@
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Component } from 'svelte';
-import { closeModalForTest, currentModal, modals } from './modals';
+import { closeModalForTest, currentModal, dismissModal, modals } from './modals';
 import FormDialog from '$lib/components/forms/FormDialog.svelte';
 import PromptInput from '$lib/components/common/PromptInput.svelte';
 import type { FieldSpec } from '$lib/core/forms/types';
@@ -71,6 +71,71 @@ describe('open', () => {
     expect(request.props).toEqual({ path: '/nc/a.nc' });
     request.resolve(42);
     await expect(result).resolves.toBe(42);
+  });
+});
+
+describe('open options and the host’s own dismissal (P3b intB)', () => {
+  const dialog = (() => {}) as unknown as Component<{ close: (r?: number) => void }>;
+
+  it('passes `wide` and `mayClose` on to the request', () => {
+    const mayClose = () => true;
+    void modals.open(dialog, {}, { wide: true, mayClose });
+    const request = get(currentModal);
+    if (request?.kind !== 'component') throw new Error('expected a component modal');
+    expect(request.wide).toBe(true);
+    expect(request.mayClose).toBe(mayClose);
+  });
+
+  it('closes a dialog without a hook at once, as before', async () => {
+    const result = modals.open(dialog, {});
+    await expect(dismissModal()).resolves.toBe(true);
+    await expect(result).resolves.toBeUndefined();
+    expect(get(modals.isOpen)).toBe(false);
+  });
+
+  it('closes a quick pick, which has no hook', async () => {
+    const picked = modals.quickPick(items);
+    await expect(dismissModal()).resolves.toBe(true);
+    await expect(picked).resolves.toBeUndefined();
+  });
+
+  it('keeps the dialog open when the hook says no, and closes it when the hook says yes', async () => {
+    let answer = false;
+    let asked = 0;
+    const result = modals.open(dialog, {}, { mayClose: async () => (asked++, answer) });
+    await expect(dismissModal()).resolves.toBe(false);
+    expect(asked).toBe(1);
+    expect(get(modals.isOpen)).toBe(true);
+    answer = true;
+    await expect(dismissModal()).resolves.toBe(true);
+    await expect(result).resolves.toBeUndefined();
+    expect(get(modals.isOpen)).toBe(false);
+  });
+
+  it('asks once while a question is open (a second press waits), and keeps the dialog when the hook throws', async () => {
+    let release: (v: boolean) => void = () => {};
+    let asked = 0;
+    void modals.open(dialog, {}, { mayClose: () => new Promise<boolean>((r) => ((asked++, (release = r)))) });
+    const first = dismissModal();
+    await expect(dismissModal()).resolves.toBe(false);
+    expect(asked).toBe(1);
+    release(false);
+    await expect(first).resolves.toBe(false);
+    closeModalForTest();
+
+    const quiet = console.error;
+    console.error = () => {};
+    try {
+      void modals.open(dialog, {}, { mayClose: () => Promise.reject(new Error('boom')) });
+      await expect(dismissModal()).resolves.toBe(false);
+      expect(get(modals.isOpen)).toBe(true);
+    } finally {
+      console.error = quiet;
+    }
+  });
+
+  it('does nothing when no modal is open', async () => {
+    await expect(dismissModal()).resolves.toBe(false);
   });
 });
 

@@ -1,0 +1,17 @@
+{
+  "$format": 1,
+  "about": "Clearing the last written argument (VARI) drops it with its comma; clearing FDEP leaves an empty argument in its place.",
+  "input": "../../nc/sinumerik/s02-drill.MPF",
+  "line": 12,
+  "values": {
+    "VARI": "",
+    "FDEP": ""
+  },
+  "expected": {
+    "first": 12,
+    "last": 12,
+    "lines": [
+      "N80 CYCLE83(5,0,2,-30,,,,2,0,0.5,1)"
+    ]
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "$format": 1,
+  "about": "A CYCL DEF 200 without Q395 (the lines of h01, block renumbered): Q200 changed, Q395 added as a new last line in database order, the line before it gains its ~.",
+  "input": [
+    "0 BEGIN PGM H01_3TOOLS MM",
+    "1 ; WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE",
+    "2 TOOL CALL 2 Z S2400",
+    "3 L Z+100 R0 FMAX M3",
+    "4 CYCL DEF 200 DRILLING ~",
+    "   Q200=2 ;CLEARANCE ~",
+    "   Q201=-15 ;DEPTH ~",
+    "   Q206=150 ;PLUNGE FEED ~",
+    "   Q202=5 ;PECK ~",
+    "   Q210=0 ;DWELL TOP ~",
+    "   Q203=+0 ;SURFACE ~",
+    "   Q204=50 ;2ND CLEARANCE ~",
+    "   Q211=0 ;DWELL BOTTOM",
+    "5 L X-30 Y-20 R0 FMAX M8",
+    "6 CYCL CALL",
+    "7 END PGM H01_3TOOLS MM"
+  ],
+  "line": 5,
+  "values": {
+    "Q200": "3",
+    "Q395": "1"
+  },
+  "expected": {
+    "first": 5,
+    "last": 13,
+    "lines": [
+      "4 CYCL DEF 200 DRILLING ~",
+      "   Q200=3 ;CLEARANCE ~",
+      "   Q201=-15 ;DEPTH ~",
+      "   Q206=150 ;PLUNGE FEED ~",
+      "   Q202=5 ;PECK ~",
+      "   Q210=0 ;DWELL TOP ~",
+      "   Q203=+0 ;SURFACE ~",
+      "   Q204=50 ;2ND CLEARANCE ~",
+      "   Q211=0 ;DWELL BOTTOM ~",
+      "   Q395=1 ;DEPTH REFERENCE: 0 TOOL TIP, 1 FULL DIAMETER"
+    ]
+  }
+}

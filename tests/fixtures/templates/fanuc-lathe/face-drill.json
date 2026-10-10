@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "fanuc-lathe",
+  "profile": "fanuc-lathe",
+  "template": "face-drill",
+  "values": {},
+  "env": {
+    "prevBlockNumber": 100,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "N110 G97 S1000 M3\nN120 G0 X0. Z5. M8\nN130 G83 Z-40. R-5. Q5000 F0.1\nN140 G80"
+}

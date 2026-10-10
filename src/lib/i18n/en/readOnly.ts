@@ -42,14 +42,17 @@ export default {
   saveAsInstead: '{name} is read-only, so choose where to save it',
 
   // A change that is not typing, refused before it runs (`app/readOnlyLock.ts`). `action`
-  // is display text: a transform's title, a script's name, `insertBlock` below.
+  // is display text: a transform's title, a script's name, `insertTemplate` below.
   refusedUser:
     '{name} is locked against editing, so {action} did not run. To unlock it, click Read-only in the status bar or use Lock Against Editing in the command palette (F1).',
   refusedAttribute:
     '{name} is read-only on disk and opened locked, so {action} did not run. To unlock the text, click Read-only in the status bar or use Lock Against Editing in the command palette (F1); saving it then asks where to put it.',
   refusedBinary:
     '{name} is mostly NUL bytes (data, not a program) and is open read-only, so {action} did not run.',
-  insertBlock: 'Insert {block}',
+  /** P3.5: the action of a template insert; {template} is the template's label (data). */
+  insertTemplate: 'Insert {template}',
+  /** P3.5: the action of Edit Cycle. */
+  editCycle: 'Edit Cycle',
   /** The document was locked while the script ran; its result goes nowhere without asking. */
   lockedDuringRunTitle: 'The program was locked while the script ran',
   lockedDuringRunMessage:

@@ -659,6 +659,7 @@
         {
           "address": "Q201",
           "label": "Depth, negative into the material",
+          "max": 0,
           "position": "none",
           "required": true
         },
@@ -724,6 +725,7 @@
         {
           "address": "Q201",
           "label": "Depth, negative into the material",
+          "max": 0,
           "position": "none",
           "required": true
         },
@@ -779,6 +781,7 @@
         {
           "address": "Q201",
           "label": "Depth, negative into the material",
+          "max": 0,
           "position": "none",
           "required": true
         },
@@ -845,6 +848,7 @@
         {
           "address": "Q201",
           "label": "Depth, negative into the material",
+          "max": 0,
           "position": "none",
           "required": true
         },
@@ -942,6 +946,7 @@
         {
           "address": "Q201",
           "label": "Depth, negative into the material",
+          "max": 0,
           "position": "none",
           "required": true
         },
@@ -1056,6 +1061,7 @@
         {
           "address": "Q201",
           "label": "Thread depth, negative into the material",
+          "max": 0,
           "position": "none",
           "required": true
         },
@@ -1106,6 +1112,7 @@
         {
           "address": "Q201",
           "label": "Thread depth, negative into the material",
+          "max": 0,
           "position": "none",
           "required": true
         },
@@ -1149,6 +1156,7 @@
         {
           "address": "Q201",
           "label": "Depth, negative into the material",
+          "max": 0,
           "position": "none",
           "required": true
         },
@@ -1215,6 +1223,7 @@
         {
           "address": "Q201",
           "label": "Thread depth, negative into the material",
+          "max": 0,
           "position": "none",
           "required": true
         },
@@ -1288,12 +1297,14 @@
         {
           "address": "Q201",
           "label": "Depth, negative into the material",
+          "max": 0,
           "position": "none",
           "required": true
         },
         {
           "address": "Q344",
-          "label": "Centring diameter",
+          "label": "Centring diameter, negative into the material",
+          "max": 0,
           "position": "none",
           "required": true
         },
@@ -1348,6 +1359,7 @@
         {
           "address": "Q201",
           "label": "Thread depth, negative into the material",
+          "max": 0,
           "position": "none",
           "required": true
         },
@@ -1916,5 +1928,938 @@
     }
   ],
   "dialect": "heidenhain",
+  "templates": [
+    {
+      "body": "{{N}}BEGIN PGM {{name}} {{unit}}\n{{N}}BLK FORM 0.1 Z X{{xmin}} Y{{ymin}} Z{{zmin}}\n{{N}}BLK FORM 0.2 X{{xmax}} Y{{ymax}} Z{{zmax}}",
+      "description": "BEGIN PGM with the name and the unit, and the stock as a box (BLK FORM) for the control's graphics. Close the program with Program end, which writes END PGM.",
+      "group": "Program",
+      "id": "program-start",
+      "label": "Program start",
+      "params": [
+        {
+          "default": "NEW",
+          "help": "The file name without .H, with no spaces; END PGM has to repeat it.",
+          "id": "name",
+          "label": "Program name",
+          "required": true,
+          "type": "text"
+        },
+        {
+          "choices": [
+            {
+              "label": "Millimetres (MM)",
+              "value": "MM"
+            },
+            {
+              "label": "Inches (INCH)",
+              "value": "INCH"
+            }
+          ],
+          "default": "MM",
+          "id": "unit",
+          "label": "Units",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "-50",
+          "id": "xmin",
+          "label": "Stock, smallest X",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "-40",
+          "id": "ymin",
+          "label": "Stock, smallest Y",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "-20",
+          "id": "zmin",
+          "label": "Stock, smallest Z",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "50",
+          "id": "xmax",
+          "label": "Stock, largest X",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "40",
+          "id": "ymax",
+          "label": "Stock, largest Y",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "zmax",
+          "label": "Stock, largest Z",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending",
+      "toolbar": true
+    },
+    {
+      "body": "{{N}}TOOL CALL {{t}} Z S{{s}} {{f}} {{name}}\n{{N}}L Z{{z}} R0 FMAX {{m}}",
+      "description": "Calls the tool along Z with its speed, then moves up to a safe height at rapid without radius compensation and starts the spindle.",
+      "group": "Tool change",
+      "id": "tool-call",
+      "label": "Tool call",
+      "params": [
+        {
+          "default": 1,
+          "id": "t",
+          "label": "Tool number",
+          "max": 32767,
+          "min": 0,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "default": 3200,
+          "id": "s",
+          "label": "Spindle speed (rpm)",
+          "max": 99999,
+          "min": 0,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "decimals": "as-entered",
+          "help": "The feed the following moves use with F AUTO; may be left empty.",
+          "id": "f",
+          "label": "Feed (mm/min)",
+          "max": 99999.999,
+          "min": 0,
+          "prefix": "F",
+          "type": "number"
+        },
+        {
+          "comment": true,
+          "id": "name",
+          "label": "Tool description",
+          "type": "text"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "100",
+          "id": "z",
+          "label": "Retract height (Z)",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "Spindle clockwise (M3)",
+              "value": "M3"
+            },
+            {
+              "label": "Spindle clockwise and coolant (M13)",
+              "value": "M13"
+            },
+            {
+              "label": "Spindle counter-clockwise (M4)",
+              "value": "M4"
+            },
+            {
+              "label": "Spindle counter-clockwise and coolant (M14)",
+              "value": "M14"
+            }
+          ],
+          "default": "M13",
+          "id": "m",
+          "label": "Spindle and coolant",
+          "required": true,
+          "type": "choice"
+        }
+      ],
+      "review": "pending",
+      "toolbar": true
+    },
+    {
+      "body": "{{N}}CYCL DEF 200 DRILLING ~\n    Q200={{q200}} ;CLEARANCE ~\n    Q201={{q201}} ;DEPTH ~\n    Q206={{q206}} ;PLUNGE FEED ~\n    Q202={{q202}} ;PECK ~\n    Q210={{q210}} ;DWELL TOP ~\n    Q203={{q203}} ;SURFACE ~\n    Q204={{q204}} ;2ND CLEARANCE ~\n    Q211={{q211}} ;DWELL BOTTOM ~\n    Q395={{q395}} ;DEPTH REF\n{{N}}L {{x}} {{y}} R0 FMAX M99",
+      "description": "Defines drilling cycle 200 and calls it at the first hole with M99. Pecks of Q202 with a full retract; every further hole is a positioning block ending in M99.",
+      "group": "Drilling",
+      "id": "drill",
+      "label": "Drilling (cycle 200)",
+      "params": [
+        {
+          "decimals": "as-entered",
+          "default": "2",
+          "id": "q200",
+          "label": "Q200 Safety clearance above the surface",
+          "max": 99999.9999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "-15",
+          "help": "Measured from the surface; 0 does nothing. Negative: into the part. A positive depth reverses the cycle and is refused here.",
+          "id": "q201",
+          "label": "Q201 Depth (negative into the part)",
+          "max": 0,
+          "min": -99999.9999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "250",
+          "id": "q206",
+          "label": "Q206 Plunging feed (mm/min)",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "5",
+          "help": "Equal to or deeper than Q201: one pass.",
+          "id": "q202",
+          "label": "Q202 Peck depth",
+          "max": 99999.9999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "q210",
+          "label": "Q210 Dwell at the top (s)",
+          "max": 3600,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "q203",
+          "label": "Q203 Surface (Z, absolute)",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "100",
+          "help": "Height above the surface where the tool cannot hit the part or the clamps.",
+          "id": "q204",
+          "label": "Q204 Second safety clearance",
+          "max": 99999.9999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0.1",
+          "id": "q211",
+          "label": "Q211 Dwell at the bottom (s)",
+          "max": 3600,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "The tool tip (0)",
+              "value": "0"
+            },
+            {
+              "label": "The full diameter (1)",
+              "value": "1"
+            }
+          ],
+          "default": "0",
+          "id": "q395",
+          "label": "Q395 Depth measured to",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "30",
+          "id": "x",
+          "label": "First hole X",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "prefix": "X",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "20",
+          "id": "y",
+          "label": "First hole Y",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "prefix": "Y",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending",
+      "toolbar": true
+    },
+    {
+      "body": "{{N}}CYCL DEF 203 UNIVERSAL DRILLING ~\n    Q200={{q200}} ;CLEARANCE ~\n    Q201={{q201}} ;DEPTH ~\n    Q206={{q206}} ;PLUNGE FEED ~\n    Q202={{q202}} ;PECK ~\n    Q210={{q210}} ;DWELL TOP ~\n    Q203={{q203}} ;SURFACE ~\n    Q204={{q204}} ;2ND CLEARANCE ~\n    Q212={{q212}} ;PECK DECREMENT ~\n    Q213={{q213}} ;BREAKS BEFORE RETRACT ~\n    Q205={{q205}} ;MIN PECK ~\n    Q211={{q211}} ;DWELL BOTTOM ~\n    Q208={{q208}} ;RETRACT FEED ~\n    Q256={{q256}} ;CHIP BREAK RETRACT ~\n    Q395={{q395}} ;DEPTH REF\n{{N}}L {{x}} {{y}} R0 FMAX M99",
+      "description": "Defines cycle 203: pecks that get shorter, chip breaking with a full retract after a number of breaks, dwells at the top and bottom. Calls it at the first hole with M99.",
+      "group": "Drilling",
+      "id": "universal-drill",
+      "label": "Universal drilling (cycle 203)",
+      "params": [
+        {
+          "decimals": "as-entered",
+          "default": "2",
+          "id": "q200",
+          "label": "Q200 Safety clearance above the surface",
+          "max": 99999.9999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "-20",
+          "help": "Measured from the surface; 0 does nothing. Negative: into the part. A positive depth reverses the cycle and is refused here.",
+          "id": "q201",
+          "label": "Q201 Depth (negative into the part)",
+          "max": 0,
+          "min": -99999.9999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "150",
+          "id": "q206",
+          "label": "Q206 Plunging feed (mm/min)",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "5",
+          "help": "Equal to or deeper than Q201: one pass.",
+          "id": "q202",
+          "label": "Q202 Peck depth",
+          "max": 99999.9999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "q210",
+          "label": "Q210 Dwell at the top (s)",
+          "max": 3600,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "q203",
+          "label": "Q203 Surface (Z, absolute)",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "50",
+          "help": "Height above the surface where the tool cannot hit the part or the clamps.",
+          "id": "q204",
+          "label": "Q204 Second safety clearance",
+          "max": 99999.9999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0.2",
+          "help": "Each peck is this much shorter than the one before.",
+          "id": "q212",
+          "label": "Q212 Peck decrement",
+          "max": 99999.9999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "default": 3,
+          "id": "q213",
+          "label": "Q213 Chip breaks before a full retract",
+          "max": 99999,
+          "min": 0,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "3",
+          "id": "q205",
+          "label": "Q205 Smallest peck",
+          "max": 99999.9999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0.25",
+          "id": "q211",
+          "label": "Q211 Dwell at the bottom (s)",
+          "max": 3600,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "500",
+          "help": "0 retracts at the plunging feed.",
+          "id": "q208",
+          "label": "Q208 Retract feed (mm/min)",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0.2",
+          "id": "q256",
+          "label": "Q256 Retract for a chip break",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "The tool tip (0)",
+              "value": "0"
+            },
+            {
+              "label": "The full diameter (1)",
+              "value": "1"
+            }
+          ],
+          "default": "0",
+          "id": "q395",
+          "label": "Q395 Depth measured to",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "30",
+          "id": "x",
+          "label": "First hole X",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "prefix": "X",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "20",
+          "id": "y",
+          "label": "First hole Y",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "prefix": "Y",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}CYCL DEF 207 RIGID TAPPING ~\n    Q200={{q200}} ;CLEARANCE ~\n    Q201={{q201}} ;THREAD DEPTH ~\n    Q239={{q239}} ;PITCH ~\n    Q203={{q203}} ;SURFACE ~\n    Q204={{q204}} ;2ND CLEARANCE\n{{N}}L {{x}} {{y}} R0 FMAX M99",
+      "description": "Defines rigid tapping cycle 207 and calls it at the first hole with M99. The spindle speed is the one of the tool call; the machine must be set up for rigid tapping.",
+      "group": "Tapping",
+      "id": "rigid-tap",
+      "label": "Rigid tapping (cycle 207)",
+      "params": [
+        {
+          "decimals": "as-entered",
+          "default": "2",
+          "id": "q200",
+          "label": "Q200 Safety clearance above the surface",
+          "max": 99999.9999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "-20",
+          "help": "Measured from the surface; 0 does nothing. Negative: into the part. A positive depth reverses the cycle and is refused here.",
+          "id": "q201",
+          "label": "Q201 Thread depth (negative into the part)",
+          "max": 0,
+          "min": -99999.9999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "1",
+          "help": "The sign is the hand of the thread: + right-hand, - left-hand.",
+          "id": "q239",
+          "label": "Q239 Thread pitch (mm)",
+          "max": 99.9999,
+          "min": -99.9999,
+          "plusSign": true,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "q203",
+          "label": "Q203 Surface (Z, absolute)",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "50",
+          "help": "Height above the surface where the tool cannot hit the part or the clamps.",
+          "id": "q204",
+          "label": "Q204 Second safety clearance",
+          "max": 99999.9999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "30",
+          "id": "x",
+          "label": "First hole X",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "prefix": "X",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "20",
+          "id": "y",
+          "label": "First hole Y",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "prefix": "Y",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}CYCL DEF 240 CENTERING ~\n    Q200={{q200}} ;CLEARANCE ~\n    Q343={{q343}} ;DIAMETER OR DEPTH ~\n    Q201={{q201}} ;DEPTH ~\n    Q344={{q344}} ;DIAMETER ~\n    Q206={{q206}} ;PLUNGE FEED ~\n    Q211={{q211}} ;DWELL BOTTOM ~\n    Q203={{q203}} ;SURFACE ~\n    Q204={{q204}} ;2ND CLEARANCE\n{{N}}L {{x}} {{y}} R0 FMAX M99",
+      "description": "Defines centering cycle 240, to a diameter or to a depth, and calls it at the first hole with M99.",
+      "group": "Drilling",
+      "id": "centering",
+      "label": "Centering (cycle 240)",
+      "params": [
+        {
+          "decimals": "as-entered",
+          "default": "2",
+          "id": "q200",
+          "label": "Q200 Safety clearance above the surface",
+          "max": 99999.9999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "The diameter Q344 (1)",
+              "value": "1"
+            },
+            {
+              "label": "The depth Q201 (0)",
+              "value": "0"
+            }
+          ],
+          "default": "1",
+          "id": "q343",
+          "label": "Q343 Centre to",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "help": "Used when Q343 is 0. Negative: into the part. A positive depth reverses the cycle and is refused here.",
+          "id": "q201",
+          "label": "Q201 Depth (negative into the part)",
+          "max": 0,
+          "min": -99999.9999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "-9",
+          "help": "Used when Q343 is 1; needs the tool's point angle in the tool table. Negative: into the part. A positive value reverses the cycle and is refused here.",
+          "id": "q344",
+          "label": "Q344 Diameter of the centre (negative)",
+          "max": 0,
+          "min": -99999.9999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "250",
+          "id": "q206",
+          "label": "Q206 Plunging feed (mm/min)",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0.1",
+          "id": "q211",
+          "label": "Q211 Dwell at the bottom (s)",
+          "max": 3600,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "q203",
+          "label": "Q203 Surface (Z, absolute)",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "100",
+          "help": "Height above the surface where the tool cannot hit the part or the clamps.",
+          "id": "q204",
+          "label": "Q204 Second safety clearance",
+          "max": 99999.9999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "30",
+          "id": "x",
+          "label": "First hole X",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "prefix": "X",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "20",
+          "id": "y",
+          "label": "First hole Y",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "prefix": "Y",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}L {{x}} {{y}} {{z}} {{comp}} {{feed}}",
+      "description": "A straight move to the coordinates you fill in; an empty one is left out.",
+      "group": "Moves",
+      "id": "line",
+      "label": "Straight move (L)",
+      "params": [
+        {
+          "decimals": "as-entered",
+          "id": "x",
+          "label": "X",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "prefix": "X",
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "id": "y",
+          "label": "Y",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "prefix": "Y",
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "id": "z",
+          "label": "Z",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "prefix": "Z",
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "None (R0)",
+              "value": "R0"
+            },
+            {
+              "label": "Left of the contour (RL)",
+              "value": "RL"
+            },
+            {
+              "label": "Right of the contour (RR)",
+              "value": "RR"
+            }
+          ],
+          "default": "R0",
+          "id": "comp",
+          "label": "Radius compensation",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "default": "FMAX",
+          "help": "FMAX for rapid, or F and a value such as F500.",
+          "id": "feed",
+          "label": "Feed",
+          "type": "text",
+          "uppercase": true
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}CC X{{cx}} Y{{cy}}\n{{N}}C X{{x}} Y{{y}} {{dir}} {{feed}}",
+      "description": "Sets the circle centre (CC) and moves on the arc to the end point (C); the radius is the distance from the centre to the start point.",
+      "group": "Moves",
+      "id": "circle",
+      "label": "Circle around a centre (CC, C)",
+      "params": [
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "cx",
+          "label": "Centre X",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "cy",
+          "label": "Centre Y",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "10",
+          "id": "x",
+          "label": "End point X",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "y",
+          "label": "End point Y",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "Clockwise (DR-)",
+              "value": "DR-"
+            },
+            {
+              "label": "Counter-clockwise (DR+)",
+              "value": "DR+"
+            }
+          ],
+          "default": "DR-",
+          "id": "dir",
+          "label": "Direction",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "as-entered",
+          "id": "feed",
+          "label": "Feed (mm/min)",
+          "max": 99999.999,
+          "min": 0,
+          "prefix": "F",
+          "type": "number"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}STOP {{note}}",
+      "description": "Stops the program; the operator continues with NC start.",
+      "group": "Program",
+      "id": "stop",
+      "label": "Program stop",
+      "params": [
+        {
+          "comment": true,
+          "id": "note",
+          "label": "Note for the operator",
+          "type": "text"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}L Z{{z}} R0 FMAX M9\n{{N}}M30\n{{N}}END PGM {{name}} {{unit}}",
+      "description": "Moves up at rapid with coolant off, ends the program with M30 and closes it with END PGM, whose name and unit have to match BEGIN PGM.",
+      "group": "Program",
+      "id": "program-end",
+      "label": "Program end",
+      "params": [
+        {
+          "decimals": "as-entered",
+          "default": "100",
+          "id": "z",
+          "label": "Retract height (Z)",
+          "max": 99999.9999,
+          "min": -99999.9999,
+          "plusSign": true,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "default": "NEW",
+          "help": "The same name as in BEGIN PGM.",
+          "id": "name",
+          "label": "Program name",
+          "required": true,
+          "type": "text"
+        },
+        {
+          "choices": [
+            {
+              "label": "Millimetres (MM)",
+              "value": "MM"
+            },
+            {
+              "label": "Inches (INCH)",
+              "value": "INCH"
+            }
+          ],
+          "default": "MM",
+          "id": "unit",
+          "label": "Units",
+          "required": true,
+          "type": "choice"
+        }
+      ],
+      "review": "pending",
+      "toolbar": true
+    }
+  ],
   "version": 1
 }

@@ -26,6 +26,7 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { findConflicts } from '$lib/core/keys/keySpec';
 import { hasKey } from '$lib/i18n';
+import { PROGRAM_START_TEMPLATE_ID, templateCommandId, templateIdOfCommand, TEMPLATE_COMMAND_PREFIX } from '$lib/core/templates';
 import type { CommandDef, KeySpec } from '$lib/app/types';
 import { SHORTCUTS } from '../runtime/lib/shortcuts.js';
 
@@ -150,6 +151,18 @@ const PINNED: { id: string; keys?: Keys; title: string; owner: string; pending?:
   { id: 'view.toggleInspector', keys: 'Mod+Alt+A', title: 'inspector.toggle', owner: 'inspector.ts' },
   { id: 'inspector.editValue', title: 'inspector.editValue', owner: 'inspector.ts' },
   { id: 'view.toggleMotionColors', title: 'motionColors.toggle', owner: 'motionColors.ts' },
+  // Phase 3, P3b (pinned by the P3b prelude; Phase 3 plan §6.7). None has a default key: each is
+  // reached from the Insert tab and the palette, and the `Mod+Alt` letters left are on the AltGr
+  // manual check. The templates (`contrib/templates.ts`, P3.5): one `insert.template:<id>` command
+  // per template id, built at run time from the databases (`templateCommandId`, checked below),
+  // and a quick pick of the active document's templates; the Home tab keeps one button,
+  // `insert.template:program-start`, in group `templates.groupProgram`. The cycle form
+  // (`contrib/cycleForms.ts`, P3.5): Insert tab, group `cycleForm.group`. The manager
+  // (`contrib/templateManager.ts`, P3.9): Insert tab, group `templateManager.group`.
+  { id: 'templates.insert', title: 'templates.insert', owner: 'templates.ts' },
+  { id: 'nc.editCycle', title: 'cycleForm.edit', owner: 'cycleForms.ts' },
+  { id: 'templates.manage', title: 'templateManager.manage', owner: 'templateManager.ts' },
+  { id: 'templates.fromSelection', title: 'templateManager.fromSelection', owner: 'templateManager.ts' },
 ];
 /**
  * The ribbon groups of those entries: NC tab (M10, M12 navigation), Home tab (search, M13
@@ -167,6 +180,10 @@ const PINNED_GROUPS = [
   'typing.group',
   'view.groupPanels',
   'motionColors.group',
+  'templates.groupProgram',
+  'templates.groupTemplates',
+  'cycleForm.group',
+  'templateManager.group',
 ];
 /** The palette categories of those entries. */
 const PINNED_CATEGORIES = [
@@ -180,12 +197,15 @@ const PINNED_CATEGORIES = [
   'typing.category',
   'inspector.category',
   'motionColors.category',
+  'templates.category',
+  'cycleForm.category',
+  'templateManager.category',
 ];
 
 const asDefs = (rows: { id: string; keys?: Keys }[]): CommandDef[] =>
   rows.map((row): CommandDef => ({ id: row.id, keys: row.keys, title: row.id, run: () => {} }));
 
-describe('the commands M10 to M13 and P3a pin (plan §7.13; P10 item 2, P11 item 4, P12 item 8, P13; Phase 3 plan §6.7)', () => {
+describe('the commands M10 to M13, P3a and P3b pin (plan §7.13; P10 item 2, P11 item 4, P12 item 8, P13; Phase 3 plan §6.7)', () => {
   it('reads the shipped shortcuts it checks against', () => {
     // A sanity floor: F7 and Shift+F7 (navigation), Mod+S (files), F9 (scripts) are there.
     const keys = SHIPPED.map((d) => d.keys).filter((k): k is KeySpec => typeof k === 'string');
@@ -231,6 +251,24 @@ describe('the commands M10 to M13 and P3a pin (plan §7.13; P10 item 2, P11 item
       if (pin.keys === undefined || (pin.pending && !SHIPPED.some((d) => d.id === pin.id))) continue;
       expect(table, pin.id).toContainEqual([pin.id, pin.keys]);
     }
+  });
+
+  it('builds the template commands from the template id (P3b prelude), and no source spells one out', () => {
+    expect(templateCommandId(PROGRAM_START_TEMPLATE_ID)).toBe('insert.template:program-start');
+    expect(templateIdOfCommand('insert.template:tool-start')).toBe('tool-start');
+    expect(templateIdOfCommand('insert.template:Tool Start')).toBeNull();
+    expect(templateIdOfCommand('insert.block:start')).toBeNull();
+    // The ids come from the databases at run time, so a literal one in a contribution would be a
+    // command that outlives its template.
+    expect(SHIPPED.filter((d) => d.id.startsWith(TEMPLATE_COMMAND_PREFIX))).toEqual([]);
+  });
+
+  it('has no Phase 1 block command once the templates are in the Insert tab (AD-28; the deletion after P3.5)', () => {
+    const files = readdirSync(CONTRIB).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'));
+    if (!files.includes('templates.ts')) return; // until P3.5 lands, the blocks are still the Insert tab
+    const spelled = files.filter((f) => readFileSync(join(CONTRIB, f), 'utf8').includes('insert.block:'));
+    expect(spelled).toEqual([]);
+    expect(files).not.toContain('blocks.ts');
   });
 
   it('has a row in the contributions README for every contribution file', () => {

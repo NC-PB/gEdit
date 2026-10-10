@@ -1,0 +1,21 @@
+{
+  "$format": 1,
+  "about": "A new optional word goes after the last parameter word, so before the comment and before the codes that follow it.",
+  "input": [
+    "%",
+    "O1000",
+    "N20 G98 G81 X1. Y1. Z-5. R2. F100. M8 (SPOT)"
+  ],
+  "line": 3,
+  "values": {
+    "K": "4",
+    "Y": ""
+  },
+  "expected": {
+    "first": 3,
+    "last": 3,
+    "lines": [
+      "N20 G98 G81 X1. Z-5. R2. F100. K4 M8 (SPOT)"
+    ]
+  }
+}

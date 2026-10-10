@@ -1,0 +1,23 @@
+{
+  "$format": 1,
+  "about": "Under IS-B a fraction typed into a point-less Z would change how the machine reads the word (increments to mm): refused, never rounded or converted.",
+  "input": [
+    "%",
+    "O1000",
+    "N10 G90 G0 X0 Y0",
+    "N20 G98 G83 X1. Y1. Z-5000 R2. Q4. F100. (PECK)",
+    "N30 G80"
+  ],
+  "line": 4,
+  "machine": {
+    "numberInput": "is-b"
+  },
+  "values": {
+    "Z": "-5.5"
+  },
+  "expected": {
+    "errors": {
+      "Z": "machines.numbers.rounded"
+    }
+  }
+}

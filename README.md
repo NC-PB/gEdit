@@ -107,6 +107,17 @@ hover adds a cycle's parameters and the meaning of a word in its block, and a na
 mark beside the line numbers shows which lines are rapids, straight moves, arcs, threads or
 cycles. See [Understanding a block](docs/user/inspector.md).
 
+**Writing with templates.** The Insert tab offers the templates of the program you are in: program
+start and end, tool change, drilling, tapping, turning and threading cycles, for all six dialects.
+A short form asks for the values and shows the text that will be written, with the block numbers
+carried on from where you are (Klartext renumbers the blocks behind); the values are written as you
+type them and refused when they do not fit, never rounded. A field can be a formula (a feed from a
+pitch and a speed, worked out exactly). **Edit Cycle** changes the cycle at the cursor in a form and
+rewrites only the words you changed. Templates appear in completion on an empty line, can be starred,
+and you can make your own in a template manager or from a few selected lines; they are kept in your
+code files. The templates that ship are marked *review pending* until they have been checked against a
+machine. See [Writing with templates](docs/user/templates.md).
+
 **NC transformations.** Renumber blocks and remove block numbers, insert or remove the
 spaces between words, remove empty lines, remove comments (keeping the program name and,
 if you ask, your header), convert case. Each one runs on the selection or the whole
@@ -136,10 +147,8 @@ called on, the number of calls and the feed and speed range — and under it the
 the `F` of the tapping block is a thread pitch, so it is not counted as a feed rate. A row
 with a line number jumps there when you click it.*
 
-**The rest.** Ready-made code blocks (program header, drilling cycle) for Fanuc mill and
-Klartext programs, from the Insert tab — the turning dialects have none yet; light, dark or
-system theme; a settings dialog; recent files; a command palette (`F1`) and a shortcut
-list that are generated from the commands themselves.
+**The rest.** Light, dark or system theme; a settings dialog; recent files; a command palette
+(`F1`) and a shortcut list that are generated from the commands themselves.
 
 ### Only run scripts you trust
 
@@ -171,9 +180,10 @@ arithmetic on address values, comparing a re-posted program without the noise of
 and number formatting, merging in both directions, search and replace by word value
 (`T1` but not `T10`, `S>2000`), multi-channel programs with a check that the wait codes of the
 channels match, your own profiles and code files, and the typing options such as forced upper
-case (see the [roadmap](docs/planning/roadmap.md)). Phase 3 is under way: its first half, the code
-inspector, hover help with the modal state and the motion colours, is built; the second half,
-templates in place of the ready-made code blocks, is next.
+case (see the [roadmap](docs/planning/roadmap.md)). Phase 3, "Understand and write", is done: the code
+inspector, hover help with the modal state and the motion colours, and templates with Edit Cycle,
+formulas and a template manager. The built-in templates are still marked "review pending" until
+they have been checked against a machine. The first release, 1.0, is next.
 Showing the channels of a program side by side is planned for Phase 4.
 
 ## Documentation
@@ -183,6 +193,7 @@ Showing the channels of a program side by side is planned for Phase 4.
   [your own profiles and code files](docs/user/profiles.md),
   [channels](docs/user/channels.md),
   [understanding a block](docs/user/inspector.md) (the inspector, the hover and the motion colours),
+  [writing with templates](docs/user/templates.md) (the Insert tab, Edit Cycle, formulas and the template manager),
   [transformations](docs/user/transformations.md), [scripts](docs/user/scripts.md) and the
   [keyboard](docs/user/shortcuts.md).
 - **[Planning](docs/planning/README.md)** — scope, roadmap and feature notes.

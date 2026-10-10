@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "sinumerik",
+  "profile": "sinumerik",
+  "template": "threading",
+  "values": {},
+  "env": {
+    "prevBlockNumber": 100,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "N110 G97 S800 M4\nN120 CYCLE99(0,20,-25,20,2,2,0.92,0.05,30,0,6,1,1.5,300103,1,1,0,0,0,0,1,0,0,1,\"\",\"\",\"\",0,0)"
+}

@@ -21,6 +21,8 @@ export default {
   noChoices: 'Nothing to choose from',
   /** A generated form that happens to have no fields at all. */
   noFields: 'There is nothing to set here.',
+  /** P3.5: under a template form while a value is refused, in place of the text OK would insert. */
+  previewBlocked: 'Correct the marked values to see the text.',
   /** Accessible name of the single input of `modals.prompt()`. */
   promptValue: 'Value',
 

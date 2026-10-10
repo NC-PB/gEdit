@@ -17,6 +17,8 @@
     icon?: Component;
     disabled?: boolean;
     testid?: string;
+    /** Phase 3 (P3.5): `data-review`, a template's `pending` mark; omitted from the DOM when absent. */
+    review?: string;
     onclick: () => void;
   }
 
@@ -27,6 +29,7 @@
     icon = undefined,
     disabled = false,
     testid = 'cmd-button',
+    review = undefined,
     onclick,
   }: Props = $props();
 </script>
@@ -36,6 +39,7 @@
   type="button"
   data-testid={testid}
   data-command={command}
+  data-review={review}
   title={title || label}
   {disabled}
   {onclick}
@@ -71,6 +75,21 @@
   }
   .ribbon-btn:active:not(:disabled) {
     background-color: var(--surface-active);
+  }
+  /* A template the owner has not reviewed yet: a quiet dot, the tooltip says why. */
+  .ribbon-btn[data-review='pending'] {
+    position: relative;
+  }
+  .ribbon-btn[data-review='pending']::after {
+    position: absolute;
+    top: 3px;
+    right: 4px;
+    width: 5px;
+    height: 5px;
+    background: var(--text-muted);
+    border-radius: 50%;
+    content: '';
+    opacity: 0.6;
   }
   .ribbon-btn:disabled {
     color: var(--text-disabled);

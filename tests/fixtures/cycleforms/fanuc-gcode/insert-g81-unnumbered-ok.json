@@ -1,0 +1,31 @@
+{
+  "$format": 1,
+  "about": "Insert mode in an unnumbered document: no block number; the modal cycle is cancelled with G80 in a block of its own (P3b fix NC-05).",
+  "input": [
+    "%",
+    "O1000",
+    "G90 G0 X0 Y0"
+  ],
+  "line": 3,
+  "insert": {
+    "code": "G81",
+    "env": {
+      "prevBlockNumber": null,
+      "numbered": false
+    }
+  },
+  "values": {
+    "X": "5.",
+    "Z": "-7.",
+    "R": "2.",
+    "F": "100."
+  },
+  "expected": {
+    "first": 4,
+    "last": 3,
+    "lines": [
+      "G81 X5. Z-7. R2. F100.",
+      "G80"
+    ]
+  }
+}

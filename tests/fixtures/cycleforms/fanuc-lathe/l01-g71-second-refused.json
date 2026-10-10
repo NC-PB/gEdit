@@ -1,0 +1,10 @@
+{
+  "$format": 1,
+  "about": "The second block of the two-block G71 (P, Q, U, W, F). The database cannot say which block a word belongs to, so the form refuses the cycle (blocks: 2, AD-39).",
+  "input": "../../nc/fanuc-lathe/l01-turning-a.nc",
+  "line": 16,
+  "values": {},
+  "expected": {
+    "refused": "cycleForm.refused.twoBlocks"
+  }
+}

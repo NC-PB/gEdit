@@ -1,0 +1,36 @@
+{
+  "$format": 1,
+  "about": "Insert mode on an unnumbered Okuma program: the words in database order, then G180 alone in its block (P3b fix NC-05).",
+  "input": [
+    "$O03.MIN%",
+    "(WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE)",
+    "G00 X50 Z5 C0"
+  ],
+  "line": 3,
+  "machine": {
+    "numberInput": "okuma-1mm"
+  },
+  "insert": {
+    "code": "G181",
+    "env": {
+      "prevBlockNumber": null,
+      "numbered": false
+    }
+  },
+  "values": {
+    "X": "50",
+    "Z": "-12",
+    "C": "0",
+    "K": "3",
+    "F": "120",
+    "E": "0.5"
+  },
+  "expected": {
+    "first": 4,
+    "last": 3,
+    "lines": [
+      "G181 X50 Z-12 C0 K3 F120 E0.5",
+      "G180"
+    ]
+  }
+}

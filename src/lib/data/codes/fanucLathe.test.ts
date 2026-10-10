@@ -108,6 +108,7 @@ function tableUnit(dialect: string, code: string, address: string): Unit | undef
   }
 
   if (dialect === MILL && MILL_CYCLES.includes(code)) {
+    if (address === 'Q' && ['G73', 'G76', 'G83', 'G84', 'G87'].includes(code)) return 'length';
     return address === 'P' || address === 'K' || address === 'L' ? 'count' : undefined;
   }
   return undefined;
@@ -291,9 +292,11 @@ describe('the mill corrections of §8.3', () => {
     expect(unitOf('G4', 'X')).toBe('dwell');
     expect(unitOf('M98', 'P')).toBe('count');
     expect(unitOf('M98', 'L')).toBe('count');
-    // A peck and an R plane stay lengths: they are measured, and the machine reads them
-    // the way it reads any other length.
-    expect(unitOf('G83', 'Q')).toBeUndefined();
+    // An R plane is a length by class (`R` is one by name). A peck and a shift (`Q`) are lengths
+    // too, but no class names `Q`, so the database says so outright (P3b intA): a point-less
+    // `Q` is read the way the machine reads any other length (input increments on an IS-B
+    // control), never as a bare number. On the lathe `Q` is micrometres (`increment`).
+    for (const code of ['G73', 'G76', 'G83', 'G84', 'G87']) expect(unitOf(code, 'Q'), code).toBe('length');
     expect(unitOf('G83', 'R')).toBeUndefined();
   });
 });

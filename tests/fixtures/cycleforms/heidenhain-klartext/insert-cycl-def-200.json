@@ -1,0 +1,46 @@
+{
+  "$format": 1,
+  "about": "Insert mode: a CYCL DEF 200 after block 3, numbered 4 (the caller renumbers the blocks after it), one Q line per value in database order, ~ on every line but the last.",
+  "input": [
+    "0 BEGIN PGM H01_3TOOLS MM",
+    "1 ; WRITTEN FOR GEDIT - SYNTHETIC TEST PROGRAM, NOT FOR A MACHINE",
+    "2 TOOL CALL 2 Z S2400",
+    "3 L Z+100 R0 FMAX M3",
+    "5 L X-30 Y-20 R0 FMAX M8",
+    "6 CYCL CALL",
+    "7 END PGM H01_3TOOLS MM"
+  ],
+  "line": 4,
+  "insert": {
+    "code": "CYCL DEF 200",
+    "env": {
+      "prevBlockNumber": 3,
+      "numbered": true
+    }
+  },
+  "values": {
+    "Q200": "2",
+    "Q201": "-15",
+    "Q206": "150",
+    "Q202": "5",
+    "Q210": "0",
+    "Q203": "+0",
+    "Q204": "50",
+    "Q211": "0.2"
+  },
+  "expected": {
+    "first": 5,
+    "last": 4,
+    "lines": [
+      "4 CYCL DEF 200 DRILLING CYCLE ~",
+      "   Q200=2 ;SAFETY CLEARANCE ABOVE THE SURFACE ~",
+      "   Q201=-15 ;DEPTH, NEGATIVE INTO THE MATERIAL ~",
+      "   Q206=150 ;PLUNGING FEED ~",
+      "   Q202=5 ;INFEED PER PECK ~",
+      "   Q210=0 ;DWELL AT THE TOP AFTER EACH RETRACT ~",
+      "   Q203=+0 ;WORKPIECE SURFACE IN THE TOOL AXIS ~",
+      "   Q204=50 ;SECOND CLEARANCE FOR RETRACTING ~",
+      "   Q211=0.2 ;DWELL AT THE HOLE BOTTOM"
+    ]
+  }
+}

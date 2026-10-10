@@ -2378,7 +2378,7 @@ Harness commands added by the preludes: `h_config_read(name)` (P6; `settings.jso
 
 **M13 integration added one row:** `profile.manage` — title `userConfig.manage` ("Manage Profiles…"), category `userConfig.category`, no default key, owned by `contrib/settings.ts` (§7.16 #200). `findConflicts` over every shipped shortcut plus the pinned rows is clean on both platforms.
 
-**The Phase 3 prelude (P3a, 2026-10-09) pinned the P3a rows** the same way, all `pending`: `view.toggleInspector` on `Mod+Alt+A` ("Code Inspector", View tab), `inspector.editValue` ("Edit Value at Cursor…") and `view.toggleMotionColors` ("Motion Colors"), with `findConflicts` clean on both platforms; the table and the reasons are in [§6.7 of phase-3-implementation.md](phase-3-implementation.md#67-commands-and-keys-p2-713-extended).
+**The Phase 3 prelude (P3a, 2026-10-09) pinned the P3a rows** the same way, all `pending`: `view.toggleInspector` on `Mod+Alt+A` ("Code Inspector", View tab), `inspector.editValue` ("Edit Value at Cursor…") and `view.toggleMotionColors` ("Motion Colors"), with `findConflicts` clean on both platforms; the table and the reasons are in [§6.7 of phase-3-implementation.md](phase-3-implementation.md#67-commands-and-keys-p2-713-extended). **The P3b prelude (2026-10-09)** pinned `templates.insert` ("Insert Template…"), `nc.editCycle` ("Edit Cycle…"), `templates.manage` ("Manage Templates…") and `templates.fromSelection` ("New Template from Selection…"), all `pending` and without a default key, and fixed `insert.template:<id>` as built from the template id (`templateCommandId`); same section.
 
 The registry's conflict check (P1 AD-4) and the AltGr rule (D21) apply; the `Mod+Alt` keys are on the Windows AltGr manual check (§13; `Mod+Alt+A` from Phase 3). `Alt+F7` was chosen over the nearer `Alt+F8` because Monaco binds `Alt+F8` and `Shift+Alt+F8` to marker navigation (`contrib/gotoError/browser/gotoError.js:178-202`), and `Mod+Alt+C` is already the comparison (`src/lib/contrib/compare.ts:133`).
 
@@ -3355,7 +3355,8 @@ Addresses (replaced): `X` "position as a diameter"; `U` "incremental X, as a dia
 | `M98` | `P`, `L` | `count` | Program number and repeat count |
 | `G81`–`G89`, `G84.2`, `G84.3` (mill, `fanuc.json`) | `P` | `count` | Dwell in milliseconds |
 | `G81`–`G89`, `G84.2`, `G84.3` (mill) | `K`, `L` | `count` | Repeat counts (syntax-fanuc §3.2 "`L` and `K` when they are repeat counts", §4 `K` is also a repeat count in drilling cycles) |
-| `G81`–`G89`, `G84.2`, `G84.3` (mill) | `Q`, `R`, `Z` | – (by class) | Peck, R level and depth are lengths |
+| `G73`, `G76`, `G83`, `G84`, `G87` (mill) | `Q` | `length` | Peck depth and shift are lengths with the decimal-point rule of any other length, so a point-less `Q4000` is read in input increments on an IS-B control and is machine-dependent without a machine; no class names the address `Q` (only `R` is a length by name), so the database says it outright (Phase 3 plan §7 #235). The lathe `Q` stays `increment` (µm) |
+| `G81`–`G89`, `G84.2`, `G84.3` (mill) | `R`, `Z` | – (by class) | R level and depth are lengths |
 | `M98` (mill) | `P`, `L` | `count` | as the lathe |
 | `G43.5` (mill) | `I`, `J`, `K` | `count` | Tool direction components (M9, WP9.2) |
 | `G43.5` | `Q` | `angle` | |

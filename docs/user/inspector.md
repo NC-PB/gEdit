@@ -185,9 +185,9 @@ Over a cycle code (`G83`, `G76`, `CYCL DEF 200`, `CYCLE83`) the hover adds a tab
 | Word | Meaning | Written |
 |---|---|---|
 | `Z` | Depth | `-15.` |
-| `R` | Retract plane | `2.` |
+| `R` | R point: where the feed starts (G99 returns here) | `2.` |
 | `Q` | Peck depth | `5.` |
-| `P` | Dwell at the bottom | *not written* |
+| `P` | Dwell at the bottom (least time increments: 1 ms on IS-B) | *not written* |
 
 The title says which cycle it is. For a lathe cycle in two blocks it says *block 1 of 2* or
 *block 2 of 2*, with the parameters of that block. Over the `M99` that runs a Klartext cycle, the

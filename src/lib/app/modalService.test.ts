@@ -13,7 +13,8 @@ import { loadCodeDb } from '$lib/core/codes/load';
 import { resolveCodeDbFiles } from '$lib/core/codes/resolve';
 import { applyMachine, effectiveMachine, noMachine } from '$lib/core/machines/effective';
 import { maskComments } from '$lib/core/nc/mask';
-import { ModalInterpreter } from '$lib/core/nc/modal';
+import { ModalIndex, ModalInterpreter } from '$lib/core/nc/modal';
+import { expectWithin } from '../../../tests/unit/helpers/budget';
 import { tokenizeLine } from '$lib/core/nc/tokenizer';
 import { compileProfile } from '$lib/core/profiles/compile';
 import { resolveProfiles } from '$lib/core/profiles/resolve';
@@ -21,7 +22,7 @@ import { validateProfile } from '$lib/core/profiles/validate';
 import { BUILTIN_CODE_DB_JSON } from '$lib/data/codes';
 import { BUILTIN_PROFILE_SOURCES } from '$lib/data/profiles';
 import { createDocumentStore } from '$lib/stores/documents';
-import { createModalService, FALLBACK_GAP_MS, modal, runWhenIdle, type ModalServiceInternals, type ModalView } from './modalService';
+import { createModalService, FALLBACK_GAP_MS, IDLE_BUDGET_MS, modal, runWhenIdle, type ModalServiceInternals, type ModalView } from './modalService';
 import type { MachineConfig } from '$lib/core/machines/types';
 import type { LineState, ModalState } from '$lib/core/nc/types';
 import type { Profile } from '$lib/core/profiles/types';
@@ -483,6 +484,35 @@ describe('the modal service', () => {
     expect(h.idlePending()).toBe(1);
     h.idleAll();
     expect(h.service.stateAfter(nc, 299)).not.toBeNull();
+  });
+
+  it('P3.4 (owner, 2026-10-09): an idle slice is 8 ms, and the service hands exactly that to the index', () => {
+    expect(IDLE_BUDGET_MS).toBe(8);
+    const spy = vi.spyOn(ModalIndex.prototype, 'buildSome');
+    try {
+      const h = harness(); // no budget of its own: the default
+      h.add(program(200));
+      h.idleOnce();
+      expect(spy).toHaveBeenCalled();
+      expect(spy.mock.calls.every(([budget]) => budget === 8)).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('P3.4: one idle slice of a 300k-line document returns within 8 ms plus the line it is on (wall clock, median of seven)', () => {
+    const h = harness();
+    h.add(program(300_000));
+    h.idleOnce(); // warm up (regexes compile on first use)
+    const runs: number[] = [];
+    for (let i = 0; i < 7; i++) {
+      const started = performance.now();
+      h.idleOnce();
+      runs.push(performance.now() - started);
+    }
+    expect(h.idlePending(), 'the build is far from done after eight slices').toBe(1);
+    runs.sort((a, b) => a - b);
+    expectWithin(runs[3], 8 + 4, 'one idle slice, median of seven');
   });
 
   it('CODE-3: with no idle clock a slice is a frame away from the one before', () => {

@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "fanuc",
+  "profile": "fanuc-gcode",
+  "template": "program-start",
+  "values": {},
+  "env": {
+    "prevBlockNumber": null,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "%\nO1000 (NEW PROGRAM)\nN10 G21 G17 G40 G49 G80 G90 G94\nN20 G54"
+}

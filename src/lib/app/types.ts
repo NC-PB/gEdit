@@ -26,6 +26,7 @@ import type { Settings } from '$lib/core/settings/schema';
 import type { OutlineItem } from '$lib/core/profiles/outline';
 import type { CompiledProfile, Profile, ProfileProblem } from '$lib/core/profiles/types';
 import type { DetectResult } from '$lib/core/profiles/detect';
+import type { RenderResult, TemplateDef } from '$lib/core/templates/types';
 import type { TransformDef, TransformResult } from '$lib/core/transforms/types';
 import type {
   EffectiveMachine,
@@ -352,6 +353,13 @@ export interface EditorService {
   replaceAll(id: DocId, textLF: string, o?: { keepCursorLine?: boolean }): void;
   /** Active document, at the selections, one undo step. */
   insertText(text: string): void;
+  /**
+   * Phase 3 (P3.5): inserts `template` (Monaco snippet syntax: `${1:Z-5.}` tab stops) in the
+   * active document through the snippet controller, as one undo step. Without `at` it goes to
+   * the selection; with it, `line` (1-based) is where it goes: `replace` puts it in place of
+   * that whole line, otherwise on a new line after it. The caret ends at the last tab stop.
+   */
+  insertSnippet(template: string, at?: { line: number; replace: boolean }): void;
   focus(): void;
   hasFocus(): boolean;
   /** Activates the document if needed, sets the cursor, centers and focuses. */
@@ -445,6 +453,26 @@ export interface QuickPickItem<T> {
   value: T;
 }
 
+/** What a form's `live` hook answers (Phase 3 plan §7 #226; P3.5). */
+export interface FormLiveResult {
+  /** Values to show in the read-only fields; they are handed over with the answer. */
+  values?: Record<string, unknown>;
+  /** Plain text shown under the form (`template-preview`). */
+  preview?: string;
+  /** Shown in place of the preview; OK is disabled while it is set. */
+  error?: Msg;
+  /** By field id; OK is disabled while any is set. */
+  fieldErrors?: Record<string, Msg>;
+}
+
+/** What `Modals.open` takes besides the component and its props. */
+export interface ModalOptions {
+  /** A wide panel. */
+  wide?: boolean;
+  /** Asked before the host dismisses the dialog on its own; false keeps it open. */
+  mayClose?: () => boolean | Promise<boolean>;
+}
+
 /** app/modals.ts → `export const modals: Modals` (quickPick in M1; prompt and form in M2) */
 export interface Modals {
   quickPick<T>(
@@ -469,10 +497,36 @@ export interface Modals {
     values?: Record<string, unknown>;
     okLabel?: string;
     context?: { addresses?: string[] };
+    /**
+     * Phase 3 (P3b prelude; Phase 3 plan §6.11, §7 #226; built by P3.5 in `FormDialog`). Called
+     * with the current values after every change (the dialog computes it as a derived value, so
+     * once per update, not once per keystroke event): the values it answers are shown in the
+     * read-only fields (the formulas) and handed over with the answer, `preview` under the form
+     * (`template-preview`, plain text, never markdown), and `error` in place of the preview; OK
+     * stays disabled while there is an `error` or a field error. `fieldErrors` replace the
+     * form's own message for that field (they are the template engine's, `Msg` like every other
+     * message, not display text). Absent: the P2 form, unchanged.
+     */
+    live?: (values: Record<string, unknown>) => FormLiveResult;
+    /** Phase 3 (P3b prelude): a plain-text note shown above the fields (a template's "review pending", the words a cycle form keeps). */
+    note?: string;
+    /**
+     * Phase 3 (P3.5): a test id and data attributes for the note's element, so a scenario can find
+     * the cycle form (`cycle-form`, `data-cycle`, `data-mode`) though its note may be empty. The
+     * element is drawn when there is a `note` or a `marker`; without a marker it is `form-note`.
+     */
+    marker?: { testid: string; data: Record<string, string> };
   }): Promise<Record<string, unknown> | undefined>;
+  /**
+   * A dialog component of ours. `options.wide`: the panel is wide (a list and an editor side by side)
+   * instead of the quick-pick width. `options.mayClose` (P3b intB): asked before the host dismisses the
+   * dialog on its own (Esc with the focus outside the panel, a press outside it); `false` keeps the
+   * dialog open. A dialog's own Cancel and OK buttons are not asked: the dialog decides those itself.
+   */
   open<P extends Record<string, unknown>, R>(
     c: Component<P & { close: (r?: R) => void }>,
     props: P,
+    options?: ModalOptions,
   ): Promise<R | undefined>;
   readonly isOpen: Readable<boolean>;
 }
@@ -480,8 +534,12 @@ export interface Modals {
 /** app/fileOps.ts → `createFileOps(deps)` plus `export const files: FileOps` */
 export interface FileOps {
   newUntitled(o?: { profileId?: string; text?: string; activate?: boolean }): DocId;
-  /** No paths: multi-select dialog. Already-open documents are focused instead of reopened. */
-  open(paths?: string[]): Promise<DocId[]>;
+  /**
+   * No paths: multi-select dialog. Already-open documents are focused instead of reopened.
+   * `keepScratch`: the untouched new document the app starts with stays open (it is otherwise
+   * replaced by the first file opened); for a caller that opens a file to change it, not to show it.
+   */
+  open(paths?: string[], opts?: { keepScratch?: boolean }): Promise<DocId[]>;
   save(id?: DocId): Promise<boolean>;
   saveAs(id?: DocId): Promise<boolean>;
   saveAll(): Promise<boolean>;
@@ -1272,7 +1330,7 @@ export interface UserConfigService {
  * the effective key changes (the profile, the database, a variant or a machine parameter:
  * `machines.revision`, `profiles.revision`, a dialect switch). Fed by the document's content
  * changes: an edit drops the snapshots at and after its first changed line at once and the
- * rest is rebuilt in idle chunks of at most 16 ms, so typing never waits for the index.
+ * rest is rebuilt in idle chunks of at most 8 ms, so typing never waits for the index.
  *
  * Readers (the inspector, the hover, the motion colours) never block: a state the index has
  * not reached yet is `null`, and `changed` tells them to ask again.
@@ -1345,6 +1403,48 @@ export interface AppContext {
   userConfig: UserConfigService;
   // Phase 3, P3a prelude
   modal: ModalService;
+  // Phase 3, P3b prelude (P3.5 fills it)
+  templates: TemplateService;
+}
+
+/**
+ * Phase 3 (P3b prelude; Phase 3 plan §6.11, §7 #229; **P3.5 fills it**): `app/templateService.ts`
+ * → `export const templates: TemplateService`, the harness hook `h.app.ctx.templates`.
+ *
+ * The templates a document sees are those of its **effective** database
+ * (`machines.effective(docId).codes.templates`, AD-28, AD-31) for its profile's machine type
+ * (`templatesForMachine`), so a system-B lathe document sees the `fanuc-lathe-b` overrides and the
+ * same document under system A the `fanuc-lathe` ones. The Insert tab, completion, the palette and
+ * the template manager all read them here, never from a profile id.
+ */
+export interface TemplateService {
+  /** The templates of document `id`, in database order (built-in, then the user's); [] for an unknown document. */
+  list(id: DocId): TemplateDef[];
+  /** The database id the templates of document `id` come from (the effective database, a variant included), or null. */
+  dialectOf(id: DocId): string | null;
+  /**
+   * The text template `templateId` of document `id` gives for `values` with the cursor on line
+   * `line` (1-based; the block numbers continue from the numbered block above it). Never inserts.
+   */
+  render(id: DocId, templateId: string, values: Record<string, unknown>, line: number): RenderResult;
+  /**
+   * Inserts template `templateId` into the active document after the cursor's line, as one undo
+   * step (a `consecutive` profile with the renumber of the following blocks in the same edit).
+   * Without `values` the form opens (a snippet template goes to the snippet controller); with
+   * them nothing is asked (the harness, completion's form-less path). False when nothing was
+   * inserted: refused (a locked document, an unknown template, values that do not fit) or cancelled.
+   */
+  insert(templateId: string, values?: Record<string, unknown>): Promise<boolean>;
+  /**
+   * The ids the user starred in database `dialect` (the manager's star, P3.9), shown first as a
+   * "Favorites" group by the Insert tab and the quick pick. Kept in `state.json` under
+   * `ui.lastParams['templates:favorites']` as `{ "<dialect>": ["<id>", …] }`, at most 200 ids per
+   * database, read as untrusted (an id that is no template is skipped, not removed).
+   */
+  favorites(dialect: string): string[];
+  setFavorite(dialect: string, id: string, on: boolean): void;
+  /** Bumps whenever the list of any document may have changed: a code reload, `machines.revision`, `profiles.revision`, a dialect switch, a favorite. */
+  readonly changed: Readable<number>;
 }
 
 // ---------------------------------------------------------------------------

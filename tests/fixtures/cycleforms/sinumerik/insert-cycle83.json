@@ -1,0 +1,29 @@
+{
+  "$format": 1,
+  "about": "Insert mode: CYCLE83 with the values by position, the empty ones in between written empty, nothing after the last value.",
+  "input": [
+    "N10 G0 X0 Z5"
+  ],
+  "line": 1,
+  "insert": {
+    "code": "CYCLE83",
+    "env": {
+      "prevBlockNumber": 10,
+      "numbered": true
+    }
+  },
+  "values": {
+    "RTP": "5",
+    "RFP": "0",
+    "SDIS": "2",
+    "DP": "-30",
+    "DTB": "0.5"
+  },
+  "expected": {
+    "first": 2,
+    "last": 1,
+    "lines": [
+      "N20 CYCLE83(5,0,2,-30,,,,,0.5)"
+    ]
+  }
+}

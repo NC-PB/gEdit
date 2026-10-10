@@ -63,7 +63,7 @@ Run what CI runs: `npm run check`, `npm test`, `npm run build`, `npm run license
 - **rust** (macOS, Windows, Linux): `cargo fmt`, `clippy` with warnings as errors, `cargo test`.
 - **bundle** (macOS, Windows, Linux): an unsigned debug build of the installers, uploaded as workflow artifacts for manual smoke tests.
 
-The runtime harness has a workflow of its own, `.github/workflows/harness.yml`: it builds the patched app on a GitHub-hosted macOS 14 runner (which has a live desktop session) and runs the cumulative suite m0 to m12, rp, m13 and p3a (130 scenarios). It is not part of `ci.yml` and does not run on pull requests, because it takes about 25 minutes of macOS runner time; it runs on every push to `main` and on demand (Actions tab, Harness, Run workflow), and uploads the result files and app logs as the `harness-results` artifact.
+The runtime harness has a workflow of its own, `.github/workflows/harness.yml`: it builds the patched app on a GitHub-hosted macOS 14 runner (which has a live desktop session) and runs the cumulative suite m0 to m12, rp, m13, p3a and p3b (133 scenarios). It is not part of `ci.yml` and does not run on pull requests, because it takes about 25 minutes of macOS runner time; it runs on every push to `main` and on demand (Actions tab, Harness, Run workflow), and uploads the result files and app logs as the `harness-results` artifact.
 
 ## Releases
 

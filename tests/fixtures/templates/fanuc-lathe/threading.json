@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "fanuc-lathe",
+  "profile": "fanuc-lathe",
+  "template": "threading",
+  "values": {},
+  "env": {
+    "prevBlockNumber": 100,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "N110 G97 S500 M3\nN120 G0 X80. Z130.\nN130 G76 P011060 Q100 R0.2\nN140 G76 X60.64 Z25. P3680 Q1800 F6."
+}

@@ -206,3 +206,27 @@ describe('address-list', () => {
     expect(html).toContain('Nothing to choose from');
   });
 });
+
+describe('a read-only field (Phase 3 plan §7 #226)', () => {
+  it('shows its value in a control that cannot be typed into, and marks the wrapper', () => {
+    const html = markup({ fields: [{ id: 'feed', type: 'text', label: 'Feed', readOnly: true }], values: { feed: '600' } });
+    expect(html).toContain('data-readonly="true"');
+    expect(html).toMatch(/<input[^>]*readonly/);
+    expect(html).toContain('value="600"');
+  });
+
+  it('disables a choice and a checkbox that are read-only, and marks nothing on an ordinary field', () => {
+    const html = markup({
+      fields: [
+        { id: 'c', type: 'choice', label: 'C', readOnly: true, choices: [{ label: 'One', value: 1 }] },
+        { id: 'b', type: 'bool', label: 'B', readOnly: true },
+        { id: 'n', type: 'text', label: 'N' },
+      ],
+      values: { c: 1, b: true, n: 'x' },
+    });
+    expect(html.match(/data-readonly="true"/g)).toHaveLength(2);
+    expect(html).toMatch(/<select[^>]*disabled/);
+    expect(html).toMatch(/type="checkbox"[^>]*disabled/);
+    expect(html).not.toMatch(/data-field="n"[^>]*data-readonly/);
+  });
+});

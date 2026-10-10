@@ -3035,5 +3035,1215 @@
     }
   ],
   "dialect": "sinumerik",
+  "templates": [
+    {
+      "body": "{{title}}\n{{N}}{{setup}} {{units}}\n{{N}}{{offset}}",
+      "description": "A description, the safe-start line for turning or milling, the units and the work offset.",
+      "group": "Program",
+      "id": "program-start",
+      "label": "Program start",
+      "params": [
+        {
+          "comment": true,
+          "default": "NEW PROGRAM",
+          "id": "title",
+          "label": "Program description",
+          "type": "text"
+        },
+        {
+          "choices": [
+            {
+              "label": "Turning: G18, feed per revolution, X as a diameter",
+              "value": "G18 G90 G95 DIAMON"
+            },
+            {
+              "label": "Milling: G17, feed per minute, no radius compensation",
+              "value": "G17 G90 G94 G40"
+            }
+          ],
+          "help": "The turning and the milling profile share this template; choose the line for your machine. Nothing is chosen until you pick one.",
+          "id": "setup",
+          "label": "Machining",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "choices": [
+            {
+              "label": "Millimetres (G71)",
+              "value": "G71"
+            },
+            {
+              "label": "Inches (G70)",
+              "value": "G70"
+            }
+          ],
+          "default": "G71",
+          "id": "units",
+          "label": "Units",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "choices": [
+            {
+              "label": "G54",
+              "value": "G54"
+            },
+            {
+              "label": "G55",
+              "value": "G55"
+            },
+            {
+              "label": "G56",
+              "value": "G56"
+            },
+            {
+              "label": "G57",
+              "value": "G57"
+            }
+          ],
+          "default": "G54",
+          "id": "offset",
+          "label": "Work offset",
+          "required": true,
+          "type": "choice"
+        }
+      ],
+      "review": "pending",
+      "toolbar": true
+    },
+    {
+      "body": "{{N}}T=\"{{tool}}\" D{{d}}\n{{N}}G96 S{{vc}} LIMS={{lims}} {{dir}}\n{{N}}G0 X{{x}} Z{{z}} {{coolant}}",
+      "description": "Selects the tool by name with its cutting edge, starts constant cutting speed with the speed limit LIMS= and approaches with coolant.",
+      "group": "Tool change",
+      "id": "tool-start",
+      "label": "Tool start",
+      "machineType": "lathe",
+      "params": [
+        {
+          "default": "ROUGH_OD",
+          "help": "As in the tool list; no double quotes.",
+          "id": "tool",
+          "label": "Tool name",
+          "required": true,
+          "type": "text"
+        },
+        {
+          "default": 1,
+          "id": "d",
+          "label": "Cutting edge (D)",
+          "max": 32000,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "default": 220,
+          "id": "vc",
+          "label": "Cutting speed (m/min)",
+          "max": 9999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "default": 2500,
+          "help": "LIMS= limits the spindle speed under constant cutting speed.",
+          "id": "lims",
+          "label": "Highest spindle speed (rpm)",
+          "max": 99999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "choices": [
+            {
+              "label": "Clockwise (M3)",
+              "value": "M3"
+            },
+            {
+              "label": "Counter-clockwise (M4)",
+              "value": "M4"
+            }
+          ],
+          "default": "M4",
+          "id": "dir",
+          "label": "Spindle direction",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "80",
+          "id": "x",
+          "label": "Approach diameter (X)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "2",
+          "id": "z",
+          "label": "Approach position (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "Coolant on (M8)",
+              "value": "M8"
+            },
+            {
+              "label": "No coolant",
+              "value": ""
+            }
+          ],
+          "default": "M8",
+          "id": "coolant",
+          "label": "Coolant",
+          "type": "choice"
+        }
+      ],
+      "review": "pending",
+      "toolbar": true
+    },
+    {
+      "body": "{{N}}CYCLE95(\"{{con}}\",{{mid}},{{falz}},{{falx}},{{fal}},{{ff1}},{{ff2}},{{ff3}},{{vari}},{{dt}},{{dam}},{{vrt}})",
+      "description": "Roughs and finishes along a contour that a subprogram or a labelled section describes, with the three feeds as arguments. Empty arguments keep the cycle's own setting.",
+      "group": "Turning",
+      "id": "stock-removal",
+      "label": "Stock removal (CYCLE95)",
+      "machineType": "lathe",
+      "params": [
+        {
+          "default": "CONTOUR_1",
+          "help": "The name of the contour subprogram, or the first and last label of the contour in this program.",
+          "id": "con",
+          "label": "Contour",
+          "required": true,
+          "type": "text"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "2",
+          "help": "Whether this is a radius or a diameter depends on DIAMON and on the cycle setting of the machine. Check it before the first run.",
+          "id": "mid",
+          "label": "Largest depth of cut (radius or diameter: verify)",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0.1",
+          "id": "falz",
+          "label": "Finishing allowance on Z",
+          "max": 99999.999,
+          "min": 0,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0.2",
+          "id": "falx",
+          "label": "Finishing allowance on X",
+          "max": 99999.999,
+          "min": 0,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "help": "Instead of, or as well as, the allowances on Z and X.",
+          "id": "fal",
+          "label": "Finishing allowance along the contour",
+          "max": 99999.999,
+          "min": 0,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0.3",
+          "id": "ff1",
+          "label": "Roughing feed (mm/rev)",
+          "max": 99,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0.15",
+          "id": "ff2",
+          "label": "Feed into undercuts (mm/rev)",
+          "max": 99,
+          "min": 0,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0.1",
+          "id": "ff3",
+          "label": "Finishing feed (mm/rev)",
+          "max": 99,
+          "min": 0,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "Roughing, along Z, outside (1)",
+              "value": "1"
+            },
+            {
+              "label": "Finishing, along Z, outside (5)",
+              "value": "5"
+            },
+            {
+              "label": "Roughing and finishing, along Z, outside (9)",
+              "value": "9"
+            },
+            {
+              "label": "Roughing, along Z, inside (3)",
+              "value": "3"
+            },
+            {
+              "label": "Finishing, along Z, inside (7)",
+              "value": "7"
+            },
+            {
+              "label": "Roughing and finishing, along Z, inside (11)",
+              "value": "11"
+            },
+            {
+              "label": "Roughing, facing, outside (2)",
+              "value": "2"
+            },
+            {
+              "label": "Finishing, facing, outside (6)",
+              "value": "6"
+            },
+            {
+              "label": "Roughing and finishing, facing, outside (10)",
+              "value": "10"
+            }
+          ],
+          "default": "9",
+          "id": "vari",
+          "label": "Machining",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "as-entered",
+          "id": "dt",
+          "label": "Dwell for chip breaking (s)",
+          "max": 9999,
+          "min": 0,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "id": "dam",
+          "label": "Path between chip-breaking stops",
+          "max": 99999.999,
+          "min": 0,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "help": "0 lifts off by 1 mm.",
+          "id": "vrt",
+          "label": "Lift-off from the contour",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}G97 S{{s}} {{dir}}\n{{N}}CYCLE99({{zs}},{{xs}},{{ze}},{{xe}},{{app}},{{rop}},{{tdep}},{{fal}},{{iang}},0,{{nrc}},{{nid}},{{pit}},{{vari}},1,{{sdis}},0,0,0,0,1,0,0,{{pita}},\"\",\"\",\"\",0,0)",
+      "description": "Cuts a straight thread in several passes. The pitch is an argument, not the feed in force. Mode arguments the template does not ask for are written as 0 or empty (the cycle's own setting). The sample is an M20×1.5 outside thread.",
+      "group": "Threading",
+      "id": "threading",
+      "label": "Thread turning (CYCLE99)",
+      "machineType": "lathe",
+      "params": [
+        {
+          "default": 800,
+          "id": "s",
+          "label": "Spindle speed (rpm)",
+          "max": 99999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "choices": [
+            {
+              "label": "Clockwise (M3)",
+              "value": "M3"
+            },
+            {
+              "label": "Counter-clockwise (M4)",
+              "value": "M4"
+            }
+          ],
+          "default": "M4",
+          "id": "dir",
+          "label": "Spindle direction",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "zs",
+          "label": "Thread start (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "20",
+          "id": "xs",
+          "label": "Thread diameter at the start (X)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "-25",
+          "id": "ze",
+          "label": "Thread end (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "20",
+          "help": "The same as at the start for a straight thread.",
+          "id": "xe",
+          "label": "Thread diameter at the end (X)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "2",
+          "id": "app",
+          "label": "Run-in path",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "2",
+          "id": "rop",
+          "label": "Run-out path",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0.92",
+          "id": "tdep",
+          "label": "Thread depth",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0.05",
+          "id": "fal",
+          "label": "Finishing allowance",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "30",
+          "help": "Positive feeds along the one flank, negative along the other, 0 straight in.",
+          "id": "iang",
+          "label": "Infeed angle (°)",
+          "max": 90,
+          "min": -90,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "default": 6,
+          "id": "nrc",
+          "label": "Number of roughing cuts",
+          "max": 999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "default": 1,
+          "id": "nid",
+          "label": "Number of idle passes",
+          "max": 999,
+          "min": 0,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "1.5",
+          "id": "pit",
+          "label": "Thread pitch",
+          "max": 999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "Outside thread, rough and finish, decreasing cuts",
+              "value": "300103"
+            },
+            {
+              "label": "Outside thread, rough and finish, equal cuts",
+              "value": "300101"
+            },
+            {
+              "label": "Inside thread, rough and finish, decreasing cuts",
+              "value": "300104"
+            },
+            {
+              "label": "Inside thread, rough and finish, equal cuts",
+              "value": "300102"
+            }
+          ],
+          "default": "300103",
+          "help": "Decreasing cuts keep the chip area the same on every pass; all four feed in along one flank.",
+          "id": "vari",
+          "label": "Machining",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "1",
+          "id": "sdis",
+          "label": "Retract distance between passes",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "Millimetres (1)",
+              "value": "1"
+            },
+            {
+              "label": "Threads per inch (2)",
+              "value": "2"
+            },
+            {
+              "label": "Inches (3)",
+              "value": "3"
+            }
+          ],
+          "default": "1",
+          "id": "pita",
+          "label": "Unit of the pitch",
+          "required": true,
+          "type": "choice"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}G0 X{{x}} Z{{z}} M9\n{{N}}{{stop}}",
+      "description": "Back to the tool change position with coolant off and an optional stop.",
+      "group": "Tool change",
+      "id": "tool-end",
+      "label": "Tool end",
+      "machineType": "lathe",
+      "params": [
+        {
+          "decimals": "as-entered",
+          "default": "200",
+          "id": "x",
+          "label": "Tool change position X (diameter)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "200",
+          "id": "z",
+          "label": "Tool change position Z",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "Optional stop (M1)",
+              "value": "M1"
+            },
+            {
+              "label": "Program stop (M0)",
+              "value": "M0"
+            },
+            {
+              "label": "No stop",
+              "value": ""
+            }
+          ],
+          "default": "M1",
+          "id": "stop",
+          "label": "Stop after the tool",
+          "type": "choice"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}T=\"{{tool}}\" M6\n{{N}}D{{d}}\n{{N}}S{{s}} {{dir}}\n{{N}}G0 X{{x}} Y{{y}}\n{{N}}Z{{z}} {{coolant}}",
+      "description": "Loads the tool with M6, activates its cutting edge D, starts the spindle and approaches the start position.",
+      "group": "Tool change",
+      "id": "tool-change",
+      "label": "Tool change",
+      "machineType": "mill",
+      "params": [
+        {
+          "default": "END_MILL_D10",
+          "help": "As in the tool list; no double quotes.",
+          "id": "tool",
+          "label": "Tool name",
+          "required": true,
+          "type": "text"
+        },
+        {
+          "default": 1,
+          "id": "d",
+          "label": "Cutting edge (D)",
+          "max": 32000,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "default": 3000,
+          "id": "s",
+          "label": "Spindle speed (rpm)",
+          "max": 99999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "choices": [
+            {
+              "label": "Clockwise (M3)",
+              "value": "M3"
+            },
+            {
+              "label": "Counter-clockwise (M4)",
+              "value": "M4"
+            }
+          ],
+          "default": "M3",
+          "id": "dir",
+          "label": "Spindle direction",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "x",
+          "label": "Start position X",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "y",
+          "label": "Start position Y",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "50",
+          "id": "z",
+          "label": "Approach height (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "Coolant on (M8)",
+              "value": "M8"
+            },
+            {
+              "label": "No coolant",
+              "value": ""
+            }
+          ],
+          "default": "M8",
+          "id": "coolant",
+          "label": "Coolant",
+          "type": "choice"
+        }
+      ],
+      "review": "pending",
+      "toolbar": true
+    },
+    {
+      "body": "{{N}}F{{f}}\n{{N}}MCALL CYCLE81({{rtp}},{{rfp}},{{sdis}},{{dp}})\n{{N}}{{x}} {{y}}\n{{N}}MCALL",
+      "description": "Sets the drilling feed, makes CYCLE81 modal with MCALL, drills the first hole and ends the modal call. Add more positions before the closing MCALL; each one drills a hole.",
+      "group": "Drilling",
+      "id": "drill",
+      "label": "Drilling (CYCLE81)",
+      "machineType": "mill",
+      "params": [
+        {
+          "decimals": "as-entered",
+          "default": "50",
+          "id": "rtp",
+          "label": "Retraction plane (Z, absolute)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "rfp",
+          "label": "Reference plane: top of the hole (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "2",
+          "help": "Above the reference plane, without a sign.",
+          "id": "sdis",
+          "label": "Safety distance",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "-25",
+          "id": "dp",
+          "label": "Final depth (Z, absolute)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "150",
+          "help": "Written in its own block before MCALL. A feed written after MCALL would drill at once where the tool stands.",
+          "id": "f",
+          "label": "Drilling feed (mm/min)",
+          "max": 99999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "20",
+          "id": "x",
+          "label": "First hole X",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "X",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "20",
+          "id": "y",
+          "label": "First hole Y",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "Y",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending",
+      "toolbar": true
+    },
+    {
+      "body": "{{N}}F{{f}}\n{{N}}MCALL CYCLE82({{rtp}},{{rfp}},{{sdis}},{{dp}},,{{dtb}})\n{{N}}{{x}} {{y}}\n{{N}}MCALL",
+      "description": "Like CYCLE81 with a dwell at the bottom, for a counterbore or a flat bottom. The drilling feed is set before MCALL.",
+      "group": "Drilling",
+      "id": "drill-dwell",
+      "label": "Drilling with dwell (CYCLE82)",
+      "machineType": "mill",
+      "params": [
+        {
+          "decimals": "as-entered",
+          "default": "50",
+          "id": "rtp",
+          "label": "Retraction plane (Z, absolute)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "rfp",
+          "label": "Reference plane: top of the hole (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "2",
+          "help": "Above the reference plane, without a sign.",
+          "id": "sdis",
+          "label": "Safety distance",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "-25",
+          "id": "dp",
+          "label": "Final depth (Z, absolute)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "150",
+          "help": "Written in its own block before MCALL. A feed written after MCALL would drill at once where the tool stands.",
+          "id": "f",
+          "label": "Drilling feed (mm/min)",
+          "max": 99999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "1",
+          "help": "Seconds; the cycle reads a negative value as spindle revolutions.",
+          "id": "dtb",
+          "label": "Dwell at the bottom (s)",
+          "max": 9999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "20",
+          "id": "x",
+          "label": "First hole X",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "X",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "20",
+          "id": "y",
+          "label": "First hole Y",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "Y",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}F{{f}}\n{{N}}MCALL CYCLE83({{rtp}},{{rfp}},{{sdis}},{{dp}},,{{fdep}},,{{dam}},{{dtb}},{{dts}},{{frf}},{{vari}})\n{{N}}{{x}} {{y}}\n{{N}}MCALL",
+      "description": "Pecks to the final depth, breaking the chip or pulling out after each peck. The drilling feed is set before MCALL, which makes the cycle modal for the positions that follow.",
+      "group": "Drilling",
+      "id": "peck-drill",
+      "label": "Deep-hole drilling (CYCLE83)",
+      "machineType": "mill",
+      "params": [
+        {
+          "decimals": "as-entered",
+          "default": "50",
+          "id": "rtp",
+          "label": "Retraction plane (Z, absolute)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "rfp",
+          "label": "Reference plane: top of the hole (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "2",
+          "help": "Above the reference plane, without a sign.",
+          "id": "sdis",
+          "label": "Safety distance",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "-25",
+          "id": "dp",
+          "label": "Final depth (Z, absolute)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "150",
+          "help": "Written in its own block before MCALL. A feed written after MCALL would drill at once where the tool stands.",
+          "id": "f",
+          "label": "Drilling feed (mm/min)",
+          "max": 99999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "-5",
+          "id": "fdep",
+          "label": "Depth of the first peck (Z, absolute)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "3",
+          "id": "dam",
+          "label": "Reduction of each further peck",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "dtb",
+          "label": "Dwell at the bottom (s)",
+          "max": 9999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "dts",
+          "label": "Dwell at the start for chip removal (s)",
+          "max": 9999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "1",
+          "id": "frf",
+          "label": "Feed factor for the first peck",
+          "max": 1,
+          "min": 0.001,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "Break the chip (0)",
+              "value": "0"
+            },
+            {
+              "label": "Pull out to clear the chips (1)",
+              "value": "1"
+            }
+          ],
+          "default": "0",
+          "id": "vari",
+          "label": "Between the pecks",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "20",
+          "id": "x",
+          "label": "First hole X",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "X",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "20",
+          "id": "y",
+          "label": "First hole Y",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "Y",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}MCALL CYCLE84({{rtp}},{{rfp}},{{sdis}},{{dp}},,{{dtb}},{{sdac}},,{{pit}},{{poss}},{{sst}},{{sst1}})\n{{N}}{{x}} {{y}}\n{{N}}MCALL",
+      "description": "Taps with the spindle under position control; the pitch and the speeds are arguments of the cycle, not the feed in force. MCALL makes it modal for the positions that follow.",
+      "group": "Drilling",
+      "id": "tapping",
+      "label": "Rigid tapping (CYCLE84)",
+      "machineType": "mill",
+      "params": [
+        {
+          "decimals": "as-entered",
+          "default": "50",
+          "id": "rtp",
+          "label": "Retraction plane (Z, absolute)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "rfp",
+          "label": "Reference plane: top of the hole (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "2",
+          "help": "Above the reference plane, without a sign.",
+          "id": "sdis",
+          "label": "Safety distance",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "-20",
+          "id": "dp",
+          "label": "Final depth (Z, absolute)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "dtb",
+          "label": "Dwell at the bottom (s)",
+          "max": 9999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "Clockwise (3)",
+              "value": "3"
+            },
+            {
+              "label": "Counter-clockwise (4)",
+              "value": "4"
+            },
+            {
+              "label": "Stopped (5)",
+              "value": "5"
+            }
+          ],
+          "default": "3",
+          "id": "sdac",
+          "label": "Spindle after the cycle",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "1.5",
+          "help": "Positive for a right-hand thread, negative for a left-hand one.",
+          "id": "pit",
+          "label": "Thread pitch (mm)",
+          "max": 99,
+          "min": -99,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "poss",
+          "label": "Spindle stop angle (°)",
+          "max": 360,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "default": 500,
+          "id": "sst",
+          "label": "Tapping speed (rpm)",
+          "max": 99999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "default": 0,
+          "help": "0 retracts at the tapping speed.",
+          "id": "sst1",
+          "label": "Retract speed (rpm)",
+          "max": 99999,
+          "min": 0,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "20",
+          "id": "x",
+          "label": "First hole X",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "X",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "20",
+          "id": "y",
+          "label": "First hole Y",
+          "max": 99999.999,
+          "min": -99999.999,
+          "prefix": "Y",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}M9\n{{N}}M5\n{{N}}{{end}}",
+      "description": "Coolant and spindle off and the end of the program.",
+      "group": "Program",
+      "id": "program-end",
+      "label": "Program end",
+      "params": [
+        {
+          "choices": [
+            {
+              "label": "End and rewind (M30)",
+              "value": "M30"
+            },
+            {
+              "label": "End (M2)",
+              "value": "M2"
+            }
+          ],
+          "default": "M30",
+          "id": "end",
+          "label": "End of program",
+          "required": true,
+          "type": "choice"
+        }
+      ],
+      "review": "pending",
+      "toolbar": true
+    }
+  ],
   "version": 1
 }

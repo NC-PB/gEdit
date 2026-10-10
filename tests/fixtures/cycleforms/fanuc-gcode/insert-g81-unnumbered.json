@@ -1,0 +1,27 @@
+{
+  "$format": 1,
+  "about": "Insert mode in an unnumbered document: no block number; a missing required value is refused.",
+  "input": [
+    "%",
+    "O1000",
+    "G90 G0 X0 Y0"
+  ],
+  "line": 3,
+  "insert": {
+    "code": "G81",
+    "env": {
+      "prevBlockNumber": null,
+      "numbered": false
+    }
+  },
+  "values": {
+    "X": "5.",
+    "Z": "-7.",
+    "R": "2."
+  },
+  "expected": {
+    "errors": {
+      "F": "cycleForm.refused.required"
+    }
+  }
+}

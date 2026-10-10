@@ -1,0 +1,29 @@
+{
+  "$format": 1,
+  "about": "The packed G81 of f02 line 20: Z changed, the optional X cleared (no space to take with it), K added with no separator, before nothing.",
+  "input": "../../nc/fanuc/f02-packed.nc",
+  "line": 20,
+  "form": {
+    "values": {
+      "X": "10.",
+      "Y": "10.",
+      "Z": "-5.",
+      "R": "2.",
+      "F": "200.",
+      "K": ""
+    },
+    "kept": []
+  },
+  "values": {
+    "Z": "-6",
+    "X": "",
+    "K": "3"
+  },
+  "expected": {
+    "first": 20,
+    "last": 20,
+    "lines": [
+      "N150G98G81Y10.Z-6.R2.F200.K3"
+    ]
+  }
+}

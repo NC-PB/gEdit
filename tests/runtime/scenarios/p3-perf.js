@@ -6,7 +6,7 @@
 //
 //   A. The index build never blocks the UI. From the moment the opened program is drawn until the modal
 //      index covers it (`ctx.modal.whenReady`), a 4 ms timer keeps ticking; the longest gap between two ticks is
-//      the longest stall, held to `STALL_BUDGET_MS` (the plan: idle chunks of 16 ms, plus a frame).
+//      the longest stall, held to `STALL_BUDGET_MS` (the plan: idle slices of 8 ms since P3b, 16 ms in P3a, plus a frame).
 //   B. Hover at line 300,000: the context line is there, and the hover costs at most `HOVER_BUDGET_MS` more
 //      than the same hover at line 10 of the same document. Right after an edit at line 1 the index has
 //      dropped its later snapshots, so the same far hover is the Phase 2 text and nothing stale; the inspector
@@ -20,6 +20,10 @@
 //      more than `MAX_MARKS` in all.
 //   E. A machine switch rebuilds the index in idle chunks: the same stall budget while it rebuilds, the hover
 //      is the Phase 2 text until it has caught up, and the colours come back.
+//   F. (H3b, plan P3a known gap 9 and P3b known gap 15) A 300,000-line Klartext program, the dialect whose index is the
+//      most expensive to build: the same stall budget while it builds in 8 ms slices, how long the build takes on the
+//      wall clock (nothing waits for it, so the budget only catches a build that stops finishing), and the hover at the
+//      far end once it has.
 
 import { scenario } from '../lib/index.js'
 import { largeProgram, plain, revealLine } from './m3-common.js'
@@ -36,6 +40,14 @@ const KEYPRESS_P95_BUDGET_MS = 50
 const FRAME_MS = 17
 /** The cost of the inspector and the colours for typing: one frame (the same allowance as `m12-perf`). */
 const TYPING_COST_BUDGET_MS = 17
+/**
+ * The wall-clock time from the opened program to a finished index of a 300,000-line Klartext program (idle slices of
+ * 8 ms). Nothing waits for it (AD-33), so the budget is not a user-visible figure: it is twice what the development
+ * Mac measured on the P3b build (2.8-3.8 s after the open, as long as the mill program's 2.7-3.9 s: the wall time of
+ * an idle build is the idle callbacks, not the work, which is 0.9-1.6 s of CPU in node), so that a build which has
+ * become much slower, or no longer finishes, is caught.
+ */
+const KLARTEXT_BUILD_BUDGET_MS = 8000
 const KEYSTROKES = 40
 const MOVES = 20
 const MAX_RETRIES = 2
@@ -54,6 +66,32 @@ function checkStall(h, what, r) {
   h.log(`${what}: outline ready at ${r.done.outline} ms, index at ${r.done.modal} ms; worst gap ${r.worstAll} ms, after the outline ${r.worstAfterOutline}; gaps over 30 ms: ${r.gaps.map((g) => `${g.at}:${g.gap}`).join(' ')}`)
   h.check(`${what}: the index outlasted the outline's own build, so its chunks can be told apart (index ${r.done.modal} ms, outline ${r.done.outline} ms)`, r.isolated, r.done)
   h.checkTime(`${what}: the page is never stalled by the index, the longest gap between two 4 ms ticks after the outline was done`, r.worstAfterOutline ?? r.worstAll, STALL_BUDGET_MS, { done: r.done, gaps: r.gaps.slice(0, 20) }, { also: r.isolated })
+}
+
+/**
+ * A deterministic 300,000-line Klartext program: a header, a tool call and a long run of numbered straight moves,
+ * CRLF throughout (the shape of `largeProgram`, in the dialect whose tokenizer is the most expensive).
+ * @param {number} [minLines]
+ */
+function largeKlartext(minLines = 300000) {
+  const lines = ['0 BEGIN PGM PERF MM', '1 BLK FORM 0.1 Z X+0 Y+0 Z-20', '2 BLK FORM 0.2 X+100 Y+80 Z+0', '3 TOOL CALL 1 Z S3000', '4 L Z+25 R0 FMAX M3', '5 L X+0 Y+0 R0 FMAX', '6 L Z-1 R0 F200']
+  let n = lines.length
+  let x = 0
+  let y = 0
+  let direction = 1
+  const signed = (/** @type {number} */ value) => `${value < 0 ? '-' : '+'}${Math.abs(value).toFixed(3)}`
+  while (lines.length < minLines - 1) {
+    x += 0.5 * direction
+    if (x > 100 || x < 0) {
+      direction = -direction
+      x += 0.5 * direction
+      y = y >= 80 ? 0 : y + 1
+    }
+    const z = -2 + Math.sin(x / 7) * Math.cos(y / 5)
+    lines.push(`${n++} L X${signed(x)} Y${signed(y)} Z${signed(z)} R0 F800`)
+  }
+  lines.push(`${n} END PGM PERF MM`)
+  return lines.join('\r\n') + '\r\n'
 }
 
 scenario('p3-perf', { timeout: 1500 }, async (h) => {
@@ -268,5 +306,32 @@ scenario('p3-perf', { timeout: 1500 }, async (h) => {
     await clickMotionColors(h)
     await h.waitFor(() => markCount(h) > 0, { timeout: 5000 })
     h.check('and the colours are back on the lines of the new state', markCount(h) > 0 && markDecorations(h).length <= MAX_MARKS, markCount(h))
+  })
+  // ==================================================================== F. a Klartext program of 300,000 lines
+  await guard(h, 'F. Klartext', async () => {
+    const text = largeKlartext()
+    const klines = splitLines(text)
+    const kpath = `${h.cfg.run}/p3-perf-300k-klartext.h`
+    await h.disk.write(kpath, text)
+    h.check(`the generated Klartext program has ${klines.length} lines (300,000 or more)`, klines.length >= 300000, klines.length)
+    await h.dialogs.queue('open', kpath)
+    const opened = await ctx.files.open()
+    const kid = opened[0] ?? ''
+    const shown = await untilDom(() => h.q('editor-host')?.dataset.docId === kid && drawn(h, '0 BEGIN PGM PERF MM'), 60000)
+    h.check('the program is open, drawn, and read as a Klartext program', shown !== null && ctx.docs.get(kid)?.profileId === 'heidenhain-klartext', ctx.docs.get(kid)?.profileId)
+    await h.waitFor(() => ctx.editor.getLineCount(kid) >= klines.length, { timeout: 120000, interval: 50 })
+    const build = await watchRebuild(h, kid, async () => {})
+    checkStall(h, `the Klartext index of ${klines.length} lines after the open`, build)
+    h.log(`Klartext index: ready ${build.done.modal} ms after the open (outline ${build.done.outline} ms)`)
+    h.checkTime(`the Klartext index of ${klines.length} lines is complete`, build.done.modal, KLARTEXT_BUILD_BUDGET_MS, { done: build.done })
+    const FARK = klines.length - 20
+    const farLine = ctx.editor.getLines(kid, FARK, FARK)[0]
+    // Another word in between, so the hover to time is a new content to wait for (as in section B).
+    await hoverOn(h, kid, FARK, 'F800')
+    const ms = await hoverLatency(h, kid, FARK, farLine.indexOf(' X') + 3)
+    const hover = await hoverOn(h, kid, FARK, farLine.split(' ')[2])
+    h.log(`Klartext hover at line ${FARK}: ${Math.round(ms)} ms`)
+    h.check(`the hover at line ${FARK} has its context line: an axis word is a target`, hover.last.startsWith('X — ') && hover.last.includes(ctx.t('assistant.context.target')), hover.last)
+    h.checkTime(`Klartext hover at line ${FARK}, from the trigger to the content with the context`, ms, HOVER_BUDGET_MS, {}, { also: ms > 0 })
   })
 })

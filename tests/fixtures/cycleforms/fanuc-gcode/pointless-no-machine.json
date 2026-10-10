@@ -1,0 +1,20 @@
+{
+  "$format": 1,
+  "about": "A point-less Z with no machine chosen: its reading depends on the machine (increments or as written), so the form refuses to change it, like the inspector's edit.",
+  "input": [
+    "%",
+    "O1000",
+    "N10 G90 G0 X0 Y0",
+    "N20 G98 G83 X1. Y1. Z-5000 R2. Q4. F100. (PECK)",
+    "N30 G80"
+  ],
+  "line": 4,
+  "values": {
+    "Z": "-6000"
+  },
+  "expected": {
+    "errors": {
+      "Z": "inspector.why.needsMachine"
+    }
+  }
+}

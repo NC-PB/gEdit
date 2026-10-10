@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "fanuc-lathe",
+  "profile": "fanuc-lathe",
+  "template": "rough-finish",
+  "values": {},
+  "env": {
+    "prevBlockNumber": 100,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "N110 G0 X40. Z2.\nN120 G71 U1.5 R0.5\nN130 G71 P100 Q200 U0.4 W0.1 F0.25\nN100 G0 X16.\nN200 G1 X34.\nN140 G70 P100 Q200"
+}

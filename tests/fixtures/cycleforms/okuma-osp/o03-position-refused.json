@@ -1,0 +1,13 @@
+{
+  "$format": 1,
+  "about": "C60 under the modal G181 of line 15 runs the cycle there.",
+  "input": "../../nc/okuma/o03-live-tool.MIN",
+  "line": 16,
+  "values": {},
+  "expected": {
+    "refused": "cycleForm.refused.elsewhere",
+    "params": {
+      "line": 15
+    }
+  }
+}

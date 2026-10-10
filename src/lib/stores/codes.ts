@@ -25,6 +25,7 @@ import { CodeDbError, loadCodeDb, emptyCodeDb, type CodeDbProblem } from '$lib/c
 import { completionsFor, lookupWord as lookupWordIn, normalizeCode } from '$lib/core/codes/lookup';
 import { MAX_CODE_DB_DEPTH, resolveCodeDbFiles, type CodeDbMergeNotice } from '$lib/core/codes/resolve';
 import { BUILTIN_CODE_DB_JSON } from '$lib/data/codes';
+import { loadTemplates, TEMPLATE_LIMITS } from '$lib/core/templates/load';
 import { profiles } from '$lib/stores/profiles';
 import type { CodeDbService, UserFileText } from '$lib/app/types';
 import type { CodeDb, CodeEntry, CodeLookup } from '$lib/core/codes/types';
@@ -463,7 +464,21 @@ export function createCodeDbService(deps: CodeDbServiceDeps): CodeDbServiceInter
       indexOf.push(i);
       return true;
     });
-    return { dialect: stem, layer: { file: f.name, raw: { ...raw, codes }, indexOf }, overlay };
+    // Phase 3 (P3b prelude): the same for the templates. A broken user template is reported above
+    // (`templates[i]…`) and left out of the merge, so it never replaces the built-in template of
+    // the same id with nothing; of two with one id the first that reads wins, as in the loader.
+    const layerRaw: Record<string, unknown> = { ...raw, codes };
+    delete layerRaw.templates;
+    if (Array.isArray(raw.templates)) {
+      const ids = new Set<string>();
+      layerRaw.templates = raw.templates.slice(0, TEMPLATE_LIMITS.templates).filter((item) => {
+        const one = loadTemplates([item]);
+        if (one.length !== 1 || ids.has(one[0].id)) return false;
+        ids.add(one[0].id);
+        return true;
+      });
+    }
+    return { dialect: stem, layer: { file: f.name, raw: layerRaw, indexOf }, overlay };
   }
 
   /**

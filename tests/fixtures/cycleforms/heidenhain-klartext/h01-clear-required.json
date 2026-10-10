@@ -1,0 +1,14 @@
+{
+  "$format": 1,
+  "about": "Clearing a required Q parameter is refused.",
+  "input": "../../nc/heidenhain/h01-3tools.h",
+  "line": 19,
+  "values": {
+    "Q201": ""
+  },
+  "expected": {
+    "errors": {
+      "Q201": "cycleForm.refused.required"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "sinumerik",
+  "profile": "sinumerik-mill",
+  "template": "tool-change",
+  "values": {},
+  "env": {
+    "prevBlockNumber": 100,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "N110 T=\"END_MILL_D10\" M6\nN120 D1\nN130 S3000 M3\nN140 G0 X0 Y0\nN150 Z50 M8"
+}

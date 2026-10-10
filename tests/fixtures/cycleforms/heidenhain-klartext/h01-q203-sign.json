@@ -1,0 +1,26 @@
+{
+  "$format": 1,
+  "about": "Q203=+0 keeps its written plus sign when changed to a positive value, and takes a minus.",
+  "input": "../../nc/heidenhain/h01-3tools.h",
+  "line": 19,
+  "values": {
+    "Q203": "2",
+    "Q204": "-1"
+  },
+  "expected": {
+    "first": 19,
+    "last": 28,
+    "lines": [
+      "18 CYCL DEF 200 DRILLING ~",
+      "   Q200=2 ;CLEARANCE ~",
+      "   Q201=-15 ;DEPTH ~",
+      "   Q206=150 ;PLUNGE FEED ~",
+      "   Q202=5 ;PECK ~",
+      "   Q210=0 ;DWELL TOP ~",
+      "   Q203=+2 ;SURFACE ~",
+      "   Q204=-1 ;2ND CLEARANCE ~",
+      "   Q211=0 ;DWELL BOTTOM ~",
+      "   Q395=0 ;DEPTH REF"
+    ]
+  }
+}

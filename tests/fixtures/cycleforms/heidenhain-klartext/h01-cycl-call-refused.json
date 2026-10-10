@@ -1,0 +1,13 @@
+{
+  "$format": 1,
+  "about": "CYCL CALL runs the cycle defined on line 19: the form edits the definition.",
+  "input": "../../nc/heidenhain/h01-3tools.h",
+  "line": 30,
+  "values": {},
+  "expected": {
+    "refused": "cycleForm.refused.elsewhere",
+    "params": {
+      "line": 19
+    }
+  }
+}

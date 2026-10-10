@@ -528,7 +528,8 @@ describe('editing a value', () => {
     r.moveCursor(5, 16); // Q5.
     r.answer.value = '6.5';
     expect(await r.service.editAtCursor()).toBe('applied');
-    expect(r.prompts[0]).toMatchObject({ title: 'Change Q5.', initial: '5.' });
+    // `Q` of the mill cycle is a length (P3b intA, plan §7 #235): the prompt shows its value in mm.
+    expect(r.prompts[0]).toMatchObject({ title: 'Change Q5.', label: 'New value in mm', initial: '5' });
     expect(r.lines[4]).toBe('G83 Z-20. R2. Q6.5 F100');
   });
 

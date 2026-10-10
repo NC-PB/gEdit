@@ -248,3 +248,12 @@ describe('helpers', () => {
     expect(decimalPlaces(Number.NaN)).toBe(0);
   });
 });
+
+describe('a read-only field (Phase 3 plan §7 #226)', () => {
+  it('is not validated: it shows a computed value and nothing was typed into it', () => {
+    const computed: FieldSpec = { id: 'feed', type: 'integer', label: 'Feed', readOnly: true, required: true, min: 1 };
+    expect(validateFields([computed], {})).toEqual({});
+    expect(validateFields([computed], { feed: 'abc' })).toEqual({});
+    expect(validateFields([{ ...computed, readOnly: false }], {})).toEqual({ feed: { key: 'forms.errors.required' } });
+  });
+});

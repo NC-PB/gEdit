@@ -388,8 +388,8 @@ function idArg(arg: unknown): string | undefined {
  * go through the registry like every other control.
  *
  * The title is the script's own name and therefore **not** an i18n key: `t()` returns an
- * unknown key unchanged, which is exactly the fallback `contrib/blocks.ts` relies on for
- * block names (AD-14).
+ * unknown key unchanged, which is exactly the fallback `contrib/templates.ts` relies on for
+ * template labels (AD-14).
  */
 export function runCommandsFor(entries: readonly ScriptEntry[]): CommandDef[] {
   return entries

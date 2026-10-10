@@ -96,7 +96,7 @@ Releases (accepted 2026-10-01; [D70](phase-2-implementation.md#101-decided-by-th
 | v0.4 | M10 | published |
 | v0.5 | M11 | published |
 | v0.6 | M12, the owner answers of 2026-10-07 and 2026-10-08 | next: ready on `main`, cut when the owner asks |
-| 1.0 | M13, the Phase 2 exit | planned: the one release, cut at the very end after the owner's bundle check on the three platforms (the v0.6 changes go into it) |
+| 1.0 | M13, the Phase 2 exit, and Phase 3 (P3a, P3b; all on `main`) | planned: the one release, cut at the very end after the owner's bundle check on the three platforms (the v0.6 changes and Phase 3 go into it) |
 
 Row by row:
 
@@ -140,11 +140,11 @@ The exit criteria hold, and these things the original Phase 2 listed were moved 
 
 The release notes of 1.0 repeat this list.
 
-## Phase 3: Understand and write (in progress)
+## Phase 3: Understand and write (done)
 
 Exit criteria: a user can put the cursor in any block and see what each word means and what is in force there (the code inspector), change a value from the inspector, read a cycle's parameters and the modal context in the hover, see at a glance how each line moves (motion colors), and insert parameterized templates in place of the old code blocks. The TypeScript modal interpreter gives the same answers as the Python one, line by line. These are exit criteria X7 (the inspector) and the templates half of X9 of the former Phase 2 plan, plus X14–X18 (hover, parity, motion colors, no regression within the budgets, cycle forms and the template manager); X9 keeps the user-profile and code-file half in Phase 2.
 
-Status: **the plan of record is [phase-3-implementation.md](phase-3-implementation.md)** (2026-10-09), with two milestones: **P3a "Understand a block"** (implemented on `p3a/int`, 2026-10-09: P3.1, P3.2a/b, P3.3 and P3.7 with the user guide; two reviews and a skeptic pass with both fix batches are done, the local runs of the new scenarios pass, and it **lands on `main` next**, with the runtime suite on the GitHub runner after the landing) and **P3b "Write with templates"** (designed; its prelude follows P3a). The designs that the Phase 2 plan kept for Phase 3 moved there.
+Status: **done (2026-10-10); the plan of record is [phase-3-implementation.md](phase-3-implementation.md)**, with two milestones, both on `main`, reviewed and fixed: **P3a "Understand a block"** (on `main` 2026-10-09: P3.1, P3.2a/b, P3.3 and P3.7 with the user guide; two reviews, a skeptic pass and both fix batches; runtime suite 130 of 130 on the GitHub runner, run 37971477581) and **P3b "Write with templates"** (on `main` 2026-10-10: the prelude, P3.4 the engine, P3.6 the content of 49 templates for the six built-in sets, all still marked "review pending", P3.8 cycle forms, formulas and the engine of "from selection", P3.5 the Insert tab, completion and Edit Cycle, P3.5x the deletion of the Phase 1 blocks, P3.9 the template manager and New Template from Selection, with the user guide page [Writing with templates](../user/templates.md); the NC review (17 findings), the code review (17), the skeptic pass (31 confirmed, 2 partly, none rejected), their fix batches and a fuzz review of the fast block-number scan; the harness scenarios of H3b and the 8 ms slices measured again; runtime suite 133 of 133 on the GitHub runner, run 38013719677). The owner's review of the template content is still to come (G10); the one release, v1.0.0, follows. The designs that the Phase 2 plan kept for Phase 3 moved there.
 
 | Area | Item | Size | Delivery | Plan | Status |
 |---|---|---|---|---|---|
@@ -152,11 +152,11 @@ Status: **the plan of record is [phase-3-implementation.md](phase-3-implementati
 | Assistant | [Code inspector panel](code-assistant.md#code-inspector-panel), [edit values](code-assistant.md#edit-values-in-the-inspector) | M | Core | P3a: P3.2a (reading a word, the rows, editing a value), P3.2b (the panel) | done: reviewed and fixed, on `main` |
 | Assistant | [Hover with cycle parameters and modal context](code-assistant.md#hover-explanations-for-codes) | S | Core | P3a: P3.3 | done: reviewed and fixed, on `main` |
 | Profiles | Motion-mode line coloring from the modal interpreter ([tokenizer and colors](dialect-profiles.md#tokenizer-and-colors)): a colored mark beside each line that moves (rapid, straight, arc, thread, cycle), with a setting | M | Core | P3a: P3.7 | done (AD-34): reviewed and fixed, on `main` |
-| Assistant | [Parametric templates](code-assistant.md#parametric-templates), [placeholders](code-assistant.md#placeholders), [file-based templates](code-assistant.md#template-files-and-management): the engine | M | Core | [P3b](phase-3-implementation.md#p3b-write-with-templates): P3.4 | planned |
-| Assistant | [Templates in completion](code-assistant.md#templates-in-completion) and in the Insert tab, in place of the blocks JSON | M | Core | P3b: P3.5 | planned |
-| Assistant | Template content for the built-in dialects, marked "review pending" until the owner's review | M | Profile | P3b: P3.6 | planned |
-| Assistant | [Cycle forms](code-assistant.md#cycle-forms), [formula parameters](code-assistant.md#formula-parameters), [template manager UI and create from selection](code-assistant.md#template-files-and-management) | M | Core | P3b: P3.8, P3.9 (designed by the P3b prelude) | planned |
-| Profiles | Form-generated profile editor with a live preview, beside the template manager UI ([phase-2-implementation.md §11 item 1](phase-2-implementation.md#11-deferred-or-cut-items-phase-2--phase-3-or-backlog); D40) | M | Core | with the template manager UI | planned |
+| Assistant | [Parametric templates](code-assistant.md#parametric-templates), [placeholders](code-assistant.md#placeholders), [file-based templates](code-assistant.md#template-files-and-management): the engine | M | Core | [P3b](phase-3-implementation.md#p3b-write-with-templates): P3.4 | done (AD-37, AD-38): the engine, the file format, 8 ms index slices; reviewed and fixed, on `main` |
+| Assistant | [Templates in completion](code-assistant.md#templates-in-completion) and in the Insert tab, in place of the blocks JSON | M | Core | P3b: P3.5, then P3.5x deletes the blocks | done: the Insert tab by template group with Favorites, completion on an empty line, the palette, Edit Cycle; the blocks are deleted; reviewed and fixed, on `main` |
+| Assistant | Template content for the built-in dialects, marked "review pending" until the owner's review | M | Profile | P3b: P3.6 | done: 49 templates in the six built-in sets, mill and lathe sets apart, all still marked "review pending"; reviewed and fixed, on `main`; the owner's review (G10) follows |
+| Assistant | [Cycle forms](code-assistant.md#cycle-forms), [formula parameters](code-assistant.md#formula-parameters), [template manager UI and create from selection](code-assistant.md#template-files-and-management) | M | Core | P3b: P3.8 (cycle forms, formulas, the engine half of "from selection"), P3.9 (the manager) | done (X18): Edit Cycle, formula fields, the manager with save through the file's document, New Template from Selection; reviewed and fixed, on `main` |
+| Profiles | Form-generated profile editor with a live preview, beside the template manager UI ([phase-2-implementation.md §11 item 1](phase-2-implementation.md#11-deferred-or-cut-items-phase-2--phase-3-or-backlog); D40) | M | Core | not in P3b (the session plan has the template manager only; [Phase 3 plan §9](phase-3-implementation.md#9-owner-decisions-and-defaults) item 9) | deferred (Phase 4) |
 
 ## Phase 4: Comfort and geometry
 
@@ -175,6 +175,7 @@ Exit criteria: geometry transforms and cycle expansion work reliably on the fixt
 | Scripting | [Script packages](scripting.md#plugins) enable/disable, per-script shortcuts | S | Core |
 | Settings | [Keyboard shortcut customization](settings-ui.md#keyboard-shortcuts), [full config export/import and relocation](settings-ui.md#configuration-portability), [UI translations](settings-ui.md#internationalization) | M | Core |
 | Settings | Per-profile colors and the [role color editor](settings-ui.md#themes-and-colors), a settings search box, JSON Schemas for profiles and machines | M | Core |
+| Profiles | Form-generated profile editor with a live preview (D40; moved from Phase 3 by the P3b prelude, 2026-10-09) | M | Core |
 | Profiles | Per-profile `tabWidth`, `rulers` and completion mode; hover delay and modifier modes; a quick switcher in recently-used order (§11 item 21; or cut) | S | Core |
 | Machines | The later machine parameters (§11 item 26): folder-to-machine rules, a `toolWord` variant for short lathe `T` words, machine limits (top spindle speed, travel) used by the program checks, per-block parameter units (`G76` `P`), editing per-class number input in the dialog (or when asked for) | M | Core + Profile |
 | Editor | Multi-channel, the rest (§11 item 28): merging a split channel document back into its source, channel-aware compare and search scope, a sync timeline, writing the split channels to disk, a check that follows jumps, folder-aware sibling lookup, and sync presets per control | L | Core |

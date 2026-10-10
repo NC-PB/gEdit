@@ -178,5 +178,148 @@
       "label": "Cycle return to the retract plane",
       "description": "After each hole a drilling cycle pulls back only to the R plane, which is quicker. In G-code system A the same number means feed per revolution instead."
     }
+  ],
+  "templates": [
+    {
+      "id": "program-start",
+      "label": "Program start",
+      "group": "Program",
+      "description": "G-code system B: tape mark, program number, a safe-start line (units, no nose radius compensation, feed per revolution with G95), both axes to the reference point and back to absolute positions (G90).",
+      "toolbar": true,
+      "machineType": "lathe",
+      "review": "pending",
+      "body": "%\nO{{prog}} {{title}}\n{{N}}{{units}} G40 G95\n{{N}}G91 G28 X0. Z0.\n{{N}}G90",
+      "params": [
+        {
+          "id": "prog",
+          "label": "Program number",
+          "type": "integer",
+          "help": "The number after O, written with at least four digits. O0 is not allowed.",
+          "required": true,
+          "min": 1,
+          "max": 99999999,
+          "default": 1000,
+          "digits": 4
+        },
+        {
+          "id": "title",
+          "label": "Program name",
+          "type": "text",
+          "default": "NEW PROGRAM",
+          "comment": true
+        },
+        {
+          "id": "units",
+          "label": "Units",
+          "type": "choice",
+          "required": true,
+          "choices": [
+            { "label": "Millimetres (G21)", "value": "G21" },
+            { "label": "Inches (G20)", "value": "G20" }
+          ],
+          "default": "G21"
+        }
+      ]
+    },
+    {
+      "id": "tool-start",
+      "label": "Tool start",
+      "group": "Tool change",
+      "description": "G-code system B: the speed limit (G92 S), the turret station with its offset and a comment, constant cutting speed with the spindle direction, the approach and coolant.",
+      "toolbar": true,
+      "machineType": "lathe",
+      "review": "pending",
+      "body": "{{N}}G92 S{{smax}}\n{{N}}T{{t}}{{o}} {{name}}\n{{N}}G96 S{{vc}} {{dir}}\n{{N}}G0 X{{x}} Z{{z}} {{coolant}}",
+      "params": [
+        {
+          "id": "smax",
+          "label": "Highest spindle speed (rpm)",
+          "type": "integer",
+          "help": "The speed limit for constant cutting speed; the spindle never turns faster.",
+          "required": true,
+          "min": 1,
+          "max": 99999,
+          "default": 2500
+        },
+        {
+          "id": "t",
+          "label": "Turret station",
+          "type": "integer",
+          "required": true,
+          "min": 1,
+          "max": 99,
+          "default": 1,
+          "digits": 2
+        },
+        {
+          "id": "o",
+          "label": "Offset number",
+          "type": "integer",
+          "required": true,
+          "min": 0,
+          "max": 99,
+          "default": 1,
+          "digits": 2
+        },
+        {
+          "id": "name",
+          "label": "Tool description",
+          "type": "text",
+          "default": "OD ROUGH",
+          "comment": true
+        },
+        {
+          "id": "vc",
+          "label": "Cutting speed (m/min)",
+          "type": "integer",
+          "help": "Constant cutting speed: the control changes the spindle speed with the diameter.",
+          "required": true,
+          "min": 1,
+          "max": 9999,
+          "default": 220
+        },
+        {
+          "id": "dir",
+          "label": "Spindle direction",
+          "type": "choice",
+          "required": true,
+          "choices": [
+            { "label": "Clockwise (M3)", "value": "M3" },
+            { "label": "Counter-clockwise (M4)", "value": "M4" }
+          ],
+          "default": "M3"
+        },
+        {
+          "id": "x",
+          "label": "Approach diameter (X)",
+          "type": "number",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "34",
+          "decimals": "min1"
+        },
+        {
+          "id": "z",
+          "label": "Approach position (Z)",
+          "type": "number",
+          "required": true,
+          "min": -99999.999,
+          "max": 99999.999,
+          "default": "2",
+          "decimals": "min1"
+        },
+        {
+          "id": "coolant",
+          "label": "Coolant",
+          "type": "choice",
+          "choices": [
+            { "label": "Coolant on (M8)", "value": "M8" },
+            { "label": "No coolant", "value": "" }
+          ],
+          "default": "M8"
+        }
+      ]
+    }
   ]
 }

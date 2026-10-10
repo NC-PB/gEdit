@@ -1,0 +1,16 @@
+{
+  "$format": 1,
+  "about": "A no-op on CYCLE84: the block comes back byte for byte.",
+  "input": "../../nc/sinumerik/s02-drill.MPF",
+  "line": 36,
+  "values": {
+    "RTP": "5"
+  },
+  "expected": {
+    "first": 36,
+    "last": 36,
+    "lines": [
+      "N320 CYCLE84(5,0,2,-15,,0.5,3,,1.5,,500,500)"
+    ]
+  }
+}

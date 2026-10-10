@@ -14,7 +14,8 @@ import sinumerikCodesJson from '$lib/data/codes/sinumerik.json';
 import { compileProfile } from '$lib/core/profiles/compile';
 import { t } from '$lib/i18n';
 import { loadCodeDb } from './load';
-import { completionContext, completionItems, completionsAt } from './completionItems';
+import { completionContext, completionItems, completionsAt, templateMatches } from './completionItems';
+import { loadTemplates, type TemplateDef } from '$lib/core/templates';
 import type { CompiledProfile, Profile } from '$lib/core/profiles/types';
 import type { CodeDb, CodeEntry } from './types';
 
@@ -382,5 +383,104 @@ describe('completionItems', () => {
   it('leaves the notes out when there is no translator', () => {
     const [item] = completionItems([entry('G83', fanuc)]);
     expect(item.documentation).toBe(entry('G83', fanuc).description);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Templates (Phase 3 plan §5 P3.5)
+// ---------------------------------------------------------------------------
+
+describe('completion: templates', () => {
+  const list = loadTemplates([
+    { id: 'peck-drill', label: 'Peck drilling (G83)', group: 'Drilling', description: 'A hole with pecks.', review: 'pending', body: '{{N}}G83' },
+    { id: 'tapping', label: 'Rigid tapping', group: 'Tapping', body: '{{N}}G84' },
+    { id: 'quick', label: 'Quick hole', group: 'Drilling', snippet: true, body: 'G81 Z${1:-5.}' },
+  ]);
+  const withTemplates = {
+    t,
+    templates: { list, snippetText: (def: TemplateDef) => (def.id === 'quick' ? 'G81 Z${1:-5.}' : null) },
+  };
+
+  function offered(cp: CompiledProfile, db: CodeDb, marked: string, extra = withTemplates) {
+    const offset = marked.indexOf('|');
+    const line = marked.slice(0, offset) + marked.slice(offset + 1);
+    return completionsAt(line, offset, cp, db, extra);
+  }
+  const templateLabels = (marked: string, cp = fanucProfile, db = fanuc): string[] =>
+    (offered(cp, db, marked)?.items ?? []).filter((item) => item.kind === 'template').map((item) => item.label);
+
+  it('offers every template on a line that is empty up to the cursor, sorted ahead of the codes', () => {
+    const result = offered(fanucProfile, fanuc, '|')!;
+    const ordered = [...result.items].sort((a, b) => (a.sortText ?? '').localeCompare(b.sortText ?? ''));
+    expect(ordered.slice(0, 3).map((item) => item.label)).toEqual(['Peck drilling (G83)', 'Rigid tapping', 'Quick hole']);
+    expect(ordered[3].kind).not.toBe('template');
+    expect(result.items.length).toBeGreaterThan(3);
+  });
+
+  it('is also offered behind indentation, and filters by the typed text against the label’s words', () => {
+    expect(templateLabels('   |')).toHaveLength(3);
+    expect(templateLabels('dri|')).toEqual(['Peck drilling (G83)']);
+    expect(templateLabels('QUICK|')).toEqual(['Quick hole']);
+    expect(templateLabels('peck d|')).toEqual(['Peck drilling (G83)']); // what is typed starts the label
+    expect(templateLabels('G83|')).toEqual(['Peck drilling (G83)']);
+    expect(templateLabels('xyz|')).toEqual([]);
+  });
+
+  it('keeps the codes after the templates when a prefix is typed', () => {
+    const result = offered(fanucProfile, fanuc, 'G8|')!;
+    const kinds = result.items.map((item) => item.kind);
+    expect(kinds.indexOf('template')).toBeGreaterThan(kinds.lastIndexOf('code'));
+  });
+
+  it('is not offered after a block number, behind another word, in a comment, in a string or inside a call', () => {
+    expect(templateLabels('N10 |')).toEqual([]);
+    expect(templateLabels('N10 dri|')).toEqual([]);
+    expect(templateLabels('G0 X1 dri|')).toEqual([]);
+    expect(templateLabels('(dri|')).toEqual([]);
+    expect(templateLabels('; dri|', klartextProfile, heidenhain)).toEqual([]);
+    expect(offered(sinumerikProfile, sinumerik, 'MSG("dri|')).toBeNull();
+    expect(templateLabels('CYCLE83(5,|', sinumerikProfile, sinumerik)).toEqual([]);
+    expect(offered(fanucProfile, fanuc, '(HEADER) |')).not.toBeNull();
+  });
+
+  it('is offered at the start of a Klartext block, without a block number, like the codes', () => {
+    expect(templateLabels('|', klartextProfile, heidenhain)).toHaveLength(3);
+    expect(templateLabels('12 |', klartextProfile, heidenhain)).toEqual([]);
+  });
+
+  it('inserts a snippet template’s text inline as a snippet, and a form template nothing but its id', () => {
+    const items = offered(fanucProfile, fanuc, '|')!.items.filter((item) => item.kind === 'template');
+    const form = items.find((item) => item.label === 'Rigid tapping')!;
+    expect(form).toMatchObject({ insertText: '', snippet: false, template: { id: 'tapping', form: true } });
+    const quick = items.find((item) => item.label === 'Quick hole')!;
+    expect(quick).toMatchObject({ insertText: 'G81 Z${1:-5.}', snippet: true, template: { id: 'quick', form: false } });
+  });
+
+  it('leaves out a snippet template that cannot be rendered', () => {
+    const none = { t, templates: { list, snippetText: () => null } };
+    const labelsOut = (offered(fanucProfile, fanuc, '|', none)?.items ?? []).filter((i) => i.kind === 'template').map((i) => i.label);
+    expect(labelsOut).toEqual(['Peck drilling (G83)', 'Rigid tapping']);
+  });
+
+  it('names the group, the description and that the review is pending', () => {
+    const peck = offered(fanucProfile, fanuc, '|')!.items.find((item) => item.label === 'Peck drilling (G83)')!;
+    expect(peck.detail).toBe('Template: Drilling');
+    expect(peck.documentation).toBe(`A hole with pecks.\n\n${t('templates.reviewPending')}`);
+    const tapping = offered(fanucProfile, fanuc, '|')!.items.find((item) => item.label === 'Rigid tapping')!;
+    expect(tapping.documentation).toBeUndefined();
+    // Monaco is told to keep every item we matched.
+    expect(offered(fanucProfile, fanuc, 'dri|')!.items[0].filterText).toBe('dri');
+  });
+
+  it('offers nothing of the kind without templates, as before', () => {
+    expect(offered(fanucProfile, fanuc, '|', { t } as never)!.items.some((item) => item.kind === 'template')).toBe(false);
+  });
+
+  it('matches by the start of the label or of one of its words', () => {
+    expect(templateMatches('Peck drilling (G83)', '')).toBe(true);
+    expect(templateMatches('Peck drilling (G83)', 'Peck')).toBe(true);
+    expect(templateMatches('Peck drilling (G83)', 'peck dr')).toBe(true);
+    expect(templateMatches('Peck drilling (G83)', 'ill')).toBe(false);
+    expect(templateMatches('Bohrung Grundloch', 'grund')).toBe(true);
   });
 });

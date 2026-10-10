@@ -1,0 +1,20 @@
+{
+  "$format": 1,
+  "codes": "sinumerik",
+  "profile": "sinumerik",
+  "template": "program-start",
+  "values": {
+    "setup": "G18 G90 G95 DIAMON"
+  },
+  "env": {
+    "prevBlockNumber": null,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": ";NEW PROGRAM\nN10 G18 G90 G95 DIAMON G71\nN20 G54"
+}

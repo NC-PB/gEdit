@@ -47,14 +47,15 @@ const OPEN_BUDGET_MS = 2000
 /**
  * How much slower than a small buffer the big document may be: one frame at 60 Hz, and, since Phase 3 (P3a, an
  * intentional change), one slice of the modal index. Typing in a 300,000-line program drops the index's
- * snapshots after the cursor and the index is rebuilt in idle slices of at most 16 ms (`IDLE_BUDGET_MS`,
- * AD-33: "a keystroke waits for at most one slice"); a small buffer has none to rebuild. Measured on the
+ * snapshots after the cursor and the index is rebuilt in idle slices (`IDLE_BUDGET_MS`, AD-33: "a keystroke
+ * waits for at most one slice"); a small buffer has none to rebuild. The slice was 16 ms in P3a and is 8 ms
+ * from P3b (owner decision of 2026-10-09, plan §7 #230), which is the value of `INDEX_SLICE_MS` below. Measured on the
  * development Mac: the drawn p95 is 17 ms before P3a and 23-25 ms with it (the bimodal samples are the keys
  * that arrived during a slice), and the raf p95 reads 22-30 ms above the small buffer's in about one run in
  * three. The absolute budget above (under 50 ms on screen) is unchanged and holds with room (40-41 ms);
  * `p3-perf` holds it again with the inspector open and the colours on.
  */
-const INDEX_SLICE_MS = 16
+const INDEX_SLICE_MS = 8
 const SIZE_COST_BUDGET_MS = 17 + INDEX_SLICE_MS
 
 /** One frame at 60 Hz, rounded up: the most the compositor can add after the DOM write. */

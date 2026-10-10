@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "fanuc",
+  "profile": "fanuc-gcode",
+  "template": "tool-end",
+  "values": {},
+  "env": {
+    "prevBlockNumber": 100,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "N110 M9\nN120 M5\nN130 G91 G28 Z0.\nN140 G90\nN150 M1"
+}

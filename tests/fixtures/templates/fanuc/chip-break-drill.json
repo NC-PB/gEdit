@@ -1,0 +1,18 @@
+{
+  "$format": 1,
+  "codes": "fanuc",
+  "profile": "fanuc-gcode",
+  "template": "chip-break-drill",
+  "values": {},
+  "env": {
+    "prevBlockNumber": 100,
+    "numbered": true,
+    "sys": {
+      "date": "2026-10-09",
+      "time": "12:00",
+      "file": "PART1.nc",
+      "stem": "PART1"
+    }
+  },
+  "expected": "N110 G98 G73 X10. Y10. Z-18. R2. Q3. F150.\nN120 G80"
+}

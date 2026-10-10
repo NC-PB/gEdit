@@ -20,6 +20,14 @@
 //   - a code with required parameters inserts as a snippet with one tab stop per
 //     parameter.
 //
+// Phase 3 (P3.5, Phase 3 plan §6.7): **templates** are offered too, where the line is empty up to
+// the word being typed (nothing before it but blanks: no block number, no earlier word), and
+// never inside a comment, a string or the arguments of a call (the rules above come first). They
+// are filtered by the typed text against the label — a word of the label starts with it,
+// whatever the case — and an empty prefix offers all of them, ahead of the codes. A snippet
+// template inserts its text inline (the provider renders it, the tab stops are Monaco's); a form
+// template inserts nothing and runs its command (`CompletionSpec.template.form`).
+//
 // Content: a label, a description and a parameter name belong to the database and are
 // inserted as they are written there. The notes around them (`modal`, `Required: …`, the
 // warning on an entry that is not verified yet) come from `t()`.
@@ -29,10 +37,11 @@ import { completionsFor } from './lookup';
 import type { CompiledProfile } from '$lib/core/profiles/types';
 import type { LineState, NcToken } from '$lib/core/nc/types';
 import type { Translate } from '$lib/app/types';
+import type { TemplateDef } from '$lib/core/templates/types';
 import type { CodeDb, CodeEntry } from './types';
 
 /** What kind of thing a suggestion is; the provider maps it to a Monaco icon. */
-export type CompletionKind = 'code' | 'cycle' | 'keyword';
+export type CompletionKind = 'code' | 'cycle' | 'keyword' | 'template';
 
 /** One suggestion, before it is turned into a Monaco item. */
 export interface CompletionSpec {
@@ -47,6 +56,10 @@ export interface CompletionSpec {
   documentation?: string;
   /** Keeps the database order instead of Monaco's alphabetical one. */
   sortText?: string;
+  /** What Monaco filters this item by; a template's is the typed text, because the label was matched here. */
+  filterText?: string;
+  /** Set on a template: its id, and whether accepting it runs the form (`form`) instead of inserting text. */
+  template?: { id: string; form: boolean };
 }
 
 export interface CompletionOptions {
@@ -62,6 +75,12 @@ export interface CompletionOptions {
    * before its value). `completionsAt` passes it; without it the ISO layout is used.
    */
   profile?: CompiledProfile;
+  /**
+   * Phase 3 (P3.5): the templates the document offers (`TemplateService.list`), and the text of a
+   * snippet template (`TemplateService.render`; null when it cannot be rendered, and it is then
+   * not offered). Absent: no template is offered.
+   */
+  templates?: { list: readonly TemplateDef[]; snippetText(template: TemplateDef): string | null };
 }
 
 /** Where a suggestion goes and what it is filtered by. */
@@ -206,6 +225,54 @@ export function completionItems(entries: CodeEntry[], o: CompletionOptions = {})
       sortText: String(i).padStart(4, '0'),
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Templates (P3.5)
+// ---------------------------------------------------------------------------
+
+/** The words of a label, lower case: `Peck drilling (G83)` → peck, drilling, g83. */
+function labelWords(label: string): string[] {
+  return label.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((word) => word !== '');
+}
+
+/** True when `prefix` is empty or starts the label or one of its words (case does not matter). */
+export function templateMatches(label: string, prefix: string): boolean {
+  const typed = prefix.trim().toLowerCase();
+  if (typed === '') return true;
+  return label.toLowerCase().startsWith(typed) || labelWords(label).some((word) => word.startsWith(typed));
+}
+
+/** The template suggestions for the word `prefix` (rule of the header), in the order of the list. */
+function templateItems(o: CompletionOptions, prefix: string): CompletionSpec[] {
+  if (!o.templates) return [];
+  const out: CompletionSpec[] = [];
+  const lead = prefix === '' ? '!' : 'z';
+  o.templates.list.forEach((def, i) => {
+    if (!templateMatches(def.label, prefix)) return;
+    const snippet = def.snippet === true;
+    let insertText = '';
+    if (snippet) {
+      const text = o.templates?.snippetText(def) ?? null;
+      if (text === null) return;
+      insertText = text;
+    }
+    const notes: string[] = [];
+    if (def.description) notes.push(def.description);
+    if (def.review === 'pending' && o.t) notes.push(o.t('templates.reviewPending'));
+    out.push({
+      label: def.label,
+      insertText,
+      snippet,
+      kind: 'template',
+      detail: o.t ? o.t('templates.completionDetail', { group: def.group }) : def.group,
+      documentation: notes.length === 0 ? undefined : notes.join('\n\n'),
+      sortText: `${lead}${String(i).padStart(4, '0')}`,
+      filterText: prefix,
+      template: { id: def.id, form: !snippet },
+    });
+  });
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -387,5 +454,10 @@ export function completionsAt(
   }
 
   const entries = completionsFor(db, context.prefix, context.atBlockStart);
-  return { items: completionItems(entries, options), start: context.start, end: context.end };
+  const items = completionItems(entries, options);
+  // Templates stand where a block may start with nothing before it (not after a block number).
+  if (context.atBlockStart && line.slice(0, context.start).trim() === '') {
+    items.push(...templateItems(options, context.prefix));
+  }
+  return { items, start: context.start, end: context.end };
 }

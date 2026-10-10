@@ -2500,5 +2500,782 @@
     }
   ],
   "dialect": "okuma",
+  "templates": [
+    {
+      "body": "{{file}}\n{{prog}}\n{{title}}\n{{N}}G50 S{{smax}}",
+      "description": "The optional tape header, the program name, a description and the spindle speed limit (G50 S). Sample values in mm and mm/rev (unit setting 1 mm).",
+      "group": "Program",
+      "id": "program-start",
+      "label": "Program start",
+      "params": [
+        {
+          "help": "Letters and digits, starting with a letter, at most 16. Writes the header line $NAME.MIN%; leave empty for none.",
+          "id": "file",
+          "label": "File name for the tape header",
+          "prefix": "$",
+          "suffix": ".MIN%",
+          "type": "text",
+          "uppercase": true
+        },
+        {
+          "default": "1001",
+          "help": "At most four letters or digits after O; leave empty for none.",
+          "id": "prog",
+          "label": "Program name (O)",
+          "prefix": "O",
+          "type": "text",
+          "uppercase": true
+        },
+        {
+          "comment": true,
+          "default": "NEW PROGRAM",
+          "id": "title",
+          "label": "Program description",
+          "type": "text"
+        },
+        {
+          "default": 2500,
+          "help": "The speed limit for constant cutting speed.",
+          "id": "smax",
+          "label": "Highest spindle speed (rpm)",
+          "max": 99999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        }
+      ],
+      "review": "pending",
+      "toolbar": true
+    },
+    {
+      "body": "{{N}}G0 X{{xi}} Z{{zi}}\n{{N}}T{{r}}{{t}}{{o}} {{name}}\n{{N}}G96 S{{vc}} {{dir}}\n{{N}}G0 X{{x}} Z{{z}} {{coolant}}",
+      "description": "Moves to the index position, indexes the turret (nose radius offset, tool, offset), starts constant cutting speed and approaches with coolant. Sample values in mm and mm/rev (unit setting 1 mm).",
+      "group": "Tool change",
+      "id": "tool-start",
+      "label": "Tool start",
+      "params": [
+        {
+          "decimals": "as-entered",
+          "default": "600",
+          "id": "xi",
+          "label": "Turret index position X (diameter)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "400",
+          "id": "zi",
+          "label": "Turret index position Z",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "default": 1,
+          "digits": 2,
+          "help": "The first two digits of the six-digit tool word.",
+          "id": "r",
+          "label": "Nose radius offset number",
+          "max": 99,
+          "min": 0,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "default": 1,
+          "digits": 2,
+          "id": "t",
+          "label": "Tool number",
+          "max": 99,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "default": 1,
+          "digits": 2,
+          "id": "o",
+          "label": "Offset number",
+          "max": 99,
+          "min": 0,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "comment": true,
+          "default": "OD ROUGH",
+          "id": "name",
+          "label": "Tool description",
+          "type": "text"
+        },
+        {
+          "default": 180,
+          "id": "vc",
+          "label": "Cutting speed (m/min)",
+          "max": 9999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "choices": [
+            {
+              "label": "Clockwise (M3)",
+              "value": "M3"
+            },
+            {
+              "label": "Counter-clockwise (M4)",
+              "value": "M4"
+            }
+          ],
+          "default": "M3",
+          "id": "dir",
+          "label": "Spindle direction",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "72",
+          "id": "x",
+          "label": "Approach diameter (X)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "3",
+          "id": "z",
+          "label": "Approach position (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "Coolant on (M8)",
+              "value": "M8"
+            },
+            {
+              "label": "No coolant",
+              "value": ""
+            }
+          ],
+          "default": "M8",
+          "id": "coolant",
+          "label": "Coolant",
+          "type": "choice"
+        }
+      ],
+      "review": "pending",
+      "toolbar": true
+    },
+    {
+      "body": "{{N}}G97 S{{s}} {{dir}}\n{{N}}G0 X{{x}} Z{{zs}} {{coolant}}\n{{N}}G74 X{{x}} Z{{z}} D{{d}} {{e}} F{{f}}\n{{N}}G0 Z{{zs}}",
+      "description": "Drills along Z in pecks of D with G74 (X0 is a centre hole) and returns to the start position. Sample values in mm and mm/rev (unit setting 1 mm).",
+      "group": "Drilling",
+      "id": "face-drill",
+      "label": "Face drilling (G74)",
+      "params": [
+        {
+          "default": 1500,
+          "id": "s",
+          "label": "Spindle speed (rpm)",
+          "max": 99999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "choices": [
+            {
+              "label": "Clockwise (M3)",
+              "value": "M3"
+            },
+            {
+              "label": "Counter-clockwise (M4)",
+              "value": "M4"
+            }
+          ],
+          "default": "M3",
+          "id": "dir",
+          "label": "Spindle direction",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "help": "0 drills on centre.",
+          "id": "x",
+          "label": "Hole position X (diameter)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "5",
+          "id": "zs",
+          "label": "Start position (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "Coolant on (M8)",
+              "value": "M8"
+            },
+            {
+              "label": "No coolant",
+              "value": ""
+            }
+          ],
+          "default": "M8",
+          "id": "coolant",
+          "label": "Coolant",
+          "type": "choice"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "-12",
+          "id": "z",
+          "label": "Hole bottom (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "3",
+          "id": "d",
+          "label": "Peck depth",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "id": "e",
+          "label": "Dwell at the bottom",
+          "max": 9999,
+          "min": 0,
+          "prefix": "E",
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0.12",
+          "id": "f",
+          "label": "Feed (mm/rev)",
+          "max": 99,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}G97 S{{s}} {{dir}}\n{{N}}G0 X{{xs}} Z{{zs}}\n{{N}}G71 X{{x}} Z{{z}} B{{b}} D{{d}} U{{u}} H{{h}} F{{f}} {{infeed}} {{pattern}}",
+      "description": "The whole thread from one block: final diameter, end, infeed angle, first cut, allowance, height and lead, all diameters as diameters. F is the lead. The sample is an M20×1.5 outside thread. Sample values in mm and mm/rev (unit setting 1 mm).",
+      "group": "Threading",
+      "id": "threading",
+      "label": "Threading (G71)",
+      "params": [
+        {
+          "default": 800,
+          "id": "s",
+          "label": "Spindle speed (rpm)",
+          "max": 99999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "choices": [
+            {
+              "label": "Clockwise (M3)",
+              "value": "M3"
+            },
+            {
+              "label": "Counter-clockwise (M4)",
+              "value": "M4"
+            }
+          ],
+          "default": "M3",
+          "id": "dir",
+          "label": "Spindle direction",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "24",
+          "id": "xs",
+          "label": "Start point X (diameter)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "5",
+          "id": "zs",
+          "label": "Start point Z",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "18.16",
+          "id": "x",
+          "label": "Final thread diameter (X)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "-25",
+          "id": "z",
+          "label": "Thread end (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "60",
+          "help": "Usually the angle of the insert tip; 0 feeds straight in.",
+          "id": "b",
+          "label": "Infeed angle (°)",
+          "max": 179.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0.4",
+          "id": "d",
+          "label": "First depth of cut (diameter)",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0.1",
+          "help": "0 or empty: no finishing pass.",
+          "id": "u",
+          "label": "Finishing allowance (diameter)",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "1.84",
+          "id": "h",
+          "label": "Thread height (diameter)",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "1.5",
+          "id": "f",
+          "label": "Thread lead (mm)",
+          "max": 999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "Along the left flank (M32)",
+              "value": "M32"
+            },
+            {
+              "label": "Zigzag (M33)",
+              "value": "M33"
+            },
+            {
+              "label": "Along the right flank (M34)",
+              "value": "M34"
+            }
+          ],
+          "default": "M32",
+          "id": "infeed",
+          "label": "Infeed",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "choices": [
+            {
+              "label": "As the machine is set",
+              "value": ""
+            },
+            {
+              "label": "Pattern 1 (M73)",
+              "value": "M73"
+            },
+            {
+              "label": "Pattern 2 (M74)",
+              "value": "M74"
+            },
+            {
+              "label": "Pattern 3 (M75)",
+              "value": "M75"
+            }
+          ],
+          "default": "",
+          "id": "pattern",
+          "label": "Depth of each pass",
+          "type": "choice"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{name}} G81\nG0 X{{x_first}}\nG1 X{{x_last}}\nG80\n{{N}}G0 X{{xs}} Z{{zs}}\n{{N}}G85 {{name}} D{{d}} F{{f}} U{{u}} W{{w}}\n{{N}}G87 {{name}}",
+      "description": "The finished contour between G81 and G80 (fill in the blocks between the two contour points), the roughing call G85 and the finishing call G87. No S, T or M word in the G85 and G87 blocks; change the tool before G87 if another one finishes. LAP is an option of the control. Sample values in mm and mm/rev (unit setting 1 mm).",
+      "group": "Turning",
+      "id": "lap-rough-finish",
+      "label": "LAP roughing and finishing (G85, G87)",
+      "params": [
+        {
+          "default": "NLAP1",
+          "help": "N followed by at most four letters or digits, for example NLAP1; the same in all three places. The form offers a name the program does not use yet.",
+          "id": "name",
+          "label": "Contour name",
+          "required": true,
+          "type": "text",
+          "uppercase": true
+        },
+        {
+          "decimals": "as-entered",
+          "default": "16",
+          "id": "x_first",
+          "label": "First contour point (X)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "34",
+          "id": "x_last",
+          "label": "Last contour point (X)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "80",
+          "id": "xs",
+          "label": "LAP start point X (diameter)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "5",
+          "id": "zs",
+          "label": "LAP start point Z",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "3",
+          "id": "d",
+          "label": "Depth of cut (diameter)",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0.3",
+          "id": "f",
+          "label": "Roughing feed (mm/rev)",
+          "max": 99,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0.4",
+          "id": "u",
+          "label": "Finishing allowance on X (diameter)",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0.2",
+          "id": "w",
+          "label": "Finishing allowance on Z",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}M110\n{{N}}G0 X{{xs}} Z{{zs}} C{{c}}\n{{N}}SB={{sb}} M13\n{{N}}G94\n{{N}}G181 X{{x}} Z{{z}} C{{c}} K{{k}} F{{f}} {{e}}\n{{N}}G180\n{{N}}G0 X{{xr}} Z{{zr}}\n{{N}}M12\n{{N}}G95\n{{N}}M109",
+      "description": "C-axis on (M110), driven tool on (SB= with M13), feed per minute, the drilling cycle at the first hole (add more C positions after it), cancel with G180, retract in X and Z, then driven tool off, feed per revolution and C-axis off. Sample values in mm and mm/rev (unit setting 1 mm).",
+      "group": "Drilling",
+      "id": "live-drill",
+      "label": "Driven-tool drilling (G181)",
+      "params": [
+        {
+          "decimals": "as-entered",
+          "default": "60",
+          "id": "xs",
+          "label": "Start point X (diameter)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "5",
+          "help": "The cycle's start level; K is measured from it.",
+          "id": "zs",
+          "label": "Start point Z",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "0",
+          "id": "c",
+          "label": "C angle of the first hole (°)",
+          "max": 360,
+          "min": -360,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "default": 400,
+          "id": "sb",
+          "label": "Driven-tool speed (rpm)",
+          "max": 99999,
+          "min": 1,
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "60",
+          "id": "x",
+          "label": "Hole position X (diameter)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "-10",
+          "id": "z",
+          "label": "Hole bottom (Z)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "3",
+          "id": "k",
+          "label": "Rapid approach from the start point",
+          "max": 99999.999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "40",
+          "id": "f",
+          "label": "Feed (mm/min)",
+          "max": 99999,
+          "min": 0,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "id": "e",
+          "label": "Dwell at the bottom",
+          "max": 9999,
+          "min": 0,
+          "prefix": "E",
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "600",
+          "help": "The block after G180 has to move both X and Z.",
+          "id": "xr",
+          "label": "Retract position X (diameter)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "400",
+          "id": "zr",
+          "label": "Retract position Z",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}G0 X{{x}} Z{{z}} M9\n{{N}}{{stop}}",
+      "description": "Back to the index position with coolant off and an optional stop. Sample values in mm and mm/rev (unit setting 1 mm).",
+      "group": "Tool change",
+      "id": "tool-end",
+      "label": "Tool end",
+      "params": [
+        {
+          "decimals": "as-entered",
+          "default": "600",
+          "id": "x",
+          "label": "Turret index position X (diameter)",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "decimals": "as-entered",
+          "default": "400",
+          "id": "z",
+          "label": "Turret index position Z",
+          "max": 99999.999,
+          "min": -99999.999,
+          "required": true,
+          "type": "number"
+        },
+        {
+          "choices": [
+            {
+              "label": "Optional stop (M1)",
+              "value": "M1"
+            },
+            {
+              "label": "Program stop (M0)",
+              "value": "M0"
+            },
+            {
+              "label": "No stop",
+              "value": ""
+            }
+          ],
+          "default": "M1",
+          "id": "stop",
+          "label": "Stop after the tool",
+          "type": "choice"
+        }
+      ],
+      "review": "pending"
+    },
+    {
+      "body": "{{N}}M5\n{{N}}{{end}}\n{{tape}}",
+      "description": "Spindle off, end of program and, if wanted, the % that ends a program on tape. Sample values in mm and mm/rev (unit setting 1 mm).",
+      "group": "Program",
+      "id": "program-end",
+      "label": "Program end",
+      "params": [
+        {
+          "choices": [
+            {
+              "label": "End (M2)",
+              "value": "M2"
+            },
+            {
+              "label": "End and rewind (M30)",
+              "value": "M30"
+            }
+          ],
+          "default": "M2",
+          "id": "end",
+          "label": "End of program",
+          "required": true,
+          "type": "choice"
+        },
+        {
+          "choices": [
+            {
+              "label": "Write % (tape end)",
+              "value": "%"
+            },
+            {
+              "label": "None",
+              "value": ""
+            }
+          ],
+          "default": "%",
+          "id": "tape",
+          "label": "Tape end mark",
+          "type": "choice"
+        }
+      ],
+      "review": "pending",
+      "toolbar": true
+    }
+  ],
   "version": 1
 }

@@ -2,13 +2,25 @@
   The single modal host (plan AD-6, §7.9). Owner: WP1.1.
 
   It renders whatever `modals` has open - QuickPick in M1, prompt / form / custom dialogs
-  from M2 - one at a time, keeps focus inside the panel, closes on Esc or a click outside,
+  from M2 - one at a time, keeps focus inside the panel, closes on Esc or a click outside (asking the dialog first when it has a `mayClose` hook),
   and drives `modals.isOpen`, which suspends the key dispatcher.
   AppShell (WP1.5) mounts exactly one of these.
 -->
+<script module lang="ts">
+  /**
+   * True when a press at `target` is outside `panel` (the press dismisses the modal). A target that is
+   * no DOM node (the window) is not outside; no panel yet is not outside either.
+   */
+  export function pressedOutside(panel: { contains(node: unknown): boolean } | undefined, target: unknown): boolean {
+    if (panel === undefined) return false;
+    const isNode = typeof target === 'object' && target !== null && 'nodeType' in target;
+    return isNode && !panel.contains(target);
+  }
+</script>
+
 <script lang="ts">
   import QuickPick from './QuickPick.svelte';
-  import { currentModal } from '$lib/app/modals';
+  import { currentModal, dismissModal } from '$lib/app/modals';
 
   let panel = $state<HTMLElement | undefined>(undefined);
 
@@ -30,7 +42,7 @@
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      request.resolve(undefined);
+      void dismissModal();
       return;
     }
     if (e.key !== 'Tab') return;
@@ -48,11 +60,14 @@
     }
   }
 
-  /** A press outside the panel dismisses the modal, like a native popover. */
+  /**
+   * A press outside the panel dismisses the modal, like a native popover, unless the dialog has a
+   * `mayClose` hook that says no (a dialog with unsaved edits asks first).
+   */
   function onMouseDown(e: MouseEvent): void {
     const request = $currentModal;
     if (!request || !panel) return;
-    if (e.target instanceof Node && !panel.contains(e.target)) request.resolve(undefined);
+    if (pressedOutside(panel, e.target)) void dismissModal();
   }
 </script>
 
@@ -73,18 +88,26 @@
     data-testid={request.kind === 'quickPick' ? 'modal' : 'modal-backdrop'}
     data-modal={request.kind === 'quickPick' ? 'quick-pick' : undefined}
   >
-    <div class="modal-panel" bind:this={panel}>
-      {#if request.kind === 'quickPick'}
-        <QuickPick
-          items={request.items}
-          placeholder={request.placeholder}
-          initialIndex={request.initialIndex}
-          close={(value?: unknown) => request.resolve(value)}
-        />
-      {:else}
-        {@const Dialog = request.component}
-        <Dialog {...request.props} close={(value?: unknown) => request.resolve(value)} />
-      {/if}
+    <div class="modal-panel" class:wide={request.kind === 'component' && request.wide === true} bind:this={panel}>
+      <!--
+        One dialog per request. Without the key, a request that replaces another before the host has
+        drawn the empty state in between (a dialog that closes and one that opens in one update) is
+        given to the dialog that is already there: the same component with new props. The form dialog
+        seeds its values from its props once, so the second form would then show the first one's.
+      -->
+      {#key request}
+        {#if request.kind === 'quickPick'}
+          <QuickPick
+            items={request.items}
+            placeholder={request.placeholder}
+            initialIndex={request.initialIndex}
+            close={(value?: unknown) => request.resolve(value)}
+          />
+        {:else}
+          {@const Dialog = request.component}
+          <Dialog {...request.props} close={(value?: unknown) => request.resolve(value)} />
+        {/if}
+      {/key}
     </div>
   </div>
 {/if}
@@ -100,6 +123,12 @@
     inset: 0;
     padding-top: 12vh;
     background: rgb(0 0 0 / 35%);
+  }
+
+  /* `modals.open(..., { wide: true })`: a list and an editor side by side. */
+  .modal-panel.wide {
+    width: min(1100px, 94vw);
+    max-height: 86vh;
   }
 
   .modal-panel {

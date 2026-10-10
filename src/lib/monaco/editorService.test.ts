@@ -244,6 +244,7 @@ interface FakeModel {
   getAlternativeVersionId(): number;
   getLineCount(): number;
   getLineContent(line: number): string;
+  getLineMaxColumn(line: number): number;
   getLinesContent(): string[];
   getFullModelRange(): Record<string, number>;
   getValueLengthInRange(range: unknown, preference?: number): number;
@@ -275,6 +276,10 @@ interface FakeEditorInstance {
   setPosition(p: { lineNumber: number; column: number }): void;
   getSelections(): never[];
   getSelection(): null;
+  setSelection(range: Record<string, number>): void;
+  /** The snippet controller, with what it was asked to insert. */
+  snippets: string[];
+  getContribution(id: string): { insert(template: string): void } | null;
   revealLineInCenter(): void;
   revealLineInCenterIfOutsideViewport(): void;
   executeEdits(source: string, edits: unknown[]): void;
@@ -313,6 +318,7 @@ function fakeMonaco(): { api: Monaco; state: FakeMonaco } {
       getAlternativeVersionId: () => version,
       getLineCount: () => model.value.split('\n').length,
       getLineContent: (line) => model.value.split('\n')[line - 1] ?? '',
+      getLineMaxColumn: (line) => (model.value.split('\n')[line - 1] ?? '').length + 1,
       getLinesContent: () => model.value.split('\n'),
       getFullModelRange: () => ({ startLineNumber: 1, startColumn: 1, endLineNumber: model.getLineCount(), endColumn: 1 }),
       getValueLengthInRange: () => 0,
@@ -386,6 +392,11 @@ function fakeMonaco(): { api: Monaco; state: FakeMonaco } {
       },
       getSelections: () => [],
       getSelection: () => null,
+      setSelection(range) {
+        editorInstance.calls.push(`setSelection:${range.startLineNumber}:${range.startColumn}-${range.endLineNumber}:${range.endColumn}`);
+      },
+      snippets: [],
+      getContribution: (id) => (id === 'snippetController2' ? { insert: (template) => void editorInstance.snippets.push(template) } : null),
       revealLineInCenter() {},
       revealLineInCenterIfOutsideViewport() {},
       executeEdits(source) {
@@ -771,6 +782,43 @@ describe('createEditorService with a fake Monaco', () => {
 // ---------------------------------------------------------------------------
 // M7 (WP7.3): the read-only editor option (AD-23, F32)
 // ---------------------------------------------------------------------------
+
+describe('inserting a snippet (Phase 3 plan P3.5)', () => {
+  async function ready(text: string) {
+    const h = await attached();
+    const id = addDoc(h.docs);
+    h.service.createModel(id, text, 'fanuc-gcode', 'lf');
+    await h.service.attach(h.container());
+    return { ...h, id, editor: h.state.editors[0], model: h.state.created.at(-1) as FakeModel };
+  }
+
+  it('hands the template to the snippet controller at the cursor, as one undo step', async () => {
+    const h = await ready('N10 G0\nN20 G1\n');
+    h.service.insertSnippet('G81 Z${1:-5.}');
+    expect(h.editor.snippets).toEqual(['G81 Z${1:-5.}']);
+    expect(h.model.calls).toEqual(['pushStackElement', 'pushStackElement']);
+    expect(h.editor.calls).toContain('focus');
+  });
+
+  it('puts it on a new line after a line, or in place of a line', async () => {
+    const h = await ready('N10 G0\nN20 G1\n');
+    h.service.insertSnippet('G81 Z${1}', { line: 1, replace: false });
+    expect(h.editor.position).toEqual({ lineNumber: 1, column: 7 });
+    expect(h.editor.snippets).toEqual(['\nG81 Z${1}']);
+    h.service.insertSnippet('G81 Z${1}', { line: 2, replace: true });
+    expect(h.editor.calls).toContain('setSelection:2:1-2:7');
+    expect(h.editor.snippets[1]).toBe('G81 Z${1}');
+  });
+
+  it('does nothing without an editor, and without a snippet controller', async () => {
+    const early = await attached();
+    early.service.insertSnippet('G81'); // not attached yet: no throw
+    const h = await ready('N10\n');
+    h.editor.getContribution = () => null;
+    h.service.insertSnippet('G81');
+    expect(h.editor.snippets).toEqual([]);
+  });
+});
 
 describe('the read-only option', () => {
   /** Every `readOnly` the editor was given, in order. */
