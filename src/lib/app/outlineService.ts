@@ -1,16 +1,19 @@
 // The outline service (plan §7.3, AD-12). Owner: WP3.5.
 //
 // One `OutlineIndex` (core/profiles/outline.ts) per open document. The first build runs
-// after the first render, in 20k-line chunks, so opening a 10 MB program never blocks a
-// frame; every content change is fed into `applyChange`, and only the *published* items
-// are debounced by 150 ms. `toolLines()` and `itemAt()` answer from the index directly,
+// after the first render, in slices of at most `BUILD_BUDGET_MS` (8 ms, the budget of the
+// modal index) that start when the app is idle (`runWhenIdle`), so opening a 10 MB program
+// never blocks a frame: a slice reads a few hundred lines at a time and looks at the clock
+// between two of them (B1 B2; it was 20,000 lines a slice, which is 150 ms and more on a
+// slow engine). A machine switch rebuilds the same way. Every content change is fed into
+// `applyChange`, and only the *published* items are debounced by 150 ms. `toolLines()` and `itemAt()` answer from the index directly,
 // because F7 pressed right after a keystroke must not step to a stale line.
 //
 // A document is indexed once, not once per tab switch: the M1 program map re-parsed on
 // every switch and paid ~36 ms on a 10 MB program (G7). Here the panel only swaps which
 // store it subscribes to.
 //
-// Why the chunk loop re-reads the line count instead of trusting the change events: while
+// Why the slice loop re-reads the line count instead of trusting the change events: while
 // the first build is running, an edit *below* the built prefix needs no work at all (the
 // build has not read those lines yet), and an edit *inside* it is a normal `applyChange`
 // plus a shift of the build cursor. Only a change that straddles the boundary, or a flush
@@ -32,12 +35,19 @@ import type { ChannelParams, ChannelSet, SyncRule } from '$lib/core/channels/typ
 import { labelsOf, referenceAddresses, referencesOn, blockKeyOf, comparesByText, maskedOf } from '$lib/core/transforms/references';
 import type { BlockKey } from '$lib/core/transforms/references';
 import { tokenizeLine } from '$lib/core/nc/tokenizer';
+import { IDLE_BUDGET_MS, runWhenIdle } from '$lib/app/modalService';
 import { t } from '$lib/i18n';
 import type { CompiledProfile } from '$lib/core/profiles/types';
 import type { Disposable, DocId, DocumentStore, EditorService, OutlineService } from '$lib/app/types';
 
-/** Lines per chunk of the first build (AD-12). */
-export const CHUNK_LINES = 20_000;
+/**
+ * Lines the first build reads between two looks at the clock (AD-12). A slice runs at least
+ * one such run and stops at the first look that finds `BUILD_BUDGET_MS` spent, so the longest
+ * a slice holds the main thread is the budget plus one run.
+ */
+export const CHUNK_LINES = 250;
+/** The most one slice of the first build spends, the modal index's budget (B1 B2). */
+export const BUILD_BUDGET_MS = IDLE_BUDGET_MS;
 /** How long the published items wait after the last change (AD-12). */
 export const AGGREGATE_DELAY_MS = 150;
 
@@ -75,6 +85,16 @@ export interface OutlineServiceDeps {
   };
   /** `setTimeout`, as a canceller; `ms` of 0 means "after this frame". */
   schedule(fn: () => void, ms: number): Disposable;
+  /**
+   * Runs `fn` when the app is idle (`runWhenIdle`): the scheduler of the first build's slices
+   * (B1 B2). Absent, they are `schedule(fn, 0)`.
+   */
+  idle?(fn: () => void): Disposable;
+  /** The clock of the slice budget (`performance.now`). Absent, `performance.now`. */
+  now?(): number;
+  /** The most one slice spends, in ms; `BUILD_BUDGET_MS` when absent. */
+  budgetMs?: number;
+  /** Lines between two looks at the clock (`CHUNK_LINES`). */
   chunkLines: number;
   delayMs: number;
 }
@@ -357,6 +377,10 @@ export function createOutlineService(deps: OutlineServiceDeps): OutlineServiceIn
   const entries = new Map<DocId, Entry>();
   let stops: Disposable[] = [];
   let installed = false;
+  const now = deps.now ?? (() => performance.now());
+  const budget = deps.budgetMs ?? BUILD_BUDGET_MS;
+  /** The scheduler of the build's slices: idle time, or the next turn where the deps give no idle clock. */
+  const later = (fn: () => void): Disposable => (deps.idle !== undefined ? deps.idle(fn) : deps.schedule(fn, 0));
 
   function install(): void {
     if (installed) return;
@@ -482,25 +506,34 @@ export function createOutlineService(deps: OutlineServiceDeps): OutlineServiceIn
     }, deps.delayMs);
   }
 
-  /** Reads the next chunk; the last one finishes the build and publishes at once. */
+  /**
+   * One slice of the first build: reads `chunkLines` lines at a time until the budget is spent
+   * (it always reads one run, so the build moves on), then hands the main thread back and
+   * continues when the app is idle again. The slice that reads the last line finishes the
+   * build and publishes at once.
+   */
   function step(id: DocId, entry: Entry): void {
     const build = entry.build;
     if (build === null) return;
-    const total = deps.editor.getLineCount(id);
-    const end = Math.min(total, build.next + deps.chunkLines - 1);
-    if (end >= build.next) {
-      entry.index.applyChange(build.next, build.next - 1, deps.editor.getLines(id, build.next, end));
-      build.next = end + 1;
+    const started = now();
+    for (;;) {
+      const total = deps.editor.getLineCount(id);
+      const end = Math.min(total, build.next + deps.chunkLines - 1);
+      if (end >= build.next) {
+        entry.index.applyChange(build.next, build.next - 1, deps.editor.getLines(id, build.next, end));
+        build.next = end + 1;
+      }
+      if (build.next > total) {
+        entry.build = null;
+        entry.publish?.();
+        entry.publish = null;
+        publishNow(entry);
+        entry.markReady();
+        return;
+      }
+      if (now() - started >= budget) break;
     }
-    if (build.next > total) {
-      entry.build = null;
-      entry.publish?.();
-      entry.publish = null;
-      publishNow(entry);
-      entry.markReady();
-      return;
-    }
-    build.cancel = deps.schedule(() => step(id, entry), 0);
+    build.cancel = later(() => step(id, entry));
   }
 
   function rebuild(id: DocId, entry: Entry): void {
@@ -514,7 +547,7 @@ export function createOutlineService(deps: OutlineServiceDeps): OutlineServiceIn
     entry.index.reset([]);
     // The first chunk waits for the next turn as well, so opening a document never
     // classifies 20k lines inside the event that created it.
-    entry.build = { next: 1, cancel: deps.schedule(() => step(id, entry), 0) };
+    entry.build = { next: 1, cancel: later(() => step(id, entry)) };
     schedulePublish(entry);
   }
 
@@ -633,6 +666,8 @@ export const outline: OutlineServiceInternals = createOutlineService({
     const handle = setTimeout(fn, ms);
     return () => clearTimeout(handle);
   },
+  idle: runWhenIdle,
+  now: () => performance.now(),
   chunkLines: CHUNK_LINES,
   delayMs: AGGREGATE_DELAY_MS,
 });

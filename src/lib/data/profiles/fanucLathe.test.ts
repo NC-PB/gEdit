@@ -618,6 +618,84 @@ describe('what the lathe profile inherits and what it states', () => {
   });
 });
 
+// B1 B2: the thread-cycle rule (`G70`-`G73` with a `P` and a `Q`) looked ahead for the `P` and the
+// `Q` from every `G7x` it found, so a long line of `G71 G71 G71 ...` cost the square of its
+// length (34-38 ms on 16,000 characters). Detection reads 400 lines on open, and a program
+// that is one very long line stalled it. The rule now looks ahead once, from the start of the
+// line, like the map's own `G71` trigger.
+describe('the thread-cycle rule of detection (B1 B2)', () => {
+  const lathe = compiled(LATHE);
+  const rule = lathe.re.detectContent.find((r) => r.weight === 6 && r.re.source.includes('7[0-3]'));
+  const claims = (line: string): boolean => rule?.re.test(line) === true;
+
+  it('finds the rule', () => {
+    expect(rule).toBeDefined();
+  });
+
+  it('claims a roughing or finishing cycle block that gives its P and Q, in either order', () => {
+    expect(claims('G71 P100 Q200 U0.4 W0.1 F0.3')).toBe(true);
+    expect(claims('N50 G70 P100 Q200')).toBe(true);
+    expect(claims('G73 Q200 P100 U1.')).toBe(true);
+    expect(claims('G072 P1 Q2')).toBe(true);
+    // The two addresses may now stand in front of the G, as the map trigger reads them.
+    expect(claims('P100 Q200 G71')).toBe(true);
+    expect(claims('P100 G71 Q200')).toBe(true);
+  });
+
+  it('claims nothing without both addresses, with a longer number or with a letter in front', () => {
+    expect(claims('G71 P100')).toBe(false);
+    expect(claims('G71 Q200')).toBe(false);
+    expect(claims('G74 P100 Q200')).toBe(false);
+    expect(claims('G710 P100 Q200')).toBe(false);
+    expect(claims('G71.5 P100 Q200')).toBe(false);
+    expect(claims('XG71 P100 Q200')).toBe(false);
+    expect(claims('G1 X10. Z-5.')).toBe(false);
+  });
+
+  it('reads only what stands in front of a comment', () => {
+    expect(claims('G71 P100 (Q200)')).toBe(false);
+    expect(claims('(G71) P100 Q200')).toBe(false);
+    expect(claims('G71 (P100 Q200)')).toBe(false);
+    expect(claims('P100 Q200 (G71)')).toBe(false);
+    expect(claims('G71 P100 Q200 (CYCLE)')).toBe(true);
+  });
+
+  // The same budget as the Okuma rules (`okuma.test.ts`): eight times the line, at most 24 times the time.
+  it('reads a long line in time proportional to its length, with every content rule', () => {
+    const SHAPES: [string, string][] = [
+      ['blanks', ' '],
+      ['letters', 'A'],
+      ['thread cycles', 'G71 '],
+      ['a cycle with its P', 'G71 P1 '],
+      ['a cycle with both addresses', 'G71 P1 Q1 '],
+      ['the addresses alone', 'P Q '],
+      ['packed words', 'G1X1'],
+      ['packed cycles', 'G71P1Q'],
+      ['tool words', 'T0101 '],
+      ['the retract words', 'G28 U0. W0. '],
+      ['comments', '(A) '],
+    ];
+    const cost = (re: RegExp, line: string): number => {
+      let best = Infinity;
+      for (let run = 0; run < 3; run++) {
+        const started = performance.now();
+        re.test(line);
+        best = Math.min(best, performance.now() - started);
+      }
+      return best;
+    };
+    lathe.re.detectContent.forEach((r, i) => {
+      for (const [name, unit] of SHAPES) {
+        const short = cost(r.re, unit.repeat(4000 / unit.length));
+        const long = cost(r.re, unit.repeat(32000 / unit.length));
+        expect(long, `detect.content[${i}] on ${name}: ${short.toFixed(2)} ms for 4k, ${long.toFixed(2)} ms for 32k`).toBeLessThan(
+          Math.max(50, 24 * short),
+        );
+      }
+    });
+  });
+});
+
 /** The editor text of a fixture. */
 function readFixture(rel: string): string {
   const opened = openFixture(rel);
