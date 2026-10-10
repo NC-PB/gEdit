@@ -60,9 +60,17 @@ export interface FileStat {
  * "the stat did not answer" and asks before it writes, where an entry that looks like
  * "outside the scope" could let a save skip its changed-on-disk question. A caller that
  * reads `unavailable` per entry passes `{ partial: true }`.
+ *
+ * `canonical` asks Rust to resolve each path (`FileStat.canonical`). It is off by default:
+ * resolving is a lookup per folder level, a network round trip each on a share, so only
+ * the callers that need a file's identity (Open, Save As, restore) ask, and the 2 s poll
+ * never does.
  */
-export async function filesStat(paths: string[], o: { partial?: boolean } = {}): Promise<FileStat[]> {
-  const stats = await invoke<FileStat[]>('files_stat', { paths });
+export async function filesStat(
+  paths: string[],
+  o: { partial?: boolean; canonical?: boolean } = {},
+): Promise<FileStat[]> {
+  const stats = await invoke<FileStat[]>('files_stat', { paths, ...(o.canonical === true ? { canonical: true } : {}) });
   if (!o.partial && stats.length > 0 && stats.every((stat) => stat.unavailable === true)) {
     throw new Error(`files_stat: no answer in time for ${stats.length === 1 ? stats[0].path : `${stats.length} paths`}`);
   }

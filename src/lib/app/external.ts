@@ -199,11 +199,18 @@ export function createExternalChangeService(deps: ExternalChangeDeps): ExternalC
     // Bytes already read for a racy stamp, so the change below does not read them again.
     let racyBytes: Uint8Array | undefined;
     if (!diskChanged(doc.disk, stat)) {
-      const racy = doc.external === 'none' && isRacy(doc.disk) && (stat.size ?? 0) <= MAX_OPEN_BYTES;
+      const racy = isRacy(doc.disk) && (stat.size ?? 0) <= MAX_OPEN_BYTES;
       if (!racy) {
         reportUnchanged(id);
         return;
       }
+      // A banner that is already up for exactly this `(mtime, size)` was raised by a look
+      // at the bytes, and nothing has moved since: say nothing and read nothing. Without
+      // this the next tick took the stat for "unchanged" and cleared the banner, and the
+      // tick after raised it again, every two seconds (B1 CODE-03). A banner raised for
+      // another state is read again, so a revert of the bytes still clears it.
+      const raised = seen.get(id);
+      if (doc.external !== 'none' && raised && raised.mtimeMs === stat.mtimeMs && raised.size === stat.size) return;
       try {
         racyBytes = await deps.readFile(doc.path);
       } catch (err) {

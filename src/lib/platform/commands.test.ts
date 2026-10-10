@@ -57,6 +57,16 @@ describe('filesStat', () => {
     expect(invoke).toHaveBeenCalledWith('files_stat', { paths: ['/nc/a.nc', '/nc/b.h'] });
   });
 
+  // B1 CODE-07: resolving paths is a lookup per folder level, so it is asked for, never default.
+  it('asks Rust to resolve the canonical path only when the caller says so', async () => {
+    invoke.mockResolvedValue([]);
+    await filesStat(['/nc/a.nc'], { canonical: true });
+    expect(invoke).toHaveBeenLastCalledWith('files_stat', { paths: ['/nc/a.nc'], canonical: true });
+    await filesStat(['/nc/a.nc'], { partial: true });
+    expect(invoke).toHaveBeenLastCalledWith('files_stat', { paths: ['/nc/a.nc'] });
+    expect(invoke.mock.lastCall?.[1]).not.toHaveProperty('canonical');
+  });
+
   it('passes the result through unchanged', async () => {
     const stats = [
       { path: '/nc/a.nc', allowed: true, exists: true, isDir: false, mtimeMs: 1, size: 2, readonly: false },
