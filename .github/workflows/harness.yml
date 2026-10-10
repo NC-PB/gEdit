@@ -19,7 +19,7 @@ name: Harness
 
 on:
   push:
-    branches: [main]
+    branches: [main, spike/harness-ci]
   workflow_dispatch:
 
 permissions:
