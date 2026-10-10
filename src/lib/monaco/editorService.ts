@@ -24,6 +24,7 @@
 
 import type * as MonacoApi from 'monaco-editor/esm/vs/editor/editor.api.js';
 import { getMonaco, type Monaco } from '$lib/monaco/setup';
+import { SHARED_EDITOR_OPTIONS } from '$lib/monaco/instanceOptions';
 import { docs as appDocs } from '$lib/stores/documents';
 import { t } from '$lib/i18n';
 import type {
@@ -56,6 +57,7 @@ const EDITOR_OPTIONS: MonacoApi.editor.IStandaloneEditorConstructionOptions = {
   fontFamily: "'Fira Code', 'Consolas', monospace",
   lineNumbersMinChars: 4,
   padding: { top: 16 },
+  ...SHARED_EDITOR_OPTIONS,
 };
 
 /** A document whose model exists. */

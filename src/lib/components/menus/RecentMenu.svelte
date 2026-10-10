@@ -1,5 +1,5 @@
 <!--
-  The Home tab's "Recent" dropdown (plan §5 WP2.3). Owner: WP2.3.
+  The File tab's "Recent" dropdown (plan §5 WP2.3). Owner: WP2.3.
 
   A custom ribbon group, because its content is data rather than commands: the entries
   come from Rust and change on every open and save. File names are data and stay

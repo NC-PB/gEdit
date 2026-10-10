@@ -36,8 +36,8 @@ afterEach(() => {
 const full: Contribution = {
   id: 'files',
   commands: [{ id: 'file.save', title: 't.save', run: () => {} }],
-  ribbon: [{ tab: 'home', group: 'g.file', command: 'file.save', order: 0 }],
-  ribbonGroups: [{ tab: 'home', group: 'g.custom', order: 1, component }],
+  ribbon: [{ tab: 'file', group: 'g.file', command: 'file.save', order: 0 }],
+  ribbonGroups: [{ tab: 'file', group: 'g.custom', order: 1, component }],
   panels: [{ id: 'output', region: 'bottom', title: 't.output', component, order: 0 }],
   statusItems: [{ id: 'file', side: 'left', order: 0, component }],
   keybindingRemovals: [{ keys: 'F2', command: 'editor.action.rename' }],

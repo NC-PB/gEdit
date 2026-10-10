@@ -175,9 +175,9 @@ describe('what the contribution declares', () => {
     expect(def.enabled?.({ activeDocId: 'd1' } as never)).toBe(true);
   });
 
-  it('puts the command on the Home tab, group typing.group, order 125', () => {
+  it('puts the command on the Edit tab, group typing.group, order 150', () => {
     const items = (typing.ribbon ?? []) as RibbonItemDef[];
-    expect(items).toEqual([{ tab: 'home', group: 'typing.group', command: 'edit.toggleForceUppercase', order: 125 }]);
+    expect(items).toEqual([{ tab: 'edit', group: 'typing.group', command: 'edit.toggleForceUppercase', order: 150 }]);
     expect(hasKey('typing.group')).toBe(true);
   });
 });

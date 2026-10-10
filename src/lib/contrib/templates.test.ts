@@ -1,6 +1,6 @@
 // The templates contribution (Phase 3 plan §5 P3.5, §6.7): one command per template id of the
-// loaded databases, kept in step with the service; the palette's quick pick; the Home tab's
-// program-start button and the Insert tab's group.
+// loaded databases, kept in step with the service; the palette's quick pick; the Insert
+// tab's group (Program start is only there).
 
 import { readable, writable } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -70,12 +70,13 @@ beforeEach(() => {
 });
 
 describe('the templates contribution', () => {
-  it('declares templates.insert without a key, the Home tab’s program-start button and the Insert tab’s group', () => {
+  it('declares templates.insert without a key and the Insert tab’s group, and no button of its own on any other tab', () => {
     const insert = contrib.commands.find((c) => c.id === 'templates.insert')!;
     expect(insert.title).toBe('templates.insert');
     expect(insert.category).toBe('templates.category');
     expect((insert as { keys?: unknown }).keys).toBeUndefined();
-    expect(contrib.ribbon).toEqual([{ tab: 'home', group: 'templates.groupProgram', command: 'insert.template:program-start', order: 20 }]);
+    // B1 A9: the Home tab's "Program" group (a second Program start) is gone.
+    expect((contrib as { ribbon?: unknown }).ribbon).toBeUndefined();
     expect(contrib.ribbonGroups).toEqual([{ tab: 'insert', group: 'templates.groupTemplates', order: 10, component: expect.anything() }]);
     // No command is spelled out: the ids come from the databases.
     expect(contrib.commands.map((c) => c.id)).toEqual(['templates.insert']);

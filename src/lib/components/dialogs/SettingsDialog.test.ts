@@ -10,6 +10,8 @@
 // The markup is rendered with `svelte/server`, which needs no DOM. Clicking a page,
 // editing a value and saving are the M2 runtime scenarios' job.
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import SettingsDialog, {
@@ -26,6 +28,7 @@ import SettingsDialog, {
   snapshotValues,
   specOf,
   leaveQuestion,
+  mayChangeTab,
   mayLeave,
   settingsModal,
   type SpecDeps,
@@ -366,6 +369,44 @@ describe('SettingsDialog markup', () => {
 });
 
 // B1 A4: Settings asks before it closes with something typed in it.
+describe('changing the tab with a machine form open (B1 A9)', () => {
+  const asking = (answer: boolean) => {
+    const asks: string[] = [];
+    return {
+      asks,
+      confirm: async (o: { message: string }): Promise<boolean> => {
+        asks.push(o.message);
+        return answer;
+      },
+    };
+  };
+
+  it('asks before leaving the Machines tab with the form open, in the machine wording', async () => {
+    const no = asking(false);
+    expect(await mayChangeTab(MACHINES_TAB, PROFILES_TAB, true, no.confirm, t)).toBe(false);
+    expect(no.asks).toEqual([t('settings.leave.draftMessage')]);
+    const yes = asking(true);
+    expect(await mayChangeTab(MACHINES_TAB, 'appearance', true, yes.confirm, t)).toBe(true);
+    expect(yes.asks).toHaveLength(1);
+  });
+
+  it('asks nothing when the form is closed, on any other tab, or on a click on the tab that is shown', async () => {
+    const none = asking(false);
+    expect(await mayChangeTab(MACHINES_TAB, PROFILES_TAB, false, none.confirm, t)).toBe(true);
+    expect(await mayChangeTab(PROFILES_TAB, MACHINES_TAB, true, none.confirm, t)).toBe(true);
+    expect(await mayChangeTab('appearance', PROFILES_TAB, true, none.confirm, t)).toBe(true);
+    expect(await mayChangeTab(MACHINES_TAB, MACHINES_TAB, true, none.confirm, t)).toBe(true);
+    expect(none.asks).toEqual([]);
+  });
+
+  it('is what the tab buttons and the arrow keys go through', () => {
+    const source = readFileSync(fileURLToPath(new URL('./SettingsDialog.svelte', import.meta.url)), 'utf8');
+    expect(source).toContain('mayChangeTab(active, category, machinesModel.hasDraft()');
+    expect(source).toContain('onclick={() => void selectCategory(tab)}');
+    expect(source).toContain('void selectCategory(tabs[next])');
+  });
+});
+
 describe('leaving with something typed', () => {
   it('asks nothing when nothing was changed', async () => {
     expect(leaveQuestion({ values: false, draft: false }, t)).toBeNull();

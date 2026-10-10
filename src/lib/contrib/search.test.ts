@@ -102,9 +102,9 @@ describe('the search commands', () => {
     }
   });
 
-  it('sit in one Home-tab group, with a caption', () => {
+  it('sit in one Edit-tab group, with a caption', () => {
     for (const item of search.ribbon ?? []) {
-      expect(item.tab).toBe('home');
+      expect(item.tab).toBe('edit');
       expect(item.group).toBe('search.group');
     }
     expect((search.ribbon ?? []).map((item) => item.command)).toEqual([...byId.keys()]);

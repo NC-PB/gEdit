@@ -143,6 +143,24 @@
     return question === null ? true : confirm({ ...question, kind: 'warning' });
   }
 
+  /**
+   * May the dialog change from tab `from` to tab `to`? Only the Machines page holds something
+   * a tab change would lose: it is unmounted when another tab is shown, and with it a
+   * half-filled machine form. So a change away from Machines asks while the form is open
+   * (`draft`); every other change, and a click on the tab that is already shown, is free
+   * (B1 A9, the open point of A4). The settings values are kept across tabs and are not asked about.
+   */
+  export async function mayChangeTab(
+    from: DialogTab,
+    to: DialogTab,
+    draft: boolean,
+    confirm: (o: { title: string; message: string; ok: string; kind: 'warning' }) => Promise<boolean>,
+    translate: Translate,
+  ): Promise<boolean> {
+    if (from !== MACHINES_TAB || to === from || !draft) return true;
+    return mayLeave({ values: false, draft: true }, confirm, translate);
+  }
+
   /** The pages that have something to show, in `CATEGORY_ORDER`. */
   export function pagesOf(metas: readonly SettingFieldMeta[] = SETTING_FIELDS): SettingsPage[] {
     return CATEGORY_ORDER.map((category) => ({
@@ -402,9 +420,29 @@
 
   // --- the category tabs ----------------------------------------------------
 
-  function selectCategory(category: DialogTab): void {
-    active = category;
-    tablist?.querySelector<HTMLElement>(`[data-category="${category}"]`)?.focus();
+  /** A question is already open for a tab change (a second click must not stack another). */
+  let changingTab = false;
+
+  function focusActiveTab(): void {
+    tablist?.querySelector<HTMLElement>(`[data-category="${active}"]`)?.focus();
+  }
+
+  async function selectCategory(category: DialogTab): Promise<void> {
+    if (changingTab) return;
+    // The ordinary change happens at once; only a change away from an open machine form asks.
+    if (active !== MACHINES_TAB || category === active || !machinesModel.hasDraft()) {
+      active = category;
+      focusActiveTab();
+      return;
+    }
+    changingTab = true;
+    try {
+      if (await mayChangeTab(active, category, machinesModel.hasDraft(), (o) => dialogs.confirm(o), t)) active = category;
+    } finally {
+      changingTab = false;
+    }
+    // The tab that is shown takes the focus, also when the user said no and stays on it.
+    focusActiveTab();
   }
 
   /** Arrow keys, Home and End move between the pages, as a tab list is expected to. */
@@ -418,7 +456,7 @@
     else return;
     e.preventDefault();
     e.stopPropagation();
-    selectCategory(tabs[next]);
+    void selectCategory(tabs[next]);
   }
 
   // --- the list control (scripts.folders) -----------------------------------
@@ -601,7 +639,7 @@
             aria-selected={tab === active}
             aria-controls="settings-page-{tab}"
             tabindex={tab === active ? 0 : -1}
-            onclick={() => selectCategory(tab)}
+            onclick={() => void selectCategory(tab)}
             onkeydown={onTabKey}
           >
             {categoryLabel(tab)}

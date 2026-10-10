@@ -103,7 +103,7 @@ export interface CommandDef {
   run: (c: CommandContext, arg?: unknown) => unknown | Promise<unknown>;
 }
 
-export type RibbonTab = 'home' | 'insert' | 'nc' | 'tools' | 'view';
+export type RibbonTab = 'file' | 'edit' | 'insert' | 'nc' | 'tools' | 'scripts' | 'view';
 
 export interface RibbonItemDef {
   tab: RibbonTab;

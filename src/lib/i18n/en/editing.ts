@@ -7,7 +7,7 @@
 import type { Messages } from '../types';
 
 export default {
-  /** The palette prefix of the Home-tab commands, and of the View-tab ones. */
+  /** The palette prefix of the Edit-tab commands, and of the View-tab ones. */
   category: 'Edit',
   categoryView: 'View',
 

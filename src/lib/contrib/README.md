@@ -99,7 +99,7 @@ Each row names the owning work package and the feature.
 | `compare.ts` | WP2.5 | compare with a document, a file or the saved version (overlay) |
 | `cursor.ts` | WP1.2 | cursor status item |
 | `cycleForms.ts` | P3.5 | Edit Cycle: the form of the cycle at the cursor, or a new cycle, `nc.editCycle` (Phase 3, P3b; the prelude pinned it; engine `core/templates/cycleForm.ts`, P3.8) |
-| `editing.ts` | WP4.4 | Home "Edit" and View-tab wrappers around Monaco actions |
+| `editing.ts` | WP4.4 | Edit-tab "Edit" and View-tab wrappers around Monaco actions |
 | `encoding.ts` | WP1.6 | encoding and EOL status items and pickers |
 | `externalChange.ts` | WP2.3 | the external-change banner and the poll |
 | `files.ts` | WP1.6 | file commands, close guard, drag and drop, window title |
@@ -122,12 +122,12 @@ Each row names the owning work package and the feature.
 | `recovery.ts` | WP7.4 | crash-recovery snapshots, the restore dialog, `recovery.showPending` |
 | `results.ts` | WP4.1 | the Results panel (bottom region) |
 | `scripts.ts` | WP5.2 | the script UI: Tools group, `script.*` commands, Output panel, status item |
-| `search.ts` | WP11.1 | Home tab "Search": `search.findAll` (Mod+Shift+F), `search.replace`, `search.wholeAddressInFind` |
+| `search.ts` | WP11.1 | Edit tab "Search": `search.findAll` (Mod+Shift+F), `search.replace`, `search.wholeAddressInFind` |
 | `segments.ts` | WP10.1 | `nav.selectToolSegment` (Mod+F7): select from one tool change to the next |
 | `session.ts` | WP7.5 | session restore at start, and the per-file memory that follows the tabs |
 | `settings.ts` | WP2.7 | the settings dialog, `settings.open` (Mod+,), `profile.manage` (Settings on the Profiles page, no key; M13 integration), reload on save |
 | `tabs.ts` | WP1.2 | next/previous/switch tab |
-| `templates.ts` | P3.5 | the Insert tab's templates of the active document's effective database, `insert.template:<id>` per template, `templates.insert`, the Home tab's program start, templates in completion (Phase 3, P3b; the prelude pinned them) |
+| `templates.ts` | P3.5 | the Insert tab's templates of the active document's effective database, `insert.template:<id>` per template, `templates.insert`, templates in completion (Phase 3, P3b; the prelude pinned them) |
 | `templateManager.ts` | P3.9 | the template manager and New Template from Selection: `templates.manage`, `templates.fromSelection` (Phase 3, P3b; the prelude pinned them) |
 | `theme.ts` | WP2.6 | `view.setTheme`, the settings → editor-option bridge |
 | `typing.ts` | WP13.4 | upper-case typing and no join of two blocks (AD-30), `edit.toggleForceUppercase` (M13; P13 pinned it) |

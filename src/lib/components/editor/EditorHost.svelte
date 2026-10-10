@@ -44,7 +44,12 @@
     flex: 1 1 auto;
     min-height: 0;
     min-width: 0;
-    overflow: hidden;
+    /* Not `hidden` (B1 A9). Monaco puts the tips of the find widget's buttons and the
+       context menu into its own container as absolutely positioned boxes, and a tip that
+       belongs above the first lines lies outside the wrapper: `hidden` cut it off. The
+       editor inside is exactly as large as this box (`automaticLayout`), so nothing
+       inside it can make the box grow. */
+    overflow: visible;
     background-color: var(--bg-app);
   }
   .editor-container {

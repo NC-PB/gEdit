@@ -314,7 +314,7 @@ listed. A word or comment whose conversion would change its length — `ß` beco
 moves every offset behind it — keeps its case while the rest of the line is converted, and
 the line is listed.
 
-The **Upper Case** and **Lower Case** buttons on the Home tab are the editor's plain text
+The **Upper Case** and **Lower Case** buttons on the Edit tab are the editor's plain text
 commands: they change the selected text as it is — with nothing selected, the word at the
 cursor — comments and quoted tool names included. Use **Convert Case…** on a program.
 Typing in upper case as you go is a different thing again: it is an option of the dialect, not
@@ -413,4 +413,4 @@ mill, the `T` word on a lathe, `TOOL CALL` in Klartext.
 | Adding to, subtracting from, multiplying or dividing the values of chosen addresses (a Z shift, say) | A bundled script — [Address arithmetic](scripts.md#address-arithmetic) |
 | Mirroring, splitting by tool, joining programs | Not in this version; write a script, or wait for the bundled library to grow |
 | Find and replace | The editor's own: `Cmd/Ctrl+F` to find, `Ctrl+H` on Windows and Linux or `Cmd+Alt+F` on macOS to replace |
-| Find an address or a value everywhere (`G1`, `S>12000`), list the hits, or replace them in place or into a new tab | **Find All…** and **Replace All…** on the Home tab, which follow the four rules above — [Searching](README.md#searching), and [Regular expressions](regex.md) for patterns |
+| Find an address or a value everywhere (`G1`, `S>12000`), list the hits, or replace them in place or into a new tab | **Find All…** and **Replace All…** on the Edit tab, which follow the four rules above — [Searching](README.md#searching), and [Regular expressions](regex.md) for patterns |

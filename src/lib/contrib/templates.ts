@@ -10,8 +10,9 @@
 //   - The Insert tab shows `TemplatesGroup`: one block of buttons per template group (the
 //     `toolbar` templates), the others in the group's "More templates…" list, a "Favorites"
 //     group first when the database has starred templates.
-//   - The Home tab keeps one button, `insert.template:program-start`, in the group
-//     `templates.groupProgram`: the active program's own "Program start" (a form per database).
+//   - "Program start" (`insert.template:program-start`, a form per database) is one of those
+//     buttons and the only place it is offered: the old one-button "Program" group of the Home
+//     tab is gone with the Home tab (B1 A9).
 //   - `templates.insert` (palette, no key) is a quick pick of the active program's templates,
 //     favourites first, then by group.
 //
@@ -27,7 +28,7 @@ import TemplatesGroup from '$lib/components/shell/TemplatesGroup.svelte';
 import { modals } from '$lib/app/modals';
 import { status } from '$lib/app/status';
 import { t } from '$lib/i18n';
-import { PROGRAM_START_TEMPLATE_ID, templateCommandId } from '$lib/core/templates';
+import { templateCommandId } from '$lib/core/templates';
 import type { TemplateDef } from '$lib/core/templates';
 import type { CommandContext, CommandDef, Contribution, Disposable, QuickPickItem, TemplateService } from '$lib/app/types';
 
@@ -122,7 +123,6 @@ export default {
       run: (c) => pickAndInsert(c.activeDocId),
     },
   ],
-  ribbon: [{ tab: 'home', group: 'templates.groupProgram', command: templateCommandId(PROGRAM_START_TEMPLATE_ID), order: 20 }],
   ribbonGroups: [{ tab: 'insert', group: 'templates.groupTemplates', order: 10, component: TemplatesGroup }],
   activate: () => keepCommandsInStep(templates),
 } satisfies Contribution;

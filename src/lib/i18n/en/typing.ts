@@ -7,7 +7,7 @@ import type { Messages } from '../types';
 
 export default {
   category: 'Edit',
-  /** Caption of the Home-tab group (`{ tab: 'home', group: 'typing.group' }`), after Edit. */
+  /** Caption of the Edit-tab group (`{ tab: 'edit', group: 'typing.group' }`), after Go To. */
   group: 'Typing',
   /** `edit.toggleForceUppercase`: upper-case typing off or on again, for this session only. */
   toggleForceUppercase: 'Upper-Case Typing',

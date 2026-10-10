@@ -213,7 +213,7 @@ describe('the ribbon', () => {
     expect(items.map((item) => item.command).sort()).toEqual([...byId.keys()].sort());
   });
 
-  it('groups them as the plan asks: Edit on Home, the rest on View', () => {
+  it('groups them as the plan asks: Edit on the Edit tab, the rest on View', () => {
     const groups = new Map<string, { tab: string; commands: string[] }>();
     for (const item of items) {
       const group = groups.get(item.group) ?? { tab: item.tab, commands: [] };
@@ -221,7 +221,7 @@ describe('the ribbon', () => {
       groups.set(item.group, group);
     }
     expect([...groups].map(([key, g]) => [key, g.tab])).toEqual([
-      ['editing.groupEdit', 'home'],
+      ['editing.groupEdit', 'edit'],
       ['editing.groupCode', 'view'],
       ['editing.groupDisplay', 'view'],
       ['editing.groupZoom', 'view'],
@@ -245,8 +245,8 @@ describe('the ribbon', () => {
     expect(order('editing.groupCode')).toBeLessThan(order('editing.groupDisplay'));
     expect(order('editing.groupDisplay')).toBeLessThan(order('editing.groupZoom'));
     expect(order('editing.groupZoom')).toBeLessThan(90);
-    // Home: behind File (10-60), Recent (15) and Program (20).
-    expect(order('editing.groupEdit')).toBeGreaterThan(60);
+    // Edit tab: this group first, ahead of Search (130), Go To (140) and Typing (150).
+    expect(order('editing.groupEdit')).toBeLessThan(130);
   });
 
   it('keeps the buttons of a group in the order they are declared', () => {

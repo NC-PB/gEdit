@@ -11,6 +11,8 @@
 // build, because the index is only started by whoever asks for it first and that may be
 // F7 itself (the program map is not mounted while the left region is hidden).
 
+import Locate from 'lucide-svelte/icons/locate';
+import { asIcon } from '$lib/app/icons';
 import { outline } from '$lib/app/outlineService';
 import { modals } from '$lib/app/modals';
 import { status } from '$lib/app/status';
@@ -113,11 +115,14 @@ async function stepTool(dir: 1 | -1): Promise<void> {
 
 export default {
   id: 'navigation',
+  // The Edit tab's "Go To" group (B1 A9).
+  ribbon: [{ tab: 'edit', group: 'navigation.groupGoto', command: 'nav.goto', order: 140 }],
   commands: [
     {
       id: 'nav.goto',
       title: 'navigation.goto',
       category: 'navigation.category',
+      icon: asIcon(Locate),
       keys: 'Ctrl+G',
       global: true,
       enabled: hasDocument,

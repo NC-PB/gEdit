@@ -192,6 +192,17 @@ describe('createDiff and the read-only lock', () => {
     expect(fake.created[0]).toMatchObject({ readOnly: false, originalEditable: false });
   });
 
+  it('creates the diff editor with the same colour and overflow options as the main editor (B1 A9)', async () => {
+    // Both creation sites feed the one shared configuration service, so they must agree.
+    (await compare(open(false))).dispose();
+    expect(fake.created[0]).toMatchObject({
+      colorDecorators: false,
+      defaultColorDecorators: 'never',
+      fixedOverflowWidgets: true,
+      hover: { above: false },
+    });
+  });
+
   it('locks the modified side of a locked document, revert arrows included', async () => {
     (await compare(open(true))).dispose();
     expect(fake.created[0]).toMatchObject({ readOnly: true });

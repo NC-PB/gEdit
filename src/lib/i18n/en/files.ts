@@ -18,6 +18,12 @@ export default {
   saveAll: 'Save All',
   close: 'Close',
   closeAll: 'Close All',
+  /** `file.reload`: read the file again from disk. */
+  reload: 'Reload',
+  reloadTitle: 'Reload from Disk',
+  reloadMessage: 'Reload {name} from disk? The changes you made since the last save are replaced. Undo brings them back.',
+  reloadButton: 'Reload',
+  reloadNoFile: '{name} has not been saved to a file yet, so there is nothing to reload.',
   closeWindow: 'Close Window',
 
   // Native dialog titles
