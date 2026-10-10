@@ -112,9 +112,16 @@ describe('what the roles decide (the reasons are in the G10 table, plan §8.7)',
   });
 
   it('Klartext: Q203 is the one tool-axis position, every depth and clearance is measured from it', () => {
-    // P10 added 202 (boring), 208 (bore milling) and 262 (thread milling), §7.16 #110.
-    const cycles = ['200', '201', '202', '203', '205', '206', '207', '208', '209', '240', '262'];
-    expect(withRole('heidenhain', 'tool-axis')).toEqual(cycles.map((n) => `CYCL DEF ${n} Q203`));
+    // P10 added 202 (boring), 208 (bore milling) and 262 (thread milling), §7.16 #110. B1 (a7s)
+    // added the pocket, slot and stud cycles 251–254, 256 and 257 (TNC 640 cycle manual
+    // 10/2017, ch. 5) and the SL cycles 21–25 (ch. 7): cycle 25 names its surface Q5 and its
+    // clearance height Q7 (both absolute); 21–24 take theirs from cycle 20, which stays out.
+    const cycles = ['200', '201', '202', '203', '205', '206', '207', '208', '209', '240', '262', '251', '252', '253', '254', '256', '257'];
+    expect(withRole('heidenhain', 'tool-axis')).toEqual([
+      ...cycles.map((n) => `CYCL DEF ${n} Q203`),
+      'CYCL DEF 25 Q5',
+      'CYCL DEF 25 Q7',
+    ]);
     for (const n of cycles) {
       const roles = rolesOf('heidenhain', `CYCL DEF ${n}`);
       expect(roles.Q201, n).toBe('none');
@@ -143,7 +150,11 @@ describe('what the roles decide (the reasons are in the G10 table, plan §8.7)',
       expect([roles.RTP, roles.RFP, roles.DP, roles.SDIS, roles.DPR], code).toEqual(['tool-axis', 'tool-axis', 'tool-axis', 'none', 'none']);
       expect(Object.values(roles), `${code}: every parameter reviewed`).not.toContain(null);
     }
-    expect(withRole('sinumerik', 'tool-axis').filter((p) => !/ (RTP|RFP|DP)$/.test(p))).toEqual(['CYCLE83 FDEP']);
+    // B1 (a7s): the milling cycles write their names with an underscore, and their chamfering
+    // depth _ZFS is a tool-axis position too while _AMODE reads it as absolute.
+    expect(withRole('sinumerik', 'tool-axis').filter((p) => !/ _?(RTP|RFP|DP)$/.test(p))).toEqual([
+      'CYCLE83 FDEP', 'POCKET3 _ZFS', 'POCKET4 _ZFS', 'SLOT1 _ZFS',
+    ]);
     // The drilling axis, the plane and whether the depth is absolute can each be chosen by a
     // mode argument; anything but 0 there is a reading the role does not describe.
     for (const code of ['CYCLE81', 'CYCLE82', 'CYCLE83', 'CYCLE85']) {
@@ -153,6 +164,42 @@ describe('what the roles decide (the reasons are in the G10 table, plan §8.7)',
     for (const code of ['CYCLE83', 'CYCLE84', 'CYCLE840']) expect(rolesOf('sinumerik', code)._AXN, code).toBe('mode');
     // CYCLE86's _GMODE only says whether the tool lifts off the wall.
     expect(rolesOf('sinumerik', 'CYCLE86')._GMODE).toBe('none');
+  });
+
+  it('B1: a Sinumerik milling or turning cycle with a point in the plane is refused, never shifted in part', () => {
+    // POCKET3, POCKET4, SLOT1 and CYCLE61 place the machining at a point of their own in the
+    // plane (840D sl NC programming manual 06/2019, §3.25.1.5–3.25.1.11); CYCLE93 and CYCLE97 at
+    // a start point and diameters on the turning axes (cycles manual 01/2008, §4.3, §4.7).
+    const own: Record<string, string[]> = {
+      CYCLE61: ['_PA', '_PO'],
+      POCKET3: ['_PA', '_PO'],
+      POCKET4: ['_PA', '_PO'],
+      SLOT1: ['_CPA', '_CPO'],
+      CYCLE93: ['SPD', 'SPL'],
+      CYCLE97: ['SPL', 'FPL', 'DM1', 'DM2'],
+    };
+    for (const [code, addresses] of Object.entries(own)) {
+      const roles = rolesOf('sinumerik', code);
+      expect(Object.entries(roles).filter(([, r]) => r === 'other').map(([a]) => a), code).toEqual(addresses);
+      expect(Object.values(roles), `${code}: every parameter reviewed`).not.toContain(null);
+    }
+    // The plane, the depth reading and the dimensioning are mode arguments, as on the drilling cycles.
+    for (const code of ['POCKET3', 'POCKET4', 'SLOT1']) {
+      const roles = rolesOf('sinumerik', code);
+      expect([roles._GMODE, roles._DMODE, roles._AMODE], code).toEqual(['mode', 'mode', 'mode']);
+    }
+    expect([rolesOf('sinumerik', 'CYCLE61')._DMODE, rolesOf('sinumerik', 'CYCLE61')._AMODE]).toEqual(['mode', 'mode']);
+  });
+
+  it('B1: Klartext cycle 254 places its slots around a centre of its own', () => {
+    // Q216, Q217 (absolute) are used when Q367 is 0; the role cannot depend on another
+    // parameter, so the cycle is refused and listed whatever Q367 says.
+    const roles = rolesOf('heidenhain', 'CYCL DEF 254');
+    expect(Object.entries(roles).filter(([, r]) => r === 'other').map(([a]) => a)).toEqual(['Q216', 'Q217']);
+    for (const n of ['251', '252', '253', '256', '257', '21', '22', '23', '24', '25']) {
+      expect(Object.values(rolesOf('heidenhain', `CYCL DEF ${n}`)), n).not.toContain('other');
+      expect(Object.values(rolesOf('heidenhain', `CYCL DEF ${n}`)), `${n}: every parameter reviewed`).not.toContain(null);
+    }
   });
 
   it('Sinumerik: the swivel points of CYCLE800 are positions the role does not cover', () => {

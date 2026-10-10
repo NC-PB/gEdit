@@ -251,8 +251,22 @@ describe('built-in code databases', () => {
     // required. The exceptions are the optional parameters a later software version
     // appended at the end, which older controls do not know: Q395, and Q208 of cycle 205
     // (both from software 34059x-04, source review 2026-09).
+    // B1 (a7s): the optional parameters the TNC 640 cycle manual (10/2017, "new and changed
+    // cycle functions") names as added to cycles 22, 25, 251–254, 256 and 257; and the `F` of
+    // cycle 19, a word of its 19.1 sub-block, not a parameter line.
+    const LATER: Record<string, string[]> = {
+      'CYCL DEF 19': ['F'],
+      'CYCL DEF 22': ['Q401', 'Q404'],
+      'CYCL DEF 25': ['Q18', 'Q446', 'Q447', 'Q448'],
+      'CYCL DEF 251': ['Q439'],
+      'CYCL DEF 252': ['Q439'],
+      'CYCL DEF 253': ['Q439'],
+      'CYCL DEF 254': ['Q439'],
+      'CYCL DEF 256': ['Q215', 'Q369', 'Q338', 'Q385'],
+      'CYCL DEF 257': ['Q215', 'Q369', 'Q338', 'Q385'],
+    };
     const optional = (code: string, address: string) =>
-      address === 'Q395' || (code === 'CYCL DEF 205' && address === 'Q208');
+      address === 'Q395' || (code === 'CYCL DEF 205' && address === 'Q208') || (LATER[code] ?? []).includes(address);
     for (const entry of heidenhain.db.codes.filter((e) => e.code.startsWith('CYCL DEF '))) {
       for (const param of entry.params ?? []) {
         const label = `${entry.code} ${param.address}`;
@@ -694,5 +708,35 @@ describe('B1: the block of a two-block cycle (CodeParam.block) and the review ma
     ]);
     expect(marked('fanuc-lathe')).toEqual(['G50.3', 'G68.1', 'G69.1', 'G71', 'G72', 'G73', 'G74', 'G75', 'G76']);
     expect(marked('fanuc-lathe-b')).toEqual(['G92.1']);
+  });
+});
+
+describe('B1: the words a code owns (`ownWords`, package A6)', () => {
+  it('reads the list upper case, reports what is not a word, and keeps the entry', () => {
+    const { db, problems } = load({
+      dialect: 'x',
+      version: 1,
+      codes: [
+        { code: 'M128', label: 'TCP on', ownWords: ['f'] },
+        { code: 'M140', label: 'Retract', ownWords: ['F', 7] },
+        { code: 'PLANE RESET', label: 'Reset', ownWords: 'F' },
+        { code: 'M129', label: 'TCP off' },
+      ],
+    });
+    expect(db.codes.map((e) => e.ownWords ?? null)).toEqual([['F'], ['F'], null, null]);
+    expect(problems.map((p) => p.path)).toEqual(['codes[1].ownWords[1]', 'codes[2].ownWords']);
+  });
+
+  it('carries the shipped Klartext list through the loader, where the scripts read it', () => {
+    // Without the loader member the app would drop the attribute and the scripts, which get
+    // the loaded entries, would read every one of these F words as a path feed.
+    const owning = heidenhain.db.codes.filter((e) => e.ownWords !== undefined).map((e) => e.code).sort();
+    expect(owning).toEqual([
+      'CYCL DEF 19', 'M128', 'M140', 'PLANE AXIAL', 'PLANE EULER', 'PLANE POINTS', 'PLANE PROJECTED',
+      'PLANE RELATIV', 'PLANE RESET', 'PLANE SPATIAL', 'PLANE VECTOR',
+    ]);
+    for (const code of owning) expect(lookupCode(heidenhain.db, code)?.ownWords, code).toEqual(['F']);
+    // FUNCTION TCPM's `F TCP` is a keyword, not a value: it owns nothing.
+    expect(lookupCode(heidenhain.db, 'FUNCTION TCPM')?.ownWords).toBeUndefined();
   });
 });

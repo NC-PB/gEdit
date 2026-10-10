@@ -427,6 +427,10 @@ function readEntry(
   if (flag(raw.alone, `${path}.alone`, report)) entry.alone = true;
   const requires = readWords(raw.requires, `${path}.requires`, report);
   if (requires) entry.requires = requires;
+  // B1 (A6): the words behind a code that are its own (Klartext `M128 F800`); the scripts read
+  // them from the loaded database, so a member the loader dropped would be one they never see.
+  const ownWords = readWords(raw.ownWords, `${path}.ownWords`, report);
+  if (ownWords) entry.ownWords = ownWords;
   const contour = oneOf(raw.contour, FRAMES, `${path}.contour`, report);
   if (contour !== undefined) entry.contour = contour;
   // M10 review: the pole, a program call and a coordinate shift (NC-2, NC-6, NC-7).

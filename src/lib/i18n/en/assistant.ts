@@ -146,6 +146,8 @@ export default {
     polarCommand: 'Polar coordinate command',
     /** WP8.5: exact stop against continuous path (Sinumerik G60, G64, G641, G642, G645). */
     pathmode: 'Path mode',
+    /** B1 (a7s): Sinumerik G601–G603, when the next block starts under an exact stop (G60, G9). */
+    exactstop: 'Exact stop criterion',
     /** WP8.3: which turret a block is for (Okuma G13, G14). */
     turret: 'Turret selection',
     /** WP8.3: the Okuma LAP codes that describe and run an automatic roughing contour. */

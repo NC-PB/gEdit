@@ -20,9 +20,9 @@
 // Which entries carry `verify: true` follows one rule, written down here because G10
 // reads it: a meaning the notes tag [M] or [P] (the 840D sl programming manual, 06/2019), a
 // DIN 66025 meaning, or one the owner decided (D35; M6 on 2026-10-08) is shown in hover; what the manual
-// only lists (G942, G952), what the machine sets up (M19) and the cycles whose
-// parameters are not described (CYCLE93, CYCLE97) is not. The source review (2026-09) read
-// the cycles manual of 01/2008, which describes CYCLE87–CYCLE89.
+// only lists (G942, G952) and what the machine sets up (M19) is not. The source review (2026-09) read
+// the cycles manual of 01/2008, which describes CYCLE87–CYCLE89; B1 (a7s) took CYCLE93 and
+// CYCLE97 from it as well.
 //
 // The database is read through `resolveCodeDbFiles` (AD-17) so it is the merge result the
 // app uses that is checked, and through `loadCodeDb` where the loaded shape matters.
@@ -67,6 +67,8 @@ const MODAL_GROUPS = [
   'lengthComp', 'offset', 'cycle', 'cyclereturn', 'diametermode', 'pathmode',
   // M10 (WP10.2): G290/G291, the language the control reads the program in.
   'language',
+  // B1 (a7s): G601–G603, when the next block starts under an exact stop (G group 12).
+  'exactstop',
 ];
 
 describe('the shipped Sinumerik database', () => {
@@ -261,9 +263,9 @@ describe('what a code does to the modal state', () => {
   it('starts a cycle on every CYCLE entry and on G63, for its own block', () => {
     const starts = codesWith((e) => e.sets?.cycle === 'start');
     expect(starts).toEqual([
-      'CYCLE62', 'CYCLE81', 'CYCLE82', 'CYCLE83', 'CYCLE84', 'CYCLE840', 'CYCLE85', 'CYCLE86',
+      'CYCLE61', 'CYCLE62', 'CYCLE81', 'CYCLE82', 'CYCLE83', 'CYCLE84', 'CYCLE840', 'CYCLE85', 'CYCLE86',
       'CYCLE87', 'CYCLE88', 'CYCLE89', 'CYCLE92', 'CYCLE93', 'CYCLE930', 'CYCLE940', 'CYCLE95',
-      'CYCLE951', 'CYCLE952', 'CYCLE97', 'CYCLE98', 'CYCLE99', 'G63',
+      'CYCLE951', 'CYCLE952', 'CYCLE97', 'CYCLE98', 'CYCLE99', 'G63', 'POCKET3', 'POCKET4', 'SLOT1',
     ]);
     // G63 taps once: the move type in force before it applies again after its block.
     expect(entry('G63')?.group).toBe('nonmodal');
@@ -414,12 +416,22 @@ describe('the cycles', () => {
     expect(entry('CYCLE930')?.label).toMatch(/groov/i);
     expect(entry('CYCLE99')?.label).toMatch(/thread/i);
     expect(entry('CYCLE99')?.label).not.toMatch(/undercut|relief/i);
-    // Not in the 4.92 cycle list: recognised by name, parameters not described.
+    // B1 (a7s): not in the 4.92 cycle list; described from the cycles manual of 01/2008
+    // (§4.3, §4.7). Neither has a feed among its arguments: CYCLE93 names none, and
+    // CYCLE97 takes its lead from PIT or MPIT.
+    expect(entry('CYCLE93')?.params?.map((p) => p.address)).toEqual([
+      'SPD', 'SPL', 'WIDG', 'DIAG', 'STA1', 'ANG1', 'ANG2', 'RCO1', 'RCO2', 'RCI1', 'RCI2', 'FAL1', 'FAL2', 'IDEP', 'DTB', 'VARI', '_VRT', '_DN',
+    ]);
+    expect(entry('CYCLE97')?.params?.map((p) => p.address)).toEqual([
+      'PIT', 'MPIT', 'SPL', 'FPL', 'DM1', 'DM2', 'APP', 'ROP', 'TDEP', 'FAL', 'IANG', 'NSP', 'NRC', 'NID', 'VARI', 'NUMT', '_VRT',
+    ]);
     for (const code of ['CYCLE93', 'CYCLE97']) {
-      expect(entry(code)?.params, code).toBeUndefined();
-      expect(entry(code)?.description, code).toMatch(/not described yet/);
-      expect(entry(code)?.verify, code).toBe(true);
+      expect(feeds(code), code).toEqual([]);
+      expect(entry(code)?.verify, code).toBeUndefined();
+      expect(entry(code)?.description, code).not.toMatch(/not described yet/);
     }
+    expect(unitOf('CYCLE93', 'DTB')).toBe('dwell');
+    expect(entry('CYCLE93')?.params?.find((p) => p.address === 'DTB')?.label).toMatch(/in seconds/);
   });
 });
 
@@ -431,7 +443,7 @@ describe('what is confirmed and what is not', () => {
     // reads — `pitchFeed`, `sets` — work regardless.
     // M6 left the list on the owner's answer of 2026-10-08 (M9-7): on a Siemens mill it is
     // the tool change that loads the tool selected with T.
-    expect(codesWith((e) => e.verify === true)).toEqual(['CYCLE93', 'CYCLE97', 'G942', 'G952', 'M19']);
+    expect(codesWith((e) => e.verify === true)).toEqual(['G942', 'G952', 'M19']);
     expect(entry('M6')?.description).toMatch(/loads the tool selected with T/);
   });
 
@@ -457,5 +469,84 @@ describe('what is confirmed and what is not', () => {
     expect(entry('MSG')?.description).not.toMatch(/operation/i);
     for (const code of ['G90', 'G91']) expect(entry(code)?.description, code).not.toMatch(/AC\(|IC\(/);
     expect(entry('GOTOF')?.description).not.toMatch(/block number/);
+  });
+});
+
+describe('B1 (a7s): the codes taken from the 840D sl manuals', () => {
+  // Facts from the 840D sl NC programming manual 06/2019 (§2.11, §3.1.8, §3.7.4, §3.13.5.3,
+  // §3.14.10, §3.25.1.5–3.25.1.11, G groups 10, 12, 22, 30) and the cycles manual 01/2008.
+  // Each entry carries the owner's review mark until the owner has read it.
+  const feeds = (code: string) => (entry(code)?.params ?? []).filter((p) => /\bfeed\b(?!\s+factor)/i.test(p.label)).map((p) => p.address);
+  const NEW = [
+    'G601', 'G602', 'G603', 'G643', 'G644', 'CYCLE61', 'POCKET3', 'POCKET4', 'SLOT1', 'CTOL', 'OTOL',
+    'WAITM', 'WAITMC', 'WAITE', 'SETM', 'CLEARM', 'INIT', 'START', 'COMPSURF', 'CUT3DCC', 'CUT3DCCD',
+  ];
+  const CHANGED = ['G645', 'CYCLE93', 'CYCLE97'];
+
+  it('ships every new entry with a label and a description, marked for the owner\'s review', () => {
+    for (const code of [...NEW, ...CHANGED]) {
+      const e = entry(code) as (CodeEntry & { review?: string }) | undefined;
+      expect(e, code).toBeDefined();
+      expect(e?.description?.length ?? 0, code).toBeGreaterThan(0);
+      expect(e?.review, code).toBe('pending');
+      expect(e?.verify, code).toBeUndefined();
+    }
+  });
+
+  it('keeps the exact-stop criteria apart from the path mode, and the new roundings in it', () => {
+    // G601–G603 are G group 12: they choose when the next block starts under G60 or G9 and
+    // do not end G60. G643 and G644 are path modes of group 10 like G641, G642 and G645.
+    for (const code of ['G601', 'G602', 'G603']) {
+      expect([entry(code)?.group, entry(code)?.modal], code).toEqual(['exactstop', true]);
+      expect(entry(code)?.description, code).toMatch(/G60 or G9/);
+    }
+    for (const code of ['G643', 'G644', 'G645']) expect([entry(code)?.group, entry(code)?.modal], code).toEqual(['pathmode', true]);
+    expect(codesWith((e) => e.group === 'exactstop')).toEqual(['G601', 'G602', 'G603']);
+  });
+
+  it('lists the arguments of the milling cycles in the order the control reads them', () => {
+    const order = (code: string) => entry(code)?.params?.map((p) => p.address);
+    expect(order('CYCLE61')).toEqual([
+      '_RTP', '_RFP', '_SDIS', '_DP', '_PA', '_PO', '_LENG', '_WID', '_MID', '_MIDA', '_FALD', '_FFP1', '_VARI', '_LIM', '_DMODE', '_AMODE',
+    ]);
+    expect(order('POCKET3')).toEqual([
+      '_RTP', '_RFP', '_SDIS', '_DP', '_LENG', '_WID', '_CRAD', '_PA', '_PO', '_STA', '_MID', '_FAL', '_FALD', '_FFP1', '_FFD',
+      '_CDIR', '_VARI', '_MIDA', '_AP1', '_AP2', '_AD', '_RAD1', '_DP1', '_UMODE', '_FS', '_ZFS', '_GMODE', '_DMODE', '_AMODE',
+    ]);
+    expect(order('POCKET4')).toEqual([
+      '_RTP', '_RFP', '_SDIS', '_DP', '_CDIAM', '_PA', '_PO', '_MID', '_FAL', '_FALD', '_FFP1', '_FFD', '_CDIR', '_VARI', '_MIDA',
+      '_AP1', '_AD', '_RAD1', '_DP1', '_UMODE', '_FS', '_ZFS', '_GMODE', '_DMODE', '_AMODE',
+    ]);
+    expect(order('SLOT1')).toEqual([
+      'RTP', 'RFP', 'SDIS', '_DP', '_DPR', 'NUM', 'LENG', 'WID', '_CPA', '_CPO', 'RAD', 'STA1', 'INDA', 'FFD', 'FFP1', '_MID',
+      'CDIR', '_FAL', 'VARI', '_MIDF', 'FFP2', 'SSF', '_FALD', '_STA2', '_DP1', '_UMODE', '_FS', '_ZFS', '_GMODE', '_DMODE', '_AMODE',
+    ]);
+    // POCKET4's fifth argument is a radius unless _DMODE says diameter (the 2008 manual calls it _PRAD).
+    expect(entry('POCKET4')?.params?.[4].label).toMatch(/radius, or its diameter/i);
+    // SLOT1 changed its meaning between versions: the label says both.
+    expect(entry('SLOT1')?.description).toMatch(/Older versions mill NUM slots on a circle/);
+  });
+
+  it('names the feeds of the milling cycles so Scale Feed lists them, and no factor or mode as one', () => {
+    expect(feeds('CYCLE61')).toEqual(['_FFP1']);
+    expect(feeds('POCKET3')).toEqual(['_FFP1', '_FFD']);
+    expect(feeds('POCKET4')).toEqual(['_FFP1', '_FFD']);
+    // FFP2 is the finishing feed of older SLOT1 versions and reserved in the current one.
+    expect(feeds('SLOT1')).toEqual(['FFD', 'FFP1', 'FFP2']);
+    for (const code of ['CYCLE61', 'POCKET3', 'POCKET4', 'SLOT1']) {
+      expect(entry(code)?.pitchFeed, code).toBeUndefined();
+      expect(entry(code)?.tapping, code).toBeUndefined();
+    }
+  });
+
+  it('describes the tolerance words and the channel commands', () => {
+    // CTOL= and OTOL= are values written with `=`, as SVC= is: they switch nothing.
+    for (const code of ['CTOL', 'OTOL']) {
+      expect(entry(code)?.sets, code).toBeUndefined();
+      expect(entry(code)?.modal, code).toBeUndefined();
+      expect(entry(code)?.description, code).toMatch(/negative value goes back/);
+    }
+    for (const code of ['WAITM', 'WAITMC', 'WAITE', 'SETM', 'CLEARM', 'INIT', 'START']) expect(entry(code)?.group, code).toBe('program');
+    expect(entry('CLEARM')?.description).toMatch(/CLEARM\(\) clears all/);
   });
 });
