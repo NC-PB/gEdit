@@ -39,6 +39,15 @@ export default {
   resetTitle: 'Reset {category}?',
   resetMessage:
     'Put every {category} setting back to its default? This is written to settings.json right away, whether or not you save the rest.',
+  // Leaving with something typed (B1 A4). Wording after the template manager's question.
+  leave: {
+    title: 'Unsaved changes',
+    valuesMessage: 'The changes you made in Settings are not saved. Leave without saving them?',
+    draftMessage: 'The machine you are adding or editing is not saved yet. Leave without saving it?',
+    bothMessage:
+      'The changes you made in Settings and the machine you are adding or editing are not saved. Leave without saving them?',
+    ok: 'Discard changes',
+  },
   resetFailed: 'The settings could not be reset',
   resetDone: '{category} settings were reset',
   // The Machines page (M6, AD-31). A machine configuration says how one control reads its

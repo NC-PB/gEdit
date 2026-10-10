@@ -41,6 +41,7 @@ const fake = vi.hoisted(() => {
       },
     },
     blocked: { value: false },
+    readOnly: { value: false },
     problems: { value: [] as MachineProblem[] },
     defaults: { value: {} as Record<string, string> },
     add: vi.fn(async (_machine: unknown): Promise<string> => 'new-id'),
@@ -49,7 +50,7 @@ const fake = vi.hoisted(() => {
     remove: vi.fn(async (): Promise<void> => {}),
     setDefault: vi.fn(async (): Promise<void> => {}),
     openFile: vi.fn(async (): Promise<void> => {}),
-    replaceWithEmpty: vi.fn(async (): Promise<void> => {}),
+    replaceWithEmpty: vi.fn(async (): Promise<string | null> => 'machines.json.bak'),
     confirm: vi.fn(async (_o: unknown): Promise<boolean> => true),
     shown: [] as { text: string; error: boolean }[],
   };
@@ -83,6 +84,7 @@ vi.mock('$lib/stores/machines', async () => {
       isMachinesDocument: () => false,
       problems: () => fake.problems.value,
       blocked: () => fake.blocked.value,
+      readOnly: () => fake.readOnly.value,
       replaceWithEmpty: fake.replaceWithEmpty,
       get: (id: string) => (fake.getList() as MachineConfig[]).find((m) => m.id === id),
       compatibleWith: () => fake.getList() as MachineConfig[],
@@ -142,6 +144,7 @@ const {
   variantFieldId,
 } = await import('$lib/core/machines/fields');
 const { initialValues } = await import('$lib/core/forms/values');
+const { ReportedError } = await import('$lib/core/machines/types');
 
 const deps = { machines, profiles, codes, docs, dialogs, status, t };
 
@@ -178,6 +181,7 @@ function addDoc(profileId: string, machineId?: string | null): DocId {
 beforeEach(() => {
   fake.setList([]);
   fake.blocked.value = false;
+  fake.readOnly.value = false;
   fake.problems.value = [];
   fake.defaults.value = {};
   fake.shown.length = 0;
@@ -309,7 +313,29 @@ describe('while the machines file could not be read', () => {
     expect(fake.openFile).toHaveBeenCalledTimes(1);
     expect(await replaceMachinesFile(deps)).toBe(true);
     expect(fake.replaceWithEmpty).toHaveBeenCalledTimes(1);
-    expect(fake.shown.at(-1)?.text).toBe(t('machines.page.replaced'));
+    // The message names the backup the old file was kept as (B1 A4).
+    expect(fake.shown.at(-1)?.text).toBe(t('machines.page.replaced', { name: 'machines.json.bak' }));
+    expect(fake.shown.at(-1)?.text).toContain('machines.json.bak');
+  });
+
+  it('does not offer Replace for a file a newer gEdit wrote (B1 A4)', () => {
+    fake.readOnly.value = true;
+    const html = page();
+    expect(actions(html)).toEqual(['add!', 'import!', 'export', 'open-file']);
+    expect(html).toContain(t('machines.page.blockedNewer'));
+    expect(html).not.toContain(t('machines.page.blocked'));
+  });
+
+  it('says a failed replace once: the store has already told (B1 A4)', async () => {
+    fake.replaceWithEmpty.mockRejectedValueOnce(new ReportedError('a copy could not be kept'));
+    expect(await replaceMachinesFile(deps)).toBe(false);
+    expect(fake.shown).toEqual([]);
+  });
+
+  it('still says a failure the store did not report (B1 A4)', async () => {
+    fake.replaceWithEmpty.mockRejectedValueOnce(new Error('weird'));
+    expect(await replaceMachinesFile(deps)).toBe(false);
+    expect(fake.shown.at(-1)).toEqual({ text: t('machines.page.saveFailed'), error: true });
   });
 
   it('replaces nothing when the confirmation is declined', async () => {
@@ -382,6 +408,14 @@ describe('Add', () => {
     const values = { ...draft.values, [FIELD_NAME]: 'Lathe 2' };
     expect(await submitDraft({ ...draft, values }, deps)).toBe(false);
     expect(fake.shown.at(-1)).toEqual({ text: t('machines.page.saveFailed'), error: true });
+  });
+
+  it('shows one message, not two, when the store has already reported the failed save (B1 A4)', async () => {
+    fake.add.mockRejectedValueOnce(new ReportedError('disk full'));
+    const draft = addDraft('fanuc-lathe', deps);
+    const values = { ...draft.values, [FIELD_NAME]: 'Lathe 2' };
+    expect(await submitDraft({ ...draft, values }, deps)).toBe(false);
+    expect(fake.shown).toEqual([]);
   });
 });
 
@@ -462,7 +496,30 @@ describe('a name', () => {
   it('may not be longer than the file allows', () => {
     const draft = { ...lathe(), values: { ...lathe().values, [FIELD_NAME]: 'x'.repeat(65) } };
     expect(draftErrors(fieldsFor(draft, deps), draft, [])[FIELD_NAME]).toEqual({
-      key: 'machines.page.nameLong',
+      key: 'forms.errors.tooLong',
+      params: { count: 64 },
+    });
+    // Exactly the limit passes.
+    const ok = { ...lathe(), values: { ...lathe().values, [FIELD_NAME]: 'x'.repeat(64) } };
+    expect(draftErrors(fieldsFor(ok, deps), ok, [])[FIELD_NAME]).toBeUndefined();
+  });
+
+  it('may not carry notes the file would refuse (B1 A4)', () => {
+    const draft = { ...lathe(), values: { ...lathe().values, [FIELD_NOTES]: 'n'.repeat(501) } };
+    expect(draftErrors(fieldsFor(draft, deps), draft, [])[FIELD_NOTES]).toEqual({
+      key: 'forms.errors.tooLong',
+      params: { count: 500 },
+    });
+    const ok = { ...lathe(), values: { ...lathe().values, [FIELD_NOTES]: 'n'.repeat(500) } };
+    expect(draftErrors(fieldsFor(ok, deps), ok, [])[FIELD_NOTES]).toBeUndefined();
+  });
+
+  it('may not give a duplicate a name the file would refuse (B1 A4)', () => {
+    const draft = duplicateDraft(LATHE_2, deps);
+    draft.values[FIELD_NAME] = 'x'.repeat(65);
+    expect(draftErrors(fieldsFor(draft, deps), draft, [LATHE_2])[FIELD_NAME]).toEqual({
+      key: 'forms.errors.tooLong',
+      params: { count: 64 },
     });
   });
 });

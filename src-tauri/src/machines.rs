@@ -26,7 +26,10 @@
 use serde_json::Value;
 use tauri::AppHandle;
 
-use crate::config::{as_object, read_json_object_versioned, save_json_object_versioned, JsonFile};
+use crate::config::{
+    as_object, read_json_object_versioned, replace_json_object_versioned,
+    save_json_object_versioned, JsonFile,
+};
 use crate::paths::{self, AppDirs};
 
 /// The highest `$version` this build writes. Must match `MACHINES_VERSION` in
@@ -58,6 +61,21 @@ pub fn save(dirs: &AppDirs, machines: Value) -> Result<(), String> {
     )
 }
 
+/// The body of [`machines_replace`]: the file becomes an empty one and whatever was
+/// there is kept beside it, whatever it held. Answers the backup's file name, or
+/// `None` when there was no file to keep.
+pub fn replace(dirs: &AppDirs) -> Result<Option<String>, String> {
+    let mut empty = serde_json::Map::new();
+    empty.insert("machines".to_owned(), Value::Array(Vec::new()));
+    empty.insert("defaults".to_owned(), Value::Object(serde_json::Map::new()));
+    replace_json_object_versioned(
+        &dirs.machines_file(),
+        paths::MACHINES_FILE_NAME,
+        empty,
+        MACHINES_VERSION,
+    )
+}
+
 /// Makes sure `machines.json` exists and answers with its path. The grant is the
 /// caller's business, because only it has the app handle.
 ///
@@ -85,6 +103,15 @@ pub fn ensure_file(dirs: &AppDirs) -> Result<std::path::PathBuf, String> {
 #[tauri::command]
 pub fn machines_save(app: AppHandle, machines: Value) -> Result<(), String> {
     save(&paths::app_dirs(&app)?, machines)
+}
+
+/// "Replace with an empty file" on the Machines page: keeps the old file as a backup
+/// beside it (`machines.json.bak`, or a time-stamped name when that one is taken) and
+/// puts an empty one in its place. Answers the backup's file name. The payload is
+/// not the webview's to choose: the new file is always the empty one.
+#[tauri::command]
+pub fn machines_replace(app: AppHandle) -> Result<Option<String>, String> {
+    replace(&paths::app_dirs(&app)?)
 }
 
 /// Makes sure `machines.json` exists, grants that one file to the fs scope and
@@ -239,6 +266,120 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
     }
 
+    /// "Replace with an empty file" keeps the old file **whatever it holds**: a file
+    /// that is valid JSON but not a machines file (the webview refuses it) was not
+    /// "unusable" to Rust, so it used to be written over with no copy at all.
+    #[test]
+    fn replace_keeps_a_backup_of_a_file_that_is_valid_json() {
+        let (root, dirs) = scratch("replace-shape");
+        let path = dirs.machines_file();
+        fs::write(&path, "{\"machines\": \"not a list\"}").unwrap();
+        assert!(crate::config::load(&dirs).machines_error.is_none());
+
+        let kept = replace(&dirs).unwrap().expect("no backup name");
+
+        assert_eq!(kept, "machines.json.bak");
+        let backup = fs::read_to_string(bak_path(&path)).unwrap();
+        assert!(backup.contains("not a list"), "{backup}");
+        assert_eq!(
+            on_disk(&dirs),
+            serde_json::json!({ "$version": 1, "machines": [], "defaults": {} })
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// An empty file (zero bytes) is not JSON; it is kept too.
+    #[test]
+    fn replace_keeps_an_empty_and_a_broken_file() {
+        let (root, dirs) = scratch("replace-empty");
+        let path = dirs.machines_file();
+        fs::write(&path, "").unwrap();
+        assert_eq!(
+            replace(&dirs).unwrap().as_deref(),
+            Some("machines.json.bak")
+        );
+        assert_eq!(fs::read(bak_path(&path)).unwrap(), b"");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// A second replace does not overwrite the first rescue copy.
+    #[test]
+    fn replace_never_overwrites_an_earlier_backup() {
+        let (root, dirs) = scratch("replace-twice");
+        let path = dirs.machines_file();
+        fs::write(&path, "first {").unwrap();
+        assert_eq!(
+            replace(&dirs).unwrap().as_deref(),
+            Some("machines.json.bak")
+        );
+        fs::write(&path, "second {").unwrap();
+        let second = replace(&dirs).unwrap().expect("no backup name");
+
+        assert_ne!(second, "machines.json.bak");
+        assert!(
+            second.starts_with("machines.json.") && second.ends_with(".bak"),
+            "{second}"
+        );
+        assert_eq!(fs::read_to_string(bak_path(&path)).unwrap(), "first {");
+        assert_eq!(
+            fs::read_to_string(dirs.config.join(&second)).unwrap(),
+            "second {"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// No file, no backup, and no error.
+    #[test]
+    fn replace_without_a_file_writes_the_empty_one() {
+        let (root, dirs) = scratch("replace-none");
+        assert_eq!(replace(&dirs).unwrap(), None);
+        assert_eq!(on_disk(&dirs)["machines"], serde_json::json!([]));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// A file from a newer gEdit is never replaced, by Replace either.
+    #[test]
+    fn replace_refuses_a_file_from_a_newer_gedit() {
+        let (root, dirs) = scratch("replace-newer");
+        let path = dirs.machines_file();
+        let newer = format!(
+            "{{\"$version\": {}, \"machines\": []}}",
+            MACHINES_VERSION + 1
+        );
+        fs::write(&path, &newer).unwrap();
+        let err = replace(&dirs).expect_err("replaced a newer file");
+        assert!(err.contains("newer gEdit"), "{err}");
+        assert_eq!(fs::read_to_string(&path).unwrap(), newer);
+        assert!(!bak_path(&path).exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// When the copy cannot be made, nothing is replaced and the error says so (the
+    /// rename result used to be thrown away). A folder that cannot be written to
+    /// stands in for the full disk; the file can still be read.
+    #[cfg(unix)]
+    #[test]
+    fn replace_reports_a_backup_that_could_not_be_made() {
+        use std::os::unix::fs::PermissionsExt;
+        let (root, dirs) = scratch("replace-copy-fails");
+        let path = dirs.machines_file();
+        fs::write(&path, "{\"machines\": 5}").unwrap();
+        fs::set_permissions(&dirs.config, fs::Permissions::from_mode(0o555)).unwrap();
+        // A superuser writes anyway, and then there is nothing to prove here.
+        let can_still_write = fs::write(dirs.config.join("probe"), "x").is_ok();
+
+        let result = replace(&dirs);
+
+        fs::set_permissions(&dirs.config, fs::Permissions::from_mode(0o755)).unwrap();
+        if !can_still_write {
+            let err = result.expect_err("the replace went through");
+            assert!(err.contains("could not be kept"), "{err}");
+            assert_eq!(fs::read_to_string(&path).unwrap(), "{\"machines\": 5}");
+            assert!(!bak_path(&path).exists());
+        }
+        let _ = fs::remove_dir_all(&root);
+    }
+
     /// A file from a newer gEdit is read and never written: its machines may carry
     /// parameters this build does not understand, and stamping it down to this
     /// version would silently drop them.
@@ -305,6 +446,7 @@ mod tests {
         for command in [
             "pub fn machines_save(app: AppHandle, machines: Value)",
             "pub fn machines_open_file(app: AppHandle)",
+            "pub fn machines_replace(app: AppHandle)",
         ] {
             assert!(source.contains(command), "missing or changed: {command}");
         }

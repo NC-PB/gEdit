@@ -64,6 +64,13 @@ export function errorText(err: unknown): string {
 export function createNativeDialogs(deps: NativeDialogsDeps): NativeDialogs {
   const { backend } = deps;
   let busy = false;
+  /** Callers of `whenFree` waiting for the chain in front to end, oldest first. */
+  const waiting: (() => void)[] = [];
+
+  /** Lets the oldest waiting caller look at the lock again; it takes it when it is still free. */
+  function wake(): void {
+    waiting.shift()?.();
+  }
 
   return {
     /**
@@ -176,6 +183,24 @@ export function createNativeDialogs(deps: NativeDialogsDeps): NativeDialogs {
         return await op();
       } finally {
         busy = false;
+        wake();
+      }
+    },
+
+    /**
+     * Like `exclusive`, but a caller that finds a chain in front **waits its turn** instead
+     * of being sent away: for a question that must be asked (the stale-result offer of a
+     * script would otherwise be answered "no" by nobody, B1 A4). Callers are served in the
+     * order they arrived.
+     */
+    async whenFree<T>(op: () => Promise<T>): Promise<T> {
+      while (busy) await new Promise<void>((resolve) => waiting.push(resolve));
+      busy = true;
+      try {
+        return await op();
+      } finally {
+        busy = false;
+        wake();
       }
     },
   };

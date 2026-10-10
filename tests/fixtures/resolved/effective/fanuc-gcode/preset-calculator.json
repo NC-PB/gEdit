@@ -198,7 +198,7 @@
           },
           {
             "id": "calculator",
-            "label": "As written: X50 and X50. are both 50 mm; the mill has no cycle parameter with a fixed micron reading, so Q and the rest read the same way",
+            "label": "As written: X50 and X50. are both 50 mm",
             "source": "syntax-fanuc.md §3.2",
             "value": {
               "incrementMm": "0.001",

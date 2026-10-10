@@ -138,6 +138,21 @@ describe('StatusBar', () => {
     expect(render(StatusBar).body).toContain('data-item="script"');
   });
 
+  // B1 A4: a message can carry a button (the machine mismatch notice: "Choose Machine…").
+  it('draws the button of a message that has an action, and only then', async () => {
+    const { status } = await import('$lib/app/status');
+    try {
+      status.show('Looks like B', { action: { label: 'Choose Machine…', run: () => {} } });
+      const html = render(StatusBar).body;
+      expect(html).toContain('data-testid="status-message-action"');
+      expect(html).toContain('Choose Machine…');
+      status.show('Plain');
+      expect(render(StatusBar).body).not.toContain('data-testid="status-message-action"');
+    } finally {
+      status.clear();
+    }
+  });
+
   // I2: the file name is `contrib/files.ts`'s registered item, not shell chrome. The bar
   // used to hard-code a second one, which put two `data-item="file"` elements in the DOM
   // and made `h.q('status-item', { item: 'file' })` ambiguous.

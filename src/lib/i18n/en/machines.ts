@@ -81,6 +81,8 @@ export default {
     numberInput: 'How the control reads numbers',
     numberInputHelp:
       'It decides what a written number means — above all whether a word without a decimal point is a count of input increments.',
+    numberInputUnconfirmed:
+      'A preset marked "unconfirmed" is the usual setting for this kind of control, not one checked against your machine. Compare it with your machine\'s parameters before you rely on it.',
     units: 'Units at power-on',
     unitsHelp: 'What the control measures in until the program says otherwise.',
     diameter: 'Diameter programming at power-on',
@@ -113,6 +115,7 @@ export default {
     on: 'on',
     off: 'off',
     profileDefault: 'Dialect default',
+    unconfirmed: 'unconfirmed',
     custom: 'Custom (edited in the file)',
     customDetail:
       'The file holds number rules that match no preset. They are kept until a preset is picked here.',
@@ -174,6 +177,7 @@ export default {
   typeMill: 'mill',
   typeLathe: 'lathe',
   // AD-31: detection disagrees with the chosen machine. Nothing switches by itself.
+  mismatchAction: 'Choose Machine…',
   mismatch:
     'This program looks like {label} "{detected}"; machine "{name}" is set to "{chosen}". Nothing was changed.',
 
@@ -196,6 +200,8 @@ export default {
     // a newer gEdit that it can read and must not write.
     blocked:
       'The machines file cannot be used as it is, so nothing here may be changed: a hand edit is never overwritten behind your back. Open the file and fix it, or replace it with an empty one.',
+    blockedNewer:
+      'The machines file was written by a newer version of gEdit. It is used as it is, but nothing here may be changed and it is never overwritten. Open the file to look at it, or update gEdit.',
     blockedAction: 'The machines file cannot be used as it is.',
     problem: '{path}: {message}',
     add: 'Add…',
@@ -223,23 +229,21 @@ export default {
     removeInUse_one: 'Remove {name}? {count} open document uses it and will fall back to the dialect defaults.',
     removeInUse_other: 'Remove {name}? {count} open documents use it and will fall back to the dialect defaults.',
     replaceTitle: 'Replace the machines file?',
-    // What Replace actually does (`config.rs::save_json_object_versioned`): a new, empty
-    // file takes its place; the old one is kept as `machines.json.bak` only when it could
-    // not be read as JSON at all — a file that parsed but could not be used as machine
-    // records is replaced with no backup. A file written by a newer gEdit is not touched:
-    // Replace is refused for it, same as every other write.
+    // What Replace does (`config.rs::replace_json_object_versioned`): whatever file is there
+    // is copied next to it first (`machines.json.bak`, or a dated name when that one is
+    // taken), then an empty file takes its place. A file written by a newer gEdit is not
+    // offered Replace at all.
     replaceMessage:
-      'A new, empty file takes its place. The old one is kept as machines.json.bak only if it could not be read as JSON at all; if it could be read but not used, it is replaced with no backup. A file written by a newer gEdit is left as it is — Replace is refused for it, like any other write.',
+      'A new, empty file takes its place. The old file is kept as a backup in the same folder, as machines.json.bak (or with the date in its name if that one already exists).',
     nameTaken: 'Another machine is already called that.',
-    nameLong: 'A name may be at most 64 characters long.',
     added: 'Machine {name} added',
     updated: 'Machine {name} saved',
     duplicated: 'Machine {name} added',
     removed: 'Machine {name} removed',
     defaultSet: '{name} is now the default for the {profile} dialect',
     defaultCleared: 'The {profile} dialect has no default machine any more',
-    replaced:
-      'The machines file was replaced with an empty one. The file that was there is kept as machines.json.bak only if it could not be read as JSON.',
+    replaced: 'The machines file was replaced with an empty one. The old file is kept as {name}.',
+    replacedNoBackup: 'The machines file was replaced with an empty one.',
     saveFailed: 'The machines file could not be written',
     modalDropped:
       'The power-on codes {codes} do not exist in what you just chose, so those groups follow the dialect again.',

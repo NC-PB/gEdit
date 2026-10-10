@@ -3,7 +3,7 @@
 
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ERROR_TIMEOUT_MS, MESSAGE_TIMEOUT_MS, status } from './status';
+import { ACTION_TIMEOUT_MS, ERROR_TIMEOUT_MS, MESSAGE_TIMEOUT_MS, status } from './status';
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -32,6 +32,22 @@ describe('status.show', () => {
     expect(get(status.current)?.error).toBe(true);
     vi.advanceTimersByTime(ERROR_TIMEOUT_MS - MESSAGE_TIMEOUT_MS);
     expect(get(status.current)).toBeNull();
+  });
+
+  it('carries a button and keeps the message long enough to reach it (B1 A4)', () => {
+    const run = vi.fn();
+    status.show('Looks like B', { action: { label: 'Choose Machine…', run } });
+    const shown = get(status.current);
+    expect(shown?.action?.label).toBe('Choose Machine…');
+    shown?.action?.run();
+    expect(run).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(MESSAGE_TIMEOUT_MS);
+    expect(get(status.current)).not.toBeNull();
+    vi.advanceTimersByTime(ACTION_TIMEOUT_MS - MESSAGE_TIMEOUT_MS);
+    expect(get(status.current)).toBeNull();
+    // A message without one has none.
+    status.show('Plain');
+    expect(get(status.current)).toEqual({ text: 'Plain', error: false });
   });
 
   it('carries the untranslated detail text', () => {

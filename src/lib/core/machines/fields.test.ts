@@ -449,3 +449,29 @@ describe('the summary the status item shows', () => {
     expect(lines.some((line) => line.includes('Millimetres'))).toBe(true);
   });
 });
+
+describe('presets nobody has confirmed (B1 A4)', () => {
+  it('say so in plain words, and only those', () => {
+    let seen = 0;
+    for (const info of WITH_PARAMS) {
+      const decl = declOf(info.id);
+      const field = byId(machineFields(decl, dbOf(info.id), undefined), FIELD_NUMBER_INPUT);
+      for (const preset of decl.numberInput?.presets ?? []) {
+        const choice = field?.choices?.find((entry) => entry.value === preset.id);
+        const flagged = choice?.label.endsWith(`(${t('machines.value.unconfirmed')})`);
+        expect(flagged, `${info.id}/${preset.id}`).toBe(preset.verify === true);
+        if (preset.verify === true) {
+          seen++;
+          expect(choice?.label.startsWith(preset.label)).toBe(true);
+          expect(field?.help).toContain(t('machines.param.numberInputUnconfirmed'));
+        }
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
+  });
+
+  it('keeps the Fanuc mill label short and true', () => {
+    const preset = (declOf('fanuc-gcode').numberInput?.presets ?? []).find((p) => p.id === 'calculator');
+    expect(preset?.label).toBe('As written: X50 and X50. are both 50 mm');
+  });
+});

@@ -14,6 +14,7 @@
 //   2. shape      → the value is not of the field's kind at all (`forms.errors.invalid`)
 //   3. number     → parses, is whole when `integer`, fits `decimals`
 //   4. bounds     → `min` / `max` (both → one `range` message)
+//   5. length     → `maxLength` of a text (counted on the trimmed text)
 // A `choice` or `address-list` whose `choices` are still empty cannot be checked against
 // anything, so any non-empty value passes; the caller fills the choices before it matters
 // (`files.defaultProfile` in WP2.7).
@@ -99,7 +100,11 @@ function fieldProblem(field: FieldSpec, value: unknown): Msg | null {
     case 'text':
     case 'file':
     case 'folder':
-      return typeof value === 'string' ? null : INVALID;
+      if (typeof value !== 'string') return INVALID;
+      if (field.maxLength !== undefined && value.trim().length > field.maxLength) {
+        return { key: 'forms.errors.tooLong', params: { count: field.maxLength } };
+      }
+      return null;
     case 'bool':
       return typeof value === 'boolean' ? null : INVALID;
     case 'number':

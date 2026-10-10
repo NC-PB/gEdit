@@ -259,6 +259,72 @@ describe('exclusive', () => {
   });
 });
 
+describe('whenFree (B1 A4)', () => {
+  it('waits for the chain in front instead of being sent away', async () => {
+    const { dialogs } = setup();
+    let release = (): void => {};
+    const first = dialogs.exclusive(
+      () =>
+        new Promise<string>((resolve) => {
+          release = () => resolve('first');
+        }),
+    );
+    const order: string[] = [];
+    const second = dialogs.whenFree(async () => {
+      order.push('second');
+      return 'second';
+    });
+    await Promise.resolve();
+    expect(order).toEqual([]);
+    release();
+    expect(await first).toBe('first');
+    expect(await second).toBe('second');
+    expect(order).toEqual(['second']);
+  });
+
+  it('serves several waiters one after the other, in the order they came', async () => {
+    const { dialogs } = setup();
+    let release = (): void => {};
+    const first = dialogs.whenFree(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const log: string[] = [];
+    let release2 = (): void => {};
+    const second = dialogs.whenFree(
+      () =>
+        new Promise<void>((resolve) => {
+          log.push('second starts');
+          release2 = resolve;
+        }),
+    );
+    const third = dialogs.whenFree(async () => void log.push('third'));
+    release();
+    await first;
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(log).toEqual(['second starts']);
+    release2();
+    await second;
+    await third;
+    expect(log).toEqual(['second starts', 'third']);
+  });
+
+  it('frees the lock after a failure and answers a free lock at once', async () => {
+    const { dialogs } = setup();
+    await expect(dialogs.whenFree(() => Promise.reject(new Error('boom')))).rejects.toThrow('boom');
+    expect(await dialogs.whenFree(async () => 'again')).toBe('again');
+    // And `exclusive` still sends a re-entrant call away.
+    let release = (): void => {};
+    const held = dialogs.whenFree(() => new Promise<void>((resolve) => (release = resolve)));
+    expect(await dialogs.exclusive(async () => 'x')).toBeUndefined();
+    release();
+    await held;
+  });
+});
+
 describe('errorText', () => {
   it('reads a string, an Error and an object', () => {
     expect(errorText('plain')).toBe('plain');

@@ -43,6 +43,18 @@
           data-testid="status-message"
           data-error={$message.error ? '1' : '0'}>{$message.text}</span
         >
+        {#if $message.action}
+          {@const action = $message.action}
+          <button
+            type="button"
+            class="message-action"
+            data-testid="status-message-action"
+            onclick={() => {
+              status.clear();
+              action.run();
+            }}>{action.label}</button
+          >
+        {/if}
       {/if}
     </span>
   </div>
@@ -90,6 +102,19 @@
     white-space: nowrap;
     text-overflow: ellipsis;
     opacity: 0.9;
+  }
+  .message-action {
+    flex: 0 0 auto;
+    padding: 0 6px;
+    border: 1px solid currentcolor;
+    border-radius: 2px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .message-action:hover {
+    background-color: rgb(255 255 255 / 15%);
   }
   .message.error {
     padding: 0 6px;

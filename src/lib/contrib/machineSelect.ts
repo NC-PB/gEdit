@@ -14,7 +14,7 @@
 // Machine and dialect names are data and stay untranslated (README rule 3).
 
 import MachineStatus from '$lib/components/status/MachineStatus.svelte';
-import SettingsDialog, { MACHINES_TAB } from '$lib/components/dialogs/SettingsDialog.svelte';
+import SettingsDialog, { MACHINES_TAB, settingsModal } from '$lib/components/dialogs/SettingsDialog.svelte';
 import { files } from '$lib/app/fileOps';
 import { modals } from '$lib/app/modals';
 import { status } from '$lib/app/status';
@@ -145,17 +145,21 @@ async function pickOther(docId: DocId, title: string, profileId: string): Promis
   if (picked === undefined) return;
   const machine = machines.get(picked);
   if (!machine) return;
-  files.setProfile(docId, machine.profile);
-  // A machine picked by hand is a decision, so the "?" of an uncertain guess goes with it.
-  if (docs.get(docId)?.dialectUncertain === true) docs.update(docId, { dialectUncertain: false });
-  // AD-22: picking a machine of another dialect changes the dialect too, and that is a
-  // decision the user made by hand — so it is remembered for the file exactly as the
-  // dialect picker's own choice is (`contrib/profileSelect.ts`). Without this line the
-  // file comes back next time with a detected dialect and a machine that does not fit
-  // it, and AD-31 drops the machine with a message (M7 integration, mergeA).
-  const path = docs.get(docId)?.path ?? null;
-  if (path !== null) fileMemory.remember(path, { profileId: machine.profile });
-  machines.setForDoc(docId, machine.id);
+  // One step: the machine is chosen while the dialect changes, so the old machine is never
+  // looked at against the new dialect (it said "not for this dialect" about a pick that was
+  // right, B1 A4).
+  machines.setProfileAndMachine(docId, machine.id, () => {
+    files.setProfile(docId, machine.profile);
+    // A machine picked by hand is a decision, so the "?" of an uncertain guess goes with it.
+    if (docs.get(docId)?.dialectUncertain === true) docs.update(docId, { dialectUncertain: false });
+    // AD-22: picking a machine of another dialect changes the dialect too, and that is a
+    // decision the user made by hand — so it is remembered for the file exactly as the
+    // dialect picker's own choice is (`contrib/profileSelect.ts`). Without this line the
+    // file comes back next time with a detected dialect and a machine that does not fit
+    // it, and AD-31 drops the machine with a message (M7 integration, mergeA).
+    const path = docs.get(docId)?.path ?? null;
+    if (path !== null) fileMemory.remember(path, { profileId: machine.profile });
+  });
   status.show(
     t('machines.changedProfile', {
       name: title,
@@ -228,7 +232,8 @@ async function pickMachine(): Promise<void> {
  * into the dialog's DOM after it is on screen.
  */
 async function openMachinesPage(): Promise<void> {
-  await modals.open(SettingsDialog, { initialTab: MACHINES_TAB });
+  const { props, options } = settingsModal(MACHINES_TAB);
+  await modals.open(SettingsDialog, props, options);
 }
 
 async function openMachinesFile(): Promise<void> {

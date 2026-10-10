@@ -119,6 +119,7 @@ pub fn run() {
             config::settings_save,
             config::settings_open_file,
             machines::machines_save,
+            machines::machines_replace,
             machines::machines_open_file,
             quit::quit_guard_set_dirty,
             backup::files_backup,

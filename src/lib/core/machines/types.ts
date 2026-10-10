@@ -27,6 +27,20 @@ import type { ChannelParams } from '$lib/core/channels/types';
 import type { CodeDb } from '$lib/core/codes/types';
 import type { CompiledProfile, MachineParamsDecl, Profile } from '$lib/core/profiles/types';
 
+/**
+ * An error the machines store has already told the user about (a status message with the
+ * detail). Whoever catches it must not say it a second time (B1 A4: a failed save showed
+ * two messages, one from the store and one from the page).
+ */
+export class ReportedError extends Error {
+  readonly reported = true;
+}
+
+/** True for an error the store has already shown (see {@link ReportedError}). */
+export function wasReported(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { reported?: unknown }).reported === true;
+}
+
 /** The file format version of `machines.json`. Must match `MACHINES_VERSION` in `machines.rs`. */
 export const MACHINES_VERSION = 1;
 

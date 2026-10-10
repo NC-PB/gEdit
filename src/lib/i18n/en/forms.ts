@@ -35,6 +35,8 @@ export default {
     min: 'Enter {min} or more.',
     max: 'Enter {max} or less.',
     range: 'Enter a value between {min} and {max}.',
+    tooLong_one: 'Use at most {count} character.',
+    tooLong_other: 'Use at most {count} characters.',
     notInChoices: 'Choose one of the offered values.',
     invalid: 'This value cannot be used here.',
   },
