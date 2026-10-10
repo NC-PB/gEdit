@@ -471,7 +471,7 @@ describe('keepMine', () => {
     expect(doc?.external).toBe('none');
     expect(doc?.metaDirty).toBe(true);
     // The document now claims the file as it is on disk, so the next tick is quiet.
-    expect(doc?.disk).toEqual(stampOf('O2000', 6000));
+    expect(doc?.disk).toMatchObject(stampOf('O2000', 6000));
 
     await h.service.checkNow();
     expect(h.docs.get(id)?.external).toBe('none');
@@ -521,7 +521,7 @@ describe('keepMine', () => {
     expect(h.docs.get(id)?.external).toBe('changed');
     // And "Keep mine" now has a real stamp to hand over.
     h.service.keepMine(id);
-    expect(h.docs.get(id)?.disk).toEqual(stampOf('O2000 (the new post)', 90_000));
+    expect(h.docs.get(id)?.disk).toMatchObject(stampOf('O2000 (the new post)', 90_000));
   });
 
   it('keeps the stamp of a file too large to hash, and does not nag about it', async () => {
@@ -587,7 +587,7 @@ describe('a reload that cannot be carried out', () => {
 
     expect(h.reloaded).toEqual([id, id]);
     expect(h.docs.get(id)?.external).toBe('none');
-    expect(h.docs.get(id)?.disk).toEqual(stampOf('O2000 (good again)', 7000));
+    expect(h.docs.get(id)?.disk).toMatchObject(stampOf('O2000 (good again)', 7000));
   });
 
   it('keeps the stamp a Keep mine would apply', async () => {
@@ -600,7 +600,7 @@ describe('a reload that cannot be carried out', () => {
 
     h.service.keepMine(id);
 
-    expect(h.docs.get(id)?.disk).toEqual(stampOf('junk', 6000));
+    expect(h.docs.get(id)?.disk).toMatchObject(stampOf('junk', 6000));
     expect(h.docs.get(id)?.external).toBe('none');
   });
 
@@ -630,5 +630,86 @@ describe('reload', () => {
     await h.service.checkNow();
     expect(h.docs.get(id)?.external).toBe('none');
     expect(h.messages.filter((m) => m.error)).toEqual([]);
+  });
+});
+
+// B1 A1: FAT32 and exFAT keep time in 2 s steps, so a same-size rewrite inside the step
+// that the stamp was taken in leaves size and mtime exactly as they were.
+describe('a stamp the file system cannot tell apart from a rewrite (racy)', () => {
+  /** The document's stamp, taken 500 ms after the file's time: inside the 2 s step. */
+  function racy(h: Harness, id: DocId): void {
+    const stamp = h.docs.get(id)?.disk as DiskStamp;
+    h.docs.update(id, { disk: { ...stamp, takenAtMs: (stamp.mtimeMs ?? 0) + 500 } });
+  }
+
+  it('reads the file and raises the banner for a same-size, same-time rewrite', async () => {
+    const h = harness();
+    const id = h.add({ text: 'O1000', mtimeMs: 1000 });
+    racy(h, id);
+    h.disk.set(PATH, { text: 'O2000', mtimeMs: 1000 }); // five bytes either way
+
+    await h.service.checkNow();
+
+    expect(h.reads).toBe(1);
+    expect(h.docs.get(id)?.external).toBe('changed');
+    expect(h.messages).toHaveLength(1);
+  });
+
+  it('does not read a stamp that is not racy: one stat, as before', async () => {
+    const h = harness();
+    const id = h.add({ text: 'O1000', mtimeMs: 1000 });
+    h.docs.update(id, { disk: { ...(h.docs.get(id)?.disk as DiskStamp), takenAtMs: 1000 + 60_000 } });
+    h.disk.set(PATH, { text: 'O2000', mtimeMs: 1000 });
+
+    await h.service.checkNow();
+
+    expect(h.reads).toBe(0);
+    expect(h.docs.get(id)?.external).toBe('none');
+  });
+
+  it('does not read a stamp from before takenAtMs existed', async () => {
+    const h = harness();
+    h.add({ text: 'O1000', mtimeMs: 1000 });
+    await h.service.checkNow();
+    expect(h.reads).toBe(0);
+  });
+
+  it('renews a racy stamp that still matches once the step is over, then stops reading', async () => {
+    const h = harness();
+    const id = h.add({ text: 'O1000', mtimeMs: 1000 });
+    racy(h, id);
+
+    await h.service.checkNow();
+    // The fake clock is far past 1000 + 2.5 s, so the look settled the question.
+    expect(h.reads).toBe(1);
+    expect(h.docs.get(id)?.external).toBe('none');
+    expect(h.docs.get(id)?.disk?.takenAtMs).toBe(Date.now());
+
+    await h.service.checkNow();
+    await h.service.checkNow();
+    expect(h.reads).toBe(1);
+  });
+
+  it('keeps looking while the step may still be running', async () => {
+    const h = harness();
+    const id = h.add({ text: 'O1000', mtimeMs: Date.now() - 500 });
+    racy(h, id);
+    h.docs.update(id, { disk: { ...(h.docs.get(id)?.disk as DiskStamp), takenAtMs: Date.now() - 200 } });
+
+    await h.service.checkNow();
+    await h.service.checkNow();
+
+    expect(h.reads).toBe(2);
+    expect(h.docs.get(id)?.external).toBe('none');
+  });
+
+  it('leaves a stamp alone whose time is far in the future (a clock that disagrees)', async () => {
+    const h = harness();
+    const id = h.add({ text: 'O1000', mtimeMs: Date.now() + 3_600_000 });
+    h.docs.update(id, { disk: { ...(h.docs.get(id)?.disk as DiskStamp), takenAtMs: Date.now() } });
+
+    await h.service.checkNow();
+
+    expect(h.reads).toBe(0);
   });
 });

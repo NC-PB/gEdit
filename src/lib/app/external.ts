@@ -10,6 +10,12 @@
 // compared with the document's disk stamp before anything is reported, so a touch that
 // did not change the bytes — and the app's own write, which restamps — stays silent.
 //
+// The hint is blind in one case: FAT32 and exFAT keep time in 2 s steps, so a second write
+// of the same size inside the step looks unchanged. A stamp whose mtime lies within that
+// window of when it was taken (`isRacy`) is therefore hashed on every poll, until a look
+// at the file past the step finds it unchanged and the stamp is renewed; every other
+// stamp costs one stat, as before.
+//
 // The decision, once the content really differs:
 //
 //   clean document and `files.externalChange = reload` → reload, one undo step
@@ -27,7 +33,7 @@
 // `createExternalChangeService(deps)` plus the singleton wired to the real services
 // (AD-2), so a unit test drives it with a fake clock, a fake stat and a fake read.
 
-import { diskChanged, files as appFiles, MAX_OPEN_BYTES } from '$lib/app/fileOps';
+import { diskChanged, files as appFiles, isRacy, MAX_OPEN_BYTES, RACY_WINDOW_MS } from '$lib/app/fileOps';
 import { status as appStatus } from '$lib/app/status';
 import { fnv1a32 } from '$lib/core/text';
 import { docs as appDocs } from '$lib/stores/documents';
@@ -63,6 +69,8 @@ export interface ExternalChangeDeps {
   /** Installs the `focus` and `visibilitychange` listeners; returns their disposer. */
   watchFocus(check: () => void): Disposable;
   intervalMs: number;
+  /** The app's clock for `DiskStamp.takenAtMs`; `Date.now` unless a test pins it. */
+  now?(): number;
 }
 
 /** What `(mtime, size)` the last reported change was raised for. */
@@ -82,6 +90,7 @@ interface Decided extends Seen {
 }
 
 export function createExternalChangeService(deps: ExternalChangeDeps): ExternalChangeService {
+  const now = (): number => (deps.now ? deps.now() : Date.now());
   /**
    * The stamp a "Keep mine" would apply, per document: the file as the poll last read it.
    * `null` means the new content was too large to hash, so there is no new stamp — the
@@ -187,9 +196,29 @@ export function createExternalChangeService(deps: ExternalChangeDeps): ExternalC
       reportDeleted(id);
       return;
     }
+    // Bytes already read for a racy stamp, so the change below does not read them again.
+    let racyBytes: Uint8Array | undefined;
     if (!diskChanged(doc.disk, stat)) {
-      reportUnchanged(id);
-      return;
+      const racy = doc.external === 'none' && isRacy(doc.disk) && (stat.size ?? 0) <= MAX_OPEN_BYTES;
+      if (!racy) {
+        reportUnchanged(id);
+        return;
+      }
+      try {
+        racyBytes = await deps.readFile(doc.path);
+      } catch (err) {
+        console.warn(`could not read ${doc.path}`, err);
+        return;
+      }
+      const still = deps.docs.get(id);
+      if (!still?.path || still.path !== doc.path || still.disk !== doc.disk) return;
+      if (racyBytes.length === doc.disk.size && fnv1a32(racyBytes) === doc.disk.hash) {
+        // Unchanged. Once the file system's step has certainly ended, a write that came
+        // later would show in the time, so the stamp is renewed and stops being racy.
+        const settled = stat.mtimeMs === null || now() - stat.mtimeMs >= RACY_WINDOW_MS;
+        reportUnchanged(id, settled ? { ...doc.disk, takenAtMs: now() } : undefined);
+        return;
+      }
     }
     // The banner is already up for exactly this file; do not read it again every 2 s.
     const last = seen.get(id);
@@ -206,19 +235,23 @@ export function createExternalChangeService(deps: ExternalChangeDeps): ExternalC
     }
 
     let bytes: Uint8Array;
-    try {
-      bytes = await deps.readFile(doc.path);
-    } catch (err) {
-      // Mid-write on a share, or a permission that just went away: try again next tick.
-      console.warn(`could not read ${doc.path}`, err);
-      return;
+    if (racyBytes) {
+      bytes = racyBytes;
+    } else {
+      try {
+        bytes = await deps.readFile(doc.path);
+      } catch (err) {
+        // Mid-write on a share, or a permission that just went away: try again next tick.
+        console.warn(`could not read ${doc.path}`, err);
+        return;
+      }
     }
 
     // The document may have been saved, reloaded or closed while the read was in flight.
     const fresh = deps.docs.get(id);
     if (!fresh?.path || fresh.path !== doc.path || !fresh.disk) return;
 
-    const stamp: DiskStamp = { mtimeMs: stat.mtimeMs, size: bytes.length, hash: fnv1a32(bytes) };
+    const stamp: DiskStamp = { mtimeMs: stat.mtimeMs, size: bytes.length, hash: fnv1a32(bytes), takenAtMs: now() };
     if (stamp.hash === fresh.disk.hash && stamp.size === fresh.disk.size) {
       // Same bytes, new mtime: record the stamp so the next tick is cheap, and stay quiet.
       reportUnchanged(id, stamp);

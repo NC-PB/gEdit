@@ -71,6 +71,13 @@ pub struct FileStat {
     /// call asked for more than [`MAX_STAT_PATHS`] paths. Every other field is empty then,
     /// and **empty does not mean gone**: nothing about this path is known.
     pub unavailable: bool,
+    /// **Which file this is**: the path with every symlink, `..` and mapped-drive
+    /// spelling resolved (`std::fs::canonicalize`, `\\?\` folded away by
+    /// [`crate::paths::plain`]). Two spellings of one file answer the same string, so the
+    /// webview can tell that a second tab, or a Save As, would take a file another tab
+    /// already owns. `None` for a directory, for a path that is not there, and when
+    /// resolving it failed — then only the lexical comparison is left.
+    pub canonical: Option<String>,
 }
 
 impl FileStat {
@@ -373,6 +380,7 @@ fn is_stuck(key: &str) -> bool {
 fn of_metadata(path: String, meta: &Metadata) -> FileStat {
     let is_dir = meta.is_dir();
     let readonly = not_writable(&path, meta);
+    let canonical = (!is_dir).then(|| canonical_of(&path)).flatten();
     FileStat {
         path,
         allowed: true,
@@ -382,7 +390,15 @@ fn of_metadata(path: String, meta: &Metadata) -> FileStat {
         size: (!is_dir).then_some(meta.len()),
         readonly,
         unavailable: false,
+        canonical,
     }
+}
+
+/// [`FileStat::canonical`] for a path that was just stat-ed. It runs on the same
+/// worker thread as the stat, so the time budget of [`run_bounded`] covers it too.
+fn canonical_of(path: &str) -> Option<String> {
+    let resolved = std::fs::canonicalize(path).ok()?;
+    crate::paths::plain(&resolved).to_str().map(str::to_owned)
 }
 
 /// `SystemTime` as epoch milliseconds. A modification time before 1970 is
@@ -512,6 +528,45 @@ mod tests {
         assert!(stat.allowed && stat.exists && stat.is_dir);
         assert_eq!(stat.size, None);
         assert!(stat.mtime_ms.is_some());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// B1 A1. Two spellings of one file must answer one `canonical`: a `..` hop and a
+    /// symlink both reach `a.nc`, and a tab opened through either must find the other.
+    #[cfg(unix)]
+    #[test]
+    fn canonical_is_the_same_for_every_spelling_of_a_file() {
+        let dir = scratch_dir("canonical");
+        std::os::unix::fs::symlink(dir.join("a.nc"), dir.join("link.nc")).unwrap();
+        let direct = one(s(&dir.join("a.nc")));
+        let through_link = one(s(&dir.join("link.nc")));
+        let through_dots = one(s(&dir.join("sub").join("..").join("a.nc")));
+        let canonical = direct.canonical.clone().expect("no canonical path");
+        assert!(canonical.ends_with("a.nc"), "{canonical}");
+        assert_eq!(through_link.canonical.as_deref(), Some(canonical.as_str()));
+        assert_eq!(through_dots.canonical.as_deref(), Some(canonical.as_str()));
+        // The answer to the stat itself is untouched: the path is the one passed in.
+        assert_eq!(through_link.path, s(&dir.join("link.nc")));
+        // Another file is another identity.
+        let other = one(s(&dir.join("secret.nc")));
+        assert_ne!(other.canonical, direct.canonical);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn canonical_is_empty_for_a_directory_a_missing_path_and_a_refusal() {
+        let dir = scratch_dir("canonical-none");
+        assert_eq!(one(s(&dir.join("sub"))).canonical, None);
+        assert_eq!(one(s(&dir.join("gone.nc"))).canonical, None);
+        assert_eq!(one(s(&dir.join("secret.nc"))).canonical, None);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn canonical_is_serialized_in_camel_case() {
+        let dir = scratch_dir("canonical-json");
+        let json = serde_json::to_value(one(s(&dir.join("a.nc")))).unwrap();
+        assert!(json["canonical"].is_string(), "{json}");
         let _ = fs::remove_dir_all(&dir);
     }
 

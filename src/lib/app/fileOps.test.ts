@@ -21,7 +21,7 @@ import {
 import { createExternalChangeService } from './external';
 import { outlookOf } from './recovery';
 import { createDocumentStore } from '$lib/stores/documents';
-import { decodeFile } from '$lib/core/text';
+import { decodeFile, fnv1a32 } from '$lib/core/text';
 import { createProfileRegistry } from '$lib/stores/profiles';
 import { baseName } from '$lib/utils/platform';
 import { t } from '$lib/i18n';
@@ -260,6 +260,8 @@ function createFakeFs(): FileSystemAccess & {
   readOnly: Set<string>;
   /** Paths the fs scope does not allow, so `files_stat` answers `allowed: false`. */
   forbidden: Set<string>;
+  /** `FileStat.canonical` per path: which file a spelling is. Absent: Rust gave none. */
+  canonical: Map<string, string>;
 } {
   const files = new Map<string, Uint8Array>();
   const mtimes = new Map<string, number>();
@@ -269,8 +271,10 @@ function createFakeFs(): FileSystemAccess & {
   const writeFailures = new Set<string>();
   const readOnly = new Set<string>();
   const forbidden = new Set<string>();
+  const canonical = new Map<string, string>();
   let clock = 1000;
   return {
+    canonical,
     files,
     mtimes,
     sizes,
@@ -425,6 +429,7 @@ function setup(o: { isTauri?: boolean; filtersSupported?: boolean } = {}): Harne
         mtimeMs: fs.mtimes.get(path) ?? null,
         size: fs.sizes.get(path) ?? fs.files.get(path)?.length ?? null,
         readonly: fs.readOnly.has(path),
+        ...(fs.canonical.has(path) ? { canonical: fs.canonical.get(path) } : {}),
       };
     });
   };
@@ -2341,7 +2346,7 @@ describe('restoreDocument (AD-21)', () => {
       encoding: { encoding: 'windows-1252', hasBom: false },
       eol: 'crlf',
       textLF: text,
-      diskStamp: { mtimeMs: 500, size: onDisk.length, hash: 7 },
+      diskStamp: { mtimeMs: 500, size: onDisk.length, hash: fnv1a32(onDisk) },
     });
     await settled();
 
@@ -2561,5 +2566,230 @@ describe('a save over a file the document cannot vouch for (G8 M7)', () => {
     expect(await h.files.save(id)).toBe(true);
     expect(h.docs.get(id)?.disk?.mtimeMs).toBe(before);
     expect(text(path)).toContain('my edit');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B1 A1: one file, one tab; a rewrite the file system cannot date; unknown sizes
+// ---------------------------------------------------------------------------
+
+describe('two spellings of one file (B1 A1)', () => {
+  /** `/nc/link.nc` and `/nc/sub/../a.nc` are the file Rust calls `/real/a.nc`. */
+  function alias(real: string, ...spellings: string[]): void {
+    for (const spelling of [real, ...spellings]) {
+      if (spelling !== real) {
+        h.fs.files.set(spelling, h.fs.files.get(real) as Uint8Array);
+        h.fs.mtimes.set(spelling, h.fs.mtimes.get(real) as number);
+      }
+      h.fs.canonical.set(spelling, real);
+    }
+  }
+
+  it('opens the file once: the second spelling brings the first tab forward', async () => {
+    const real = h.put('/real/a.nc', 'nc/encoding/utf8-lf.nc');
+    alias(real, '/nc/link.nc');
+    const [first] = await h.files.open([real]);
+    h.files.newUntitled();
+    const read = vi.spyOn(h.fs, 'readFile');
+
+    const ids = await h.files.open(['/nc/link.nc']);
+
+    expect(ids).toEqual([first]);
+    expect(h.docs.all().filter((doc) => doc.path !== null)).toHaveLength(1);
+    expect(h.docs.getActiveId()).toBe(first);
+    // Found by the stat alone: nothing was read for the second spelling.
+    expect(read).not.toHaveBeenCalled();
+    expect(h.status.last()).toContain(t('files.focused', { name: 'a.nc' }));
+  });
+
+  it('opens it once when both spellings arrive in one Open', async () => {
+    const real = h.put('/real/a.nc', 'nc/encoding/utf8-lf.nc');
+    alias(real, '/nc/link.nc');
+
+    const ids = await h.files.open(['/nc/link.nc', real]);
+
+    expect(new Set(ids).size).toBe(1);
+    expect(h.docs.all().filter((doc) => doc.path !== null)).toHaveLength(1);
+    expect(h.status.last()).toContain(t('files.opened', { name: 'link.nc' }));
+  });
+
+  it('remembers which file a document is, after an open and after a save', async () => {
+    const real = h.put('/real/a.nc', 'nc/encoding/utf8-lf.nc');
+    alias(real, '/nc/link.nc');
+    const [id] = await h.files.open(['/nc/link.nc']);
+    expect(h.docs.get(id)?.canonical).toBe(real);
+    expect(h.docs.byIdentity(real)?.id).toBe(id);
+
+    h.fs.canonical.set('/nc/copy.nc', '/real/copy.nc');
+    h.dialogs.answers.saveFile.push('/nc/copy.nc');
+    expect(await h.files.saveAs(id)).toBe(true);
+    expect(h.docs.get(id)?.canonical).toBe('/real/copy.nc');
+    expect(h.docs.byIdentity(real)).toBeUndefined();
+  });
+
+  it('refuses a Save As onto a file another tab owns under another spelling', async () => {
+    const real = h.put('/real/a.nc', 'nc/encoding/utf8-lf.nc');
+    alias(real, '/nc/link.nc');
+    await h.files.open([real]);
+    const other = h.files.newUntitled({ text: 'G0 X1\n' });
+    h.dialogs.answers.saveFile.push('/nc/link.nc');
+
+    expect(await h.files.saveAs(other)).toBe(false);
+
+    expect(h.fs.writes).toEqual([]);
+    const error = h.dialogs.calls.find((c) => c.kind === 'error');
+    expect(String(error?.args.detail)).toBe(t('files.alreadyOpen', { name: 'a.nc' }));
+    expect(h.docs.get(other)?.path).toBeNull();
+  });
+
+  it('lets a document Save As onto its own file under another spelling', async () => {
+    const real = h.put('/real/a.nc', 'nc/encoding/utf8-lf.nc');
+    alias(real, '/nc/link.nc');
+    const [id] = await h.files.open([real]);
+    h.editor.type(id, 'G0 X9\n');
+    h.dialogs.answers.saveFile.push('/nc/link.nc');
+    h.dialogs.answers.confirm.push(true);
+
+    expect(await h.files.saveAs(id)).toBe(true);
+    expect(h.docs.all().filter((doc) => doc.path !== null)).toHaveLength(1);
+  });
+
+  it('does not bind a restored snapshot to a file a tab owns under another spelling', async () => {
+    const real = h.put('/real/a.nc', 'nc/encoding/utf8-lf.nc');
+    alias(real, '/nc/link.nc');
+    const [open] = await h.files.open([real]);
+
+    const id = h.files.restoreDocument({
+      title: 'link.nc',
+      profileId: 'fanuc-gcode',
+      encoding: { encoding: 'utf-8', hasBom: false },
+      eol: 'lf',
+      nul: { leader: 0, trailer: 0, stripped: 0 },
+      textLF: 'G0 X1\n',
+      diskStamp: null,
+      path: '/nc/link.nc',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(h.docs.get(id)?.path).toBeNull();
+    expect(h.docs.get(id)?.proposedPath).toBe('/nc/link.nc');
+    expect(h.docs.byIdentity(real)?.id).toBe(open);
+  });
+
+  it('compares only the written paths when Rust gave no canonical path', async () => {
+    const real = h.put('/real/a.nc', 'nc/encoding/utf8-lf.nc');
+    h.fs.files.set('/nc/link.nc', h.fs.files.get(real) as Uint8Array);
+    h.fs.mtimes.set('/nc/link.nc', 500);
+
+    const ids = await h.files.open([real, '/nc/link.nc']);
+
+    expect(new Set(ids).size).toBe(2);
+  });
+});
+
+describe('a rewrite the file system cannot date (B1 A1)', () => {
+  /** A post that rewrites the file to the same length inside the file system's 2 s step. */
+  function repostSameSize(path: string, text: string): void {
+    const bytes = new TextEncoder().encode(text);
+    expect(bytes.length).toBe(h.fs.files.get(path)?.length);
+    h.fs.files.set(path, bytes);
+    // `mtimes` is left alone: FAT32 and exFAT report the same time for both writes.
+  }
+
+  async function openDirty(path: string, text: string): Promise<DocId> {
+    h.fs.files.set(path, new TextEncoder().encode(text));
+    h.fs.mtimes.set(path, 500);
+    const [id] = await h.files.open([path]);
+    h.editor.type(id, `${text}G0 X2\n`);
+    return id;
+  }
+
+  it('asks before the save overwrites a same-size, same-time rewrite', async () => {
+    const id = await openDirty('/nc/a.nc', 'G0 X1\n');
+    repostSameSize('/nc/a.nc', 'G0 X9\n');
+
+    expect(await h.files.save(id)).toBe(false);
+
+    const asked = h.dialogs.calls.find((c) => c.kind === 'confirm');
+    expect(asked?.args.title).toBe(t('files.changedOnDiskTitle'));
+    expect(h.fs.writes).toEqual([]);
+    expect(new TextDecoder().decode(h.fs.files.get('/nc/a.nc'))).toBe('G0 X9\n');
+  });
+
+  it('writes without a question when the bytes are the ones the tab read', async () => {
+    const id = await openDirty('/nc/a.nc', 'G0 X1\n');
+
+    expect(await h.files.save(id)).toBe(true);
+
+    expect(h.dialogs.calls.filter((c) => c.kind === 'confirm')).toEqual([]);
+  });
+
+  it('asks when the file cannot be read to compare it', async () => {
+    const id = await openDirty('/nc/a.nc', 'G0 X1\n');
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    h.fs.readFailures.add('/nc/a.nc');
+
+    expect(await h.files.save(id)).toBe(false);
+
+    expect(h.dialogs.calls.some((c) => c.kind === 'confirm')).toBe(true);
+    expect(h.fs.writes).toEqual([]);
+  });
+
+  it('stamps every document with the moment the stamp was taken', async () => {
+    const before = Date.now();
+    const id = await openDirty('/nc/a.nc', 'G0 X1\n');
+    const stamp = h.docs.get(id)?.disk;
+    expect(stamp?.takenAtMs).toBeGreaterThanOrEqual(before);
+    await h.files.save(id);
+    expect(h.docs.get(id)?.disk?.takenAtMs).toBeGreaterThanOrEqual(stamp?.takenAtMs ?? 0);
+  });
+});
+
+describe('a file whose size nobody knows (B1 A1)', () => {
+  it('is not opened when files_stat does not answer at all', async () => {
+    const path = h.put('/nc/a.nc', 'nc/encoding/utf8-lf.nc');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const read = vi.spyOn(h.fs, 'readFile');
+    h.statFails.now = true;
+
+    expect(await h.files.open([path])).toEqual([]);
+
+    expect(read).not.toHaveBeenCalled();
+    expect(h.docs.all().filter((doc) => doc.path !== null)).toHaveLength(0);
+    const error = h.dialogs.calls.find((c) => c.kind === 'error');
+    expect(String(error?.args.detail)).toBe(t('files.noAnswer', { name: 'a.nc' }));
+  });
+
+  it('is not reloaded when it grew past the limit, and the buffer stays', async () => {
+    const path = h.put('/nc/a.nc', 'nc/encoding/utf8-lf.nc');
+    const [id] = await h.files.open([path]);
+    h.editor.type(id, 'mine\n');
+    h.fs.sizes.set(path, 4 * MAX_OPEN_BYTES);
+    const read = vi.spyOn(h.fs, 'readFile');
+
+    await h.files.reloadFromDisk(id);
+
+    expect(read).not.toHaveBeenCalled();
+    expect(h.editor.getText(id)).toBe('mine\n');
+    const error = h.dialogs.calls.find((c) => c.kind === 'error');
+    expect(error?.args.summary).toBe(t('files.reloadFailed', { name: 'a.nc' }));
+    expect(String(error?.args.detail)).toBe(
+      t('files.tooLarge', { name: 'a.nc', size: '200 MB', limit: '50 MB' }),
+    );
+  });
+
+  it('is not reloaded when files_stat does not answer', async () => {
+    const path = h.put('/nc/a.nc', 'nc/encoding/utf8-lf.nc');
+    const [id] = await h.files.open([path]);
+    h.editor.type(id, 'mine\n');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const read = vi.spyOn(h.fs, 'readFile');
+    h.statFails.now = true;
+
+    await h.files.reloadFromDisk(id);
+
+    expect(read).not.toHaveBeenCalled();
+    expect(h.editor.getText(id)).toBe('mine\n');
+    expect(h.dialogs.calls.some((c) => c.kind === 'error')).toBe(true);
   });
 });

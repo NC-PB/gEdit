@@ -216,6 +216,14 @@ export interface DiskStamp {
   mtimeMs: number | null;
   size: number;
   hash: number;
+  /**
+   * When (epoch ms, the app's clock) this stamp was taken. A file system with a coarse
+   * modification time (FAT32 and exFAT keep two seconds) shows a second write of the same
+   * size within that slot as "unchanged"; the external-change poll therefore hashes a
+   * stamp whose `mtimeMs` is that close to `takenAtMs` until a later look confirms it.
+   * Optional so that a stamp from an older version, in a recovery sidecar, still reads.
+   */
+  takenAtMs?: number;
 }
 
 export interface CursorInfo {
@@ -252,6 +260,13 @@ export interface DocMeta {
   /** Derived by the store: `textDirty || metaDirty`. */
   dirty: boolean;
   disk: DiskStamp | null;
+  /**
+   * Which file `path` is, as Rust resolved it when the document was opened or saved
+   * (`FileStat.canonical`): symlinks, `..` and mapped drives followed. Two documents
+   * never share one. Null or absent when it is not known (untitled, a stat that did not
+   * answer); then only the written path is compared.
+   */
+  canonical?: string | null;
   external: 'none' | 'changed' | 'deleted';
   /**
    * M7, AD-23: the buffer refuses edits. Not optional, so that no code path can
@@ -315,6 +330,12 @@ export interface DocumentStore {
   move(id: DocId, toIndex: number): void;
   /** Case-insensitive on macOS and Windows. */
   byPath(path: string): DocMeta | undefined;
+  /**
+   * The document that owns the file `canonical` names (`FileStat.canonical`), however its
+   * path is spelled; compared the way `byPath` compares. Undefined for an empty or null
+   * `canonical`.
+   */
+  byIdentity(canonical: string | null | undefined): DocMeta | undefined;
   /** Lowest free index >= 1. */
   nextUntitledIndex(): number;
 }
@@ -539,7 +560,7 @@ export interface FileOps {
    * `keepScratch`: the untouched new document the app starts with stays open (it is otherwise
    * replaced by the first file opened); for a caller that opens a file to change it, not to show it.
    */
-  open(paths?: string[], opts?: { keepScratch?: boolean }): Promise<DocId[]>;
+  open(paths?: string[], opts?: { keepScratch?: boolean; activate?: boolean; index?: number }): Promise<DocId[]>;
   save(id?: DocId): Promise<boolean>;
   saveAs(id?: DocId): Promise<boolean>;
   saveAll(): Promise<boolean>;

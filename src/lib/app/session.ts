@@ -98,8 +98,12 @@ export interface SessionDeps {
   load(): Promise<SessionState>;
   /** `files_stat`, so a file that is gone is dropped before a dialog can appear. */
   stat(paths: string[]): Promise<{ allowed: boolean; exists: boolean; isDir: boolean }[]>;
-  /** `files.open`. It also drops the pristine untitled document for us. */
-  open(paths: string[]): Promise<DocId[]>;
+  /**
+   * `files.open`. It also drops the pristine untitled document for us. With
+   * `activate: false` the files are added behind the tab in front and no summary is
+   * shown; `index` is the tab position of the first of them.
+   */
+  open(paths: string[], o?: { activate?: boolean; index?: number }): Promise<DocId[]>;
   activate(id: DocId): void;
   onWillQuit(cb: () => Promise<void> | void): Disposable;
   notify(text: string, o?: { error?: boolean; detail?: string }): void;
@@ -122,7 +126,9 @@ export function snapshotOf(
   return { paths: saved.map((doc) => doc.path), active: at < 0 ? null : at };
 }
 
-export function createSessionService(deps: SessionDeps): SessionService {
+export function createSessionService(deps: SessionDeps): SessionService & { settled(): Promise<void> } {
+  /** The background half of the restore (see `restore`); `settled()` waits for it. */
+  let tail: Promise<void> = Promise.resolve();
   let timer: ReturnType<typeof setTimeout> | undefined;
   /** True while a change has not reached `deps.save` yet. */
   let unsaved = false;
@@ -291,25 +297,69 @@ export function createSessionService(deps: SessionDeps): SessionService {
         return 0;
       }
 
-      let opened: DocId[];
-      try {
-        opened = await deps.open(usable);
-      } catch (err) {
-        console.warn('the session could not be reopened', err);
-        tellMissing();
-        return 0;
+      // The tab that was in front, or — when that file is one of the skipped ones — the
+      // first that came back, goes up **first** and alone: a restore of fifty tabs takes
+      // seconds, and the one the user looks at should not wait for the other forty-nine
+      // (B1 A1). `files.open` leaves what it opens active; the others are added behind it.
+      const wanted = stored.active === null ? undefined : stored.paths[stored.active];
+      const candidates =
+        wanted !== undefined && usable.includes(wanted)
+          ? [wanted, ...usable.filter((path) => path !== wanted)]
+          : usable;
+      let front: { id: DocId; path: string } | undefined;
+      const attempted: string[] = [];
+      for (const path of candidates) {
+        attempted.push(path);
+        let opened: DocId[];
+        try {
+          opened = await deps.open([path]);
+        } catch (err) {
+          console.warn('the session could not be reopened', err);
+          tellMissing();
+          return 0;
+        }
+        if (opened.length > 0) {
+          front = { id: opened[0], path };
+          break;
+        }
       }
       tellMissing();
-      if (opened.length === 0) return 0;
+      if (front === undefined) return 0;
+      deps.activate(front.id);
 
-      // The tab that was in front, or — when that file is one of the skipped ones — the
-      // first that came back. `files.open` leaves the *last* one active, which is never
-      // what was meant.
-      const wanted = stored.active === null ? undefined : stored.paths[stored.active];
-      const front =
-        wanted !== undefined && usable.includes(wanted) ? deps.docs.byPath(wanted)?.id : opened[0];
-      if (front !== undefined) deps.activate(front);
-      return opened.length;
+      // Everything else follows in the background, at the tab positions it had. Until it
+      // is done the paths still to come are carried in the written list like the
+      // unreachable ones: a session written now must not forget forty tabs that are on
+      // their way (rule 1).
+      const frontPath = front.path;
+      const rest = usable.filter((path) => !attempted.includes(path));
+      if (rest.length > 0) {
+        unreachable = [...skipped, ...rest];
+        const at = usable.indexOf(frontPath);
+        const head = rest.filter((path) => usable.indexOf(path) < at);
+        const after = rest.filter((path) => usable.indexOf(path) > at);
+        tail = (async () => {
+          try {
+            if (head.length > 0) await deps.open(head, { activate: false, index: 0 });
+            if (after.length > 0) {
+              const frontAt = deps.docs.all().findIndex((doc) => doc.id === front.id);
+              await deps.open(after, { activate: false, ...(frontAt < 0 ? {} : { index: frontAt + 1 }) });
+            }
+          } catch (err) {
+            console.warn('the rest of the session could not be reopened', err);
+          } finally {
+            // What did not open is not carried any more; the next start tries the stored
+            // list once more, which is what the last write before this one held.
+            unreachable = skipped;
+          }
+        })();
+      }
+      // The one in front is up; the others are on their way (`settled()` waits for them).
+      return 1 + rest.length;
+    },
+
+    settled(): Promise<void> {
+      return tail;
     },
   };
 }
@@ -531,7 +581,7 @@ export const session: SessionService = createSessionService({
   },
   load: async () => (isTauriRuntime() ? sessionLoad() : { paths: [], active: null }),
   stat: async (paths) => (isTauriRuntime() ? statSessionPaths(paths) : []),
-  open: (paths) => appFiles.open(paths),
+  open: (paths, o) => appFiles.open(paths, o),
   activate: (id) => appDocs.activate(id),
   onWillQuit: (cb) => appFiles.onWillQuit(cb),
   notify: (text, o) => appStatus.show(text, o),

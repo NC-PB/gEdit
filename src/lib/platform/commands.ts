@@ -40,6 +40,13 @@ export interface FileStat {
    * known. Rust always sends it; optional so that a hand-made stat need not.
    */
   unavailable?: boolean;
+  /**
+   * Which file this is: the path with symlinks, `..` and mapped drives resolved. Two
+   * spellings of one file share it. Null for a folder, a missing path and a path that
+   * could not be resolved (then only the written spelling is known). Optional so that a
+   * hand-made stat need not carry it.
+   */
+  canonical?: string | null;
 }
 
 /**

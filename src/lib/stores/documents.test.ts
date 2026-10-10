@@ -321,3 +321,42 @@ describe('proposedPath', () => {
     expect(docs.get(id)?.title).toBe('Untitled-4');
   });
 });
+
+describe('byIdentity (B1 A1)', () => {
+  it('finds the document that owns a file, whatever its path says', () => {
+    const docs = createDocumentStore({ caseInsensitivePaths: false });
+    const id = docs.add(file('/nc/link.nc', { canonical: '/real/a.nc' }));
+    docs.add(file('/nc/other.nc', { canonical: '/real/other.nc' }));
+    docs.add(file('/nc/unknown.nc'));
+
+    expect(docs.byIdentity('/real/a.nc')?.id).toBe(id);
+    expect(docs.byIdentity('/real/missing.nc')).toBeUndefined();
+    expect(docs.byIdentity(null)).toBeUndefined();
+    expect(docs.byIdentity(undefined)).toBeUndefined();
+    expect(docs.byIdentity('')).toBeUndefined();
+  });
+
+  it('compares the way byPath does: case-insensitive on macOS and Windows only', () => {
+    const insensitive = createDocumentStore({ caseInsensitivePaths: true });
+    const id = insensitive.add(file('/nc/a.nc', { canonical: '/Real/A.nc' }));
+    expect(insensitive.byIdentity('/real/a.NC')?.id).toBe(id);
+
+    const sensitive = createDocumentStore({ caseInsensitivePaths: false });
+    sensitive.add(file('/nc/a.nc', { canonical: '/Real/A.nc' }));
+    expect(sensitive.byIdentity('/real/a.nc')).toBeUndefined();
+  });
+
+  it('folds the verbatim Windows spelling away', () => {
+    const docs = createDocumentStore({ caseInsensitivePaths: true, backslashSeparator: true });
+    const id = docs.add(file('Z:\\a.nc', { canonical: '\\\\?\\C:\\nc\\a.nc' }));
+    expect(docs.byIdentity('C:\\nc\\a.nc')?.id).toBe(id);
+  });
+
+  it('follows an update of the canonical path', () => {
+    const docs = createDocumentStore({ caseInsensitivePaths: false });
+    const id = docs.add(file('/nc/a.nc', { canonical: '/real/a.nc' }));
+    docs.update(id, { canonical: '/real/b.nc' });
+    expect(docs.byIdentity('/real/a.nc')).toBeUndefined();
+    expect(docs.byIdentity('/real/b.nc')?.id).toBe(id);
+  });
+});
