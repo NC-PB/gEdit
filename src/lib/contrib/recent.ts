@@ -1,4 +1,4 @@
-// Recent files: the Home "Recent" dropdown and the two commands (plan §5 WP2.3, AD-9).
+// Recent files: the File tab's "Recent" dropdown and the two commands (plan §5 WP2.3, AD-9).
 // One feature per file (plan AD-3); see ./README.md.
 //
 // The list itself lives in Rust (`stores/recent.ts` only mirrors it), because reopening a
@@ -112,8 +112,8 @@ export default {
     },
   ],
   ribbonGroups: [
-    // Between the File group (order 10) and the Program group (order 20) of the Home tab.
-    { tab: 'home', group: 'recent.groupRecent', order: 15, component: RecentMenu },
+    // After the File group (order 10) of the File tab.
+    { tab: 'file', group: 'recent.groupRecent', order: 15, component: RecentMenu },
   ],
   activate(): Disposable {
     // The list is Rust's; read it once so the dropdown has something on the first render.

@@ -24,9 +24,12 @@
 import type { Messages } from '../types';
 
 export default {
-  // The palette category and the Tools group caption.
+  // The palette category and the captions of the ribbon groups: Run and Manage on the Scripts tab,
+  // "My Scripts" (the user's own) beside them, and "Built-in Scripts" on the Tools tab (B1 A9).
   category: 'Scripts',
-  groupScripts: 'Python Scripts',
+  groupScripts: 'Run',
+  groupOwn: 'My Scripts',
+  groupBundled: 'Built-in Scripts',
 
   // -------------------------------------------------------------------------
   // The run, as the status bar and the panel title say it
@@ -70,6 +73,8 @@ export default {
   scriptTooltip: '{script} — {description}',
   noneForProfile: 'No scripts for this dialect',
   noneAtAll: 'No scripts found. Use New Script or Add Folder.',
+  /** The Scripts tab's own list while the user folders hold no script (the built-in ones are on the Tools tab). */
+  noneOwn: 'No scripts of your own yet. Use New Script or Add Folder.',
   headerProblem: '{script}: the header could not be read, so it runs in output mode',
 
   // -------------------------------------------------------------------------

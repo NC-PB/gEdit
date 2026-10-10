@@ -4,17 +4,18 @@
 import type { Messages } from '../types';
 
 export default {
-  workspace: 'gEdit',
   ribbon: 'Ribbon',
   ribbonTabs: 'Ribbon tabs',
   statusBar: 'Status bar',
 
   // Ribbon tabs, in the order of AD-6. Looked up through a map in Ribbon.svelte,
   // so shell.test.ts checks that each of these keys exists.
-  tabHome: 'Home',
+  tabFile: 'File',
+  tabEdit: 'Edit',
   tabInsert: 'Insert',
   tabNc: 'NC',
   tabTools: 'Tools',
+  tabScripts: 'Scripts',
   tabView: 'View',
 
   // Panel chrome

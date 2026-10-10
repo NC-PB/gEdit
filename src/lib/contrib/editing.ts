@@ -4,7 +4,7 @@
 // Everything Monaco can already do and nobody can find: undo, find and replace, the line
 // operations, folding, the quick outline, the display toggles and the font zoom. The
 // commands are thin — `editor.focus()` and then the Monaco action — but they are what
-// puts those features on the Home and View tabs and into one enablement rule.
+// puts those features on the Edit and View tabs and into one enablement rule.
 //
 // Three rules hold this file together:
 //
@@ -90,8 +90,8 @@ interface ActionSpec {
 }
 
 /**
- * Home → Edit. `undo` and `redo` are Monaco's `MultiCommand`s, not editor actions, which
- * is why they carry `palette` and the rest do not.
+ * The Edit tab (formerly Home). `undo` and `redo` are Monaco's `MultiCommand`s, not editor
+ * actions, which is why they carry `palette` and the rest do not.
  */
 const EDIT: ActionSpec[] = [
   { id: 'edit.undo', title: 'editing.undo', icon: asIcon(Undo2), action: 'undo', palette: true },
@@ -276,8 +276,8 @@ export default {
     ...TOGGLES,
   ],
   ribbon: [
-    // 110 leaves the Home tab's File (10-60), Recent (15) and Program (20) groups in front.
-    ...ribbonItems(EDIT, 'home', 'editing.groupEdit', 110),
+    // The Edit tab: this group first (110), then Search (130), Go To (140) and Typing (150).
+    ...ribbonItems(EDIT, 'edit', 'editing.groupEdit', 110),
     ...ribbonItems(CODE, 'view', 'editing.groupCode', 40),
     ...ribbonItems(TOGGLES, 'view', 'editing.groupDisplay', 50),
     ...ribbonItems(ZOOM, 'view', 'editing.groupZoom', 60),

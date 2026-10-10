@@ -16,18 +16,19 @@
   import { t } from '$lib/i18n';
   import { isMacPlatform } from '$lib/utils/platform';
   import RibbonButton from './RibbonButton.svelte';
-  import { groupsOf, TAB_LABEL, tabsOf } from './ribbonModel';
+  import { groupsOf, resolveTab, TAB_LABEL, tabsOf } from './ribbonModel';
   import type { CommandDef, RibbonItemDef, RibbonTab } from '$lib/app/types';
 
   const entries = ribbon.entries;
   const changed = commands.changed;
   const isMac = isMacPlatform();
 
-  let activeTab = $state<RibbonTab>('home');
+  let activeTab = $state<RibbonTab>('file');
 
   const tabs = $derived(tabsOf($entries));
-  // A tab can disappear when its contribution is disposed (HMR, tests).
-  const currentTab = $derived(tabs.includes(activeTab) ? activeTab : (tabs[0] ?? 'home'));
+  // A tab can disappear when its contribution is disposed (HMR, tests), and a retired id
+  // ('home') falls back to the File tab.
+  const currentTab = $derived(resolveTab(activeTab, tabs));
 
   interface Button {
     item: RibbonItemDef;
@@ -82,10 +83,6 @@
 </script>
 
 <div class="ribbon" data-testid="ribbon">
-  <div class="app-header">
-    <span class="app-title">{t('shell.workspace')}</span>
-  </div>
-
   <div class="ribbon-tabs" role="tablist" aria-label={t('shell.ribbonTabs')}>
     {#each tabs as tab, i (tab)}
       <button
@@ -145,21 +142,9 @@
     user-select: none;
   }
 
-  .app-header {
-    display: flex;
-    align-items: center;
-    height: 28px;
-    padding: 0 12px;
-    background-color: var(--bg-app);
-  }
-  .app-title {
-    color: var(--text-muted);
-    font-size: 11px;
-  }
-
   .ribbon-tabs {
     display: flex;
-    padding: 4px 12px 0;
+    padding: 6px 12px 0;
     overflow-x: auto;
     background-color: var(--bg-app);
     scrollbar-width: none;
@@ -188,7 +173,14 @@
     border-color: var(--border-color);
   }
 
-  /* 1366x768: the body scrolls instead of squeezing the buttons (plan AD-6). */
+  /* 1366x768: the body scrolls instead of squeezing the buttons (plan AD-6).
+
+     The scrollbar has to take its own room below the group labels and never lie over
+     them. A native scrollbar of the thin kind (`scrollbar-width: thin`) is an overlay on
+     macOS (WebKit) with the system setting "automatic", and it then covers the label row
+     of the groups. A styled `::-webkit-scrollbar` is never an overlay, in WebKit and in
+     Chromium (WebView2), so the height is set here and `scrollbar-width` is deliberately
+     left alone (Chromium lets it win over the styled one). */
   .ribbon-body {
     display: flex;
     align-items: stretch;
@@ -196,7 +188,20 @@
     padding: 4px 8px;
     overflow-x: auto;
     overflow-y: hidden;
-    scrollbar-width: thin;
+  }
+  .ribbon-body::-webkit-scrollbar {
+    height: 10px;
+  }
+  .ribbon-body::-webkit-scrollbar-track {
+    background: var(--bg-ribbon);
+    border-left: none;
+    border-top: 1px solid var(--border-color);
+  }
+  /* A browser without the styled scrollbar: the standard thin one, which leaves room. */
+  @supports not selector(::-webkit-scrollbar) {
+    .ribbon-body {
+      scrollbar-width: thin;
+    }
   }
 
   .ribbon-group {

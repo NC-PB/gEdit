@@ -5,6 +5,8 @@ import type { Messages } from '../types';
 
 export default {
   category: 'Navigate',
+  /** Caption of the Edit-tab group of the Go to Line button (`{ tab: 'edit', group: 'navigation.groupGoto' }`). */
+  groupGoto: 'Go To',
   goto: 'Go to Line or Block…',
   gotoTitle: 'Go to line or block',
   gotoPlaceholder: '120 or N120',

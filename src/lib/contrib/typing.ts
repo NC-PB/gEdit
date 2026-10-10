@@ -293,7 +293,7 @@ export default {
       run: (c) => toggle(c.activeDocId),
     },
   ],
-  ribbon: [{ tab: 'home', group: 'typing.group', command: 'edit.toggleForceUppercase', order: 125 }],
+  ribbon: [{ tab: 'edit', group: 'typing.group', command: 'edit.toggleForceUppercase', order: 150 }],
   activate() {
     const attached = editor.onDidAttach(ensureHook);
     // An editor that was attached before this activation.

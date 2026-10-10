@@ -350,8 +350,8 @@ describe('registration', () => {
     expect(contribution.statusItems?.map((s) => s.id)).toEqual(['script']);
   });
 
-  it('puts its buttons on the Tools tab and its script list in the Scripts group', () => {
-    for (const item of contribution.ribbon ?? []) expect(item.tab, item.command).toBe('tools');
+  it('puts its buttons and the user\'s own script list on the Scripts tab, the built-in list on the Tools tab', () => {
+    for (const item of contribution.ribbon ?? []) expect(item.tab, item.command).toBe('scripts');
     expect(contribution.ribbon?.map((i) => i.command)).toEqual([
       'script.runPicker',
       'script.cancel',
@@ -360,8 +360,19 @@ describe('registration', () => {
       'script.rescan',
       'script.addFolder',
     ]);
-    expect(contribution.ribbonGroups?.[0].group).toBe('scripts.groupScripts');
-    for (const group of new Set((contribution.ribbon ?? []).map((i) => i.group))) {
+    expect(contribution.ribbonGroups?.map((g) => [g.tab, g.group])).toEqual([
+      ['scripts', 'scripts.groupOwn'],
+      ['tools', 'scripts.groupBundled'],
+    ]);
+    const groups = [...(contribution.ribbon ?? []).map((i) => i.group), ...(contribution.ribbonGroups ?? []).map((g) => g.group)];
+    // Run, My Scripts, Manage in that order on the Scripts tab (a group sits where its smallest order is).
+    const place = (key: string): number =>
+      Math.min(
+        ...[...(contribution.ribbon ?? []), ...(contribution.ribbonGroups ?? [])].filter((e) => e.group === key).map((e) => e.order),
+      );
+    expect(place('scripts.groupScripts')).toBeLessThan(place('scripts.groupOwn'));
+    expect(place('scripts.groupOwn')).toBeLessThan(place('scripts.groupManage'));
+    for (const group of new Set(groups)) {
       expect(hasKey(group), group).toBe(true);
     }
   });

@@ -23,7 +23,7 @@ and never corrects a value for you.
 
 | | |
 |---|---|
-| [The Insert tab](#the-insert-tab) | Where the templates are, and the Program button on the Home tab |
+| [The Insert tab](#the-insert-tab) | Where the templates are, and where Program start is |
 | [Inserting a template](#inserting-a-template) | The form, the values, the preview, one undo step |
 | [Block numbers](#block-numbers) | How the numbers continue, and where they do not; contour numbers of their own |
 | [Formulas](#formulas) | A value that is worked out from the others |
@@ -58,8 +58,8 @@ The tab has these groups:
 A built-in template's button carries a small dot and the tooltip "Not yet reviewed"; the
 tooltip also shows the template's description.
 
-On the **Home** tab, the **Program** group has one button, **Program start**: the first lines
-of a program in the dialect's own style. In a new, empty file it writes into line 1.
+**Program start**, the first lines of a program in the dialect's own style, is the first button
+of the **Templates** group. In a new, empty file it writes into line 1. It is only on the Insert tab.
 
 The same commands are in the command palette (**F1**): *Insert: Insert Template…* lists the
 templates of the program in groups, favourites first; *Insert: <template name>* inserts one

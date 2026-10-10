@@ -18,6 +18,7 @@
 
 import type * as MonacoApi from 'monaco-editor/esm/vs/editor/editor.api.js';
 import { editor as editorService } from '$lib/monaco/editorService';
+import { SHARED_EDITOR_OPTIONS } from '$lib/monaco/instanceOptions';
 import { docs as appDocs } from '$lib/stores/documents';
 import { settings as appSettings } from '$lib/stores/settings';
 import type { Settings } from '$lib/core/settings/schema';
@@ -63,7 +64,8 @@ function typedEditorOptions(s: Settings): EditorOptions {
     dragAndDrop: s['editor.dragAndDrop'],
     emptySelectionClipboard: s['editor.emptySelectionClipboard'],
     rulers: [...s['editor.rulers']],
-    hover: { enabled: s['assist.hover'] },
+    // `above` is repeated because `updateOptions` rebuilds the `hover` group from its parts.
+    hover: { enabled: s['assist.hover'], above: SHARED_EDITOR_OPTIONS.hover.above },
     ...completionOptions(s['assist.completion']),
   };
 }

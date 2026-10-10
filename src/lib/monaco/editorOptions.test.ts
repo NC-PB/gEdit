@@ -24,7 +24,7 @@ describe('editorOptionsFor', () => {
     expect(options.dragAndDrop).toBe(false);
     expect(options.emptySelectionClipboard).toBe(true);
     expect(options.rulers).toEqual([]);
-    expect(options.hover).toEqual({ enabled: true });
+    expect(options.hover).toEqual({ enabled: true, above: false });
   });
 
   it('asks for the outline model behind sticky scroll', () => {

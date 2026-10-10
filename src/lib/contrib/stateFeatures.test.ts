@@ -195,9 +195,9 @@ describe('layoutPersist', () => {
 });
 
 describe('where the features sit', () => {
-  it('puts the Recent dropdown in the Home tab, after the File group', () => {
+  it('puts the Recent dropdown in the File tab, after the File group', () => {
     expect(recentContrib.ribbonGroups).toEqual([
-      { tab: 'home', group: 'recent.groupRecent', order: 15, component: RecentMenu },
+      { tab: 'file', group: 'recent.groupRecent', order: 15, component: RecentMenu },
     ]);
   });
 

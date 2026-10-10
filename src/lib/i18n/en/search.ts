@@ -7,7 +7,7 @@ import type { Messages } from '../types';
 
 export default {
   category: 'Search',
-  /** Caption of the Home-tab ribbon group (`{ tab: 'home', group: 'search.group' }`). */
+  /** Caption of the Edit-tab ribbon group (`{ tab: 'edit', group: 'search.group' }`). */
   group: 'Search',
   /** `search.findAll`, `Mod+Shift+F` (§7.13): the search form, hits into Results. */
   findAll: 'Find All…',

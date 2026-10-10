@@ -41,20 +41,21 @@ are disabled and say so. Everything else in gEdit keeps working**, writing and e
 scripts included. On Windows that covers the case that looks least like it: a
 clean Windows 10 or 11 already has `python.exe` and `python3.exe` on `PATH` before Python
 is installed, as placeholders that open the Microsoft Store instead of running anything.
-gEdit never takes one of those for an interpreter, and the Tools tab says "Python 3.9 or
+gEdit never takes one of those for an interpreter, and the Tools and Scripts tabs say "Python 3.9 or
 newer was not found". A Python you really did install from the Store is used as usual.
 
 ## Running a script
 
-Scripts are in the **Python Scripts** group of the **Tools** tab — a subfolder's scripts
-under its name, the rest under "Scripts" — with the script's own description as the
+The scripts that come with gEdit are in the **Built-in Scripts** group of the **Tools** tab,
+and your own are in the **My Scripts** group of the **Scripts** tab — a subfolder's scripts
+under its name, the rest together — with the script's own description as the
 tooltip. A script that declares which dialects it is for is only offered on those.
 
 | | |
 |---|---|
 | Pick a script from a list | **F9** |
 | Run the last script again | **Cmd/Ctrl+F9** |
-| Run a particular script | Its button on the Tools tab, or its own entry in the `F1` command palette |
+| Run a particular script | Its button on the Tools tab (bundled) or the Scripts tab (yours), or its own entry in the `F1` command palette |
 
 **Cmd/Ctrl+F9 does not ask again.** It runs the last script straight away, with the values
 you used last time — running the same thing again is what the command is for. To change a
@@ -742,7 +743,7 @@ content, not the script.
 
 Rules worth knowing:
 
-- **One level of subfolders** becomes the groups on the Tools tab. Deeper folders are
+- **One level of subfolders** becomes the groups on the Scripts tab. Deeper folders are
   ignored.
 - A script **takes the place of** one with the same file name in an earlier folder: yours
   wins over a bundled one, an extra folder wins over both.
@@ -1211,8 +1212,8 @@ are short, and they are meant to be read.
 
 | | |
 |---|---|
-| The Tools tab says "Python 3.9 or newer was not found" | No Python, or one older than 3.9. Set `Settings ▸ Scripts ▸ Python interpreter` to the interpreter's path |
-| A script is not on the Tools tab | It may be for other dialects (`profiles` in its header), it may be hidden behind a file of the same name in a later folder, its name or its subfolder's name starts with `_` or `.`, it sits more than one folder deep, or the bundled scripts are hidden. Use **Rescan** after adding it |
+| The Tools and Scripts tabs say "Python 3.9 or newer was not found" | No Python, or one older than 3.9. Set `Settings ▸ Scripts ▸ Python interpreter` to the interpreter's path |
+| A script is not on the Tools or Scripts tab | It may be for other dialects (`profiles` in its header), it may be hidden behind a file of the same name in a later folder, its name or its subfolder's name starts with `_` or `.`, it sits more than one folder deep, or the bundled scripts are hidden. Use **Rescan** after adding it |
 | It appears under its file name, and the tooltip says the header could not be read | gEdit refused the header (see [The header](#the-header)); it then runs in panel mode and shows raw output only. Fix it, then **Rescan** |
 | *The program changed while the script ran* | You typed in the document while it ran, so nothing was applied. Run it again, or take **Open in new tab** |
 | It is stopped every time | It needs longer than the time limit: raise `Settings ▸ Scripts ▸ Script timeout` (up to an hour), or set `timeout` in the script's header (up to a day) |

@@ -30,17 +30,19 @@ the machine, not for the person who builds the editor — the build and design n
 
 ![The gEdit window: ribbon, tabs, program map, editor and status bar](../screenshots/main-window.png)
 
-*The Home tab of the ribbon, two open programs in the tab bar, the Program Map on the left
+*The ribbon, two open programs in the tab bar, the Program Map on the left
 and the status bar along the bottom. The theme here is the dark one.*
 
-Across the top is the **ribbon**, with five tabs:
+Across the top is the **ribbon**, with seven tabs:
 
 | Tab | What it holds |
 |---|---|
-| **Home** | New, Open, Save, Save As, Save All, Close · the recent-files list · **Program start** (the first lines of a program, in the dialect's own style; see [Writing with templates](templates.md)) · undo, redo, find, replace, **Find All…**, **Replace All…**, **Find Whole Address…** ([Searching](#searching)), comment, duplicate, move, delete line, select all, upper and lower case (plain text commands; on a program use **Convert Case…** on the NC tab) · **Typing**: **Upper-Case Typing** switches [upper case while you type](#typing-forced-upper-case-and-no-accidental-joins) off or on for this session |
-| **Insert** | The **templates** of the active program — program start and end, tool change, drilling, tapping, turning and threading cycles, for all six dialects — as buttons and lists, **Favorites** first; **Edit Cycle…** for the cycle at the cursor; **Manage Templates…** and **New Template from Selection…** for your own. See [Writing with templates](templates.md) |
+| **File** | New, Open, Save, Save As, Save All, Close, **Reload** (read the file again from disk) · the recent-files list |
+| **Edit** | Undo, redo, find, replace, comment, duplicate, move, delete line, select all, upper and lower case (plain text commands; on a program use **Convert Case…** on the NC tab) · **Find All…**, **Replace All…**, **Find Whole Address…** ([Searching](#searching)) · **Go to Line or Block…** · **Typing**: **Upper-Case Typing** switches [upper case while you type](#typing-forced-upper-case-and-no-accidental-joins) off or on for this session |
+| **Insert** | The **templates** of the active program — **Program start** (the first lines of a program, in the dialect's own style) and end, tool change, drilling, tapping, turning and threading cycles, for all six dialects — as buttons and lists, **Favorites** first; **Edit Cycle…** for the cycle at the cursor; **Manage Templates…** and **New Template from Selection…** for your own. See [Writing with templates](templates.md) |
 | **NC** | Renumbering, removing block numbers, the cleanups, block skip and selecting a tool segment — see [Transformations](transformations.md) |
-| **Tools** | Compare ([Comparing two programs](#comparing-two-programs)), the scripts — see [Scripts](scripts.md) — and **Test Profile on Document** for [profiles of your own](profiles.md#testing-a-profile-on-a-program) |
+| **Tools** | Compare ([Comparing two programs](#comparing-two-programs)) · the scripts that come with gEdit — **Program checks**, **Scale feed rates**, **Scale spindle speeds**, **Tool list**, **Extents**, **Address arithmetic** (see [Scripts](scripts.md)) · **Check Wait Codes** for [channels](channels.md#check-wait-codes) · **Test Profile on Document** for [profiles of your own](profiles.md#testing-a-profile-on-a-program) |
+| **Scripts** | Run a script, stop it, your own scripts (**My Scripts**), **New Script**, **Edit Script**, **Rescan**, **Add Folder** — see [Scripts](scripts.md) |
 | **View** | The command palette, the panels (Program Map, Code Inspector, Results, Script Output), the motion-colour switch, folding, display switches, zoom, theme, settings, the shortcut list and About |
 
 Below it are the **tabs**, one per open program, then the editor, and at the bottom the
@@ -157,7 +159,7 @@ first: **Overwrite** or **Cancel**.
 
 ### Recent files
 
-The Home tab has the recent-files list (the **Recent…** drop-down), and **Open Recent…** in
+The File tab has the recent-files list (the **Recent…** drop-down), and **Open Recent…** in
 the command palette (**F1**; listed as *File: Open Recent…*) opens the same list as a
 picker. Entries that no longer exist are marked; opening one offers to drop it from the
 list. The drop-down's last entry, **Clear recent files**, empties the list. Its length is
@@ -489,9 +491,9 @@ turn that off.
 | What you want | Command |
 |---|---|
 | Find text, one hit at a time, and replace it | `Cmd/Ctrl+F`, the editor's own find and replace (see [Shortcuts](shortcuts.md)) |
-| Every hit in a list, in one program or in all open ones | **Find All…**, `Cmd/Ctrl+Shift+F` (Home tab, *Search*) |
-| Change what a search finds, in place or into a new tab | **Replace All…** (Home tab, *Search*) |
-| One address in the editor's own find box, so you can step through it | **Find Whole Address…** (Home tab, *Search*) |
+| Every hit in a list, in one program or in all open ones | **Find All…**, `Cmd/Ctrl+Shift+F` (Edit tab, *Search*) |
+| Change what a search finds, in place or into a new tab | **Replace All…** (Edit tab, *Search*) |
+| One address in the editor's own find box, so you can step through it | **Find Whole Address…** (Edit tab, *Search*) |
 
 Find All and Replace All share one form. It reads each line the way the dialect does, so it
 knows a comment from a block.
@@ -618,7 +620,7 @@ editor.**
 ## Checking a program before the machine
 
 Two bundled scripts read a program without running it, and a third does arithmetic on it.
-They are on the Tools tab and are described in [Scripts](scripts.md):
+They are on the Tools tab (group *Built-in Scripts*) and are described in [Scripts](scripts.md):
 
 | | What it tells you |
 |---|---|
@@ -830,7 +832,7 @@ looked at while you type. One Klartext detail: the program name in `BEGIN PGM na
 kept as written: a name typed from left to right keeps its case before the unit behind it
 is written. A Fanuc `<name>` in angle brackets keeps its case in the same way.
 
-The **Upper-Case Typing** button in the **Typing** group of the Home tab (also in the palette)
+The **Upper-Case Typing** button in the **Typing** group of the Edit tab (also in the palette)
 switches this off, or on, **for this session**, for every open document. It is not
 remembered: the next start follows the profiles again. The status bar says which way it
 went. To switch it off for good for a machine or a folder, write `"forceUppercase": false`

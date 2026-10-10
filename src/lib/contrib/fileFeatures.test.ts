@@ -7,7 +7,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import encoding from './encoding';
-import files, { dropHandler, openDropped, type DropDeps } from './files';
+import files, { dropHandler, openDropped, reloadActive, type DropDeps, type ReloadDeps } from './files';
 import profileSelect from './profileSelect';
 import { dialogs } from '$lib/app/dialogs';
 import { hasKey, t } from '$lib/i18n';
@@ -30,6 +30,7 @@ describe('commands', () => {
       'file.saveAs',
       'file.saveAll',
       'file.close',
+      'file.reload',
       'file.closeAll',
       'file.closeWindow',
     ]);
@@ -42,6 +43,7 @@ describe('commands', () => {
       'file.saveAs': 'Mod+Shift+S',
       'file.saveAll': 'Mod+Alt+S',
       'file.close': 'Mod+W',
+      'file.reload': null,
       'file.closeAll': null,
       // The macOS menu item carries no accelerator, so the webview owns this chord
       // (WP1.4 D-WP1.4-1).
@@ -84,15 +86,77 @@ describe('i18n', () => {
 });
 
 describe('the ribbon', () => {
-  it('puts the file commands in the Home tab, in one group, in order', () => {
+  it('puts the file commands in the File tab, in one group, in order', () => {
     const items = files.ribbon ?? [];
-    expect(items.every((item) => item.tab === 'home' && item.group === 'files.groupFile')).toBe(true);
+    expect(items.every((item) => item.tab === 'file' && item.group === 'files.groupFile')).toBe(true);
     expect(items.map((item) => item.order)).toEqual([...items.map((item) => item.order)].sort((a, b) => a - b));
   });
 
   it('only shows commands this contribution registers', () => {
     const known = new Set(commandsOf(files).map((def) => def.id));
     for (const item of files.ribbon ?? []) expect(known.has(item.command)).toBe(true);
+  });
+});
+
+describe('Reload (B1 A9)', () => {
+  const doc = (over: Partial<{ path: string | null; dirty: boolean }> = {}) => ({
+    id: 'd1',
+    title: 'O1000.nc',
+    path: '/nc/O1000.nc' as string | null,
+    dirty: false,
+    ...over,
+  });
+
+  function reloadDeps(found: ReturnType<typeof doc> | undefined, answer = true): ReloadDeps & { log: string[] } {
+    const log: string[] = [];
+    return {
+      log,
+      get: () => found,
+      async confirm(o) {
+        log.push(`confirm:${o.title}:${o.message}`);
+        return answer;
+      },
+      async reload(id) {
+        log.push(`reload:${id}`);
+      },
+      show(text) {
+        log.push(`show:${text}`);
+      },
+    };
+  }
+
+  it('is a File tab button after Close, named Reload', () => {
+    const items = (files.ribbon ?? []).filter((item) => item.command === 'file.reload');
+    expect(items).toEqual([{ tab: 'file', group: 'files.groupFile', command: 'file.reload', order: 70 }]);
+    expect(t(commandsOf(files).find((def) => def.id === 'file.reload')?.title ?? '')).toBe('Reload');
+  });
+
+  it('reads a clean file again without asking', async () => {
+    const d = reloadDeps(doc());
+    await reloadActive('d1', d);
+    expect(d.log).toEqual(['reload:d1']);
+  });
+
+  it('asks before it replaces unsaved changes, and stops on No', async () => {
+    const yes = reloadDeps(doc({ dirty: true }), true);
+    await reloadActive('d1', yes);
+    expect(yes.log).toHaveLength(2);
+    expect(yes.log[0]).toContain('confirm:Reload from Disk:Reload O1000.nc from disk?');
+    expect(yes.log[1]).toBe('reload:d1');
+
+    const no = reloadDeps(doc({ dirty: true }), false);
+    await reloadActive('d1', no);
+    expect(no.log).toHaveLength(1);
+  });
+
+  it('says so when the document has no file, and does nothing without a document', async () => {
+    const unsaved = reloadDeps(doc({ path: null }));
+    await reloadActive('d1', unsaved);
+    expect(unsaved.log).toEqual([`show:${t('files.reloadNoFile', { name: 'O1000.nc' })}`]);
+    const none = reloadDeps(undefined);
+    await reloadActive(null, none);
+    await reloadActive('gone', none);
+    expect(none.log).toEqual([]);
   });
 });
 

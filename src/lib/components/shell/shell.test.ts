@@ -5,6 +5,8 @@
 // it covers the structure, the test ids and what the registries put where. The live
 // behaviour (startup, splitters, panel switching) is covered by the M1 runtime scenarios.
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { render } from 'svelte/server';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { commands, resetCommandsForTest } from '$lib/app/registry/commands';
@@ -35,8 +37,8 @@ function contribute(): void {
     { id: 'file.save', title: 'common.save', enabled: () => false, run: () => {} },
   ]);
   ribbon.add([
-    { tab: 'home', group: 'shell.panels', command: 'file.open', order: 10 },
-    { tab: 'home', group: 'shell.panels', command: 'file.save', order: 20 },
+    { tab: 'file', group: 'shell.panels', command: 'file.open', order: 10 },
+    { tab: 'file', group: 'shell.panels', command: 'file.save', order: 20 },
     { tab: 'view', group: 'view.groupPanels', command: 'file.open', order: 10 },
   ]);
   panels.add({ id: 'programMap', region: 'left', title: 'programMap.title', component: ProgramMapPanel, order: 10 });
@@ -92,14 +94,39 @@ describe('AppShell', () => {
 });
 
 describe('Ribbon', () => {
-  it('renders one tab per used tab and selects Home', () => {
+  it('renders one tab per used tab and selects File', () => {
     contribute();
     const html = render(Ribbon).body;
     expect(html.match(/data-testid="ribbon-tab"/g)).toHaveLength(2);
-    expect(html).toContain('data-tab="home"');
+    expect(html).toContain('data-tab="file"');
     expect(html).toContain('data-tab="view"');
     expect(html).not.toContain('data-tab="nc"');
-    expect(/data-tab="home"[^>]*aria-selected="true"|aria-selected="true"[^>]*data-tab="home"/.test(html)).toBe(true);
+    expect(/data-tab="file"[^>]*aria-selected="true"|aria-selected="true"[^>]*data-tab="file"/.test(html)).toBe(true);
+  });
+
+  it('does not repeat the app name above the tabs: the window title bar has it (B1 A9)', () => {
+    contribute();
+    const html = render(Ribbon).body;
+    expect(html).not.toContain('app-title');
+    expect(html).not.toContain('app-header');
+    expect(html).not.toContain('>gEdit<');
+    // The tabs are the first thing in the ribbon.
+    expect(html.indexOf('role="tablist"')).toBeLessThan(html.indexOf('role="tabpanel"'));
+    expect(/<div class="ribbon[^"]*" data-testid="ribbon"><div class="ribbon-tabs/.test(html)).toBe(true);
+  });
+
+  it('gives the scrollbar of the button row its own room, so it never lies over the group labels (B1 A9)', () => {
+    const source = readFileSync(fileURLToPath(new URL('./Ribbon.svelte', import.meta.url)), 'utf8');
+    const css = source.split('<style>')[1] ?? '';
+    // The row scrolls sideways when it is too narrow ...
+    expect(/\.ribbon-body\s*\{[^}]*overflow-x:\s*auto/.test(css)).toBe(true);
+    // ... with a styled scrollbar, which is never an overlay (WebKit on macOS draws a native
+    // thin one over the labels) ...
+    expect(/\.ribbon-body::-webkit-scrollbar\s*\{[^}]*height:\s*\d+px/.test(css)).toBe(true);
+    // ... and `scrollbar-width` on the row only for a browser without the styled one: in
+    // Chromium it would win over the styled scrollbar and bring the overlay back.
+    const withoutFallback = css.replace(/@supports not selector\(::-webkit-scrollbar\)\s*\{[\s\S]*?\}\s*\}/, '');
+    expect(/\.ribbon-body\s*\{[^}]*scrollbar-width/.test(withoutFallback)).toBe(false);
   });
 
   it('renders a cmd-button per item of the selected tab, with its command id', () => {
