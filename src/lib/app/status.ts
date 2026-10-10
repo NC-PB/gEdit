@@ -10,16 +10,19 @@
 // replaces the first and restarts its timer.
 
 import { derived, writable } from 'svelte/store';
-import type { StatusService } from '$lib/app/types';
+import type { StatusAction, StatusService } from '$lib/app/types';
 
 export interface StatusMessage {
   text: string;
   error: boolean;
   detail?: string;
+  action?: StatusAction;
 }
 
 /** How long a plain message stays on screen. */
 export const MESSAGE_TIMEOUT_MS = 4000;
+/** How long a message with a button stays: long enough to read it and reach the button. */
+export const ACTION_TIMEOUT_MS = 10_000;
 /** How long an error stays on screen: long enough to read a path or a backend message. */
 export const ERROR_TIMEOUT_MS = 8000;
 
@@ -34,15 +37,20 @@ function stopTimer(): void {
 export const status: StatusService = {
   current: derived(message, (m) => m),
 
-  show(text: string, o: { error?: boolean; sticky?: boolean; detail?: string } = {}): void {
+  show(text: string, o: { error?: boolean; sticky?: boolean; detail?: string; action?: StatusAction } = {}): void {
     const error = o.error === true;
     stopTimer();
-    message.set({ text, error, ...(o.detail === undefined ? {} : { detail: o.detail }) });
+    message.set({
+      text,
+      error,
+      ...(o.detail === undefined ? {} : { detail: o.detail }),
+      ...(o.action === undefined ? {} : { action: o.action }),
+    });
     if (o.sticky === true) return;
     timer = setTimeout(() => {
       timer = undefined;
       message.set(null);
-    }, error ? ERROR_TIMEOUT_MS : MESSAGE_TIMEOUT_MS);
+    }, error ? ERROR_TIMEOUT_MS : o.action !== undefined ? ACTION_TIMEOUT_MS : MESSAGE_TIMEOUT_MS);
   },
 
   clear(): void {

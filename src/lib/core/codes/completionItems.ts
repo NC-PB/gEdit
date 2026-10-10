@@ -186,12 +186,14 @@ function snippetFor(entry: CodeEntry, style: SnippetStyle): string | null {
  *
  * `cycle` is the snippet icon in `monaco/providers/completion.ts`, and that icon is a
  * promise that accepting the item leaves tab stops to fill in. So it is decided by what
- * the item *inserts*, not by the group alone: a cycle with no required parameter
- * (`G80`, `CYCL CALL`, `M89`, `M99`) inserts the bare code and is drawn like any other
- * code. The same holds when snippets are switched off for all of them.
+ * the item *inserts*, and by that alone (B1 A4: it used to need the `cycle` group as well,
+ * so an expanding `M140 MB …` or `CYCL DEF …` looked like a plain code): every item that
+ * expands gets it, and one that inserts the bare code (a cycle with no required parameter
+ * such as `G80` or `M89`, or any entry while snippets are switched off) is drawn like any
+ * other code.
  */
 function kindOf(entry: CodeEntry, snippet: boolean): CompletionKind {
-  if (snippet && entry.group === 'cycle') return 'cycle';
+  if (snippet) return 'cycle';
   return /^[A-Za-z]\d/.test(entry.code) ? 'code' : 'keyword';
 }
 

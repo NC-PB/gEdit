@@ -32,7 +32,7 @@
     type Settings,
   } from '$lib/core/settings/schema';
   import type { FieldChoice, FieldSpec } from '$lib/core/forms/types';
-  import type { Translate } from '$lib/app/types';
+  import type { ModalOptions, Translate } from '$lib/app/types';
 
   /** The pages, in the order §7.7 lists them. */
   export const CATEGORY_ORDER: readonly SettingCategory[] = [
@@ -83,6 +83,64 @@
   /** The tabs, in order: the schema pages, then Machines, then Profiles. */
   export function tabsOf(pages: readonly SettingsPage[]): DialogTab[] {
     return [...pages.map((page) => page.category), MACHINES_TAB, PROFILES_TAB];
+  }
+
+  /**
+   * What the dialog tells whoever opened it. `leave` is the dialog's own question "may this
+   * close without losing what was typed?"; the opener hands it to `modals.open` as `mayClose`,
+   * so Esc with the focus outside the panel and a press outside it ask too (B1 A4). Until the
+   * dialog is on screen there is nothing to lose.
+   */
+  export interface SettingsModel {
+    leave: () => Promise<boolean>;
+  }
+
+  /**
+   * The props and the options every opener of this dialog passes to `modals.open`, so that
+   * all of them (`settings.open`, `profile.manage`, `machines.manage`) get the same question.
+   */
+  export function settingsModal(initialTab?: DialogTab): {
+    props: { initialTab?: DialogTab; model: SettingsModel };
+    options: ModalOptions;
+  } {
+    const model: SettingsModel = { leave: async () => true };
+    return {
+      props: { ...(initialTab === undefined ? {} : { initialTab }), model },
+      options: { mayClose: () => model.leave() },
+    };
+  }
+
+  /** What would be lost by leaving: values changed on a settings page, an unfinished machine form. */
+  export interface LeaveState {
+    values: boolean;
+    draft: boolean;
+  }
+
+  /** The question to ask for `state`, or null when nothing would be lost. Wording after the template manager's. */
+  export function leaveQuestion(
+    state: LeaveState,
+    translate: Translate,
+  ): { title: string; message: string; ok: string } | null {
+    if (!state.values && !state.draft) return null;
+    return {
+      title: translate('settings.leave.title'),
+      message: state.values
+        ? state.draft
+          ? translate('settings.leave.bothMessage')
+          : translate('settings.leave.valuesMessage')
+        : translate('settings.leave.draftMessage'),
+      ok: translate('settings.leave.ok'),
+    };
+  }
+
+  /** Asks `leaveQuestion` when there is one; true when leaving is fine. */
+  export async function mayLeave(
+    state: LeaveState,
+    confirm: (o: { title: string; message: string; ok: string; kind: 'warning' }) => Promise<boolean>,
+    translate: Translate,
+  ): Promise<boolean> {
+    const question = leaveQuestion(state, translate);
+    return question === null ? true : confirm({ ...question, kind: 'warning' });
   }
 
   /** The pages that have something to show, in `CATEGORY_ORDER`. */
@@ -192,7 +250,7 @@
   import { untrack } from 'svelte';
   import { get } from 'svelte/store';
   import Modal from '$lib/components/common/Modal.svelte';
-  import MachinesPage from '$lib/components/dialogs/MachinesPage.svelte';
+  import MachinesPage, { type MachinesModel } from '$lib/components/dialogs/MachinesPage.svelte';
   import ProfilesPage from '$lib/components/dialogs/ProfilesPage.svelte';
   import FormRenderer from '$lib/components/forms/FormRenderer.svelte';
   import { dialogs } from '$lib/app/dialogs';
@@ -215,9 +273,11 @@
      * shown as an empty dialog.
      */
     initialTab?: DialogTab;
+    /** Filled in by the dialog: the opener's `mayClose` asks through it (see `settingsModal`). */
+    model?: SettingsModel;
   }
 
-  let { close, initialTab }: Props = $props();
+  let { close, initialTab, model }: Props = $props();
 
   const paths = settings.paths;
 
@@ -285,6 +345,27 @@
   );
   let tablist = $state<HTMLElement | undefined>(undefined);
   let busy = $state(false);
+
+  /** What the Machines page says about its form: filled in by the page while it is shown. */
+  const machinesModel: MachinesModel = { hasDraft: () => false };
+
+  /** What closing now would lose. The machine form lives in the page, which is only mounted on its tab. */
+  function leaveState(): LeaveState {
+    return {
+      values: !readOnly && Object.keys(changedValues(current, get(settings.values))).length > 0,
+      draft: machinesModel.hasDraft(),
+    };
+  }
+
+  /** Asks before the dialog closes with something typed in it; true when it may close. */
+  function askToLeave(state: LeaveState = leaveState()): Promise<boolean> {
+    return mayLeave(state, (o) => dialogs.confirm(o), t);
+  }
+
+  // The opener's `mayClose` (Esc outside the panel, a press outside it) asks through this.
+  untrack(() => {
+    if (model !== undefined) model.leave = () => askToLeave();
+  });
 
   const errors = $derived(validateFields(everySpec, current));
   const blocked = $derived(Object.keys(errors).length > 0);
@@ -402,6 +483,8 @@
    */
   async function openSettingsFile(): Promise<void> {
     if (busy) return;
+    // The file replaces the dialog, so what was typed here is gone: ask first.
+    if (!(await askToLeave())) return;
     busy = true;
     let path: string;
     try {
@@ -416,8 +499,16 @@
     await files.open([path]);
   }
 
+  /** Cancel and Esc inside the panel: closes, after asking when something typed would be lost. */
+  async function cancel(): Promise<void> {
+    if (await askToLeave()) close();
+  }
+
   async function save(): Promise<void> {
     if (blocked || readOnly || busy) return;
+    // Save writes the settings and closes; a machine form that is still open would go with
+    // it, so that is asked about first (the values are what the user is saving).
+    if (!(await askToLeave({ values: false, draft: machinesModel.hasDraft() }))) return;
     const patch = changedValues(current, get(settings.values));
     if (Object.keys(patch).length === 0) {
       close();
@@ -449,7 +540,7 @@
   okLabel={t('common.save')}
   okDisabled={blocked || readOnly || busy}
   onOk={() => void save()}
-  onCancel={() => close()}
+  onCancel={() => void cancel()}
 >
   {#snippet footer()}
     <button
@@ -527,7 +618,7 @@
         data-category={active}
       >
         {#if active === MACHINES_TAB}
-          <MachinesPage />
+          <MachinesPage model={machinesModel} />
         {:else if active === PROFILES_TAB}
           <ProfilesPage />
         {:else}

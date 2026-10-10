@@ -1,8 +1,8 @@
 // Applying a transform's lines to a model (plan §7.3, AD-5, AD-12). Owner: **WP4.1**.
 //
 // This is the one place that turns a `TransformResult` into edits, and the **one undo
-// step** rule lives here: `pushStackElement()`, then a single `pushEditOperations()` with
-// every edit `computeLineEdits` found, then `pushStackElement()` again. One Cmd+Z has to
+// step** rule lives here: `pushStackElement()`, then `pushEditOperations()` with every edit
+// `computeLineEdits` found (in batches, see below), then `pushStackElement()` again. One Cmd+Z has to
 // put the program back exactly as it was — a renumber that takes four undos to reverse is
 // a transform nobody trusts.
 //
@@ -22,27 +22,24 @@
 // split back into its lines before the ranges are built (H4 found this: after a renumber
 // every bookmark and the cursor inside the renumbered run had moved).
 //
-// The split stops at `MONACO_REDUCES_AT`, and that number is not ours. Monaco's
-// `pieceTreeTextBuffer._reduceOperations` collapses a batch of **1000 or more** operations
-// into one edit spanning all of them, to avoid the allocation storm a formatter can cause.
-// Past that point per-line edits are not merely wasted, they are worse than one hunk: the
-// batch is collapsed anyway and building it cost a thousand ranges first. So a program
-// with fewer than 1000 changed blocks keeps every decoration exactly where it was, and a
-// bigger one falls back to the hunk it used to get. What that leaves open is below.
+// Monaco's `pieceTreeTextBuffer._reduceOperations` collapses a batch of **1000 or more**
+// operations given to one `pushEditOperations` into a single edit spanning all of them, to
+// avoid the allocation storm a formatter can cause, and every bookmark, fold and cursor
+// between the first and the last of them then moves. So the narrow edits go to the model
+// in **several calls of at most `MAX_OPERATIONS_PER_CALL`** (999), the last batch first so
+// the line numbers of the earlier ones stay true, all between the same two
+// `pushStackElement()` calls, which keeps it one undo step (B1 A4; before that, a plan of
+// 1000 or more narrow edits fell back to one whole hunk and a bookmark on an untouched
+// line moved).
 //
 // Above ~20k changed lines, switch to chunked whole-line hunks (AD-12): past that point
 // per-line edits cost more than they save, and Monaco's edit application is the bottleneck
 // rather than the diff. The gaps between the merged edits are filled from the old lines,
 // which are equal on both sides, so a chunked plan produces exactly the same text.
 //
-// **Known gap, for WP4.1 or M5.** `MONACO_REDUCES_AT` caps the *split*; it does not cap the
-// plan. A transform that changes 1000 or more lines in 1000 or more separate places —
-// `remove-comments` over a big CAM program, say — still hands Monaco a batch it collapses,
-// and then every decoration between the first and the last edit moves. Capping the whole
-// plan (merge neighbours until at most 999 operations are left, which `coalesceEdits`
-// already knows how to do) would fix that case too, and would make the 20k line budget
-// above redundant. It is a change to how every large transform applies, so it wants its
-// own budget run rather than a place in an integration commit.
+// What still leaves the decorations inside a hunk behind: above `CHUNK_LINES` changed lines
+// the plan is merged into whole-line hunks on purpose, and a hunk that replaces several
+// different lines (not n by n) is one operation whatever its size.
 //
 // Text always travels as LF (`monaco/editorService.ts`): Monaco normalizes what is
 // inserted to the model's own EOL, so a CRLF document stays CRLF.
@@ -63,11 +60,13 @@ export const CHUNK_LINES = 20_000;
 /**
  * The batch size at which Monaco stops applying the operations it was given and applies
  * one edit covering all of them instead (`pieceTreeTextBuffer._reduceOperations`: "a
- * thousand edits work fine regardless of their shape"). A plan of this many narrow edits
- * buys nothing — the collapsed edit moves the decorations inside it exactly as one hunk
- * would — so the split below stops here.
+ * thousand edits work fine regardless of their shape"). It is a limit of one
+ * `pushEditOperations` call, so a plan is handed over in calls below it.
  */
 export const MONACO_REDUCES_AT = 1000;
+
+/** The most operations one `pushEditOperations` call carries: one under what Monaco collapses. */
+export const MAX_OPERATIONS_PER_CALL = MONACO_REDUCES_AT - 1;
 
 /** Monaco's `IRange`, spelled out so this module needs no value import of Monaco. */
 export interface EditRange {
@@ -146,9 +145,8 @@ function coalesceEdits(edits: LineEdit[], oldLines: string[], chunkLines: number
  * one. Splitting costs one Monaco operation per changed line instead of one per run, which
  * is the trade AD-12 already describes.
  *
- * It is worth it only while the batch stays under `MONACO_REDUCES_AT`, so the answer is
- * `edits` unchanged when the split would reach that — Monaco would collapse the batch back
- * into one edit and the narrowing would have been thrown away.
+ * However many pieces that makes, the plan goes to the model in calls of at most
+ * `MAX_OPERATIONS_PER_CALL` (`batchOperations`), so Monaco never collapses them.
  *
  * The text is unaffected: the pieces cover exactly the same old lines with exactly the
  * same new ones. The order stays ascending, and two pieces of one hunk are adjacent rather
@@ -160,11 +158,6 @@ function splitEqualCountEdits(edits: LineEdit[], oldLines: string[]): LineEdit[]
   const splittable = (edit: LineEdit): boolean =>
     edit.oldEnd - edit.oldStart > 1 && edit.oldEnd - edit.oldStart === edit.newLines.length;
   if (!edits.some(splittable)) return edits;
-
-  // What the split would cost, before building any of it.
-  let count = 0;
-  for (const edit of edits) count += splittable(edit) ? edit.oldEnd - edit.oldStart : 1;
-  if (count >= MONACO_REDUCES_AT) return edits;
 
   const out: LineEdit[] = [];
   for (const edit of edits) {
@@ -275,6 +268,19 @@ function operationFor(
   };
 }
 
+/**
+ * The operations in groups of at most `MAX_OPERATIONS_PER_CALL`, in document order. They are
+ * applied from the last group to the first (`applyLinesTo`): every range is in the
+ * coordinates of the document as it was, and an edit further down never moves a line above it.
+ */
+export function batchOperations(operations: LineOperation[]): LineOperation[][] {
+  const batches: LineOperation[][] = [];
+  for (let at = 0; at < operations.length; at += MAX_OPERATIONS_PER_CALL) {
+    batches.push(operations.slice(at, at + MAX_OPERATIONS_PER_CALL));
+  }
+  return batches;
+}
+
 /** The whole plan: the diff, the chunking decision and the Monaco ranges. */
 export function planLineEdits(o: {
   oldLines: string[];
@@ -335,9 +341,14 @@ export function applyLinesTo(
   });
   if (plan.operations.length === 0) return { changedLines: 0 };
 
-  // One undo step, whatever the plan turned out to be (AD-12).
+  // One undo step, whatever the plan turned out to be (AD-12): the calls between the two
+  // stack elements join the same one. Last batch first, so the ranges of the earlier ones
+  // still point at the lines they were computed for.
+  const batches = batchOperations(plan.operations);
   model.pushStackElement();
-  model.pushEditOperations(null, plan.operations, () => null);
+  for (let i = batches.length - 1; i >= 0; i--) {
+    model.pushEditOperations(null, batches[i], () => null);
+  }
   model.pushStackElement();
   return { changedLines: plan.changedLines };
 }

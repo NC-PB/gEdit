@@ -344,17 +344,24 @@ describe('completionItems', () => {
     expect(g83.kind).toBe('code');
   });
 
-  // Over both shipped databases: nothing wears the snippet icon without expanding. The
-  // converse is deliberately not claimed — `G43 H${1}` and `M140 MB${1}` do expand, and
-  // they keep the icon of what they are, because their group is not `cycle`.
-  it('never draws the snippet icon on an item that inserts plain text', () => {
+  // Over both shipped databases the icon and the expansion are one thing (B1 A4): every item
+  // that expands wears the snippet icon, and nothing wears it without expanding. `M140 MB${1}`
+  // and `G43 H${1}` used to look like plain codes because their group is not `cycle`.
+  it('draws the snippet icon on exactly the items that expand', () => {
     for (const db of [fanuc, heidenhain]) {
-      const drawn = completionItems(db.codes, { t }).filter((item) => item.kind === 'cycle');
+      const items = completionItems(db.codes, { t });
+      const drawn = items.filter((item) => item.kind === 'cycle');
       expect(drawn.length, `${db.dialect} has no snippet item at all`).toBeGreaterThan(0);
-      for (const item of drawn) {
-        expect(item.snippet, `${db.dialect} ${item.label}`).toBe(true);
+      for (const item of items) {
+        expect(item.kind === 'cycle', `${db.dialect} ${item.label}`).toBe(item.snippet);
       }
     }
+  });
+
+  it('gives an expanding word that is not a cycle the snippet icon too', () => {
+    const [m140] = completionItems([entry('M140', heidenhain)], { t, profile: klartextProfile });
+    expect(m140.snippet).toBe(true);
+    expect(m140.kind).toBe('cycle');
   });
 
   it('says when an entry is not verified yet', () => {

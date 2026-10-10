@@ -62,6 +62,14 @@
   }
 
   /**
+   * The rows to list: those with a key, or all of them when `showUnbound` is on. Most commands
+   * have no key, and a table of mostly dashes hid the ones people look for (B1 A4).
+   */
+  export function visibleRows(rows: readonly ShortcutRow[], showUnbound: boolean): ShortcutRow[] {
+    return showUnbound ? [...rows] : rows.filter((row) => row.keys !== undefined);
+  }
+
+  /**
    * The rows grouped under their translated heading, sorted by heading. Two category keys
    * with the same label (for example 'core.categoryView' and 'view.category') become one
    * group. The rows without a category end up last, whatever their heading is.
@@ -92,6 +100,7 @@
 </script>
 
 <script lang="ts">
+  import { untrack } from 'svelte';
   import Modal from '$lib/components/common/Modal.svelte';
   import { commands } from '$lib/app/registry/commands';
   import { t } from '$lib/i18n';
@@ -100,11 +109,14 @@
   interface Props {
     /** Supplied by ModalHost; the dialog only ever closes. */
     close: (value?: unknown) => void;
+    /** Starts with the commands that have no key listed too; off by default. */
+    showUnbound?: boolean;
   }
 
-  let { close }: Props = $props();
+  let { close, showUnbound: startWithUnbound = false }: Props = $props();
 
   let query = $state('');
+  let showUnbound = $state(untrack(() => startWithUnbound));
   let input = $state<HTMLInputElement | undefined>(undefined);
 
   // The registry does not change while a modal is open, so one snapshot is enough.
@@ -120,7 +132,10 @@
   }
 
   const needle = $derived(query.trim().toLowerCase());
-  const matching = $derived(needle ? rows.filter((row) => haystack(row).includes(needle)) : rows);
+  const found = $derived(needle ? rows.filter((row) => haystack(row).includes(needle)) : rows);
+  const matching = $derived(visibleRows(found, showUnbound));
+  /** Matches left out because they have no key; the hint says so, so a search never looks empty for no reason. */
+  const hidden = $derived(found.length - matching.length);
   const groups = $derived(groupRows(matching, labelOf));
 
   $effect(() => {
@@ -143,9 +158,17 @@
       bind:value={query}
     />
 
+    <label class="toggle">
+      <input type="checkbox" data-testid="shortcuts-show-unbound" bind:checked={showUnbound} />
+      {t('help.showUnbound')}
+    </label>
+
     <p class="hint">
       {t('help.platformHint')}
       {t('help.commands', { count: matching.length })}
+      {#if hidden > 0}
+        <span data-testid="shortcuts-hidden">{t('help.unboundHidden', { count: hidden })}</span>
+      {/if}
     </p>
 
     <div class="list">
@@ -207,6 +230,15 @@
   .filter-input:focus {
     border-color: var(--accent, #0078d4);
     outline: none;
+  }
+
+  .toggle {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-top: 8px;
+    font-size: 12px;
+    cursor: pointer;
   }
 
   .hint {

@@ -224,6 +224,8 @@ function createFakeDialogs(): FakeDialogs {
         busy = false;
       }
     },
+    // B1 A4: nothing in these tests holds the lock while another chain asks.
+    whenFree: (op) => op(),
   };
 }
 

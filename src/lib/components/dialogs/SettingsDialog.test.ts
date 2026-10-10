@@ -25,6 +25,9 @@ import SettingsDialog, {
   sameValue,
   snapshotValues,
   specOf,
+  leaveQuestion,
+  mayLeave,
+  settingsModal,
   type SpecDeps,
 } from './SettingsDialog.svelte';
 import { validateFields } from '$lib/core/forms/validate';
@@ -359,5 +362,61 @@ describe('SettingsDialog markup', () => {
   it('says nothing about a broken or read-only file when there is none', () => {
     expect(html).not.toContain('data-testid="settings-notice"');
     expect(html).not.toContain('data-testid="settings-readonly"');
+  });
+});
+
+// B1 A4: Settings asks before it closes with something typed in it.
+describe('leaving with something typed', () => {
+  it('asks nothing when nothing was changed', async () => {
+    expect(leaveQuestion({ values: false, draft: false }, t)).toBeNull();
+    let asked = 0;
+    const ok = await mayLeave(
+      { values: false, draft: false },
+      async () => {
+        asked += 1;
+        return false;
+      },
+      t,
+    );
+    expect(ok).toBe(true);
+    expect(asked).toBe(0);
+  });
+
+  it('names what would be lost, in the template manager’s words', () => {
+    const values = leaveQuestion({ values: true, draft: false }, t);
+    const draft = leaveQuestion({ values: false, draft: true }, t);
+    const both = leaveQuestion({ values: true, draft: true }, t);
+    expect(values?.message).toBe(t('settings.leave.valuesMessage'));
+    expect(draft?.message).toBe(t('settings.leave.draftMessage'));
+    expect(both?.message).toBe(t('settings.leave.bothMessage'));
+    expect(new Set([values?.message, draft?.message, both?.message]).size).toBe(3);
+    expect(values?.title).toBe(t('settings.leave.title'));
+    expect(values?.ok).toBe(t('settings.leave.ok'));
+  });
+
+  it('closes only when the user agrees', async () => {
+    const asks: string[] = [];
+    const answer = (value: boolean) => async (o: { title: string; message: string }): Promise<boolean> => {
+      asks.push(o.message);
+      return value;
+    };
+    expect(await mayLeave({ values: false, draft: true }, answer(false), t)).toBe(false);
+    expect(await mayLeave({ values: true, draft: false }, answer(true), t)).toBe(true);
+    expect(asks).toHaveLength(2);
+  });
+
+  it('gives every opener a model whose question starts as "yes" and a mayClose that uses it', async () => {
+    const { props, options } = settingsModal('machines');
+    expect(props.initialTab).toBe('machines');
+    expect(await options.mayClose!()).toBe(true);
+    props.model.leave = async () => false;
+    expect(await options.mayClose!()).toBe(false);
+    expect('initialTab' in settingsModal().props).toBe(false);
+  });
+
+  it('has the texts it asks with', () => {
+    for (const key of ['title', 'valuesMessage', 'draftMessage', 'bothMessage', 'ok']) {
+      expect(hasKey(`settings.leave.${key}`), key).toBe(true);
+    }
   });
 });

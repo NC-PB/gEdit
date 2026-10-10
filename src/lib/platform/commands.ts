@@ -165,6 +165,17 @@ export function machinesSave(machines: Record<string, unknown>): Promise<void> {
 }
 
 /**
+ * B1 A4. "Replace with an empty file" on the Machines page. Rust keeps whatever file is
+ * there as a backup beside it (`machines.json.bak`, or `machines.json.<date>.bak` when that
+ * name is taken) and puts an empty one in its place; it answers the backup's file name, or
+ * `null` when there was no file. A copy that cannot be made, a file from a newer gEdit and
+ * a file that cannot be read are errors, and the old file stays where it was.
+ */
+export function machinesReplace(): Promise<string | null> {
+  return invoke<string | null>('machines_replace');
+}
+
+/**
  * M6, §7.10. Makes sure `machines.json` exists (creating an empty one), grants that single
  * file to the fs scope and answers with its path, so "Open machines file" can open it as a
  * document. Only this one file is granted — never the folder.

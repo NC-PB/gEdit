@@ -38,11 +38,11 @@
   } from '$lib/core/machines/fields';
   import { initialValues } from '$lib/core/forms/values';
   import { validateFields } from '$lib/core/forms/validate';
-  import { channelBlock, validateChannels } from '$lib/core/machines/validate';
+  import { channelBlock, MAX_NAME_LENGTH, validateChannels } from '$lib/core/machines/validate';
   import type { ChannelParams } from '$lib/core/channels/types';
   import type { CodeDb } from '$lib/core/codes/types';
   import type { FieldChoice, FieldSpec } from '$lib/core/forms/types';
-  import type { MachineConfig, MachineParams, MachineProblem } from '$lib/core/machines/types';
+  import { wasReported, type MachineConfig, type MachineParams, type MachineProblem } from '$lib/core/machines/types';
   import type {
     CodeDbService,
     DocumentStore,
@@ -63,6 +63,11 @@
     dialogs: Pick<NativeDialogs, 'confirm'>;
     status: Pick<StatusService, 'show'>;
     t: Translate;
+  }
+
+  /** What the page tells the dialog around it: whether a machine form is open (B1 A4). */
+  export interface MachinesModel {
+    hasDraft: () => boolean;
   }
 
   /** One row of the list. An entry with problems is one the file kept but gEdit cannot use. */
@@ -249,6 +254,7 @@
           label: deps.t('machines.param.name'),
           help: deps.t('machines.param.nameHelp'),
           required: true,
+          maxLength: MAX_NAME_LENGTH,
           default: '',
         },
       ];
@@ -265,7 +271,7 @@
     );
   }
 
-  /** `validateFields`, plus the two rules a `FieldSpec` cannot carry (§7.15 name rules). */
+  /** `validateFields` (which also holds the length limits), plus the rule a `FieldSpec` cannot carry: a name no other machine has (§7.15 name rules). */
   export function draftErrors(
     fields: readonly FieldSpec[],
     draft: Draft,
@@ -274,8 +280,7 @@
     const errors = validateFields(fields as FieldSpec[], draft.values);
     const name = typeof draft.values[FIELD_NAME] === 'string' ? (draft.values[FIELD_NAME] as string).trim() : '';
     if (errors[FIELD_NAME] === undefined && name !== '') {
-      if (name.length > 64) errors[FIELD_NAME] = { key: 'machines.page.nameLong' };
-      else if (takenNames(list, draft.kind === 'edit' ? draft.id : null).has(name.toLowerCase())) {
+      if (takenNames(list, draft.kind === 'edit' ? draft.id : null).has(name.toLowerCase())) {
         errors[FIELD_NAME] = { key: 'machines.page.nameTaken' };
       }
     }
@@ -315,6 +320,15 @@
   /** English detail for anything thrown across the IPC boundary. */
   function detailOf(err: unknown): string {
     return err instanceof Error ? err.message : String(err);
+  }
+
+  /**
+   * Says a failure, unless the machines store has already said it: it shows its own message
+   * with the detail, and a second one from the page was the same news twice (B1 A4).
+   */
+  function say(deps: MachinesDeps, key: string, err: unknown): void {
+    if (wasReported(err)) return;
+    deps.status.show(deps.t(key), { error: true, detail: detailOf(err) });
   }
 
   /** True when the write went through; the page keeps the form open otherwise. */
@@ -360,7 +374,7 @@
       // better than reporting a save that never happened.
       return false;
     } catch (err) {
-      deps.status.show(deps.t('machines.page.saveFailed'), { error: true, detail: detailOf(err) });
+      say(deps, 'machines.page.saveFailed', err);
       return false;
     }
   }
@@ -389,7 +403,7 @@
     try {
       await deps.machines.remove(row.id);
     } catch (err) {
-      deps.status.show(deps.t('machines.page.saveFailed'), { error: true, detail: detailOf(err) });
+      say(deps, 'machines.page.saveFailed', err);
       return false;
     }
     deps.status.show(deps.t('machines.page.removed', { name: row.name }));
@@ -405,7 +419,7 @@
     try {
       await deps.machines.setDefault(row.profileId, row.isDefault ? null : row.id);
     } catch (err) {
-      deps.status.show(deps.t('machines.page.saveFailed'), { error: true, detail: detailOf(err) });
+      say(deps, 'machines.page.saveFailed', err);
       return;
     }
     deps.status.show(
@@ -419,11 +433,14 @@
     try {
       await deps.machines.openFile();
     } catch (err) {
-      deps.status.show(deps.t('machines.openFileFailed'), { error: true, detail: detailOf(err) });
+      say(deps, 'machines.openFileFailed', err);
     }
   }
 
-  /** The one path that moves an unusable file aside (AD-31 Management). */
+  /**
+   * The one path that puts an empty file in place of an unusable one (AD-31 Management).
+   * The old file is kept beside it as a backup, and the message names it.
+   */
   export async function replaceMachinesFile(deps: MachinesDeps): Promise<boolean> {
     const confirmed = await deps.dialogs.confirm({
       title: deps.t('machines.page.replaceTitle'),
@@ -432,18 +449,22 @@
       kind: 'warning',
     });
     if (!confirmed) return false;
+    let backup: string | null;
     try {
-      await deps.machines.replaceWithEmpty();
+      backup = await deps.machines.replaceWithEmpty();
     } catch (err) {
-      deps.status.show(deps.t('machines.page.saveFailed'), { error: true, detail: detailOf(err) });
+      say(deps, 'machines.page.saveFailed', err);
       return false;
     }
-    deps.status.show(deps.t('machines.page.replaced'));
+    deps.status.show(
+      backup === null ? deps.t('machines.page.replacedNoBackup') : deps.t('machines.page.replaced', { name: backup }),
+    );
     return true;
   }
 </script>
 
 <script lang="ts">
+  import { untrack } from 'svelte';
   import FormRenderer from '$lib/components/forms/FormRenderer.svelte';
   import ChannelsForm from '$lib/components/dialogs/ChannelsForm.svelte';
   import ChannelsTester from '$lib/components/dialogs/ChannelsTester.svelte';
@@ -459,6 +480,13 @@
   import { t } from '$lib/i18n';
   import { baseName } from '$lib/utils/platform';
 
+  interface Props {
+    /** The dialog around the page asks it whether a machine form is open (B1 A4). */
+    model?: MachinesModel;
+  }
+
+  let { model }: Props = $props();
+
   const deps: MachinesDeps = { machines, profiles, codes, docs, dialogs, status, t };
 
   const list = machines.list;
@@ -471,6 +499,7 @@
       rows: rowsOf($list, deps),
       problems: fileProblems(deps),
       blocked: machines.blocked(),
+      readOnly: machines.readOnly(),
     };
   });
 
@@ -478,6 +507,10 @@
   let profileStep = $state<Record<string, unknown> | null>(null);
   let draft = $state<Draft | null>(null);
   let busy = $state(false);
+  // A form is open: closing the dialog now would drop what was typed into it.
+  untrack(() => {
+    if (model !== undefined) model.hasDraft = () => draft !== null;
+  });
   let form = $state<HTMLElement | undefined>(undefined);
 
   const profileFields = $derived(profileField(deps));
@@ -624,7 +657,7 @@
 
 <div class="machines" data-testid="settings-machines">
   {#if view.blocked}
-    <p class="notice" data-testid="machines-notice">{t('machines.page.blocked')}</p>
+    <p class="notice" data-testid="machines-notice">{view.readOnly ? t('machines.page.blockedNewer') : t('machines.page.blocked')}</p>
   {/if}
   {#each view.problems as problem, k (k)}
     <p class="notice" data-testid="machines-notice">{problem}</p>
@@ -825,7 +858,8 @@
         data-disabled="0"
         onclick={() => void run(() => openMachinesFile(deps))}>{t('machines.page.openFile')}</button
       >
-      {#if view.blocked}
+      <!-- Not for a file a newer gEdit wrote: it is read as it is and never replaced. -->
+      {#if view.blocked && !view.readOnly}
         <button
           type="button"
           class="action"

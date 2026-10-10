@@ -43,6 +43,9 @@ export default {
   noMatches: 'No matching commands',
   otherGroup: 'Other',
   platformHint: 'The keys are shown for this computer.',
+  showUnbound: 'Show commands without a key',
+  unboundHidden_one: '{count} command without a key is hidden.',
+  unboundHidden_other: '{count} commands without a key are hidden.',
   commands_one: '{count} command',
   commands_other: '{count} commands',
 } as const satisfies Messages;

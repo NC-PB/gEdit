@@ -444,6 +444,8 @@ export interface NativeDialogs {
   pickFile(o?: { title?: string }): Promise<string | null>;
   /** One chain at a time; a re-entrant call resolves `undefined`. */
   exclusive<T>(op: () => Promise<T>): Promise<T | undefined>;
+  /** Like `exclusive`, but a caller that finds a chain in front waits for it instead of getting `undefined`. */
+  whenFree<T>(op: () => Promise<T>): Promise<T>;
 }
 
 export interface QuickPickItem<T> {
@@ -588,11 +590,20 @@ export interface FileOps {
   onWillQuit(cb: () => Promise<void> | void): Disposable;
 }
 
+/** A button on a status message (B1 A4: the machine mismatch warning offers "Choose Machine…"). `label` is translated. */
+export interface StatusAction {
+  label: string;
+  run: () => void;
+}
+
 /** app/status.ts → `export const status: StatusService` */
 export interface StatusService {
-  readonly current: Readable<{ text: string; error: boolean; detail?: string } | null>;
-  /** `text` is already translated. Messages clear after 4 s, errors after 8 s. */
-  show(text: string, o?: { error?: boolean; sticky?: boolean; detail?: string }): void;
+  readonly current: Readable<{ text: string; error: boolean; detail?: string; action?: StatusAction } | null>;
+  /**
+   * `text` is already translated. Messages clear after 4 s, errors after 8 s, a message with
+   * an `action` after 10 s (time to reach the button).
+   */
+  show(text: string, o?: { error?: boolean; sticky?: boolean; detail?: string; action?: StatusAction }): void;
   clear(): void;
 }
 
@@ -1084,8 +1095,14 @@ export interface MachineService {
   problems(): MachineProblem[];
   /** True while the file itself could not be read: every write below is refused. */
   blocked(): boolean;
-  /** The one path that moves an unusable file to `machines.json.bak`. */
-  replaceWithEmpty(): Promise<void>;
+  /**
+   * The one path that puts an empty file in place of an unusable one. The old file is kept
+   * beside it; answers the backup's file name (`null` without a Tauri runtime or a file).
+   * Refused for a file from a newer gEdit.
+   */
+  replaceWithEmpty(): Promise<string | null>;
+  /** True while the file was written by a newer gEdit: it is read but never written. */
+  readOnly(): boolean;
   get(id: string): MachineConfig | undefined;
   /** The machines that can be chosen for this profile: its chain (AD-31) and its family (a mill and a lathe profile of one control). */
   compatibleWith(profileId: string): MachineConfig[];
@@ -1095,6 +1112,14 @@ export interface MachineService {
    */
   typeMismatch(docId: DocId): { name: string; machineType: 'mill' | 'lathe'; documentType: 'mill' | 'lathe' } | null;
   defaultFor(profileId: string): string | null;
+  /**
+   * Chooses `machineId` for the document **and** changes its dialect in one step:
+   * `applyProfile` is called with the choice already in place, so nothing is evaluated
+   * with the new dialect and the old machine (which said "that machine is not for this
+   * dialect" about a pick that was right). Per-file memory gets the machine as `setForDoc`
+   * gives it; the dialect's own memory is the caller's, inside `applyProfile`.
+   */
+  setProfileAndMachine(docId: DocId, machineId: string, applyProfile: () => void): void;
   /** The id comes from the name (slug, suffix on collision); saved at once. */
   add(m: Omit<MachineConfig, 'id'>): Promise<string>;
   update(id: string, patch: Partial<Omit<MachineConfig, 'id'>>): Promise<void>;

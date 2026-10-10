@@ -58,11 +58,14 @@ const fake = vi.hoisted(() => {
     openFile: vi.fn(async (): Promise<void> => {}),
     setForDoc: vi.fn((): void => {}),
     setProfile: vi.fn((): void => {}),
+    /** The order the document was changed in: the machine must come before the dialect (B1 A4). */
+    order: [] as string[],
     remember: vi.fn((): void => {}),
     disposeSave: vi.fn((): void => {}),
     shown: [] as { text: string; error: boolean }[],
     opened: [] as unknown[],
     openedWith: [] as unknown[],
+    openedOptions: [] as unknown[],
     /** Every quick pick that was raised, and what the next one answers. */
     picks: [] as unknown[][],
     answers: [] as unknown[],
@@ -79,7 +82,10 @@ vi.mock('$lib/app/fileOps', () => ({
       fake.saved = cb;
       return fake.disposeSave;
     },
-    setProfile: (...args: unknown[]) => fake.setProfile(...(args as [])),
+    setProfile: (...args: unknown[]) => {
+      fake.order.push('profile');
+      return fake.setProfile(...(args as []));
+    },
   },
 }));
 
@@ -89,9 +95,10 @@ vi.mock('$lib/app/modals', () => ({
       fake.picks.push(items);
       return fake.answers.shift();
     },
-    open: async (component: unknown, props?: unknown): Promise<undefined> => {
+    open: async (component: unknown, props?: unknown, options?: unknown): Promise<undefined> => {
       fake.opened.push(component);
       fake.openedWith.push(props);
+      fake.openedOptions.push(options);
       return undefined;
     },
   },
@@ -122,7 +129,8 @@ vi.mock('$lib/stores/machines', async () => {
       isMachinesDocument: (id: DocId) => docs.byPath(MACHINES_FILE)?.id === id,
       problems: () => [],
       blocked: () => false,
-      replaceWithEmpty: async (): Promise<void> => {},
+      replaceWithEmpty: async (): Promise<string | null> => null,
+      readOnly: () => false,
       get: (id: string) => (fake.getList() as MachineConfig[]).find((m) => m.id === id),
       compatibleWith: (profileId: string) => {
         const chain = profiles.get(profileId)?.chain ?? [];
@@ -152,6 +160,11 @@ vi.mock('$lib/stores/machines', async () => {
         return { machine, profile: applyMachine(profile, machine).profile } as unknown as EffectiveProfile;
       },
       setForDoc: (...args: unknown[]) => fake.setForDoc(...(args as [])),
+      setProfileAndMachine: (docId: unknown, machineId: unknown, applyProfile: () => void): void => {
+        fake.order.push('machine');
+        fake.setForDoc(...([docId, machineId] as unknown as []));
+        applyProfile();
+      },
     },
   };
 });
@@ -195,11 +208,13 @@ beforeEach(() => {
   fake.shown.length = 0;
   fake.opened.length = 0;
   fake.openedWith.length = 0;
+  fake.openedOptions.length = 0;
   fake.picks.length = 0;
   fake.answers.length = 0;
   fake.reloadFromDisk.mockClear();
   fake.openFile.mockClear();
   fake.setForDoc.mockClear();
+  fake.order.length = 0;
   fake.setProfile.mockClear();
   fake.remember.mockClear();
   fake.disposeSave.mockClear();
@@ -330,6 +345,8 @@ describe('picking a machine', () => {
     await contrib.commands[0].run();
     expect(fake.setProfile).toHaveBeenCalledWith(id, 'fanuc-lathe');
     expect(fake.setForDoc).toHaveBeenCalledWith(id, 'lathe-2');
+    // One step, machine first: the old machine is never judged against the new dialect (B1 A4).
+    expect(fake.order).toEqual(['machine', 'profile']);
     // AD-22 (M7 integration, mergeA): the dialect this changed is the user's own choice
     // and is remembered with the file. Without it the file is detected as a mill again
     // next time and AD-31 then drops the lathe machine that no longer fits.
@@ -439,7 +456,9 @@ describe('the management commands', () => {
     // I6 replaced WP6.10's tab press with a prop, so the tab is part of the request and
     // there is nothing to poll for.
     await contrib.commands[1].run();
-    expect(fake.openedWith.at(-1)).toEqual({ initialTab: 'machines' });
+    expect(fake.openedWith.at(-1)).toEqual({ initialTab: 'machines', model: expect.any(Object) });
+    // And it asks before Esc or a press outside drops a half-filled machine form (B1 A4).
+    expect(typeof (fake.openedOptions.at(-1) as { mayClose?: unknown }).mayClose).toBe('function');
   });
 });
 

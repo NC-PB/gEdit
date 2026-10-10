@@ -27,6 +27,7 @@ const fake = vi.hoisted(() => {
     /** The components handed to `modals.open`, and the props each got. */
     opened: [] as unknown[],
     openedProps: [] as unknown[],
+    openedOptions: [] as unknown[],
     setPaths(next: unknown): void {
       paths = next;
       for (const run of subscribers) run(next);
@@ -60,9 +61,10 @@ vi.mock('$lib/app/fileOps', () => ({
 
 vi.mock('$lib/app/modals', () => ({
   modals: {
-    open: async (component: unknown, props?: unknown): Promise<undefined> => {
+    open: async (component: unknown, props?: unknown, options?: unknown): Promise<undefined> => {
       fake.opened.push(component);
       fake.openedProps.push(props);
+      fake.openedOptions.push(options);
       return undefined;
     },
   },
@@ -121,6 +123,7 @@ beforeEach(() => {
   fake.disposeSave.mockClear();
   fake.opened.length = 0;
   fake.openedProps.length = 0;
+  fake.openedOptions.length = 0;
   fake.setPaths(paths(SETTINGS_FILE));
 });
 
@@ -143,13 +146,34 @@ describe('what it declares', () => {
     // `satisfies Contribution` keeps the literal type, so the command takes no argument.
     settingsContrib.commands[0].run();
     expect(fake.opened).toEqual([SettingsDialog]);
-    expect(fake.openedProps).toEqual([{}]);
+    expect(fake.openedProps).toEqual([{ model: expect.any(Object) }]);
   });
 
   it('profile.manage opens the same dialog on the Profiles tab', () => {
     settingsContrib.commands[1].run();
     expect(fake.opened).toEqual([SettingsDialog]);
-    expect(fake.openedProps).toEqual([{ initialTab: 'profiles' }]);
+    expect(fake.openedProps).toEqual([{ initialTab: 'profiles', model: expect.any(Object) }]);
+  });
+
+  // B1 A4: Esc outside the panel and a press outside it close the dialog by themselves; they
+  // ask the dialog first, through the model it was given.
+  it('hands the host a mayClose that asks the dialog, so a half-typed form is not lost', async () => {
+    settingsContrib.commands[0].run();
+    const props = fake.openedProps[0] as { model: { leave: () => Promise<boolean> } };
+    const options = fake.openedOptions[0] as { mayClose?: () => boolean | Promise<boolean> };
+    expect(typeof options.mayClose).toBe('function');
+    // Nothing on screen yet that could be lost: the host may close.
+    expect(await options.mayClose!()).toBe(true);
+    // The dialog fills its question in when it is shown.
+    props.model.leave = async () => false;
+    expect(await options.mayClose!()).toBe(false);
+    props.model.leave = async () => true;
+    expect(await options.mayClose!()).toBe(true);
+  });
+
+  it('profile.manage asks the same way', () => {
+    settingsContrib.commands[1].run();
+    expect(typeof (fake.openedOptions[0] as { mayClose?: unknown }).mayClose).toBe('function');
   });
 
   it('has an id that matches its file name, and the i18n namespace', () => {
