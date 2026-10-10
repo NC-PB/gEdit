@@ -625,6 +625,8 @@ def params_of(entry: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def param_named(entry: Optional[Dict[str, Any]], address: str) -> Optional[Dict[str, Any]]:
+    # B1: the first declaration answers for both blocks of a two-block cycle; its `position`
+    # and `unit` are the same in both (`gedit_nc.params_of_block` has the block's labels).
     for param in params_of(entry):
         written = param.get("address")
         if isinstance(written, str) and written.upper() == address.upper():

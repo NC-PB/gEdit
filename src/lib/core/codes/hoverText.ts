@@ -48,6 +48,7 @@ import { tokenizeLine } from '$lib/core/nc/tokenizer';
 import { parseNumber } from '$lib/core/nc/numbers';
 import { readingsOf, valueOf } from '$lib/core/machines/numbers';
 import { axisWordsOf, isAssignmentWord, lookupCode, lookupWord, normalizeCode } from './lookup';
+import { paramOfBlock, type CycleBlock } from './blocks';
 import { inspectBlock, type InspectInput, type InspectView, type InspectedCycle } from './inspect';
 import {
   blockEntries,
@@ -668,9 +669,9 @@ const FEED_KEY: Partial<Record<NonNullable<ResolvedClass>, string>> = {
 };
 
 /** The parameter `address` is of among `entries`, with the entry that declares it. */
-function paramOwner(address: string, entries: readonly (CodeEntry | null)[]): { param: CodeParam; entry: CodeEntry } | null {
+function paramOwner(x: LineInputs, address: string, entries: readonly (CodeEntry | null)[]): { param: CodeParam; entry: CodeEntry } | null {
   for (const entry of entries) {
-    const param = paramOf(entry, address);
+    const param = paramIn(x, entry, address);
     if (entry && param) return { param, entry };
   }
   return null;
@@ -684,6 +685,19 @@ interface LineInputs {
   blockCodes: readonly CodeEntry[];
   /** The block's cycle, when the word is one of its parameters. */
   cycleEntry: CodeEntry | null;
+  /**
+   * B1: the cycle the block itself writes and which of its two blocks this is, as the inspector
+   * found it (`InspectedCycle.part`). Of a two-block cycle a word is a parameter of this block
+   * only (`CodeParam.block`: `U` of the first `G71` block is the depth of cut, of the second the
+   * finishing allowance). Null when the block writes no cycle.
+   */
+  ownCycle: { entry: CodeEntry; block: CycleBlock | null } | null;
+}
+
+/** The parameter `address` is of `entry`; of the block's own two-block cycle, the one of this block (B1). */
+function paramIn(x: LineInputs, entry: CodeEntry | null, address: string): CodeParam | null {
+  if (entry !== null && x.ownCycle !== null && entry === x.ownCycle.entry) return paramOfBlock(entry, address, x.ownCycle.block);
+  return paramOf(entry, address);
 }
 
 function feedPart(x: LineInputs, address: string, t: Translate): string | null {
@@ -751,16 +765,16 @@ function axisParts(x: LineInputs, address: string, t: Translate): string[] {
   }
   if (what === 'data' && whatEntry) {
     // `G50 X100.`, `G4 X2.`: a value for the code, not a place the tool goes to.
-    const param = paramOf(whatEntry, address);
+    const param = paramIn(x, whatEntry, address);
     push(param ? say(t, 'param', { label: param.label, code: whatEntry.code }) : say(t, 'data', { code: whatEntry.code }));
     push(diameterPart(x, t));
     return parts;
   }
   const twin = incrementalAxisOf(view.profile, address);
-  const cycleParam = cycleEntry ? paramOf(cycleEntry, address) : null;
+  const cycleParam = cycleEntry ? paramIn(x, cycleEntry, address) : null;
   // `G28`, `G30`: the axis words are the intermediate point, in the program's coordinates,
   // absolute or incremental (the code declares them); `G53` alone is machine coordinates.
-  const via = what === 'machine' && whatEntry ? paramOf(whatEntry, address) : null;
+  const via = what === 'machine' && whatEntry ? paramIn(x, whatEntry, address) : null;
   if (via && whatEntry) push(say(t, 'param', { label: via.label, code: whatEntry.code }));
   if (twin !== null) push(say(t, 'incrementalOf', { axis: twin }));
   else if (!via) {
@@ -812,7 +826,7 @@ function contextLine(x: LineInputs, t: Translate): string | null {
   } else if (isAxisWord(profile, address)) {
     parts = axisParts(x, address, t);
   } else {
-    const owner = paramOwner(address, [cycleEntry, ...blockCodes, ...inForceEntries(after, blockCodes, view.db)]);
+    const owner = paramOwner(x, address, [cycleEntry, ...blockCodes, ...inForceEntries(after, blockCodes, view.db)]);
     if (owner) parts.push(say(t, 'param', { label: owner.param.label, code: owner.entry.code }));
   }
   if (parts.length === 0) return null;
@@ -919,6 +933,8 @@ function contextParagraphs(
   const reading = readWord(word.token, blockTokens, after, view);
   if (!reading) return [];
   const cycleEntry = word.kind === 'cycleParam' && inspection.cycle ? lookupCode(db, inspection.cycle.code) : null;
-  const x: LineInputs = { token: word.token, reading, after, view, blockCodes: blockEntries(blockTokens, db), cycleEntry };
+  const ownEntry = inspection.cycle && inspection.cycle.role !== 'calls' ? lookupCode(db, inspection.cycle.code) : null;
+  const ownCycle = ownEntry ? { entry: ownEntry, block: inspection.cycle?.part?.index ?? null } : null;
+  const x: LineInputs = { token: word.token, reading, after, view, blockCodes: blockEntries(blockTokens, db), cycleEntry, ownCycle };
   return [contextLine(x, t), valueParagraph(x, t)].filter((p): p is string => p !== null);
 }

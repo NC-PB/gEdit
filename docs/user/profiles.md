@@ -303,8 +303,10 @@ used.
 | `aliases` | Other spellings of the same code (`M021`). A spelling that differs only by capitals or leading zeros needs no alias |
 | `group` | A free word to sort by (`coolant`, `auxiliary`). The groups the built-in sets use for the modal state (`motion`, `plane`, `distance`, …) are best left to them |
 | `modal` | `true` when the code stays in force until another of its group replaces it |
-| `params` | The words the code takes: a list of `{ "address": "P", "label": "…" }`, with `"required": true`, `"min"` and `"max"` where they apply |
+| `params` | The words the code takes: a list of `{ "address": "P", "label": "…" }`, with `"required": true`, `"min"` and `"max"` where they apply. On a cycle written in two blocks, `"block": 1` or `"block": 2` says which block a word belongs to ([below](#cycles-written-in-two-blocks)) |
+| `blocks` | `2` for a cycle written in two blocks with the same code, such as the lathe's `G71` and `G76` |
 | `verify` | `true` marks an entry you are not sure about: it is kept out of the hover and marked in the completion list, as the built-in "not verified yet" entries are |
+| `review` | `"pending"` marks an entry that is still waiting for a review; the built-in sets use it for entries filled in from the control manuals. It changes nothing gEdit shows or does |
 
 An entry for a code the database already has **changes only the members it writes**. The
 others, the label included, stay as they are; `sets` is merged by key, and a list (such as
@@ -332,6 +334,39 @@ sets pitchFeed to false ("fanuc-lathe" has true); scale feed will scale its F li
 entry for a code the database does not have is a new code and needs its `label`. A set of
 your own can also list codes of its parent that its control does not have in a `remove` list,
 the way the built-in lathe set does for the mill's drilling cycles.
+
+#### Cycles written in two blocks
+
+The lathe roughing, pecking and threading cycles `G71` to `G76` are written in two blocks with
+the same code, and one letter can mean something else in each: in
+
+```
+G71 U2. R0.5
+G71 P100 Q200 U0.4 W0.1 F0.25
+```
+
+the first `U` is the depth of cut and the second the finishing allowance on X. The entry says
+so with `"blocks": 2`, and each of its `params` with `"block": 1` or `"block": 2`; a word without
+`block` belongs to both. A letter may be listed once for each block, each time with its own
+label:
+
+```json
+"params": [
+  { "address": "U", "label": "Depth of cut per pass", "block": 1 },
+  { "address": "R", "label": "Retract after each pass", "block": 1 },
+  { "address": "P", "label": "First profile block", "block": 2 },
+  { "address": "Q", "label": "Last profile block", "block": 2 },
+  { "address": "U", "label": "Finishing allowance on X", "block": 2 }
+]
+```
+
+gEdit takes a block for the **second** one when it writes a word that only the second block has
+(`P` and `Q` here), and for the first when it writes a word of the first block and none of
+those; the inspector and the hover then show that
+block's words with their labels. Everything else about a letter listed twice, `unit` included,
+has to be the same in both blocks: only the label may differ, or the second one is reported and
+left out. A `block` on a code without `"blocks": 2` is reported too. An entry with no `block` at
+all still works: the inspector then pairs the block with the one above or below it.
 
 ### Which set is in force
 

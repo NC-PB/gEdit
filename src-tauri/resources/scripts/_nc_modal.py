@@ -259,6 +259,66 @@ def tcp_of(entry: Optional[Dict[str, Any]]) -> Optional[str]:
     return value if value in ("on", "off") else None
 
 
+# -- B1 (plan "Two-block schema"; ``CodeEntry.blocks``, ``CodeParam.block``): the two blocks
+# of a lathe roughing or threading cycle (``G71 U2. R.5`` then ``G71 P10 Q20 U.4 W.1 F.25``).
+# The TypeScript twins are ``cycleBlockOf`` and ``paramsOfBlock`` in
+# ``src/lib/core/codes/blocks.ts``, held to the same cases (``tests/fixtures/codes/blocks.json``).
+#
+# A reader that only asks how a value is read or moved needs neither: an address declared once
+# per block has the same ``unit``, ``position``, ``axis`` and ``programNumber`` in both (the
+# loader refuses a database that says otherwise), so the first declaration answers for either
+# block. Only the label differs, and a script that shows it asks for the block here.
+
+
+def _block_params(entry: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    params = entry.get("params") if isinstance(entry, dict) else None
+    return [p for p in params if isinstance(p, dict) and isinstance(p.get("address"), str) and p["address"] != ""] if isinstance(params, list) else []
+
+
+def declares_blocks(entry: Optional[Dict[str, Any]]) -> bool:
+    """The entry is a two-block cycle that says which of its parameters belongs to which block."""
+    return isinstance(entry, dict) and entry.get("blocks") == 2 and any(p.get("block") in (1, 2) for p in _block_params(entry))
+
+
+def cycle_block_of(entry: Optional[Dict[str, Any]], written: Any) -> Optional[int]:
+    """Which block of a two-block cycle a block is that writes the addresses ``written``.
+
+    ``2`` when it writes an address declared for the second block only (``P``/``Q`` of
+    ``G71``, an axis word of ``G74``, ``X``/``Z`` of ``G76``); else ``1`` when it writes an
+    address declared for the first block (or for both); else ``None``: the block writes
+    nothing the entry declares, or the entry does not say which parameter belongs where.
+    """
+    if not declares_blocks(entry):
+        return None
+    first = set()
+    second = set()
+    for param in _block_params(entry):
+        address = param["address"].upper()
+        if param.get("block") != 2:
+            first.add(address)
+        if param.get("block") != 1:
+            second.add(address)
+    wrote_first = False
+    for word in written or ():
+        address = word.upper() if isinstance(word, str) else ""
+        if address in second and address not in first:
+            return 2
+        if address in first:
+            wrote_first = True
+    return 1 if wrote_first else None
+
+
+def params_of_block(entry: Optional[Dict[str, Any]], block: Optional[int]) -> List[Dict[str, Any]]:
+    """The parameters of ``entry`` that belong to ``block`` (declared for it or for both).
+
+    With ``block`` ``None``, or an entry that does not declare blocks, every parameter.
+    """
+    params = _block_params(entry)
+    if block not in (1, 2) or not declares_blocks(entry):
+        return params
+    return [p for p in params if p.get("block") is None or p.get("block") == block]
+
+
 #: P10 (§7.4 rule 15): the tool axis a bare axis letter names -> the working plane.
 _PLANE_OF_TOOL_AXIS = {"Z": "XY", "Y": "ZX", "X": "YZ"}
 

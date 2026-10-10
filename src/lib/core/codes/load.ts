@@ -4,7 +4,8 @@
 // database goes through this function exactly like a user database from `<config>/codes/`, so
 // the built-ins are checked by the same rules. Phase 3 (P3b prelude): the `templates` member is
 // read by `core/templates/load.ts` (`loadTemplates`), its problems reported here with the path
-// `templates[i]…`; `blocks: 2` marks a two-block cycle.
+// `templates[i]…`; `blocks: 2` marks a two-block cycle. B1: `CodeParam.block` (which block of
+// such a cycle a parameter belongs to, checked by `checkBlockParams`) and `review: 'pending'`.
 //
 // Two levels of strictness, because a bad user database must not stop the app:
 //   - the file itself has to be a database — an object with a `dialect` and a `codes`
@@ -178,10 +179,49 @@ function oneOf<T extends string>(
   return undefined;
 }
 
+/**
+ * B1: the members of a parameter that change how its value is read or moved. On a two-block
+ * entry an address declared once per block has to agree on all of them (`CodeParam.block`).
+ */
+const READING_MEMBERS = ['unit', 'position', 'axis', 'programNumber'] as const;
+
+/**
+ * B1 (`CodeParam.block`): on a two-block entry, an address is declared at most once per block
+ * (a declaration without `block` counts for both), and two declarations of one address agree on
+ * `READING_MEMBERS`, so a reader that does not know the block still reads the value right. A
+ * declaration that breaks either rule is reported and dropped; the first one stays.
+ */
+function checkBlockParams(params: CodeParam[], path: string, report: (p: CodeDbProblem) => void): CodeParam[] {
+  const kept: CodeParam[] = [];
+  params.forEach((param, i) => {
+    const blocks = param.block === undefined ? [1, 2] : [param.block];
+    const others = kept.filter((k) => k.address === param.address);
+    const clash = others.find((k) => k.block === undefined || blocks.includes(k.block));
+    if (clash) {
+      report({
+        path: `${path}[${i}]`,
+        message: `parameter ${param.address} is declared twice for the same block; declare it once per block with "block": 1 and "block": 2`,
+      });
+      return;
+    }
+    const differs = others.length > 0 ? READING_MEMBERS.find((m) => others[0][m] !== param[m]) : undefined;
+    if (differs !== undefined) {
+      report({
+        path: `${path}[${i}].${differs}`,
+        message: `parameter ${param.address} has to have the same ${differs} in both blocks; only its label may differ`,
+      });
+      return;
+    }
+    kept.push(param);
+  });
+  return kept;
+}
+
 function readParams(
   raw: unknown,
   path: string,
   report: (p: CodeDbProblem) => void,
+  twoBlocks = false,
 ): CodeParam[] | undefined {
   if (raw === undefined) return undefined;
   if (!Array.isArray(raw)) {
@@ -228,9 +268,16 @@ function readParams(
     // P11: a parameter whose value names a program, for search; unknown values are dropped.
     const programNumber = oneOf(item.programNumber, PROGRAM_NUMBERS, `${at}.programNumber`, report);
     if (programNumber !== undefined) param.programNumber = programNumber;
+    // B1: the block of a two-block cycle this parameter belongs to; only on such an entry.
+    if (item.block !== undefined) {
+      if (item.block !== 1 && item.block !== 2) report({ path: `${at}.block`, message: 'block has to be 1 or 2' });
+      else if (!twoBlocks) report({ path: `${at}.block`, message: 'block needs "blocks": 2 on the entry' });
+      else param.block = item.block;
+    }
     out.push(param);
   });
-  return out.length > 0 ? out : undefined;
+  const checked = twoBlocks ? checkBlockParams(out, path, report) : out;
+  return checked.length > 0 ? checked : undefined;
 }
 
 function readAddresses(
@@ -388,6 +435,11 @@ function readEntry(
   if (flag(raw.call, `${path}.call`, report)) entry.call = true;
   if (flag(raw.shift, `${path}.shift`, report)) entry.shift = true;
   if (flag(raw.verify, `${path}.verify`, report)) entry.verify = true;
+  // B1: written from the manuals and not reviewed by the owner yet; changes nothing else.
+  if (raw.review !== undefined) {
+    if (raw.review === 'pending') entry.review = 'pending';
+    else report({ path: `${path}.review`, message: 'review has to be "pending"; read as reviewed' });
+  }
   // Phase 3 (P3b prelude): a cycle written in two blocks (the cycle form refuses it).
   if (raw.blocks !== undefined) {
     if (raw.blocks === 2) entry.blocks = 2;
@@ -395,7 +447,7 @@ function readEntry(
   }
   const description = str(raw.description);
   if (description) entry.description = description;
-  const params = readParams(raw.params, `${path}.params`, report);
+  const params = readParams(raw.params, `${path}.params`, report, entry.blocks === 2);
   if (params) entry.params = params;
   const sets = readSets(raw.sets, `${path}.sets`, report);
   if (sets) entry.sets = sets;

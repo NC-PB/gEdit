@@ -86,6 +86,23 @@ export interface CodeParam {
    * Absent: the value names no program. Only search reads it; a replace never follows it.
    */
   programNumber?: 'plain' | 'packed';
+  /**
+   * B1 (plan "Two-block schema", owner default). On an entry with `blocks: 2` only: the block of
+   * the cycle this parameter belongs to (`G71 U… R…` is block 1, `G71 P… Q… U… W… F…` block 2).
+   * Absent: it belongs to both blocks with the same meaning. An address may be declared once per
+   * block, each time with its own label (`U` of `G71`: the depth of cut in the first block, the
+   * finishing allowance in the second); the members that change how a value is read or moved
+   * (`unit`, `position`, `axis`, `programNumber`) have to agree between the two, so every reader
+   * that asks only "what is `U` of `G71`" stays right in both blocks (`core/codes/load.ts`
+   * refuses a second declaration that disagrees).
+   *
+   * Which block a written block is (`cycleBlockOf`, `core/codes/blocks.ts`; Python
+   * `gedit_nc.cycle_block_of`): the second when it writes an address declared for the second
+   * block only (`P`/`Q` of `G71`, an axis word of `G74`, `X`/`Z` of `G76`, as the manuals
+   * decide it), else the first when it writes an address declared for the first block; else
+   * unknown, and the inspector falls back to its pairing of neighbouring blocks.
+   */
+  block?: 1 | 2;
 }
 
 /**
@@ -210,8 +227,10 @@ export interface CodeEntry {
    * Phase 3 (P3b prelude; Phase 3 plan §7 #227; the first half of the NC-14 flag). `2`: the cycle
    * is written in two blocks with the same code (the lathe roughing and threading cycles in their
    * two-block form, `G71 U… R…` then `G71 P… Q… U… W… F…`). The cycle form (P3.8) refuses such a
-   * cycle, because nothing says yet which parameter belongs to which block (`CodeParam.block`,
-   * backlog); the inspector keeps its pairing heuristic. Set by P3.6 from the manuals.
+   * cycle: it writes one block. B1: `CodeParam.block` says which parameter belongs to which
+   * block, the inspector and the hover read it (`core/codes/blocks.ts`), and the pairing of
+   * neighbouring blocks is only the fallback for an entry without it. Set by P3.6 from the
+   * manuals.
    */
   blocks?: 2;
   /** Other spellings that mean the same, e.g. `['G01']`. */
@@ -262,6 +281,15 @@ export interface CodeEntry {
   params?: CodeParam[];
   /** Not confirmed against the syntax notes yet: never shown in hover (WP3.6). */
   verify?: boolean;
+  /**
+   * B1 (owner decision of 2026-10-10: code data filled from the manuals is marked for the owner's
+   * later review, like the templates' `review`). `'pending'`: written or changed from the control
+   * manuals and not reviewed by the owner yet; removed entry by entry by that review. Unlike
+   * `verify` it changes nothing the app shows or computes: the entry is used as written. Read by
+   * the loader only (any other value is reported and dropped); it is text, not meaning, so a
+   * user file that writes it is not listed as a change of meaning.
+   */
+  review?: 'pending';
   /** P6. What this code switches on, for the modal interpreter (AD-19). */
   sets?: CodeSets;
   /**

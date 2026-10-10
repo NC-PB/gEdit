@@ -17,7 +17,9 @@
       { "code": "G15", "declared": {"frame": "close"}, "reads": {"axisWords": null, "frame": "close", "speedLimitBound": null, "tcp": null} },
       { "code": "G16", "declared": {"frame": "open"}, "reads": {"axisWords": null, "frame": "open", "speedLimitBound": null, "tcp": null} },
       { "code": "G28", "declared": {"axisWords": "machine"}, "reads": {"axisWords": "machine", "frame": null, "speedLimitBound": null, "tcp": null} },
+      { "code": "G29", "declared": {"axisWords": "machine"}, "reads": {"axisWords": "machine", "frame": null, "speedLimitBound": null, "tcp": null} },
       { "code": "G30", "declared": {"axisWords": "machine"}, "reads": {"axisWords": "machine", "frame": null, "speedLimitBound": null, "tcp": null} },
+      { "code": "G30.1", "declared": {"axisWords": "machine"}, "reads": {"axisWords": "machine", "frame": null, "speedLimitBound": null, "tcp": null} },
       { "code": "G43.4", "declared": {"sets": {"tcp": "on"}}, "reads": {"axisWords": null, "frame": null, "speedLimitBound": null, "tcp": "on"} },
       { "code": "G43.5", "declared": {"sets": {"tcp": "on"}}, "reads": {"axisWords": null, "frame": null, "speedLimitBound": null, "tcp": "on"} },
       { "code": "G49", "declared": {"sets": {"tcp": "off"}}, "reads": {"axisWords": null, "frame": null, "speedLimitBound": null, "tcp": "off"} },
@@ -36,13 +38,17 @@
       { "code": "G68.4", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null, "tcp": null} },
       { "code": "G69", "declared": {"frame": "close"}, "reads": {"axisWords": null, "frame": "close", "speedLimitBound": null, "tcp": null} },
       { "code": "G69.1", "declared": {"frame": "close"}, "reads": {"axisWords": null, "frame": "close", "speedLimitBound": null, "tcp": null} },
-      { "code": "G92", "declared": {"axisWords": "data", "shift": true, "sets": {"speedLimit": true}}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": "upper", "tcp": null} }
+      { "code": "G92", "declared": {"axisWords": "data", "shift": true, "sets": {"speedLimit": true}}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": "upper", "tcp": null} },
+      { "code": "G92.1", "declared": {"axisWords": "data", "shift": true}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null, "tcp": null} }
     ],
     "fanuc-lathe": [
       { "code": "G4", "declared": {"axisWords": "data"}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null, "tcp": null} },
       { "code": "G50", "declared": {"axisWords": "data", "shift": true, "sets": {"speedLimit": true}}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": "upper", "tcp": null} },
+      { "code": "G50.3", "declared": {"axisWords": "data", "shift": true}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null, "tcp": null} },
       { "code": "G68", "declared": {"frame": "open"}, "reads": {"axisWords": null, "frame": "open", "speedLimitBound": null, "tcp": null} },
+      { "code": "G68.1", "declared": {"axisWords": "data", "frame": "open"}, "reads": {"axisWords": "data", "frame": "open", "speedLimitBound": null, "tcp": null} },
       { "code": "G69", "declared": {"frame": "close"}, "reads": {"axisWords": null, "frame": "close", "speedLimitBound": null, "tcp": null} },
+      { "code": "G69.1", "declared": {"frame": "close"}, "reads": {"axisWords": null, "frame": "close", "speedLimitBound": null, "tcp": null} },
       { "code": "G71", "declared": {"axisWords": "data"}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null, "tcp": null} },
       { "code": "G72", "declared": {"axisWords": "data"}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null, "tcp": null} },
       { "code": "G73", "declared": {"axisWords": "data"}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null, "tcp": null} },
@@ -50,7 +56,8 @@
     ],
     "fanuc-lathe-b": [
       { "code": "G50", "declared": {"axisWords": "data", "frame": "close", "sets": {"speedLimit": true}}, "reads": {"axisWords": "data", "frame": "close", "speedLimitBound": "upper", "tcp": null} },
-      { "code": "G92", "declared": {"axisWords": "data", "shift": true, "sets": {"speedLimit": true}}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": "upper", "tcp": null} }
+      { "code": "G92", "declared": {"axisWords": "data", "shift": true, "sets": {"speedLimit": true}}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": "upper", "tcp": null} },
+      { "code": "G92.1", "declared": {"axisWords": "data", "shift": true}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null, "tcp": null} }
     ],
     "heidenhain": [
       { "code": "BLK FORM", "declared": {"axisWords": "data"}, "reads": {"axisWords": "data", "frame": null, "speedLimitBound": null, "tcp": null} },

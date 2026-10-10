@@ -131,8 +131,11 @@ export interface ResolveCodeDbOptions {
   onEntryProblem?: (dialect: string, p: CodeDbProblem, index: number) => void;
 }
 
-/** Members that are text for a reader, not meaning for the scripts: never reported. */
-const TEXT_MEMBERS = new Set(['code', 'label', 'description', 'replace']);
+/**
+ * Members that are text for a reader, not meaning for the scripts: never reported. B1: `review`,
+ * the owner's review mark, changes nothing the app computes.
+ */
+const TEXT_MEMBERS = new Set(['code', 'label', 'description', 'replace', 'review']);
 
 /** `false`, an empty list and an absent member read the same in `loadCodeDb`. */
 function meaningOf(value: unknown): string | undefined {

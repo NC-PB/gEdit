@@ -51,6 +51,23 @@ function viewOf(profileId: string, o: { name?: string; params?: Partial<MachineP
   return { profile: checked.profile, cp: compileProfile(checked.profile), db: loadCodeDb(DBS[applied.codes]), machine: eff };
 }
 
+/**
+ * B1: the view with every `CodeParam.block` taken out, as a user database written before it would
+ * have them: one declaration per address (the first), so the inspector has to fall back to
+ * pairing neighbouring blocks.
+ */
+function withoutBlocks(view: InspectView): InspectView {
+  const codes = view.db.codes.map((entry) => {
+    if (entry.blocks !== 2 || !entry.params) return entry;
+    const seen = new Set<string>();
+    const params = entry.params
+      .filter((p) => !seen.has(p.address) && (seen.add(p.address), true))
+      .map(({ block: _block, ...p }) => p);
+    return { ...entry, params };
+  });
+  return { ...view, db: { ...view.db, codes } };
+}
+
 function mv(code: string, line = 0, from: ModalValue['from'] = 'profile'): ModalValue {
   return line === 0 ? { code, line, assumed: true, from } : { code, line, assumed: false };
 }
@@ -280,24 +297,31 @@ describe('a Fanuc lathe (G-code system A)', () => {
   it('shows the two blocks of G76, each with its own parameters, the thread height among them, and F as the lead', () => {
     const first = inspectBlock(doc(text, 7), view, state(base), state({ ...base, block: { cycle: 'G76', pitchFeed: true } }));
     expect(first.cycle).toMatchObject({ code: 'G76', line: 7, role: 'runs', part: { index: 1, of: 2 } });
+    // B1 (`CodeParam.block`): the first block lists the parameters of the first block only.
     const written1 = Object.fromEntries(first.cycle!.params.map((p) => [p.param.address, p.written]));
-    expect(written1).toEqual({ P: '020060', Q: '100', R: '0.05', X: null, Z: null, F: null });
+    expect(written1).toEqual({ P: '020060', Q: '100', R: '0.05' });
     expect(row(first, 'P020060')).toMatchObject({ kind: 'cycleParam', value: { cls: 'count', effective: null } });
+    expect(row(first, 'P020060').meaning).toMatch(/packed/);
+    expect(row(first, 'R0.05').meaning).toMatch(/^Finishing allowance/);
 
     const after2 = state({ ...base, block: { cycle: 'G76', pitchFeed: true } });
     const second = inspectBlock(doc(text, 8), view, state(base), after2);
     expect(second.cycle).toMatchObject({ code: 'G76', line: 8, role: 'runs', part: { index: 2, of: 2 } });
     const params2 = second.cycle!.params.map((p) => [p.param.address, p.written, p.line]);
     expect(params2).toEqual([
+      ['X', '27.6', 8],
+      ['U', null, null],
+      ['Z', '-30.', 8],
+      ['W', null, null],
+      ['R', '0', 8],
       ['P', '1200', 8],
       ['Q', '300', 8],
-      ['R', '0', 8],
-      ['X', '27.6', 8],
-      ['Z', '-30.', 8],
       ['F', '1.5', 8],
     ]);
-    // The database's label says which block's P is the thread height.
-    expect(second.cycle!.params[0].param.label).toMatch(/thread height/);
+    // The second block's P is the thread height, its R the taper (B1: one label per block).
+    expect(second.cycle!.params.find((p) => p.param.address === 'P')?.param.label).toMatch(/^Thread height/);
+    expect(row(second, 'P1200').meaning).toMatch(/^Thread height/);
+    expect(row(second, 'R0').meaning).toMatch(/^Taper/);
     const f = row(second, 'F1.5');
     expect(f).toMatchObject({ kind: 'cycleParam', value: { cls: 'feedPerRev', effective: '1.5', unit: 'mm/rev' } });
     expect(f.notes).toEqual([{ key: 'inspector.note.lead', params: { code: 'G76' } }]);
@@ -305,8 +329,14 @@ describe('a Fanuc lathe (G-code system A)', () => {
     expectKnownKeys(second);
   });
 
-  it('a one-shot cycle alone is no pair', () => {
+  it('knows a second block that stands alone by its own words (its first block is in the machine parameters)', () => {
     const r = inspectBlock(doc('G76 X27.6 Z-30. P1200 Q300 F1.5', 1), view, null, state({ ...base, block: { cycle: 'G76', pitchFeed: true } }));
+    expect(r.cycle?.part).toEqual({ index: 2, of: 2 });
+    expect(row(r, 'P1200').meaning).toMatch(/^Thread height/);
+  });
+
+  it('pairs neighbouring blocks only for an entry that does not say which block a word belongs to', () => {
+    const r = inspectBlock(doc('G76 X27.6 Z-30. P1200 Q300 F1.5', 1), withoutBlocks(view), null, state({ ...base, block: { cycle: 'G76', pitchFeed: true } }));
     expect(r.cycle?.part).toBeUndefined();
   });
 
@@ -577,8 +607,14 @@ describe('the budget (X17: the inspector updates within 30 ms per cursor move)',
 // ---------------------------------------------------------------------------
 
 /** The inspection of the block at `line`, with the states the real index answers. */
-function inspectReal(profileId: string, text: string, line: number, o: Parameters<typeof viewOf>[1] = null): BlockInspection {
-  const view = viewOf(profileId, o);
+function inspectReal(
+  profileId: string,
+  text: string,
+  line: number,
+  o: Parameters<typeof viewOf>[1] = null,
+  change: (view: InspectView) => InspectView = (v) => v,
+): BlockInspection {
+  const view = change(viewOf(profileId, o));
   const lines = text.split('\n');
   const index = new ModalIndex(view.cp, view.db);
   index.reset(lines.length, (n) => lines[n - 1] ?? '');
@@ -715,10 +751,33 @@ describe('the two blocks of a lathe cycle over a comment or a blank line', () =>
     });
   }
 
-  it('does not pair across a block that moves', () => {
+  it('does not pair across a block that moves (an entry without CodeParam.block)', () => {
     const text = 'G71 U2. R1.\nG00 X40.\nG71 P10 Q20 U0.5 W0.1 F0.25';
-    expect(inspectReal('fanuc-lathe', text, 1).cycle?.part).toBeUndefined();
-    expect(inspectReal('fanuc-lathe', text, 3).cycle?.part).toBeUndefined();
+    expect(inspectReal('fanuc-lathe', text, 1, null, withoutBlocks).cycle?.part).toBeUndefined();
+    expect(inspectReal('fanuc-lathe', text, 3, null, withoutBlocks).cycle?.part).toBeUndefined();
+  });
+
+  it('tells the blocks apart by their own words wherever they stand (B1, CodeParam.block)', () => {
+    const text = 'G71 U2. R1.\nG00 X40.\nG71 P10 Q20 U0.5 W0.1 F0.25';
+    const first = inspectReal('fanuc-lathe', text, 1);
+    const second = inspectReal('fanuc-lathe', text, 3);
+    expect(first.cycle?.part).toEqual({ index: 1, of: 2 });
+    expect(second.cycle?.part).toEqual({ index: 2, of: 2 });
+    // The same U is the depth of cut in the first block and the allowance on X in the second.
+    expect(row(first, 'U2.').meaning).toMatch(/^Depth of cut per pass, a radius value/);
+    expect(row(second, 'U0.5').meaning).toMatch(/^Finishing allowance on X, read like X/);
+    expect(first.cycle?.params.map((p) => p.param.address)).toEqual(['U', 'R']);
+    expect(second.cycle?.params.map((p) => p.param.address)).toEqual(['P', 'Q', 'U', 'W', 'F']);
+    // A first block without R (its retract stays in force) is still the first: U alone.
+    expect(inspectReal('fanuc-lathe', 'G71 U1.5', 1).cycle?.part).toEqual({ index: 1, of: 2 });
+  });
+
+  it('reads the R of G74 by block: the back-off in the first, the relief at the bottom in the second', () => {
+    const text = 'G74 R0.5\nG74 X0 Z-30. Q5000 R0.2 F0.1\nG74 Z-30. Q5000 F0.1';
+    expect(row(inspectReal('fanuc-lathe', text, 1), 'R0.5').meaning).toMatch(/^Back-off after each peck/);
+    expect(row(inspectReal('fanuc-lathe', text, 2), 'R0.2').meaning).toMatch(/^Relief at the bottom/);
+    // Without X and P it is a peck drilling block, still the second (it writes Z, Q and F).
+    expect(inspectReal('fanuc-lathe', text, 3).cycle?.part).toEqual({ index: 2, of: 2 });
   });
 });
 

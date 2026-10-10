@@ -4,6 +4,7 @@
   "extends": "fanuc",
   "remove": [
     "G43",
+    "G43.1",
     "G43.4",
     "G43.5",
     "G44",
@@ -13,6 +14,7 @@
     "G84.3",
     "G86",
     "G91",
+    "G92.1",
     "G95"
   ],
   "addresses": {
@@ -161,6 +163,15 @@
       "description": "Sets the coordinate system without moving. With an S word it gives the highest spindle speed the control may use for constant surface speed; write it in a block of its own in front of G96. G-code system B uses G92 for this."
     },
     {
+      "code": "G50.3",
+      "group": "nonmodal",
+      "axisWords": "data",
+      "shift": true,
+      "review": "pending",
+      "label": "Work coordinate system preset",
+      "description": "Puts the work coordinate system back where its work offset says, after a manual move or a shift has displaced it. The block names the axes to reset, each with 0; an axis it does not name keeps its coordinates. This is the G-code system A spelling; systems B and C write G92.1."
+    },
+    {
       "code": "G68",
       "group": "frame",
       "frame": "open",
@@ -168,11 +179,46 @@
       "description": "On a lathe with two opposed turrets, mirrors the moves so that the second turret machines the same shape (mirror image, or symmetric machining). G69 ends it. A machining centre uses the same number for a rotation of the coordinate system."
     },
     {
+      "code": "G68.1",
+      "group": "frame",
+      "axisWords": "data",
+      "frame": "open",
+      "review": "pending",
+      "label": "Coordinate system rotation",
+      "description": "Turns the coordinates of the following blocks about a centre in the selected plane by the angle R, positive counter-clockwise (absolute, unless a machine parameter makes it incremental). The two axis words of the plane give the centre, always absolute; without them the tool position is the centre, and without R a machine parameter gives the angle. With X, Y, Z and I, J, K the same code starts a three-dimensional coordinate conversion about the direction I, J, K. G69.1 ends both. The first move after G68.1 and after G69.1 has to be absolute.",
+      "params": [
+        { "address": "R", "label": "Rotation angle, positive counter-clockwise", "unit": "angle" },
+        {
+          "address": "I",
+          "label": "Rotation axis direction, X component (three-dimensional conversion)",
+          "unit": "count"
+        },
+        {
+          "address": "J",
+          "label": "Rotation axis direction, Y component (three-dimensional conversion)",
+          "unit": "count"
+        },
+        {
+          "address": "K",
+          "label": "Rotation axis direction, Z component (three-dimensional conversion)",
+          "unit": "count"
+        }
+      ]
+    },
+    {
       "code": "G69",
       "group": "frame",
       "frame": "close",
       "label": "Mirror image for the second turret off",
       "description": "Ends the mirror image that G68 started. A machining centre uses the same number to end a rotation of the coordinate system."
+    },
+    {
+      "code": "G69.1",
+      "group": "frame",
+      "frame": "close",
+      "review": "pending",
+      "label": "Coordinate system rotation off",
+      "description": "Ends G68.1 (the rotation or the three-dimensional conversion) and the tilted working plane of G68.2, and goes back to the coordinates of the program. It may stand in a block with other words; the first move after it has to be absolute."
     },
     {
       "code": "G70",
@@ -203,37 +249,25 @@
       "blocks": 2,
       "axisWords": "data",
       "sets": { "cycle": "start" },
+      "review": "pending",
       "label": "Roughing cycle along Z",
-      "description": "Roughs an outside or inside contour in passes along Z and leaves an allowance for the finishing cycle. It is written in two blocks: depth of cut and retract first, then the profile range and the allowances.",
+      "description": "Roughs an outside or inside contour in passes along Z and leaves a finishing allowance for G70. Written in two blocks: the depth of cut and the retract first, then the profile range, the allowances and the feed. The block with P and Q runs the cycle; the same U means the depth of cut in the first block and the allowance on X in the second. The first block's values are machine parameters that the block overwrites, so they stay in force until written again. The addresses are those of the usual ZX plane (G18); in another plane the control reads other ones.",
       "params": [
+        { "address": "U", "label": "Depth of cut per pass, a radius value without sign", "block": 1 },
+        { "address": "R", "label": "Retract after each pass, a radius value without sign", "block": 1 },
+        { "address": "P", "label": "Block number of the first profile block", "min": 0, "unit": "count", "block": 2 },
+        { "address": "Q", "label": "Block number of the last profile block", "min": 0, "unit": "count", "block": 2 },
         {
           "address": "U",
-          "label": "Depth of cut per pass in the first block (a radius value), allowance on X in the second (a diameter, its sign says outside or inside)"
+          "label": "Finishing allowance on X, read like X (a diameter value when X is a diameter); its sign gives the side",
+          "block": 2
         },
-        {
-          "address": "R",
-          "label": "Retract between the passes, in the first block"
-        },
-        {
-          "address": "P",
-          "label": "Block number of the first profile block",
-          "min": 0,
-          "unit": "count"
-        },
-        {
-          "address": "Q",
-          "label": "Block number of the last profile block",
-          "min": 0,
-          "unit": "count"
-        },
-        {
-          "address": "W",
-          "label": "Allowance on Z"
-        },
+        { "address": "W", "label": "Finishing allowance on Z; its sign gives the side", "block": 2 },
         {
           "address": "F",
-          "label": "Roughing feed",
-          "min": 0
+          "label": "Roughing feed (a feed inside the profile blocks is not used)",
+          "min": 0,
+          "block": 2
         }
       ]
     },
@@ -243,37 +277,25 @@
       "blocks": 2,
       "axisWords": "data",
       "sets": { "cycle": "start" },
+      "review": "pending",
       "label": "Roughing cycle along X (facing)",
-      "description": "The same as G71, but the passes run along X, so it roughs a face instead of a diameter. The depth of cut in the first block is a W value.",
+      "description": "The same as G71, but the passes run along X, so it roughs a face instead of a diameter. Written in two blocks: the depth of cut (W) and the retract first, then the profile range, the allowances and the feed. The block with P and Q runs the cycle; the same W means the depth of cut in the first block and the allowance on Z in the second. The first block's values are machine parameters that the block overwrites, so they stay in force until written again. The addresses are those of the usual ZX plane (G18); in another plane the control reads other ones.",
       "params": [
-        {
-          "address": "W",
-          "label": "Depth of cut per pass in the first block, allowance on Z in the second"
-        },
-        {
-          "address": "R",
-          "label": "Retract between the passes, in the first block"
-        },
-        {
-          "address": "P",
-          "label": "Block number of the first profile block",
-          "min": 0,
-          "unit": "count"
-        },
-        {
-          "address": "Q",
-          "label": "Block number of the last profile block",
-          "min": 0,
-          "unit": "count"
-        },
+        { "address": "W", "label": "Depth of cut per pass, a radius value without sign", "block": 1 },
+        { "address": "R", "label": "Retract after each pass, a radius value without sign", "block": 1 },
+        { "address": "P", "label": "Block number of the first profile block", "min": 0, "unit": "count", "block": 2 },
+        { "address": "Q", "label": "Block number of the last profile block", "min": 0, "unit": "count", "block": 2 },
         {
           "address": "U",
-          "label": "Allowance on X (a diameter, its sign says outside or inside)"
+          "label": "Finishing allowance on X, read like X (a diameter value when X is a diameter); its sign gives the side",
+          "block": 2
         },
+        { "address": "W", "label": "Finishing allowance on Z; its sign gives the side", "block": 2 },
         {
           "address": "F",
-          "label": "Roughing feed",
-          "min": 0
+          "label": "Roughing feed (a feed inside the profile blocks is not used)",
+          "min": 0,
+          "block": 2
         }
       ]
     },
@@ -283,39 +305,34 @@
       "blocks": 2,
       "axisWords": "data",
       "sets": { "cycle": "start" },
+      "review": "pending",
       "label": "Pattern repeating cycle",
-      "description": "Walks the profile again and again, each time a little closer to the finished shape. It suits a blank that is already near the final form, such as a casting or a forging. Two blocks: the stock to remove and the number of passes first, then the profile range and the allowances.",
+      "description": "Walks the profile again and again, each time a little closer to the finished shape. It suits a blank that is already near the final form, such as a casting or a forging. Written in two blocks: the relief on X and Z and the number of passes first, then the profile range, the allowances and the feed. The block with P and Q runs the cycle. The first block's values are machine parameters that the block overwrites, so they stay in force until written again. The addresses are those of the usual ZX plane (G18); in another plane the control reads other ones.",
       "params": [
         {
           "address": "U",
-          "label": "Stock to remove on X in the first block, allowance on X in the second"
+          "label": "Relief on X: how far the first pass stands off the finished shape, a radius value with sign",
+          "block": 1
         },
         {
           "address": "W",
-          "label": "Stock to remove on Z in the first block, allowance on Z in the second"
+          "label": "Relief on Z: how far the first pass stands off the finished shape, with sign",
+          "block": 1
         },
+        { "address": "R", "label": "Number of roughing passes", "min": 0, "unit": "count", "block": 1 },
+        { "address": "P", "label": "Block number of the first profile block", "min": 0, "unit": "count", "block": 2 },
+        { "address": "Q", "label": "Block number of the last profile block", "min": 0, "unit": "count", "block": 2 },
         {
-          "address": "R",
-          "label": "Number of passes in the first block",
-          "min": 0,
-          "unit": "count"
+          "address": "U",
+          "label": "Finishing allowance on X, read like X (a diameter value when X is a diameter); its sign gives the side",
+          "block": 2
         },
-        {
-          "address": "P",
-          "label": "Block number of the first profile block",
-          "min": 0,
-          "unit": "count"
-        },
-        {
-          "address": "Q",
-          "label": "Block number of the last profile block",
-          "min": 0,
-          "unit": "count"
-        },
+        { "address": "W", "label": "Finishing allowance on Z; its sign gives the side", "block": 2 },
         {
           "address": "F",
-          "label": "Roughing feed",
-          "min": 0
+          "label": "Roughing feed (a feed inside the profile blocks is not used)",
+          "min": 0,
+          "block": 2
         }
       ]
     },
@@ -326,38 +343,35 @@
       "pitchFeedAmbiguous": true,
       "tappingElsewhere": true,
       "sets": { "cycle": "start" },
+      "review": "pending",
       "label": "Face pecking cycle",
-      "description": "Drills or grooves into the face in pecks, pulling back by R between them so the chips clear. Written in two blocks: the retract first, then the end point and the steps. On a lathe it is not a tapping cycle, so F is an ordinary feed — but the same number is the left-hand tapping cycle on a mill, where F is the pitch. gEdit scales neither the F of such a block nor the spindle speed it runs at: refusing a real pecking feed costs one edit by hand, scaling a pitch or the speed of a tap cuts a different thread.",
+      "description": "Drills or grooves into the face in pecks along Z, backing off between them so the chips break. Written in two blocks: the back-off amount first, then the end point, the steps, the relief at the bottom and the feed. The block with an axis word runs the cycle; R means the back-off in the first block and the relief at the bottom in the second. Without X (U) and P it only pecks along Z: a deep-hole drilling cycle. On a lathe it is not a tapping cycle, so F is an ordinary feed, but the same number is the left-hand tapping cycle on a mill, where F is the pitch. gEdit scales neither the F of such a block nor the spindle speed it runs at: refusing a real pecking feed costs one edit by hand, scaling a pitch or the speed of a tap cuts a different thread.",
       "params": [
-        {
-          "address": "R",
-          "label": "Retract between the pecks, in the first block"
-        },
-        {
-          "address": "X",
-          "label": "End diameter of the last groove; leave it out for a hole on centre"
-        },
-        {
-          "address": "Z",
-          "label": "Depth along Z"
-        },
+        { "address": "R", "label": "Back-off after each peck, a radius value without sign", "block": 1 },
+        { "address": "X", "label": "End point on X: the position of the last groove", "block": 2 },
+        { "address": "U", "label": "End point on X, as a distance from the start point", "block": 2 },
+        { "address": "Z", "label": "End point on Z: the depth", "block": 2 },
+        { "address": "W", "label": "End point on Z, as a distance from the start point", "block": 2 },
         {
           "address": "P",
-          "label": "Step on X between the grooves, in least increments without a point (µm on a metric IS-B machine)",
+          "label": "Step on X between the grooves, a radius value in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
-          "unit": "increment"
+          "unit": "increment",
+          "block": 2
         },
         {
           "address": "Q",
-          "label": "Peck along Z, in least increments without a point (µm on a metric IS-B machine)",
+          "label": "Depth of each peck along Z, in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
-          "unit": "increment"
+          "unit": "increment",
+          "block": 2
         },
         {
-          "address": "F",
-          "label": "Feed",
-          "min": 0
-        }
+          "address": "R",
+          "label": "Relief at the bottom of the cut, a radius value; normally positive, with X and P left out its sign gives the direction",
+          "block": 2
+        },
+        { "address": "F", "label": "Feed", "min": 0, "block": 2 }
       ]
     },
     {
@@ -365,38 +379,35 @@
       "group": "cycle",
       "blocks": 2,
       "sets": { "cycle": "start" },
+      "review": "pending",
       "label": "Grooving cycle along X",
-      "description": "The same as G74 turned through ninety degrees: it pecks into a diameter and steps along Z, which is how a wide groove is cut with a narrow insert.",
+      "description": "The same as G74 turned through ninety degrees: it pecks into a diameter along X and steps along Z, which is how a wide groove is cut with a narrow insert. Written in two blocks: the back-off amount first, then the end point, the steps, the relief at the bottom and the feed. The block with an axis word runs the cycle; R means the back-off in the first block and the relief at the bottom in the second. Without Z (W) and Q it cuts one groove, or parts off.",
       "params": [
-        {
-          "address": "R",
-          "label": "Retract between the pecks, in the first block"
-        },
-        {
-          "address": "X",
-          "label": "Groove bottom diameter"
-        },
-        {
-          "address": "Z",
-          "label": "End point of the last groove along Z"
-        },
+        { "address": "R", "label": "Back-off after each peck, a radius value without sign", "block": 1 },
+        { "address": "X", "label": "End point on X: the bottom of the groove", "block": 2 },
+        { "address": "U", "label": "End point on X, as a distance from the start point", "block": 2 },
+        { "address": "Z", "label": "End point on Z: the position of the last groove", "block": 2 },
+        { "address": "W", "label": "End point on Z, as a distance from the start point", "block": 2 },
         {
           "address": "P",
-          "label": "Peck on X, in least increments without a point (µm on a metric IS-B machine)",
+          "label": "Depth of each peck on X, a radius value in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
-          "unit": "increment"
+          "unit": "increment",
+          "block": 2
         },
         {
           "address": "Q",
           "label": "Step along Z between the grooves, in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
-          "unit": "increment"
+          "unit": "increment",
+          "block": 2
         },
         {
-          "address": "F",
-          "label": "Feed",
-          "min": 0
-        }
+          "address": "R",
+          "label": "Relief at the bottom of the cut, a radius value; normally positive, with Z and Q left out its sign gives the direction",
+          "block": 2
+        },
+        { "address": "F", "label": "Feed", "min": 0, "block": 2 }
       ]
     },
     {
@@ -405,39 +416,55 @@
       "blocks": 2,
       "pitchFeed": true,
       "sets": { "cycle": "start" },
+      "review": "pending",
       "label": "Multi-pass threading cycle",
-      "description": "Cuts a thread in several passes, taking less material each time. Written in two blocks: the finishing passes, the pull-out chamfer and the insert angle packed into P, the smallest cut depth and the finish allowance first; then the thread end, the taper, the thread height, the first cut depth and the lead. F is the thread lead per revolution, not a feed rate. P means two different things in the two blocks and one entry cannot tell them apart, so gEdit counts it rather than measuring it: the packed six digits of the first block are never converted, and the thread height of the second is shown as written.",
+      "description": "Cuts a thread in several passes, taking less material each time. Written in two blocks: the finishing passes, the pull-out chamfer and the insert angle packed into P, the smallest depth of cut and the finishing allowance first; then the end point, the taper, the thread height, the depth of the first cut and the lead. The block with X (U) and Z (W) runs the cycle; P, Q and R mean different things in the two blocks, and each of them stays in force until it is written again. F is the thread lead per revolution, not a feed rate. gEdit shows both P values as written: the packed digits of the first block must never be converted.",
       "params": [
         {
           "address": "P",
-          "label": "Finishing passes, chamfer and insert angle packed into six digits in the first block; thread height in microns in the second. Counted, not measured: the packed digits must never be converted, and one entry cannot tell the two blocks apart",
+          "label": "Six digits packed: number of finishing passes (01-99), pull-out chamfer in tenths of the lead (00-99), insert angle (80, 60, 55, 30, 29 or 00 degrees); P010060 is one pass, no chamfer, 60°. Counted, never converted",
           "min": 0,
-          "unit": "count"
+          "unit": "count",
+          "block": 1
         },
         {
           "address": "Q",
-          "label": "Smallest cut depth in the first block, first cut depth in the second, both in least increments without a point (µm on a metric IS-B machine)",
+          "label": "Smallest depth of cut, a radius value in least increments without a point (µm on a metric IS-B machine)",
           "min": 0,
-          "unit": "increment"
+          "unit": "increment",
+          "block": 1
         },
+        { "address": "R", "label": "Finishing allowance, a radius value", "block": 1 },
+        { "address": "X", "label": "End point of the thread on X (at the root)", "block": 2 },
+        { "address": "U", "label": "End point of the thread on X, as a distance from the start point", "block": 2 },
+        { "address": "Z", "label": "End point of the thread on Z", "block": 2 },
+        { "address": "W", "label": "End point of the thread on Z, as a distance from the start point", "block": 2 },
         {
           "address": "R",
-          "label": "Finish allowance in the first block, taper in the second"
+          "label": "Taper: the difference in radius between the start and the end of the thread, with sign; 0 for a straight thread",
+          "block": 2
         },
         {
-          "address": "X",
-          "label": "Thread end diameter at the root"
+          "address": "P",
+          "label": "Thread height, a radius value in least increments without a point (µm on a metric IS-B machine); shown as written",
+          "min": 0,
+          "unit": "count",
+          "block": 2
         },
         {
-          "address": "Z",
-          "label": "Thread end along Z"
+          "address": "Q",
+          "label": "Depth of the first cut, a radius value in least increments without a point (µm on a metric IS-B machine)",
+          "min": 0,
+          "unit": "increment",
+          "block": 2
         },
         {
           "address": "F",
           "label": "Thread lead per revolution",
           "required": true,
           "min": 0,
-          "unit": "feedPerRev"
+          "unit": "feedPerRev",
+          "block": 2
         }
       ]
     },
