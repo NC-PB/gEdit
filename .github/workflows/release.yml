@@ -208,6 +208,15 @@ jobs:
             echo "::error::The .deb installs /usr/bin/gedit, which is GNOME's editor."
             exit 1
           fi
+          # The package name is separate from the program name: Tauri takes it from the product
+          # name ("gEdit" -> gedit) unless told otherwise, and Debian/Ubuntu's own text editor
+          # is the package `gedit`. Printed so a run shows it; a package called `gedit` fails.
+          package=$(dpkg-deb -f "$deb" Package)
+          echo "Package: $package"
+          if [ "$package" = "gedit" ]; then
+            echo "::error::The .deb package is called gedit, the name of GNOME's editor package."
+            exit 1
+          fi
           unpacked=$(mktemp -d)
           dpkg-deb -x "$deb" "$unpacked"
           cat "$unpacked"/usr/share/applications/*.desktop

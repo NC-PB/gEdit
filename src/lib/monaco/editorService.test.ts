@@ -751,7 +751,7 @@ describe('createEditorService with a fake Monaco', () => {
     expect(h.state.editors[0].createdWith.theme).toBe('vs-dark');
   });
 
-  it('creates the editor with no colour boxes, fixed overflow widgets and the hover below (B1 A9)', async () => {
+  it('creates the editor with no colour boxes, and fixed overflow widgets, the hover left to Monaco (B1 A9)', async () => {
     // `#101=5` is a Fanuc parameter, not the colour #110011: Monaco's own colour detector
     // draws a swatch in front of it unless both options are off.
     const h = await attached();
@@ -760,8 +760,8 @@ describe('createEditorService with a fake Monaco', () => {
       colorDecorators: false,
       defaultColorDecorators: 'never',
       fixedOverflowWidgets: true,
-      hover: { above: false },
     });
+    expect(h.state.editors[0].createdWith).not.toHaveProperty('hover');
   });
 
   it('builds an editor with no option update when nothing was ever set', async () => {

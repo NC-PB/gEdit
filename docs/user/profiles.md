@@ -305,6 +305,7 @@ used.
 | `modal` | `true` when the code stays in force until another of its group replaces it |
 | `params` | The words the code takes: a list of `{ "address": "P", "label": "…" }`, with `"required": true`, `"min"` and `"max"` where they apply. On a cycle written in two blocks, `"block": 1` or `"block": 2` says which block a word belongs to ([below](#cycles-written-in-two-blocks)) |
 | `blocks` | `2` for a cycle written in two blocks with the same code, such as the lathe's `G71` and `G76` |
+| `ownWords` | A list of addresses, such as `["F"]`: words of those addresses written **behind** the code in its block belong to the code itself and are not ordinary values. The built-in Klartext set uses it for the `F` of `M128`, `M140`, `PLANE …` and cycle 19, which is a feed for that function only; Scale Feed leaves such a word as written and the tool list does not count it as a feed |
 | `verify` | `true` marks an entry you are not sure about: it is kept out of the hover and marked in the completion list, as the built-in "not verified yet" entries are |
 | `review` | `"pending"` marks an entry that is still waiting for a review; the built-in sets use it for entries filled in from the control manuals. It changes nothing gEdit shows or does |
 

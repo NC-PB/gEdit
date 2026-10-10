@@ -199,8 +199,8 @@ describe('createDiff and the read-only lock', () => {
       colorDecorators: false,
       defaultColorDecorators: 'never',
       fixedOverflowWidgets: true,
-      hover: { above: false },
     });
+    expect(fake.created[0]).not.toHaveProperty('hover');
   });
 
   it('locks the modified side of a locked document, revert arrows included', async () => {

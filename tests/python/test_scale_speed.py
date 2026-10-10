@@ -61,7 +61,7 @@ import json
 import sys
 import unittest
 
-from tests.python import helpers, pending_codes
+from tests.python import helpers
 
 SCRIPT = "scale_speed.py"
 
@@ -149,9 +149,7 @@ def context_of(case):
     else:
         effective = helpers.effective_context(case.profile_id)
     context["profile"] = effective["profile"]
-    # B1: an entry the shipped database does not have yet (`tests/python/pending_codes.py`).
-    context["codes"] = pending_codes.with_pending(effective["codes"], case.options)
-    pending_codes.strip(context)
+    context["codes"] = effective["codes"]
     context["machine"] = dict(effective["machine"])
     name = case.options.get("machineName")
     if isinstance(name, str) and name != "":
@@ -170,7 +168,7 @@ def run_case(case):
     return helpers.run_script(SCRIPT, stdin=case.input_text(), context=context_of(case))
 
 
-def shape_of(lines, cp, extra=()):
+def shape_of(lines, cp):
     """Every token of a program with the scaled values blanked out.
 
     Two programs with the same shape differ **only** inside the values of spindle words:
@@ -184,7 +182,7 @@ def shape_of(lines, cp, extra=()):
     scaled = set(SCALED_ADDRESSES) | {word.upper() for word in limits if isinstance(word, str)}
     # 2026-09: a cutting speed written as a word of its own (`SVC=`), which the code
     # database marks with `sets.speedUnit: 'surface'` on the word's entry.
-    for entry in list(helpers.load_codes(cp.profile)) + list(extra):
+    for entry in helpers.load_codes(cp.profile):
         code = entry.get("code")
         if isinstance(code, str) and code.isalpha() and (entry.get("sets") or {}).get("speedUnit") == "surface":
             scaled.add(code.upper())
@@ -257,8 +255,7 @@ class TestGoldenCases(unittest.TestCase):
                 before = case.input_lines()
                 after = case.expected_text().split("\n")
                 self.assertEqual(len(before), len(after), "a scale run never adds a line")
-                extra = pending_codes.extra_codes(case.options)
-                self.assertEqual(shape_of(before, cp, extra), shape_of(after, cp, extra))
+                self.assertEqual(shape_of(before, cp), shape_of(after, cp))
 
     def test_the_trailing_newline_of_the_input_survives(self):
         for case in self.cases:
@@ -477,11 +474,11 @@ class TestCodeDatabase(unittest.TestCase):
 
     def test_a_klartext_cutting_speed_written_with_a_colon_follows_the_surface_speed_option(self):
         # B1 (owner: yes): `VC:120` in a TURNDATA block is the tool's cutting speed, read off
-        # the database (`sets.speedUnit: 'surface'` on the `VC` entry; a test-local one until
-        # the shipped database has it). Automatically means no on this milling profile, so it
-        # is reported; yes scales the number and keeps the colon form.
+        # the database (`sets.speedUnit: 'surface'` on the shipped `VC` entry of the Klartext
+        # database). Automatically means no on this milling profile, so it is reported; yes
+        # scales the number and keeps the colon form.
         context = helpers.effective_context("heidenhain-klartext")
-        codes = list(context["codes"]) + [{"code": "VC", "group": "spindle", "sets": {"speedUnit": "surface"}, "label": "Cutting speed"}]
+        self.assertTrue(any(entry.get("code") == "VC" for entry in context["codes"]))
         program = "1 FUNCTION TURNDATA SPIN VCONST:ON VC:120 SMAX3000\n2 FUNCTION TURNDATA SPIN VCONST:OFF S1000\n"
         for choice, text, findings in (
             ("auto", "1 FUNCTION TURNDATA SPIN VCONST:ON VC:120 SMAX3000\n2 FUNCTION TURNDATA SPIN VCONST:OFF S500\n",
@@ -489,17 +486,17 @@ class TestCodeDatabase(unittest.TestCase):
             ("yes", "1 FUNCTION TURNDATA SPIN VCONST:ON VC:60 SMAX3000\n2 FUNCTION TURNDATA SPIN VCONST:OFF S500\n", []),
         ):
             with self.subTest(surfaceSpeed=choice):
-                run = helpers.make_context(params={"percent": 50, "surfaceSpeed": choice}, profile=context["profile"], codes=codes)
+                run = helpers.make_context(params={"percent": 50, "surfaceSpeed": choice}, profile=context["profile"], codes=context["codes"])
                 result = helpers.run_script(SCRIPT, stdin=program, context=run)
                 self.assertTrue(result.ok, result.stderr)
                 payload = result.json()
                 self.assertEqual(payload["text"], text)
                 self.assertEqual([f["message"] for f in payload["findings"]], findings)
         # Without the entry `VC:` is no speed of this run at all, as before.
-        run = helpers.make_context(params={"percent": 50, "surfaceSpeed": "yes"}, profile=context["profile"], codes=context["codes"])
-        if not any(entry.get("code") == "VC" for entry in context["codes"]):
-            payload = helpers.run_script(SCRIPT, stdin=program, context=run).json()
-            self.assertIn("VC:120 SMAX3000", payload["text"])
+        without = [entry for entry in context["codes"] if entry.get("code") != "VC"]
+        run = helpers.make_context(params={"percent": 50, "surfaceSpeed": "yes"}, profile=context["profile"], codes=without)
+        payload = helpers.run_script(SCRIPT, stdin=program, context=run).json()
+        self.assertIn("VC:120 SMAX3000", payload["text"])
 
     def test_a_run_without_a_code_database_says_what_it_could_not_know(self):
         payload = self.run_with([], "G96 S180 M3\n")

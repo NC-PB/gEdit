@@ -238,7 +238,7 @@ export interface ScriptDeps {
    */
   channels?: Pick<ChannelService, 'fresh'>;
   modals: Pick<Modals, 'form'>;
-  dialogs: Pick<NativeDialogs, 'confirm'>;
+  dialogs: Pick<NativeDialogs, 'confirm' | 'whenFree'>;
   status: Pick<StatusService, 'show'>;
   uiState: Pick<UiStateStore, 'state' | 'getLastParams' | 'setLastParams' | 'update'>;
   results: ResultsService;
@@ -728,13 +728,18 @@ export function createScriptService(deps: ScriptDeps): ScriptService {
     text: string,
     why?: { title: string; message: string },
   ): Promise<void> {
-    const open = await deps.dialogs.confirm({
-      title: why?.title ?? tr(MSG.staleTitle()),
-      message: why?.message ?? tr(MSG.staleMessage(label)),
-      ok: tr(MSG.staleOpen()),
-      cancel: t('common.cancel'),
-      kind: 'warning',
-    });
+    // The question waits for a dialog that is in front of it (the user may have opened one
+    // while the script ran); without that the text of the run would be answered "no" by
+    // nobody and thrown away (B1 A4, `dialogs.whenFree`).
+    const open = await deps.dialogs.whenFree(() =>
+      deps.dialogs.confirm({
+        title: why?.title ?? tr(MSG.staleTitle()),
+        message: why?.message ?? tr(MSG.staleMessage(label)),
+        ok: tr(MSG.staleOpen()),
+        cancel: t('common.cancel'),
+        kind: 'warning',
+      }),
+    );
     if (!open) {
       say(MSG.staleDiscarded(label), { error: true });
       return;

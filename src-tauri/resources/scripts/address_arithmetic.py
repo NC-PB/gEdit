@@ -1134,8 +1134,9 @@ class Run:
         # A cycle written as a call (`CYCLE81(…)`), repeated behind `MCALL`.
         starts = [(e, k) for e, k in cycles if sets_of(e).get("cycle") == "start"]
         call_starts = [e for e, k in starts if k == "call"]
-        # A call the database does not know, with a number among its arguments (`CYCLE61(50,0,2,-1,…)`,
-        # `POCKET4(…)`): a cycle nobody described may hold absolute positions that a shift of
+        # A call the database does not know, with a number among its arguments
+        # (`CYCLE76(50,0,2,-1,…)`, `CYCLE77(…)`: Sinumerik cycles the database does not
+        # describe): a cycle nobody described may hold absolute positions that a shift of
         # the tool axis has to move with the axis words, so it is refused and listed, never
         # skipped in silence (found at the M10 integration: the Sinumerik face-milling cycle
         # stayed where it was while every Z word around it moved).

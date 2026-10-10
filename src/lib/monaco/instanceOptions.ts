@@ -20,8 +20,7 @@ export const SHARED_EDITOR_OPTIONS = {
   // of the page instead of inside the editor box, which clips them: a hover on one of the
   // first lines no longer sticks out under the ribbon and gets cut off.
   fixedOverflowWidgets: true,
-  // A hover opens below the word and goes above it only when there is no room below. In the
-  // fixed layer the room above a line near the top of the editor is the ribbon and the tab
-  // bar, and a hover that prefers "above" there is drawn over them.
-  hover: { above: false },
+  // No `hover.above` here on purpose (owner decision, 2026-10-10): a hover is placed the
+  // way Monaco places it, above the word and below it when there is no room above in the
+  // window. Near the first lines it may be drawn over the ribbon; it is fully visible.
 } as const satisfies MonacoApi.editor.IEditorOptions;

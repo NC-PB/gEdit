@@ -708,6 +708,19 @@ describe('B1: the block of a two-block cycle (CodeParam.block) and the review ma
     ]);
     expect(marked('fanuc-lathe')).toEqual(['G50.3', 'G68.1', 'G69.1', 'G71', 'G72', 'G73', 'G74', 'G75', 'G76']);
     expect(marked('fanuc-lathe-b')).toEqual(['G92.1']);
+    // The Okuma lathe codes (package A7-O).
+    expect(marked('okuma')).toEqual(['G20', 'G21', 'G85', 'G86', 'G93', 'G119', 'G132', 'G133', 'G313', 'M85']);
+    // The Sinumerik and Klartext codes (package A7-S).
+    expect(marked('sinumerik')).toEqual([
+      'G601', 'G602', 'G603', 'G643', 'G644', 'G645', 'CYCLE61', 'POCKET3', 'POCKET4', 'SLOT1', 'CYCLE93', 'CYCLE97',
+      'CTOL', 'OTOL', 'WAITM', 'WAITMC', 'WAITE', 'SETM', 'CLEARM', 'INIT', 'START', 'COMPSURF', 'CUT3DCC', 'CUT3DCCD',
+    ]);
+    expect(marked('heidenhain')).toEqual([
+      'VC', 'CYCL DEF 19', 'CYCL DEF 251', 'CYCL DEF 252', 'CYCL DEF 253', 'CYCL DEF 254', 'CYCL DEF 256',
+      'CYCL DEF 257', 'CYCL DEF 14', 'CYCL DEF 21', 'CYCL DEF 22', 'CYCL DEF 23', 'CYCL DEF 24', 'CYCL DEF 25',
+      'PLANE SPATIAL', 'PLANE PROJECTED', 'PLANE EULER', 'PLANE VECTOR', 'PLANE POINTS', 'PLANE RELATIV',
+      'PLANE AXIAL', 'PLANE RESET', 'M128', 'M140',
+    ]);
   });
 });
 

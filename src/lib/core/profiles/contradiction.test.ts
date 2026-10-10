@@ -536,7 +536,7 @@ describe('the script runner', () => {
       },
       machines: { effective: effectiveOf(docs) },
       modals: { form: (request) => Promise.resolve(request.values) },
-      dialogs: { confirm: () => Promise.resolve(false) },
+      dialogs: { confirm: () => Promise.resolve(false), whenFree: (op) => op() },
       status: { show: (text, o) => seen.status.push({ text, error: o?.error === true }) },
       uiState: {
         state: ui,

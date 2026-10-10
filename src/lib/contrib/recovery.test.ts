@@ -50,6 +50,11 @@ const fake = vi.hoisted(() => ({
   shown: [] as { text: string; error: boolean; sticky: boolean }[],
   /** Paths another tab has open right now. */
   openPaths: [] as string[],
+  /** Canonical paths of the files other tabs hold, however they were spelled (B1 integration). */
+  openIdentities: [] as string[],
+  /** What `files_stat` answers: path -> canonical path. */
+  canonical: {} as Record<string, string>,
+  statFails: false,
 }));
 
 vi.mock('$lib/app/recovery', () => ({
@@ -109,6 +114,15 @@ vi.mock('$lib/app/status', () => ({
 vi.mock('$lib/stores/documents', () => ({
   docs: {
     byPath: (path: string) => (fake.openPaths.includes(path) ? { id: 'd9' } : undefined),
+    byIdentity: (canonical: string | null | undefined) =>
+      canonical && fake.openIdentities.includes(canonical) ? { id: 'd9' } : undefined,
+  },
+}));
+
+vi.mock('$lib/platform/commands', () => ({
+  filesStat: async (paths: string[]) => {
+    if (fake.statFails) throw new Error('no answer');
+    return paths.map((path) => ({ path, exists: true, canonical: fake.canonical[path] ?? null }));
   },
 }));
 
@@ -131,6 +145,9 @@ beforeEach(() => {
   fake.claimed = 0;
   fake.shown = [];
   fake.openPaths = [];
+  fake.openIdentities = [];
+  fake.canonical = {};
+  fake.statFails = false;
   fake.restore.mockClear();
   fake.discard.mockClear();
 });
@@ -219,6 +236,45 @@ describe('the four answers', () => {
     expect(message.text).not.toContain('prog.nc');
     // What it asks for is not done in four seconds.
     expect(message.sticky).toBe(true);
+  });
+
+  // B1 integration (A1 x A2). `bindRestored` refuses a twin by canonical path, so a
+  // snapshot of another spelling of an open file also stays untitled: that has to be said.
+  it('names a file another tab holds under another spelling (same canonical path)', async () => {
+    const taken = entry({ key: 'd2', path: '/link/open.nc', title: 'open.nc' });
+    fake.leftovers = [entry(), taken];
+    fake.canonical = { '/link/open.nc': '/real/open.nc', '/nc/prog.nc': '/nc/prog.nc' };
+    fake.openIdentities = ['/real/open.nc'];
+    fake.answers = [{ action: 'restore', entries: [entry(), taken] }];
+
+    await showLeftovers();
+    expect(fake.shown).toHaveLength(1);
+    expect(fake.shown[0].text).toContain('open.nc is already open in another tab');
+    expect(fake.shown[0].text).not.toContain('prog.nc');
+    expect(fake.shown[0].sticky).toBe(true);
+  });
+
+  it('names the second of two snapshots that are one file under two spellings', async () => {
+    const a = entry({ key: 'd1', path: '/real/x.nc', title: 'x.nc' });
+    const b = entry({ key: 'd2', path: '/link/x.nc', title: 'x.nc' });
+    fake.leftovers = [a, b];
+    fake.canonical = { '/real/x.nc': '/real/x.nc', '/link/x.nc': '/real/x.nc' };
+    fake.answers = [{ action: 'restore', entries: [a, b] }];
+
+    await showLeftovers();
+    expect(fake.shown[0].text).toContain('x.nc is already open in another tab');
+  });
+
+  it('falls back to the written path when the file system gives no canonical path', async () => {
+    const taken = entry({ key: 'd2', path: '/nc/open.nc', title: 'open.nc' });
+    fake.leftovers = [taken];
+    fake.openPaths = ['/nc/open.nc'];
+    fake.statFails = true;
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    fake.answers = [{ action: 'restore', entries: [taken] }];
+
+    await showLeftovers();
+    expect(fake.shown[0].text).toContain('open.nc is already open in another tab');
   });
 
   it('names a file once when two snapshots of it come back together', async () => {

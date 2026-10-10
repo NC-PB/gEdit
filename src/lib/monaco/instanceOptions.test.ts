@@ -35,13 +35,14 @@ describe('SHARED_EDITOR_OPTIONS', () => {
     expect(SHARED_EDITOR_OPTIONS.defaultColorDecorators).toBe('never');
   });
 
-  it('draws hovers and tips in the fixed layer, below the word first', () => {
+  it('draws hovers and tips in the fixed layer', () => {
     expect(SHARED_EDITOR_OPTIONS.fixedOverflowWidgets).toBe(true);
-    expect(SHARED_EDITOR_OPTIONS.hover.above).toBe(false);
   });
 
-  it('is still true after a settings change: updateOptions rebuilds the hover group', () => {
-    expect(editorOptionsFor(DEFAULTS).hover).toEqual({ enabled: true, above: false });
+  it('leaves the hover placement to Monaco (above, below when there is no room), owner decision 2026-10-10', () => {
+    expect('hover' in SHARED_EDITOR_OPTIONS).toBe(false);
+    expect(editorOptionsFor(DEFAULTS).hover).toEqual({ enabled: true });
+    expect(editorOptionsFor(DEFAULTS).hover).not.toHaveProperty('above');
   });
 });
 

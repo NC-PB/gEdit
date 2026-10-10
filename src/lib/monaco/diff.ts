@@ -21,7 +21,7 @@
 //     `automaticLayout` is passed, with the value `editorService` already set, and
 //     `readOnly`/`readOnlyMessage`, which `editorService` sets on every document switch
 //     anyway and which no Monaco feature reads back from that service. The exception is
-//     `SHARED_EDITOR_OPTIONS` (`instanceOptions.ts`): the same three values the main editor is
+//     `SHARED_EDITOR_OPTIONS` (`instanceOptions.ts`): the same values the main editor is
 //     created with (no colour boxes, fixed overflow widgets), so passing them changes nothing.
 //  2. `theme` is deliberately absent: passing it calls `themeService.setTheme()`
 //     (`standaloneCodeEditor.js:258`), which would override the user's theme choice

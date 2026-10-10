@@ -364,7 +364,7 @@ The program map lists what each profile calls worth listing:
   subprogram calls, `STOP` and the program end;
 - for **Okuma**, the `O` program names, the operation comments (a whole-line comment, or a
   sequence number with nothing but a comment behind it, as in `N2 (CENTRE DRILL)`), named
-  sequences such as `NLAP1`, `CALL O…` and `MODIN O…`, the G-code macro calls (`G161`–`G171`,
+  sequences such as `NLAP1`, `CALL O…` and `MODIN O…`, the G-code macro calls (`G161`–`G176`,
   `G205`–`G214`), `M00`/`M01` stops and the ends (`M02`, `M30`, `RTS`). A line lists one
   item, and a named block that ends the program (`NEND M02`) is listed as the end, with
   the name in its text;
@@ -522,7 +522,7 @@ twice:
 | `G80`–`G88` | the drilling cycles, and `G80`, which cancels them | LAP: the definition of a finished shape and its automatic roughing and finishing |
 | Drilling with a driven tool | `G83`–`G89`, cancelled by `G80` | `G181`–`G189`, cancelled by `G180` |
 | `G90`, `G91` | in G-code system A, `G90` is a turning cycle and `U`/`W` move incrementally | absolute and incremental positions; `X` stays a diameter |
-| `G20`, `G21` | inch and metric | a home-position return and the return for a tool change |
+| `G20`, `G21` | inch and metric | a home-position return and the return for a tool change; the position is the machine's own (`HP=` says which), so gEdit treats the block as a move to machine positions |
 | Dwell | `G04 X`, `U` or `P` | `G04 F`: the time is in `F` |
 | `U`, `W` | incremental `X` and `Z` | finish allowances in the cycles; incremental moves are written with `G91` |
 | Arc radius | `R` | `L` |
@@ -573,13 +573,13 @@ help either leaves them out or marks them as not verified:
   not described, and the `P` word only by name; the turret selection `G13`/`G14` is
   explained;
 - the system variables;
-- contour generation `G132`/`G133` and the pick-off spindle codes `G142`/`G143` (not
-  verified); the contour codes `G101`–`G103` are explained and their `F` is a feed per minute
-  whatever the feed mode; the Y-axis mode and coordinate conversion (`G136`–`G138`, where `X`
+- the pick-off spindle codes `G142`/`G143` (not verified); the contour codes
+  `G101`–`G103` and the contour arcs on the cylinder surface `G132`/`G133` are explained and
+  their `F` is a feed per minute whatever the feed mode; the Y-axis mode and coordinate conversion (`G136`–`G138`, where `X`
   is a radius), the spindle selection `G140`/`G141` and the program coordinate systems
   `G15`/`G16` are explained;
-- the G-code macro calls `G171` and `G205`–`G214`: the map lists them as calls, and the code
-  help has no entry for them (`G161`–`G170` are explained);
+- the G-code macro calls `G171`–`G176` and `G205`–`G214`: the map lists them as calls, and the
+  code help has no entry for them (`G161`–`G170` are explained);
 - schedule programs (`.SDF`, `PSELECT`).
 
 M-codes the database does not describe are machine functions set up by the builder; they are

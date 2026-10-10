@@ -158,6 +158,11 @@ interface Harness {
   formAnswers: (Record<string, unknown> | undefined)[];
   confirms: { title: string; message: string; ok: string }[];
   confirmAnswers: boolean[];
+  /** Another dialog is in front: `whenFree` holds its operation until this opens (null = free). */
+  dialogInFront: Promise<void> | null;
+  /** Whether each confirm ran inside `whenFree`. */
+  confirmsInsideWhenFree: boolean[];
+  insideWhenFree: boolean;
   applied: { id: DocId; startLine: number; endLine: number; lines: string[] }[];
   /** What the fake `applyLines` reports as changed; null means "one per line handed over". */
   applyLinesAnswer: number | null;
@@ -206,6 +211,9 @@ function harness(o: { profileId?: string; entries?: ScriptEntry[] } = {}): Harne
     formAnswers: [],
     confirms: [],
     confirmAnswers: [],
+    dialogInFront: null,
+    confirmsInsideWhenFree: [],
+    insideWhenFree: false,
     applied: [],
     applyLinesAnswer: null,
     created: [],
@@ -262,7 +270,17 @@ function harness(o: { profileId?: string; entries?: ScriptEntry[] } = {}): Harne
     dialogs: {
       confirm: (request) => {
         h.confirms.push({ title: request.title, message: request.message, ok: request.ok });
+        h.confirmsInsideWhenFree.push(h.insideWhenFree);
         return Promise.resolve(h.confirmAnswers.shift() ?? false);
+      },
+      whenFree: async (op) => {
+        if (h.dialogInFront !== null) await h.dialogInFront;
+        h.insideWhenFree = true;
+        try {
+          return await op();
+        } finally {
+          h.insideWhenFree = false;
+        }
       },
     },
     status: {
@@ -909,6 +927,30 @@ describe('ScriptService.run: the stale guard', () => {
     await h.service.run('bundled:scale_feed.py');
     expect(h.applied).toHaveLength(0);
     expect(h.confirms).toHaveLength(1);
+    expect(h.created).toEqual([{ profileId: 'fanuc-gcode', text: 'N10 G1 F90.' }]);
+  });
+
+  // B1 integration (A3 x A4). The stale-result offer is a question that must be asked: with
+  // another dialog in front it waits for it (`dialogs.whenFree`) instead of being skipped.
+  it('asks for the new tab only when the dialog in front has gone', async () => {
+    const h = await ready();
+    h.duringRun = () => {
+      h.version += 1;
+    };
+    h.runs = [result({ stdout: 'N10 G1 F90.' })];
+    h.confirmAnswers = [true];
+    let close: () => void = () => {};
+    h.dialogInFront = new Promise<void>((resolve) => (close = resolve));
+
+    const running = h.service.run('bundled:scale_feed.py');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(h.confirms).toHaveLength(0);
+    expect(h.created).toHaveLength(0);
+
+    close();
+    await running;
+    expect(h.confirms).toHaveLength(1);
+    expect(h.confirmsInsideWhenFree).toEqual([true]);
     expect(h.created).toEqual([{ profileId: 'fanuc-gcode', text: 'N10 G1 F90.' }]);
   });
 

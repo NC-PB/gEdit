@@ -53,7 +53,7 @@ from __future__ import annotations
 import sys
 import unittest
 
-from tests.python import helpers, pending_codes
+from tests.python import helpers
 
 SCRIPT = "tool_list.py"
 
@@ -128,9 +128,7 @@ def context_of(case):
     else:
         effective = helpers.effective_context(case.profile_id)
     context["profile"] = effective["profile"]
-    # B1: an attribute the shipped database does not have yet (`tests/python/pending_codes.py`).
-    context["codes"] = pending_codes.with_pending(effective["codes"], case.options)
-    pending_codes.strip(context)
+    context["codes"] = effective["codes"]
     context["machine"] = dict(effective["machine"])
     name = case.options.get("machineName")
     if isinstance(name, str) and name != "":
