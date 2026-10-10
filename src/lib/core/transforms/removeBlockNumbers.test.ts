@@ -276,6 +276,20 @@ describe('Sinumerik jump targets (M11 review NC-3)', () => {
     expect(result.lines).toEqual(['GOTOF 30', 'G0 X0', 'N30 M30']);
   });
 
+  // B1: with "keep numbers that are pointed at" off, the question before the run counted a
+  // jump to a main block (`GOTOB :20`) and the run listed no row for it.
+  it('lists a jump to a main block when the numbers that are pointed at are not kept', () => {
+    const off = { keepReferenced: false };
+    for (const jump of ['GOTOB :20', 'GOTOB:20']) {
+      const lines = ['N10 G0 X0', ':20 G0 X1', 'N30 G1 X2', `N40 IF R1==1 ${jump}`, 'N50 M30'];
+      expect(removeBlockNumbers.preflight?.(lines, context(cp, 1, undefined, off))?.key, jump).toBe('ncNumbering.removeBlockNumbers.references');
+      const result = removeBlockNumbers.run(lines, context(cp, 1, undefined, off));
+      expect(result.lines, jump).toEqual(['G0 X0', 'G0 X1', 'G1 X2', `IF R1==1 ${jump}`, 'M30']);
+      expect(result.skipped.map((s) => [s.line, s.severity]), jump).toEqual([[4, 'warning']]);
+      expect(result.warnings, jump).toContainEqual({ key: 'ncNumbering.removeBlockNumbers.referencesKept', params: { count: 1 } });
+    }
+  });
+
   it('lists a jump through a name that is no label, and not one to a label of the program', () => {
     const computed = removeBlockNumbers.run(['N10 GOTOF DEST', 'N20 M30'], context(cp));
     expect(computed.skipped.map((s) => [s.line, s.severity])).toEqual([[1, 'warning']]);

@@ -33,11 +33,58 @@
 // everything else stays, so `<SHAFT-T12>` masks as `<_____-___>`. Not as blanks: a run of
 // blanks is how the map finds a comment, and the name would become a tool's description.
 // The map reads the name itself off the real line, at the offsets the mask keeps.
+//
+// A bracket expression is the tokenizer's third span read in one piece (`#1=[#2 (A)+1]`,
+// and an unclosed `[`, which runs to the end of the line). Nothing inside it is a comment
+// to the tokenizer, so nothing inside it is blanked here either (B1). Such a line is rare
+// — a `[` whose expression holds a comment marker, a quote or a program-name lead — and
+// this file does not repeat the rules that decide where an expression starts: on such a
+// line the mask is read off the tokenizer's own tokens (`maskByTokens`).
 
 import type { CompiledProfile } from '$lib/core/profiles/types';
-import { commentAt, commentEndAt, lexSpec, programNameEndAt } from './tokenizer';
+import type { LexSpec } from './tokenizer';
+import { commentAt, commentEndAt, expressionEndAt, lexSpec, programNameEndAt, tokenizeLine } from './tokenizer';
 
 const QUOTE = 0x22;
+const BRACKET_OPEN = '[';
+
+/**
+ * True when a bracket expression between `from` and `limit` holds a character that can start
+ * a span the mask changes (`maskLeadPattern`): only then can the tokenizer, which reads the
+ * expression whole, and the character loop below disagree. Each `[` is asked once: a `[`
+ * inside an expression ends no later than the expression around it, so the next one asked
+ * stands behind it. A profile whose leads are not known (`maskLeadPattern` null) always says
+ * yes when the line has a `[`.
+ */
+function expressionHoldsLead(line: string, from: number, limit: number, spec: LexSpec): boolean {
+  let open = line.indexOf(BRACKET_OPEN, from);
+  while (open >= 0 && open < limit) {
+    const lead = spec.maskLeadPattern;
+    if (lead === null) return true;
+    const end = expressionEndAt(line, open, limit);
+    lead.lastIndex = open + 1;
+    const found = lead.exec(line);
+    if (found !== null && found.index < end) return true;
+    open = line.indexOf(BRACKET_OPEN, end);
+  }
+  return false;
+}
+
+/** The mask written from the tokens of the line: comments blanked, program names masked, the rest as it is. */
+function maskByTokens(line: string, cp: CompiledProfile, spec: LexSpec, limit: number): string {
+  let masked = '';
+  let copied = 0;
+  for (const token of tokenizeLine(line, cp).tokens) {
+    if (token.kind === 'comment') {
+      masked += line.slice(copied, token.start) + blanks(token.end - token.start);
+      copied = token.end;
+    } else if (token.kind === 'programMarker' && token.start < limit && programNameEndAt(line, token.start, limit, spec) === token.end) {
+      masked += line.slice(copied, token.start) + maskName(token.text);
+      copied = token.end;
+    }
+  }
+  return copied === 0 ? line : masked + line.slice(copied);
+}
 
 function blanks(count: number): string {
   return count > 0 ? ' '.repeat(count) : '';
@@ -91,6 +138,9 @@ export function maskComments(line: string, cp: CompiledProfile): string {
       return copied === 0 ? line : masked + line.slice(copied);
     }
   }
+
+  // A bracket expression with a comment marker, a quote or a name lead inside (B1).
+  if (p < limit && expressionHoldsLead(line, p, limit, spec)) return maskByTokens(line, cp, spec, limit);
 
   while (p < limit) {
     const code = line.charCodeAt(p);

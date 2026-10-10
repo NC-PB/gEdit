@@ -1121,7 +1121,11 @@ def _arguments_end_at(line: str, p: int, limit: int, spec: _LexSpec) -> int:
 
 
 def _expression_end_at(line: str, p: int, limit: int) -> int:
-    """Where the bracket expression that starts at ``p`` ends (exclusive); brackets may nest."""
+    """Where the bracket expression that starts at ``p`` ends (exclusive); brackets may nest.
+
+    An unclosed ``[`` runs to ``limit``, comment markers and all (B1); ``mask_comments`` reads
+    the same span as code, and ``program_checks.py`` reports the bracket.
+    """
     depth = 0
     for i in range(p, limit):
         code = ord(line[i])
@@ -1380,6 +1384,10 @@ def _label_span_of(line: str, spec: _LexSpec) -> Optional[_LabelSpan]:
     name = match.group("name")
     if not isinstance(name, str) or name == "":
         return None
+    # A jump keyword (``syntax.labelAfter``) is never a label: ``GOTOF:20`` is the jump
+    # ``GOTOF`` to the main block ``:20`` written without the blank, as ``GOTOF :20`` is (B1).
+    if spec.label_after and (name if spec.case_sensitive else name.upper()) in spec.label_after:
+        return None
     return _LabelSpan(start=match.start("name"), end=match.end(), name=name)
 
 
@@ -1577,7 +1585,8 @@ def _describe_word(token: Token, address: str, spec: _LexSpec, value: Optional[_
 
     The incremental prefix is only taken off a coordinate word — one or two letters behind
     the prefix and a value behind those (``IX+10``, ``IPA+360``) — so a program name such
-    as ``INCHJOB`` keeps all of its letters.
+    as ``INCHJOB`` keeps all of its letters, and an address with a digit behind its first
+    letter (``I2+5``, B1) keeps its ``I``.
     """
     name = address if spec.case_sensitive else address.upper()
     if (
@@ -1585,6 +1594,7 @@ def _describe_word(token: Token, address: str, spec: _LexSpec, value: Optional[_
         and value is not None
         and 2 <= len(name) <= 3
         and _to_upper(ord(name[0])) == spec.incremental
+        and _is_letter(ord(name[1]))
     ):
         name = name[1:]
         token.incremental = True
@@ -2111,6 +2121,16 @@ def tokenize_line(
                     found = value
                     split = s
                     break
+            # B1: the points of `PLANE POINTS` and of the FK helper points carry their number
+            # inside the address, in front of one axis letter: `P1X+0`, `P3Z+32.5`. Only with
+            # a signed value, as for `DR2+0.05`, so `P1X` alone or `P1XY+1` stays as it was.
+            if found is None and digits > letters and digits + 1 < chunk_end and _is_letter(ord(line[digits])):
+                sign = ord(line[digits + 1])
+                if sign == _PLUS or sign == _MINUS:
+                    value = _read_value(line, digits + 1, chunk_end, spec, False)
+                    if value is not None and value.end == chunk_end:
+                        found = value
+                        split = digits + 1
             if found is not None:
                 token = _push(tokens, "word", line, p, chunk_end)
                 _describe_word(token, line[p:split], spec, found)
@@ -2219,6 +2239,42 @@ def block_number_of(line: str, cp: CompiledProfile) -> Optional[Dict[str, Any]]:
 _MASK_NAME = re.compile(r"[A-Za-z0-9]")
 
 
+def _expression_holds_lead(line: str, start: int, limit: int, spec: _LexSpec) -> bool:
+    """True when a bracket expression between ``start`` and ``limit`` holds a character that
+    can start a span the mask changes. Mirrors ``expressionHoldsLead`` (``mask.ts``, B1).
+    Each ``[`` is asked once: a ``[`` inside an expression ends no later than the one around it.
+    """
+    open_at = line.find("[", start, limit)
+    while open_at >= 0:
+        lead = spec.mask_lead_pattern
+        if lead is None:
+            return True
+        end = _expression_end_at(line, open_at, limit)
+        found = lead.search(line, open_at + 1)
+        if found is not None and found.start() < end:
+            return True
+        open_at = line.find("[", end, limit) if end < limit else -1
+    return False
+
+
+def _mask_by_tokens(line: str, cp: CompiledProfile, spec: _LexSpec, limit: int) -> str:
+    """The mask written from the tokens of the line (``maskByTokens``, ``mask.ts``, B1)."""
+    masked = ""
+    copied = 0
+    for token in tokenize_line(line, cp)[0]:
+        if token.kind == "comment":
+            masked += line[copied : token.start] + " " * (token.end - token.start)
+            copied = token.end
+        elif (
+            token.kind == "programMarker"
+            and token.start < limit
+            and _program_name_end_at(line, token.start, limit, spec) == token.end
+        ):
+            masked += line[copied : token.start] + _MASK_NAME.sub("_", token.text)
+            copied = token.end
+    return line if copied == 0 else masked + line[copied:]
+
+
 def mask_comments(line: str, cp: CompiledProfile) -> str:
     """``line`` with every comment blanked out, same length. Mirrors ``maskComments``.
 
@@ -2270,6 +2326,11 @@ def mask_comments(line: str, cp: CompiledProfile) -> str:
         found = spec.mask_lead_pattern.search(line, p)
         if found is None or found.start() >= limit:
             return line if copied == 0 else masked + line[copied:]
+
+    # A bracket expression is read whole by the tokenizer, an unclosed one to the line end
+    # (B1): where one holds a comment marker, a quote or a name lead, the tokens decide.
+    if p < limit and _expression_holds_lead(line, p, limit, spec):
+        return _mask_by_tokens(line, cp, spec, limit)
 
     while p < limit:
         code = ord(line[p])

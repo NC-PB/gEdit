@@ -212,6 +212,16 @@ describe('the iso grammar', () => {
     expect(at('#1=#2/2')).toEqual(['variable:#1', 'operator:=', 'variable:#2', 'operator:/', 'number:2']);
   });
 
+  // B1 (TODO "column 0"): the Klartext grammar once lost the block number behind a skip
+  // mark written right in front of it, because a standalone rule claimed column 0 first.
+  // The iso grammar is held to the same line, on the mill and on the lathe.
+  it.each(['fanuc-gcode', 'fanuc-lathe'])('%s: reads a block skip written directly in front of the block number', (id) => {
+    const iso = (line: string) => roles(byId(id).grammar, line);
+    expect(iso('/N120 G0 X0.')).toEqual(['skip:/', 'blockNumber:N120', 'gcode:G0', 'axis:X0.']);
+    expect(iso('/1N120 G0 X0.')).toEqual(['skip:/1', 'blockNumber:N120', 'gcode:G0', 'axis:X0.']);
+    expect(iso('/ N120 G0 X0.')).toEqual(['skip:/', 'blockNumber:N120', 'gcode:G0', 'axis:X0.']);
+  });
+
   it('puts the macro keywords in front of the single-letter addresses', () => {
     expect(at('GOTO10')).toEqual(['keyword:GOTO', 'number:10']);
     // `EQ` has to win against the `Q` parameter address, or a comparison is painted as a

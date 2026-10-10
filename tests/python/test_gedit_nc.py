@@ -1232,6 +1232,45 @@ class TestMaskComments(unittest.TestCase):
         self.assertEqual(gedit_nc.mask_comments("G0X0Y0", self.fanuc), "G0X0Y0")
 
 
+class TestMaskFollowsBracketExpressions(unittest.TestCase):
+    """B1: a bracket expression is read whole, an unclosed one to the line end, and the mask
+    blanks exactly the comments the tokenizer reads (mirrors ``mask.test.ts``)."""
+
+    LINES = [
+        ("fanuc-gcode", "#1=[#2+1 (NOTE)"),
+        ("fanuc-gcode", "#1=[#2 (A) +1] (B)"),
+        ("fanuc-gcode", "IF [#1 EQ 2 GOTO 10 (X)"),
+        ("fanuc-gcode", "G65 <SUB_1> A[#1 (X) B2"),
+        ("fanuc-gcode", "#1=[#2+1] (NOTE) #3=[#4"),
+        ("okuma-osp", "V1=[V2+1 (NOTE)"),
+        ("sinumerik", "R1=[R2+3 ;NOTE"),
+        ("sinumerik", 'MSG("A[;B") ;C'),
+        ("sinumerik", 'X=[R1 "Q;" ;C'),
+        ("heidenhain-klartext", "5 L X+10 [ ; NOTE"),
+    ]
+
+    def test_the_mask_blanks_exactly_the_comment_tokens(self):
+        for profile_id, line in self.LINES:
+            cp = gedit_nc.compile_profile(helpers.load_profile(profile_id))
+            names = cp.profile["syntax"].get("programNames")
+            masked = gedit_nc.mask_comments(line, cp)
+            with self.subTest(profile=profile_id, line=line):
+                self.assertEqual(len(masked), len(line))
+                for token in gedit_nc.tokenize_line(line, cp)[0]:
+                    span = masked[token.start : token.end]
+                    if token.kind == "comment":
+                        self.assertEqual(span, " " * len(token.text))
+                    elif token.kind == "programMarker" and names and re.fullmatch(names, token.text):
+                        self.assertEqual(span, re.sub(r"[A-Za-z0-9]", "_", token.text))
+                    else:
+                        self.assertEqual(span, token.text)
+
+    def test_an_unclosed_bracket_keeps_the_comment_marker_behind_it_as_code(self):
+        cp = gedit_nc.compile_profile(helpers.load_profile("fanuc-gcode"))
+        self.assertEqual(gedit_nc.mask_comments("#1=[#2+1 (T1 M6)", cp), "#1=[#2+1 (T1 M6)")
+        self.assertEqual(gedit_nc.mask_comments("#1=[#2+1] (T1 M6)", cp), "#1=[#2+1] " + " " * len("(T1 M6)"))
+
+
 class TestMaskCommentsInTheTurningDialects(unittest.TestCase):
     """A dialect with strings and a comment to the line end reads the string first (P8).
 

@@ -76,7 +76,16 @@ export function languageConfiguration(p: Profile): LanguageConfiguration {
 
   const sigil = sigilOf(p.syntax?.variables);
   const systemSigil = sigilOf(p.syntax?.systemVariables);
-  const point = (p.syntax?.decimalSeparator ?? '.').replace(/[\\^$.|?*+()[\]{}]/g, '\\$&');
+  const escape = (text: string): string => text.replace(/[\\^$.|?*+()[\]{}]/g, '\\$&');
+  const point = escape(p.syntax?.decimalSeparator ?? '.');
+  // B1: the second decimal mark (`syntax.decimalSeparatorAlt`, the Klartext comma) keeps a
+  // number in one piece too, so a double-click on `241,781` selects all of it. It needs a
+  // digit behind it, as in the tokenizer, so a comma between two words stays a comma.
+  const alt = p.syntax?.decimalSeparatorAlt;
+  const fraction =
+    typeof alt === 'string' && alt.length === 1 && alt !== (p.syntax?.decimalSeparator ?? '.')
+      ? `(?:${point}\\d*|${escape(alt)}\\d+)`
+      : `(?:${point}\\d*)`;
   // Order is the whole of it: Monaco takes the first branch that matches where the cursor
   // is. The longer, more specific forms come first, so `$AA_IM` is not read as the
   // identifier `AA_IM` next to an operator and `SB=` is not read as the address `SB`
@@ -87,8 +96,8 @@ export function languageConfiguration(p: Profile): LanguageConfiguration {
     ...(typeof p.syntax?.assignment === 'string' && p.syntax.assignment !== ''
       ? [`[A-Za-z_][A-Za-z0-9_]*=`]
       : []),
-    `[A-Za-z_]+\\d*(?:${point}\\d*)?`,
-    `\\d+(?:${point}\\d*)?`,
+    `[A-Za-z_]+\\d*${fraction}?`,
+    `\\d+${fraction}?`,
   ];
   const wordPattern = new RegExp(branches.map((branch) => `(?:${branch})`).join('|'), 'g');
 

@@ -24,14 +24,14 @@
       "check": "Brackets",
       "checkId": "brackets",
       "severity": "error",
-      "message": "N30 R1=(R2+3: 1 ( is not closed"
+      "message": "N30 R1=(R2+3: a ( is opened and not closed on its line"
     },
     {
       "line": 5,
       "check": "Brackets",
       "checkId": "brackets",
       "severity": "error",
-      "message": "N40 MSG(\"NOT CLOSED): a \" that is not closed"
+      "message": "N40 MSG(\"NOT CLOSED): a string is opened with \" and not closed on its line"
     },
     {
       "line": 6,
