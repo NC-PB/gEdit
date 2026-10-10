@@ -529,7 +529,7 @@ Fanuc mill's templates `fanuc.json`, for a Klartext program `heidenhain.json`.
 - A file for a **set of your own** (`shop-lathe.json`, which `extends` a built-in one) holds
   the templates of that set and the parents' templates stay available through `extends`.
 - The file reloads when it is saved, so a template you write by hand and save in a tab is
-  there at once. **Reload Profiles** (Tools tab) reads the folder again.
+  there at once. **Reload Profiles** (command palette) reads the folder again.
 - A template in the file that gEdit cannot use is **left out and listed in the Results panel**
   with the file and its place in it (for example `templates[3].params[1].formula`). It never
   hides a built-in template that has its id. The rest of the file loads.

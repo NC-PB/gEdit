@@ -63,8 +63,6 @@ Status: shipped. Every row below exists, except what §10 of [phase-1-implementa
 | Settings | [Storage layout](settings-ui.md#storage-layout), [basic settings dialog](settings-ui.md#settings-dialog) | S | Core |
 | Settings | [Light/dark/system theme](settings-ui.md#themes-and-colors), [default shortcuts](settings-ui.md#keyboard-shortcuts), [window state](settings-ui.md#session-and-state) | S | Core |
 
-<a id="phase-2-real-cam-output-safely-in-progress"></a>
-
 ## Phase 2: Real CAM output, safely (done)
 
 Status: **M13 on `main`; Phase 2 done** (2026-10-09). The exit criteria of §2.2 of [phase-2-implementation.md](phase-2-implementation.md#22-phase-2-exit-criteria-testable) are checked by the cumulative runtime suite, with programs and golden results in `tests/fixtures/exit2/`. What was not built is listed under [What Phase 2 did not do](#what-phase-2-did-not-do). Release 1.0 (v1.0.0) was prepared on 2026-10-10: the draft is built by the release workflow, and the owner checks the installers on the three platforms and publishes it.
@@ -158,6 +156,10 @@ Status: **done (2026-10-10); the plan of record is [phase-3-implementation.md](p
 | Assistant | [Cycle forms](code-assistant.md#cycle-forms), [formula parameters](code-assistant.md#formula-parameters), [template manager UI and create from selection](code-assistant.md#template-files-and-management) | M | Core | P3b: P3.8 (cycle forms, formulas, the engine half of "from selection"), P3.9 (the manager) | done (X18): Edit Cycle, formula fields, the manager with save through the file's document, New Template from Selection; reviewed and fixed, on `main` |
 | Profiles | Form-generated profile editor with a live preview, beside the template manager UI ([phase-2-implementation.md §11 item 1](phase-2-implementation.md#11-deferred-or-cut-items-phase-2--phase-3-or-backlog); D40) | M | Core | not in P3b (the session plan has the template manager only; [Phase 3 plan §9](phase-3-implementation.md#9-owner-decisions-and-defaults) item 9) | deferred (Phase 4) |
 
+### Bug-fix round 1 (done, no release)
+
+Status: **done on the integration branch (2026-10-10); the plan of record is [bugfix-round-1.md](bugfix-round-1.md).** Between Phase 3 and the release the owner asked for the known bugs and risks to be fixed first. The round is not a phase and adds no feature row: it fixed the items of the "Bugs and risks" part of [TODO.md](../../TODO.md) (data safety, scripts and platform, performance, NC correctness, UI), filled the Fanuc, Sinumerik, Klartext and Okuma code databases from the control manuals (every new entry marked for the owner's review), re-cut the ribbon into seven tabs, and was checked by an NC review, a code review and a skeptic pass with their fix batches. It lands on `main` under *Unreleased* in the [CHANGELOG](../../CHANGELOG.md); v1.0.0 is still the next release. What it left is in the backlog below and in [TODO.md](../../TODO.md).
+
 ## Phase 4: Comfort and geometry
 
 Exit criteria: geometry transforms and cycle expansion work reliably on the fixture set, and the editor has the comfort features long-time users expect. This was Phase 3 before the re-cut of 2026-09-30.
@@ -196,7 +198,7 @@ Good candidates for contributed scripts. See [nc-transformations backlog](nc-tra
 - Native application menus on Windows and Linux (macOS has one; the owner, 2026-10-08)
 - A Klartext comment toggle that puts the `;` after the block number (the owner, 2026-10-08)
 - R9, an Okuma machining-centre profile: when a programming manual of the machining-centre control arrives ([source review §5](source-review-2026-09.md#5-roadmap-proposals); moved here from the open questions on 2026-10-08)
-- R10, the function feeds (`M128 F`, `M140 F`, `PLANE F`, cycle 19's `F`) and Klartext's Q-parameter feeds: when a real program shows such a feed (moved here from the open questions on 2026-10-08)
+- R10, Klartext's Q-parameter feeds: when a real program shows such a feed (moved here from the open questions on 2026-10-08). The function feeds that R10 also named (`M128 F`, `M140 F`, `PLANE F`, cycle 19's `F`) were done in [bug-fix round 1](bugfix-round-1.md): they are no path feeds for Scale Feed, the tool list or the state
 - Insert and remove text by rule, and batch replace from a mapping file (deferred from Phase 2; good first contributed scripts)
 - A combined tool list over several channel files, and split by tool and join programs (deferred from Phase 2; they need scripts that take several documents, the `documents: all-open | pick` of P1 D16)
 - Load and save formatting per profile (deferred from Phase 2)

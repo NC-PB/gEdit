@@ -72,6 +72,10 @@ as written, what it means, its value and one or more short notes:
 - Motion, Plane, Distance (absolute or incremental), Units, Diameter mode, Work offset, Tool,
   Spindle, Speed, Speed limit, Feed, Coolant, Compensation, Active cycle, Defined cycle,
   Frame and Tool centre point, then any other modal group the dialect has, as `Group <name>`.
+- **Feed** is the feed of the path. A function's own `F` — Klartext `M128 F800`, `M140 … F`,
+  `PLANE … MOVE … F`, cycle 19's `F` — is the feed of that function only, so the row keeps
+  showing the earlier path feed (and an `F` written in front of the code in the same block is
+  the path feed). Such an `F` does not end a feed per tooth or per revolution either.
 - Each row says **where it was set**: `line 7`, a link that moves the cursor there; `at power-on`
   for what the control starts with.
 - **set here** marks what this very block set or changed, so you can see at a glance what a
@@ -114,10 +118,14 @@ it was written on, or *not written*. Some cases:
   of its place; an empty argument is *not written*.
 - A Fanuc cycle (`G81`–`G89`) shows the words of its block. The position blocks that follow
   are under a modal cycle; the state row *Active cycle* says which one.
-- Some lathe cycles are written in **two blocks**, `G76` for instance: the first block holds the
-  settings of the passes, the second the thread itself with its end
+- Some lathe cycles are written in **two blocks**, `G71` to `G76` for instance: the first block holds the
+  settings of the passes, the second the profile or the thread itself with its end
   point, the height and the lead. The table says *Block 1 of 2* or *Block 2 of 2* and shows the
-  parameters of that block. Okuma writes its thread in one block and shows one table.
+  parameters of that block, each with the meaning it has there (the `U` of the first block of
+  `G71` is the depth of cut, the `U` of the second the finishing allowance). gEdit knows which
+  block it is from the words the block writes (`P` and `Q` make a `G71` block the second one),
+  also for a second block written on its own, when the values of the first are set in the
+  machine's parameters. Okuma writes its thread in one block and shows one table.
 
 ### Changing a value
 
@@ -148,7 +156,7 @@ What happens, and why:
 | A G or M code, a call, a word gEdit does not know | A code is not a value; type over it in the editor. |
 | A variable or an expression | The value is known only when the program runs. |
 | Something that is not a decimal number | *That is not a decimal number.* (A comma is read as a point.) |
-| A decimal number where the word takes a whole number: a tool word, `D` and `H` written without a point, any count such as a number of passes | *This word takes a whole number.* |
+| A decimal number where the word takes a whole number: a tool word, `D` and `H` written without a point, any count such as a number of passes | *This word takes a whole number.* A word that only looks like a count but is a real number — an Euler angle or a direction component (`I`, `J`, `K` of `G68.2`, `G43.5`, `G68`, `G41.6`), a scale factor, the knot and weight of `G6.2` — takes decimals |
 | A value below the smallest or above the largest the code help gives for that parameter | *The smallest value allowed is …* / *The largest value allowed is …* |
 | A document that is locked against editing | The status bar says that Change Value did not run ([Read-only programs](README.md#read-only-programs)). |
 

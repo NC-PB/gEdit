@@ -19,10 +19,10 @@ in the dialog can never quietly widen a run to the whole program.
 
 **2. One undo step.** However many lines a run changed, one `Cmd/Ctrl+Z` puts the program
 back exactly as it was. Only the lines that actually differ are rewritten, so bookmarks
-and folded sections outside the change survive. On a big run — a thousand or more changed
-lines, such as renumbering a long program or removing the comments of a big CAM file — the
-change is applied in one piece, and bookmarks and folds between the first and the last
-changed line can move.
+and folded sections outside the change survive. That holds on a big run too — a thousand
+or more changed lines, such as renumbering a long program or removing the comments of a big
+CAM file — and on the undo: the bookmarks and folds on lines the run did not change stay
+where they are, going forward and coming back.
 
 **3. It tells you what it did, and what it did not do.** The status bar gets a one-line
 summary ("Renumbered 412 blocks"). Anything the run refused to touch goes to the
@@ -77,7 +77,7 @@ the first run in a dialect:
 | **Maximum** | Leave empty for no maximum (default 99999 on Fanuc). On Okuma and Sinumerik it is required and at most the highest block number the control accepts: 9999 on Okuma, 2147483647 on Sinumerik (a whole number there, so real 5-axis posts that number past N3,700,000 still fit) |
 | **Above the maximum** | Start over at the start value, or stop and warn (Okuma and Sinumerik: stop by default) |
 | **Spaces after the number** | Between `N120` and the rest of the block |
-| **Skip lines starting with** | Separated by spaces. Fanuc skips `%`, `O` and `(`; Okuma `$`, `%`, `O` and `(`; Sinumerik `%`, `;`, `PROC`, `DEF` and `EXTERN`. A program marker (`%`, `O1001`, Okuma's `$NAME.MIN%`, Sinumerik's `%_N_…`) is never numbered, whatever the list says — on Okuma only an `O` line with nothing behind it counts as one, so `O1001 (NAME)` is protected only by the `O` in the list |
+| **Skip lines starting with** | Separated by spaces. Fanuc skips `%`, `O` and `(`; Okuma `$`, `%`, `O` and `(`; Sinumerik `%`, `;`, `PROC`, `DEF` and `EXTERN`. A program marker (`%`, `O1001`, Okuma's `$NAME.MIN%`, Sinumerik's `%_N_…`) is never numbered, whatever the list says — on Okuma only an `O` line with nothing behind it counts as one, so `O1001 (NAME)` is protected only by the `O` in the list. An Okuma line that starts with `$` continues the block above it and is never numbered either, even if you take `$` out of the list; Results lists it as *Skipped: this line continues the block above it.* |
 | **Skip empty lines** | On by default |
 | **Start over at each program start** | For files that hold several programs. On by default |
 | **Only renumber blocks that already have a number** | Leaves unnumbered blocks unnumbered |
@@ -141,7 +141,7 @@ A main block, `:20 G1 X10`, is numbered like any other block: renumbering keeps 
 and gives it the next number of the same count (`:110`). A jump that names it by its colon,
 `GOTOF :20`, is rewritten with it. `GOTOF N20` names an ordinary `N20` only, never the main
 block `:20`, so it is reported as missing when there is no `N20`. A jump written without a
-blank, `GOTOF:20`, is read as a label and is not followed; leave a blank after the jump word.
+blank, `GOTOF:20`, is read as a jump like `GOTOF :20` and is followed and rewritten with it.
 A label that starts with `N`, such as `NEXT_PECK:`, gets a block number in front of it
 (`N20 NEXT_PECK:`) like any other label.
 
@@ -193,9 +193,8 @@ on: with it, a program comes out clean except for the handful of blocks that hav
 their numbers, and each of those is listed in Results with the reason.
 
 Switch it off and every number goes. Then you are asked first, and afterwards every line in
-the run that points at a block number is listed so you can fix the jumps by hand. (A jump to
-a Sinumerik main block, `GOTOB :20`, is counted in the question but gets no line of its own
-in that list yet.)
+the run that points at a block number is listed so you can fix the jumps by hand, a jump to a
+Sinumerik main block (`GOTOB :20`, with or without a blank) included.
 
 On Sinumerik a main block, `:20`, that a jump names (`GOTOF :20`) is one of the numbers that
 stay; a main block nobody names loses its number like the others.
@@ -290,10 +289,16 @@ Every comment that was kept is listed in Results with the reason.
 Converts the program to upper or lower case. Comments are left alone unless you switch off
 **Leave comments as they are**. Text in quotes in the code keeps its case — a tool name in
 `TOOL CALL "MILL_D10"` or `T="drill_d8"`, the text of a `MSG("…")` — but inside a comment
-you chose to convert, a quote is just a character and its text converts with the rest. **A
-Fanuc program name in `<angle brackets>` is not kept apart yet**: `<mac_f1>` becomes
-`<MAC_F1>`, and the control may read a name as case-sensitive, which would break a call to
-the lower-case original — check a program that calls another by name before converting it.
+you chose to convert, a quote is just a character and its text converts with the rest.
+
+**Program names and numbers keep their case**, because the control may tell upper from lower
+case in a name, and converting a call without the program it calls would break the call. That
+covers a Fanuc name in angle brackets (`<mac_f1>`), a program number (`O1234`, `:1234`), a file
+header (`%_N_part_MPF`, `$part.MIN%`) and the target of an Okuma `CALL`. Every line where a name
+would have changed gets a row in Results (*Program name left as written: the control may tell
+upper from lower case in it.*), and a warning gives the count (*2 program names and numbers
+were left as written.*). So converting to upper case leaves an `o1001` as it is, and the row
+says so; change such a name by hand if you want it in capitals.
 
 | Option | What it does |
 |---|---|

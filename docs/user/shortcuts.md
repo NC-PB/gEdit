@@ -9,7 +9,10 @@ program: **View ▸ Keyboard Shortcuts**. That dialog is generated from the comm
 themselves, so for every key gEdit assigns — everything on this page except the Editing
 table and Quick outline — it is right, and this page is stale if the two ever disagree.
 The editing keys come with the editor component: the dialog lists those commands without
-a key, and the keys work all the same.
+a key, and the keys work all the same. The commands that have no key at all are hidden at
+first, so the list is the keys; tick **Show commands without a key** to see them too. A line
+under the search box says how many are hidden (*N commands without a key are hidden.*), so a
+search that finds nothing is not mistaken for a command that does not exist.
 
 **F1** opens the command palette, which finds any command by name — including the many
 that have no shortcut at all.
@@ -27,6 +30,8 @@ On a Mac laptop the F-keys may need the `fn` key, depending on your keyboard set
 | `Cmd/Ctrl+Alt+S` | Save All |
 | `Cmd/Ctrl+W` | Close the tab |
 | `Cmd/Ctrl+Shift+W` | Close the window |
+
+**Reload** (read the file again from disk) is on the File tab and in the palette; it has no key.
 
 Close All, Open Recent…, Clear Recent Files, Lock Against Editing, Show Recovered Work,
 Manage Machines…, Open Machines File and the four status-bar pickers (dialect, machine,
@@ -170,8 +175,9 @@ None of these has a key; they are on the ribbon or in the palette (`F1`).
 - `Backspace` in column 1 and `Delete` at the end of a line refuse to join two blocks of text
   (the switch above does not change that); select the line break to delete it.
 - **Manage Profiles…**, **New Profile From…**, **Open**, **Import** and **Export Profile
-  File…**, **Reload Profiles** and **Test Profile on Document** (Tools tab, *Profiles*) are
-  described in [Your own profiles and code files](profiles.md#the-profiles-page).
+  File…** and **Reload Profiles** are in the palette; **Test Profile on Document** is also on
+  the Tools tab (*Profiles*). All are described in
+  [Your own profiles and code files](profiles.md#the-profiles-page).
 - **Import Machines…** and **Export Machines…** are described under
   [Moving machines to another computer](machines.md#moving-machines-to-another-computer).
 
