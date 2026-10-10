@@ -82,10 +82,21 @@ export default {
   snapshotFailed:
     'Unsaved changes to {name} cannot be stored for crash recovery. Save your work to a file — a crash would lose it.',
 
+  // The lasting sign (B1 A2): an item in the status bar while snapshots cannot be written,
+  // which goes when a pass writes again. Clicking it tries again at once.
+  failingItem: 'Crash recovery is not saving',
+  failingTooltip:
+    'Unsaved changes to {names} cannot be stored for crash recovery. Save your work to a file — a crash would lose it. Click to try again.',
+
   // --- results -------------------------------------------------------------
   restored_one: '1 document was restored. It is unsaved — check it before you save.',
   restored_other: '{count} documents were restored. They are unsaved — check them before you save.',
   restoreFailed: '{name} could not be restored.',
+  /** After a restore where another tab already has the file open: the text is in an untitled tab. */
+  pathTaken_one:
+    '{names} is already open in another tab, so its recovered text is in an untitled tab. Use Save As to keep it under another name.',
+  pathTaken_other:
+    '{names} are already open in another tab, so their recovered text is in untitled tabs. Use Save As to keep it under other names.',
   /** After a partial restore: the rest are still on disk, and that is deliberate. */
   keptRest_one: '1 more snapshot is kept and will be offered again next time.',
   keptRest_other: '{count} more snapshots are kept and will be offered again next time.',

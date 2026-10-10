@@ -13,8 +13,6 @@ export default {
   category: 'Insert',
   /** `templates.insert`: a quick pick of the active document's templates, by group. */
   insert: 'Insert Template…',
-  /** The Home tab's group with the `program-start` button (`insert.template:program-start`). */
-  groupProgram: 'Program',
   /** The Insert tab's custom group of template buttons (one row of buttons and a "More" list per template group). */
   groupTemplates: 'Templates',
   /** The "More templates…" list of a template group. */

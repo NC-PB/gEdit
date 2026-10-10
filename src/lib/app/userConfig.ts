@@ -1,5 +1,4 @@
-// The user's own profiles and code files (plan AD-29, §7.3). Written by the M13 prelude
-// (P13) as a stub; **WP13.2 owns it from Wave A on**.
+// The user's own profiles and code files (plan AD-29, §7.3). Built by WP13.2.
 //
 // What this module is for: the one place that reads `<config>/profiles/` and
 // `<config>/codes/` (through `user_files_list`, `platform/commands.ts`) and hands the files

@@ -46,10 +46,10 @@ scenario('m4-editing-cmds', { timeout: 420 }, async (h) => {
     await h.idle()
   }
 
-  // ============================================================= A. the two ribbon tabs
-  await ribbonTab(h, 'home')
+  // ============================================================= A. the two ribbon tabs (Edit and View)
+  await ribbonTab(h, 'edit')
   const homeButtons = h.qa('cmd-button').map((e) => e.dataset.command)
-  h.check('the Home tab carries the twelve Edit commands', EDITING_COMMANDS.home.every((id) => homeButtons.includes(id)), EDITING_COMMANDS.home.filter((id) => !homeButtons.includes(id)))
+  h.check('the Edit tab carries the twelve Edit commands (B1 A9: they moved from the Home tab, which is gone)', EDITING_COMMANDS.home.every((id) => homeButtons.includes(id)), EDITING_COMMANDS.home.filter((id) => !homeButtons.includes(id)))
 
   await ribbonTab(h, 'view')
   const viewButtons = h.qa('cmd-button').map((e) => e.dataset.command)
@@ -70,13 +70,13 @@ scenario('m4-editing-cmds', { timeout: 420 }, async (h) => {
   )
 
   // ============================================================ B. the twelve line tools
-  await ribbonTab(h, 'home')
+  await ribbonTab(h, 'edit')
   const id = await newDoc(h, PROGRAM)
   // Only the active tab's buttons are in the DOM, so enablement is asked of the registry
-  // and the Home buttons are checked where they are drawn.
+  // and the Edit buttons are checked where they are drawn.
   h.check('every wrapper is enabled with a document open', wrappers.every((cmd) => ctx.commands.isEnabled(cmd)), wrappers.filter((cmd) => !ctx.commands.isEnabled(cmd)))
   h.check(
-    'and the Home buttons are drawn enabled',
+    'and the Edit tab buttons are drawn enabled',
     EDITING_COMMANDS.home.every((cmd) => cmdButton(h, cmd) !== null && !(/** @type {HTMLButtonElement} */ (cmdButton(h, cmd)).disabled)),
     EDITING_COMMANDS.home.filter((cmd) => cmdButton(h, cmd) === null || /** @type {HTMLButtonElement} */ (cmdButton(h, cmd)).disabled),
   )

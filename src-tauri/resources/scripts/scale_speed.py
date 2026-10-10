@@ -64,7 +64,7 @@
 # id = "surfaceSpeed"
 # type = "choice"
 # label = "Also scale constant surface speeds"
-# help = "Under G96 the S word is a surface speed in metres or feet per minute, not revolutions, and so is a tool's cutting speed written as a word of its own (SVC= on a Sinumerik). Automatically means yes on a turning profile, where nearly every cut is one, and no on a milling profile."
+# help = "Under G96 the S word is a surface speed in metres or feet per minute, not revolutions, and so is a tool's cutting speed written as a word of its own (SVC= on a Sinumerik, VC: in a Klartext turning block). Automatically means yes on a turning profile, where nearly every cut is one, and no on a milling profile."
 # default = "auto"
 # choices = [
 #   { label = "Automatically (yes when turning)", value = "auto" },
@@ -106,10 +106,12 @@ Constant surface speed
     exception and the answer is no; on a turning one nearly every cut is under `G96`, and a
     run that skipped them would leave the cutting speeds of the whole program alone. What is
     not scaled is listed. A cutting speed written as a word of its own (Sinumerik `SVC=100`,
-    which the control turns into a spindle speed through the tool radius) is the same kind
+    which the control turns into a spindle speed through the tool radius, and the Klartext
+    `VC:120` of a `FUNCTION TURNDATA SPIN` block, written with a colon) is the same kind
     of number and follows the same option; the code database says which word that is
     (``sets.speedUnit: 'surface'`` on the word's entry), and it drives the master spindle,
-    or the spindle its index names (`SVC[2]=`), like any other speed word.
+    or the spindle its index names (`SVC[2]=`), like any other speed word. Only the number
+    is rewritten: the `=` or the `:` stays as written.
 Speed limits
     `G50 S` (and `G92 S` in G-code system B) clamps the top spindle speed for constant
     surface speed. It is a machine limit, not a cutting speed. **Which** code that is comes
@@ -559,6 +561,18 @@ def assignment_word(token: gedit_nc.Token) -> bool:
     return sep == "=" and head.strip().upper() == token.address.upper()
 
 
+def colon_word(token: gedit_nc.Token) -> bool:
+    """True for a word written with `:` (the profile's ``syntax.colonWords``): Klartext `VC:120`.
+
+    The lexer reads such a word as one token whose address is the name in front of the `:`
+    and whose value is what follows it, so the address is exactly that name.
+    """
+    if token.kind != "word" or not token.address:
+        return False
+    head, sep, _ = token.text.partition(":")
+    return sep == ":" and head.strip().upper() == token.address.upper()
+
+
 def block_entries(
     tokens: Sequence[gedit_nc.Token], tracker: gedit_nc.FeedModeTracker
 ) -> List[Dict[str, Any]]:
@@ -676,8 +690,10 @@ def speed_words(tokens: Sequence[gedit_nc.Token], params: Params) -> List[SpeedW
                     out.append(SpeedWord(kind, name, tokens[k], number, text.upper() + "[]", text.upper()))
                     i = k + 1
                     continue
-        if token.kind == "word" and address in params.surface_words and assignment_word(token):
-            # `SVC=100`: the tool's cutting speed on the master spindle.
+        if token.kind == "word" and address in params.surface_words and (assignment_word(token) or colon_word(token)):
+            # `SVC=100`, Klartext `VC:120` (`FUNCTION TURNDATA SPIN VCONST:ON VC:120`): the
+            # tool's cutting speed on the master spindle. Only the number behind the `=` or
+            # the `:` is rewritten, so the form stays as written.
             out.append(SpeedWord("speed", text, token, None, address, address))
             i += 1
             continue

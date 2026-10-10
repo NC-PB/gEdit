@@ -1,7 +1,7 @@
 [package]
 name = "gedit"
 version = "1.0.0"
-description = "A desktop G-code editor for CNC programming (Fanuc & Heidenhain)."
+description = "A desktop G-code editor for CNC programming (Fanuc, Heidenhain, Okuma, Sinumerik)."
 authors = ["Peter <83696476+NC-PB@users.noreply.github.com>"]
 license = "MIT"
 repository = "https://github.com/NC-PB/gEdit"
@@ -38,6 +38,17 @@ tauri = { version = "2", features = ["test"] }
 
 [target."cfg(unix)".dependencies]
 libc = "0.2"
+
+# A job object per script run (`src/scripts/job.rs`): what a script started dies with the
+# run on Windows, the way `killpg` does it on Unix. 0.61 is the version Tauri's own
+# dependencies already use, so this adds no second copy to the build.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_JobObjects",
+  "Win32_System_Threading",
+] }
 
 # The macOS termination hook (AD-20, plan M6 P6 item 2). Confined to `src/quit.rs`:
 # nothing else in the backend talks to Objective-C, and G8 checks that.

@@ -57,6 +57,7 @@ const PARAMS: Readonly<Record<string, readonly string[]>> = {
   'scripts.staleMessage': ['script'],
   'scripts.staleOpen': [],
   'scripts.staleDiscarded': ['script'],
+  'scripts.headerChanged': ['script'],
 };
 
 const PLACEHOLDER = /\{(\w+)\}/g;

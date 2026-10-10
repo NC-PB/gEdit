@@ -94,7 +94,9 @@ scenario('m0-main', { timeout: 180 }, async (h) => {
     (starterMap?.length ?? 0) === 2 && !!h.q('program-map-item', { line: 2, kind: 'program' }),
     h.qa('program-map-item').map((e) => e.dataset.line + ':' + e.dataset.kind),
   )
-  h.check('the Home tab is selected', h.q('ribbon-tab', { tab: 'home', 'aria-selected': 'true' }) !== null)
+  // B1 A9: the Home tab is gone; the ribbon starts on File (the seven tabs are File, Edit, Insert,
+  // NC, Tools, Scripts, View).
+  h.check('the File tab is selected, and there is no Home tab', h.q('ribbon-tab', { tab: 'file', 'aria-selected': 'true' }) !== null && h.q('ribbon-tab', { tab: 'home' }) === null)
 
   // The hook switches the profile the same way the picker does. The store changes in the
   // same tick; the status item is Svelte state, so it repaints on the next frame.
@@ -228,12 +230,14 @@ scenario('m0-main', { timeout: 180 }, async (h) => {
     { script, calibration: blocked },
   )
 
-  // The ribbon path, v2: Tools -> the Scripts group -> click the script -> the Output panel.
+  // The ribbon path, v2: Scripts -> My Scripts -> click the script -> the Output panel.
+  // (B1 A9: a script of a folder the user added is on the Scripts tab, not on Tools; Tools keeps
+  // the built-in ones.)
   // A script with no header runs in panel mode (`decideApply` step 4, the v1 fallback), so
   // its stdout lands in the panel rather than in the program.
-  h.click(h.q('ribbon-tab', { tab: 'tools' }))
+  h.click(h.q('ribbon-tab', { tab: 'scripts' }))
   const item = await h.waitFor(() => h.q('script-item', { scriptId: 'extra0:a_echo.py' }), { timeout: 15000 })
-  h.check('the folder’s scripts are offered in the Tools group', !!item && item.getAttribute('data-command') === 'script.run:extra0:a_echo.py', item?.outerHTML?.slice(0, 160))
+  h.check('the folder’s scripts are offered in the My Scripts group of the Scripts tab', !!item && item.getAttribute('data-command') === 'script.run:extra0:a_echo.py', item?.outerHTML?.slice(0, 160))
   const docText = h.app.text()
   if (item) {
     h.click(item)
@@ -251,7 +255,7 @@ scenario('m0-main', { timeout: 180 }, async (h) => {
       h.qa('panel').map((e) => `${e.dataset.region}/${e.dataset.panel}`),
     )
   }
-  h.click(h.q('ribbon-tab', { tab: 'home' }))
+  h.click(h.q('ribbon-tab', { tab: 'file' }))
 
   // ---------------------------------------------------------------- the fs scope
   const scoped = `${run}/fs-roundtrip.nc`

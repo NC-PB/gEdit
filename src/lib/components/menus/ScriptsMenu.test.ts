@@ -6,7 +6,7 @@
 // with four different fixes, and a single "no scripts" for all of them sends the user
 // looking in the wrong place. The fifth case pins the seam a scenario clicks.
 //
-// `core/scripting/filter.ts` is WP5.1's and still the P5 stub, so the filter is faked with
+// The filter of `core/scripting/filter.ts` is faked with
 // the rules its header states.
 
 import { render } from 'svelte/server';
@@ -201,5 +201,46 @@ describe('the script items', () => {
     const html = menu();
     expect(html).toContain('data-script-id="user:a.py"');
     expect(html).toMatch(/data-script-id="user:a.py"[^>]*disabled/);
+  });
+});
+
+// B1 A9: the Tools tab lists the scripts that ship with gEdit, the Scripts tab the user's own.
+describe('the two lists (B1 A9)', () => {
+  const Bundled = async () => (await import('./BundledScriptsMenu.svelte')).default;
+  const Own = async () => (await import('./OwnScriptsMenu.svelte')).default;
+
+  beforeEach(() => {
+    scriptList.set([
+      entry('bundled:scale_feed.py', { meta: meta({ name: 'Scale feed rates' }) }),
+      entry('bundled:tool_list.py', { meta: meta({ name: 'Tool list' }) }),
+      entry('user:mine.py', { meta: meta({ name: 'My script' }) }),
+      entry('extra0:other.py', { meta: meta({ name: 'Other folder script' }) }),
+    ]);
+  });
+
+  it('shows only the built-in scripts on the Tools tab', async () => {
+    const html = render(await Bundled()).body;
+    expect(html).toContain('data-script-id="bundled:scale_feed.py"');
+    expect(html).toContain('data-script-id="bundled:tool_list.py"');
+    expect(html).not.toContain('user:mine.py');
+    expect(html).not.toContain('extra0:other.py');
+  });
+
+  it('shows only the user\'s own scripts, from the user folder and added folders, on the Scripts tab', async () => {
+    const html = render(await Own()).body;
+    expect(html).toContain('data-script-id="user:mine.py"');
+    expect(html).toContain('data-script-id="extra0:other.py"');
+    expect(html).not.toContain('bundled:');
+  });
+
+  it('does not caption a single ungrouped list inside a group that already has a label', async () => {
+    expect(render(await Bundled()).body).not.toContain('class="caption');
+    expect(menu()).toContain('class="caption');
+  });
+
+  it('tells the Scripts tab, not the Tools tab, that there is nothing of the user\'s own yet', async () => {
+    scriptList.set([entry('bundled:scale_feed.py')]);
+    expect(render(await Own()).body).toContain('No scripts of your own yet');
+    expect(render(await Bundled()).body).not.toContain('No scripts');
   });
 });

@@ -1,10 +1,10 @@
-// Templates (Phase 2 plan §7.8, AD-28; Phase 3 plan §6.11). Written by the P3b prelude.
+// Templates (Phase 2 plan §7.8, AD-28; Phase 3 plan §6.11).
 //
 // The one import for everything else: the Insert tab, completion and the palette (P3.5), the
 // cycle forms (P3.8 engine, P3.5 command), the template manager (P3.9) and the code database
 // loader (`core/codes/load.ts`, which reads the `templates` member through `loadTemplates`).
 //
-// Owners from Wave A on: `types.ts`, `load.ts`, `engine.ts` — P3.4; `formula.ts`,
+// Built by: `types.ts`, `load.ts`, `engine.ts` — P3.4; `formula.ts`,
 // `cycleForm.ts`, `fromSelection.ts` — P3.8.
 
 export * from './types';

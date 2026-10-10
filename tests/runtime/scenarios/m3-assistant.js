@@ -121,10 +121,13 @@ scenario('m3-assistant', { timeout: 300 }, async (h) => {
   )
   h.check('G80 has nothing to fill in and is not drawn as a snippet', iconOf('G80') === 'symbol-function', iconOf('G80'))
 
-  // G9x are modes rather than cycles, so they insert the bare code and carry the plain
-  // code icon: the two kinds really are told apart.
+  // G9x are modes rather than cycles, so they insert the bare code and carry the plain code icon: the two
+  // kinds really are told apart. B1 A4: the icon follows what the item inserts, so G93 (inverse time feed,
+  // which needs its F) expands to `G93 F` with a tab stop and is drawn as a snippet, like a cycle.
   const g9 = await suggestAt(h, fanucId, 10, 7)
-  h.check('a mode code is offered as a plain code, not as a snippet', g9.db.length > 0 && g9.db.every((row) => row.icon === 'symbol-function'), g9.db.map((r) => `${r.label}:${r.icon}`))
+  const g9icon = (/** @type {string} */ code) => g9.db.find((row) => row.label === code)?.icon
+  h.check('a mode code is offered as a plain code, not as a snippet', g9.db.length > 0 && g9.db.filter((row) => row.label !== 'G93').every((row) => row.icon === 'symbol-function'), g9.db.map((r) => `${r.label}:${r.icon}`))
+  h.check('except G93, which inserts G93 F with a tab stop for the F and is drawn as a snippet', g9icon('G93') === 'symbol-snippet', g9.db.map((r) => `${r.label}:${r.icon}`))
   h.check('G9 offers the distance, feed and spindle modes', g9.db.map((r) => r.label).includes('G90') && g9.db.map((r) => r.label).includes('G95'), g9.db.map((r) => r.label))
 
   // A packed block is the case WP3.6 §5.2 asked for: the language configuration's

@@ -11,7 +11,11 @@
 // effective values would drift apart until the next start.
 
 import Settings2 from 'lucide-svelte/icons/settings-2';
-import SettingsDialog, { PROFILES_TAB } from '$lib/components/dialogs/SettingsDialog.svelte';
+import SettingsDialog, {
+  PROFILES_TAB,
+  settingsModal,
+  type DialogTab,
+} from '$lib/components/dialogs/SettingsDialog.svelte';
 import { asIcon } from '$lib/app/icons';
 import { files } from '$lib/app/fileOps';
 import { modals } from '$lib/app/modals';
@@ -33,6 +37,12 @@ function isSettingsDocument(id: DocId): boolean {
   return docs.byPath(file)?.id === id;
 }
 
+/** Opens the dialog; Esc outside it, a press outside it and Cancel ask first when something typed would be lost (B1 A4). */
+function openSettings(tab?: DialogTab): Promise<unknown> {
+  const { props, options } = settingsModal(tab);
+  return modals.open(SettingsDialog, props, options);
+}
+
 export default {
   id: 'settings',
   commands: [
@@ -43,7 +53,7 @@ export default {
       icon: asIcon(Settings2),
       keys: 'Mod+,',
       global: true,
-      run: () => modals.open(SettingsDialog, {}),
+      run: () => openSettings(),
     },
     {
       // M13 (integration): the way to the Profiles page without a key. The page's buttons
@@ -53,7 +63,7 @@ export default {
       title: 'userConfig.manage',
       category: 'userConfig.category',
       global: true,
-      run: () => modals.open(SettingsDialog, { initialTab: PROFILES_TAB }),
+      run: () => openSettings(PROFILES_TAB),
     },
   ],
   // A group's place in the tab is the smallest `order` its items carry, so 95 puts

@@ -4,26 +4,20 @@ A **profile** is everything gEdit knows about one kind of NC file: extensions an
 
 Tag format: `Priority · Size · Delivery`.
 
-## Today and target
+> **Status.** Design note from 2026-09-19. What shipped is described in the user guide ([Dialects](../user/dialects.md), [Machines](../user/machines.md), [Your own profiles and code files](../user/profiles.md)); where this note and the guide differ, the guide is right. Status per section: the profile model, detection, the outline, numbering, the generated grammars, `extends`, user profiles with a lean editor (the JSON in a tab, a Profiles page, a test on the open program) and the editing options shipped; load and save formatting, per-profile colors, a form-generated editor with a live preview and per-profile `tabWidth`/`rulers`/`completion` did not (roadmap Phase 4 table or backlog). The JSON examples below are the Phase 1 shape: the shipped files carry more members (see `src/lib/data/profiles/`).
 
-Today the dialect knowledge is spread over hardcoded files:
+## Where the knowledge was, and where it is
 
-| Current file | Holds | Moves to |
-|---|---|---|
-| `src/lib/utils/dialects.ts` | Label, save filter, extensions, default file name | `name`, `files` |
-| `src/lib/utils/detectLanguage.ts` | Extension switch, weighted content regexes | `detect` |
-| `src/lib/utils/gcodeParser.ts` | Per-dialect regexes for tool calls and comments | `toolCall`, `outline` |
-| `src/lib/languages/fanuc.ts`, `heidenhain.ts` | Monarch grammar, completion list | `grammar` + `syntax` + `colors`; completions go to the [code database](code-assistant.md#code-database-format) |
-| `src/lib/data/blocks/*.json` | Insertable snippets | Code database `templates` |
-
-Target: built-in profiles are JSON files shipped with the app. The TypeScript code becomes generic: detection scoring, an outline rule runner, and a grammar generator that reads the profile. Adding a dialect then means adding a profile and a code database, plus a grammar only if the syntax family is new.
+*Historical note.* Before Phase 1 the dialect knowledge was spread over hardcoded files (`src/lib/utils/dialects.ts`, `detectLanguage.ts`, `gcodeParser.ts`, `src/lib/languages/*.ts` and `src/lib/data/blocks/*.json`). Phase 1 moved all of it into JSON profiles and the code database, and those files are gone. Built-in profiles are JSON files shipped with the app (`src/lib/data/profiles/`), the TypeScript code is generic (detection scoring, an outline rule runner, grammar generators that read the profile), and adding a dialect means adding a profile and a code database, plus a grammar only if the syntax family is new. The migration steps at the end of this note are all done.
 
 ## Profile model
 
 ### Built-in and user profiles
 `P1 · M · Core` (built-ins as JSON) · `P2 · M · Core` (user profiles with `extends`)
 
-- Built-in profiles: `fanuc-gcode` (milling) and `heidenhain-klartext` (the existing ids stay, so current Monaco language ids keep working). Later: a Fanuc lathe child profile, `sinumerik-gcode` and `okuma-osp`. Built-ins are read-only in the app bundle.
+**Status:** `extends` for the built-in profiles shipped in M6, user profiles in M13. The choice of a profile by hand is kept per file (M7).
+
+- Built-in profiles: `fanuc-gcode` (milling), `fanuc-lathe` (a child of it), `heidenhain-klartext`, `okuma-osp`, `sinumerik` (turning) and `sinumerik-mill` (the Phase 1 plan called the Siemens one `sinumerik-gcode`). Built-ins are read-only in the app bundle.
 - User profiles live in `<config>/profiles/*.json`. A user profile names a parent with `extends` and contains only the fields it changes. Objects merge deeply, and arrays and scalar values replace. A typical use is one profile per machine, sharing a base dialect but with a different extension, folder or numbering step.
 - Each profile registers its own Monaco language id (its `id`), so profiles with different comment syntax or keywords can be highlighted differently.
 - An open document can switch profiles manually (existing selector in the ribbon; later also in the status bar). The choice is remembered per file path (P2).
@@ -43,7 +37,7 @@ Example user profile:
 
 ### Format choice
 
-JSON, validated by a JSON Schema (`schema/profile.schema.json`). Reasons: it matches the existing blocks JSON, needs no extra parser in TypeScript, and serde reads it in Rust. The schema gives field descriptions for the generated settings UI. The downside is escaped backslashes in regexes (`"\\d+"`). The [pattern tester](#profile-editor) in the settings UI reduces that pain.
+JSON. The plan was to validate it against a JSON Schema (`schema/profile.schema.json`); no schema file ships. The loader checks profiles in code (`src/lib/core/profiles/validate.ts`), and JSON Schemas for profiles and machines are in the Phase 4 table of the roadmap. Reasons for JSON: it needs no extra parser in TypeScript, and serde reads it in Rust. The downside is escaped backslashes in regexes (`"\\d+"`). The [pattern tester](#profile-editor) (*Test Profile on Document*) reduces that pain.
 
 ## Schema overview
 
@@ -61,7 +55,7 @@ JSON, validated by a JSON Schema (`schema/profile.schema.json`). Reasons: it mat
 | `numberFormat` | `decimals` (`keep` \| n), `trailingZeros`, `keepPoint`, `plusSign` | [Number formatting](nc-transformations.md#number-formatting) |
 | `editing` | `forceUppercase`, `preventLineJoin`, `autoSpace`, `autoIndent`, `tabWidth`, `rulers[]`, `completion` | [Typing behavior](editor-core.md#typing-behavior-for-nc-code) |
 | `onLoad` / `onSave` | See [Load and save formatting](#load-and-save-formatting) | File handling |
-| `compare` | `ignoreBlockNumbers`, `ignoreWhitespace`, `ignoreComments`, `ignoreCase`, `ignoreNumberFormat`, `tolerance` | [File compare](file-compare.md#ignore-options) |
+| `compare` | `ignoreBlockNumbers`, `ignoreWhitespace`, `ignoreComments`, `ignoreCase`, `ignoreNumberFormat` (`tolerance` was cut, see [file-compare.md](file-compare.md#ignore-options)) | [File compare](file-compare.md#ignore-options) |
 | `toolList` | `description` (`above` \| `below` \| `trailing` \| `auto`), `commentFilter`, `extraFields[]`, `collapseOffsetDigits`, `dropLeadingZeros` | [Tool list](nc-transformations.md#tool-list) |
 | `highlight` | `[{match, role \| color, extend}]` | [Colors](#tokenizer-and-colors) |
 | `colors` | `{dark: {role: color}, light: {...}}` | [Colors](#tokenizer-and-colors) |
@@ -136,7 +130,7 @@ CAM output is often packed (`N10T1M6`), and `\b` finds no boundary between a dig
   "onLoad": { "stripNul": true },
   "compare": {
     "ignoreBlockNumbers": true, "ignoreWhitespace": true, "ignoreComments": false,
-    "ignoreCase": true, "ignoreNumberFormat": true, "tolerance": 0
+    "ignoreCase": true, "ignoreNumberFormat": true
   },
   "toolList": { "description": "auto", "commentFilter": "^[-*=_\\s]*$", "dropLeadingZeros": true }
 }
@@ -145,7 +139,7 @@ CAM output is often packed (`N10T1M6`), and `\b` finds no boundary between a dig
 Notes on this example:
 
 - `toolFrom: "same-line-or-last"`: many posts preselect the next tool with a bare `T` word right after a tool change, so a `T` word alone is not a tool change. The change is the `M6` line, and its tool is the `T` on the same line or the last `T` before it.
-- `.min` is left out on purpose. Today it maps to Fanuc, but it is the Okuma OSP main-program extension ([syntax-okuma.md](syntax/syntax-okuma.md#111-extension-conflict-min)). It stays with Fanuc only until the Okuma profile exists.
+- `.min` is left out on purpose: it is the Okuma OSP main-program extension ([syntax-okuma.md](syntax/syntax-okuma.md#111-extension-conflict-min)) and belongs to the `okuma-osp` profile, which exists since M8. The shipped Fanuc profile also lists `ncc` and `ptp`, and its detection weights are the ones above.
 - The Fanuc lathe child profile changes the rules that differ for turning ([syntax-fanuc.md](syntax/syntax-fanuc.md#41-profiles-the-same-code-means-different-things)): every `T` word is a tool change (with `collapseOffsetDigits` in the tool list), and `G70`–`G73` get a reference rule for their `P`/`Q` block numbers. The milling profile must not have that rule, because on mills `G73` is peck drilling and its `Q` is a peck depth.
 
 ## Example: Heidenhain Klartext
@@ -201,36 +195,48 @@ The tool-call trigger requires a tool number, name or `QS` parameter, because a 
 ### Detection
 `P1 · S · Core`
 
-Replaces the `switch` in `detectLanguage.ts`:
+**Status:** shipped in Phase 1, extended in M8, M9 and M12.5.
+
+Replaced the `switch` of the old `detectLanguage.ts`:
 
 1. If a profile lists a folder that contains the file, that profile wins.
-2. Otherwise, each profile gets a score: its extension weight plus the weights of content patterns that match within the first 400 non-empty lines (the same limit as today). A line counts only for its strongest matching pattern.
+2. Otherwise, each profile gets a score: its extension weight plus the weights of content patterns that match within the first 400 non-empty lines (the limit of Phase 0). A line counts only for its strongest matching pattern.
 3. The highest score wins. Ties go to the higher `priority`, then to user profiles over built-ins, then to the current or default profile.
-4. A manual choice by the user for a file path is remembered and overrides detection (P2).
+4. A manual choice by the user for a file path is remembered and overrides detection (shipped in M7). Detection since M9 and M12.5 does more than this list: see [Dialects](../user/dialects.md#which-dialect-a-file-gets).
 
 ### Outline (program map)
 `P1 · S · Core`
 
-Replaces the branches in `gcodeParser.ts` with a generic runner. Tool entries come from `toolCall`. `outline` adds more kinds (`program`, `section`, `comment`, `label`, `stop`, `subprogram-call`). For each line, the first matching rule wins. The display text comes from the named groups. The kinds have fixed icons in the program map. Comment lines inside a tool segment can be shown as children of the tool, which gives a two-level tree (tool → operation comments) for typical CAM output.
+**Status:** shipped in Phase 1.
+
+Replaced the branches of the old `gcodeParser.ts` with a generic runner. Tool entries come from `toolCall`. `outline` adds more kinds (`program`, `section`, `comment`, `label`, `stop`, `subprogram-call`). For each line, the first matching rule wins. The display text comes from the named groups. The kinds have fixed icons in the program map. Comment lines inside a tool segment can be shown as children of the tool, which gives a two-level tree (tool → operation comments) for typical CAM output.
 
 ### Numbering
 `P1 · S · Profile` (fields) · consumed by [renumber](nc-transformations.md#renumber-blocks)
+
+**Status:** shipped in Phase 1, with reference-aware renumbering added in M6 (`references[]`).
 
 `mode`: `free` (default: any start and step) or `consecutive` (Klartext: every logical block, from `start` in steps of 1, no gaps allowed). How a block number is recognized (`N` prefix or leading integer) comes from `syntax.blockNumber`. Other fields: `start`, `step`, `fitToMax`, `digits`, `max`, `onOverflow` (`wrap` \| `stop`), `spacesAfter` or `alignColumn`, `everyNth`, `skipStartingWith[]`, `skipContaining[]`, `skipEmpty`, `skipFirst`, `skipLast`, `onlyNumbered`, `restartAtProgramStart`, `startTrigger` + `startAfterTrigger`, `references[]`, `autoNumberOnEnter`, `promptBeforeRenumber`.
 
 ### Editing
 `P2 · S · Profile`
 
+**Status:** only `forceUppercase` and `preventLineJoin` are read (shipped in M13). `autoSpace`, `autoIndent`, `rulers` and a per-profile `tabWidth` and `completion` mode are not built (roadmap Phase 4 table); the global editor settings apply.
+
 `forceUppercase` (comments excluded), `preventLineJoin`, `autoSpace`, `autoIndent`, `tabWidth`, `rulers` (for example the control's maximum block length), `completion` (`auto` \| `manual` \| `off`). Values missing in a profile fall back to the global editor settings.
 
 ### Load and save formatting
 `P2 · S · Core`
+
+**Status:** not built, except `onLoad.stripNul` (Phase 1). The rest is in the backlog.
 
 - `onLoad`: `stripNul` (default on, reported), `tabsToSpaces`, `insertSpaces`. Any change made on load marks the document modified and is listed in the status bar, so the user knows the file will differ when saved.
 - `onSave`: `trimTrailingWhitespace`, `finalNewline` (`keep` \| `add` \| `remove`), plus `files.encoding` and `files.lineEnding`. Characters that the target encoding cannot represent block the save with a list of lines, instead of being replaced silently.
 
 ### Tokenizer and colors
 `P1 · M · Core` (generated grammar, role colors) · `P2 · S · Core` (per-profile colors, extra rules)
+
+**Status:** the generated grammars (`iso`, `klartext`, Sinumerik, Okuma) and the role colors shipped; per-profile `colors` and `highlight` are deferred to Phase 4. Coloring lines by motion shipped in P3a as a mark beside the line (see [Understanding a block](../user/inspector.md#motion-colours)).
 
 - `grammar` selects a Monarch grammar generator. `iso` covers Fanuc-style word-address code. It is generated from `syntax` (comment delimiters, block-number prefix, skip mark, variables) and the code database keywords. `klartext` is hand-written but reads the same `syntax` fields. Sinumerik (strings, `;` comments, function-style cycle calls) and Okuma OSP (alphanumeric sequence names, `=` addresses, `V` variables) differ too much for `iso` and get their own grammars, following the rule order in [syntax-sinumerik.md](syntax/syntax-sinumerik.md#38-monarch-rule-order-proposal) and [syntax-okuma.md](syntax/syntax-okuma.md#38-monarch-rule-order-proposal).
 - Tokens carry roles: `blockNumber`, `skip`, `gcode`, `mcode`, `axis`, `arcCenter`, `feed`, `spindle`, `tool`, `variable`, `keyword`, `comment`, `section`, `programMarker`, `number`, `string`, `operator`, `invalid`.
@@ -242,6 +248,8 @@ Replaces the branches in `gcodeParser.ts` with a generic runner. Tool entries co
 ## Profile editor
 `P2 · M · Core`
 
+**Status:** a lean editor shipped in M13: the JSON in a tab, a Profiles page in the settings dialog (new from a profile, open, import, export, remove, reload) and *Test Profile on Document*, the pattern tester described below. The form generated from a schema and the live preview are deferred to Phase 4.
+
 A page in the settings dialog ([settings-ui.md](settings-ui.md#settings-dialog)):
 
 - List of profiles. Built-ins are marked read-only and can be duplicated into a user profile with `extends`. User profiles can be renamed, deleted (with confirmation) and reordered (the order is the detection tie-break).
@@ -252,7 +260,9 @@ A page in the settings dialog ([settings-ui.md](settings-ui.md#settings-dialog))
 
 ## Migration steps
 
-1. Write TypeScript types and the JSON Schema. Convert today's hardcoded data into `fanuc-gcode.json` and `heidenhain-klartext.json`. Load them at startup. Behavior stays identical, which is checked with sample-file tests for detection and the program map. (P1)
+*Done.* All six steps were carried out (1 to 4 in Phase 1, 5 in M13, 6 in M6 and M8); the list stays as the record of the order.
+
+1. Write TypeScript types and the JSON Schema. Convert the hardcoded data of Phase 0 into `fanuc-gcode.json` and `heidenhain-klartext.json`. Load them at startup. Behavior stays identical, which is checked with sample-file tests for detection and the program map. (P1)
 2. Replace `detectLanguage.ts` with profile scoring and `gcodeParser.ts` with the outline runner. (P1)
 3. Generate the ISO grammar from the profile, and parameterize the Klartext grammar. (P1)
 4. Move completions and blocks into the code database. (P1/P2)

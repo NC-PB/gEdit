@@ -1,5 +1,4 @@
-// Session restore and per-file memory, webview half (plan §7.9, AD-22). Owner: WP7.5
-// (the M7 prelude wrote the stubs this replaces).
+// Session restore and per-file memory, webview half (plan §7.9, AD-22). Built by WP7.5.
 //
 // Two halves of one idea — "gEdit comes back the way it was left" — and they are in one
 // file because they are switched on by two settings that the user reads as one feature:
@@ -98,8 +97,12 @@ export interface SessionDeps {
   load(): Promise<SessionState>;
   /** `files_stat`, so a file that is gone is dropped before a dialog can appear. */
   stat(paths: string[]): Promise<{ allowed: boolean; exists: boolean; isDir: boolean }[]>;
-  /** `files.open`. It also drops the pristine untitled document for us. */
-  open(paths: string[]): Promise<DocId[]>;
+  /**
+   * `files.open`. It also drops the pristine untitled document for us. With
+   * `activate: false` the files are added behind the tab in front and no summary is
+   * shown; `index` is the tab position of the first of them.
+   */
+  open(paths: string[], o?: { activate?: boolean; index?: number }): Promise<DocId[]>;
   activate(id: DocId): void;
   onWillQuit(cb: () => Promise<void> | void): Disposable;
   notify(text: string, o?: { error?: boolean; detail?: string }): void;
@@ -122,7 +125,9 @@ export function snapshotOf(
   return { paths: saved.map((doc) => doc.path), active: at < 0 ? null : at };
 }
 
-export function createSessionService(deps: SessionDeps): SessionService {
+export function createSessionService(deps: SessionDeps): SessionService & { settled(): Promise<void> } {
+  /** The background half of the restore (see `restore`); `settled()` waits for it. */
+  let tail: Promise<void> = Promise.resolve();
   let timer: ReturnType<typeof setTimeout> | undefined;
   /** True while a change has not reached `deps.save` yet. */
   let unsaved = false;
@@ -151,6 +156,13 @@ export function createSessionService(deps: SessionDeps): SessionService {
    * lingers is a nuisance, a tab list that vanished is a day's work to reconstruct.
    */
   let unreachable: string[] = [];
+  /**
+   * While the background tail of the restore runs: the stored paths still to come and
+   * where they are going, so a session written meanwhile keeps the stored order. `head`
+   * goes in front of every tab, `after` right behind the tab that was put up first
+   * (`front`); that is exactly where the tail's `files.open` calls will put them.
+   */
+  let tailPlan: { head: string[]; after: string[]; front: string } | null = null;
   /** Whether the user has been told, once, that the session list is not being stored. */
   let toldSaveFailed = false;
 
@@ -162,8 +174,23 @@ export function createSessionService(deps: SessionDeps): SessionService {
     // has to take it out of the session — so it stops being carried for good.
     unreachable = unreachable.filter((path) => !open.has(path));
     if (unreachable.length === 0) return snapshot;
-    // Appended, never inserted: `active` is an index into `paths`.
-    return { paths: [...snapshot.paths, ...unreachable], active: snapshot.active };
+    const carried = new Set(unreachable);
+    const head = tailPlan?.head.filter((path) => carried.has(path)) ?? [];
+    const after = tailPlan?.after.filter((path) => carried.has(path)) ?? [];
+    // The paths the tail has still to open stand where the tab bar will have them (the
+    // order they were stored in), not behind the tabs the user opened meanwhile. What
+    // could not be reached at all is appended after everything.
+    const tabs = [...snapshot.paths];
+    if (after.length > 0) {
+      const frontAt = tailPlan === null ? -1 : tabs.indexOf(tailPlan.front);
+      tabs.splice(frontAt < 0 ? tabs.length : frontAt + 1, 0, ...after);
+    }
+    const pending = new Set([...head, ...after]);
+    const paths = [...head, ...tabs, ...unreachable.filter((path) => !pending.has(path))];
+    const front = snapshot.active === null ? undefined : snapshot.paths[snapshot.active];
+    // `active` is an index into `paths`: recomputed from the path that is in front.
+    const at = front === undefined ? -1 : paths.indexOf(front);
+    return { paths, active: at < 0 ? null : at };
   }
 
   function writeNow(): Promise<void> {
@@ -291,25 +318,71 @@ export function createSessionService(deps: SessionDeps): SessionService {
         return 0;
       }
 
-      let opened: DocId[];
-      try {
-        opened = await deps.open(usable);
-      } catch (err) {
-        console.warn('the session could not be reopened', err);
-        tellMissing();
-        return 0;
+      // The tab that was in front, or — when that file is one of the skipped ones — the
+      // first that came back, goes up **first** and alone: a restore of fifty tabs takes
+      // seconds, and the one the user looks at should not wait for the other forty-nine
+      // (B1 A1). `files.open` leaves what it opens active; the others are added behind it.
+      const wanted = stored.active === null ? undefined : stored.paths[stored.active];
+      const candidates =
+        wanted !== undefined && usable.includes(wanted)
+          ? [wanted, ...usable.filter((path) => path !== wanted)]
+          : usable;
+      let front: { id: DocId; path: string } | undefined;
+      const attempted: string[] = [];
+      for (const path of candidates) {
+        attempted.push(path);
+        let opened: DocId[];
+        try {
+          opened = await deps.open([path]);
+        } catch (err) {
+          console.warn('the session could not be reopened', err);
+          tellMissing();
+          return 0;
+        }
+        if (opened.length > 0) {
+          front = { id: opened[0], path };
+          break;
+        }
       }
       tellMissing();
-      if (opened.length === 0) return 0;
+      if (front === undefined) return 0;
+      deps.activate(front.id);
 
-      // The tab that was in front, or — when that file is one of the skipped ones — the
-      // first that came back. `files.open` leaves the *last* one active, which is never
-      // what was meant.
-      const wanted = stored.active === null ? undefined : stored.paths[stored.active];
-      const front =
-        wanted !== undefined && usable.includes(wanted) ? deps.docs.byPath(wanted)?.id : opened[0];
-      if (front !== undefined) deps.activate(front);
-      return opened.length;
+      // Everything else follows in the background, at the tab positions it had. Until it
+      // is done the paths still to come are carried in the written list like the
+      // unreachable ones: a session written now must not forget forty tabs that are on
+      // their way (rule 1).
+      const frontPath = front.path;
+      const rest = usable.filter((path) => !attempted.includes(path));
+      if (rest.length > 0) {
+        unreachable = [...skipped, ...rest];
+        const at = usable.indexOf(frontPath);
+        const head = rest.filter((path) => usable.indexOf(path) < at);
+        const after = rest.filter((path) => usable.indexOf(path) > at);
+        tailPlan = { head, after, front: frontPath };
+        tail = (async () => {
+          try {
+            if (head.length > 0) await deps.open(head, { activate: false, index: 0 });
+            if (after.length > 0) {
+              const frontAt = deps.docs.all().findIndex((doc) => doc.id === front.id);
+              await deps.open(after, { activate: false, ...(frontAt < 0 ? {} : { index: frontAt + 1 }) });
+            }
+          } catch (err) {
+            console.warn('the rest of the session could not be reopened', err);
+          } finally {
+            // What did not open is not carried any more; the next start tries the stored
+            // list once more, which is what the last write before this one held.
+            unreachable = skipped;
+            tailPlan = null;
+          }
+        })();
+      }
+      // The one in front is up; the others are on their way (`settled()` waits for them).
+      return 1 + rest.length;
+    },
+
+    settled(): Promise<void> {
+      return tail;
     },
   };
 }
@@ -506,7 +579,7 @@ export function createFileTracker(deps: FileTrackerDeps): Disposable {
 // ---------------------------------------------------------------------------
 
 /**
- * The restore's stat, answered per entry (review of TODO Next up 8). A session usually
+ * The restore's stat, answered per entry (from a review). A session usually
  * lives on one share, and when that share hangs every entry comes back `unavailable` —
  * which plain `filesStat` turns into a rejection, and a restore whose stat rejected opened
  * nothing and said nothing. Read per entry, an unavailable path has `allowed: false`, so
@@ -531,7 +604,7 @@ export const session: SessionService = createSessionService({
   },
   load: async () => (isTauriRuntime() ? sessionLoad() : { paths: [], active: null }),
   stat: async (paths) => (isTauriRuntime() ? statSessionPaths(paths) : []),
-  open: (paths) => appFiles.open(paths),
+  open: (paths, o) => appFiles.open(paths, o),
   activate: (id) => appDocs.activate(id),
   onWillQuit: (cb) => appFiles.onWillQuit(cb),
   notify: (text, o) => appStatus.show(text, o),

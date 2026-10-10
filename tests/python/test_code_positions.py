@@ -61,5 +61,49 @@ class PositionGoldenTest(unittest.TestCase):
                 self.assertEqual(found, [])
 
 
+class OkumaHomeReturnTest(unittest.TestCase):
+    """B1 (package A7-O): the Okuma home returns ``G20`` and ``G21`` go to positions stored
+    in machine coordinates, so their axis words are machine positions, as Fanuc ``G28``,
+    ``G30`` and ``G53`` are; their only parameter (``HP``, which position) has no R8 role."""
+
+    def entries(self, dialect):
+        return {e["code"]: e for e in helpers.resolved_codes(dialect)}
+
+    def test_g20_and_g21_are_machine_positions_like_the_fanuc_returns(self):
+        okuma = self.entries("okuma")
+        fanuc = self.entries("fanuc")
+        for code in ("G20", "G21"):
+            with self.subTest(code=code):
+                self.assertEqual(gedit_nc.axis_words_of(okuma[code]), "machine")
+                self.assertEqual(
+                    [[p["address"], gedit_nc.position_of(p)] for p in okuma[code].get("params") or []],
+                    [["HP", None]],
+                )
+        for code in ("G28", "G30", "G53"):
+            with self.subTest(code=code):
+                self.assertEqual(gedit_nc.axis_words_of(fanuc[code]), "machine")
+
+    def test_extents_keep_a_home_return_out_of_the_ranges(self):
+        import extents  # the bundled folder is on sys.path once gedit_nc is imported
+
+        # A machine in the 1 mm unit system, so a written X100. is 100 mm and is resolved.
+        context = helpers.effective_context("okuma-osp", preset="okuma-1mm")
+        context["machine"] = dict(context["machine"], id="m", name="M")
+        cp = gedit_nc.compile_profile(context["profile"])
+        walker = extents.Extents(context, cp)
+        state = None
+        program = ["G00 X100. Z50.", "G20 HP=1 X400. Z300.", "G00 X80. Z10.", "M02"]
+        for number, line in enumerate(program, 1):
+            state = walker.line(line, number, state, record=True)
+        walker.settle_held()
+        x = walker.program.ranges.get("X")
+        self.assertIsNotNone(x)
+        self.assertEqual(
+            (extents.text_of(x.low, 4), extents.text_of(x.high, 4)), ("80", "100"),
+            "the X of a G20 block is a machine position and never enters the program's range",
+        )
+        self.assertEqual([r["where"] for r in walker.machine_rows], ["G20 (line 2)", "G20 (line 2)"])
+
+
 if __name__ == "__main__":
     unittest.main()

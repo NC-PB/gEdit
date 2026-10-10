@@ -164,5 +164,10 @@
   {"line":"DISPLOF","tokens":[{"kind":"keyword","text":"DISPLOF","address":"DISPLOF"}]},
   {"line":"N22 DISPLON ;BACK ON","tokens":[{"kind":"blockNumber","text":"N22","address":"N","valueText":"22"},{"kind":"keyword","text":"DISPLON","address":"DISPLON"},{"kind":"comment","text":";BACK ON"}]},
   {"line":";%_N_SHAFT_12_MPF","tokens":[{"kind":"programMarker","text":";%_N_SHAFT_12_MPF"}]},
-  {"line":"N20 GOTOF R10","tokens":[{"kind":"blockNumber","text":"N20","address":"N","valueText":"20"},{"kind":"keyword","text":"GOTOF","address":"GOTOF"},{"kind":"variable","text":"R10"}]}
+  {"line":"N20 GOTOF R10","tokens":[{"kind":"blockNumber","text":"N20","address":"N","valueText":"20"},{"kind":"keyword","text":"GOTOF","address":"GOTOF"},{"kind":"variable","text":"R10"}]},
+  {"line":"N10 GOTOF:20","tokens":[{"kind":"blockNumber","text":"N10","address":"N","valueText":"10"},{"kind":"keyword","text":"GOTOF","address":"GOTOF"},{"kind":"operator","text":":"},{"kind":"word","text":"20","valueText":"20"}]},
+  {"line":"GOTOB:20","tokens":[{"kind":"keyword","text":"GOTOB","address":"GOTOB"},{"kind":"operator","text":":"},{"kind":"word","text":"20","valueText":"20"}]},
+  {"line":"/1 N30 gotoc:40","tokens":[{"kind":"skip","text":"/1"},{"kind":"blockNumber","text":"N30","address":"N","valueText":"30"},{"kind":"keyword","text":"gotoc","address":"GOTOC"},{"kind":"operator","text":":"},{"kind":"word","text":"40","valueText":"40"}]},
+  {"line":"N50 GOTOF :20","tokens":[{"kind":"blockNumber","text":"N50","address":"N","valueText":"50"},{"kind":"keyword","text":"GOTOF","address":"GOTOF"},{"kind":"operator","text":":"},{"kind":"word","text":"20","valueText":"20"}]},
+  {"line":"GOTO_END:","tokens":[{"kind":"label","text":"GOTO_END:","address":"GOTO_END"}]}
 ]

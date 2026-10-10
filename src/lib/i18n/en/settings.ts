@@ -39,12 +39,17 @@ export default {
   resetTitle: 'Reset {category}?',
   resetMessage:
     'Put every {category} setting back to its default? This is written to settings.json right away, whether or not you save the rest.',
+  // Leaving with something typed (B1 A4). Wording after the template manager's question.
+  leave: {
+    title: 'Unsaved changes',
+    valuesMessage: 'The changes you made in Settings are not saved. Leave without saving them?',
+    draftMessage: 'The machine you are adding or editing is not saved yet. Leave without saving it?',
+    bothMessage:
+      'The changes you made in Settings and the machine you are adding or editing are not saved. Leave without saving them?',
+    ok: 'Discard changes',
+  },
   resetFailed: 'The settings could not be reset',
   resetDone: '{category} settings were reset',
-  // The Machines page (M6, AD-31). A machine configuration says how one control reads its
-  // programs; without one, gEdit uses the profile's documented defaults and says so.
-  machinesEmpty:
-    'No machines yet. Documents are read with the defaults their dialect profile documents, and anything that depends on the machine is shown as assumed.',
   openFile: 'Open settings file',
   openFileFailed: 'The settings file could not be opened',
   reloadFailed: 'The saved settings file could not be read again',
@@ -126,7 +131,7 @@ export default {
   },
 
   files: {
-    recentLength: { label: 'Recent files to remember', help: 'Zero turns the recent list off.' },
+    recentLength: { label: 'Recent files to remember', help: 'Zero turns the recent list off: nothing new is added and the list is hidden. The list is kept and comes back when you set a number again.' },
     externalChange: {
       label: 'When a file changes outside gEdit',
       help: 'A document with unsaved changes always asks, whatever is set here.',
@@ -148,6 +153,14 @@ export default {
     backupCount: {
       label: 'Versions to keep',
       help: 'How many earlier versions of each file gEdit keeps. Only for copies kept in gEdit.',
+    },
+    backupTotalMb: {
+      label: 'Most space for earlier versions (MB)',
+      help: 'When the earlier versions of all files together take more than this, the oldest ones are deleted. The newest version of every file is always kept. Earlier versions of a file on a USB stick, a network share or another disk are never deleted because the file seems to be missing. 0 means no limit. Only for copies kept in gEdit.',
+    },
+    backupOrphanDays: {
+      label: 'Delete earlier versions of deleted files after (days)',
+      help: 'Earlier versions of a file that was deleted (or whose folder was renamed or moved) on this computer\'s own disk are deleted this many days after the last one was made. Files on a USB stick, a network share or another disk are not covered: their earlier versions only go when the space limit above is reached, and the newest one stays. 0 means keep them for ever. Only for copies kept in gEdit.',
     },
     recovery: {
       label: 'Recover unsaved changes after a crash',

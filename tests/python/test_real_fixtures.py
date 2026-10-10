@@ -1,6 +1,6 @@
 """The owner's own programs, Python side (plan §9.2, D45, gate G11).
 
-Written by the M6 prelude (P6) as a stub; **FX owns it**, and M9 (WP9.6) made it the
+Owned by FX; M9 (WP9.6) made it the
 Python half of the real G11 run. The TypeScript half is ``tests/unit/realFixtures.test.ts``,
 which runs every check of ``tests/real/README.md`` — the bundled scripts included, started
 the way the app starts them, under the machine the manifest names. This half proves the one

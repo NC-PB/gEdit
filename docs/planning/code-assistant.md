@@ -4,21 +4,25 @@ Help for reading and writing NC code: explanations of the codes on the current l
 
 Tag format: `Priority · Size · Delivery`.
 
+> **Status.** Design note from 2026-09-19. What shipped is described in the user guide ([Code help](../user/README.md#code-help), [Understanding a block](../user/inspector.md), [Writing with templates](../user/templates.md)); where this note and the guide differ, the guide is right. Status per section: the code dictionary, hover (with cycle parameters and modal context), completion and the inspector with value editing shipped in Phase 1 and in P3a; templates, template files, formulas, cycle forms (as **Edit Cycle**) and the template manager shipped in P3b. The `P2` and `P3` tags below are the tags of the original plan; the *Status* lines say what happened. Not built: the assistant master switch, the inspector's Templates part (templates are in the Insert tab, in completion and in the manager instead), template illustrations (backlog).
+
 ## Design
 
 Two layers, both data-driven and per dialect:
 
 1. **Code dictionary.** It describes address letters, G/M codes, keywords and the parameters of standard cycles. It drives hover help, the code inspector, completion and cycle forms. Because it works on parsed words, it explains any block, whether it came from a post-processor, a template or was typed by hand.
-2. **Templates.** Reusable code snippets with parameters, inserted through a form or as a snippet with tab stops. They replace today's static code blocks.
+2. **Templates.** Reusable code snippets with parameters, inserted through a form or as a snippet with tab stops. They replaced the static code blocks of Phase 0, which are deleted.
 
 We do not match templates back against existing code to edit it. That breaks as soon as the code deviates slightly from the template. Editing existing code works on parsed words and the dictionary instead.
 
-Both live in one **code database** file per dialect ([format below](#code-database-format)).
+Both live in one **code database** file per dialect ([format below](#code-database-format)). The user's own templates live in code files of the user's, next to their own G and M codes ([Where your templates are kept](../user/templates.md#where-your-templates-are-kept)).
 
 ## Hover help
 
 ### Hover explanations for codes
 `P1 · M · Core` (codes and addresses) · `P2 · S · Core` (cycle parameters, modal context)
+
+**Status:** shipped: codes and addresses in Phase 1; cycle parameters and modal context in P3a (P3.3). Hover can be switched off in `Settings ▸ Assistance`; a delay or a modifier key was not built.
 
 Hovering over a word shows a short explanation from the dictionary. It uses a Monaco `HoverProvider` per dialect.
 
@@ -33,21 +37,27 @@ Hovering over a word shows a short explanation from the dictionary. It uses a Mo
 ### Code inspector panel
 `P2 · M · Core`
 
-A dockable panel on the right that follows the cursor. It has three parts:
+**Status:** shipped in P3a (P3.2b).
+
+A panel that follows the cursor. It sits on the left beside the Program Map and is closed until it is opened (`Cmd/Ctrl+Alt+A`); see [Understanding a block](../user/inspector.md). It has two parts (the third part of the original design, templates, went elsewhere):
 
 - **Current block:** each word of the block (or of a multi-line Klartext cycle definition) as a row with address, value and meaning. Unknown words are shown as unknown, not hidden.
 - **Modal state at cursor:** motion mode, plane, absolute/incremental, units, work offset, active tool, spindle direction and speed, feed and feed mode, coolant, cutter compensation, active canned cycle. It comes from the modal interpreter ([nc-transformations.md](nc-transformations.md#nc-tokenizer-and-modal-interpreter)). This is useful for CAM output, where most state is set far above the current line.
-- **Templates:** the templates of the current dialect, filtered by group and a search box. Double-click or Enter inserts at the cursor.
+- **Templates:** planned as a third part of the panel (filtered by group and a search box). Not built: the templates are on the Insert tab, in completion on an empty line and in the template manager ([Templates in completion](#templates-in-completion), [Template files and management](#template-files-and-management)).
 
-A shortcut shows or hides the panel. A settings switch turns off the whole assistant (panel, hover, template commands) for users who want a plain editor.
+A shortcut shows or hides the panel. There is no single switch for the whole assistant: hover, completion and the motion colors have their own switches in `Settings ▸ Assistance`.
 
 ### Edit values in the inspector
 `P2 · M · Core`
+
+**Status:** shipped in P3a (P3.2a): a value is written the way the machine reads it, or refused; it is never rounded.
 
 Values in the current-block table can be edited in place. Changing a value rewrites only that word, as one undo step. It keeps the word order, the spacing, the number style (decimal point, decimals, sign) and any trailing comment. Values are checked against the dictionary (a negative feed or a non-integer tool number is flagged). This avoids typos in address letters when correcting feeds, speeds, depths or retract planes.
 
 ### Cycle forms
 `P3 · M · Core`
+
+**Status:** shipped in P3b (P3.8) as **Edit Cycle…** on the Insert tab ([Edit Cycle](../user/templates.md#edit-cycle)). A cycle written in two blocks (the lathe `G71` to `G76`) is refused, because a form could put a word in the wrong block.
 
 For cycles described in the dictionary (G73, G81–G89 and the lathe equivalents; Klartext 200-series drilling cycles), "Edit cycle" opens a form with one field per parameter, pre-filled from the block. On confirm, the block is rewritten. Present words keep their order, new optional words are appended in the dictionary order, and words the dictionary does not know are kept. The same form inserts a new cycle when the cursor is not on one.
 
@@ -56,9 +66,11 @@ For cycles described in the dictionary (G73, G81–G89 and the lathe equivalents
 ### Dictionary-driven completion
 `P1 · S · Core`
 
-Replaces the hardcoded cycle list in `languages/fanuc.ts` and `languages/heidenhain.ts`:
+**Status:** shipped in Phase 1. An entry not yet checked against a manual is offered with a "Not verified yet" note.
 
-- Suggestions come from the dictionary, with English labels and descriptions. Today's snippets are documented in German. They move into the dictionary and are rewritten in English.
+Replaced the hardcoded cycle lists of the Phase 0 grammars:
+
+- Suggestions come from the dictionary (`src/lib/core/codes/completionItems.ts`), with English labels and descriptions.
 - Filtered by what is typed: `G8` offers G80–G89 with labels, and `M` offers M codes. Klartext offers keywords at the start of a block (`L`, `CC`, `C`, `TOOL CALL`, `CYCL DEF`).
 - No suggestions inside comments.
 - Cycles insert as snippets with tab stops for their required parameters.
@@ -67,6 +79,8 @@ Replaces the hardcoded cycle list in `languages/fanuc.ts` and `languages/heidenh
 ### Templates in completion
 `P2 · S · Core`
 
+**Status:** shipped in P3b (P3.5): templates are offered on a line with nothing before the word; `Tab` accepts.
+
 Templates appear in the completion list with their label. Picking one inserts it inline (snippet templates) or opens its parameter form.
 
 ## Templates
@@ -74,7 +88,9 @@ Templates appear in the completion list with their label. Picking one inserts it
 ### Parametric templates
 `P2 · M · Core`
 
-A template is a named piece of code with parameters, scoped to a dialect and a group (for example "Program frame", "Tool change", "Drilling", "Moves"). Inserting one opens a form with a field per parameter. On confirm, the generated code is inserted at the cursor as one undo step. The project ships a small default set per dialect: program start and end, tool change, safe retract, work offset, rapid/linear/arc move, standard drilling cycles.
+**Status:** shipped in P3b (P3.4, P3.6).
+
+A template is a named piece of code with parameters, scoped to a dialect and a group (for example "Program frame", "Tool change", "Drilling", "Moves"). Inserting one opens a form with a field per parameter. On confirm, the generated code is inserted at the cursor as one undo step. The project ships a default set per control: 49 templates in all (program start and end, tool start or change, drilling, tapping, turning and threading cycles, a few moves), listed in [What ships](../user/templates.md#what-ships). Safe retract, work offset and rapid/linear/arc templates were not built (Klartext has *Straight move* and *Circle around a centre*). Every shipped template is marked "review pending" until the owner has checked it.
 
 Parameter options:
 
@@ -90,6 +106,8 @@ Parameter options:
 ### Placeholders
 `P2 · S · Core`
 
+**Status:** shipped in P3b as described.
+
 Template bodies are plain NC text with placeholders:
 
 | Placeholder | Meaning |
@@ -104,22 +122,26 @@ A template without parameters can set `"snippet": true` and use Monaco snippet s
 ### Formula parameters
 `P3 · M · Core`
 
+**Status:** shipped in P3b (P3.8). The calculation is exact on decimal text, and there are no units.
+
 A formula parameter computes its value from other parameters, for example feed from speed, teeth and chip load: `s * z * fz`. It supports `+ - * / %`, parentheses, `abs floor ceil round sign sqrt ln log sin cos tan asin acos atan`, and `pi`, with angles in degrees. It uses a small safe expression parser, never `eval`. Results use the same formatting options and appear in the form as read-only fields (can be hidden per template). A template with only a formula works as a small calculator that inserts its result.
 
 ### Template files and management
 `P2 · S · Core` (file-based) · `P3 · M · Core` (manager UI)
 
-- Built-in templates ship read-only inside the app. User templates live in `<config>/codes/<id>.json`, where `<id>` is the code database id, and are merged on top (same template `id` overrides).
-- P2: editing means editing the JSON file. There is a command to open the file and one to reload it. Sharing means copying the file.
-- P3: a manager dialog to list, group, add, duplicate, delete and reorder templates. It has a body editor with buttons that insert placeholders, a property form for the selected parameter, and a live preview of the generated code.
-- P3: create a template from the selected code. The selection becomes the body, and the numeric values can optionally become parameters automatically (`Z-5.` → parameter `z` with prefix `Z`).
-- P3: a favorite flag that shows a template in a "Favorites" group.
+**Status:** shipped in P3b (P3.8, P3.9); see [The template manager](../user/templates.md#the-template-manager).
+
+- Built-in templates ship read-only inside the app, in the code database files (`src/lib/data/codes/*.json`). User templates live in the `templates` list of `<config>/codes/<id>.json`, where `<id>` is the code database id, and are merged on top (same template `id` replaces the built-in one whole).
+- Editing the JSON file by hand works, and the file reloads when it is saved (*Reload Profiles* on the Tools tab reads the folder again). Sharing means copying the file.
+- The manager dialog (shipped, P3.9) lists, groups, adds, duplicates, deletes and reorders the user's templates. It has a body editor with buttons that insert placeholders, a property form for the selected parameter, and a live preview of the generated code. It saves through the file's own document, with the backup and the reload.
+- *New Template from Selection* (shipped, P3.8 and P3.9): the selection becomes the body, and the numeric values can become parameters (`Z-5.` → parameter `z` with prefix `Z`).
+- Favorites (shipped): a star per template; the starred ones form a "Favorites" group. The stars are a preference kept in the state file, not a member of the template.
 
 Template illustrations (an image per template or parameter) are in the backlog.
 
 ## Code database format
 
-One JSON file per dialect. Built-ins are in `src/lib/data/codes/`, and user additions are in `<config>/codes/`. It extends and replaces `src/lib/data/blocks/*.json`.
+One JSON file per dialect. Built-ins are in `src/lib/data/codes/`, and user additions are in `<config>/codes/`. It replaced the Phase 0 `src/lib/data/blocks/*.json`, which are deleted. The examples below show the shape; the shipped files also use `extends` (a file builds on another, for example `fanuc-lathe` on `fanuc`) and `remove`, and have members this note does not list (see [Your own profiles and code files](../user/profiles.md#code-files-your-own-g-and-m-codes) for the ones a user may write). No JSON Schema file ships yet (the `$schema` line is a plan; JSON Schemas for profiles and machines are in the Phase 4 table of the roadmap).
 
 ```json
 {
@@ -199,7 +221,7 @@ Schema notes:
 - `group` is free text but drives completion sorting and the inspector's modal-state grouping (`motion`, `plane`, `distance`, `feedmode`, `offset`, `compensation`, `cycle`, `spindle`, `coolant`, `program`).
 - `pitchFeed: true` marks tapping and threading codes, whose feed is tied to the pitch. Feed and speed scaling use it to skip those blocks.
 - `params` on a code describes the words that belong to it. The same parameter schema (`label`, `required`, `min`, `max`, `type`, `choices`) is used by template params and by script params ([scripting.md](scripting.md#parameters)), so one form engine serves all three.
-- Migration from `blocks/*.json`: object key → `id`, `Text` → `label`, `Description` → `description`, `Button` → `toolbar`, `TextBlock` → `body`. The loader accepts the old format during the transition.
+- Migration from `blocks/*.json` (done in P3b, the old files are deleted): object key → `id`, `Text` → `label`, `Description` → `description`, `Button` → `toolbar`, `TextBlock` → `body`. The loader no longer reads the old format.
 
 ## Authoring rules for content
 

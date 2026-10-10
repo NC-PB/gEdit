@@ -7,8 +7,8 @@
 // markup is rendered with `svelte/server`, so there is no DOM, no Monaco and no `$effect`,
 // and what is checked is the seam the runtime harness reads.
 //
-// `core/scripting/filter.ts` is WP5.1's and still the P5 stub, so `scriptLabel` is faked
-// here: these tests are about the panel, not about the filter.
+// `scriptLabel` from `core/scripting/filter.ts` is faked here:
+// these tests are about the panel, not about the filter.
 
 import { render } from 'svelte/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -38,6 +38,7 @@ const RUN: RunResult = {
   timedOut: false,
   cancelled: false,
   stdoutTruncated: false,
+  stderrTruncated: false,
   durationMs: 1234,
   interpreter: '/usr/bin/python3',
 };
@@ -158,6 +159,17 @@ describe('ScriptOutputPanel', () => {
     expect(html).toContain('Timed out');
     expect(html).toContain('Output cut off');
     expect(html).toContain('Stopped by a signal');
+  });
+
+  // stderr is capped at 1 MiB in Rust, and what is cut off there used to be dropped
+  // without a word: a long traceback looked complete.
+  it('says when the error messages were cut off', () => {
+    show({ exitCode: 1, success: false, stderr: 'Traceback…', stderrTruncated: true });
+    const html = panel();
+    expect(html).toContain('Error messages cut off');
+    expect(html).not.toContain('Output cut off');
+    show({ exitCode: 1, success: false, stderr: 'Traceback…' });
+    expect(panel()).not.toContain('Error messages cut off');
   });
 
   it('offers a hint before the first run and after a silent one', () => {

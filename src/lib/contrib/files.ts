@@ -1,4 +1,4 @@
-// The file feature: the New/Open/Save/Close commands, the Home "File" ribbon group, the
+// The file feature: the New/Open/Save/Close commands, the File tab's "File" ribbon group, the
 // window title, the close guard and drag and drop (plan §5 WP1.6, §7.11).
 // One feature per file (plan AD-3); see ./README.md.
 //
@@ -13,6 +13,7 @@ import FilePlus from 'lucide-svelte/icons/file-plus';
 import FileX from 'lucide-svelte/icons/file-x';
 import Files from 'lucide-svelte/icons/files';
 import FolderOpen from 'lucide-svelte/icons/folder-open';
+import RotateCw from 'lucide-svelte/icons/rotate-cw';
 import Save from 'lucide-svelte/icons/save';
 import SaveAll from 'lucide-svelte/icons/save-all';
 import FileStatus from '$lib/components/status/FileStatus.svelte';
@@ -50,6 +51,46 @@ function docArg(arg: unknown): DocId | undefined {
  */
 function once<T>(op: () => Promise<T>): Promise<T | undefined> {
   return dialogs.exclusive(op);
+}
+
+/** What `file.reload` needs, injected so a unit test needs no webview. */
+export interface ReloadDeps {
+  get(id: DocId): { id: DocId; title: string; path: string | null; dirty: boolean } | undefined;
+  confirm(o: { title: string; message: string; ok: string; kind: 'warning' }): Promise<boolean>;
+  reload(id: DocId): Promise<void>;
+  show(text: string): void;
+}
+
+const reloadDeps: ReloadDeps = {
+  get: (id) => docs.get(id),
+  confirm: (o) => dialogs.confirm(o),
+  reload: (id) => files.reloadFromDisk(id),
+  show: (text) => status.show(text),
+};
+
+/**
+ * `file.reload`: read the file again from disk. Asks first when the document has unsaved
+ * changes (they are replaced, as one undo step), and says so when the document has no file.
+ * The check lives here and not in `files.reloadFromDisk`, which the external-change banner
+ * and the auto-reload also call and which must not ask.
+ */
+export async function reloadActive(id: DocId | null, deps: ReloadDeps = reloadDeps): Promise<void> {
+  const doc = id === null ? undefined : deps.get(id);
+  if (!doc) return;
+  if (!doc.path) {
+    deps.show(t('files.reloadNoFile', { name: doc.title }));
+    return;
+  }
+  if (doc.dirty) {
+    const ok = await deps.confirm({
+      title: t('files.reloadTitle'),
+      message: t('files.reloadMessage', { name: doc.title }),
+      ok: t('files.reloadButton'),
+      kind: 'warning',
+    });
+    if (!ok) return;
+  }
+  await deps.reload(doc.id);
 }
 
 // ---------------------------------------------------------------------------
@@ -278,6 +319,15 @@ export default {
       run: (_c, arg) => once(() => files.close(docArg(arg))),
     },
     {
+      id: 'file.reload',
+      title: 'files.reload',
+      category: 'files.category',
+      icon: asIcon(RotateCw),
+      global: true,
+      enabled: hasDoc,
+      run: (c) => once(() => reloadActive(c.activeDocId)),
+    },
+    {
       id: 'file.closeAll',
       title: 'files.closeAll',
       category: 'files.category',
@@ -300,12 +350,13 @@ export default {
     { id: 'file', side: 'left', order: 10, component: FileStatus },
   ],
   ribbon: [
-    { tab: 'home', group: 'files.groupFile', command: 'file.new', order: 10, size: 'large' },
-    { tab: 'home', group: 'files.groupFile', command: 'file.open', order: 20, size: 'large' },
-    { tab: 'home', group: 'files.groupFile', command: 'file.save', order: 30, size: 'large' },
-    { tab: 'home', group: 'files.groupFile', command: 'file.saveAs', order: 40 },
-    { tab: 'home', group: 'files.groupFile', command: 'file.saveAll', order: 50 },
-    { tab: 'home', group: 'files.groupFile', command: 'file.close', order: 60 },
+    { tab: 'file', group: 'files.groupFile', command: 'file.new', order: 10, size: 'large' },
+    { tab: 'file', group: 'files.groupFile', command: 'file.open', order: 20, size: 'large' },
+    { tab: 'file', group: 'files.groupFile', command: 'file.save', order: 30, size: 'large' },
+    { tab: 'file', group: 'files.groupFile', command: 'file.saveAs', order: 40 },
+    { tab: 'file', group: 'files.groupFile', command: 'file.saveAll', order: 50 },
+    { tab: 'file', group: 'files.groupFile', command: 'file.close', order: 60 },
+    { tab: 'file', group: 'files.groupFile', command: 'file.reload', order: 70 },
   ],
   activate(): Disposable {
     // The window always holds a document, so the shell has something to render at once.

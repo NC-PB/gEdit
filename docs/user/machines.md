@@ -134,8 +134,9 @@ is: the µm depths and steps (`P`, `Q`) of the Fanuc lathe's `G74`, `G75`, `G76`
 than as millimetres. That holds on a control that reads positions as written too: the
 documentation the project worked from describes one machine on which `X50` is 50 mm *and*
 the peck `Q6000` is 6 mm, so "as written" is a statement about positions and not about the
-micron parameters of a cycle. The Fanuc "as written" preset therefore names an increment of
-0.001 mm for those parameters, and its label says so. The Fanuc mill profile has no such
+micron parameters of a cycle. The Fanuc lathe's "as written" preset therefore names an
+increment of 0.001 mm for those parameters, and its label says so; the mill's label does not,
+because the mill has no such parameters (*As written: X50 and X50. are both 50 mm*). The Fanuc mill profile has no such
 parameters: there the `Q` of `G73`, `G76`, `G83`, `G84` and `G87` (the peck depth, the shift at
 the hole bottom) is an ordinary **length**. Written with a decimal point it is what it says; a `Q`
 without a point follows the machine's input increment like any other point-less length (`Q4000` is
@@ -210,7 +211,7 @@ that machine.
 | Field | |
 |---|---|
 | **Name** | What the status bar and the picker call it. Yours to choose, up to 64 characters and different from every other machine's name, capitals aside: "Lathe 2", "Mill 3", "the old one" |
-| **How the control reads numbers** | One of the dialect's presets — on Okuma, the control's unit system; Sinumerik has only one. Every preset's name says what it does to a word with and without a point, so you can pick it without knowing the jargon |
+| **How the control reads numbers** | One of the dialect's presets — on Okuma, the control's unit system; Sinumerik has only one. Every preset's name says what it does to a word with and without a point, so you can pick it without knowing the jargon. A preset the project has taken from a manual and not checked against a machine says **(unconfirmed)** after its name, and the help under the choice says it is the usual setting for this kind of control, not one checked against yours: compare it with your machine's parameters before you rely on it |
 | **Units at power-on** | Millimetres or inches — what the control measures in until the program says otherwise |
 | **X and U are diameters at power-on** (Fanuc lathe), **X is a diameter at power-on** (Okuma, Sinumerik turning and milling) | Off for a control set to radius programming. The label names the dialect's diameter words, and on Sinumerik this is the diameter programming (`DIAMON`) a program starts with; it defaults to on for turning and to off for the Sinumerik milling profile |
 | **G-code system** | Fanuc lathe only: A or B. See [the Fanuc lathe](#the-fanuc-lathe) |
@@ -224,9 +225,10 @@ The feed modes a Fanuc lathe is offered follow its G-code system: `G98`/`G99` in
 `G94`/`G95` in B. Switching the system resets a power-on code the other system does not have
 to "Dialect default", and says which.
 
-Keep a note to 500 characters: the form does not stop you yet, but a longer note makes the
-machine unusable from the next start — it is then listed on the Machines page with the
-reason and cannot be picked until the note is shortened in the file.
+The form stops a name over 64 characters and a note over 500 (*Use at most 500 characters.*).
+A note that a hand edit of the file made longer makes the machine unusable from the next
+start — it is then listed on the Machines page with the reason and cannot be picked until
+the note is shortened in the file.
 
 3. **Save.**
 
@@ -300,7 +302,13 @@ machine, or none.
 
 If the program's content and the machine disagree — a program that reads like G-code system
 B opened with a machine set to A — gEdit tells you once and **changes nothing**. The
-machine you chose wins. It is your machine; a text file does not get to overrule it.
+machine you chose wins. It is your machine; a text file does not get to overrule it. The
+notice carries a **Choose Machine…** button that opens the machine picker for the document, in
+case the program is the right one and the machine is not; it stays for about ten seconds.
+
+Changing the machine through **Other machines…** changes the dialect and the machine in one
+step, so you see only the final message (*now uses machine … and the … dialect*), not a
+"not for this profile" notice first.
 
 ## Reading the settings off your machine
 
@@ -689,14 +697,17 @@ a file over 1 MiB, or a `machines` or `defaults` member of the wrong shape — t
   defaults, with one notice saying so;
 - the Machines page disables everything that writes, and offers only **Open machines file**
   and **Replace with an empty file**. A hand edit is never overwritten behind your back;
-- **Replace with an empty file** keeps the old file as `machines.json.bak`, replacing an
-  older `.bak` — but only a file that was not valid JSON, not a JSON object or too big. A
-  file that is valid JSON with a member of the wrong shape is replaced without a copy, and
-  so is a file whose copy could not be made: copy such a file away yourself first.
+- **Replace with an empty file** always keeps the old file first, whatever was wrong with it
+  (broken JSON, not an object, a member of the wrong shape, too big, even empty), as
+  `machines.json.bak` next to it. An earlier `.bak` is never overwritten: when one exists the
+  copy is named with the date and time, `machines.json.20261010-143200.bak`. The message after
+  the replacement names the copy (*The old file is kept as …*). If the copy cannot be made,
+  nothing is replaced and the page says so.
 
 A file written by a newer version of gEdit is different: its machines are used as they are,
-but gEdit never writes it — the Machines page changes nothing, and **Replace with an empty
-file** is refused as well. A file gEdit cannot open at all (no permission, or not a regular
+but gEdit never writes it — the Machines page changes nothing, shows its own notice (it was
+written by a newer version; open the file to look at it, or update gEdit) and offers no
+**Replace with an empty file** at all. A file gEdit cannot open at all (no permission, or not a regular
 file) is not replaced either. To start over in either case, move the file away yourself
 while gEdit is closed.
 

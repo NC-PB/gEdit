@@ -19,7 +19,7 @@ import os
 import re
 import unittest
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from tests.python import helpers
 
@@ -372,6 +372,47 @@ class TestSpindle(unittest.TestCase):
         self.assertEqual(lines_of(run_text(text, params={"toolChangeSpindle": False})), [])
 
 
+class TestUnclosedStringsAndBrackets(unittest.TestCase):
+    """B1: an unclosed string or ``[`` runs to the end of its line in both tokenizers and in
+    the mask, and the report says so in plain words, never as a stray ``)`` of the comment
+    the bracket swallowed."""
+
+    def messages(self, profile_id: str, *lines: str) -> List[Tuple[int, str]]:
+        report = run_text(program(*lines), profile_id)
+        return [(row["line"], row["message"]) for row in findings(report, "brackets")]
+
+    def test_an_unclosed_bracket_with_a_comment_behind_it_on_fanuc(self) -> None:
+        self.assertEqual(
+            self.messages("fanuc-gcode", "O1", "#1=[#2+1 (NOTE)", "#3=[#4 (A) +1] (B)", "G1 X10)", "M30"),
+            [
+                (3, "#1=[#2+1 (NOTE): a [ is opened and not closed on its line"),
+                (5, "G1 X10): a ) with no ( before it"),
+            ],
+        )
+
+    def test_two_unclosed_brackets_are_counted(self) -> None:
+        self.assertEqual(
+            self.messages("fanuc-gcode", "O1", "#1=[[#2+1", "M30"),
+            [(3, "#1=[[#2+1: 2 [ are opened and not closed on its line")],
+        )
+
+    def test_an_unclosed_bracket_and_string_on_sinumerik(self) -> None:
+        self.assertEqual(
+            self.messages("sinumerik", "R1=[R2+3 ;NOTE", 'MSG("A;B', "R1=(R2+3", "M30"),
+            [
+                (2, "R1=[R2+3 ;NOTE: a [ is opened and not closed on its line"),
+                (3, 'MSG("A;B: a string is opened with " and not closed on its line'),
+                (4, "R1=(R2+3: a ( is opened and not closed on its line"),
+            ],
+        )
+
+    def test_an_unclosed_string_on_klartext(self) -> None:
+        self.assertEqual(
+            self.messages("heidenhain-klartext", "0 BEGIN PGM T MM", '1 TOOL CALL "D10 Z S1000 ; NOTE', "2 END PGM T MM"),
+            [(3, '1 TOOL CALL "D10 Z S1000 ; NOTE: a string is opened with " and not closed on its line')],
+        )
+
+
 class TestToolWordsAndMoves(unittest.TestCase):
     def test_a_fanuc_lathe_tool_word_with_or_without_its_leading_zero_is_one_form(self) -> None:
         # The tool rule takes 1 to 5 digits: T101 and T0101 are the same station and offset.
@@ -406,6 +447,16 @@ class TestConflicts(unittest.TestCase):
         self.assertEqual(lines_of(run_text(same_block), "stateConflicts"), [])
         written_with = program("O1", "T1 M6", "S1000 M3", "G41 G68.2 X0 Y0 Z0 I0 J45. K0", "M30")
         self.assertEqual(lines_of(run_text(written_with), "stateConflicts"), [5])
+
+    def test_an_okuma_plane_change_under_nose_radius_compensation_is_reported(self) -> None:
+        # B1 fix NC (NC-09, owner question 15): OSP-P200L, cutter radius compensation: G17, G18
+        # or G119 written while G41/G42 is in force is an alarm.
+        text = program("O1", "G0 X50. Z5.", "G41 G1 X40. Z0 F0.2", "G17", "G40 G0 X60. Z5.", "G18", "M02")
+        # Line 1 is the marker: the G17 under G41 is line 5; the G18 after G40 is no conflict.
+        self.assertEqual(lines_of(run_text(text, "okuma-osp"), "stateConflicts"), [5])
+        for code in ("G18", "G119"):
+            text = program("O1", "G0 X50. Z5.", "G42 G1 X40. Z0 F0.2", code, "G40 G0 X60. Z5.", "M02")
+            self.assertEqual(lines_of(run_text(text, "okuma-osp"), "stateConflicts"), [5], code)
 
     def test_the_frame_a_code_opens_itself_is_not_its_own_conflict(self) -> None:
         text = program("O1", "T1 M6", "S1000 M3", "G68.2 X0 Y0 Z0 I0 J45. K0", "G53.1", "G69", "M30")

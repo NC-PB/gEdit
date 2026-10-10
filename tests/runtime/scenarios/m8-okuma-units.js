@@ -31,6 +31,7 @@ import {
   REPORT_KEYS,
   REPORT_ROWS,
   choiceOf,
+  shownPreset,
   closeSettingsDialog,
   context,
   findings,
@@ -140,8 +141,8 @@ scenario('m8-okuma-units', { timeout: 480 }, async (h) => {
   const opened = ctx.commands.run('machines.manage')
   await h.waitFor(() => h.q('settings-machines'), { timeout: 10000 })
   await startAdd(h, OKUMA)
-  h.check('the form starts on the documented default, 1 mm', choiceOf(h, 'numberInput').selected === preset('okuma-1mm')?.label, choiceOf(h, 'numberInput').selected)
-  await saveMachineForm(h, { name: /** @type {string} */ (micron.options.machineName), numberInput: /** @type {string} */ (preset('okuma-1um')?.label) })
+  h.check('the form starts on the documented default, 1 mm', choiceOf(h, 'numberInput').selected === shownPreset(h, /** @type {any} */ (preset('okuma-1mm'))), choiceOf(h, 'numberInput').selected)
+  await saveMachineForm(h, { name: /** @type {string} */ (micron.options.machineName), numberInput: shownPreset(h, /** @type {any} */ (preset('okuma-1um'))) })
   const onDisk = /** @type {any} */ (await machinesFile(h))
   const record = onDisk?.machines?.[0]
   h.check('the machine is written to machines.json under the Okuma profile', onDisk?.machines?.length === 1 && record?.profile === OKUMA && record?.name === micron.options.machineName, onDisk)

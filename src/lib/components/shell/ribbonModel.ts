@@ -13,16 +13,32 @@
 import type { RibbonGroupDef, RibbonItemDef, RibbonTab } from '$lib/app/types';
 
 /** Left-to-right order of the ribbon tabs (plan AD-6). */
-export const TAB_ORDER: readonly RibbonTab[] = ['home', 'insert', 'nc', 'tools', 'view'];
+export const TAB_ORDER: readonly RibbonTab[] = ['file', 'edit', 'insert', 'nc', 'tools', 'scripts', 'view'];
 
 /** i18n key of each tab's label. Kept here so the component has no dynamic key building. */
 export const TAB_LABEL: Readonly<Record<RibbonTab, string>> = {
-  home: 'shell.tabHome',
+  file: 'shell.tabFile',
+  edit: 'shell.tabEdit',
   insert: 'shell.tabInsert',
   nc: 'shell.tabNc',
   tools: 'shell.tabTools',
+  scripts: 'shell.tabScripts',
   view: 'shell.tabView',
 };
+
+/** The tab the ribbon opens on, and the one an unknown or retired tab id falls back to. */
+export const DEFAULT_TAB: RibbonTab = 'file';
+
+/**
+ * A tab id read from somewhere (a remembered choice, a test) as a tab that exists in `tabs`.
+ * 'home', the first tab of the old layout (before B1 A9), becomes the File tab, which took
+ * its File and Recent groups; anything else that is not offered falls back to the first tab.
+ */
+export function resolveTab(saved: unknown, tabs: readonly RibbonTab[]): RibbonTab {
+  const wanted = saved === 'home' ? DEFAULT_TAB : saved;
+  const found = tabs.find((tab) => tab === wanted);
+  return found ?? tabs[0] ?? DEFAULT_TAB;
+}
 
 export type RibbonEntry = RibbonItemDef | RibbonGroupDef;
 
@@ -39,11 +55,11 @@ function isCustom(entry: RibbonEntry): entry is RibbonGroupDef {
 }
 
 /**
- * The tabs that have at least one entry, in AD-6 order. 'home' is always present, so the
- * ribbon has a selected tab even before any contribution has loaded.
+ * The tabs that have at least one entry, in AD-6 order. The File tab is always present, so
+ * the ribbon has a selected tab even before any contribution has loaded.
  */
 export function tabsOf(entries: readonly RibbonEntry[]): RibbonTab[] {
-  const used = new Set<RibbonTab>(['home']);
+  const used = new Set<RibbonTab>([DEFAULT_TAB]);
   for (const entry of entries) used.add(entry.tab);
   return TAB_ORDER.filter((tab) => used.has(tab));
 }

@@ -197,10 +197,9 @@ export function completionsFor(db: CodeDb, prefix: string, atBlockStart: boolean
 }
 
 // ---------------------------------------------------------------------------
-// P9 (roadmap R3, TODO "Ahead"; plan §7.2). How one entry's flags read. Written by the
-// M9 prelude so that TypeScript and Python (`gedit_nc.axis_words_of`,
-// `speed_limit_bound_of`, `frame_of`) answer with one rule each; WP9.2 owns them from
-// Wave A on and holds the two languages to the same flagged-entry golden.
+// P9 (roadmap R3, TODO "Ahead"; plan §7.2). How one entry's flags read. Written so
+// that TypeScript and Python (`gedit_nc.axis_words_of`, `speed_limit_bound_of`, `frame_of`)
+// answer with one rule each; WP9.2 holds the two languages to the same flagged-entry golden.
 // ---------------------------------------------------------------------------
 
 /**

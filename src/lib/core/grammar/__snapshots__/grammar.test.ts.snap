@@ -23,6 +23,26 @@ exports[`generateGrammar > fanuc-gcode: is stable 1`] = `
         "programMarker",
       ],
       [
+        "^(\\s*)([/][1-9]?)(\\s*)([/][1-9]?)(\\s*)([/][1-9]?)",
+        [
+          "",
+          "skip",
+          "",
+          "skip",
+          "",
+          "skip",
+        ],
+      ],
+      [
+        "^(\\s*)([/][1-9]?)(\\s*)([/][1-9]?)",
+        [
+          "",
+          "skip",
+          "",
+          "skip",
+        ],
+      ],
+      [
         "^\\s*[/][1-9]?",
         "skip",
       ],
@@ -60,15 +80,19 @@ exports[`generateGrammar > fanuc-gcode: is stable 1`] = `
         "keyword",
       ],
       [
+        "[A-Za-z]{3,}(?:\\s+(?!(?:AXNUM|BPRNT|DPRNT|PCLOS|POPEN|ROUND|WHILE|ACOS|ASIN|ATAN|GOTO|SQRT|THEN|ABS|ADP|AND|ATN|BCD|BIN|COS|END|EXP|FIX|FUP|MOD|POW|RND|SIN|SQR|TAN|XOR|AX|DO|EQ|GE|GT|IF|LE|LN|LT|NE|OR)(?![A-Za-z]))[A-Za-z]+(?![A-Za-z])(?!\\s*(?:[0-9+\\-\\[#]|\\.)))*",
+        "",
+      ],
+      [
         "N\\s*\\d+",
         "blockNumber",
       ],
       [
-        "G\\s*\\d{1,3}(?:\\.\\d{1,2})?",
+        "G\\s*\\d{1,4}(?:\\.\\d{1,2})?",
         "gcode",
       ],
       [
-        "M\\s*\\d{1,3}",
+        "M\\s*\\d{1,4}",
         "mcode",
       ],
       [
@@ -147,6 +171,26 @@ exports[`generateGrammar > fanuc-lathe: is stable 1`] = `
         "programMarker",
       ],
       [
+        "^(\\s*)([/][1-9]?)(\\s*)([/][1-9]?)(\\s*)([/][1-9]?)",
+        [
+          "",
+          "skip",
+          "",
+          "skip",
+          "",
+          "skip",
+        ],
+      ],
+      [
+        "^(\\s*)([/][1-9]?)(\\s*)([/][1-9]?)",
+        [
+          "",
+          "skip",
+          "",
+          "skip",
+        ],
+      ],
+      [
         "^\\s*[/][1-9]?",
         "skip",
       ],
@@ -184,15 +228,19 @@ exports[`generateGrammar > fanuc-lathe: is stable 1`] = `
         "keyword",
       ],
       [
+        "[A-Za-z]{3,}(?:\\s+(?!(?:AXNUM|BPRNT|DPRNT|PCLOS|POPEN|ROUND|WHILE|ACOS|ASIN|ATAN|GOTO|SQRT|THEN|ABS|ADP|AND|ATN|BCD|BIN|COS|END|EXP|FIX|FUP|MOD|POW|RND|SIN|SQR|TAN|XOR|AX|DO|EQ|GE|GT|IF|LE|LN|LT|NE|OR)(?![A-Za-z]))[A-Za-z]+(?![A-Za-z])(?!\\s*(?:[0-9+\\-\\[#]|\\.)))*",
+        "",
+      ],
+      [
         "N\\s*\\d+",
         "blockNumber",
       ],
       [
-        "G\\s*\\d{1,3}(?:\\.\\d{1,2})?",
+        "G\\s*\\d{1,4}(?:\\.\\d{1,2})?",
         "gcode",
       ],
       [
-        "M\\s*\\d{1,3}",
+        "M\\s*\\d{1,4}",
         "mcode",
       ],
       [
@@ -297,7 +345,83 @@ exports[`generateGrammar > heidenhain-klartext: is stable 1`] = `
         "blockNumber",
       ],
       [
-        "(?:REFPNT\\s+CENTER-CENTER|FUNCTION\\s+RESET\\s+TCPM|REFPNT\\s+TIP-CENTER|PATHCTRL\\s+VECTOR|PLANE\\s+PROJECTED|REFPNT\\s+TIP-TIP|CYCL\\s+CALL\\s+PAT|CYCL\\s+CALL\\s+POS|FUNCTION\\s+TCPM|PATHCTRL\\s+AXIS|PLANE\\s+RELATIV|PLANE\\s+SPATIAL|PLANE\\s+POINTS|PLANE\\s+VECTOR|PLANE\\s+AXIAL|PLANE\\s+EULER|PLANE\\s+RESET|TRANS\\s+DATUM|AXIS\\s+SPAT|BEGIN\\s+PGM|COORD\\s+ROT|CYCL\\s+CALL|TABLE\\s+ROT|TOOL\\s+CALL|APPR\\s+LCT|AXIS\\s+POS|BLK\\s+FORM|CALL\\s+LBL|CALL\\s+PGM|CYCL\\s+DEF|TOOL\\s+DEF|APPR\\s+CT|APPR\\s+LN|APPR\\s+LT|DEP\\s+LCT|END\\s+PGM|SEL\\s+PGM|DEP\\s+CT|DEP\\s+LN|DEP\\s+LT|F\\s+CONT|F\\s+TCP|FAUTO|FMAX|INCH|MOVE|SEQ\\+|SEQ-|STAY|STOP|TURN|CHF|CTP|LBL|MAX|REP|RND|CC|CP|CR|CT|FN|LN|LP|MB|MM|R0|RL|RR)(?![A-Za-z])",
+        "(CYCL\\s+DEF)(\\s+)(\\d+(?:\\.0+)?)(\\s+)((?![A-Z]{1,2}[+\\-]?\\d)[^\\s;~+\\-.\\d#"(](?:[^;~]*?[^\\s;~])?)(?=\\s*(?:[;~]|$)|\\s+Q\\d+\\s*=)",
+        [
+          "keyword",
+          "",
+          "number",
+          "",
+          "",
+        ],
+      ],
+      [
+        "(CYCL\\s+DEF)(\\s+)(9\\.1)(\\s+)([A-Z][A-Z.\\-]*)(?=\\s*[+-]?\\d)",
+        [
+          "keyword",
+          "",
+          "number",
+          "",
+          "",
+        ],
+      ],
+      [
+        "((?:BEGIN|END)\\s+PGM)(\\s+)([^\\s;](?:[^;]*?[^\\s;])?)(?=\\s+(?:MM|INCH)\\s*(?:;|$))",
+        [
+          "keyword",
+          "",
+          "",
+        ],
+      ],
+      [
+        "((?:BEGIN|END)\\s+PGM)(\\s+)([^\\s;]+)(?=\\s*$)",
+        [
+          "keyword",
+          "",
+          "",
+        ],
+      ],
+      [
+        "(CYCL\\s+DEF)(\\s+)(12\\.1)(\\s+)(PGM)(\\s+)([^\\s;~]+)",
+        [
+          "keyword",
+          "",
+          "number",
+          "",
+          "",
+          "",
+          "",
+        ],
+      ],
+      [
+        "(FN)(\\s*)(16)(\\s*)(:)(\\s*)([^\\s;](?:[^;]*?[^\\s;])?)(?=\\s*(?:;|$))",
+        [
+          "keyword",
+          "",
+          "number",
+          "",
+          "operator",
+          "",
+          "",
+        ],
+      ],
+      [
+        "(CALL\\s+PGM)(\\s+)([^\\s;~"]+)",
+        [
+          "keyword",
+          "",
+          "",
+        ],
+      ],
+      [
+        "(?:HSC-MODE|VCONST|VC):(?:(?:[+-]?(?:\\d+[.,]?\\d*|[.,]\\d+)|[+-]?(?:Q[LRS]?\\d+))|\\[[^\\]]*\\]|[A-Za-z]+)(?=\\s|$|;)",
+        "number",
+      ],
+      [
+        "[#](?:[+-]?(?:\\d+[.,]?\\d*|[.,]\\d+)|[+-]?(?:Q[LRS]?\\d+))(?=\\s|$|"|;)",
+        "number",
+      ],
+      [
+        "(?:REFPNT\\s+CENTER-CENTER|FUNCTION\\s+RESET\\s+TCPM|REFPNT\\s+TIP-CENTER|PATHCTRL\\s+VECTOR|PLANE\\s+PROJECTED|REFPNT\\s+TIP-TIP|CYCL\\s+CALL\\s+PAT|CYCL\\s+CALL\\s+POS|FUNCTION\\s+TCPM|PATHCTRL\\s+AXIS|PLANE\\s+RELATIV|PLANE\\s+SPATIAL|PLANE\\s+POINTS|PLANE\\s+VECTOR|PLANE\\s+AXIAL|PLANE\\s+EULER|PLANE\\s+RESET|TRANS\\s+DATUM|AXIS\\s+SPAT|BEGIN\\s+PGM|COORD\\s+ROT|CYCL\\s+CALL|TABLE\\s+ROT|TOOL\\s+CALL|APPR\\s+LCT|AXIS\\s+POS|BLK\\s+FORM|CALL\\s+LBL|CALL\\s+PGM|CYCL\\s+DEF|TOOL\\s+DEF|APPR\\s+CT|APPR\\s+LN|APPR\\s+LT|DEP\\s+LCT|END\\s+PGM|SEL\\s+PGM|DEP\\s+CT|DEP\\s+LN|DEP\\s+LT|F\\s+CONT|F\\s+TCP|FAUTO|FMAX|INCH|MOVE|SEQ\\+|SEQ-|STAY|STOP|TURN|CHF|CTP|LBL|MAX|REP|RND|CC|CP|CR|CT|FN|LN|LP|MB|MM|R0|RL|RR|VC)(?![A-Za-z])(?![.,]\\d)",
         "keyword",
       ],
       [
@@ -329,7 +453,7 @@ exports[`generateGrammar > heidenhain-klartext: is stable 1`] = `
         "variable",
       ],
       [
-        "(?:I)?(?:CCA|DR2|LEN|REP|DL|DR|MB|NX|NY|NZ|PA|PR|TX|TY|TZ|R)(?:(?:[+-]?(?:\\d+[.,]?\\d*|[.,]\\d+)|[+-]?(?:Q[LRS]?\\d+)))",
+        "(?:I)?(?:CCA|DR2|LEN|P1X|P1Y|P1Z|P2X|P2Y|P2Z|P3X|P3Y|P3Z|REP|DL|DR|MB|NX|NY|NZ|PA|PR|TX|TY|TZ|VC|R)(?:(?:[+-]?(?:\\d+[.,]?\\d*|[.,]\\d+)|[+-]?(?:Q[LRS]?\\d+)))",
         "number",
       ],
       [
@@ -380,7 +504,7 @@ exports[`generateGrammar > okuma-osp: is stable 1`] = `
         "skip",
       ],
       [
-        "^(\\s*)(N\\s*\\d{1,4}(?![0-9A-Za-z]))(\\s*)([/])",
+        "^(\\s*)(N\\s*\\d+)(\\s*)([/])",
         [
           "",
           "blockNumber",
@@ -389,7 +513,7 @@ exports[`generateGrammar > okuma-osp: is stable 1`] = `
         ],
       ],
       [
-        "^(\\s*)(N[A-Za-z][A-Za-z0-9]{0,3}(?![0-9A-Za-z]))(\\s*)([/])",
+        "^(\\s*)((?!(?:NOEX|NOT|NE)(?=\\s|$))N[A-Za-z][A-Za-z0-9]{0,3}(?=\\s|$))(\\s*)([/])",
         [
           "",
           "section",
@@ -398,11 +522,11 @@ exports[`generateGrammar > okuma-osp: is stable 1`] = `
         ],
       ],
       [
-        "^\\s*O(?<name>[A-Z0-9]{1,4})\\s*$",
+        "^\\s*O(?<name>[A-Z][A-Z0-9]{0,15}|\\d{1,16})\\s*$",
         "programMarker",
       ],
       [
-        "((?:CALL|MODIN))(\\s+)(O[A-Za-z0-9]{1,4})(?![0-9A-Za-z])",
+        "((?:CALL|MODIN))(\\s+)(O(?:[A-Z][A-Z0-9]{0,15}|\\d{1,16})(?![A-Z0-9]))(?![0-9A-Za-z_])",
         [
           "keyword",
           "",
@@ -414,11 +538,11 @@ exports[`generateGrammar > okuma-osp: is stable 1`] = `
         "keyword",
       ],
       [
-        "N\\s*\\d{1,4}(?![0-9A-Za-z])",
+        "N\\s*\\d+",
         "blockNumber",
       ],
       [
-        "N[A-Za-z][A-Za-z0-9]{0,3}(?![0-9A-Za-z])",
+        "(?!(?:NOEX|NOT|NE)(?=\\s|$))N[A-Za-z][A-Za-z0-9]{0,3}(?=\\s|$)",
         "section",
       ],
       [
@@ -498,6 +622,10 @@ exports[`generateGrammar > okuma-osp: is stable 1`] = `
         "variable",
       ],
       [
+        "(?:[A-Z]{2}[A-Z0-9]*)",
+        "",
+      ],
+      [
         "(?:\\d+\\.?\\d*|\\.\\d+)",
         "number",
       ],
@@ -519,6 +647,103 @@ exports[`generateGrammar > sinumerik: is stable 1`] = `
   "defaultToken": "",
   "ignoreCase": true,
   "tokenizer": {
+    "declare": [
+      [
+        "^",
+        {
+          "next": "@popall",
+          "token": "@rematch",
+        },
+      ],
+      [
+        ",",
+        {
+          "switchTo": "declareName",
+          "token": "operator",
+        },
+      ],
+      [
+        "(?:COMPCURV|ENDWHILE|TRANSMIT|AMIRROR|COMPCAD|DEFAULT|DISPLOF|DISPLON|ENDLOOP|EXTCALL|ORIAXES|ORIVECT|REPEATB|TRAFOOF|ASCALE|ATRANS|COMPOF|COMPON|CUT3DC|DIAM90|DIAMOF|DIAMON|ENDFOR|EXTERN|MIRROR|ORIMKS|ORIWKS|REPEAT|STOPRE|STRING|TRAANG|TRACYL|TRAORI|BLOCK|BRISK|B_AND|B_NOT|B_XOR|CFTCP|CUT2D|ENDIF|FFWOF|FFWON|FRAME|GOTOB|GOTOC|GOTOF|KONTC|KONTT|MCALL|PCALL|SBLOF|SBLON|SCALE|TRANS|UNTIL|WHILE|AROT|AXIS|BOOL|B_OR|CALL|CASE|CFIN|CHAR|ELSE|GOTO|KONT|LOOP|NORM|PROC|REAL|SOFT|SUPA|ACN|ACP|AND|CFC|CIP|DIV|FOR|INT|MOD|NOT|RET|ROT|RPL|XOR|AC|CT|DC|IC|IF|OF|OR|TO)(?![A-Za-z0-9_])",
+        {
+          "switchTo": "declareName",
+          "token": "keyword",
+        },
+      ],
+      [
+        "[(\\[]",
+        {
+          "next": "declareNest",
+          "token": "operator",
+        },
+      ],
+      {
+        "include": "root",
+      },
+    ],
+    "declareName": [
+      [
+        "^",
+        {
+          "next": "@popall",
+          "token": "@rematch",
+        },
+      ],
+      [
+        "\\s+",
+        "",
+      ],
+      [
+        "(?:COMPCURV|ENDWHILE|TRANSMIT|AMIRROR|COMPCAD|DEFAULT|DISPLOF|DISPLON|ENDLOOP|EXTCALL|ORIAXES|ORIVECT|REPEATB|TRAFOOF|ASCALE|ATRANS|COMPOF|COMPON|CUT3DC|DIAM90|DIAMOF|DIAMON|ENDFOR|EXTERN|MIRROR|ORIMKS|ORIWKS|REPEAT|STOPRE|STRING|TRAANG|TRACYL|TRAORI|BLOCK|BRISK|B_AND|B_NOT|B_XOR|CFTCP|CUT2D|ENDIF|FFWOF|FFWON|FRAME|GOTOB|GOTOC|GOTOF|KONTC|KONTT|MCALL|PCALL|SBLOF|SBLON|SCALE|TRANS|UNTIL|WHILE|AROT|AXIS|BOOL|B_OR|CALL|CASE|CFIN|CHAR|ELSE|GOTO|KONT|LOOP|NORM|PROC|REAL|SOFT|SUPA|ACN|ACP|AND|CFC|CIP|DIV|FOR|INT|MOD|NOT|RET|ROT|RPL|XOR|AC|CT|DC|IC|IF|OF|OR|TO)(?![A-Za-z0-9_])",
+        "keyword",
+      ],
+      [
+        "\\[",
+        {
+          "next": "declareNest",
+          "token": "operator",
+        },
+      ],
+      [
+        "[A-Za-z_][A-Za-z0-9_]*",
+        {
+          "switchTo": "declare",
+          "token": "variable",
+        },
+      ],
+      [
+        "(?=\\S)",
+        {
+          "switchTo": "declare",
+          "token": "@rematch",
+        },
+      ],
+    ],
+    "declareNest": [
+      [
+        "^",
+        {
+          "next": "@popall",
+          "token": "@rematch",
+        },
+      ],
+      [
+        "[(\\[]",
+        {
+          "next": "declareNest",
+          "token": "operator",
+        },
+      ],
+      [
+        "[)\\]]",
+        {
+          "next": "@pop",
+          "token": "operator",
+        },
+      ],
+      {
+        "include": "root",
+      },
+    ],
     "root": [
       [
         "^;?%(?:_N_)?\\w+_(?:MPF|SPF)",
@@ -537,7 +762,25 @@ exports[`generateGrammar > sinumerik: is stable 1`] = `
         "comment",
       ],
       [
-        "^(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*)(N\\d+)([ \\t]+)([A-Za-z_]\\w*:(?!=))",
+        "^(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*(?!\\s))((?:N\\s*\\d+|:\\s*\\d+)?)(\\s*(?!\\s))((?:(?!(?:GOTO|GOTOF|GOTOB|GOTOC):)[A-Za-z_]\\w*:(?!=))?)(\\s*(?!\\s))((?:DEF)(?![A-Za-z0-9_]))",
+        [
+          "",
+          "skip",
+          "",
+          "skip",
+          "",
+          "blockNumber",
+          "",
+          "section",
+          "",
+          {
+            "next": "declare",
+            "token": "keyword",
+          },
+        ],
+      ],
+      [
+        "^(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*)(N\\d+)([ \\t]+)((?!(?:GOTO|GOTOF|GOTOB|GOTOC):)[A-Za-z_]\\w*:(?!=))",
         [
           "",
           "skip",
@@ -548,7 +791,7 @@ exports[`generateGrammar > sinumerik: is stable 1`] = `
         ],
       ],
       [
-        "^(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*)([A-Za-z_]\\w*:(?!=))",
+        "^(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*)((?!(?:GOTO|GOTOF|GOTOB|GOTOC):)[A-Za-z_]\\w*:(?!=))",
         [
           "",
           "skip",
@@ -566,12 +809,40 @@ exports[`generateGrammar > sinumerik: is stable 1`] = `
         ],
       ],
       [
+        "^(\\s*)([/][0-9]?)(\\s*)([/][0-9]?)(\\s*)([/][0-9]?)",
+        [
+          "",
+          "skip",
+          "",
+          "skip",
+          "",
+          "skip",
+        ],
+      ],
+      [
+        "^(\\s*)([/][0-9]?)(\\s*)([/][0-9]?)",
+        [
+          "",
+          "skip",
+          "",
+          "skip",
+        ],
+      ],
+      [
         "^\\s*[/][0-9]?",
         "skip",
       ],
       [
         "N\\s*\\d+",
         "blockNumber",
+      ],
+      [
+        "(GOTO|GOTOF|GOTOB|GOTOC)(\\s+)(?!(?:COMPCURV|ENDWHILE|TRANSMIT|AMIRROR|COMPCAD|DEFAULT|DISPLOF|DISPLON|ENDLOOP|EXTCALL|ORIAXES|ORIVECT|REPEATB|TRAFOOF|ASCALE|ATRANS|COMPOF|COMPON|CUT3DC|DIAM90|DIAMOF|DIAMON|ENDFOR|EXTERN|MIRROR|ORIMKS|ORIWKS|REPEAT|STOPRE|STRING|TRAANG|TRACYL|TRAORI|BLOCK|BRISK|B_AND|B_NOT|B_XOR|CFTCP|CUT2D|ENDIF|FFWOF|FFWON|FRAME|GOTOB|GOTOC|GOTOF|KONTC|KONTT|MCALL|PCALL|SBLOF|SBLON|SCALE|TRANS|UNTIL|WHILE|AROT|AXIS|BOOL|B_OR|CALL|CASE|CFIN|CHAR|ELSE|GOTO|KONT|LOOP|NORM|PROC|REAL|SOFT|SUPA|ACN|ACP|AND|CFC|CIP|DEF|DIV|FOR|INT|MOD|NOT|RET|ROT|RPL|XOR|AC|CT|DC|IC|IF|OF|OR|TO)(?![A-Za-z0-9_]))(?!N\\d+(?![A-Za-z0-9_]))(?!(?:R\\d+)(?![A-Za-z0-9_]))([A-Za-z_][A-Za-z0-9_]*)(?![A-Za-z0-9_])(?!\\s*[(=\\[])",
+        [
+          "keyword",
+          "",
+          "section",
+        ],
       ],
       [
         "(?:\\$[A-Z_][A-Z0-9_]*)",
@@ -695,6 +966,103 @@ exports[`generateGrammar > sinumerik-mill: is stable 1`] = `
   "defaultToken": "",
   "ignoreCase": true,
   "tokenizer": {
+    "declare": [
+      [
+        "^",
+        {
+          "next": "@popall",
+          "token": "@rematch",
+        },
+      ],
+      [
+        ",",
+        {
+          "switchTo": "declareName",
+          "token": "operator",
+        },
+      ],
+      [
+        "(?:COMPCURV|ENDWHILE|TRANSMIT|AMIRROR|COMPCAD|DEFAULT|DISPLOF|DISPLON|ENDLOOP|EXTCALL|ORIAXES|ORIVECT|REPEATB|TRAFOOF|ASCALE|ATRANS|COMPOF|COMPON|CUT3DC|DIAM90|DIAMOF|DIAMON|ENDFOR|EXTERN|MIRROR|ORIMKS|ORIWKS|REPEAT|STOPRE|STRING|TRAANG|TRACYL|TRAORI|BLOCK|BRISK|B_AND|B_NOT|B_XOR|CFTCP|CUT2D|ENDIF|FFWOF|FFWON|FRAME|GOTOB|GOTOC|GOTOF|KONTC|KONTT|MCALL|PCALL|SBLOF|SBLON|SCALE|TRANS|UNTIL|WHILE|AROT|AXIS|BOOL|B_OR|CALL|CASE|CFIN|CHAR|ELSE|GOTO|KONT|LOOP|NORM|PROC|REAL|SOFT|SUPA|ACN|ACP|AND|CFC|CIP|DIV|FOR|INT|MOD|NOT|RET|ROT|RPL|XOR|AC|CT|DC|IC|IF|OF|OR|TO)(?![A-Za-z0-9_])",
+        {
+          "switchTo": "declareName",
+          "token": "keyword",
+        },
+      ],
+      [
+        "[(\\[]",
+        {
+          "next": "declareNest",
+          "token": "operator",
+        },
+      ],
+      {
+        "include": "root",
+      },
+    ],
+    "declareName": [
+      [
+        "^",
+        {
+          "next": "@popall",
+          "token": "@rematch",
+        },
+      ],
+      [
+        "\\s+",
+        "",
+      ],
+      [
+        "(?:COMPCURV|ENDWHILE|TRANSMIT|AMIRROR|COMPCAD|DEFAULT|DISPLOF|DISPLON|ENDLOOP|EXTCALL|ORIAXES|ORIVECT|REPEATB|TRAFOOF|ASCALE|ATRANS|COMPOF|COMPON|CUT3DC|DIAM90|DIAMOF|DIAMON|ENDFOR|EXTERN|MIRROR|ORIMKS|ORIWKS|REPEAT|STOPRE|STRING|TRAANG|TRACYL|TRAORI|BLOCK|BRISK|B_AND|B_NOT|B_XOR|CFTCP|CUT2D|ENDIF|FFWOF|FFWON|FRAME|GOTOB|GOTOC|GOTOF|KONTC|KONTT|MCALL|PCALL|SBLOF|SBLON|SCALE|TRANS|UNTIL|WHILE|AROT|AXIS|BOOL|B_OR|CALL|CASE|CFIN|CHAR|ELSE|GOTO|KONT|LOOP|NORM|PROC|REAL|SOFT|SUPA|ACN|ACP|AND|CFC|CIP|DIV|FOR|INT|MOD|NOT|RET|ROT|RPL|XOR|AC|CT|DC|IC|IF|OF|OR|TO)(?![A-Za-z0-9_])",
+        "keyword",
+      ],
+      [
+        "\\[",
+        {
+          "next": "declareNest",
+          "token": "operator",
+        },
+      ],
+      [
+        "[A-Za-z_][A-Za-z0-9_]*",
+        {
+          "switchTo": "declare",
+          "token": "variable",
+        },
+      ],
+      [
+        "(?=\\S)",
+        {
+          "switchTo": "declare",
+          "token": "@rematch",
+        },
+      ],
+    ],
+    "declareNest": [
+      [
+        "^",
+        {
+          "next": "@popall",
+          "token": "@rematch",
+        },
+      ],
+      [
+        "[(\\[]",
+        {
+          "next": "declareNest",
+          "token": "operator",
+        },
+      ],
+      [
+        "[)\\]]",
+        {
+          "next": "@pop",
+          "token": "operator",
+        },
+      ],
+      {
+        "include": "root",
+      },
+    ],
     "root": [
       [
         "^;?%(?:_N_)?\\w+_(?:MPF|SPF)",
@@ -713,7 +1081,25 @@ exports[`generateGrammar > sinumerik-mill: is stable 1`] = `
         "comment",
       ],
       [
-        "^(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*)(N\\d+)([ \\t]+)([A-Za-z_]\\w*:(?!=))",
+        "^(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*(?!\\s))((?:N\\s*\\d+|:\\s*\\d+)?)(\\s*(?!\\s))((?:(?!(?:GOTO|GOTOF|GOTOB|GOTOC):)[A-Za-z_]\\w*:(?!=))?)(\\s*(?!\\s))((?:DEF)(?![A-Za-z0-9_]))",
+        [
+          "",
+          "skip",
+          "",
+          "skip",
+          "",
+          "blockNumber",
+          "",
+          "section",
+          "",
+          {
+            "next": "declare",
+            "token": "keyword",
+          },
+        ],
+      ],
+      [
+        "^(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*)(N\\d+)([ \\t]+)((?!(?:GOTO|GOTOF|GOTOB|GOTOC):)[A-Za-z_]\\w*:(?!=))",
         [
           "",
           "skip",
@@ -724,7 +1110,7 @@ exports[`generateGrammar > sinumerik-mill: is stable 1`] = `
         ],
       ],
       [
-        "^(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*)([A-Za-z_]\\w*:(?!=))",
+        "^(\\s*(?!\\s))((?:[/][0-9]?)?)(\\s*)((?!(?:GOTO|GOTOF|GOTOB|GOTOC):)[A-Za-z_]\\w*:(?!=))",
         [
           "",
           "skip",
@@ -742,12 +1128,40 @@ exports[`generateGrammar > sinumerik-mill: is stable 1`] = `
         ],
       ],
       [
+        "^(\\s*)([/][0-9]?)(\\s*)([/][0-9]?)(\\s*)([/][0-9]?)",
+        [
+          "",
+          "skip",
+          "",
+          "skip",
+          "",
+          "skip",
+        ],
+      ],
+      [
+        "^(\\s*)([/][0-9]?)(\\s*)([/][0-9]?)",
+        [
+          "",
+          "skip",
+          "",
+          "skip",
+        ],
+      ],
+      [
         "^\\s*[/][0-9]?",
         "skip",
       ],
       [
         "N\\s*\\d+",
         "blockNumber",
+      ],
+      [
+        "(GOTO|GOTOF|GOTOB|GOTOC)(\\s+)(?!(?:COMPCURV|ENDWHILE|TRANSMIT|AMIRROR|COMPCAD|DEFAULT|DISPLOF|DISPLON|ENDLOOP|EXTCALL|ORIAXES|ORIVECT|REPEATB|TRAFOOF|ASCALE|ATRANS|COMPOF|COMPON|CUT3DC|DIAM90|DIAMOF|DIAMON|ENDFOR|EXTERN|MIRROR|ORIMKS|ORIWKS|REPEAT|STOPRE|STRING|TRAANG|TRACYL|TRAORI|BLOCK|BRISK|B_AND|B_NOT|B_XOR|CFTCP|CUT2D|ENDIF|FFWOF|FFWON|FRAME|GOTOB|GOTOC|GOTOF|KONTC|KONTT|MCALL|PCALL|SBLOF|SBLON|SCALE|TRANS|UNTIL|WHILE|AROT|AXIS|BOOL|B_OR|CALL|CASE|CFIN|CHAR|ELSE|GOTO|KONT|LOOP|NORM|PROC|REAL|SOFT|SUPA|ACN|ACP|AND|CFC|CIP|DEF|DIV|FOR|INT|MOD|NOT|RET|ROT|RPL|XOR|AC|CT|DC|IC|IF|OF|OR|TO)(?![A-Za-z0-9_]))(?!N\\d+(?![A-Za-z0-9_]))(?!(?:R\\d+)(?![A-Za-z0-9_]))([A-Za-z_][A-Za-z0-9_]*)(?![A-Za-z0-9_])(?!\\s*[(=\\[])",
+        [
+          "keyword",
+          "",
+          "section",
+        ],
       ],
       [
         "(?:\\$[A-Z_][A-Z0-9_]*)",

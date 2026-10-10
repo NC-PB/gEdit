@@ -221,7 +221,7 @@ describe('availability and options', () => {
     expect(fields.every((field) => field.label.trim() !== '' && !field.label.includes('ncNumbering.'))).toBe(true);
   });
 
-  // TODO Next up 7: Digits allowed 9 on Okuma, and N00010 is a number the control rejects.
+  // Digits allowed 9 on Okuma, and N00010 is a number the control rejects.
   it('bounds the form by the limit of a dialect that stops at its maximum', () => {
     const byId = new Map((renumber.options?.(compiled('okuma-osp')) ?? []).map((field) => [field.id, field]));
     expect(byId.get('digits')).toMatchObject({ default: 0, min: 0, max: 4 });
@@ -255,7 +255,7 @@ describe('availability and options', () => {
       { key: 'ncNumbering.renumber.limitedMax', params: { max: 9999 } },
       { key: 'ncNumbering.renumber.limitedDigits', params: { digits: 4 } },
     ]);
-    // Review of Next up 7: only the answer that was over is named. A run that asked for
+    // Review: only the answer that was over is named. A run that asked for
     // too high a maximum and left the digits alone was told "at most 0 digits".
     const maxOnly = renumber.run(['N1 G0 X0'], context(okuma, { max: 50000 }));
     expect(maxOnly.warnings).toEqual([{ key: 'ncNumbering.renumber.limitedMax', params: { max: 9999 } }]);
@@ -523,6 +523,23 @@ describe('sequence numbers that are names (G10 M8)', () => {
     expect(renumber.preflight?.(['O1001', 'N0100 G00 X0', 'N5 GOTO N100', 'N6 M02'], context(okuma, FREE))?.key).toBe(
       'ncNumbering.renumber.references',
     );
+  });
+
+  // B1: the `$` lines of an Okuma block were kept only by the editable skip list. With `$`
+  // taken out of it, `N30 $ H1.8 …` took the mark off the head of the line and cut the line
+  // off its block; `syntax.continuationStart` now keeps it whatever the list says.
+  it('never numbers a line that continues the block above, with or without $ in the skip list', () => {
+    const lines = ['O1001', 'N5 G00 X100 Z50', 'N6 G01 X50 Z0 F0.2', '$ H1.8 Z-20', 'N7 M02'];
+    for (const skipStartingWith of ['% O (', '$ % O (']) {
+      const result = renumber.run(lines, context(okuma, { ...FREE, skipStartingWith }));
+      expect(result.lines, skipStartingWith).toEqual(['O1001', 'N10 G00 X100 Z50', 'N20 G01 X50 Z0 F0.2', '$ H1.8 Z-20', 'N30 M02']);
+      expect(result.skipped.map((s) => [s.line, s.severity]), skipStartingWith).toEqual([
+        [1, 'info'],
+        [4, 'info'],
+      ]);
+    }
+    const free = renumber.run(lines, context(okuma, { ...FREE, skipStartingWith: '% O (' }));
+    expect(free.skipped[1].message).toBe('Skipped: this line continues the block above it.');
   });
 
   it('moves a jump whose block keeps its number but not its text', () => {

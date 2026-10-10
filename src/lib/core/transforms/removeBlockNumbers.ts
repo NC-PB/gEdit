@@ -49,7 +49,7 @@
 import { tokenizeLine } from '$lib/core/nc/tokenizer';
 import { t } from '$lib/i18n';
 import { continuationRisk, documentOf, stateBefore } from './fragment';
-import { labelsOf, referenceAddresses, referencePreflight, referencesOn, scanProgram } from './references';
+import { labelsOf, mainReferencesOn, referenceAddresses, referencePreflight, referencesOn, scanProgram } from './references';
 import { mainKeyOf, mainPrefixOf, withMainBlocks } from './renumber';
 import type { BlockKey } from './references';
 import type { Located, Msg } from '$lib/app/types';
@@ -217,7 +217,13 @@ function runRemove(lines: string[], ctx: TransformContext): TransformResult {
     // number the program no longer has. With `keepReferenced` the number stays and the
     // line is not a finding — **unless** the reference is a computed one, because then
     // there is no number to keep and the target goes with the rest (G8 M6).
-    const words = addresses.size > 0 ? referencesOn(tokens, line, cp, addresses, labels) : [];
+    // B1: a jump to a main block (`GOTOB :20`) is a reference too — the question before the
+    // run counts it (`withMainBlocks`), so the run lists its line as well.
+    let words = addresses.size > 0 ? referencesOn(tokens, line, cp, addresses, labels) : [];
+    if (main !== null) {
+      const mains = mainReferencesOn(tokens, line, cp);
+      if (mains.length > 0) words = words.concat(mains);
+    }
     if (!keep && words.length > 0) {
       references++;
       note(i, referenceRow);

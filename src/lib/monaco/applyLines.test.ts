@@ -24,8 +24,11 @@ import {
   applyLinesTo,
   planLineEdits,
   CHUNK_LINES,
+  MAX_OPERATIONS_PER_CALL,
   MONACO_REDUCES_AT,
+  batchOperations,
   type EditableModel,
+  type UndoGroup,
   type LineOperation,
 } from './applyLines';
 
@@ -35,6 +38,10 @@ class FakeModel implements EditableModel {
   stackElements = 0;
   /** Every `pushEditOperations` batch, so "one call" can be asserted. */
   batches: LineOperation[][] = [];
+  /** The undo group each batch was pushed with (`undefined` for none). */
+  groups: (UndoGroup | undefined)[] = [];
+  /** Where in the sequence of calls each `pushStackElement` happened (index into `batches`). */
+  stackAt: number[] = [];
 
   constructor(text: string) {
     this.lines = text.split('\n');
@@ -58,10 +65,12 @@ class FakeModel implements EditableModel {
 
   pushStackElement(): void {
     this.stackElements++;
+    this.stackAt.push(this.batches.length);
   }
 
-  pushEditOperations(_before: null, operations: LineOperation[]): unknown {
+  pushEditOperations(_before: null, operations: LineOperation[], _cursor?: () => null, group?: UndoGroup): unknown {
     this.batches.push(operations);
+    this.groups.push(group);
     const spans = operations
       .map((op) => {
         const range = this.validateRange(op.range);
@@ -352,9 +361,9 @@ describe('planLineEdits: chunking', () => {
   });
 
   it('plans the biggest run it will still split in well under the budget', () => {
-    // One operation short of `MONACO_REDUCES_AT`: the most operations a plan can carry,
-    // and every one of them narrowed. The apply budget is 2 s and Monaco still has to do
-    // its half, so the planning has to be a small fraction of it.
+    // One operation short of `MONACO_REDUCES_AT`: the most that fit one call, and every one of
+    // them narrowed. The apply budget is 2 s and Monaco still has to do its half, so the
+    // planning has to be a small fraction of it.
     const size = MONACO_REDUCES_AT - 1;
     const oldLines = Array.from({ length: size }, (_, i) => `N${i * 10} G1 X${i}.`);
     const newLines = oldLines.map((_, i) => `N${i * 5 + 1} G1 X${i}.`);
@@ -374,11 +383,11 @@ describe('planLineEdits: chunking', () => {
     expect(elapsed).toBeLessThan(200);
   });
 
-  it('stops splitting where Monaco would collapse the batch anyway', () => {
-    // One line more, and the split would reach 1000 operations: Monaco's
-    // `_reduceOperations` turns those into a single edit over the whole span, which is
-    // what the un-split hunk already is — at none of the cost.
-    const size = MONACO_REDUCES_AT;
+  it('keeps splitting past the number Monaco collapses at, and hands it over in calls below it (B1 A4)', () => {
+    // 1000 narrow edits in ONE call are collapsed by Monaco into one edit over their whole
+    // span, and every bookmark and fold between the first and the last moves. The plan
+    // stays per line; `applyLinesTo` sends it in calls of at most 999, last batch first.
+    const size = 2500;
     const oldLines = Array.from({ length: size }, (_, i) => `N${i * 10} G1 X${i}.`);
     const newLines = oldLines.map((_, i) => `N${i * 5 + 1} G1 X${i}.`);
     const plan = planLineEdits({
@@ -388,12 +397,79 @@ describe('planLineEdits: chunking', () => {
       modelLineCount: size,
       maxColumn: (line) => oldLines[line - 1].length + 1,
     });
-    expect(plan.operations).toHaveLength(1);
+    expect(plan.operations).toHaveLength(size);
+    expect(plan.operations.every((op) => op.range.startLineNumber === op.range.endLineNumber)).toBe(true);
     expect(plan.changedLines).toBe(size);
 
     const model = new FakeModel(oldLines.join('\n'));
     applyLinesTo(model, 1, size, newLines);
     expect(linesOf(model.text)).toEqual(newLines);
+    // No call reaches the number Monaco collapses at; the last lines went first.
+    expect(model.batches.map((batch) => batch.length)).toEqual([502, 999, 999]);
+    expect(Math.max(...model.batches.map((batch) => batch.length))).toBeLessThan(MONACO_REDUCES_AT);
+    // Every batch is an undo element of its own (a stack element before it and after the
+    // last), tied by one group, so Monaco takes each back in a call of its own and the whole
+    // as one step (B1 fixperf; `applyLinesUndo.test.ts` runs the real undo stack).
+    expect(model.stackAt).toEqual([0, 1, 2, 3]);
+    const group = model.groups[0];
+    expect(group).toBeDefined();
+    expect(model.groups.every((g) => g === group)).toBe(true);
+    expect(group!.id).toBeGreaterThan(1_000_000);
+    const firstLines = model.batches.map((batch) => batch[0].range.startLineNumber);
+    expect(firstLines).toEqual([...firstLines].sort((x, y) => y - x));
+  });
+
+  it('batches exactly at the limit: 999 in one call, 1000 in two', () => {
+    expect(MAX_OPERATIONS_PER_CALL).toBe(999);
+    const op = (n: number): LineOperation => ({
+      range: { startLineNumber: n, startColumn: 1, endLineNumber: n, endColumn: 1 },
+      text: '',
+    });
+    const ops = (count: number): LineOperation[] => Array.from({ length: count }, (_, i) => op(i + 1));
+    expect(batchOperations(ops(0))).toEqual([]);
+    expect(batchOperations(ops(999)).map((b) => b.length)).toEqual([999]);
+    expect(batchOperations(ops(1000)).map((b) => b.length)).toEqual([999, 1]);
+    expect(batchOperations(ops(1998)).map((b) => b.length)).toEqual([999, 999]);
+    // Document order inside and across the groups.
+    expect(batchOperations(ops(1000)).flat()).toEqual(ops(1000));
+  });
+
+  it('applies mixed edits (replace, delete, insert) correctly across batches', () => {
+    // Deletions and insertions ride the same batches as replacements; adjacent edits that sit
+    // on both sides of a batch boundary must not disturb each other.
+    const size = 3000;
+    const oldLines = Array.from({ length: size }, (_, i) => `N${i} G1 X${i}.`);
+    const newLines: string[] = [];
+    oldLines.forEach((line, i) => {
+      if (i % 4 === 2) return; // deleted
+      newLines.push(i % 4 === 0 ? line.replace('G1', 'G01') : line);
+      if (i % 4 === 3) newLines.push(`(NOTE ${i})`); // inserted after
+    });
+    const model = new FakeModel(oldLines.join('\n'));
+    applyLinesTo(model, 1, size, newLines);
+    expect(linesOf(model.text)).toEqual(newLines);
+    expect(model.batches.length).toBeGreaterThan(1);
+    expect(model.batches.every((batch) => batch.length <= MAX_OPERATIONS_PER_CALL)).toBe(true);
+    expect(model.stackElements).toBe(model.batches.length + 1);
+  });
+
+  it('leaves a plan of one call as it was: two stack elements, no group', () => {
+    const oldLines = Array.from({ length: 999 }, (_, i) => `N${i} G1 X${i}.`);
+    const newLines = oldLines.map((line) => line.replace('G1', 'G01'));
+    const model = new FakeModel(oldLines.join('\n'));
+    applyLinesTo(model, 1, 999, newLines);
+    expect(model.batches).toHaveLength(1);
+    expect(model.stackAt).toEqual([0, 1]);
+    expect(model.groups).toEqual([undefined]);
+  });
+
+  it('gives every transform its own group', () => {
+    const oldLines = Array.from({ length: 2000 }, (_, i) => `N${i} G1 X${i}.`);
+    const model = new FakeModel(oldLines.join('\n'));
+    applyLinesTo(model, 1, 2000, oldLines.map((line) => line.replace('G1', 'G01')));
+    applyLinesTo(model, 1, 2000, oldLines);
+    const ids = new Set(model.groups.map((g) => g!.id));
+    expect(ids.size).toBe(2);
   });
 
   it('names the threshold Monaco actually uses', () => {

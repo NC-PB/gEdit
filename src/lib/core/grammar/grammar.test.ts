@@ -14,6 +14,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { generateGrammar } from './index';
+import { allRules, emittedRoles, monarchRun, monarchTokens, type Emitted, type MonarchLike } from './monarchSim';
 import { isoRules } from './iso';
 import { klartextRules } from './klartext';
 import { hasTapeMarker, orderedKeywords, type GrammarAction, type GrammarRule } from './shared';
@@ -74,43 +75,9 @@ function compileRule([source, action]: GrammarRule, ignoreCase: boolean) {
   };
 }
 
-interface Emitted {
-  text: string;
-  role: GrammarAction extends unknown ? string : never;
-}
-
-/** Monarch's tokenizer loop, for one line and one `root` state. */
+/** Monarch's tokenizer loop for one line, from the base state (`monarchSim.ts`). */
 function tokenize(grammar: Built['grammar'], line: string): Emitted[] {
-  const rules = grammar.tokenizer.root.map((rule) => compileRule(rule, grammar.ignoreCase));
-  const out: Emitted[] = [];
-  let pos = 0;
-
-  while (pos < line.length) {
-    const rest = line.slice(pos);
-    const hit = rules.find((rule) => (rule.lineStart ? pos === 0 : true) && rule.re.test(rest));
-    if (!hit) {
-      // Monarch advances one character with `defaultToken` when nothing matches.
-      out.push({ text: line[pos], role: grammar.defaultToken });
-      pos += 1;
-      continue;
-    }
-    const matches = rest.match(hit.re) as RegExpMatchArray;
-    expect(matches[0].length, `rule made no progress: ${hit.source}`).toBeGreaterThan(0);
-
-    if (Array.isArray(hit.action)) {
-      expect(matches.length, `group count of ${hit.source}`).toBe(hit.action.length + 1);
-      const covered = hit.action.reduce((sum, _action, i) => sum + (matches[i + 1] ?? '').length, 0);
-      expect(covered, `groups must cover the whole match of ${hit.source}`).toBe(matches[0].length);
-      hit.action.forEach((role, i) => {
-        const text = matches[i + 1] ?? '';
-        if (text !== '') out.push({ text, role });
-      });
-    } else {
-      out.push({ text: matches[0], role: hit.action });
-    }
-    pos += matches[0].length;
-  }
-  return out;
+  return monarchTokens(grammar as unknown as MonarchLike, line);
 }
 
 /** `role:text` for everything the grammar gives a role to; the neutral tokens are dropped. */
@@ -124,7 +91,7 @@ describe('generateGrammar', () => {
   it.each(BUILT.map((entry) => entry.profile.id))('%s: every rule compiles as Monarch compiles it', (id) => {
     const { grammar } = byId(id);
     expect(grammar.tokenizer.root.length).toBeGreaterThan(5);
-    for (const rule of grammar.tokenizer.root) {
+    for (const rule of allRules(grammar as unknown as MonarchLike) as GrammarRule[]) {
       expect(() => compileRule(rule, grammar.ignoreCase)).not.toThrow();
       // Monarch reads `^` as the line-start anchor only at position 0; anywhere else it
       // would match at every token boundary, which is never what a generated rule wants.
@@ -139,9 +106,9 @@ describe('generateGrammar', () => {
   it.each(BUILT.map((entry) => entry.profile.id))('%s: leaves what it does not know uncoloured', (id) => {
     const { grammar } = byId(id);
     expect(grammar.defaultToken).toBe('');
-    const emitted = new Set(grammar.tokenizer.root.flatMap((rule) => (Array.isArray(rule[1]) ? rule[1] : [rule[1]])));
+    const emitted = new Set(emittedRoles(grammar as unknown as MonarchLike));
     for (const role of emitted) {
-      expect(role === '' || (ROLES as readonly string[]).includes(role)).toBe(true);
+      expect((ROLES as readonly string[]).includes(role), role).toBe(true);
     }
     // Marking an error is the linter's job (M4), so the grammar never says `invalid`.
     expect(emitted.has('invalid')).toBe(false);
@@ -196,6 +163,13 @@ describe('the iso grammar', () => {
     expect(at(line)).toEqual(expected);
   });
 
+  it('takes a G or M code of four digits whole (B1 fix NC, NC-11)', () => {
+    expect(at('G1900 X10.')).toEqual(['gcode:G1900', 'axis:X10.']);
+    expect(at('M1234')).toEqual(['mcode:M1234']);
+    expect(at('G1234.1')).toEqual(['gcode:G1234.1']);
+    expect(roles(byId('fanuc-lathe').grammar, 'M1234 G1900')).toEqual(['mcode:M1234', 'gcode:G1900']);
+  });
+
   it('keeps a comment on one line, closed or not', () => {
     expect(at('(A) X10. (B)')).toEqual(['comment:(A)', 'axis:X10.', 'comment:(B)']);
     expect(at('(UNCLOSED HEADER COMMENT')).toEqual(['comment:(UNCLOSED HEADER COMMENT']);
@@ -210,6 +184,16 @@ describe('the iso grammar', () => {
     expect(at('N120/G00 X0.')).toEqual(['blockNumber:N120', 'skip:/', 'gcode:G00', 'axis:X0.']);
     // Away from the head of a block, `/` is the division operator.
     expect(at('#1=#2/2')).toEqual(['variable:#1', 'operator:=', 'variable:#2', 'operator:/', 'number:2']);
+  });
+
+  // B1 (TODO "column 0"): the Klartext grammar once lost the block number behind a skip
+  // mark written right in front of it, because a standalone rule claimed column 0 first.
+  // The iso grammar is held to the same line, on the mill and on the lathe.
+  it.each(['fanuc-gcode', 'fanuc-lathe'])('%s: reads a block skip written directly in front of the block number', (id) => {
+    const iso = (line: string) => roles(byId(id).grammar, line);
+    expect(iso('/N120 G0 X0.')).toEqual(['skip:/', 'blockNumber:N120', 'gcode:G0', 'axis:X0.']);
+    expect(iso('/1N120 G0 X0.')).toEqual(['skip:/1', 'blockNumber:N120', 'gcode:G0', 'axis:X0.']);
+    expect(iso('/ N120 G0 X0.')).toEqual(['skip:/', 'blockNumber:N120', 'gcode:G0', 'axis:X0.']);
   });
 
   it('puts the macro keywords in front of the single-letter addresses', () => {
@@ -301,6 +285,41 @@ describe('the iso grammar', () => {
     expect(at('<A B>')).not.toContain('programMarker:<A B>');
   });
 });
+
+// B1-G: the M12.5 `syntax` fields the tokenizer reads and the grammar did not. The
+// differential test (`differential.test.ts`) holds the two together over every golden line;
+// the sentences here say what each rule is for.
+describe('the iso grammar, plain text (syntax.plainTextRun)', () => {
+  it.each(['fanuc-gcode', 'fanuc-lathe'])('%s: free text outside a comment is one uncoloured piece', (id) => {
+    const iso = (line: string) => roles(byId(id).grammar, line);
+    // Painted letter by letter, `NE` of `ONE` and `LE` of `SPINDLE` were keywords and the
+    // `D` an offset: the tokenizer says one `unknown` token up to the next real word.
+    expect(iso('M797 SPINDLE ONE DONE')).toEqual(['mcode:M797']);
+    expect(tokenize(byId(id).grammar, 'M797 SPINDLE ONE DONE').map((token) => token.text)).toEqual(['M797', ' ', 'SPINDLE ONE DONE']);
+    // It stops in front of a group with a value, a keyword, and a comment.
+    expect(iso('M797 SPINDLE ONE X10. DONE')).toEqual(['mcode:M797', 'axis:X10.']);
+    expect(iso('N10 CHECK INSERT G1 X5.')).toEqual(['blockNumber:N10', 'gcode:G1', 'axis:X5.']);
+    expect(iso('PART LOADED GOTO 40')).toEqual(['keyword:GOTO', 'number:40']);
+    expect(iso('SPINDLE (ONE DONE)')).toEqual(['comment:(ONE DONE)']);
+    // Two letters are no run; three are.
+    expect(iso('G1 X5. FZ')).toEqual(['gcode:G1', 'axis:X5.']);
+    expect(iso('G1 X5. ZZZ')).toEqual(['gcode:G1', 'axis:X5.']);
+  });
+});
+
+describe('the iso grammar, stacked block skips', () => {
+  it.each(['fanuc-gcode', 'fanuc-lathe'])('%s: every level mark in front of the block is a skip', (id) => {
+    const iso = (line: string) => roles(byId(id).grammar, line);
+    // `/1 /3` skips the block on either of two levels; the tokenizer reads one `skip` each
+    // (M9), and the grammar left the second one as a division sign and a number.
+    expect(iso('/1 /3 N10 G0 X10.')).toEqual(['skip:/1', 'skip:/3', 'blockNumber:N10', 'gcode:G0', 'axis:X10.']);
+    expect(iso('/2/9 G0 Z5.')).toEqual(['skip:/2', 'skip:/9', 'gcode:G0', 'axis:Z5.']);
+    expect(iso('/1 G0 X0.')).toEqual(['skip:/1', 'gcode:G0', 'axis:X0.']);
+    // A slash away from the head of the block stays the division sign.
+    expect(iso('#1=#2/2')).toEqual(['variable:#1', 'operator:=', 'variable:#2', 'operator:/', 'number:2']);
+  });
+});
+
 
 describe('the klartext grammar', () => {
   const { grammar } = byId('heidenhain-klartext');
@@ -414,6 +433,64 @@ describe('the klartext grammar', () => {
   });
 });
 
+// B1-G: the Klartext fields of M12.5 (`freeText`, `colonWords`, `symbolAddresses`) and the
+// shapes Wave A added to the tokenizer.
+describe('the klartext grammar, free text and colon words', () => {
+  const { grammar } = byId('heidenhain-klartext');
+  const at = (line: string) => roles(grammar, line);
+  const pieces = (line: string) => tokenize(grammar, line).map((token) => `${token.role}:${token.text}`);
+
+  it('paints the text the control keeps as one uncoloured piece, and the words in front of it as before', () => {
+    // A cycle name, a program name and a path: not a row of numbers, operators and words.
+    expect(pieces('12 CYCL DEF 207 TAP.-RIGID NEW ~')).toEqual([
+      'blockNumber:12', ': ', 'keyword:CYCL DEF', ': ', 'number:207', ': ', ':TAP.-RIGID NEW', ': ', 'operator:~',
+    ]);
+    expect(at('0 BEGIN PGM 7-AXLE PART MM')).toEqual(['blockNumber:0', 'keyword:BEGIN PGM', 'keyword:MM']);
+    expect(at('99 END PGM 7-AXLE PART MM')).toEqual(['blockNumber:99', 'keyword:END PGM', 'keyword:MM']);
+    expect(at('5 END PGM 2.5D_MILLING MM')).toEqual(['blockNumber:5', 'keyword:END PGM', 'keyword:MM']);
+    expect(at('1 CALL PGM TNC:\\PARTS\\SUB1.H')).toEqual(['blockNumber:1', 'keyword:CALL PGM']);
+    expect(at('4 FN 16: F-PRINT TNC:\\FORMS\\REPORT.A / TNC:\\LOGS\\RUN.TXT')).toEqual([
+      'blockNumber:4', 'keyword:FN', 'number:16', 'operator::',
+    ]);
+    expect(at('9 CYCL DEF 9.1 DWELL 1.5')).toEqual(['blockNumber:9', 'keyword:CYCL DEF', 'number:9.1', 'number:1.5']);
+    // The `PGM` of `CYCL DEF 12.1 PGM` is no keyword of the profile; the name behind it is text.
+    expect(at('12 CYCL DEF 12.1 PGM SUBPGM1')).toEqual(['blockNumber:12', 'keyword:CYCL DEF', 'number:12.1']);
+    // What follows the text is read as usual: the comment, the continuation mark.
+    expect(at('19 CYCL DEF 200 DRILLING ;CENTRE HOLES')).toEqual([
+      'blockNumber:19', 'keyword:CYCL DEF', 'number:200', 'comment:;CENTRE HOLES',
+    ]);
+  });
+
+  it('paints a colon word as one word, and a code of the database in it is no keyword', () => {
+    // `VC` is a code of the database since Wave A; the tokenizer reads `VC:120` as one word.
+    expect(at('14 FUNCTION TURNDATA SPIN VCONST:ON VC:120 SMAX3000')).toEqual([
+      'blockNumber:14', 'number:VCONST:ON', 'number:VC:120',
+    ]);
+    expect(at('15 FUNCTION TURNDATA SPIN VCONST:OFF VC:Q5')).toEqual(['blockNumber:15', 'number:VCONST:OFF', 'number:VC:Q5']);
+    expect(at('13 CYCL DEF 32.2 HSC-MODE:1 TA0.5')).toEqual(['blockNumber:13', 'keyword:CYCL DEF', 'number:32.2', 'number:HSC-MODE:1']);
+    // The value runs up to a blank or a comment; a colon word cut short by anything else is not one.
+    expect(at('16 FUNCTION TURNDATA SPIN VC:120;LIMIT')).toEqual(['blockNumber:16', 'number:VC:120', 'comment:;LIMIT']);
+    expect(at('17 VC:12X')).not.toContain('number:VC:12X');
+  });
+
+  it('paints the datum-table mark and its row as one word', () => {
+    expect(at('13 CYCL DEF 7.1 #5')).toEqual(['blockNumber:13', 'keyword:CYCL DEF', 'number:7.1', 'number:#5']);
+    expect(at('13 CYCL DEF 7.1 #Q5 ;ROW')).toEqual(['blockNumber:13', 'keyword:CYCL DEF', 'number:7.1', 'number:#Q5', 'comment:;ROW']);
+  });
+
+  it('paints the points of PLANE POINTS and FK, and a decimal comma, as the tokenizer reads them', () => {
+    expect(at('20 PLANE POINTS P1X+0 P1Y+0 P1Z+0 P2X+10')).toEqual([
+      'blockNumber:20', 'keyword:PLANE POINTS', 'number:P1X+0', 'number:P1Y+0', 'number:P1Z+0', 'number:P2X+10',
+    ]);
+    expect(at('63 L X241,781 Y-5,5 FMAX')).toEqual(['blockNumber:63', 'keyword:L', 'axis:X241,781', 'axis:Y-5,5', 'keyword:FMAX']);
+    // `R0` is a code of the database and a radius of zero point five in `R0,5`.
+    expect(at('64 CR X10,2 Y25,9 R0,5 DR+')).toEqual(['blockNumber:64', 'keyword:CR', 'axis:X10,2', 'axis:Y25,9', 'number:R0,5', 'keyword:DR+']);
+    expect(at('65 CR X10 Y25 R0.5 DR-')).toEqual(['blockNumber:65', 'keyword:CR', 'axis:X10', 'axis:Y25', 'number:R0.5', 'keyword:DR-']);
+    expect(at('66 L Z+100 R0 FMAX')).toEqual(['blockNumber:66', 'keyword:L', 'axis:Z+100', 'keyword:R0', 'keyword:FMAX']);
+  });
+});
+
+
 describe('over the NC fixtures', () => {
   const dialects: [string, string][] = [
     ['fanuc-gcode', 'nc/fanuc'],
@@ -517,31 +594,35 @@ describe('long lines', () => {
     ['an address, blanks, a sign and blanks', (n) => `X${' '.repeat(n / 2)}+${' '.repeat(n / 2)}x`],
     ['packed words', (n) => 'G1X1'.repeat(n / 4)],
     ['letters and digits', (n) => 'A1'.repeat(n / 2)],
+    // B1-G: the rules of the M12.5 fields, each of which reads ahead of the word it starts at.
+    ['a run of plain words', (n) => 'ABC '.repeat(n / 4)],
+    ['a run of plain words with values', (n) => 'ABC X1 '.repeat(n / 7)],
+    ['a cycle name', (n) => `12 CYCL DEF 200 ${'AB '.repeat(n / 3)}`],
+    ['a cycle name that never ends', (n) => `12 CYCL DEF 200 ${'AB-'.repeat(n / 3)}~`],
+    ['a program name', (n) => `0 BEGIN PGM ${'AB '.repeat(n / 3)}MM`],
+    ['a colon word', (n) => `VC:${'A'.repeat(n)}`],
+    ['colon words', (n) => 'VC:12 '.repeat(n / 6)],
+    ['a call target', (n) => `CALL O${'A'.repeat(n)}`],
+    ['a jump target', (n) => `GOTOF ${'A'.repeat(n)}`],
+    ['jumps', (n) => 'GOTOF A '.repeat(n / 8)],
+    ['a declaration', (n) => `DEF INT ${'A,'.repeat(n / 2)}`],
+    ['a declaration with sizes', (n) => `DEF REAL ${'A[3],'.repeat(n / 5)}`],
+    ['nested brackets in a declaration', (n) => `DEF INT A=${'('.repeat(n / 2)}${')'.repeat(n / 2)}`],
+    ['stacked skip marks', (n) => `${'/1 '.repeat(n / 3)}N1 G1`],
+    ['a declaration padded with blanks', (n) => `N1${' '.repeat(n)}DEF${' '.repeat(n)}INT`],
   ];
 
   /**
-   * Monarch's loop without the checks of `tokenize` above, so that the time is the
-   * grammar's own: the best of three runs, in milliseconds.
+   * The time of Monarch's loop (`monarchSim.ts`, states included) over one line: the best of
+   * three runs, in milliseconds, with the rules compiled before the clock starts.
    */
   function cost(grammar: Built['grammar'], line: string): number {
-    const rules = grammar.tokenizer.root.map((rule) => compileRule(rule, grammar.ignoreCase));
+    const lang = grammar as unknown as MonarchLike;
+    monarchRun(lang, 'X1'); // compile the rules of the states first, outside the clock
     let best = Infinity;
     for (let run = 0; run < 3; run++) {
       const started = performance.now();
-      let pos = 0;
-      while (pos < line.length) {
-        const rest = line.slice(pos);
-        let taken = 1;
-        for (const rule of rules) {
-          if (rule.lineStart && pos !== 0) continue;
-          const match = rule.re.exec(rest);
-          if (match) {
-            taken = Math.max(1, match[0].length);
-            break;
-          }
-        }
-        pos += taken;
-      }
+      monarchRun(lang, line);
       best = Math.min(best, performance.now() - started);
     }
     return best;

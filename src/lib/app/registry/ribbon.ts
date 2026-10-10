@@ -16,7 +16,7 @@ import type {
 } from '$lib/app/types';
 
 /** Left-to-right order of the ribbon tabs (plan AD-6). */
-const TAB_ORDER: readonly RibbonTab[] = ['home', 'insert', 'nc', 'tools', 'view'];
+const TAB_ORDER: readonly RibbonTab[] = ['file', 'edit', 'insert', 'nc', 'tools', 'scripts', 'view'];
 
 interface Entry {
   def: RibbonItemDef | RibbonGroupDef;

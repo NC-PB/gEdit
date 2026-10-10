@@ -1,5 +1,4 @@
-// What the script UI shows (plan §5 WP5.1). Owner: **WP5.1** — written by P5, and real
-// code rather than a stub, the same call P4 made for `stores/results.ts`.
+// What the script UI shows (plan §5 WP5.1). Built by WP5.1.
 //
 // Plain `svelte/store` modules, no Tauri and no i18n (AD-2), for two reasons:
 //
@@ -76,6 +75,8 @@ export interface ScriptOutput {
   timedOut: boolean;
   cancelled: boolean;
   stdoutTruncated: boolean;
+  /** stderr was cut at its cap, or was still being read when the runner stopped waiting. */
+  stderrTruncated: boolean;
   durationMs: number;
   interpreter: string;
 }
@@ -176,6 +177,7 @@ export function outputFromRun(
     timedOut: r.timedOut,
     cancelled: r.cancelled,
     stdoutTruncated: r.stdoutTruncated,
+    stderrTruncated: r.stderrTruncated,
     durationMs: r.durationMs,
     interpreter: r.interpreter,
   };

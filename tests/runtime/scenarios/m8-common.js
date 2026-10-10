@@ -229,6 +229,16 @@ export function choiceOf(h, field) {
 }
 
 /**
+ * The label the machine form shows for a preset of the profile: its own label, and "(unconfirmed)"
+ * after it when the preset is marked `verify` (B1 A4, `machines.value.unconfirmed`).
+ * @param {Harness} h
+ * @param {{ label: string, verify?: boolean }} preset
+ */
+export function shownPreset(h, preset) {
+  return preset.verify === true ? `${preset.label} (${context(h).t('machines.value.unconfirmed')})` : preset.label
+}
+
+/**
  * Whether a bool field of the machine form is ticked, or null when the form has no such field.
  * @param {Harness} h
  * @param {string} field

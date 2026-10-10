@@ -12,7 +12,9 @@
 //   only `onWillQuit` clears                       → a Windows logoff keeps its snapshots
 //   a restore carries the snapshot's disk stamp    → the file that moved on is not
 //   `outlookOf` calls that file `changed`            overwritten in silence
-//   a session is discarded only when it is empty   → a partial restore loses nothing
+//   a restore drops only what it opened           → a partial restore loses nothing
+//   a failing snapshot shows a lasting sign        → the net being down is not a message
+//                                                    that was gone after eight seconds
 //
 // The document store is the real one (a plain svelte/store module); Monaco, Tauri and
 // `app/fileOps.ts` are replaced by `deps`. `idle` is a `setTimeout(0)`, which is what
@@ -85,9 +87,14 @@ interface Harness {
   puts: { meta: RecoveryMeta; text: string }[];
   drops: string[];
   discarded: string[];
+  /** `session/key` of every `discardEntry`. */
+  discardedEntries: string[];
+  /** What `deps.trouble` was told, in order (titles of the documents that cannot be written). */
+  trouble: string[][];
   restored: Parameters<RecoveryDeps['files']['restoreDocument']>[0][];
   cleared: number;
   listed: RecoveryEntry[];
+  list: () => Promise<RecoveryEntry[]>;
   reads: Map<string, string>;
   messages: { text: string; error: boolean }[];
   /** The `onWillQuit` handler the service registered. */
@@ -115,9 +122,12 @@ function harness(over: Partial<RecoveryDeps> = {}): Harness {
     puts: [],
     drops: [],
     discarded: [],
+    discardedEntries: [],
+    trouble: [],
     restored: [],
     cleared: 0,
     listed: [],
+    list: async () => h.listed,
     reads: new Map<string, string>(),
     messages: [],
     quit: async () => {
@@ -143,9 +153,12 @@ function harness(over: Partial<RecoveryDeps> = {}): Harness {
       versionId: (id) => models.get(id)?.version ?? 0,
     },
     files: {
+      // The real one makes a dirty document with a model, which is what the forced pass
+      // after a restore has to find.
       restoreDocument(o) {
         h.restored.push(o);
-        return `r${++nextRestored}`;
+        nextRestored += 1;
+        return h.add({ dirty: true, text: o.textLF, path: o.path });
       },
       onDidSave(cb) {
         onSave = cb;
@@ -180,9 +193,7 @@ function harness(over: Partial<RecoveryDeps> = {}): Harness {
     async clearCurrent() {
       h.cleared += 1;
     },
-    async list() {
-      return h.listed;
-    },
+    list: () => h.list(),
     async read(session, key) {
       const text = h.reads.get(`${session}/${key}`);
       if (text === undefined) throw new Error(`no snapshot ${session}/${key}`);
@@ -190,6 +201,12 @@ function harness(over: Partial<RecoveryDeps> = {}): Harness {
     },
     async discardSession(session) {
       h.discarded.push(session);
+    },
+    async discardEntry(session, key) {
+      h.discardedEntries.push(`${session}/${key}`);
+    },
+    trouble(titles) {
+      h.trouble.push(titles);
     },
     now: () => Date.now(),
     watchAway(flush) {
@@ -490,6 +507,75 @@ describe('taking snapshots', () => {
     stop();
   });
 
+  // B1 A2. The one message above was gone after eight seconds and the trouble was not: a
+  // programmer who looked away saw a quiet status bar for the rest of the afternoon.
+  it('keeps a sign up for as long as a snapshot cannot be written, and takes it down when one can', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let fail = true;
+    const h = harness({
+      async put(meta, text) {
+        if (fail) throw new Error('no space left on device');
+        h.puts.push({ meta, text });
+      },
+    });
+    const stop = h.service.start();
+    h.add({ path: '/nc/a.nc' });
+    h.add({ path: '/nc/b.nc' });
+
+    await tick(3);
+    // Raised once per document that fails, with the titles that cannot be written; not
+    // re-announced by later passes that fail the same way.
+    expect(h.trouble).toEqual([['a.nc'], ['a.nc', 'b.nc']]);
+
+    fail = false;
+    await tick();
+    // Both write again: the sign comes down after the first success leaves one, then none.
+    expect(h.trouble.at(-1)).toEqual([]);
+    expect(h.puts).toHaveLength(2);
+    stop();
+  });
+
+  it('tells by message again when the trouble comes back after it was over', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let fail = true;
+    const h = harness({
+      async put(meta, text) {
+        if (fail) throw new Error('no space left on device');
+        h.puts.push({ meta, text });
+      },
+    });
+    const stop = h.service.start();
+    const id = h.add();
+    await tick(2);
+    expect(h.messages.filter((m) => m.error)).toHaveLength(1);
+
+    fail = false;
+    await tick();
+    expect(h.trouble.at(-1)).toEqual([]);
+
+    fail = true;
+    h.edit(id, 'O1000\nG1 X5');
+    await tick(2);
+    expect(h.messages.filter((m) => m.error)).toHaveLength(2);
+    stop();
+  });
+
+  it('takes the sign down when the document that could not be written is saved or closed', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const h = harness({ put: () => Promise.reject(new Error('too large')) });
+    const stop = h.service.start();
+    const id = h.add();
+    await tick(2);
+    expect(h.trouble.at(-1)).toEqual(['prog.nc']);
+
+    // A save leaves the document clean, so the next pass has nothing to write for it.
+    h.docs.update(id, { textDirty: false });
+    h.saved(id);
+    await tick();
+    expect(h.trouble.at(-1)).toEqual([]);
+    stop();
+  });
+
   it('carries the document metadata the restore needs, and keeps the machine choice', async () => {
     const h = harness();
     const stop = h.service.start();
@@ -762,7 +848,8 @@ describe('restoring', () => {
     h.listed = [entry({ machineId: 'lathe-2' })];
 
     const ids = await h.service.restore(h.listed);
-    expect(ids).toEqual(['r1']);
+    expect(ids).toEqual(h.docs.all().map((doc) => doc.id));
+    expect(ids).toHaveLength(1);
     expect(h.restored[0]).toEqual({
       path: PATH,
       title: 'prog.nc',
@@ -796,7 +883,10 @@ describe('restoring', () => {
     expect(h.restored[0].diskStamp).toEqual(STAMP);
   });
 
-  it('discards a session once nothing is left in it', async () => {
+  // B1 A2. `recovery_discard` takes a whole session, so a restore of part of one had to
+  // keep all of it and offered the restored snapshots again at the next start, next to the
+  // open copies of the same work.
+  it('discards each restored snapshot on its own and never a whole session', async () => {
     const h = harness();
     h.reads.set('s-1/d1', 'a');
     h.reads.set('s-1/d2', 'b');
@@ -804,33 +894,111 @@ describe('restoring', () => {
 
     await h.service.restore(h.listed);
     expect(h.restored).toHaveLength(2);
-    expect(h.discarded).toEqual(['s-1']);
+    expect(h.discardedEntries).toEqual(['s-1/d1', 's-1/d2']);
+    expect(h.discarded).toEqual([]);
   });
 
-  it('keeps a session that still holds something the user did not take', async () => {
+  it('leaves the snapshots the user did not take, and says how many are kept', async () => {
     const h = harness();
     h.reads.set('s-1/d1', 'a');
     h.reads.set('s-1/d2', 'b');
     h.listed = [entry({ key: 'd1' }), entry({ key: 'd2' })];
+    // What is still on disk after the restore: `d1` went with `discardEntry`.
+    h.list = async () => h.listed.filter((e) => !h.discardedEntries.includes(entryKey(e)));
 
     await h.service.restore([h.listed[0]]);
-    // Discarding the session here would delete `d2`, which the user never saw restored.
-    // There is no per-entry drop for a leftover session, so the session stays whole.
+    // Only the restored one is dropped; `d2` was never the restore's to touch.
+    expect(h.discardedEntries).toEqual(['s-1/d1']);
     expect(h.discarded).toEqual([]);
     expect(h.messages.map((m) => m.text).join(' ')).toContain('offered again');
   });
 
-  it('keeps the session when one snapshot could not be read, and restores the rest', async () => {
+  it('keeps a snapshot that could not be read, discards the others, and restores the rest', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const h = harness();
     h.reads.set('s-1/d2', 'b');
     h.listed = [entry({ key: 'd1' }), entry({ key: 'd2' })];
 
     const ids = await h.service.restore(h.listed);
-    expect(ids).toEqual(['r1']);
+    expect(ids).toHaveLength(1);
     expect(h.restored[0].textLF).toBe('b');
+    expect(h.discardedEntries).toEqual(['s-1/d2']);
     expect(h.discarded).toEqual([]);
     expect(h.messages.some((m) => m.error)).toBe(true);
+  });
+
+  it('is not undone by a snapshot that cannot be removed: the document is open all the same', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const h = harness({ discardEntry: () => Promise.reject(new Error('read-only')) });
+    h.reads.set('s-1/d1', 'a');
+    h.reads.set('s-1/d2', 'b');
+    h.listed = [entry({ key: 'd1' }), entry({ key: 'd2' })];
+
+    const ids = await h.service.restore(h.listed);
+    expect(ids).toHaveLength(2);
+    expect(warn).toHaveBeenCalledTimes(2);
+  });
+
+  // B1 CODE-08. A restored snapshot is the only copy on disk of that work until this
+  // session has written the new document's own; a crash in between lost it.
+  it('discards a restored snapshot only after the document own snapshot is written', async () => {
+    const order: string[] = [];
+    const h = harness({
+      async put(meta) {
+        order.push(`put:${meta.key}`);
+      },
+      async discardEntry(session, key) {
+        order.push(`discard:${session}/${key}`);
+      },
+    });
+    h.reads.set('s-1/d1', 'a');
+    h.reads.set('s-1/d2', 'b');
+    h.listed = [entry({ key: 'd1' }), entry({ key: 'd2' })];
+
+    const ids = await h.service.restore(h.listed);
+
+    expect(order).toEqual([`put:${ids[0]}`, `put:${ids[1]}`, 'discard:s-1/d1', 'discard:s-1/d2']);
+  });
+
+  it('keeps every restored snapshot while this session cannot write snapshots', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const h = harness({ put: () => Promise.reject(new Error('disk full')) });
+    h.reads.set('s-1/d1', 'a');
+    h.listed = [entry({ key: 'd1' })];
+
+    const ids = await h.service.restore(h.listed);
+
+    expect(ids).toHaveLength(1);
+    expect(h.discardedEntries).toEqual([]);
+  });
+
+  it('discards only the snapshots whose document got one of its own', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const written: string[] = [];
+    const h = harness({
+      async put(meta) {
+        // The second document's snapshot fails (a document past the size limit, say).
+        if (written.length === 1) throw new Error('too big');
+        written.push(meta.key);
+      },
+    });
+    h.reads.set('s-1/d1', 'a');
+    h.reads.set('s-1/d2', 'b');
+    h.listed = [entry({ key: 'd1' }), entry({ key: 'd2' })];
+
+    await h.service.restore(h.listed);
+
+    expect(written).toHaveLength(1);
+    expect(h.discardedEntries).toEqual(['s-1/d1']);
+  });
+
+  it('keeps the snapshots when recovery is switched off', async () => {
+    const h = harness({ enabled: () => false });
+    h.reads.set('s-1/d1', 'a');
+    h.listed = [entry({ key: 'd1' })];
+    await h.service.restore(h.listed);
+    expect(h.discardedEntries).toEqual([]);
+    expect(h.puts).toEqual([]);
   });
 
   it('discards a whole leftover session on request', async () => {

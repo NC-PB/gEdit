@@ -109,6 +109,7 @@
     if (out.cancelled) parts.push(t('scripts.outputCancelled'));
     if (out.timedOut) parts.push(t('scripts.outputTimedOut'));
     if (out.stdoutTruncated) parts.push(t('scripts.outputTruncated'));
+    if (out.stderrTruncated) parts.push(t('scripts.outputStderrTruncated'));
     parts.push(
       out.exitCode === null
         ? t('scripts.outputSignal')

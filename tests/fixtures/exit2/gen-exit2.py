@@ -468,7 +468,8 @@ CHECKS_LATHE = [
     "G00 X100. Z100. T0300",
     "(NEXT: A TILTED PLANE WHILE CONSTANT SURFACE SPEED IS ON)",
     "G68.2 X0. Y0. Z0. I0. J90. K0.",
-    "G69",
+    # B1 fix NC (NC-02): on the lathe G69 ends only the turret mirror image; the tilted plane ends with G69.1.
+    "G69.1",
     "T0404 (OD FINISH)",
     "G97 S800 M03",
     "G00 X30. Z2.",

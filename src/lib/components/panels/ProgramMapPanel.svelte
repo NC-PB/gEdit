@@ -12,6 +12,32 @@
   row calls `editor.reveal`, which activates the document, moves the cursor, centres the
   line and focuses the editor.
 -->
+<script module lang="ts">
+  /** What `scrollToActiveRow` needs of the panel's root, so it can be tried without a DOM. */
+  export interface MapRoot {
+    querySelector(selector: string): {
+      dataset: DOMStringMap;
+      scrollIntoView?: (o: { block: 'nearest' }) => void;
+    } | null;
+  }
+
+  /**
+   * Brings the row that holds the cursor into view, when it is a different row from the one
+   * brought into view last time: a long map used to stay where it was while the cursor moved
+   * out of sight (B1 A4). `block: 'nearest'` scrolls the least that shows the row and not at
+   * all when it is already visible; and a row that is already the one shown is left alone, so
+   * typing on a line does not pull the map back while someone is scrolling it.
+   * Answers the key of the row now shown (null when no row is active).
+   */
+  export function scrollToActiveRow(root: MapRoot | undefined, last: string | null): string | null {
+    const row = root?.querySelector('[data-testid="program-map-item"][data-active="1"]') ?? null;
+    if (row === null) return null;
+    const key = `${row.dataset.kind ?? ''}:${row.dataset.line ?? ''}:${row.dataset.channelId ?? ''}`;
+    if (key !== last) row.scrollIntoView?.({ block: 'nearest' });
+    return key;
+  }
+</script>
+
 <script lang="ts">
   import { onMount } from 'svelte';
   import CirclePause from 'lucide-svelte/icons/circle-pause';
@@ -108,6 +134,24 @@
     }
   }
 
+  let root = $state<HTMLElement | undefined>(undefined);
+  /** The row last brought into view; not reactive, it only guards the effect below. */
+  let shownKey: string | null = null;
+
+  // The map follows the cursor: after the DOM has the new `data-active`, the active row is scrolled
+  // into view. Another document starts afresh.
+  $effect(() => {
+    void items;
+    void activeLine;
+    void cursorLine;
+    const id = docId;
+    if (id === null) {
+      shownKey = null;
+      return;
+    }
+    shownKey = scrollToActiveRow(root, shownKey);
+  });
+
   function reveal(item: OutlineItem): void {
     if (docId !== null) editor.reveal(docId, item.line);
   }
@@ -162,7 +206,7 @@
   </li>
 {/snippet}
 
-<div class="program-map" data-testid="program-map">
+<div class="program-map" data-testid="program-map" bind:this={root}>
   {#if $active === null}
     <p class="hint">{t('programMap.noDocument')}</p>
   {:else if items.length === 0}

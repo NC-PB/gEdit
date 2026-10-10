@@ -283,13 +283,13 @@ describe('hoverText: the turning dialects', () => {
   it('explains a call the database describes by its name', () => {
     expect(siemensHover('N30 MSG("OD ROUGH")', 'MSG')).toContain('**MSG** — Operator message');
     expect(siemensHover('N290 SETMS(3)', 'SETMS')).toContain('**SETMS** — Choose the master spindle');
-    // The manual confirms CYCLE83, so its hover says what it does; CYCLE97, which the 4.92
-    // cycle list does not describe, still carries `verify: true` and stays out of hover.
+    // The manual confirms CYCLE83, so its hover says what it does. B1 (a7s): CYCLE97, which the
+    // 4.92 cycle list leaves out, is described from the 2008 cycles manual and hovers too.
     const cycle = siemensHover('N80 CYCLE83(5,0,2,-30,,-8,,2,0,0.5,1,0)', 'CYCLE83') as string;
     expect(cycle).toContain('**CYCLE83** — Deep\\-hole drilling cycle');
     const old = siemensHover('N90 CYCLE97(1.5,,0,-20,40,40,3,2,0.92,0.1,0,0,5,1,3,1)', 'CYCLE97') as string;
-    expect(old).toContain('**CYCLE97**');
-    expect(old).toContain('does not describe this word yet');
+    expect(old).toContain('**CYCLE97** — Thread cutting cycle');
+    expect(old).not.toContain('does not describe this word yet');
     expect(hoverAt('N80 CYCLE83(5,0,2,-30)', 10, sinumerikProfile, sinumerik, t)).toMatchObject({ start: 4, end: 22 });
   });
 
@@ -608,7 +608,10 @@ describe('hoverText in context: Fanuc lathe, G-code system A (l01-turning-a.nc)'
   it('reads U as incremental X outside a cycle, and as the cycle parameter inside one', () => {
     const u = openDoc('fanuc-lathe', 'G21 G99\nG00 X30. Z2.\nG01 U-2. F0.1');
     expect(read(u, 3, 'U-2.')).toContain('U — incremental X, diameter (assumed: profile default)');
-    expect(read(doc, 15, 'U2.')).toMatch(/U — Depth of cut per pass in the first block .*\(G71\)/);
+    expect(read(doc, 15, 'U2.')).toMatch(/U — Depth of cut per pass, a radius value .*\(G71\)/);
+    // B1: the same address in the second block is the allowance, by that block's own label.
+    expect(read(doc, 16, 'U0.4')).toMatch(/U — Finishing allowance on X, read like X .*\(G71\)/);
+    expect(read(doc, 16, 'U0.4')).not.toContain('Depth of cut');
   });
 
   it('names the feed mode and the code that set it', () => {
@@ -636,15 +639,19 @@ describe('hoverText in context: Fanuc lathe, G-code system A (l01-turning-a.nc)'
     const first = read(doc, 32, 'G76');
     expect(first).toContain('**Parameters of G76, block 1 of 2**');
     expect(first).toContain('| Word | Meaning | Written |');
-    expect(writtenOf(first)).toEqual({ P: '020060', Q: '80', R: '0.03', X: null, Z: null, F: null });
+    // B1 (`CodeParam.block`): each block lists its own parameters only.
+    expect(writtenOf(first)).toEqual({ P: '020060', Q: '80', R: '0.03' });
     const second = read(doc, 33, 'G76');
     expect(second).toContain('**Parameters of G76, block 2 of 2**');
-    expect(writtenOf(second)).toEqual({ P: '920', Q: '250', R: null, X: '18.16', Z: '-18.', F: '1.5' });
+    expect(writtenOf(second)).toEqual({ X: '18.16', U: null, Z: '-18.', W: null, R: null, P: '920', Q: '250', F: '1.5' });
+    expect(read(doc, 33, 'P920')).toMatch(/P — Thread height, .*\(G76\)/);
+    expect(read(doc, 32, 'P020060')).toMatch(/P — Six digits packed: .*\(G76\)/);
   });
 
   it('shows the two blocks of G71, and a modal G83 with every parameter, written or not', () => {
     expect(read(doc, 15, 'G71')).toContain('**Parameters of G71, block 1 of 2**');
-    expect(writtenOf(read(doc, 16, 'G71'))).toEqual({ U: '0.4', R: null, P: '100', Q: '200', W: '0.1', F: '0.25' });
+    // B1 fix NC (NC-10): the roughing S and T of the second block are listed too, written or not.
+    expect(writtenOf(read(doc, 16, 'G71'))).toEqual({ P: '100', Q: '200', U: '0.4', W: '0.1', F: '0.25', S: null, T: null });
     const g83 = read(doc, 50, 'G83');
     expect(g83).toContain('**Parameters of G83**');
     expect(g83).not.toContain('block 1');
@@ -922,9 +929,12 @@ describe('hoverText in context: what the words of special blocks are', () => {
     // Only what the context adds (the address's own text says what U is in general).
     const context = (n: number, at: string): string => read(lathe, n, at).slice(read(lathe, n, at, { context: false }).length);
     // The label says how each block reads U; the reading adds no "diameter" of its own.
-    expect(context(1, 'U2.')).toContain('U — Depth of cut per pass in the first block (a radius value)');
+    expect(context(1, 'U2.')).toContain('U — Depth of cut per pass, a radius value without sign (G71)');
     expect(context(1, 'U2.')).toMatch(/\(G71\)$/);
     expect(context(1, 'U2.')).not.toMatch(/, diameter\b|incremental/);
+    // B1: the second block's U is the allowance, read like X, by its own label.
+    expect(context(2, 'U0.5')).toContain('U — Finishing allowance on X, read like X');
+    expect(context(2, 'U0.5')).not.toContain('Depth of cut');
     expect(context(3, 'X1.5')).not.toMatch(/, diameter\b/);
   });
 

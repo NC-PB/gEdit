@@ -23,7 +23,7 @@ and never corrects a value for you.
 
 | | |
 |---|---|
-| [The Insert tab](#the-insert-tab) | Where the templates are, and the Program button on the Home tab |
+| [The Insert tab](#the-insert-tab) | Where the templates are, and where Program start is |
 | [Inserting a template](#inserting-a-template) | The form, the values, the preview, one undo step |
 | [Block numbers](#block-numbers) | How the numbers continue, and where they do not; contour numbers of their own |
 | [Formulas](#formulas) | A value that is worked out from the others |
@@ -58,8 +58,8 @@ The tab has these groups:
 A built-in template's button carries a small dot and the tooltip "Not yet reviewed"; the
 tooltip also shows the template's description.
 
-On the **Home** tab, the **Program** group has one button, **Program start**: the first lines
-of a program in the dialect's own style. In a new, empty file it writes into line 1.
+**Program start**, the first lines of a program in the dialect's own style, is the first button
+of the **Templates** group. In a new, empty file it writes into line 1. It is only on the Insert tab.
 
 The same commands are in the command palette (**F1**): *Insert: Insert Template…* lists the
 templates of the program in groups, favourites first; *Insert: <template name>* inserts one
@@ -529,7 +529,7 @@ Fanuc mill's templates `fanuc.json`, for a Klartext program `heidenhain.json`.
 - A file for a **set of your own** (`shop-lathe.json`, which `extends` a built-in one) holds
   the templates of that set and the parents' templates stay available through `extends`.
 - The file reloads when it is saved, so a template you write by hand and save in a tab is
-  there at once. **Reload Profiles** (Tools tab) reads the folder again.
+  there at once. **Reload Profiles** (command palette) reads the folder again.
 - A template in the file that gEdit cannot use is **left out and listed in the Results panel**
   with the file and its place in it (for example `templates[3].params[1].formula`). It never
   hides a built-in template that has its id. The rest of the file loads.

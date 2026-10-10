@@ -1,5 +1,4 @@
-// The template engine (Phase 2 plan §7.8, AD-28; Phase 3 plan §6.11, P3.4). Written by the P3b
-// prelude as stubs; built by P3.4, who owns it from Wave A on.
+// The template engine (Phase 2 plan §7.8, AD-28; Phase 3 plan §6.11, P3.4). Built by P3.4.
 //
 // Pure: no Monaco, no store, no clock. The rules (binding; `docs/planning/code-assistant.md`
 // "Parametric templates" and "Placeholders"):

@@ -64,7 +64,7 @@ const FANUC_DIALECTS = [MILL, A, B];
 // them together). `G73 R` is one row the table does not have — see the hand-off note.
 
 /** The mill's canned cycles: the `G81`–`G89` rows of §8.2 cover all of them. */
-// 2026-09: with the older-format rigid tapping cycles `G84.2` and `G84.3` (TODO Next up 8).
+// 2026-09: with the older-format rigid tapping cycles `G84.2` and `G84.3`.
 const MILL_CYCLES = ['G73', 'G74', 'G76', 'G81', 'G82', 'G83', 'G84', 'G84.2', 'G84.3', 'G85', 'G86', 'G87', 'G88', 'G89'];
 
 type Unit = NonNullable<CodeParam['unit']>;
@@ -86,6 +86,13 @@ function tableUnit(dialect: string, code: string, address: string): Unit | undef
   if (['G43.5', 'G51', 'G68', 'G68.2', 'G68.4'].includes(code) && ['I', 'J', 'K'].includes(address)) return 'count';
   if (code === 'G43.5' && address === 'Q') return 'angle';
   if (['G68', 'G68.2', 'G68.3', 'G68.4'].includes(code) && address === 'R') return 'angle';
+  // B1 (the 30i manuals): the lathe's coordinate rotation, NURBS (order, knots and weights are
+  // plain numbers no reading touches) and the tilt angle of the five-axis compensation G41.6/G42.6.
+  if (code === 'G68.1') return address === 'R' ? 'angle' : ['I', 'J', 'K'].includes(address) ? 'count' : undefined;
+  if (code === 'G6.2') return ['P', 'K', 'R'].includes(address) ? 'count' : undefined;
+  if ((code === 'G41.6' || code === 'G42.6') && address === 'Q') return 'angle';
+  // B1 fix NC (NC-04): their I, J, K are the tool direction, a plain number like G43.5's.
+  if ((code === 'G41.6' || code === 'G42.6') && ['I', 'J', 'K'].includes(address)) return 'count';
 
   if (dialect === A || dialect === B) {
     // M9 (WP9.2): the other face and side cycles count their dwell and repeats too, like G83 and G87.
@@ -373,12 +380,17 @@ describe('the lathe database of G-code system A (§8.2)', () => {
     expect(entry(A, 'G75')?.pitchFeedAmbiguous).toBeUndefined();
     // G8 M6 (the same review, recorded as a decision rather than a fix): `G76`'s `P` is
     // six packed digits in the first block of the cycle and the thread height in microns
-    // in the second, and one entry cannot tell the two blocks apart. It stays a `count`,
-    // so the packed digits can never be converted and the thread height is only ever
-    // shown as written — a missing value, which is the safe half of the trade.
-    const p76 = entry(A, 'G76')?.params?.find((param) => param.address === 'P');
-    expect(p76?.unit).toBe('count');
-    expect(p76?.label).toContain('Counted, not measured');
+    // in the second. B1: each block has its own `P` with its own label (`CodeParam.block`),
+    // and both stay a `count` (the two blocks' units have to agree), so the packed digits
+    // can never be converted and the thread height is only ever shown as written — a
+    // missing value, which is the safe half of the trade.
+    const p76 = entry(A, 'G76')?.params?.filter((param) => param.address === 'P') ?? [];
+    expect(p76.map((p) => [p.block, p.unit])).toEqual([
+      [1, 'count'],
+      [2, 'count'],
+    ]);
+    expect(p76[0].label).toContain('Counted, never converted');
+    expect(p76[1].label).toMatch(/^Thread height.*shown as written$/);
     // Tapping and threading are the only lathe entries that carry it. The source review
     // (2026-09) added the variable-lead thread G34 and the older-format rigid tap G84.2,
     // both in the lathe's own G-code list, and the 2026-09 scaling pass the tapping mode
@@ -498,8 +510,9 @@ describe('the system-B variant database (§8.2)', () => {
     const changed = [...new Set([...codesOf(A), ...codesOf(B)])].filter(
       (code) => JSON.stringify(entry(A, code)) !== JSON.stringify(entry(B, code)),
     );
-    expect(changed.every((code) => /^G\d+$/.test(code)), changed.join(', ')).toBe(true);
-    expect(changed.sort()).toEqual(['G33', 'G50', 'G77', 'G78', 'G79', 'G90', 'G91', 'G92', 'G94', 'G95', 'G98', 'G99']);
+    expect(changed.every((code) => /^G\d+(\.\d+)?$/.test(code)), changed.join(', ')).toBe(true);
+    // B1: the work coordinate system preset is G50.3 in system A and G92.1 in system B.
+    expect(changed.sort()).toEqual(['G33', 'G50', 'G50.3', 'G77', 'G78', 'G79', 'G90', 'G91', 'G92', 'G92.1', 'G94', 'G95', 'G98', 'G99']);
   });
 });
 
@@ -527,6 +540,64 @@ describe('the profile and its databases agree', () => {
         expect(codes, `${profile.id}/${dialect}: modal.initial.${group} = ${code}`).toContain(normalizeCode(code));
         expect(found?.group, `${profile.id}/${dialect}: modal.initial.${group} = ${code}`).toBe(group);
       }
+    }
+  });
+});
+
+describe('B1 fix NC: the lathe frames, turret mirror and two-block words', () => {
+  it('keeps the turret mirror G68/G69 in a group of its own, apart from G68.1/G68.2/G69.1 (NC-02)', () => {
+    for (const dialect of [A, B]) {
+      const mirror = entry(dialect, 'G68');
+      expect(mirror?.group, dialect).toBe('turretMirror');
+      expect(entry(dialect, 'G69')?.group, dialect).toBe('turretMirror');
+      expect(mirror?.frame).toBe('open');
+      expect(entry(dialect, 'G69')?.frame).toBe('close');
+      for (const code of ['G68.1', 'G68.2', 'G68.3', 'G68.4', 'G69.1']) expect(entry(dialect, code)?.group, `${dialect} ${code}`).toBe('frame');
+      expect(mirror?.group).not.toBe(entry(dialect, 'G68.1')?.group);
+    }
+    // The mill keeps G68/G69 as the rotation of the frame group.
+    expect(entry(MILL, 'G68')?.group).toBe('frame');
+  });
+
+  it('says that G69.1 ends the tilted planes on the lathe, not G69 (NC-05)', () => {
+    for (const dialect of [A, B]) {
+      for (const code of ['G68.2', 'G68.3', 'G68.4']) {
+        const text = entry(dialect, code)?.description ?? '';
+        expect(text, `${dialect} ${code}`).toContain('G69.1 ends it');
+        expect(text).not.toMatch(/(^|[^.\d])G69 ends it/);
+      }
+    }
+    expect(entry(MILL, 'G68.2')?.description).toContain('G69 ends it');
+  });
+
+  it('reads the rotation direction of G68.1 as a real number (NC-06)', () => {
+    for (const address of ['I', 'J', 'K']) {
+      expect(entry(A, 'G68.1')?.params?.find((p) => p.address === address)).toMatchObject({ unit: 'count', decimals: true });
+    }
+  });
+
+  it('marks exactly the counts that are real numbers with decimals (NC-06)', () => {
+    const real = new Set<string>();
+    for (const code of ['G43.5', 'G51', 'G68', 'G68.2', 'G68.4', 'G41.6', 'G42.6']) for (const a of ['I', 'J', 'K']) real.add(`${code} ${a}`);
+    real.add('G6.2 K');
+    real.add('G6.2 R');
+    for (const dialect of FANUC_DIALECTS) {
+      for (const e of entriesOf(dialect)) {
+        for (const param of e.params ?? []) {
+          const key = `${e.code} ${param.address}`;
+          // The lathe's own G68 is the turret mirror (no params); its G68.1 rotation direction is real too.
+          const want = real.has(key) || (dialect !== MILL && e.code === 'G68.1' && ['I', 'J', 'K'].includes(param.address));
+          expect(param.decimals === true, `${dialect} ${key}`).toBe(want);
+        }
+      }
+    }
+  });
+
+  it('declares S and T in the second block of G71 to G73 (NC-10)', () => {
+    for (const code of ['G71', 'G72', 'G73']) {
+      const second = (entry(A, code)?.params ?? []).filter((p) => p.block === 2).map((p) => p.address);
+      expect(second, code).toEqual(expect.arrayContaining(['F', 'S', 'T']));
+      expect((entry(A, code)?.params ?? []).filter((p) => p.block === 1).map((p) => p.address), code).not.toContain('S');
     }
   });
 });

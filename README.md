@@ -51,8 +51,9 @@ The programs are the project's own synthetic samples from `tests/fixtures/exit/`
 Installers for macOS, Windows and Linux are on the
 [GitHub Releases page](https://github.com/NC-PB/gEdit/releases): a `.dmg` for macOS (Apple
 Silicon and Intel), an `.msi` and a setup `.exe` for Windows, and a `.deb`, an `.rpm` and an
-`.AppImage` for Linux, with a `SHA256SUMS` file to check them against. What each release
-contains is in the [CHANGELOG](CHANGELOG.md).
+`.AppImage` for Linux, with a `SHA256SUMS` file to check them against. On Linux the installed
+program is called `gedit-nc`, so it does not clash with the GNOME text editor `gedit`. What each
+release contains is in the [CHANGELOG](CHANGELOG.md).
 
 **The installers are not signed.** macOS and Windows warn you the first time you start
 gEdit, and each needs one confirmation; the steps are under
@@ -63,7 +64,9 @@ gEdit, and each needs one confirmation; the steps are under
 **Files that survive the round trip.** Several files open at once, in tabs, by dialog or by
 drag and drop. Encoding (UTF-8, UTF-8 with BOM, UTF-16, Windows-1252), line endings and the
 punched-tape NUL leader and trailer are detected and written back unchanged. A program you
-open and save without editing is byte for byte the file you started with. Unsaved changes
+open and save without editing is byte for byte the file you started with (the one exception is
+a file with CRLF line endings and a single stray CR, which is saved with a CRLF there; the
+[user guide](docs/user/README.md#files) says so). Unsaved changes
 are marked and are asked about before they are lost, and a file changed on disk by the CAM
 system is noticed while you work.
 
@@ -76,8 +79,8 @@ Restoring only reopens the text — nothing on disk is written until you save �
 that changed on disk since the snapshot is flagged so you can compare first. Your tabs come
 back, each file with its cursor, its bookmarks and a dialect or machine you chose by hand.
 A file you may not write opens locked, and Save goes to Save As. You can also lock a tab
-yourself to keep your keystrokes out of a proven program; for now the lock does not stop
-the NC transformations or a script's result from changing it.
+yourself to keep your keystrokes, the NC transformations and a script's result out of a
+proven program.
 
 **Dialect profiles.** What a control considers a comment, a block number, a tool change or
 a program start is data, not code. The dialect is detected from the extension *and* the
@@ -156,8 +159,9 @@ A script is an ordinary program running with your rights. It can read and write 
 and reach the network, and **gEdit cannot sandbox it**. What gEdit does guarantee: nothing
 runs by itself; only scripts in gEdit's script folders (the bundled one, your own and the
 ones you added) can be started; bundled scripts are never writable; and a run is bounded
-by a timeout, a Stop button and capped output. On Windows, stopping a run ends the script
-but not a program the script started itself. gEdit does not and cannot guarantee anything
+by a timeout, a Stop button and capped output. Stopping a run ends the script and the programs
+it started (on Windows too); only a program the script left running after it finished by itself
+stays. gEdit does not and cannot guarantee anything
 about what is *inside* a script: read one before you run it, the same way you would read a
 macro somebody mailed you. The full picture is in
 [docs/user/scripts.md](docs/user/scripts.md#security).
@@ -183,7 +187,7 @@ channels match, your own profiles and code files, and the typing options such as
 case (see the [roadmap](docs/planning/roadmap.md)). Phase 3, "Understand and write", is done: the code
 inspector, hover help with the modal state and the motion colours, and templates with Edit Cycle,
 formulas and a template manager. The built-in templates are still marked "review pending" until
-they have been checked against a machine. The first release, 1.0, is prepared: the owner checks its installers and publishes it.
+they have been checked against a machine. The first release, 1.0, is prepared: the owner checks its installers and publishes it. A round of fixes and manual-based code data for all four control families has landed since; it is listed under *Unreleased* in the [CHANGELOG](CHANGELOG.md).
 Showing the channels of a program side by side is planned for Phase 4.
 
 ## Documentation
@@ -203,7 +207,7 @@ Showing the channels of a program side by side is planned for Phase 4.
 ## Requirements
 
 - To build: [Node.js](https://nodejs.org/), [Rust](https://www.rust-lang.org/tools/install), and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your platform.
-- To use the script features: Python 3.9 or newer. On Windows, gEdit asks the `py` launcher which interpreter `py -3` would start, and otherwise takes `python` or `python3` from where a command prompt would find it — never the Microsoft Store placeholders that a clean Windows has on `PATH` before Python is installed. On macOS and Linux it looks up `python3` through your login shell (so a Homebrew or python.org install is found even when the app is started from Finder), then in common install locations. The interpreter can also be set in the settings dialog, or with the `GEDIT_PYTHON` environment variable. `GEDIT_PYTHON` wins over the setting, and the setting — when the file it names exists — over the lookup.
+- To use the script features: Python 3.9 or newer. On Windows, gEdit asks the `py` launcher which interpreter `py -3` would start, and otherwise takes `python` or `python3` from where a command prompt would find it — never the Microsoft Store placeholders that a clean Windows has on `PATH` before Python is installed. On macOS and Linux it looks up `python3` through your login shell (so a Homebrew or python.org install is found even when the app is started from Finder), then in common install locations; a script also gets the folders of your login shell's `PATH` added to its own (`~/.zshrc` is not read, and with `GEDIT_PYTHON` or the interpreter setting set the login shell is never started). The interpreter can also be set in the settings dialog, or with the `GEDIT_PYTHON` environment variable. `GEDIT_PYTHON` wins over the setting, and the setting — when the file it names exists — over the lookup.
 
 ## Development
 

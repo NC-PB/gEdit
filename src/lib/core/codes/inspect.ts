@@ -51,6 +51,7 @@ import type { RewriteHow } from '$lib/core/nc/rewriteWord';
 import { tokenizeLine } from '$lib/core/nc/tokenizer';
 import type { CompiledProfile, NumberFormatOptions, Profile } from '$lib/core/profiles/types';
 import type { LineState, ModalState, ModalValue, NcToken } from '$lib/core/nc/types';
+import { cycleBlockOf, paramOfBlock, paramsOfBlock, type CycleBlock } from './blocks';
 import { codeAddressesOf } from './hoverText';
 import { axisWordsOf, isAssignmentWord, lookupCode, lookupWord } from './lookup';
 import type { CodeDb, CodeEntry, CodeParam } from './types';
@@ -418,6 +419,8 @@ export function callArguments(argumentText: string): string[] {
 interface CycleFound {
   cycle: InspectedCycle;
   entry: CodeEntry;
+  /** B1: the block of a two-block cycle this block is (`cycle.part`), whose parameters its words are. */
+  block: CycleBlock | null;
 }
 
 /** Where `entry` is written in the block, or null. */
@@ -428,9 +431,18 @@ function lineOfEntry(lines: readonly BlockLine[], entry: CodeEntry, db: CodeDb):
   return null;
 }
 
-/** The value written for each parameter of `entry` in these lines. */
-function paramsWritten(lines: readonly BlockLine[], entry: CodeEntry, db: CodeDb, profile: Profile): InspectedCycle['params'] {
-  const params = Array.isArray(entry.params) ? entry.params : [];
+/**
+ * The value written for each parameter of `entry` in these lines; of a two-block cycle only the
+ * parameters of `block` (B1, `CodeParam.block`), all of them with `block` null.
+ */
+function paramsWritten(
+  lines: readonly BlockLine[],
+  entry: CodeEntry,
+  db: CodeDb,
+  profile: Profile,
+  block: CycleBlock | null = null,
+): InspectedCycle['params'] {
+  const params = paramsOfBlock(entry, block);
   // A call: its arguments by position.
   for (const { line, tokens } of lines) {
     const call = tokens.find((token) => token.kind === 'call' && lookupCode(db, token.address ?? '') === entry);
@@ -508,6 +520,10 @@ function addressesWritten(tokens: readonly NcToken[]): Set<string> {
  * write the same one-shot cycle code as a word, the first writes no feed word, and the second
  * writes an address the first does not. A heuristic on the words, no code list: two
  * consecutive threading blocks that each carry their lead, or two calls, are no pair.
+ *
+ * B1: only the fallback. An entry that declares its blocks (`CodeParam.block`) is answered by
+ * `cycleBlockOf` from the block's own words, which also knows a second block that stands alone
+ * because the first block's values are set by machine parameters.
  */
 function isPair(a: readonly NcToken[], b: readonly NcToken[], entry: CodeEntry, view: InspectView): boolean {
   const { db, profile } = view;
@@ -532,21 +548,27 @@ function findCycle(
   // its own line: the line defines what the positions after it run.
   const madeModal = blockCodes.some((entry) => entry.sets?.cycle === 'call-modal-next');
   if (own) {
+    // A one-shot cycle written in two blocks: which one this is, by the database's
+    // `CodeParam.block` (B1), else by pairing it with a neighbouring block.
+    let block: CycleBlock | null = null;
+    if (own.sets?.cycle === 'start' && own.modal !== true) {
+      const here = lines.flatMap((l) => l.tokens);
+      block = cycleBlockOf(own, addressesWritten(here));
+      if (block === null) {
+        const above = neighbourTokens(input, view, first - 1, -1);
+        const below = neighbourTokens(input, view, last + 1, 1);
+        if (above && isPair(above, here, own, view)) block = 2;
+        else if (below && isPair(here, below, own, view)) block = 1;
+      }
+    }
     const cycle: InspectedCycle = {
       code: own.code,
       line: lineOfEntry(lines, own, db) ?? first,
       role: own.sets?.cycle === 'define' || madeModal ? 'defines' : 'runs',
-      params: paramsWritten(lines, own, db, view.profile),
+      params: paramsWritten(lines, own, db, view.profile, block),
     };
-    // A one-shot cycle written in two consecutive blocks.
-    if (own.sets?.cycle === 'start' && own.modal !== true) {
-      const here = lines.flatMap((l) => l.tokens);
-      const above = neighbourTokens(input, view, first - 1, -1);
-      const below = neighbourTokens(input, view, last + 1, 1);
-      if (above && isPair(above, here, own, view)) cycle.part = { index: 2, of: 2 };
-      else if (below && isPair(here, below, own, view)) cycle.part = { index: 1, of: 2 };
-    }
-    return { cycle, entry: own };
+    if (block !== null) cycle.part = { index: block, of: 2 };
+    return { cycle, entry: own, block };
   }
   const runs = after?.block.cycle;
   if (!after || typeof runs !== 'string' || runs === '') return null;
@@ -559,6 +581,7 @@ function findCycle(
     return {
       cycle: { code: entry.code, line: defined.line, role: 'calls', params: paramsWritten(definition, entry, db, view.profile) },
       entry,
+      block: null,
     };
   }
   // A position under a cycle made modal on another line: the parameters are written there.
@@ -571,6 +594,7 @@ function findCycle(
   return {
     cycle: { code: entry.code, line: active?.line ?? first, role: 'runs', params: paramsWritten(source, entry, db, view.profile) },
     entry,
+    block: null,
   };
 }
 
@@ -756,10 +780,21 @@ function addressLabel(db: CodeDb, token: NcToken): string | null {
   return found?.address?.label ?? null;
 }
 
-/** The parameter `address` is of: the block's cycle, the block's other codes, the codes in force. */
-function paramFor(address: string, cycle: CodeEntry | null, blockCodes: readonly CodeEntry[], inForce: readonly CodeEntry[]): CodeParam | null {
-  for (const entry of [cycle, ...blockCodes, ...inForce]) {
-    const param = paramOf(entry, address);
+/**
+ * The parameter `address` is of: the block's cycle (in its `block`, B1), the block's other codes,
+ * the codes in force.
+ */
+function paramFor(
+  address: string,
+  cycle: CodeEntry | null,
+  blockCodes: readonly CodeEntry[],
+  inForce: readonly CodeEntry[],
+  block: CycleBlock | null = null,
+): CodeParam | null {
+  const own = paramOfBlock(cycle, address, block);
+  if (own) return own;
+  for (const entry of [...blockCodes, ...inForce]) {
+    const param = entry === cycle ? paramOfBlock(entry, address, block) : paramOf(entry, address);
     if (param) return param;
   }
   return null;
@@ -798,6 +833,7 @@ export function inspectBlock(
   const inForce = after ? inForceEntries(after, blockCodes, db) : [];
   const found = findCycle(input, view, lines, blockCodes, after, first, last);
   const cycleEntry = found?.entry ?? null;
+  const cycleBlock = found?.block ?? null;
   const codeAddresses = codeAddressesOf(db);
   const units = unitsAfter(after, view.machine);
 
@@ -857,7 +893,7 @@ export function inspectBlock(
           const assignment = assignmentAt(tokens, i, text, { profile, db });
           if (assignment) {
             for (let j = i + 1; j <= assignment.last; j++) consumed.add(j);
-            const param = paramOf(cycleEntry, token.text);
+            const param = paramOfBlock(cycleEntry, token.text, cycleBlock);
             if (param) push(line, assignment.token, 'cycleParam', param.label, param);
             else push(line, assignment.token, 'assignment', addressLabel(db, token), null);
           } else {
@@ -896,7 +932,7 @@ export function inspectBlock(
           if (isAssignmentWord(token)) {
             if (entry) push(line, token, described ? 'code' : 'unknown', described?.label ?? null, null);
             else if (token.value === null) push(line, token, 'variable', lookup?.address?.label ?? null, null);
-            else push(line, token, 'assignment', lookup?.address?.label ?? null, paramFor(token.address, cycleEntry, blockCodes, inForce));
+            else push(line, token, 'assignment', lookup?.address?.label ?? null, paramFor(token.address, cycleEntry, blockCodes, inForce, cycleBlock));
             return;
           }
           if (entry) {
@@ -917,12 +953,12 @@ export function inspectBlock(
             push(line, token, 'variable', lookup?.address?.label ?? null, null);
             return;
           }
-          const cycleParam = paramOf(cycleEntry, token.address);
+          const cycleParam = paramOfBlock(cycleEntry, token.address, cycleBlock);
           if (cycleParam) {
             push(line, token, 'cycleParam', cycleParam.label, cycleParam);
             return;
           }
-          const param = paramFor(token.address, null, blockCodes, inForce);
+          const param = paramFor(token.address, null, blockCodes.filter((e) => e !== cycleEntry), inForce);
           push(line, token, lookup?.unknown && !param ? 'unknown' : 'address', param?.label ?? lookup?.address?.label ?? null, param);
           return;
         }
@@ -1112,7 +1148,7 @@ function numberText(n: number): string {
 /**
  * What was typed for a row, checked before anything is written: a decimal number (a decimal
  * comma is read as the point), a whole number for the tool word, `D` and `H` written as plain
- * register numbers and every `unit: 'count'` parameter, the parameter's `min`/`max` (against
+ * register numbers and every `unit: 'count'` parameter without `decimals`, the parameter's `min`/`max` (against
  * the typed, effective value). `null` when it may be written; the message otherwise. Never
  * corrects the value.
  */
@@ -1129,7 +1165,7 @@ export function checkValue(word: InspectedWord, typed: string, view: InspectView
     (word.value?.cls ?? null) === null &&
     word.token.value?.hasPoint !== true &&
     ((tool !== '' && address === tool) || WHOLE_NUMBER_ADDRESSES.includes(address));
-  if ((word.param?.unit === 'count' || plainRegister) && fraction !== '') {
+  if (((word.param?.unit === 'count' && word.param.decimals !== true) || plainRegister) && fraction !== '') {
     return { key: 'inspector.why.wholeNumber' };
   }
   // A tool, `D` or `H` register number is never negative (`-0` neither: no sign at all).

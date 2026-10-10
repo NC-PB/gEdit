@@ -12,7 +12,7 @@
 //     replaced with "line 1, no bookmarks";
 //   - a memo being dropped because Monaco was not up yet when it was meant to be applied.
 
-import { get, writable } from 'svelte/store';
+import { get, writable, type Readable } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFileTracker, createSessionService, snapshotOf, statSessionPaths } from './session';
 import { createFileMemory } from '$lib/stores/fileMemory';
@@ -41,6 +41,12 @@ interface SessionHarness {
   saved: { paths: string[]; active: number | null }[];
   /** Every path list handed to `files.open`. */
   openedWith: string[][];
+  /** The options each of those calls carried (`activate`, `index`). */
+  openOptions: ({ activate?: boolean; index?: number } | undefined)[];
+  /** When set, `files.open` waits for it first: a tail that is still loading. */
+  holdOpen: ((paths: string[]) => Promise<void>) | null;
+  /** Paths `files.open` refuses (a file that cannot be read after all). */
+  refuseOpen: Set<string>;
   /** Documents that were activated after a restore. */
   activated: DocId[];
   notes: string[];
@@ -61,12 +67,15 @@ interface SessionHarness {
   /** The message `session_save` rejects with, or null when it works. */
   failSave: string | null;
   restoreEnabled: boolean;
+  /** The active-document store behind `activeId`, to read what is in front. */
+  activeStore: Readable<DocId | null>;
 }
 
 function sessionHarness(o: { docs?: FakeDoc[]; active?: DocId | null } = {}): SessionHarness {
   const list = writable<FakeDoc[]>(o.docs ?? []);
   const activeId = writable<DocId | null>(o.active ?? null);
   const quitHandlers = new Set<() => Promise<void> | void>();
+  let nextDoc = 0;
 
   const state: SessionHarness = {
     session: undefined as unknown as ReturnType<typeof createSessionService>,
@@ -79,6 +88,9 @@ function sessionHarness(o: { docs?: FakeDoc[]; active?: DocId | null } = {}): Se
     },
     saved: [],
     openedWith: [],
+    openOptions: [],
+    holdOpen: null,
+    refuseOpen: new Set<string>(),
     activated: [],
     notes: [],
     noticed: [],
@@ -94,6 +106,7 @@ function sessionHarness(o: { docs?: FakeDoc[]; active?: DocId | null } = {}): Se
     openDetail: undefined,
     failSave: null,
     restoreEnabled: true,
+    activeStore: activeId,
   };
 
   state.session = createSessionService({
@@ -121,13 +134,23 @@ function sessionHarness(o: { docs?: FakeDoc[]; active?: DocId | null } = {}): Se
         isDir: false,
       }));
     },
-    open: async (paths) => {
+    open: async (paths, o) => {
       state.openedWith.push(paths);
-      const opened = paths.map((path, at) => ({ id: `r${at}`, path }));
-      list.set(opened);
-      activeId.set(opened.at(-1)?.id ?? null);
-      // What the real `files.open` does last: its summary replaces whatever was shown.
-      state.shown = { text: `Opened ${opened.length} files`, error: false, detail: state.openDetail };
+      state.openOptions.push(o);
+      if (state.holdOpen !== null) await state.holdOpen(paths);
+      const opened = paths
+        .filter((path) => !state.refuseOpen.has(path))
+        .map((path) => ({ id: `r${nextDoc++}`, path }));
+      // Like the real one: the untouched untitled tab goes, the new tabs land at `index`
+      // (the first one there, the next after it) or at the end.
+      const base = get(list).filter((doc) => doc.path !== null);
+      const at = Math.min(Math.max(o?.index ?? base.length, 0), base.length);
+      list.set([...base.slice(0, at), ...opened, ...base.slice(at)]);
+      if (o?.activate !== false) {
+        activeId.set(opened.at(-1)?.id ?? null);
+        // What the real `files.open` does last: its summary replaces whatever was shown.
+        state.shown = { text: `Opened ${opened.length} files`, error: false, detail: state.openDetail };
+      }
       return opened.map((doc) => doc.id);
     },
     activate: (id) => {
@@ -257,10 +280,57 @@ describe('restoring the session', () => {
     for (const path of h.stored.paths) h.onDisk.add(path);
 
     expect(await h.session.restore()).toBe(3);
-    expect(h.openedWith).toEqual([['/a.nc', '/b.nc', '/c.nc']]);
-    // `files.open` leaves the last one active, which is never what was meant.
-    expect(h.activated).toEqual(['r1']);
+    await h.session.settled();
+    // The tab that was in front goes up first and alone, the others behind it.
+    expect(h.openedWith).toEqual([['/b.nc'], ['/a.nc'], ['/c.nc']]);
+    expect(h.activated).toEqual(['r0']);
+    expect(h.docs.map((doc) => doc.path)).toEqual(['/a.nc', '/b.nc', '/c.nc']);
+    // And it is still the one in front: the tail does not take the focus.
+    expect(get(h.activeStore)).toBe('r0');
     expect(h.notes).toEqual([]);
+  });
+
+  it('puts the tail back at the tab positions it had, whichever tab was in front', async () => {
+    const h = sessionHarness();
+    h.stored = { paths: ['/a.nc', '/b.nc', '/c.nc', '/d.nc', '/e.nc'], active: 2 };
+    for (const path of h.stored.paths) h.onDisk.add(path);
+
+    await h.session.restore();
+    await h.session.settled();
+
+    expect(h.openedWith).toEqual([['/c.nc'], ['/a.nc', '/b.nc'], ['/d.nc', '/e.nc']]);
+    // Behind the front tab, not on top of it: the head goes in at 0, the rest after it.
+    expect(h.openOptions[1]).toEqual({ activate: false, index: 0 });
+    expect(h.openOptions[2]).toEqual({ activate: false, index: 3 });
+    expect(h.docs.map((doc) => doc.path)).toEqual(['/a.nc', '/b.nc', '/c.nc', '/d.nc', '/e.nc']);
+    expect(get(h.activeStore)).toBe('r0');
+  });
+
+  it('opens the first file that comes back first when the one that was in front is gone', async () => {
+    const h = sessionHarness();
+    h.stored = { paths: ['/a.nc', '/b.nc', '/gone.nc'], active: 2 };
+    h.onDisk.add('/a.nc');
+    h.onDisk.add('/b.nc');
+
+    await h.session.restore();
+    await h.session.settled();
+
+    expect(h.openedWith).toEqual([['/a.nc'], ['/b.nc']]);
+    expect(h.docs.map((doc) => doc.path)).toEqual(['/a.nc', '/b.nc']);
+  });
+
+  it('goes on to the next file when the one meant for the front cannot be opened', async () => {
+    const h = sessionHarness();
+    h.stored = { paths: ['/a.nc', '/bad.nc', '/c.nc'], active: 1 };
+    for (const path of h.stored.paths) h.onDisk.add(path);
+    h.refuseOpen.add('/bad.nc');
+
+    await h.session.restore();
+    await h.session.settled();
+
+    expect(h.openedWith).toEqual([['/bad.nc'], ['/a.nc'], ['/c.nc']]);
+    expect(h.docs.map((doc) => doc.path)).toEqual(['/a.nc', '/c.nc']);
+    expect(h.activated).toEqual(['r0']);
   });
 
   it('skips the files that are gone, with one message and no dialog', async () => {
@@ -276,30 +346,33 @@ describe('restoring the session', () => {
 
   it('joins the missing-files notice onto the summary files.open leaves on screen', async () => {
     // There is one status message, and `files.open` shows "Opened N files" last: said
-    // before it, the notice was replaced before anyone could read it (TODO Next up 9).
+    // before it, the notice was replaced before anyone could read it.
     const h = sessionHarness();
     h.stored = { paths: ['/net/gone.nc', '/a.nc', '/b.nc'], active: 1 };
     h.onDisk.add('/a.nc');
     h.onDisk.add('/b.nc');
 
     expect(await h.session.restore()).toBe(2);
-    expect(h.shown?.text).toContain('Opened 2 files');
+    // The tab in front is up and said so; the missing-files notice is joined onto that.
+    expect(h.shown?.text).toContain('Opened 1 files');
     expect(h.shown?.text).toContain('1 file from the last session');
     // The tooltip names the file that was skipped.
     expect(h.shown?.detail).toBe('/net/gone.nc');
   });
 
-  it('hands every file to one files.open call, which is what closes the scratch tab', async () => {
-    // The pristine untitled document the window starts with is dropped by `files.open`
-    // itself (`fileOps.test.ts`: "opens several files as several tabs and drops the
-    // untouched scratch buffer"), and only when something took its place. Restoring
-    // file by file would open a tab, drop the scratch, and lose that rule for the rest.
+  it('leaves the scratch tab to the first open and does not shout about the tail', async () => {
+    // The pristine untitled document is dropped by `files.open` itself, and only when
+    // something took its place (`fileOps.test.ts`): that is the call for the tab in front.
+    // The tail is added behind it with `activate: false` — no summary, no focus.
     const h = sessionHarness();
     h.stored = { paths: ['/a.nc', '/b.nc'], active: 0 };
     for (const path of h.stored.paths) h.onDisk.add(path);
     await h.session.restore();
-    expect(h.openedWith).toHaveLength(1);
-    expect(h.openedWith[0]).toEqual(['/a.nc', '/b.nc']);
+    await h.session.settled();
+    expect(h.openedWith).toEqual([['/a.nc'], ['/b.nc']]);
+    expect(h.openOptions[0]).toBeUndefined();
+    expect(h.openOptions[1]).toEqual({ activate: false, index: 1 });
+    expect(h.shown?.text).toBe('Opened 1 files');
   });
 
   it('fronts the first file back when the one that was in front is gone', async () => {
@@ -337,7 +410,7 @@ describe('restoring the session', () => {
 });
 
 /**
- * Review of TODO Next up 8/9: the notice about skipped files, when the share behind them
+ * Review: the notice about skipped files, when the share behind them
  * hangs, and when something else is on screen already.
  */
 describe('the missing-files notice', () => {
@@ -396,6 +469,151 @@ describe('the missing-files notice', () => {
 });
 
 /**
+ * B1 A1. The tail of a restore loads in the background, and a session written meanwhile
+ * must not be the half that is open: a crash or a quit in the middle would otherwise
+ * store three tabs of fifty.
+ */
+describe('a restore whose tail is still loading', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('answers when the tab in front is up, not when the last one is', async () => {
+    const h = sessionHarness();
+    h.stored = { paths: ['/a.nc', '/b.nc', '/c.nc'], active: 0 };
+    for (const path of h.stored.paths) h.onDisk.add(path);
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    h.holdOpen = async (paths) => {
+      if (paths[0] !== '/a.nc') await gate;
+    };
+
+    expect(await h.session.restore()).toBe(3);
+    expect(h.docs.map((doc) => doc.path)).toEqual(['/a.nc']);
+    expect(get(h.activeStore)).toBe('r0');
+    release();
+    await h.session.settled();
+    expect(h.docs.map((doc) => doc.path)).toEqual(['/a.nc', '/b.nc', '/c.nc']);
+  });
+
+  it('keeps the paths that are still to come in every write', async () => {
+    const h = sessionHarness();
+    h.stored = { paths: ['/a.nc', '/b.nc', '/c.nc', '/d.nc'], active: 1 };
+    for (const path of h.stored.paths) h.onDisk.add(path);
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    h.holdOpen = async (paths) => {
+      if (paths[0] !== '/b.nc') await gate;
+    };
+
+    await h.session.restore();
+    const stop = h.session.start();
+    // The user does something while the tail loads: it is a write of the session.
+    h.setDocs([...h.docs], 'r0');
+    h.setDocs([...h.docs, { id: 'x', path: '/mine.nc' }], 'r0');
+    await vi.advanceTimersByTimeAsync(1100);
+
+    // The stored order, with the user's tab where the tab bar will have it (B1 CODE-05).
+    const during = h.saved.at(-1);
+    expect(during?.paths).toEqual(['/a.nc', '/b.nc', '/c.nc', '/d.nc', '/mine.nc']);
+    expect(during?.paths[during.active ?? -1]).toBe('/b.nc');
+
+    release();
+    await h.session.settled();
+    await vi.advanceTimersByTimeAsync(1100);
+
+    const after = h.saved.at(-1);
+    expect(after?.paths).toEqual(['/a.nc', '/b.nc', '/c.nc', '/d.nc', '/mine.nc']);
+    // The tab in front is still the one the stored index points at.
+    expect(after?.paths[after.active ?? -1]).toBe('/b.nc');
+    stop();
+  });
+
+  // B1 CODE-05. Five stored tabs `a b c d e`, `c` in front; the user opens one file while
+  // the tail loads. The write used to be `c, mine, a, b, d, e` (the open tabs first, the
+  // pending ones after), and a quit or crash then stored that order for good.
+  it('writes the stored order while the tail loads, whatever the user does meanwhile', async () => {
+    const h = sessionHarness();
+    h.stored = { paths: ['/a.nc', '/b.nc', '/c.nc', '/d.nc', '/e.nc'], active: 2 };
+    for (const path of h.stored.paths) h.onDisk.add(path);
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    h.holdOpen = async (paths) => {
+      if (paths[0] !== '/c.nc') await gate;
+    };
+
+    await h.session.restore();
+    const stop = h.session.start();
+    h.setDocs([...h.docs, { id: 'x', path: '/mine.nc' }], 'r0');
+    await h.quit();
+
+    const written = h.saved.at(-1);
+    // The user's tab stands behind the tab in front, where the tail's `d e` will go in
+    // front of it: the tab bar ends up `a b c d e mine`, and so does the stored list.
+    expect(written?.paths).toEqual(['/a.nc', '/b.nc', '/c.nc', '/d.nc', '/e.nc', '/mine.nc']);
+    expect(written?.paths[written.active ?? -1]).toBe('/c.nc');
+
+    release();
+    await h.session.settled();
+    expect(h.docs.map((doc) => doc.path)).toEqual(written?.paths);
+    stop();
+  });
+
+  it('keeps the stored order when the user switches or closes tabs during the tail', async () => {
+    const h = sessionHarness();
+    h.stored = { paths: ['/a.nc', '/b.nc', '/c.nc', '/d.nc'], active: 1 };
+    for (const path of h.stored.paths) h.onDisk.add(path);
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    h.holdOpen = async (paths) => {
+      if (paths[0] !== '/b.nc') await gate;
+    };
+
+    await h.session.restore();
+    const stop = h.session.start();
+    // The tab in front is closed and a different file takes its place.
+    h.setDocs([{ id: 'x', path: '/mine.nc' }], 'x');
+    await h.quit();
+
+    const written = h.saved.at(-1);
+    // The pending paths keep their stored order whatever else is open; with the front tab
+    // gone the tail appends what comes after it, and so does the stored list.
+    expect(written?.paths).toEqual(['/a.nc', '/mine.nc', '/c.nc', '/d.nc']);
+    expect(written?.paths[written.active ?? -1]).toBe('/mine.nc');
+    release();
+    await h.session.settled();
+    stop();
+  });
+
+  it('stops carrying a path that never opened once the tail is done', async () => {
+    const h = sessionHarness();
+    h.stored = { paths: ['/a.nc', '/bad.nc'], active: 0 };
+    for (const path of h.stored.paths) h.onDisk.add(path);
+    h.refuseOpen.add('/bad.nc');
+
+    await h.session.restore();
+    await h.session.settled();
+    const stop = h.session.start();
+    h.setDocs([...h.docs, { id: 'x', path: '/mine.nc' }], 'r0');
+    await vi.advanceTimersByTimeAsync(1100);
+
+    expect(h.saved.at(-1)?.paths).toEqual(['/a.nc', '/mine.nc']);
+    stop();
+  });
+});
+
+/**
  * G8 M7. `restore()` dropped every path it could not reach and `start()` then seeded
  * itself from the documents that were open — which, after a restore that reached
  * nothing, is the empty window. The first file the user opened by hand became the whole
@@ -438,6 +656,7 @@ describe('a restore that could not reach its files', () => {
     h.onDisk.add('/c.nc');
 
     expect(await h.session.restore()).toBe(2);
+    await h.session.settled();
     const stop = h.session.start();
 
     // One more tab, opened by hand after the restore.

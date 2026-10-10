@@ -4,6 +4,8 @@ Scripting is gEdit's main extension mechanism. Users write small Python scripts 
 
 Tag format: `Priority · Size · Delivery`.
 
+> **Status.** Design note from 2026-09-21. What shipped is described in the user guide ([Scripts](../user/scripts.md)); where this note and the guide differ, the guide is right. Status per section: contract v2 (header, parameters, context, output modes, safe apply, timeout and cancel, security, script folders) shipped in Phase 1. Differences that remain: `documents = "all-open"` and `"pick"` are accepted in a header but a script always gets the active document; there is no keyboard shortcut per script; **External commands** were cut in Phase 2; **script packages** were not built (a Phase 4 row); of the bundled library, six scripts shipped (the status column of the table below says which). The user's script folder is `<config>/scripts`, with extra folders added in the settings.
+
 ## The v1 contract, and what became of it
 
 Phase 0 shipped a first scripting pass: the user picked a folder in the ribbon, the app
@@ -57,7 +59,7 @@ Fields: `name`, `description`, `profiles`, `input`, `output`, `timeout`, `envelo
 
 Declared parameters produce a form before the script runs. The form engine is the same one used for [template parameters](code-assistant.md#parametric-templates):
 
-- Types: `number`, `integer`, `text`, `bool`, `choice` (with `choices = [{label, value}]`), `file` (open dialog, returns a path), `folder`, `address-list` (checkboxes of address letters from the profile).
+- Types: `number`, `integer`, `text`, `bool`, `choice` (with `choices = [{label, value}]`), `file` (open dialog, returns a path), `folder`, `address-list` (check boxes over the `choices` the script lists; the value is the list of the checked ones).
 - Options: `label`, `help`, `default`, `required`, `min`, `max`, `decimals`.
 - The last values are remembered per script (state file) and pre-filled next time.
 - A script with no parameters runs immediately.
@@ -97,7 +99,7 @@ The script gets its context through the environment variable `GEDIT_CONTEXT`, wh
   `preceding_lines()` is the one place that checks this, and answers `[]` when it does not
   hold.
 - `codes` is the profile's code dictionary without templates ([code database](code-assistant.md#code-database-format)), so scripts can look up what a code means in this dialect instead of assuming Fanuc numbers.
-- `documents` is filled only when the header asks for `all-open` or `pick`. Each document's text is in a temp file. It is used by the combined tool list and join programs.
+- `documents` was planned to be filled when the header asks for `all-open` or `pick`, each document's text in a temp file, for the combined tool list and join programs. **Not built:** the header accepts those values but the script gets only the active document (those scripts are deferred, see the library table).
 - stdin/stdout are UTF-8. The app sets `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8`, so Windows console code pages do not garble comments. Text is sent with LF line endings, and the document keeps its own line ending on save.
 
 ### Output modes
@@ -161,38 +163,42 @@ Scripts are normal programs that run with the user's rights. gEdit cannot sandbo
 ### Script folders and menu
 `P1 · S · Core`
 
-- Sources: bundled scripts (app resources), the user scripts folder `<config>/scripts` (created on first start), and extra folders from settings (today's "Scripts Dir" becomes one of these).
+- Sources: bundled scripts (app resources), the user scripts folder `<config>/scripts` (created on first start), and extra folders from settings (they replaced the single "Scripts Dir" of Phase 0).
 - One level of subfolders becomes groups in the menu.
 - The Tools ribbon shows the scripts with their header `name` and `description` as a tooltip. Scripts not meant for the active profile are hidden.
-- Every script is also a command in the command palette. A keyboard shortcut per script is P3 ([settings-ui.md](settings-ui.md#keyboard-shortcuts)).
+- Every script is also a command in the command palette. A keyboard shortcut per script is not built (Phase 4, with shortcut customization; [settings-ui.md](settings-ui.md#keyboard-shortcuts)).
 - A "New script" command creates a commented template in the user folder and opens it in a tab.
 
 ## Bundled script library
 
 Standard-library Python only, so no pip install is needed. Shared code lives in `gedit_nc.py` next to the bundled scripts (context loading, profile-aware tokenizer, number formatting, modal interpreter). The app adds the bundled folder to `PYTHONPATH`, so user scripts can `import gedit_nc` too.
 
-| Script | Phase | Output | Spec |
-|---|---|---|---|
-| Scale feed rates | P1 | replace | [link](nc-transformations.md#scale-feed-rates) |
-| Scale spindle speeds | P1 | replace | [link](nc-transformations.md#scale-spindle-speeds) |
-| Tool list | P1 | report | [link](nc-transformations.md#tool-list) |
-| Address arithmetic | P2 | replace | [link](nc-transformations.md#arithmetic-on-address-values) |
-| Insert / remove text by rule | P2 | replace | [link](nc-transformations.md#insert-text-by-rule) |
-| Batch replace from mapping file | P2 | replace | [link](nc-transformations.md#batch-replace-from-a-mapping-file) |
-| Character cleanup | P2 | replace | [link](nc-transformations.md#character-cleanup) |
-| Split by tool / extract tool segment | P2 | new-document | [link](nc-transformations.md#split-program-by-tool) |
-| Join programs | P2 | new-document | [link](nc-transformations.md#join-programs) |
-| Combined tool list | P2 | report | [link](nc-transformations.md#combined-tool-list) |
-| Extents | P2 | report | [link](nc-transformations.md#extents) |
-| Program checks | P2 | report | [link](nc-transformations.md#program-checks) |
-| Translate / rotate / mirror | P3 | replace | [link](nc-transformations.md#geometry-transforms) |
-| Expand drilling cycles | P3 | replace | [link](nc-transformations.md#expand-drilling-cycles) |
-| Statistics and time estimate | P3 | report | [link](nc-transformations.md#statistics-and-time-estimate) |
+| Script | Phase | Output | Status | Spec |
+|---|---|---|---|---|
+| Scale feed rates | P1 | replace | shipped (`scale_feed.py`) | [link](nc-transformations.md#scale-feed-rates) |
+| Scale spindle speeds | P1 | replace | shipped (`scale_speed.py`) | [link](nc-transformations.md#scale-spindle-speeds) |
+| Tool list | P1 | report | shipped (`tool_list.py`), per channel since M12 | [link](nc-transformations.md#tool-list) |
+| Address arithmetic | P2 | replace | shipped (M10, `address_arithmetic.py`) | [link](nc-transformations.md#arithmetic-on-address-values) |
+| Insert / remove text by rule | P2 | replace | deferred (backlog) | [link](nc-transformations.md#insert-text-by-rule) |
+| Batch replace from mapping file | P2 | replace | deferred (backlog) | [link](nc-transformations.md#batch-replace-from-a-mapping-file) |
+| Character cleanup | P2 | replace | cut; its reporting half is in the program checks | [link](nc-transformations.md#character-cleanup) |
+| Split by tool / extract tool segment | P2 | new-document | selecting a segment shipped as a core command (M10); split and extract deferred (backlog) | [link](nc-transformations.md#split-program-by-tool) |
+| Join programs | P2 | new-document | deferred (backlog); needs `documents` | [link](nc-transformations.md#join-programs) |
+| Combined tool list | P2 | report | deferred (backlog); needs `documents` | [link](nc-transformations.md#combined-tool-list) |
+| Extents | P2 | report | shipped (M10, `extents.py`) | [link](nc-transformations.md#extents) |
+| Program checks | P2 | report | shipped (M10, `program_checks.py`, 31 checks) | [link](nc-transformations.md#program-checks) |
+| Translate / rotate / mirror | P3 | replace | not built (Phase 4) | [link](nc-transformations.md#geometry-transforms) |
+| Expand drilling cycles | P3 | replace | not built (Phase 4) | [link](nc-transformations.md#expand-drilling-cycles) |
+| Statistics and time estimate | P3 | report | not built (Phase 4) | [link](nc-transformations.md#statistics-and-time-estimate) |
+
+The shared code is `gedit_nc.py` with the helper modules `_nc_lex.py`, `_nc_modal.py`, `_nc_machine.py` and `_nc_channels.py`. The "Phase" column is the tag of the original plan.
 
 Each bundled script has tests: sample input, parameters and expected output, run in CI with a plain Python.
 
 ## External commands
 `P2 · M · Core`
+
+**Status:** cut in Phase 2 (owner decision of 2026-10-08, roadmap [Not planned](roadmap.md#not-planned)). A script can start a program itself, so this section stays only as the record of the design.
 
 Runs any program (a checker, a converter, or a script in another language) on the current file from a menu entry. It is configured in settings as a list:
 
@@ -211,6 +217,8 @@ Runs any program (a checker, a converter, or a script in another language) on th
 Arguments are passed as an array without a shell, so paths with spaces need no quoting and nothing is interpreted by a shell.
 
 ## Plugins
+
+**Status:** not built. Script packages with enabling and disabling are a Phase 4 row of the roadmap; `<config>/packages/` does not exist. Today a shop shares its setup by copying scripts, profile files and code files by hand ([Sharing and backing up](../user/profiles.md#sharing-and-backing-up)).
 
 Kept minimal. There is no JavaScript plugin API for now, because it would be a large surface to design, secure and keep stable. The extension unit is a **script package**: a folder with scripts, and optionally profiles (`profiles/*.json`) and code databases (`codes/*.json`). It is installed by copying it into `<config>/packages/`. The app picks up its scripts, profiles and templates as if they were user files. Enabling or disabling a package is a setting (P3). This covers sharing a shop's setup (profiles + templates + scripts) as one folder or Git repository.
 

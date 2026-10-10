@@ -1,6 +1,5 @@
-// Guards §7.4: the compiler and the two built-in profile files. Written by the M3
-// prelude; owner from Wave A on: WP3.1, which added the validator and the detection
-// tests next to it.
+// Guards §7.4: the compiler and the two built-in profile files. Written in the M3
+// prelude; WP3.1 added the validator and the detection tests next to it.
 //
 // The JSON goes through `validateProfile` here, exactly as the registry loads it, so
 // these assertions describe a profile the app would really accept.

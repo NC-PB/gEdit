@@ -165,7 +165,7 @@ describe('the shipped Okuma database', () => {
     const expected = [
       'M0', 'M1', 'M2', 'M30', 'M3', 'M4', 'M5', 'M6', 'M8', 'M9', 'M12', 'M13', 'M14', 'M15', 'M16',
       'M17', 'M19', 'M22', 'M23', 'M24', 'M25', 'M26', 'M27', 'M32', 'M33', 'M34', ...range(40, 44, 'M'),
-      'M48', 'M49', 'M55', 'M56', 'M60', 'M61', 'M73', 'M74', 'M75', 'M83', 'M84', 'M88', 'M89',
+      'M48', 'M49', 'M55', 'M56', 'M60', 'M61', 'M73', 'M74', 'M75', 'M83', 'M84', 'M85', 'M88', 'M89',
       'M98', 'M99', 'M109', 'M110', 'M146', 'M147',
     ];
     const codes = new Set(ENTRIES.map((e) => e.code));
@@ -269,9 +269,10 @@ describe('what a code does to the modal state', () => {
     // A thread pass is a mode: the blocks after `G33 X29.4 Z-30 F2` that only change X cut
     // the next passes (syntax-okuma.md §6.2). `G00` or `G01` ends it. The synchronized feed
     // G36/G37 and the arc threads G112/G113 are motions of the same kind (G10 M8), and so
-    // are the contour moves G101-G103 of a driven tool (M9, WP9.5a).
+    // are the contour moves G101-G103 of a driven tool (M9, WP9.5a), and the side contour
+    // arcs G132/G133, which the manual calls "G code modes" like G00 and G01 (B1).
     expect(codesWith((e) => e.group === 'motion')).toEqual([
-      'G0', 'G1', 'G2', 'G3', ...range(31, 37), 'G101', 'G102', 'G103', 'G112', 'G113',
+      'G0', 'G1', 'G2', 'G3', ...range(31, 37), 'G101', 'G102', 'G103', 'G112', 'G113', 'G132', 'G133',
     ]);
     for (const code of codesWith((e) => e.group === 'motion')) expect(entry(code).modal, code).toBe(true);
   });
@@ -417,6 +418,9 @@ const PARAM_UNITS: Record<string, Record<string, Unit>> = {
   G2: { L: 'length' },
   G3: { L: 'length' },
   G4: { F: 'dwell' },
+  // B1: the number of a home or tool-change position stored in the machine's parameters.
+  G20: { HP: 'count' },
+  G21: { HP: 'count' },
   // M9 (WP9.5a): the F of every thread code is its lead, a feed per revolution whatever the
   // feed mode says; a tap's F (G77, G78, G184) is not, it follows the feed unit in force.
   G31: { F: 'feedPerRev', A: 'angle', L: 'length', J: 'count' },
@@ -442,6 +446,9 @@ const PARAM_UNITS: Record<string, Record<string, Unit>> = {
   G103: { L: 'length', F: 'feedPerMin' },
   G112: { F: 'feedPerRev' },
   G113: { F: 'feedPerRev' },
+  // B1: the side contour arcs, whose format gives F in mm/min (LG33-019 chapter 9).
+  G132: { L: 'length', F: 'feedPerMin' },
+  G133: { L: 'length', F: 'feedPerMin' },
   G181: DRIVEN_TOOL,
   G182: DRIVEN_TOOL,
   G183: { ...DRIVEN_TOOL, D: 'length', L: 'length' },
@@ -556,5 +563,82 @@ describe('what is confirmed and what is not', () => {
     ]) {
       expect(entry(code).verify, code).toBeUndefined();
     }
+  });
+});
+
+describe('B1: the lathe codes added from the manuals', () => {
+  /** The owner's review mark of a B1 entry (`CodeEntry.review`, schema of package A7-F). */
+  const reviewOf = (e: CodeEntry): unknown => (e as { review?: unknown }).review;
+
+  it('reads G20 and G21 as moves to positions in machine coordinates, numbered by HP', () => {
+    // Like Fanuc G28/G30/G53: their positions are not in the program's frame, so extents
+    // list such a block apart and address arithmetic leaves it as written.
+    for (const code of ['G20', 'G21']) {
+      expect(entry(code).axisWords, code).toBe('machine');
+      expect(entry(code).group, code).toBe('nonmodal');
+      expect(entry(code).modal, code).toBeUndefined();
+      expect(entry(code).params?.map((p) => [p.address, p.unit]), code).toEqual([['HP', 'count']]);
+      expect(lookupCode(db, code)?.axisWords, code).toBe('machine');
+    }
+    // The manual says the home position is reached at rapid; for the tool-change position
+    // it does not say, so G21 claims no motion.
+    expect(entry('G20').sets).toEqual({ motion: 'rapid' });
+    expect(entry('G21').sets).toBeUndefined();
+  });
+
+  it('reads G93 as the inverse-time feed mode, beside G94 and G95', () => {
+    expect(entry('G93').group).toBe('feedmode');
+    expect(entry('G93').modal).toBe(true);
+    expect(entry('G93').sets).toEqual({ feedUnit: 'inverse-time' });
+    expect(codesWith((e) => e.group === 'feedmode')).toEqual(['G93', 'G94', 'G95']);
+  });
+
+  it('reads G119 as the side compensation plane, beside G17 to G19', () => {
+    expect(codesWith((e) => e.group === 'plane')).toEqual(['G17', 'G18', 'G19', 'G119']);
+    expect(entry('G119').modal).toBeUndefined();
+    expect(entry('G119').sets).toBeUndefined();
+  });
+
+  it('reads G132 and G133 as feed arcs on the side with a radius L', () => {
+    for (const code of ['G132', 'G133']) {
+      expect(entry(code).sets, code).toEqual({ motion: 'feed', path: 'arc' });
+      expect(entry(code).pitchFeed, code).toBeUndefined();
+      expect(entry(code).params?.map((p) => p.address), code).toEqual(['Z', 'C', 'L', 'F']);
+      expect(entry(code).params?.find((p) => p.address === 'L')?.required, code).toBe(true);
+    }
+    expect(entry('G132').label).toMatch(/clockwise/);
+    expect(entry('G133').label).toMatch(/counter-clockwise/);
+  });
+
+  it('reads G313 as the third turret, beside G13 and G14', () => {
+    expect(codesWith((e) => e.group === 'turret')).toEqual(['G13', 'G14', 'G313']);
+    expect(entry('G313').label).toBe('Turret C');
+  });
+
+  it('reads M85 as the LAP roughing that does not return, allowed in the G85 and G86 block', () => {
+    expect(entry('M85').label).toMatch(/LAP roughing/);
+    expect(entry('M85').sets).toBeUndefined();
+    for (const code of ['G85', 'G86']) expect(entry(code).description, code).toMatch(/except M85/);
+  });
+
+  it('marks every entry B1 added or changed for the owner\'s review, and no other', () => {
+    expect(codesWith((e) => reviewOf(e) !== undefined)).toEqual([
+      'G20', 'G21', 'G85', 'G86', 'G93', 'G119', 'G132', 'G133', 'G313', 'M85',
+    ]);
+    for (const e of ENTRIES.filter((row) => reviewOf(row) !== undefined)) expect(reviewOf(e), e.code).toBe('pending');
+  });
+});
+
+describe('B1 fix NC (NC-09): Okuma details', () => {
+  it('names G21 positions as tool-change or return positions, HP up to 5; G20 HP up to 8', () => {
+    expect(entry('G21').description).toMatch(/tool-change or return position/);
+    expect(entry('G21').params?.find((p) => p.address === 'HP')).toMatchObject({ min: 1, max: 5 });
+    expect(entry('G20').params?.find((p) => p.address === 'HP')).toMatchObject({ min: 1, max: 8 });
+  });
+  it('says M85 is LAP4 only', () => {
+    expect(entry('M85').description).toMatch(/LAP4/);
+  });
+  it('refuses a plane change while nose-radius compensation is on (G17, G18, G119)', () => {
+    for (const code of ['G17', 'G18', 'G119']) expect(entry(code).conflicts, code).toEqual(['radiusComp']);
   });
 });

@@ -5,7 +5,7 @@
 
 import { render } from 'svelte/server';
 import { afterEach, describe, expect, it } from 'vitest';
-import ShortcutsDialog, { groupRows, shortcutRows, type ShortcutRow } from './ShortcutsDialog.svelte';
+import ShortcutsDialog, { groupRows, shortcutRows, visibleRows, type ShortcutRow } from './ShortcutsDialog.svelte';
 import { commands } from '$lib/app/registry/commands';
 import type { CommandDef, Disposable } from '$lib/app/types';
 
@@ -100,6 +100,17 @@ describe('groupRows', () => {
   });
 });
 
+describe('visibleRows (B1 A4)', () => {
+  const rows: ShortcutRow[] = [
+    { id: 'a', title: 't.a', keys: 'Ctrl+A' },
+    { id: 'b', title: 't.b' },
+  ];
+  it('keeps only the commands with a key unless asked for all', () => {
+    expect(visibleRows(rows, false).map((r) => r.id)).toEqual(['a']);
+    expect(visibleRows(rows, true).map((r) => r.id)).toEqual(['a', 'b']);
+  });
+});
+
 describe('ShortcutsDialog markup', () => {
   let registered: Disposable | undefined;
 
@@ -108,8 +119,8 @@ describe('ShortcutsDialog markup', () => {
     registered = undefined;
   });
 
-  function markup(): string {
-    return render(ShortcutsDialog, { props: { close: () => {} } }).body;
+  function markup(showUnbound = false): string {
+    return render(ShortcutsDialog, { props: { close: () => {}, showUnbound } }).body;
   }
 
   it('is a modal the harness can find by name, with Close and no confirm button', () => {
@@ -120,18 +131,34 @@ describe('ShortcutsDialog markup', () => {
     expect(html).toContain('data-testid="shortcuts-filter"');
   });
 
-  it('shows one row per registered command, with its heading and its keys', () => {
+  it('shows the commands that have a key, with their heading and their keys', () => {
     registered = commands.register([
       def({ id: 'help.about', title: 'help.about', category: 'help.category' }),
       def({ id: 'help.shortcuts', title: 'help.shortcuts', category: 'help.category', keys: 'Mod+K' }),
     ]);
     const html = markup();
-    expect(html.match(/data-testid="shortcuts-row"/g)).toHaveLength(2);
-    expect(html).toContain('data-command="help.about"');
+    expect(html.match(/data-testid="shortcuts-row"/g)).toHaveLength(1);
+    expect(html).not.toContain('data-command="help.about"');
+    // The one left out is counted, so the list never looks short for no reason (B1 A4).
+    expect(html).toContain('data-testid="shortcuts-hidden"');
+    expect(html).toContain('1 command without a key is hidden.');
     expect(html).toContain('data-group="Help"');
     expect(html).toContain('Keyboard Shortcuts');
     expect(html).toMatch(/data-command="help\.shortcuts"[^>]*data-keys="(⌘K|Ctrl\+K)"/);
     expect(html).not.toContain('data-testid="shortcuts-empty"');
+  });
+
+  it('lists the commands without a key too behind "Show commands without a key"', () => {
+    registered = commands.register([
+      def({ id: 'help.about', title: 'help.about', category: 'help.category' }),
+      def({ id: 'help.shortcuts', title: 'help.shortcuts', category: 'help.category', keys: 'Mod+K' }),
+    ]);
+    const html = markup(true);
+    expect(html).toContain('data-testid="shortcuts-show-unbound"');
+    expect(html).toContain('Show commands without a key');
+    expect(html.match(/data-testid="shortcuts-row"/g)).toHaveLength(2);
+    expect(html).toContain('data-command="help.about"');
+    expect(html).not.toContain('data-testid="shortcuts-hidden"');
   });
 
   it('says so when no command is registered', () => {

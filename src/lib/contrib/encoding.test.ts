@@ -160,7 +160,7 @@ describe('a punched-tape program picked as UTF-16', () => {
   });
 });
 
-// Review of TODO Next up 6 (§7.16 #30): the user guide says both locks cover everything
+// Review (§7.16 #30): the user guide says both locks cover everything
 // that would change the text, and the line-ending picker rewrote a locked model and
 // marked it modified.
 describe('the line-ending picker on a locked document', () => {

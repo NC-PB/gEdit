@@ -1,6 +1,5 @@
 // The file names of the other channels of a `multi-file` document, and which channel a
-// document is, pure (plan §7.17, AD-32, F57). Implemented by the M12 prelude (P12); owned
-// and hardened by WP12.1.
+// document is, pure (plan §7.17, AD-32, F57). Built and hardened by WP12.1.
 //
 // No I/O: the names are computed from the base name and the machine's patterns, and only
 // then asked about, metadata only, through `channel_siblings` (§7.10). Three sources, per

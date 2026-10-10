@@ -14,7 +14,7 @@ import type { PanelDef, RibbonGroupDef, RibbonItemDef, StatusItemDef } from '$li
 const component = (() => {}) as unknown as Component;
 
 function item(over: Partial<RibbonItemDef> & { command: string }): RibbonItemDef {
-  return { tab: 'home', group: 'g.file', order: 0, ...over };
+  return { tab: 'file', group: 'g.file', order: 0, ...over };
 }
 
 function panel(over: Partial<PanelDef> & { id: string }): PanelDef {
@@ -51,7 +51,7 @@ describe('ribbon', () => {
 
   it('disposes items and groups independently', () => {
     const disposeItems = ribbon.add([item({ command: 'file.save' })]);
-    const disposeGroup = ribbon.addGroup({ tab: 'home', group: 'g.custom', order: 0, component });
+    const disposeGroup = ribbon.addGroup({ tab: 'file', group: 'g.custom', order: 0, component });
     expect(get(ribbon.entries)).toHaveLength(2);
     disposeItems();
     disposeItems();

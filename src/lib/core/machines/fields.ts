@@ -28,6 +28,7 @@ import type { ChannelParams } from '$lib/core/channels/types';
 import type { CodeDb, CodeEntry } from '$lib/core/codes/types';
 import type { FieldChoice, FieldSpec } from '$lib/core/forms/types';
 import type { MachineParamsDecl, NumberInputPreset, VariantDecl } from '$lib/core/profiles/types';
+import { MAX_NAME_LENGTH, MAX_NOTES_LENGTH } from './validate';
 import type { EffectiveMachine, MachineConfig, MachineParams, NumberInput, ParamSource } from './types';
 
 /** Field ids. They are stable: the runtime scenarios read `data-field` (§7.9). */
@@ -172,13 +173,19 @@ export function machineFields(
       label: t('machines.param.name'),
       help: t('machines.param.nameHelp'),
       required: true,
+      maxLength: MAX_NAME_LENGTH,
       default: current?.name ?? '',
     },
   ];
 
   const presets = presetsOf(decl);
   if (decl.numberInput !== undefined && presets.length > 0) {
-    const choices: FieldChoice[] = presets.map((preset) => ({ label: preset.label, value: preset.id }));
+    // A preset with `verify` is a documented default nobody has confirmed for a machine of
+    // this kind: the choice says so in plain words (B1 A4). The label itself is data.
+    const choices: FieldChoice[] = presets.map((preset) => ({
+      label: preset.verify === true ? `${preset.label} (${t('machines.value.unconfirmed')})` : preset.label,
+      value: preset.id,
+    }));
     const chosen = presetIdOf(decl, current);
     if (chosen === CUSTOM_PRESET) {
       choices.push({ label: t('machines.value.custom'), value: CUSTOM_PRESET });
@@ -190,7 +197,9 @@ export function machineFields(
       help:
         chosen === CUSTOM_PRESET
           ? t('machines.value.customDetail')
-          : t('machines.param.numberInputHelp'),
+          : presets.some((preset) => preset.verify === true)
+            ? `${t('machines.param.numberInputHelp')} ${t('machines.param.numberInputUnconfirmed')}`
+            : t('machines.param.numberInputHelp'),
       choices,
       default: chosen,
     });
@@ -259,6 +268,7 @@ export function machineFields(
     type: 'text',
     label: t('machines.param.notes'),
     help: t('machines.param.notesHelp'),
+    maxLength: MAX_NOTES_LENGTH,
     default: current?.notes ?? '',
   });
 

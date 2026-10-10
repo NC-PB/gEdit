@@ -1,4 +1,4 @@
-// The channel service (plan §7.17, AD-32). Owner: WP12.5 (the M12 prelude wrote the stub).
+// The channel service (plan §7.17, AD-32). Built by WP12.5.
 //
 // Which channel a document and a line are in, and the wait-code check over the open
 // channels. The order is AD-32's: the document's effective machine -> that record's

@@ -12,6 +12,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { generateGrammar } from './index';
+import { allRules, emittedRoles, monarchTokens, type Emitted, type MonarchLike } from './monarchSim';
 import { okumaRules } from './okuma';
 import { EDITOR_COLORS, ROLES, ROLE_COLORS, type Role } from './roles';
 import { orderedKeywords, type GrammarRule } from './shared';
@@ -57,42 +58,9 @@ function compileRule([source, action]: GrammarRule, ignoreCase: boolean) {
   };
 }
 
-interface Emitted {
-  text: string;
-  role: string;
-}
-
-/** Monarch's tokenizer loop, for one line and one `root` state. */
+/** Monarch's tokenizer loop for one line, from the base state (`monarchSim.ts`). */
 function tokenize(line: string, built: typeof grammar = grammar): Emitted[] {
-  const rules = built.tokenizer.root.map((rule) => compileRule(rule, built.ignoreCase));
-  const out: Emitted[] = [];
-  let pos = 0;
-
-  while (pos < line.length) {
-    const rest = line.slice(pos);
-    const hit = rules.find((rule) => (rule.anchored ? pos === 0 : true) && rule.re.test(rest));
-    if (!hit) {
-      out.push({ text: line[pos], role: built.defaultToken });
-      pos += 1;
-      continue;
-    }
-    const matches = rest.match(hit.re) as RegExpMatchArray;
-    expect(matches[0].length, `rule made no progress: ${hit.source}`).toBeGreaterThan(0);
-
-    if (Array.isArray(hit.action)) {
-      expect(matches.length, `group count of ${hit.source}`).toBe(hit.action.length + 1);
-      const covered = hit.action.reduce((sum, _a, i) => sum + (matches[i + 1] ?? '').length, 0);
-      expect(covered, `groups must cover the whole match of ${hit.source}`).toBe(matches[0].length);
-      hit.action.forEach((role, i) => {
-        const text = matches[i + 1] ?? '';
-        if (text !== '') out.push({ text, role });
-      });
-    } else {
-      out.push({ text: matches[0], role: hit.action });
-    }
-    pos += matches[0].length;
-  }
-  return out;
+  return monarchTokens(built as unknown as MonarchLike, line);
 }
 
 /** `role:text` for everything the grammar gives a role to; neutral tokens are dropped. */
@@ -120,14 +88,12 @@ function contrast(a: string, b: string): number {
 }
 
 /** Every role the generated rules can emit, in the order they are declared. */
-const emitted: string[] = [
-  ...new Set(grammar.tokenizer.root.flatMap((rule) => (Array.isArray(rule[1]) ? rule[1] : [rule[1]]))),
-].filter((role) => role !== '');
+const emitted: string[] = emittedRoles(grammar as unknown as MonarchLike);
 
 describe('the okuma grammar', () => {
   it('every rule compiles as Monarch compiles it', () => {
     expect(grammar.tokenizer.root.length).toBeGreaterThan(20);
-    for (const rule of grammar.tokenizer.root) {
+    for (const rule of allRules(grammar as unknown as MonarchLike) as GrammarRule[]) {
       expect(() => compileRule(rule, grammar.ignoreCase)).not.toThrow();
       // Monarch reads `^` as the line-start anchor only at position 0; anywhere else it
       // would match at every token boundary.
@@ -284,6 +250,63 @@ describe('the okuma grammar reads a block', () => {
       'operator:-',
       'number:20',
     ]);
+  });
+
+  // B1-G: the name a call takes is the profile's `syntax.callTargets` (M12.5), not a shape
+  // the grammar made up: the pattern allows sixteen characters, the grammar once allowed four.
+  it('takes the program name of a call from the profile, whatever its length', () => {
+    expect(at('CALL OABCD')).toEqual(['keyword:CALL', 'programMarker:OABCD']);
+    expect(at('CALL OABCDEFGHIJKLMNO1 X10')).toEqual(['keyword:CALL', 'programMarker:OABCDEFGHIJKLMNO1', 'axis:X10']);
+    expect(at('N100 CALL O1234 A1=2')).toEqual(['blockNumber:N100', 'keyword:CALL', 'programMarker:O1234', 'number:A1', 'operator:=', 'number:2']);
+    // A name that runs on past the pattern is no target, as for the tokenizer; one letter too many.
+    expect(at('CALL OABCDEFGHIJKLMNOP1')).not.toContain('programMarker:OABCDEFGHIJKLMNOP1');
+    // The pattern and the statements are the profile's.
+    const derived = generateGrammar(
+      { ...profile, syntax: { ...profile.syntax, callTargets: { after: ['MODIN'], pattern: 'P[0-9]{1,3}' } } } as Profile,
+      db,
+    ) as unknown as typeof grammar;
+    expect(at('MODIN P123', derived)).toEqual(['keyword:MODIN', 'programMarker:P123']);
+    expect(at('CALL P123', derived)).not.toContain('programMarker:P123');
+    // Without the field the tokenizer reads no target, so the grammar paints none.
+    const none = generateGrammar({ ...profile, syntax: { ...profile.syntax, callTargets: undefined } } as Profile, db) as unknown as typeof grammar;
+    expect(at('CALL O1234', none)).not.toContain('programMarker:O1234');
+  });
+
+  // B1-G: a sequence number is any run of digits, whatever stands behind it; a sequence name
+  // needs a blank behind it; and a command of the dialect that has the shape of a name is the
+  // command (M12.5, `scanSequenceName`).
+  it('reads a keyword that has the shape of a sequence name as the keyword', () => {
+    expect(at('NOEX')).toEqual(['keyword:NOEX']);
+    expect(at('N10 NOEX')).toEqual(['blockNumber:N10', 'keyword:NOEX']);
+    // The skip mark behind the leading `N` of such a word does not make it a sequence name;
+    // the tokenizer reads the keyword and a division sign.
+    expect(at('NOEX /')).toEqual(['keyword:NOEX', 'operator:/']);
+    expect(at('/NOEX')).toEqual(['skip:/', 'keyword:NOEX']);
+    expect(at('NOT')).toEqual(['keyword:NOT']);
+    expect(at('NOEX V1=5')).toEqual(['keyword:NOEX', 'variable:V1', 'operator:=', 'number:5']);
+    // A name of the same shape that is no command stays a sequence name.
+    expect(at('NLAP1 /G0')).toEqual(['section:NLAP1', 'skip:/', 'gcode:G0']);
+    expect(at('NOEXX')).toEqual(['section:NOEXX']);
+    expect(at('GOTO NOEXX')).toContain('section:NOEXX');
+  });
+
+  it('reads the digits of a sequence number whole, and a name only with a blank behind it', () => {
+    expect(at('N10000 G0 X1')).toEqual(['blockNumber:N10000', 'gcode:G0', 'axis:X1']);
+    expect(at('N100G0X5')).toEqual(['blockNumber:N100', 'gcode:G0', 'axis:X5']);
+    expect(at('N100 /G0 X5')).toEqual(['blockNumber:N100', 'skip:/', 'gcode:G0', 'axis:X5']);
+    // `NLAP1G85` and `NLAP1/` are no sequence names (the tokenizer reads a name of its own).
+    expect(at('NLAP1G85')).not.toContain('section:NLAP1');
+    expect(at('NLAP1/G0')).not.toContain('section:NLAP1');
+  });
+
+  it('keeps a name longer than a local variable in one piece', () => {
+    // `syntax.names`: the tokenizer reads one `unknown` token; the grammar once painted the
+    // tail of it as a local variable (`CALRG`: a `C`, then the variable `ALRG`).
+    expect(at('CALRG')).toEqual([]);
+    expect(tokenize('CALRG').map((token) => token.text)).toEqual(['CALRG']);
+    expect(at('NTOOLING')).toEqual([]);
+    // Up to four characters it is a local variable, as before.
+    expect(at('DIA1')).toEqual(['variable:DIA1']);
   });
 
   it('tells the three kinds of variable apart from an address', () => {

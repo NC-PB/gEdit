@@ -350,8 +350,8 @@ describe('registration', () => {
     expect(contribution.statusItems?.map((s) => s.id)).toEqual(['script']);
   });
 
-  it('puts its buttons on the Tools tab and its script list in the Scripts group', () => {
-    for (const item of contribution.ribbon ?? []) expect(item.tab, item.command).toBe('tools');
+  it('puts its buttons and the user\'s own script list on the Scripts tab, the built-in list on the Tools tab', () => {
+    for (const item of contribution.ribbon ?? []) expect(item.tab, item.command).toBe('scripts');
     expect(contribution.ribbon?.map((i) => i.command)).toEqual([
       'script.runPicker',
       'script.cancel',
@@ -360,8 +360,19 @@ describe('registration', () => {
       'script.rescan',
       'script.addFolder',
     ]);
-    expect(contribution.ribbonGroups?.[0].group).toBe('scripts.groupScripts');
-    for (const group of new Set((contribution.ribbon ?? []).map((i) => i.group))) {
+    expect(contribution.ribbonGroups?.map((g) => [g.tab, g.group])).toEqual([
+      ['scripts', 'scripts.groupOwn'],
+      ['tools', 'scripts.groupBundled'],
+    ]);
+    const groups = [...(contribution.ribbon ?? []).map((i) => i.group), ...(contribution.ribbonGroups ?? []).map((g) => g.group)];
+    // Run, My Scripts, Manage in that order on the Scripts tab (a group sits where its smallest order is).
+    const place = (key: string): number =>
+      Math.min(
+        ...[...(contribution.ribbon ?? []), ...(contribution.ribbonGroups ?? [])].filter((e) => e.group === key).map((e) => e.order),
+      );
+    expect(place('scripts.groupScripts')).toBeLessThan(place('scripts.groupOwn'));
+    expect(place('scripts.groupOwn')).toBeLessThan(place('scripts.groupManage'));
+    for (const group of new Set(groups)) {
       expect(hasKey(group), group).toBe(true);
     }
   });
@@ -458,6 +469,10 @@ describe('new script names', () => {
     expect(validateScriptName('a\\b')?.key).toBe('scripts.nameInvalid');
     expect(validateScriptName('C:name')?.key).toBe('scripts.nameInvalid');
     expect(validateScriptName('trailing.')?.key).toBe('scripts.nameInvalid');
+    // Windows does not allow these in a file name; a scripts folder is often synced there.
+    for (const bad of ['<', '>', '"', '|', '?', '*']) {
+      expect(validateScriptName(`a${bad}b`)?.key, bad).toBe('scripts.nameInvalid');
+    }
     expect(validateScriptName('a\nb')?.key).toBe('scripts.nameInvalid');
     expect(validateScriptName('gedit_nc')?.key).toBe('scripts.nameReserved');
     expect(validateScriptName('gedit_nc.py')?.key).toBe('scripts.nameReserved');

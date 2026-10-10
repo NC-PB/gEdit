@@ -28,12 +28,14 @@ const {
   sessionSave,
   sessionLoad,
   recoveryHeader,
+  wellFormed,
   recoveryPut,
   recoveryDrop,
   recoveryClearCurrent,
   recoveryList,
   recoveryRead,
   recoveryDiscard,
+  recoveryDiscardEntry,
   channelSiblings,
   userFilesList,
   userFileCreate,
@@ -55,6 +57,16 @@ describe('filesStat', () => {
     expect(invoke).toHaveBeenCalledWith('files_stat', { paths: ['/nc/a.nc', '/nc/b.h'] });
   });
 
+  // B1 CODE-07: resolving paths is a lookup per folder level, so it is asked for, never default.
+  it('asks Rust to resolve the canonical path only when the caller says so', async () => {
+    invoke.mockResolvedValue([]);
+    await filesStat(['/nc/a.nc'], { canonical: true });
+    expect(invoke).toHaveBeenLastCalledWith('files_stat', { paths: ['/nc/a.nc'], canonical: true });
+    await filesStat(['/nc/a.nc'], { partial: true });
+    expect(invoke).toHaveBeenLastCalledWith('files_stat', { paths: ['/nc/a.nc'] });
+    expect(invoke.mock.lastCall?.[1]).not.toHaveProperty('canonical');
+  });
+
   it('passes the result through unchanged', async () => {
     const stats = [
       { path: '/nc/a.nc', allowed: true, exists: true, isDir: false, mtimeMs: 1, size: 2, readonly: false },
@@ -64,7 +76,7 @@ describe('filesStat', () => {
     await expect(filesStat(['/nc/a.nc', '/nope'])).resolves.toEqual(stats);
   });
 
-  // TODO "Next up" 8. Rust answers a stat that hung (an SMB or DNC share gone quiet) as
+  // Rust answers a stat that hung (an SMB or DNC share gone quiet) as
   // `unavailable` with everything else empty — the same fields as "outside the scope",
   // which `fileOps.write` reads as "no file there, nothing to ask about". A rejection is
   // what every one-path caller already reads as "the stat did not answer".
@@ -259,10 +271,32 @@ describe('the M7 backup, session and recovery commands', () => {
       expect(JSON.parse(header)).toEqual({ ...meta, path: '/Aufträge/Welle Ø20.nc', title: 'Welle Ø20.nc' });
     });
 
-    it('escapes control characters and lone surrogates too', () => {
-      const header = recoveryHeader({ ...meta, title: 'a\u0007b\ud800c' });
+    it('escapes control characters too', () => {
+      const header = recoveryHeader({ ...meta, title: 'a\u0007b' });
       expect(header).toMatch(/^[\x20-\x7e]*$/);
-      expect((JSON.parse(header) as { title: string }).title).toBe('a\u0007b\ud800c');
+      expect((JSON.parse(header) as { title: string }).title).toBe('a\u0007b');
+    });
+
+    // A Windows file name may hold a lone surrogate. Escaped as `\ud800` it is a header
+    // `serde_json` refuses, and the snapshot — the text the user typed — was lost with it.
+    it('makes a lone surrogate well-formed, so the snapshot is not refused by Rust', () => {
+      const header = recoveryHeader({ ...meta, path: 'C:\\nc\\a\ud800b.nc', title: 'a\udc00b\ud83d\ude00' });
+      expect(header).toMatch(/^[\x20-\x7e]*$/);
+      const parsed = JSON.parse(header) as { path: string; title: string };
+      expect(parsed.path).toBe('C:\\nc\\a\ufffdb.nc');
+      // A real pair (an emoji) is kept; the lone low half became U+FFFD.
+      expect(parsed.title).toBe('a\ufffdb\ud83d\ude00');
+      // No lone surrogate is left in what Rust will parse.
+      const lone = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
+      expect(lone.test(parsed.path) || lone.test(parsed.title)).toBe(false);
+    });
+
+    it('wellFormed keeps pairs and replaces only the lone halves', () => {
+      expect(wellFormed('plain')).toBe('plain');
+      expect(wellFormed('\ud800')).toBe('\ufffd');
+      expect(wellFormed('\udc00\ud800')).toBe('\ufffd\ufffd');
+      expect(wellFormed('\ud83d\ude00')).toBe('\ud83d\ude00');
+      expect(wellFormed('x\ud83d')).toBe('x\ufffd');
     });
 
     it('leaves plain ASCII alone', () => {
@@ -302,6 +336,9 @@ describe('the M7 backup, session and recovery commands', () => {
     invoke.mockResolvedValue(undefined);
     await recoveryDiscard('s-17');
     expect(invoke).toHaveBeenCalledWith('recovery_discard', { session: 's-17' });
+
+    await recoveryDiscardEntry('s-17', 'd4');
+    expect(invoke).toHaveBeenCalledWith('recovery_discard_entry', { session: 's-17', key: 'd4' });
   });
 
   it('decodes the raw bytes a snapshot read answers with', async () => {

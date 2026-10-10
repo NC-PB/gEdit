@@ -35,6 +35,10 @@ import {
 import { dialogs } from '$lib/app/dialogs';
 import { modals } from '$lib/app/modals';
 import { status } from '$lib/app/status';
+import { docs } from '$lib/stores/documents';
+import RecoveryStatus from '$lib/components/status/RecoveryStatus.svelte';
+import { filesStat, type FileStat } from '$lib/platform/commands';
+import { baseName } from '$lib/utils/platform';
 import { t } from '$lib/i18n';
 import type { Contribution, Disposable, RecoveryEntry } from '$lib/app/types';
 
@@ -79,9 +83,72 @@ async function confirmDiscard(entries: readonly RecoveryEntry[]): Promise<boolea
   return answer === true;
 }
 
+/**
+ * The files among `entries` that another tab already has open (or that an earlier
+ * snapshot of the same restore is about to take): their text is restored all the same
+ * but stays in an untitled tab, because two tabs on one file would each believe they own
+ * it and the second save would discard the first (`fileOps.bindRestored`).
+ *
+ * Said before it happens and not after, from what the document store holds now. A
+ * snapshot whose path is outside the fs scope also stays untitled, but that is the
+ * restore dialog's own "unreachable" row; this is the one case with no warning anywhere.
+ *
+ * "The same file" is decided like `bindRestored` decides it: by the path as written and,
+ * since B1 A1, by the file's canonical path as well (`FileStat.canonical`), so a snapshot
+ * of `link/prog.nc` is named when `real/prog.nc` is open. The canonical paths come from
+ * one `files_stat` for the distinct paths, which sends `canonical` only when asked (so it is
+ * asked, `canonical: true`); when that fails the lexical answer stands.
+ */
+export async function takenPaths(
+  entries: readonly RecoveryEntry[],
+  stat: (paths: string[]) => Promise<FileStat[]> = (paths) => filesStat(paths, { partial: true, canonical: true }),
+): Promise<string[]> {
+  const paths = [...new Set(entries.map((e) => e.path).filter((p): p is string => p !== null))];
+  const canonical = new Map<string, string>();
+  if (paths.length > 0) {
+    try {
+      for (const one of await stat(paths)) {
+        if (one.canonical) canonical.set(one.path, one.canonical);
+      }
+    } catch (err) {
+      console.warn('the files behind the recovery snapshots could not be identified', err);
+    }
+  }
+  const taken: string[] = [];
+  const seen = new Set<string>();
+  const seenIdentity = new Set<string>();
+  for (const entry of entries) {
+    if (entry.path === null) continue;
+    const identity = canonical.get(entry.path);
+    if (
+      docs.byPath(entry.path) !== undefined ||
+      seen.has(entry.path) ||
+      (identity !== undefined && (docs.byIdentity(identity) !== undefined || seenIdentity.has(identity)))
+    ) {
+      taken.push(entry.path);
+    }
+    seen.add(entry.path);
+    if (identity !== undefined) seenIdentity.add(identity);
+  }
+  return taken;
+}
+
 async function restoreThem(entries: RecoveryEntry[]): Promise<void> {
+  const taken = await takenPaths(entries);
   const ids = await recovery.restore(entries);
-  if (ids.length > 0) status.show(t('recovery.restored', { count: ids.length }));
+  if (ids.length === 0) return;
+  const restored = t('recovery.restored', { count: ids.length });
+  if (taken.length === 0) {
+    status.show(restored);
+    return;
+  }
+  // One message, because the status bar holds one: the count of restored documents and,
+  // after it, the files whose text could not take the file's place. Sticky, because
+  // what it asks for (Save As under another name) is not done in four seconds.
+  const names = [...new Set(taken.map((path) => baseName(path)))].join(', ');
+  status.show(`${restored} ${t('recovery.pathTaken', { count: taken.length, names })}`, {
+    sticky: true,
+  });
 }
 
 /**
@@ -158,6 +225,8 @@ async function askOnStartup(): Promise<void> {
 
 export default {
   id: 'recovery',
+  // Shown while snapshots cannot be written, and only then (see `RecoveryStatus.svelte`).
+  statusItems: [{ id: 'recovery', side: 'left', order: 20, component: RecoveryStatus }],
   commands: [
     {
       id: 'recovery.showPending',

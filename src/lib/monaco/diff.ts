@@ -20,7 +20,9 @@
 //     here that is not diff-specific would silently change the main editor as well. Only
 //     `automaticLayout` is passed, with the value `editorService` already set, and
 //     `readOnly`/`readOnlyMessage`, which `editorService` sets on every document switch
-//     anyway and which no Monaco feature reads back from that service.
+//     anyway and which no Monaco feature reads back from that service. The exception is
+//     `SHARED_EDITOR_OPTIONS` (`instanceOptions.ts`): the same values the main editor is
+//     created with (no colour boxes, fixed overflow widgets), so passing them changes nothing.
 //  2. `theme` is deliberately absent: passing it calls `themeService.setTheme()`
 //     (`standaloneCodeEditor.js:258`), which would override the user's theme choice
 //     (WP2.6) for as long as the comparison is open. Left out, the diff editor simply
@@ -38,6 +40,7 @@
 import type * as MonacoApi from 'monaco-editor/esm/vs/editor/editor.api.js';
 import { getMonaco } from '$lib/monaco/setup';
 import { editor as editorService } from '$lib/monaco/editorService';
+import { SHARED_EDITOR_OPTIONS } from '$lib/monaco/instanceOptions';
 import { docs } from '$lib/stores/documents';
 import { t } from '$lib/i18n';
 import type { Disposable, DocId } from '$lib/app/types';
@@ -271,6 +274,7 @@ export async function createDiff(req: DiffRequest): Promise<DiffHandle> {
       readOnly: appliedLock,
       readOnlyMessage: { value: t('readOnly.editorMessage') },
       renderOverviewRuler: true,
+      ...SHARED_EDITOR_OPTIONS,
     });
   } catch (err) {
     releaseScratch(owner);

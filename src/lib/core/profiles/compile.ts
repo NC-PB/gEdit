@@ -1,5 +1,5 @@
 // Turns a validated `Profile` into the `CompiledProfile` every NC feature reads
-// (plan §7.4, AD-11). Written by the M3 prelude (P3); owner from Wave A on: WP3.1.
+// (plan §7.4, AD-11). Built by WP3.1.
 //
 // Every pattern is compiled exactly once, here. Detection runs over 400 lines, the
 // tokenizer and the outline index run over whole documents, and building a `RegExp` per

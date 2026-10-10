@@ -12,6 +12,14 @@
 //!
 //! The platform module below does the lookup; [`interpreter`] caches its answer.
 //!
+//! **The same login shell also tells us the user's `PATH`** ([`login_path`]). A script
+//! that calls a tool by name (`git`, `ffmpeg`, a Homebrew binary) needs the directories
+//! the user's terminal has, and an app started from Finder does not have them. The shell
+//! is asked once, for both, and both answers are cached together and dropped together by
+//! [`forget`]. `~/.zshrc` is **not** read (the shell is a login shell, not an interactive
+//! one): a Python or a `PATH` that is only set there is not seen, and the user guide says
+//! to set `scripts.python` in that case.
+//!
 //! **Why the cache is a `Mutex` and not a `OnceLock`** (G8 M5). The lookup spawns a child
 //! process and waits seconds for it, so the plan's "asked once per app" is a cost, not a
 //! nicety. The `OnceLock` version got it wrong twice:
@@ -26,14 +34,13 @@
 //!   `python_check` calls, because that probe is exactly the user asking gEdit to
 //!   look again.
 
+use std::ffi::OsString;
 use std::io::Read;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-
-use imp::resolve;
 
 /// What [`interpreter`] answers when the lookup found nothing: a bare name, left for the
 /// OS to resolve when a run actually happens.
@@ -46,8 +53,25 @@ use imp::resolve;
 /// as "Python was not found". Either way the user is told the truth.
 const FALLBACK: &str = if cfg!(windows) { "python" } else { "python3" };
 
+/// What one lookup found out.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct Lookup {
+    /// The interpreter, or `None` when there is none this lookup will vouch for.
+    python: Option<PathBuf>,
+    /// The `PATH` the user's login shell has, when it answered with one (Unix only).
+    login_path: Option<OsString>,
+}
+
+/// The cached answer: the interpreter (with [`FALLBACK`] already applied) and the login
+/// shell's `PATH`.
+#[derive(Debug, Clone)]
+struct Cached {
+    python: PathBuf,
+    login_path: Option<OsString>,
+}
+
 /// The answer to the last lookup, or `None` before the first one and after [`forget`].
-static PYTHON: Mutex<Option<PathBuf>> = Mutex::new(None);
+static PYTHON: Mutex<Option<Cached>> = Mutex::new(None);
 
 /// The Python interpreter for scripts, resolved on first use and then cached.
 pub fn interpreter() -> PathBuf {
@@ -55,26 +79,40 @@ pub fn interpreter() -> PathBuf {
     if let Some(path) = std::env::var_os("GEDIT_PYTHON").filter(|p| !p.is_empty()) {
         return PathBuf::from(path);
     }
-    cached_or(resolve)
+    cached_or(imp::lookup).python
+}
+
+/// The `PATH` of the user's login shell, from the same cached lookup as
+/// [`interpreter`], or `None` when there is none (Windows, or a shell that did not say).
+///
+/// The caller decides whether to ask: `scripts::runner::script_run` does not when the
+/// interpreter is configured (`GEDIT_PYTHON`, `scripts.python`), because that setting is
+/// how a user keeps gEdit from starting a broken or slow login shell at all.
+pub fn login_path() -> Option<OsString> {
+    cached_or(imp::lookup).login_path
 }
 
 /// The cache itself, with the lookup injected so a test can count how often it runs.
-fn cached_or(lookup: impl FnOnce() -> Option<PathBuf>) -> PathBuf {
+fn cached_or(lookup: impl FnOnce() -> Lookup) -> Cached {
     // A poisoned lock would mean a panic inside this function; the cached path is still
     // whatever it was, so reading through the poison is safe and better than panicking on
     // every later script run.
     let mut cached = PYTHON.lock().unwrap_or_else(|e| e.into_inner());
     // The lock is held across `lookup()` on purpose: a second caller waits for the first
     // answer instead of spawning a second login shell of its own.
-    if let Some(path) = cached.as_ref() {
-        return path.clone();
+    if let Some(found) = cached.as_ref() {
+        return found.clone();
     }
-    let path = lookup().unwrap_or_else(|| PathBuf::from(FALLBACK));
-    *cached = Some(path.clone());
-    path
+    let found = lookup();
+    let found = Cached {
+        python: found.python.unwrap_or_else(|| PathBuf::from(FALLBACK)),
+        login_path: found.login_path,
+    };
+    *cached = Some(found.clone());
+    found
 }
 
-/// Every child process gEdit starts is started through this (TODO "Next up 10"): the
+/// Every child process gEdit starts is started through this: the
 /// interpreter probes here and a script run in `scripts::runner`. On Windows it applies
 /// [`CREATE_NO_WINDOW`], so a release build — which has no console of its own — never
 /// flashes one for a child; on macOS and Linux there is no such window and it does
@@ -121,7 +159,7 @@ fn suppress_console<C: SetCreationFlags>(command: &mut C) {
 
 #[cfg(all(test, windows))]
 mod creation_flags_tests {
-    //! Regression test for TODO "Next up 10": a release build must never flash a console
+    //! Regression test: a release build must never flash a console
     //! for a script run or an interpreter probe. `Command` gives no way to read its flags
     //! back, so this proves [`suppress_console`] against a recording double instead — see
     //! the doc comment on [`SetCreationFlags`] for why that is the real spawn path and not
@@ -149,7 +187,7 @@ mod creation_flags_tests {
 mod spawn_sites_tests {
     //! The flag test above proves what [`hidden`] does, not that anything calls it: a
     //! refactor that dropped the call from a spawn site would have left it green and the
-    //! console flashing again on Windows (review of Next up 10). So every `.spawn()` in
+    //! console flashing again on Windows (from a review). So every `.spawn()` in
     //! the two modules that start processes has to follow a [`hidden`] call in the same
     //! function. Scanned on every platform, because the call is unconditional.
     use crate::source_scan;
@@ -270,7 +308,8 @@ fn capture(command: &mut Command, timeout: Duration, max_output: usize) -> Vec<u
     out
 }
 
-/// Forgets the cached answer, so the next [`interpreter`] call asks the shell again.
+/// Forgets the cached answer (the interpreter and the login `PATH`), so the next
+/// [`interpreter`] or [`login_path`] call asks the shell again.
 ///
 /// Called by `python_check`, which is the one place the user asks gEdit to look for an
 /// interpreter — after installing Python, or after changing the setting. Without it the
@@ -340,6 +379,15 @@ mod imp {
     pub fn resolve() -> Option<PathBuf> {
         let dirs = search_dirs();
         rank(|name| which(name, &dirs, is_program), launcher_python)
+    }
+
+    /// What [`super::interpreter`] caches. Windows children inherit the user's `PATH`
+    /// as it is, so there is no login `PATH` to add.
+    pub fn lookup() -> super::Lookup {
+        super::Lookup {
+            python: resolve(),
+            login_path: None,
+        }
     }
 
     /// Which candidate wins, given a way to find a name and a way to ask the launcher.
@@ -730,8 +778,22 @@ mod imp {
     /// The stub is a legitimate last answer, not a sentinel — on a stock Mac with the
     /// Command Line Tools it is the only Python there is. `interpreter` caches it like
     /// any other, and `forget` is what lets a later install win.
+    #[cfg(test)]
     pub fn resolve() -> Option<PathBuf> {
-        rank(login_shell_python(), is_executable_file)
+        lookup().python
+    }
+
+    /// One login shell answers both questions: where `python3` is, and what `PATH` the
+    /// user's terminal has.
+    pub fn lookup() -> super::Lookup {
+        let asked = ask_login_shell();
+        super::Lookup {
+            python: rank(
+                pick_shell_python(&asked, is_executable_file),
+                is_executable_file,
+            ),
+            login_path: pick_shell_path(&asked),
+        }
     }
 
     fn rank(from_shell: Option<PathBuf>, is_executable: impl Fn(&Path) -> bool) -> Option<PathBuf> {
@@ -748,21 +810,54 @@ mod imp {
             })
     }
 
-    /// Asks `$SHELL -l -c 'command -v python3'`. A login shell reads the
+    /// What the shell prints in front of the `PATH` it reports, so the line can be told
+    /// from anything a profile prints.
+    const PATH_MARK: &str = "GEDIT_LOGIN_PATH=";
+
+    /// Asks `$SHELL -l -c 'command -v python3; …$PATH'`. A login shell reads the
     /// user's profile (and so their PATH); it is not interactive, so rc files
     /// such as `~/.zshrc` are not read.
-    fn login_shell_python() -> Option<PathBuf> {
+    fn ask_login_shell() -> String {
         let shell = std::env::var_os("SHELL")
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| DEFAULT_SHELL.into());
         let out = super::capture(
             // The leading echo keeps the answer on its own line even if the
-            // profile prints something without a trailing newline.
-            Command::new(shell).args(["-l", "-c", "echo; command -v python3"]),
+            // profile prints something without a trailing newline. `printf` rather
+            // than `echo` for the `PATH`: some `echo`s read backslashes.
+            Command::new(shell).args([
+                "-l",
+                "-c",
+                "echo; command -v python3; printf '\\n%s%s\\n' 'GEDIT_LOGIN_PATH=' \"$PATH\"",
+            ]),
             SHELL_TIMEOUT,
             MAX_SHELL_OUTPUT,
         );
-        pick_shell_python(&String::from_utf8_lossy(&out), is_executable_file)
+        String::from_utf8_lossy(&out).into_owned()
+    }
+
+    #[cfg(test)]
+    fn login_shell_python() -> Option<PathBuf> {
+        pick_shell_python(&ask_login_shell(), is_executable_file)
+    }
+
+    /// The last line that starts with [`PATH_MARK`], when what follows is a `PATH`:
+    /// at least one directory, and every directory absolute. A line from a shell that
+    /// printed a list in some other shape (`fish` spaces) or a relative entry is not
+    /// trusted, because it would put the current folder on a script's `PATH`.
+    fn pick_shell_path(stdout: &str) -> Option<std::ffi::OsString> {
+        let value = stdout
+            .lines()
+            .rev()
+            .find_map(|line| line.trim().strip_prefix(PATH_MARK))?
+            .trim();
+        let dirs: Vec<PathBuf> = std::env::split_paths(value)
+            .filter(|dir| !dir.as_os_str().is_empty())
+            .collect();
+        if dirs.is_empty() || dirs.iter().any(|dir| !dir.is_absolute()) {
+            return None;
+        }
+        std::env::join_paths(dirs).ok()
     }
 
     /// Picks the last non-empty line of the shell's stdout that is an absolute
@@ -842,6 +937,41 @@ mod imp {
             ] {
                 assert_eq!(pick(stdout), None, "accepted {stdout:?}");
             }
+        }
+
+        /// The shell's `PATH` is read from its marked line, whatever the profile printed
+        /// around it, and the python3 line is still found with the extra line after it.
+        #[test]
+        fn picks_the_marked_path_line_and_still_finds_python() {
+            let stdout = "hello\n/usr/local/bin/python3\n\nGEDIT_LOGIN_PATH=/opt/homebrew/bin:/usr/bin:/bin\nbye\n";
+            assert_eq!(
+                pick_shell_path(stdout),
+                Some(std::ffi::OsString::from("/opt/homebrew/bin:/usr/bin:/bin"))
+            );
+            assert_eq!(pick(stdout), Some(PathBuf::from("/usr/local/bin/python3")));
+        }
+
+        #[test]
+        fn a_path_that_is_not_a_clean_list_of_absolute_folders_is_not_trusted() {
+            for stdout in [
+                "",
+                "no marker here\n",
+                "GEDIT_LOGIN_PATH=\n",
+                // A relative entry would put the current folder on a script's PATH.
+                "GEDIT_LOGIN_PATH=/usr/bin:bin\n",
+                "GEDIT_LOGIN_PATH=.:/usr/bin\n",
+            ] {
+                assert_eq!(pick_shell_path(stdout), None, "accepted {stdout:?}");
+            }
+        }
+
+        #[test]
+        fn the_last_marked_line_wins() {
+            let stdout = "GEDIT_LOGIN_PATH=/a\nGEDIT_LOGIN_PATH=/b:/c\n";
+            assert_eq!(
+                pick_shell_path(stdout),
+                Some(std::ffi::OsString::from("/b:/c"))
+            );
         }
 
         #[test]
@@ -931,14 +1061,17 @@ mod cache_tests {
         let calls = AtomicUsize::new(0);
         let lookup = || {
             calls.fetch_add(1, Ordering::SeqCst);
-            Some(PathBuf::from("/usr/bin/python3"))
+            Lookup {
+                python: Some(PathBuf::from("/usr/bin/python3")),
+                login_path: None,
+            }
         };
         let stub = PathBuf::from("/usr/bin/python3");
 
         forget();
-        assert_eq!(cached_or(lookup), stub);
-        assert_eq!(cached_or(lookup), stub);
-        assert_eq!(cached_or(lookup), stub);
+        assert_eq!(cached_or(lookup).python, stub);
+        assert_eq!(cached_or(lookup).python, stub);
+        assert_eq!(cached_or(lookup).python, stub);
         assert_eq!(
             calls.load(Ordering::SeqCst),
             1,
@@ -948,7 +1081,7 @@ mod cache_tests {
         // `python_check` calls `forget`, which is what lets a Python installed while the
         // app was running still win.
         forget();
-        assert_eq!(cached_or(lookup), stub);
+        assert_eq!(cached_or(lookup).python, stub);
         assert_eq!(calls.load(Ordering::SeqCst), 2);
         forget();
     }
@@ -960,12 +1093,53 @@ mod cache_tests {
         let calls = AtomicUsize::new(0);
         let lookup = || {
             calls.fetch_add(1, Ordering::SeqCst);
-            None
+            Lookup::default()
         };
         forget();
-        assert_eq!(cached_or(lookup), PathBuf::from(FALLBACK));
-        assert_eq!(cached_or(lookup), PathBuf::from(FALLBACK));
+        assert_eq!(cached_or(lookup).python, PathBuf::from(FALLBACK));
+        assert_eq!(cached_or(lookup).python, PathBuf::from(FALLBACK));
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+        forget();
+    }
+
+    /// The login shell's `PATH` rides on the same lookup as the interpreter: one shell
+    /// for both, cached together, and dropped together by `forget`.
+    #[test]
+    fn the_login_path_is_cached_with_the_interpreter_and_forgotten_with_it() {
+        let _serial = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let calls = AtomicUsize::new(0);
+        let lookup = || {
+            calls.fetch_add(1, Ordering::SeqCst);
+            Lookup {
+                python: Some(PathBuf::from("/opt/homebrew/bin/python3")),
+                login_path: Some(OsString::from("/opt/homebrew/bin:/usr/bin")),
+            }
+        };
+        forget();
+        let first = cached_or(lookup);
+        let second = cached_or(lookup);
+        assert_eq!(
+            first.login_path,
+            Some(OsString::from("/opt/homebrew/bin:/usr/bin"))
+        );
+        assert_eq!(second.python, PathBuf::from("/opt/homebrew/bin/python3"));
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            1,
+            "one shell for both answers"
+        );
+
+        forget();
+        let after = || {
+            calls.fetch_add(1, Ordering::SeqCst);
+            Lookup::default()
+        };
+        assert_eq!(
+            cached_or(after).login_path,
+            None,
+            "forget drops the PATH too"
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
         forget();
     }
 

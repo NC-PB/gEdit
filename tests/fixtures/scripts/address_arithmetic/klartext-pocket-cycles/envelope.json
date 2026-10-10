@@ -1,0 +1,17 @@
+{
+  "message": "Added 0.5 to Z in 3 words on 3 blocks, 1 of them a cycle position. Left 2 blocks as written: 2 cycle calls with positions of their own. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 27,
+      "severity": "warning",
+      "message": "6 CYCL DEF 254 CIRCULAR SLOT ~: CYCL DEF 254 has positions of its own (Q216 and Q217) that a shift cannot judge.",
+      "reason": "cycle-position"
+    },
+    {
+      "line": 51,
+      "severity": "warning",
+      "message": "7 CYCL CALL: CYCL DEF 254 has positions of its own (Q216 and Q217) that a shift cannot judge.",
+      "reason": "cycle-position"
+    }
+  ]
+}

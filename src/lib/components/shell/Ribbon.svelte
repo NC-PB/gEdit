@@ -16,18 +16,19 @@
   import { t } from '$lib/i18n';
   import { isMacPlatform } from '$lib/utils/platform';
   import RibbonButton from './RibbonButton.svelte';
-  import { groupsOf, TAB_LABEL, tabsOf } from './ribbonModel';
+  import { groupsOf, resolveTab, TAB_LABEL, tabsOf } from './ribbonModel';
   import type { CommandDef, RibbonItemDef, RibbonTab } from '$lib/app/types';
 
   const entries = ribbon.entries;
   const changed = commands.changed;
   const isMac = isMacPlatform();
 
-  let activeTab = $state<RibbonTab>('home');
+  let activeTab = $state<RibbonTab>('file');
 
   const tabs = $derived(tabsOf($entries));
-  // A tab can disappear when its contribution is disposed (HMR, tests).
-  const currentTab = $derived(tabs.includes(activeTab) ? activeTab : (tabs[0] ?? 'home'));
+  // A tab can disappear when its contribution is disposed (HMR, tests), and a retired id
+  // ('home') falls back to the File tab.
+  const currentTab = $derived(resolveTab(activeTab, tabs));
 
   interface Button {
     item: RibbonItemDef;
@@ -82,10 +83,6 @@
 </script>
 
 <div class="ribbon" data-testid="ribbon">
-  <div class="app-header">
-    <span class="app-title">{t('shell.workspace')}</span>
-  </div>
-
   <div class="ribbon-tabs" role="tablist" aria-label={t('shell.ribbonTabs')}>
     {#each tabs as tab, i (tab)}
       <button
@@ -145,21 +142,9 @@
     user-select: none;
   }
 
-  .app-header {
-    display: flex;
-    align-items: center;
-    height: 28px;
-    padding: 0 12px;
-    background-color: var(--bg-app);
-  }
-  .app-title {
-    color: var(--text-muted);
-    font-size: 11px;
-  }
-
   .ribbon-tabs {
     display: flex;
-    padding: 4px 12px 0;
+    padding: 6px 12px 0;
     overflow-x: auto;
     background-color: var(--bg-app);
     scrollbar-width: none;
@@ -188,15 +173,47 @@
     border-color: var(--border-color);
   }
 
-  /* 1366x768: the body scrolls instead of squeezing the buttons (plan AD-6). */
+  /* 1366x768: the body scrolls instead of squeezing the buttons (plan AD-6).
+
+     The scrollbar has to take its own room below the group labels and never lie over
+     them, on every tab and at every width. Three rules carry that, and a test pins them:
+
+     1. A styled `::-webkit-scrollbar` (never an overlay, in WebKit and in Chromium/WebView2)
+        sets the height; `scrollbar-width` is deliberately left alone, because Chromium
+        lets it win over the styled one and a thin native scrollbar is an overlay on macOS.
+     2. `overflow-x: scroll`, not `auto`: the bar is part of the box from the first layout
+        on. With `auto` it appears only once the row overflows, and on a tab whose height
+        was settled before that (the File tab, the first one drawn after the window was
+        narrowed) the bar was cut out of the box and lay over the label row (B1 round).
+        The track is invisible, so a window that is wide enough shows an empty strip only.
+     3. No `min-height` on the row itself: it counts the bar and the padding in, and then
+        the content got what was left. The groups carry their own minimum height instead,
+        so the row is always the tallest group plus the padding plus the bar. */
   .ribbon-body {
     display: flex;
     align-items: stretch;
-    min-height: 84px;
     padding: 4px 8px;
-    overflow-x: auto;
+    overflow-x: scroll;
     overflow-y: hidden;
-    scrollbar-width: thin;
+  }
+  .ribbon-body::-webkit-scrollbar {
+    height: 10px;
+  }
+  .ribbon-body::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .ribbon-body::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 5px;
+  }
+  .ribbon-body::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+  }
+  /* A browser without the styled scrollbar: the standard thin one, which leaves room. */
+  @supports not selector(::-webkit-scrollbar) {
+    .ribbon-body {
+      scrollbar-width: thin;
+    }
   }
 
   .ribbon-group {
@@ -204,6 +221,7 @@
     position: relative;
     flex: 0 0 auto;
     flex-direction: column;
+    min-height: 72px;
     padding: 0 8px;
     border-right: 1px solid var(--border-color);
   }

@@ -99,6 +99,8 @@ REQUIRED_CASES = [
     "channels-multi-file",
     "channels-selection",
     "channels-two-section",
+    # B1 (owner decision): the F of a Klartext function is no feed of the tool.
+    "klartext-function-feeds",
 ]
 
 

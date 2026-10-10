@@ -1,5 +1,5 @@
 // `decideApply` (plan §7.5): the one place that decides what a finished run is allowed to
-// do to a document. Owner: **WP5.1**. Stub written by P5 — the signature and the order of
+// do to a document. The signature and the order of
 // the checks below are binding, the body is not.
 //
 // It is a **pure function** of the run's outcome. It reads no store, opens no dialog and

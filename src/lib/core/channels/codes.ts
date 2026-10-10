@@ -1,7 +1,7 @@
 // Wait codes as an NC programmer writes them (the owner's decision of 2026-10-07, §10.1):
-// `M100-M199, M300 M350`, `P1-9999`. Implemented by the M12 prelude (P12) because the
-// resolution (`marks.ts`), the machine page's live preview and its validation (WP12.3) all
-// read the same list; owned by WP12.1 from Wave A on.
+// `M100-M199, M300 M350`, `P1-9999`. Built by WP12.1 as its own
+// module because the resolution (`marks.ts`), the machine page's live preview and its validation (WP12.3) all
+// read the same list.
 //
 // The grammar, in full:
 //   - items are separated by commas, semicolons or blanks;

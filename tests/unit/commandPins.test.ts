@@ -155,8 +155,8 @@ const PINNED: { id: string; keys?: Keys; title: string; owner: string; pending?:
   // reached from the Insert tab and the palette, and the `Mod+Alt` letters left are on the AltGr
   // manual check. The templates (`contrib/templates.ts`, P3.5): one `insert.template:<id>` command
   // per template id, built at run time from the databases (`templateCommandId`, checked below),
-  // and a quick pick of the active document's templates; the Home tab keeps one button,
-  // `insert.template:program-start`, in group `templates.groupProgram`. The cycle form
+  // and a quick pick of the active document's templates; Program start is only on the Insert tab
+  // (B1 A9 removed the Home tab's second button). The cycle form
   // (`contrib/cycleForms.ts`, P3.5): Insert tab, group `cycleForm.group`. The manager
   // (`contrib/templateManager.ts`, P3.9): Insert tab, group `templateManager.group`.
   { id: 'templates.insert', title: 'templates.insert', owner: 'templates.ts' },
@@ -165,7 +165,7 @@ const PINNED: { id: string; keys?: Keys; title: string; owner: string; pending?:
   { id: 'templates.fromSelection', title: 'templateManager.fromSelection', owner: 'templateManager.ts' },
 ];
 /**
- * The ribbon groups of those entries: NC tab (M10, M12 navigation), Home tab (search, M13
+ * The ribbon groups of those entries: NC tab (M10, M12 navigation), Edit tab (search, M13
  * typing), Tools tab (compare, M12 check, M13 profile tester), View tab (P3a: the inspector
  * beside the panels, the motion colours).
  */
@@ -180,7 +180,6 @@ const PINNED_GROUPS = [
   'typing.group',
   'view.groupPanels',
   'motionColors.group',
-  'templates.groupProgram',
   'templates.groupTemplates',
   'cycleForm.group',
   'templateManager.group',

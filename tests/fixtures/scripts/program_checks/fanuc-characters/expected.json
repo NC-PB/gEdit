@@ -38,7 +38,7 @@
       "check": "Brackets",
       "checkId": "brackets",
       "severity": "error",
-      "message": "#1=[#2+[#3*2.]: 1 [ is not closed"
+      "message": "#1=[#2+[#3*2.]: a [ is opened and not closed on its line"
     },
     {
       "line": 10,

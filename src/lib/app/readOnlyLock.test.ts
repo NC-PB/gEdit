@@ -1,4 +1,4 @@
-// The refusal a locked document gives a writer that is not typing (AD-23, TODO Next up 6).
+// The refusal a locked document gives a writer that is not typing (AD-23).
 
 import { describe, expect, it } from 'vitest';
 import { LOCK_REFUSAL_KEYS, lockRefusal } from './readOnlyLock';

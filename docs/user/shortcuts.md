@@ -9,7 +9,10 @@ program: **View ▸ Keyboard Shortcuts**. That dialog is generated from the comm
 themselves, so for every key gEdit assigns — everything on this page except the Editing
 table and Quick outline — it is right, and this page is stale if the two ever disagree.
 The editing keys come with the editor component: the dialog lists those commands without
-a key, and the keys work all the same.
+a key, and the keys work all the same. The commands that have no key at all are hidden at
+first, so the list is the keys; tick **Show commands without a key** to see them too. A line
+under the search box says how many are hidden (*N commands without a key are hidden.*), so a
+search that finds nothing is not mistaken for a command that does not exist.
 
 **F1** opens the command palette, which finds any command by name — including the many
 that have no shortcut at all.
@@ -28,10 +31,12 @@ On a Mac laptop the F-keys may need the `fn` key, depending on your keyboard set
 | `Cmd/Ctrl+W` | Close the tab |
 | `Cmd/Ctrl+Shift+W` | Close the window |
 
+**Reload** (read the file again from disk) is on the File tab and in the palette; it has no key.
+
 Close All, Open Recent…, Clear Recent Files, Lock Against Editing, Show Recovered Work,
 Manage Machines…, Open Machines File and the four status-bar pickers (dialect, machine,
 encoding, line ending) have no shortcut. All of them are in the palette; Open Recent and
-Clear Recent Files are also in the Home tab's Recent list, and the pickers are in the
+Clear Recent Files are also in the File tab's Recent list, and the pickers are in the
 status bar. Lock Against Editing has no key on purpose: an accidental one would look like
 a broken keyboard.
 
@@ -90,7 +95,7 @@ These come from the editor component and are the ones you already know:
 | `Shift+Alt+Down` (`Ctrl+Shift+Alt+Down` on Linux) | Duplicate the line |
 | `Cmd/Ctrl+Shift+K` | Delete the line |
 
-Upper case, lower case, folding and the zoom are buttons on the Home and View tabs.
+Upper case, lower case, folding and the zoom are buttons on the Edit and View tabs.
 
 ## Search
 
@@ -98,7 +103,7 @@ Upper case, lower case, folding and the zoom are buttons on the Home and View ta
 |---|---|
 | `Cmd/Ctrl+Shift+F` | Find All… — every hit of an address, a value or some text, in a list in the Results panel |
 
-**Replace All…** and **Find Whole Address…** have no shortcut; they are on the Home tab (*Search*)
+**Replace All…** and **Find Whole Address…** have no shortcut; they are on the Edit tab (*Search*)
 and in the palette. See [Searching](README.md#searching). `Cmd/Ctrl+F` and the replace keys in
 the Editing table are the editor's own find box, which takes a [regular expression](regex.md)
 too.
@@ -140,8 +145,9 @@ Channel…** have no key; they are on the ribbon (NC and Tools tabs) and in the 
 | `Cmd/Ctrl+F9` | Run the last script again, straight away, with the values you used last time — it does not open the parameter form |
 
 **Run Script**, **Stop**, **New Script**, **Edit Script**, **Rescan** and **Add Folder**
-are on the Tools tab and in the palette; so is each bundled script, **Program checks**,
-**Extents** and **Address arithmetic** included. **Copy to My Scripts** is in the palette only;
+are on the Scripts tab and in the palette, with your own scripts; the bundled scripts,
+**Program checks**, **Extents** and **Address arithmetic** included, are on the Tools tab
+and in the palette. **Copy to My Scripts** is in the palette only;
 **Edit Script** on a bundled script offers the same copy (*Copy and edit*). See
 [scripts.md](scripts.md).
 
@@ -152,7 +158,7 @@ None of these has a key, on purpose; each is on the Insert tab and in the palett
 
 - **Insert Template…** lists the templates of the program, favourites first, and inserts the
   one you pick. Each template also has a command of its own, *Insert: <template name>*.
-- **Program start** (Home tab, *Program*) is the first of them.
+- **Program start** (Insert tab) is the first of them.
 - **Edit Cycle…** (Insert tab, *Cycles*) changes the cycle at the cursor in a form, or inserts a
   new one.
 - **Manage Templates…** and **New Template from Selection…** (Insert tab, *Manage*; palette
@@ -164,13 +170,14 @@ None of these has a key, on purpose; each is on the Insert tab and in the palett
 
 None of these has a key; they are on the ribbon or in the palette (`F1`).
 
-- **Upper-Case Typing** (Home tab, *Typing*) switches [upper case while you type](README.md#typing-forced-upper-case-and-no-accidental-joins)
+- **Upper-Case Typing** (Edit tab, *Typing*) switches [upper case while you type](README.md#typing-forced-upper-case-and-no-accidental-joins)
   off or on for the session.
 - `Backspace` in column 1 and `Delete` at the end of a line refuse to join two blocks of text
   (the switch above does not change that); select the line break to delete it.
 - **Manage Profiles…**, **New Profile From…**, **Open**, **Import** and **Export Profile
-  File…**, **Reload Profiles** and **Test Profile on Document** (Tools tab, *Profiles*) are
-  described in [Your own profiles and code files](profiles.md#the-profiles-page).
+  File…** and **Reload Profiles** are in the palette; **Test Profile on Document** is also on
+  the Tools tab (*Profiles*). All are described in
+  [Your own profiles and code files](profiles.md#the-profiles-page).
 - **Import Machines…** and **Export Machines…** are described under
   [Moving machines to another computer](machines.md#moving-machines-to-another-computer).
 
@@ -194,4 +201,4 @@ that is the reason, and the buttons in the comparison do the same. `About gEdit`
 ## Custom shortcuts
 
 Not in this version. The keys above are fixed; being able to change them is planned for a
-later phase (Phase 4 of the roadmap).
+later version.

@@ -112,6 +112,9 @@ scenario('m6-machines-manage-1', { timeout: 420, vars: { HOME: HOME_1 } }, async
   const ctx = context(h)
   await ready(h)
   const paths = configPaths(ctx)
+  // B1 A4: the lathe's three presets are marked `verify` in the profile, so the form writes
+  // "(unconfirmed)" after their labels. The profile's own label text is what the constants hold.
+  const shown = (/** @type {string} */ label) => `${label} (${ctx.t('machines.value.unconfirmed')})`
 
   h.check('the app runs on the shared home of this pair', paths.machinesFile.startsWith(`${h.cfg.run}/machines-home/`), paths.machinesFile)
   h.check('there is no machines file yet, and nothing was invented in its place', (await machinesFile(h)) === null && (await h.disk.stat(paths.machinesFile)) === null, {
@@ -185,7 +188,7 @@ scenario('m6-machines-manage-1', { timeout: 420, vars: { HOME: HOME_1 } }, async
   )
   h.check('a machine with no name cannot be saved', /** @type {HTMLButtonElement} */ (machineAction(h, 'save')).disabled === true, machineAction(h, 'save')?.dataset.disabled)
 
-  await saveForm(h, { name: 'Lathe IS-B', numberInput: IS_B })
+  await saveForm(h, { name: 'Lathe IS-B', numberInput: shown(IS_B) })
   const afterAdd = file([record('lathe-is-b', 'Lathe IS-B', IS_B_RULES)])
   h.check('adding a machine writes machines.json, with the whole rule set of the preset it was given', sameJson(await machinesFile(h), afterAdd), {
     got: await machinesFile(h),
@@ -213,8 +216,8 @@ scenario('m6-machines-manage-1', { timeout: 420, vars: { HOME: HOME_1 } }, async
     name: /** @type {HTMLInputElement | null} */ (machineField(h, 'name')?.querySelector('input'))?.value,
   })
   const preset = /** @type {HTMLSelectElement | null} */ (machineField(h, 'numberInput')?.querySelector('select'))
-  h.check('with the preset it was duplicated from already picked', preset?.selectedOptions[0]?.textContent?.trim() === IS_B, preset?.selectedOptions[0]?.textContent?.trim())
-  await saveForm(h, { numberInput: AS_WRITTEN })
+  h.check('with the preset it was duplicated from already picked', preset?.selectedOptions[0]?.textContent?.trim() === shown(IS_B), preset?.selectedOptions[0]?.textContent?.trim())
+  await saveForm(h, { numberInput: shown(AS_WRITTEN) })
   const afterEdit = file([record('lathe-is-b', 'Lathe IS-B', IS_B_RULES), record('lathe-calc', 'Lathe calc', AS_WRITTEN_RULES)])
   h.check('an edit replaces the rules whole and keeps the record where it stood', sameJson(await machinesFile(h), afterEdit), {
     got: await machinesFile(h),

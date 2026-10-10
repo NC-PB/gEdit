@@ -104,7 +104,7 @@ describe('built-in code databases', () => {
     expect(fanuc.db.codes.find((e) => e.code === 'G96')?.group).not.toBe(spindle);
   });
 
-  // 2026-09 decision (TODO Next up 8): `pitchFeed` sits in the cycle or motion group, or on
+  // 2026-09 decision: `pitchFeed` sits in the cycle or motion group, or on
   // a modal code of a group of its own — a mode such as Fanuc's tapping mode `G63`, which is
   // in force until another code of its group (`G61`, `G62`, `G64`) replaces it. The scripts'
   // tracker reads such a mode off the groups (`FeedModeTracker.pitch_mode`); a non-modal
@@ -132,7 +132,7 @@ describe('built-in code databases', () => {
   it('marks the tapping and threading codes the plan names as pitchFeed', () => {
     const fanucPitch = fanuc.db.codes.filter((e) => e.pitchFeed).map((e) => e.code);
     // The source review (2026-09) added the variable-lead thread G34 from the control's list.
-    // 2026-09 (TODO Next up 8): the older-format rigid tapping cycles and the tapping mode.
+    // 2026-09: the older-format rigid tapping cycles and the tapping mode.
     expect(fanucPitch.sort()).toEqual(['G32', 'G33', 'G34', 'G63', 'G74', 'G84', 'G84.2', 'G84.3']);
     expect(fanuc.db.codes.find((e) => e.code === 'G76')?.pitchFeed).toBeUndefined();
 
@@ -151,7 +151,7 @@ describe('built-in code databases', () => {
     }
   });
 
-  // TODO Next up 8: the words of a macro call and of a data-setting block are no feeds.
+  // The words of a macro call and of a data-setting block are no feeds.
   it('marks the macro calls and the data-setting block as blocks whose words are data', () => {
     // M9 (WP9.2): the modal call that runs after every block, G66.1, is one of them.
     expect(fanuc.db.codes.filter((e) => e.wordsAreData).map((e) => e.code)).toEqual(['G10', 'G65', 'G66', 'G66.1']);
@@ -251,8 +251,25 @@ describe('built-in code databases', () => {
     // required. The exceptions are the optional parameters a later software version
     // appended at the end, which older controls do not know: Q395, and Q208 of cycle 205
     // (both from software 34059x-04, source review 2026-09).
+    // B1 (a7s): the optional parameters the TNC 640 cycle manual (10/2017, "new and changed
+    // cycle functions") names as added to cycles 22, 25, 251–254, 256 and 257; and the `F` of
+    // cycle 19, a word of its 19.1 sub-block, not a parameter line.
+    const LATER: Record<string, string[]> = {
+      // B1 fix NC (NC-08): ABST is a word of the 19.1 sub-block too; the manual's own
+      // contour-formula example writes cycles 22 and 23 without Q208.
+      'CYCL DEF 19': ['F', 'ABST'],
+      'CYCL DEF 22': ['Q208', 'Q401', 'Q404'],
+      'CYCL DEF 23': ['Q208'],
+      'CYCL DEF 25': ['Q18', 'Q446', 'Q447', 'Q448'],
+      'CYCL DEF 251': ['Q439'],
+      'CYCL DEF 252': ['Q439'],
+      'CYCL DEF 253': ['Q439'],
+      'CYCL DEF 254': ['Q439'],
+      'CYCL DEF 256': ['Q215', 'Q369', 'Q338', 'Q385'],
+      'CYCL DEF 257': ['Q215', 'Q369', 'Q338', 'Q385'],
+    };
     const optional = (code: string, address: string) =>
-      address === 'Q395' || (code === 'CYCL DEF 205' && address === 'Q208');
+      address === 'Q395' || (code === 'CYCL DEF 205' && address === 'Q208') || (LATER[code] ?? []).includes(address);
     for (const entry of heidenhain.db.codes.filter((e) => e.code.startsWith('CYCL DEF '))) {
       for (const param of entry.params ?? []) {
         const label = `${entry.code} ${param.address}`;
@@ -612,5 +629,156 @@ describe('the database against the rest of the app', () => {
     const text = heidenhain.db.addresses.F.description ?? '';
     expect(text).toContain('INCH');
     expect(text.toLowerCase()).toContain('degrees per minute');
+  });
+});
+
+describe('B1: the block of a two-block cycle (CodeParam.block) and the review mark', () => {
+  const g71 = (params: unknown[], extra: Record<string, unknown> = {}): unknown => ({
+    dialect: 'x',
+    version: 1,
+    codes: [{ code: 'G71', label: 'Roughing', blocks: 2, ...extra, params }],
+  });
+
+  it('keeps one declaration of an address per block, each with its own label', () => {
+    const { db, problems } = load(
+      g71([
+        { address: 'U', label: 'Depth of cut', block: 1 },
+        { address: 'U', label: 'Allowance on X', block: 2 },
+        { address: 'P', label: 'First profile block', unit: 'count', block: 2 },
+        { address: 'F', label: 'Feed' },
+      ]),
+    );
+    expect(problems).toEqual([]);
+    expect(db.codes[0].params?.map((p) => [p.address, p.label, p.block ?? null])).toEqual([
+      ['U', 'Depth of cut', 1],
+      ['U', 'Allowance on X', 2],
+      ['P', 'First profile block', 2],
+      ['F', 'Feed', null],
+    ]);
+  });
+
+  it('drops a block that is not 1 or 2, and a block on an entry that is no two-block cycle', () => {
+    const { db, problems } = load({
+      dialect: 'x',
+      version: 1,
+      codes: [
+        { code: 'G71', label: 'Roughing', blocks: 2, params: [{ address: 'U', label: 'u', block: 3 }] },
+        { code: 'G83', label: 'Drilling', params: [{ address: 'Q', label: 'q', block: 2 }] },
+      ],
+    });
+    expect(problems.map((p) => p.path)).toEqual(['codes[0].params[0].block', 'codes[1].params[0].block']);
+    expect(problems[1].message).toContain('"blocks": 2');
+    // The parameter stays, without the block it cannot have.
+    expect(db.codes.map((e) => e.params?.[0].block ?? null)).toEqual([null, null]);
+  });
+
+  it('refuses a second declaration for the same block, and one whose reading differs from the other block', () => {
+    const { db, problems } = load(
+      g71([
+        { address: 'U', label: 'Depth of cut', block: 1 },
+        { address: 'U', label: 'Again', block: 1 },
+        { address: 'R', label: 'Retract' },
+        { address: 'R', label: 'Retract of the second block', block: 2 },
+        { address: 'P', label: 'Packed', unit: 'count', block: 1 },
+        { address: 'P', label: 'Height', unit: 'increment', block: 2 },
+      ]),
+    );
+    expect(problems.map((p) => p.path)).toEqual(['codes[0].params[1]', 'codes[0].params[3]', 'codes[0].params[5].unit']);
+    expect(problems[2].message).toContain('same unit in both blocks');
+    expect(db.codes[0].params?.map((p) => p.label)).toEqual(['Depth of cut', 'Retract', 'Packed']);
+  });
+
+  it('reads review: "pending" and drops any other value', () => {
+    const { db, problems } = load({
+      dialect: 'x',
+      version: 1,
+      codes: [
+        { code: 'G29', label: 'Return', review: 'pending' },
+        { code: 'G30', label: 'Return 2', review: 'done' },
+      ],
+    });
+    expect(db.codes.map((e) => e.review ?? null)).toEqual(['pending', null]);
+    expect(problems.map((p) => p.path)).toEqual(['codes[1].review']);
+  });
+
+  it('marks every entry the B1 manual pass wrote or changed for the owner\'s review', () => {
+    const marked = (dialect: string): string[] =>
+      (BUILTIN_CODE_DB_JSON[dialect] as { codes: { code: string; review?: string }[] }).codes
+        .filter((e) => e.review === 'pending')
+        .map((e) => e.code);
+    expect(marked('fanuc')).toEqual([
+      'G5.4', 'G6.2', 'G29', 'G30.1', 'G41.2', 'G41.3', 'G41.4', 'G41.5', 'G41.6', 'G42.2', 'G42.4', 'G42.5', 'G42.6', 'G43.1', 'G92.1',
+    ]);
+    expect(marked('fanuc-lathe')).toEqual(['G50.3', 'G68.1', 'G69.1', 'G71', 'G72', 'G73', 'G74', 'G75', 'G76']);
+    expect(marked('fanuc-lathe-b')).toEqual(['G92.1']);
+    // The Okuma lathe codes (package A7-O).
+    expect(marked('okuma')).toEqual(['G20', 'G21', 'G85', 'G86', 'G93', 'G119', 'G132', 'G133', 'G313', 'M85']);
+    // The Sinumerik and Klartext codes (package A7-S).
+    expect(marked('sinumerik')).toEqual([
+      'G601', 'G602', 'G603', 'G643', 'G644', 'G645', 'CYCLE61', 'POCKET3', 'POCKET4', 'SLOT1', 'CYCLE93', 'CYCLE97',
+      'CTOL', 'OTOL', 'WAITM', 'WAITMC', 'WAITE', 'SETM', 'CLEARM', 'INIT', 'START', 'COMPSURF', 'CUT3DCC', 'CUT3DCCD',
+    ]);
+    expect(marked('heidenhain')).toEqual([
+      'VC', 'CYCL DEF 19', 'CYCL DEF 251', 'CYCL DEF 252', 'CYCL DEF 253', 'CYCL DEF 254', 'CYCL DEF 256',
+      'CYCL DEF 257', 'CYCL DEF 14', 'CYCL DEF 21', 'CYCL DEF 22', 'CYCL DEF 23', 'CYCL DEF 24', 'CYCL DEF 25',
+      'PLANE SPATIAL', 'PLANE PROJECTED', 'PLANE EULER', 'PLANE VECTOR', 'PLANE POINTS', 'PLANE RELATIV',
+      'PLANE AXIAL', 'PLANE RESET', 'M128', 'M140',
+    ]);
+  });
+});
+
+describe('B1: the words a code owns (`ownWords`, package A6)', () => {
+  it('reads the list upper case, reports what is not a word, and keeps the entry', () => {
+    const { db, problems } = load({
+      dialect: 'x',
+      version: 1,
+      codes: [
+        { code: 'M128', label: 'TCP on', ownWords: ['f'] },
+        { code: 'M140', label: 'Retract', ownWords: ['F', 7] },
+        { code: 'PLANE RESET', label: 'Reset', ownWords: 'F' },
+        { code: 'M129', label: 'TCP off' },
+      ],
+    });
+    expect(db.codes.map((e) => e.ownWords ?? null)).toEqual([['F'], ['F'], null, null]);
+    expect(problems.map((p) => p.path)).toEqual(['codes[1].ownWords[1]', 'codes[2].ownWords']);
+  });
+
+  it('carries the shipped Klartext list through the loader, where the scripts read it', () => {
+    // Without the loader member the app would drop the attribute and the scripts, which get
+    // the loaded entries, would read every one of these F words as a path feed.
+    const owning = heidenhain.db.codes.filter((e) => e.ownWords !== undefined).map((e) => e.code).sort();
+    expect(owning).toEqual([
+      'CYCL DEF 19', 'M128', 'M140', 'PLANE AXIAL', 'PLANE EULER', 'PLANE POINTS', 'PLANE PROJECTED',
+      'PLANE RELATIV', 'PLANE RESET', 'PLANE SPATIAL', 'PLANE VECTOR',
+    ]);
+    for (const code of owning) expect(lookupCode(heidenhain.db, code)?.ownWords, code).toEqual(['F']);
+    // FUNCTION TCPM's `F TCP` is a keyword, not a value: it owns nothing.
+    expect(lookupCode(heidenhain.db, 'FUNCTION TCPM')?.ownWords).toBeUndefined();
+  });
+});
+
+describe('B1 NC-06: a count that is a real number (`decimals`)', () => {
+  it('keeps decimals on a count and reports it anywhere else', () => {
+    const { db, problems } = load({
+      dialect: 'x',
+      version: 1,
+      codes: [
+        {
+          code: 'G68.2',
+          label: 'Tilted plane',
+          params: [
+            { address: 'I', label: 'Euler angle', unit: 'count', decimals: true },
+            { address: 'X', label: 'Origin', decimals: true },
+            { address: 'K', label: 'Repeat', unit: 'count', decimals: 'yes' },
+            { address: 'P', label: 'Count', unit: 'count', decimals: false },
+          ],
+        },
+      ],
+    });
+    expect(db.codes[0].params?.map((p) => p.decimals ?? null)).toEqual([true, null, null, null]);
+    expect(problems.map((p) => [p.path, p.message])).toEqual([
+      ['codes[0].params[1].decimals', 'decimals needs "unit": "count"'],
+      ['codes[0].params[2].decimals', 'decimals has to be true or false'],
+    ]);
   });
 });

@@ -1,5 +1,5 @@
-// The built-in dialect profiles (plan AD-11, AD-16). Written by the M3 prelude (P3);
-// owner from Wave A on: WP3.1, and WP6.2 for the content of the files themselves.
+// The built-in dialect profiles (plan AD-11, AD-16). Built by WP3.1, and WP6.2
+// for the content of the files themselves.
 //
 // The JSON is imported statically, so the profiles are part of the bundle and the app
 // starts with them in hand (no fetch, no fs permission). It is deliberately typed

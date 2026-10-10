@@ -4,6 +4,7 @@
 //!
 //! - [`meta`] — the `# /// gedit` TOML header and what it declares
 //! - [`discovery`] — the script roots, the id grammar, and the four path commands
+//! - `job` (Windows only) — the job object that ends what a script started
 //! - [`runner`] — spawning, the deadline, cancel, the output caps and `python_check`
 //! - [`context`] — the `GEDIT_CONTEXT` temp folder and its RAII guard
 //! - [`settings`] — the `scripts.*` keys, read from `settings.json` in Rust
@@ -26,7 +27,7 @@
 //! 4. Nothing here ever goes through a shell: the interpreter is executed directly, with
 //!    the script as an argument, so **a script name can never be read as a command line**.
 //! 5. A run has a **bounded deadline**, a cancel and capped output, its own process group
-//!    on Unix, and is killed when the app exits — a script cannot outlive the window
+//!    on Unix (a job object on Windows), and is killed when the app exits — a script cannot outlive the window
 //!    (F19).
 //!
 //! **What none of it buys.** Scripts are ordinary programs with the user's rights and
@@ -43,6 +44,8 @@
 
 pub mod context;
 pub mod discovery;
+#[cfg(windows)]
+pub mod job;
 pub mod meta;
 pub mod runner;
 pub mod settings;

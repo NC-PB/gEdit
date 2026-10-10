@@ -28,7 +28,7 @@
     {
       "line": 30,
       "severity": "warning",
-      "message": "11 CYCL DEF 251 POCKET ~: CYCL DEF 251 is not in the code database, so nobody reviewed its positions.",
+      "message": "11 CYCL DEF 275 TROCHOIDAL SLOT ~: CYCL DEF 275 is not in the code database, so nobody reviewed its positions.",
       "reason": "cycle-not-reviewed"
     },
     {

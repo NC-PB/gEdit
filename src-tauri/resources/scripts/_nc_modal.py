@@ -46,7 +46,7 @@ interpreter's state, which TypeScript mirrors; it is the scripts' reading of the
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, FrozenSet, List, Optional, Sequence, Tuple
 
 from _nc_lex import CompiledProfile, LineState, Token, continues_block, decimal_of, mask_comments, normalize_code, tokenize_line
 
@@ -259,6 +259,66 @@ def tcp_of(entry: Optional[Dict[str, Any]]) -> Optional[str]:
     return value if value in ("on", "off") else None
 
 
+# -- B1 (plan "Two-block schema"; ``CodeEntry.blocks``, ``CodeParam.block``): the two blocks
+# of a lathe roughing or threading cycle (``G71 U2. R.5`` then ``G71 P10 Q20 U.4 W.1 F.25``).
+# The TypeScript twins are ``cycleBlockOf`` and ``paramsOfBlock`` in
+# ``src/lib/core/codes/blocks.ts``, held to the same cases (``tests/fixtures/codes/blocks.json``).
+#
+# A reader that only asks how a value is read or moved needs neither: an address declared once
+# per block has the same ``unit``, ``position``, ``axis`` and ``programNumber`` in both (the
+# loader refuses a database that says otherwise), so the first declaration answers for either
+# block. Only the label differs, and a script that shows it asks for the block here.
+
+
+def _block_params(entry: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    params = entry.get("params") if isinstance(entry, dict) else None
+    return [p for p in params if isinstance(p, dict) and isinstance(p.get("address"), str) and p["address"] != ""] if isinstance(params, list) else []
+
+
+def declares_blocks(entry: Optional[Dict[str, Any]]) -> bool:
+    """The entry is a two-block cycle that says which of its parameters belongs to which block."""
+    return isinstance(entry, dict) and entry.get("blocks") == 2 and any(p.get("block") in (1, 2) for p in _block_params(entry))
+
+
+def cycle_block_of(entry: Optional[Dict[str, Any]], written: Any) -> Optional[int]:
+    """Which block of a two-block cycle a block is that writes the addresses ``written``.
+
+    ``2`` when it writes an address declared for the second block only (``P``/``Q`` of
+    ``G71``, an axis word of ``G74``, ``X``/``Z`` of ``G76``); else ``1`` when it writes an
+    address declared for the first block (or for both); else ``None``: the block writes
+    nothing the entry declares, or the entry does not say which parameter belongs where.
+    """
+    if not declares_blocks(entry):
+        return None
+    first = set()
+    second = set()
+    for param in _block_params(entry):
+        address = param["address"].upper()
+        if param.get("block") != 2:
+            first.add(address)
+        if param.get("block") != 1:
+            second.add(address)
+    wrote_first = False
+    for word in written or ():
+        address = word.upper() if isinstance(word, str) else ""
+        if address in second and address not in first:
+            return 2
+        if address in first:
+            wrote_first = True
+    return 1 if wrote_first else None
+
+
+def params_of_block(entry: Optional[Dict[str, Any]], block: Optional[int]) -> List[Dict[str, Any]]:
+    """The parameters of ``entry`` that belong to ``block`` (declared for it or for both).
+
+    With ``block`` ``None``, or an entry that does not declare blocks, every parameter.
+    """
+    params = _block_params(entry)
+    if block not in (1, 2) or not declares_blocks(entry):
+        return params
+    return [p for p in params if p.get("block") is None or p.get("block") == block]
+
+
 #: P10 (§7.4 rule 15): the tool axis a bare axis letter names -> the working plane.
 _PLANE_OF_TOOL_AXIS = {"Z": "XY", "Y": "ZX", "X": "YZ"}
 
@@ -395,6 +455,14 @@ def _joined_code(name: str, number: Optional[str], index: Dict[str, Dict[str, An
 # ---------------------------------------------------------------------------
 
 
+def _own_words_of(entry: Optional[Dict[str, Any]]) -> FrozenSet[str]:
+    """B1: the addresses a code takes as words of its own behind it (``ownWords``), upper case."""
+    words = entry.get("ownWords") if isinstance(entry, dict) else None
+    if not isinstance(words, list):
+        return frozenset()
+    return frozenset(word.strip().upper() for word in words if isinstance(word, str) and word.strip() != "")
+
+
 def _head_of(code: str) -> str:
     """The letters a normalized code starts with: ``G`` of ``G84.2``, ``CYCL`` of ``CYCL DEF 207``."""
     end = 0
@@ -469,7 +537,16 @@ class ModalInterpreter:
         with another cycle. Neither a motion code nor a cycle cancel ends it;
     12. a speed limit whose ``sets.speedLimitBound`` is ``'lower'`` (Sinumerik ``G25``)
         marks the block's speed word as no speed (``block.speedLimit``) but is not the
-        clamp: ``speedLimit`` is the **upper** limit in force (plan §7.4).
+        clamp: ``speedLimit`` is the **upper** limit in force (plan §7.4);
+    16. **a word a function owns** (B1, NC-01): a code whose entry names addresses in
+        ``ownWords`` takes the words of those addresses that stand **behind** it in its block
+        (continued lines included) as values of its own — Klartext ``M128 F800`` (the feed
+        of the compensating moves), ``M140 MB MAX F1000``, ``PLANE … MOVE F2000``,
+        ``CYCL DEF 19.1 … F1500``. Such a word is skipped as a whole: it is neither the feed
+        in force nor a return to the modal feed unit, so an ``FZ`` feed stays per tooth. A
+        word in front of the code (``L X+50 F600 M128 F900``: ``F600``) and an assignment
+        word are not owned. :meth:`owner_of` answers it per word; :class:`FeedModeTracker`
+        (scale-feed, the tool list) reads the same marks.
 
     A defined cycle never makes a block's feed word a lead (``block.pitchFeed``,
     :attr:`pitch_feed`): it takes its values from its own parameters (``Q206``, ``Q239``),
@@ -548,6 +625,16 @@ class ModalInterpreter:
         #: M12.5 (`frameEmptyCloses`): the same walk reads the sub-block number of each
         #: keyword code (`CYCL DEF 19.1` is sub-block 1 of cycle 19).
         self._has_empty_closes = any(_empty_closes_of(entry) is not None for entry in self.codes)
+        #: Rule 16: the codes that own words, by entry, and the first letters of their
+        #: written forms; a database without any (every ISO one) never walks a block for it.
+        self._owners: Dict[int, Tuple[str, FrozenSet[str]]] = {}
+        for entry in self._entries.values():
+            words = _own_words_of(entry)
+            if words:
+                self._owners[id(entry)] = (str(entry.get("code") or ""), words)
+        self._owner_heads = frozenset(
+            _head_of(key) for key, entry in self._entries.items() if id(entry) in self._owners
+        )
         self.reset()
 
     # -- the power-on state -------------------------------------------------
@@ -605,6 +692,9 @@ class ModalInterpreter:
         #: was written with, by normalized code (``CYCL DEF 19`` -> ``"1"`` for ``19.1``).
         self._block_subs: Dict[str, str] = {}
         self._modal_ambiguous: Optional[str] = None
+        #: Rule 16: the words of the line just applied that a code of its block owns, by
+        #: ``id(token)`` -> the owner's code.
+        self._owned: Dict[int, str] = {}
         # Before the power-on codes below, which are applied through `_apply_sets` and may
         # touch the block's flags.
         self._clear_block()
@@ -706,6 +796,12 @@ class ModalInterpreter:
         if self._axis_plane:
             self._apply_tool_axis(tokens)
         self._apply_modal_call(tokens)
+        if self._owners:
+            # Rule 16: only a block with an owner in force or a code that owns words is walked.
+            if self._block_owner is not None or any(self._is_owner(code) for code in codes):
+                self._mark_owned(tokens)
+            else:
+                self._owned = {}
         self._apply_words(tokens, line)
         if masked:
             self._apply_tool(masked, line)
@@ -724,6 +820,67 @@ class ModalInterpreter:
         #: Rule 12: the block's speed limits, by bound.
         self._block_upper_limit = False
         self._block_lower_limit = False
+        #: Rule 16: the last code of the block that owns words, and those addresses; it
+        #: lasts to the end of the block, continued lines included.
+        self._block_owner: Optional[Tuple[str, FrozenSet[str]]] = None
+
+    def _mark_owned(self, tokens: "Sequence[Token]") -> None:
+        """Rule 16: marks the words of the line that a code of its block owns.
+
+        Walks the line in written order: a word under an address the owner in force names is
+        owned (and is no code itself); a code whose entry owns words becomes the owner for
+        the rest of the block. The TypeScript twin is ``markOwned`` in ``core/nc/modal.ts``.
+        """
+        owned: Dict[int, str] = {}
+        owner = self._block_owner
+        heads = self._owner_heads
+        entries = self._entries
+        count = len(tokens)
+        for i, token in enumerate(tokens):
+            kind = token.kind
+            if kind == "word":
+                address = token.address or ""
+                if address == "" or is_assignment(token):
+                    continue
+                if owner is not None and address.upper() in owner[1]:
+                    owned[id(token)] = owner[0]
+                    continue
+                if _head_of(address.upper()) not in heads:
+                    continue
+                entry = entries.get(normalize_code(address + (token.value_text or "")))
+            elif kind == "call":
+                name = token.address or ""
+                if name == "" or _head_of(name.upper()) not in heads:
+                    continue
+                entry = entries.get(normalize_code(name))
+            elif kind == "keyword":
+                name = token.address or token.text
+                if _head_of(name.strip().upper()) not in heads:
+                    continue
+                number = token.value_text
+                if number is None:
+                    nxt = _next_code_token(tokens, i + 1, count)
+                    if nxt is not None and nxt.address is None and nxt.value_text is not None:
+                        number = nxt.value_text
+                joined = _joined_code(name, number, entries)
+                entry = entries.get(normalize_code(joined if joined is not None else name))
+            else:
+                continue
+            if entry is not None:
+                found = self._owners.get(id(entry))
+                if found is not None:
+                    owner = found
+        self._block_owner = owner
+        self._owned = owned
+
+    def _is_owner(self, code: str) -> bool:
+        """Rule 16: whether a written code of the block is one that owns words."""
+        entry = self._entries.get(normalize_code(code))
+        return entry is not None and id(entry) in self._owners
+
+    def owner_of(self, token: Token) -> Optional[str]:
+        """Rule 16: the code that owns ``token``, a word of the line just applied, or ``None``."""
+        return self._owned.get(id(token)) if self._owned else None
 
     def _apply_code(self, code: str, line: int) -> None:
         entry = self._entries.get(normalize_code(code))
@@ -979,8 +1136,11 @@ class ModalInterpreter:
             self._block_run = dict(self._mcall)
 
     def _positions(self, tokens: "Sequence[Token]") -> bool:
-        """Whether the line moves to a position: an axis word with a value, and no code of
-        the block that makes its axis words data (a datum shift, ``CYCL DEF 7.1 X+5``)."""
+        """Whether the line moves to a position: an axis word with a value, or a code that
+        moves around the pole (``pole: 'use'``: Klartext ``LP PR+30 PA+45``, ``CP IPA+90``,
+        whose end point is written in polar words, not axis words), and no code of the block
+        that makes its axis words data (a datum shift, ``CYCL DEF 7.1 X+5``). The pole itself
+        (``CC``, ``pole: 'set'``) moves nothing."""
         axes = self._axes
         if not axes:
             return False
@@ -990,9 +1150,12 @@ class ModalInterpreter:
                 if not is_assignment(token):
                     found = True
                     break
+        codes = _codes_in(tokens, self._entries)
         if not found:
-            return False
-        for code in _codes_in(tokens, self._entries):
+            found = any((self._entries.get(normalize_code(code)) or {}).get("pole") == "use" for code in codes)
+            if not found:
+                return False
+        for code in codes:
             if axis_words_of(self._entries.get(normalize_code(code))) == "data":
                 return False
         return True
@@ -1032,11 +1195,16 @@ class ModalInterpreter:
 
     def _apply_words(self, tokens: "Sequence[Token]", line: int) -> None:
         """The address words of the block: the feed, the speed and the clamp."""
+        owned = self._owned
         for token in tokens:
             if token.kind != "word":
                 continue
             address = (token.address or "").upper()
             if address == "":
+                continue
+            if owned and id(token) in owned:
+                # Rule 16: a function's own word (`M128 F800`) is skipped as a whole: no
+                # feed in force and no return to the modal feed unit either.
                 continue
             main = names_main_spindle(token, self._speed_address, self._main_spindle)
             if token.index is not None and not main:
@@ -1089,13 +1257,14 @@ class ModalInterpreter:
         if pattern is not None and (is_tool or self._tool_from_last):
             match = pattern.search(masked)
             if match is not None:
-                # `groupdict` rather than `group('tool')`: a profile whose `toolCall.tool`
-                # has no named group is legal (the whole match is then the tool).
+                # B1: no fallback to the whole match. A `tool` group that took no part in the
+                # match is one the pattern made optional (an axis or an `S` alone can still be
+                # read), and the whole match would turn "no tool" into a garbage station, as
+                # it did in the program map and the tool list before. The validator requires
+                # the named group, so `groupdict` only guards a hand-made compiled profile.
                 station = match.groupdict().get("tool")
-                written = match.group(0).strip()
-                if station is None or station.strip() == "":
-                    station = written
-                found = {"station": station.strip(), "written": written, "line": line}
+                if station is not None and station.strip() != "":
+                    found = {"station": station.strip(), "written": match.group(0).strip(), "line": line}
         if found is not None:
             self._last_tool = found
         if not is_tool:
@@ -1362,6 +1531,10 @@ class FeedModeTracker:
       (``CodeEntry.wordsAreData``: ``G65``, ``G66``, ``G10``), or ``None``.
     * ``written`` — ``(entry, token kind)`` for every code of the database the line just
       applied wrote, in written order (``'word'``, ``'call'`` or ``'keyword'``).
+    * :meth:`own_word_of` — B1: the code a word of the line just applied belongs to, when a
+      code of its block names the word's address in ``ownWords`` and stands in front of it
+      (Klartext ``M128 F800``: the ``F`` is the feed of the compensating moves, not the path
+      feed; ``L X+10 F500 M128 F800`` keeps ``F500`` a path feed).
 
     **M6: this is a wrapper.** The rules live in :class:`ModalInterpreter` and come out of
     the code database (plan AD-19), so a lathe in G-code system A — where ``G98`` / ``G99``
@@ -1407,6 +1580,11 @@ class FeedModeTracker:
         # word under a letter some code of the database starts with can be a code, and a
         # written code is normalized once.
         self._heads = frozenset(_head_of(key) for key in self._entries)
+        #: B1: whether any entry names words of its own (``ownWords``); without one the
+        #: walk of a line asks nothing more than it did. Which words are owned is the
+        #: interpreter's answer (its rule 16), so scale-feed, the tool list and the modal
+        #: state read one rule.
+        self._own_words = bool(self._interp._owners)
         self._memo: Dict[str, Optional[Dict[str, Any]]] = {}
         #: group -> canonical code -> entry, for the modes `_mode_with` looks for.
         self._mode_groups: Dict[str, Dict[str, Dict[str, Any]]] = {}
@@ -1450,13 +1628,32 @@ class FeedModeTracker:
         self._memo[code] = found
         return found
 
+    def own_word_of(self, token: Token) -> Optional[str]:
+        """B1: the code ``token`` (a word of the line :meth:`update` just applied) belongs to.
+
+        A code whose entry names addresses in ``ownWords`` takes the words of those
+        addresses that stand **behind** it in its block as values of its own: Klartext
+        ``M128 F800`` (the feed of the compensating moves), ``M140 MB MAX F1000`` (the feed of
+        the retract), ``PLANE SPATIAL … MOVE F2000`` and ``CYCL DEF 19.1 … F1500`` (the feed
+        of the tilting move). Such a word is no path feed: scale-feed leaves it and the tool
+        list does not count it. A word in front of the code keeps its own meaning
+        (``L X+10 F500 M128 F800``: ``F500`` is the path feed). ``None`` for any other word.
+        """
+        return self._interp.owner_of(token)
+
     def _written(self, tokens: Sequence[Token]) -> List[Tuple[Dict[str, Any], str]]:
-        """The entries of the codes a line writes, with the token kind (:func:`_written_codes`)."""
+        """The entries of the codes a line writes, with the token kind (:func:`_written_codes`).
+
+        B1: a word a code of the block owns (:meth:`own_word_of`) is no code of its own.
+        """
         out: List[Tuple[Dict[str, Any], str]] = []
+        owned = self._interp._owned if self._own_words else None
         for i, token in enumerate(tokens):
             kind = token.kind
             if kind == "word":
                 address = token.address
+                if owned and id(token) in owned:
+                    continue
                 if not address or address.upper() not in self._heads or is_assignment(token):
                     continue
                 entry = self._lookup(address + (token.value_text or ""))

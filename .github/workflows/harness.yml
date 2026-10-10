@@ -1,8 +1,8 @@
 # The runtime harness (tests/runtime) on a GitHub-hosted macOS runner: the cumulative suite
-# m0..m12, rp (M12.5), m13 (M13, with the Phase 2 exit criteria), p3a (P3a, Phase 3) and p3b (P3b), 133 scenarios that drive the real app
+# m0..m12, rp (M12.5), m13 (M13, with the Phase 2 exit criteria), p3a (P3a, Phase 3), p3b (P3b) and b1 (the bug-fix round B1), 149 scenarios that drive the real app
 # with native key and mouse events.
 #
-# Why not on every pull request: the job takes about 15 minutes of a macOS runner (the build
+# Why not on every pull request: the job takes about 40 minutes of a macOS runner (the build
 # of the patched app alone is about two), it owns the runner's one screen for that time, and
 # macOS minutes are the scarce ones. It runs on every push to main (so a merge that breaks a
 # window, dialog or file behaviour shows up within the hour) and by hand from the Actions
@@ -73,9 +73,9 @@ jobs:
           tests/runtime/sync.sh 2>&1 | tee "$RUNNER_TEMP/logs/sync.log"
 
       # Exits non-zero on a FAIL or a BLOCKED; a pass on the retry is FLAKY and does not.
-      - name: Suite m0..m12, rp, m13, p3a and p3b
+      - name: Suite m0..m12, rp, m13, p3a, p3b and b1
         run: |
-          tests/runtime/suite.sh tests/runtime/suites/{m{0,1,2,3,4,5,6,7,8,9,10,11,12},rp,m13,p3a,p3b}.txt 2>&1 | tee "$RUNNER_TEMP/logs/suite.log"
+          tests/runtime/suite.sh tests/runtime/suites/{m{0,1,2,3,4,5,6,7,8,9,10,11,12},rp,m13,p3a,p3b,b1}.txt 2>&1 | tee "$RUNNER_TEMP/logs/suite.log"
           exit "${PIPESTATUS[0]}"
         shell: bash
 

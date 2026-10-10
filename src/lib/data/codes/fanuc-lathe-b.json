@@ -2,6 +2,7 @@
   "dialect": "fanuc-lathe-b",
   "version": 1,
   "extends": "fanuc-lathe",
+  "remove": ["G50.3"],
   "codes": [
     {
       "code": "G33",
@@ -147,6 +148,15 @@
       "shift": true,
       "label": "Coordinate set, top spindle speed",
       "description": "Sets the coordinate system without moving. With an S word it gives the highest spindle speed the control may use for constant surface speed; write it in a block of its own in front of G96. G-code system A uses G50 for this and reads G92 as the single-pass threading cycle, whose F is the thread lead — so gEdit will not scale the F of such a block here either: a program posted for system A and opened with a system-B machine would otherwise have its thread leads multiplied in silence."
+    },
+    {
+      "code": "G92.1",
+      "group": "nonmodal",
+      "axisWords": "data",
+      "shift": true,
+      "review": "pending",
+      "label": "Work coordinate system preset",
+      "description": "Puts the work coordinate system back where its work offset says, after a manual move or a shift has displaced it. The block names the axes to reset, each with 0; an axis it does not name keeps its coordinates. This is the G-code system B spelling; system A writes G50.3."
     },
     {
       "code": "G94",

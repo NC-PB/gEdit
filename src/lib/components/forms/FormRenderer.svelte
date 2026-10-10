@@ -1,9 +1,8 @@
 <!--
   The one form engine (plan §5 WP2.2, §7.5). Owner: WP2.2.
 
-  Props are unchanged from the M2 prelude's stub, so WP2.7 (the settings dialog) needs no
-  edit. One control per `FieldType`, the native pickers behind `file` and `folder`,
-  checkboxes over `choices` for `address-list`, and help text plus the error next to each
+  The props are the ones WP2.7 (the settings dialog) relies on. One control per `FieldType`, the native
+  pickers behind `file` and `folder`, checkboxes over `choices` for `address-list`, and help text plus the error next to each
   field. Every field is wrapped in a `form-field` with `data-field` and, while it fails,
   `data-error` carrying the message **key** (§7.9) — a stable name for a scenario.
 

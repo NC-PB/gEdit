@@ -255,6 +255,9 @@ class _LexSpec:
     declare_after: frozenset = frozenset()
     #: M12.5 ``syntax.plainTextRun``; 0 when the profile does not set it.
     plain_text_run: int = 0
+    #: B2: the profile's whole-line fast path (:class:`_FastLine`), or ``None`` when the
+    #: profile has a rule the fast path cannot prove it leaves alone.
+    fast: Optional[Any] = None
 
 
 @dataclass
@@ -669,7 +672,7 @@ def _build_spec(cp: CompiledProfile) -> _LexSpec:
     call_pattern = cp.patterns.get("call_targets")
     plain_text_run = syntax.get("plainTextRun")
 
-    return _LexSpec(
+    spec = _LexSpec(
         packed=syntax.get("wordSeparatorRequired") is not True,
         case_sensitive=case_sensitive,
         comments=comments,
@@ -734,6 +737,8 @@ def _build_spec(cp: CompiledProfile) -> _LexSpec:
             else 0
         ),
     )
+    spec.fast = _build_fast_line(spec, cp)
+    return spec
 
 
 def _canonical_keywords(value: Any) -> frozenset:
@@ -800,6 +805,8 @@ def _match_literal(line: str, p: int, literal: str, case_sensitive: bool) -> boo
     """Compares ``literal`` against the line at ``p``, honouring the profile's case rule."""
     if p + len(literal) > len(line):
         return False
+    if line.startswith(literal, p):
+        return True
     for i, want in enumerate(literal):
         a = ord(line[p + i])
         b = ord(want)
@@ -1121,7 +1128,11 @@ def _arguments_end_at(line: str, p: int, limit: int, spec: _LexSpec) -> int:
 
 
 def _expression_end_at(line: str, p: int, limit: int) -> int:
-    """Where the bracket expression that starts at ``p`` ends (exclusive); brackets may nest."""
+    """Where the bracket expression that starts at ``p`` ends (exclusive); brackets may nest.
+
+    An unclosed ``[`` runs to ``limit``, comment markers and all (B1); ``mask_comments`` reads
+    the same span as code, and ``program_checks.py`` reports the bracket.
+    """
     depth = 0
     for i in range(p, limit):
         code = ord(line[i])
@@ -1284,12 +1295,13 @@ class _BlockNumberScan:
     prefix: str
 
 
+_DIGITS = re.compile("[0-9]*")
+
+
 def _scan_block_number(line: str, p: int, limit: int, spec: _LexSpec) -> Optional[_BlockNumberScan]:
     """The block number at ``p``, when the profile's rule finds one there."""
     if spec.block_number_mode == "leading-integer":
-        i = p
-        while i < limit and _is_digit(ord(line[i])):
-            i += 1
+        i = _DIGITS.match(line, p, limit).end()
         if i == p:
             return None
         if i < limit:
@@ -1380,6 +1392,10 @@ def _label_span_of(line: str, spec: _LexSpec) -> Optional[_LabelSpan]:
     name = match.group("name")
     if not isinstance(name, str) or name == "":
         return None
+    # A jump keyword (``syntax.labelAfter``) is never a label: ``GOTOF:20`` is the jump
+    # ``GOTOF`` to the main block ``:20`` written without the blank, as ``GOTOF :20`` is (B1).
+    if spec.label_after and (name if spec.case_sensitive else name.upper()) in spec.label_after:
+        return None
     return _LabelSpan(start=match.start("name"), end=match.end(), name=name)
 
 
@@ -1468,8 +1484,10 @@ def _match_program_marker(line: str, p: int, limit: int, spec: _LexSpec) -> int:
 
     if _is_letter(code):
         for regex in spec.program_start:
-            match = regex.search(line)
-            if match is None or match.start() != 0:
+            # `match` finds what `search` finds when that starts at 0, and that is the only
+            # match this wants; `search` read the rest of the line to look for another.
+            match = regex.match(line)
+            if match is None:
                 continue
             end = len(match.group(0))
             start = 0
@@ -1577,7 +1595,8 @@ def _describe_word(token: Token, address: str, spec: _LexSpec, value: Optional[_
 
     The incremental prefix is only taken off a coordinate word — one or two letters behind
     the prefix and a value behind those (``IX+10``, ``IPA+360``) — so a program name such
-    as ``INCHJOB`` keeps all of its letters.
+    as ``INCHJOB`` keeps all of its letters, and an address with a digit behind its first
+    letter (``I2+5``, B1) keeps its ``I``.
     """
     name = address if spec.case_sensitive else address.upper()
     if (
@@ -1585,6 +1604,7 @@ def _describe_word(token: Token, address: str, spec: _LexSpec, value: Optional[_
         and value is not None
         and 2 <= len(name) <= 3
         and _to_upper(ord(name[0])) == spec.incremental
+        and _is_letter(ord(name[1]))
     ):
         name = name[1:]
         token.incremental = True
@@ -1607,6 +1627,341 @@ def _name_alone_in_block(tokens: List[Token], line: str, end: int, limit: int, s
             return False
     q = _skip_space(line, end, limit)
     return q >= limit or (bool(spec.comments) and _comment_at(line, q, spec) is not None)
+
+
+# ---------------------------------------------------------------------------
+# B2: the whole-line fast path
+# ---------------------------------------------------------------------------
+#
+# A script tokenizes every line of the program, and the commonest block is a run of
+# ordinary words with plain numbers (``N10 G1 X10.5 Y-3. F500``), now and then with a
+# comment. The character loop of ``tokenize_line`` asks some twenty questions at every
+# token (comment? string? keyword? variable? assignment? name? ...), and for that block the
+# answer to all of them is "no". The fast path proves the "no" for the whole line at once
+# and then cuts the line into tokens with two regular expressions instead.
+#
+# It is a *late performance shortcut*: it must give exactly the tokens the character loop
+# gives. So it only ever takes a line when it can show that no rule of the loop but the
+# plain word rule (and the comment rule) applies anywhere in it, and falls back to the loop
+# on anything else:
+#
+# * the whole rest of the block is made of nothing but ASCII letters, digits, ``+ - .``,
+#   blanks and tabs in the exact shape of a plain word (packed dialects) or a plain chunk
+#   (dialects that separate words), and comments of the profile's one comment kind -- the
+#   regular expression ``whole`` checks that;
+# * no string quote, program-name lead, symbol address or decimal comma of the profile is
+#   among those characters, and every other character the loop reacts to (``( ) [ ] = :
+#   # " ;`` ...) is outside them or opens a comment, so none of those rules can start
+#   outside a comment;
+# * the patterns that are asked at a position (``variables``, ``systemVariables``,
+#   ``names``) find nothing that starts outside a comment (a search that finds nothing
+#   proves that a match at one position finds nothing), and the exponent marker is absent;
+# * a letter whose keywords could match in front of a digit is kept out of the shape, and
+#   so is a word where words are separated that is a keyword of several parts.
+#
+# ``tests/python/test_lex_fast_path.py`` counts the calls the loop makes and fuzzes the
+# fast path against the loop (``_FAST_PATH = False``) on every built-in profile.
+
+#: Tests set this to ``False`` to read lines with the character loop only.
+_FAST_PATH = True
+
+#: The characters of a line that is trimmed off a comment without an end marker.
+_BLANKS = " \t\x0b\x0c\xa0"
+
+
+def _number_body(point: str) -> str:
+    """The regular expression of a plain number: ``12``, ``12.``, ``12.5``, ``.5``.
+
+    ``point`` is the class of the characters that may stand for the decimal point.
+    """
+    return "(?:[0-9]+(?:%s[0-9]*)?|%s[0-9]+)" % (point, point)
+
+
+#: What the fast path may contain; a comment marker that starts with one of these rules
+#: the profile out (upper-case codes, like ``_CommentMarker.code``).
+_FAST_ALPHABET = frozenset(
+    list(range(0x41, 0x5B)) + list(range(_ZERO, _NINE + 1)) + [_PLUS, _MINUS, 0x2E, _SPACE, _TAB]
+)
+
+
+class _FastLine:
+    """The compiled fast path of one profile (``_LexSpec.fast``)."""
+
+    __slots__ = (
+        "packed",
+        "case_sensitive",
+        "whole",
+        "unit",
+        "guards",
+        "keywords",
+        "fallback",
+        "comment_lead",
+        "comment_spans",
+        "comment_end",
+    )
+
+    def __init__(self, packed, case_sensitive, whole, unit, guards, keywords, fallback, comment_lead, comment_spans, comment_end):
+        self.packed = packed
+        self.case_sensitive = case_sensitive
+        #: ``fullmatch`` of the shape of the rest of the block.
+        self.whole = whole
+        #: ``finditer`` of the tokens inside a block that has the shape.
+        self.unit = unit
+        #: ``search`` of the patterns that must find nothing outside a comment.
+        self.guards = guards
+        #: Dialects that separate words: the single-part keywords by text, and the texts
+        #: (keywords of several parts, targets, declarations) that make the line fall back.
+        self.keywords = keywords
+        self.fallback = fallback
+        #: The first character of the profile's comment marker, or ``None`` when the shape
+        #: has no comment (a profile with several comment kinds, or a comment that starts
+        #: with something a word is made of).
+        self.comment_lead = comment_lead
+        #: ``finditer`` of the comments of a block that has the shape.
+        self.comment_spans = comment_spans
+        #: True when a comment runs to the end of the line (``;``), blanks trimmed.
+        self.comment_end = comment_end
+
+
+def _build_fast_line(spec: _LexSpec, cp: "CompiledProfile") -> Optional[_FastLine]:
+    """The fast path of this profile, or ``None`` when it cannot prove it leaves a rule alone."""
+    # The decimal point is `.`, or `.` and one more character (the Klartext decimal comma).
+    alt = spec.decimal_point_alt
+    if spec.decimal_point != 0x2E or alt in _FAST_ALPHABET:
+        return None
+    point = "[.%s]" % re.escape(chr(alt)) if alt != _NO_CHAR else "\\."
+    alphabet = _FAST_ALPHABET if alt == _NO_CHAR else _FAST_ALPHABET | {alt}
+    if spec.program_names is not None and (spec.program_name_lead == _NO_CHAR or spec.program_name_lead in alphabet):
+        return None
+    if any(_to_upper(code) in alphabet for code in spec.symbol_addresses):
+        return None
+    if spec.sequence_names and not all(
+        len(prefix) == 1 and _is_letter(ord(prefix)) for prefix in spec.block_number_prefixes
+    ):
+        return None
+
+    # Comments. One kind of comment, whose marker is one character and whose end is one
+    # character or the end of the line, can stand anywhere in the shape; the character loop
+    # reads it before anything else, so what is inside it does not matter. A profile with
+    # more comment kinds, or a marker made of word characters, has no comments in the shape
+    # (and no fast path at all when a marker could start with a word character).
+    lead_char = None
+    spans = None
+    comment_end = False
+    comment = "((?!))"
+    if any(marker.code in alphabet for marker in spec.comments):
+        return None
+    if len(spec.comments) == 1 and len(spec.comments[0].start) == 1:
+        marker = spec.comments[0]
+        end = marker.end
+        end_ok = end is None or (len(end) == 1 and ord(end) not in alphabet and _to_upper(ord(end)) not in alphabet)
+        # With `calls` a `(` behind an identifier is a call, not a comment; with colon words
+        # a `:` behind a name makes a word.
+        clash = (spec.calls and marker.start == "(") or (bool(spec.colon_words) and marker.start == ":")
+        if end_ok and not clash and ord(marker.start) not in alphabet:
+            lead_char = marker.start
+            lead = re.escape(lead_char)
+            if end is None:
+                comment = "(%s.*)" % lead
+                comment_end = True
+                spans = re.compile(lead + ".*", re.DOTALL).finditer
+            else:
+                stop = re.escape(end)
+                comment = "(%s[^%s]*%s?)" % (lead, stop, stop)
+                spans = re.compile("%s[^%s]*%s?" % (lead, stop, stop), re.DOTALL).finditer
+    elif spec.comments:
+        # Several kinds of comment: no comment in the shape; any of their leads in a line
+        # is outside the alphabet, so the shape rejects such a line by itself.
+        pass
+
+    # A letter that starts a keyword which could match in front of a digit, a sign or a
+    # point is not a plain address on the fast path. A keyword of two or more letters
+    # needs a letter behind its first one; a keyword of one letter needs a blank behind it
+    # where words are separated.
+    glued = set()
+    for code, group in spec.keywords.items():
+        for entry in group:
+            first = entry.parts[0]
+            if len(first) == 1:
+                if spec.packed and len(entry.parts) == 1:
+                    glued.add(code)
+            elif not _is_letter(ord(first[1])):
+                glued.add(code)
+    letters = "".join(chr(c) + chr(c + 32) for c in range(0x41, 0x5B) if c not in glued)
+    if letters == "":
+        return None
+
+    guards = [
+        pattern.search
+        for pattern in (spec.variables, spec.system_variables, spec.names)
+        if pattern is not None
+    ]
+    if spec.exponent != "":
+        guards.append(re.compile(re.escape(spec.exponent), cp.flags).search)
+
+    number = _number_body(point)
+    # The comment as one piece of the shape (it is never empty: it has its marker).
+    shape_comment = "|" + comment if lead_char is not None else ""
+    keywords: Dict[str, _KeywordEntry] = {}
+    fallback = set()
+    if spec.packed:
+        whole = re.compile(
+            "[ \\t]*(?:(?:[%s][ \\t]*[+-]?%s%s)[ \\t]*)*" % (letters, number, shape_comment), re.DOTALL
+        )
+        unit = re.compile(
+            "([ \\t]+)|%s|([A-Za-z])[ \\t]*(([+-]?)([0-9]*)(?:(%s)([0-9]*))?)" % (comment, point), re.DOTALL
+        )
+    else:
+        # A chunk ends at a blank or the end of the block; a comment must not touch it, or
+        # a keyword of one letter (`L;`) would not be the keyword the loop reads.
+        chunk = "(?:[%s][+-]?%s|[A-Za-z]+|%s)" % (letters, number, number)
+        whole = re.compile("[ \\t]*(?:(?:%s(?:[ \\t]+|\\Z))%s)*" % (chunk, shape_comment), re.DOTALL)
+        unit = re.compile(
+            "([ \\t]+)|%s|([A-Za-z]+)(?=[ \\t]|\\Z)|(?=[^ \\t])([A-Za-z]?)(([+-]?)([0-9]*)(?:(%s)([0-9]*))?)"
+            % (comment, point),
+            re.DOTALL,
+        )
+        for group in spec.keywords.values():
+            for entry in group:
+                key = entry.parts[0]
+                if (
+                    len(entry.parts) > 1
+                    or entry.canonical in spec.call_after
+                    or entry.canonical in spec.label_after
+                    or entry.canonical in spec.declare_after
+                ):
+                    fallback.add(key)
+                elif key not in keywords:
+                    keywords[key] = entry
+    return _FastLine(
+        spec.packed,
+        spec.case_sensitive,
+        whole.fullmatch,
+        unit,
+        tuple(guards),
+        keywords,
+        frozenset(fallback),
+        lead_char,
+        spans,
+        comment_end,
+    )
+
+
+def _tokenize_fast(line: str, p: int, limit: int, head: bool, tokens: List[Token], spec: _LexSpec) -> bool:
+    """Reads the block from ``p`` to ``limit`` by the fast path; ``False`` (and no token
+    added) when the line is not of the shape, and the character loop has to read it.
+
+    ``head`` is ``at_head`` of the loop: the first token of a block that carries no block
+    number may be a program number, which only ``_match_program_marker`` can tell.
+    """
+    fast = spec.fast
+    if fast.whole(line, p, limit) is None:
+        return False
+
+    # The comments of the block, and so where a pattern may match without it counting.
+    spans = None
+    lead = fast.comment_lead
+    if lead is not None and line.find(lead, p) >= 0:
+        spans = [m.span() for m in fast.comment_spans(line, p)]
+    for search in fast.guards:
+        at = p
+        while True:
+            found = search(line, at)
+            if found is None:
+                break
+            if spans is None:
+                return False
+            start = found.start()
+            for a, b in spans:
+                if a <= start < b:
+                    at = b
+                    break
+            else:
+                return False
+
+    # A comment is read before the program number rule, so only a block that starts with
+    # something else can start with a program number.
+    if head and (not spans or spans[0][0] != p) and _match_program_marker(line, p, limit, spec) > p:
+        return False
+
+    append = tokens.append
+    cs = fast.case_sensitive
+    if fast.packed:
+        for m in fast.unit.finditer(line, p, limit):
+            ws, comment, letter, text, sign, int_part, point, frac = m.groups()
+            start, end = m.span()
+            if ws is not None:
+                append(Token("whitespace", start, end, ws))
+            elif comment is not None:
+                if fast.comment_end:
+                    stop = start + len(comment.rstrip(_BLANKS))
+                    append(Token("comment", start, stop, line[start:stop]))
+                    if stop < end:
+                        append(Token("whitespace", stop, end, line[stop:end]))
+                else:
+                    append(Token("comment", start, end, comment))
+            else:
+                has_point = point is not None
+                append(
+                    Token(
+                        "word",
+                        start,
+                        end,
+                        line[start:end],
+                        letter if cs else letter.upper(),
+                        text,
+                        NumericLiteral(text, sign, int_part, frac if has_point else None, has_point),
+                    )
+                )
+        return True
+
+    keywords = fast.keywords
+    fallback = fast.fallback
+    first = len(tokens)
+    for m in fast.unit.finditer(line, p, limit):
+        ws, comment, alpha, letter, text, sign, int_part, point, frac = m.groups()
+        start, end = m.span()
+        if ws is not None:
+            append(Token("whitespace", start, end, ws))
+        elif comment is not None:
+            if fast.comment_end:
+                stop = start + len(comment.rstrip(_BLANKS))
+                append(Token("comment", start, stop, line[start:stop]))
+                if stop < end:
+                    append(Token("whitespace", stop, end, line[stop:end]))
+            else:
+                append(Token("comment", start, end, comment))
+        elif alpha is not None:
+            key = alpha if cs else alpha.upper()
+            if key in fallback:
+                del tokens[first:]
+                return False
+            entry = keywords.get(key)
+            if entry is not None:
+                append(Token("keyword", start, end, alpha, entry.canonical))
+            else:
+                append(Token("word", start, end, alpha, key))
+        else:
+            has_point = point is not None
+            append(
+                Token(
+                    "word",
+                    start,
+                    end,
+                    line[start:end],
+                    (letter if cs else letter.upper()) if letter != "" else None,
+                    text,
+                    NumericLiteral(text, sign, int_part, frac if has_point else None, has_point),
+                )
+            )
+    return True
+
+
+def _push_label(tokens: List[Token], line: str, limit: int, spec: _LexSpec, start: int, end: int, name: str) -> int:
+    """Pushes a label and the whitespace behind it, and returns the new position."""
+    token = _push(tokens, "label", line, start, end)
+    token.address = name if spec.case_sensitive else name.upper()
+    return _push_space(tokens, line, end, limit)
 
 
 def tokenize_line(
@@ -1691,6 +2046,12 @@ def tokenize_line(
     (free text outside a comment is one ``unknown`` token) and ``tapeMarker`` (``false``: no
     lone ``%`` tape marker); and a sequence name that is exactly a keyword (``NOEX``) is the
     keyword.
+
+    B1 B2 adds a shortcut that changes no token: the commonest block (plain words with plain
+    numbers, with or without a comment) is cut by two regular expressions instead of being
+    read character by character, after a check that none of the other rules can apply to it
+    (``_tokenize_fast``; the comment above ``_FastLine`` says what it proves). Any other
+    block takes the loop below.
     """
     spec = _lex_spec(cp)
     tokens: List[Token] = []
@@ -1715,6 +2076,74 @@ def tokenize_line(
     p = _push_space(tokens, line, 0, limit)
     # A line that continues the one above carries no block number and no program marker.
     at_head = not (prev_state is not None and prev_state.continuation is True)
+
+    # A file header is not an NC block: `$PART.MIN%` and `%_N_PART_MPF` are one marker, so
+    # the `$` in front of it is not a hexadecimal constant and the `%` not a tape marker.
+    if at_head and spec.header is not None and p == 0:
+        match = spec.header.match(line)
+        if match is not None and match.end() > 0:
+            end = min(match.end(), limit)
+            if end > 0:
+                _push(tokens, "programMarker", line, 0, end)
+                p = _push_space(tokens, line, end, limit)
+                at_head = False
+
+    if at_head:
+        if spec.skip is not None and spec.skip.before:
+            p = _push_skips(tokens, line, p, limit, spec)
+        # A label may start with the block-number prefix (`NEXT_PART:`), so it is read
+        # before the block number, and once more behind one, because a block may carry both.
+        label = _label_span_of(line, spec) if spec.labels is not None else None
+        if label is not None and label.start == p:
+            p = _push_label(tokens, line, limit, spec, label.start, label.end, label.name)
+            at_head = False
+        else:
+            named = _scan_sequence_name(line, p, limit, spec) if sequence_names else None
+            block = None if named is not None else _scan_block_number(line, p, limit, spec)
+            if named is not None:
+                p = _push_label(tokens, line, limit, spec, named.start, named.end, line[named.name_start : named.end])
+                at_head = False
+            elif block is not None:
+                token = _push(tokens, "blockNumber", line, block.start, block.end)
+                digits = line[block.digits_start : block.end]
+                if block.prefix != "":
+                    token.address = block.prefix if spec.case_sensitive else block.prefix.upper()
+                token.value_text = digits
+                # Digits only (`_scan_block_number`), so this is what `parse_number` answers.
+                token.value = NumericLiteral(digits, "", digits, None, False)
+                at_head = False
+                p = _push_space(tokens, line, block.end, limit)
+            if named is not None or block is not None:
+                if spec.skip is not None and spec.skip.after:
+                    p = _push_skips(tokens, line, p, limit, spec)
+                if label is not None and label.start == p:
+                    p = _push_label(tokens, line, limit, spec, label.start, label.end, label.name)
+
+    # A structure block (`12 * - ROUGHING`) is a heading; its text is read as a comment.
+    if spec.section_heading is not None and p < limit and ord(line[p]) == _STAR and spec.section_heading.search(line):
+        end = limit
+        while end > p and _is_space(ord(line[end - 1])):
+            end -= 1
+        _push(tokens, "comment", line, p, end)
+        p = end
+
+    # M12.5 `syntax.freeText`: tried once, where the block starts. The line is read up to
+    # the `text` group with the group's start as its limit, so no token can run into the
+    # text; the group is one `text` token, and the rest is read as usual behind it.
+    full_limit = limit
+    text: Optional[Tuple[int, int]] = None
+    if spec.free_text and p < limit:
+        text = _free_text_at(line, p, limit, spec)
+    if text is not None:
+        limit = text[0]
+
+    # `DEF INT COUNTER` (M12.5 `syntax.declareAfter`): set by the keyword that opens the block.
+    declaring = False
+
+    # B2: the commonest block (plain words, plain numbers) is cut by two regular expressions.
+    if _FAST_PATH and text is None and continuation_start < 0 and p < limit and spec.fast is not None:
+        if _tokenize_fast(line, p, limit, at_head, tokens, spec):
+            return tokens, LineState()
 
     # `_chunk_end_at` scans forward to the end of the chunk, so asking it once per
     # character makes a long unbroken run quadratic. The chunk end only changes when `p`
@@ -1741,74 +2170,6 @@ def tokenize_line(
             run[0] = _identifier_end_at(line, frm, limit)
             run[1] = _skip_space(line, run[0], limit)
         return run[0]
-
-    def push_label(start: int, end: int, name: str) -> int:
-        """Pushes a label and the whitespace behind it, and returns the new position."""
-        token = _push(tokens, "label", line, start, end)
-        token.address = name if spec.case_sensitive else name.upper()
-        return _push_space(tokens, line, end, limit)
-
-    # A file header is not an NC block: `$PART.MIN%` and `%_N_PART_MPF` are one marker, so
-    # the `$` in front of it is not a hexadecimal constant and the `%` not a tape marker.
-    if at_head and spec.header is not None and p == 0:
-        match = spec.header.match(line)
-        if match is not None and match.end() > 0:
-            end = min(match.end(), limit)
-            if end > 0:
-                _push(tokens, "programMarker", line, 0, end)
-                p = _push_space(tokens, line, end, limit)
-                at_head = False
-
-    if at_head:
-        if spec.skip is not None and spec.skip.before:
-            p = _push_skips(tokens, line, p, limit, spec)
-        # A label may start with the block-number prefix (`NEXT_PART:`), so it is read
-        # before the block number, and once more behind one, because a block may carry both.
-        label = _label_span_of(line, spec) if spec.labels is not None else None
-        if label is not None and label.start == p:
-            p = push_label(label.start, label.end, label.name)
-            at_head = False
-        else:
-            named = _scan_sequence_name(line, p, limit, spec) if sequence_names else None
-            block = None if named is not None else _scan_block_number(line, p, limit, spec)
-            if named is not None:
-                p = push_label(named.start, named.end, line[named.name_start : named.end])
-                at_head = False
-            elif block is not None:
-                token = _push(tokens, "blockNumber", line, block.start, block.end)
-                digits = line[block.digits_start : block.end]
-                if block.prefix != "":
-                    token.address = block.prefix if spec.case_sensitive else block.prefix.upper()
-                token.value_text = digits
-                token.value = parse_number(digits)
-                at_head = False
-                p = _push_space(tokens, line, block.end, limit)
-            if named is not None or block is not None:
-                if spec.skip is not None and spec.skip.after:
-                    p = _push_skips(tokens, line, p, limit, spec)
-                if label is not None and label.start == p:
-                    p = push_label(label.start, label.end, label.name)
-
-    # A structure block (`12 * - ROUGHING`) is a heading; its text is read as a comment.
-    if spec.section_heading is not None and p < limit and ord(line[p]) == _STAR and spec.section_heading.search(line):
-        end = limit
-        while end > p and _is_space(ord(line[end - 1])):
-            end -= 1
-        _push(tokens, "comment", line, p, end)
-        p = end
-
-    # M12.5 `syntax.freeText`: tried once, where the block starts. The line is read up to
-    # the `text` group with the group's start as its limit, so no token can run into the
-    # text; the group is one `text` token, and the rest is read as usual behind it.
-    full_limit = limit
-    text: Optional[Tuple[int, int]] = None
-    if spec.free_text and p < limit:
-        text = _free_text_at(line, p, limit, spec)
-    if text is not None:
-        limit = text[0]
-
-    # `DEF INT COUNTER` (M12.5 `syntax.declareAfter`): set by the keyword that opens the block.
-    declaring = False
 
     # Every rule below is bounded by `limit`, so `p` reaches the text's start exactly.
     while p < limit or (text is not None and p == text[0]):
@@ -2111,6 +2472,16 @@ def tokenize_line(
                     found = value
                     split = s
                     break
+            # B1: the points of `PLANE POINTS` and of the FK helper points carry their number
+            # inside the address, in front of one axis letter: `P1X+0`, `P3Z+32.5`. Only with
+            # a signed value, as for `DR2+0.05`, so `P1X` alone or `P1XY+1` stays as it was.
+            if found is None and digits > letters and digits + 1 < chunk_end and _is_letter(ord(line[digits])):
+                sign = ord(line[digits + 1])
+                if sign == _PLUS or sign == _MINUS:
+                    value = _read_value(line, digits + 1, chunk_end, spec, False)
+                    if value is not None and value.end == chunk_end:
+                        found = value
+                        split = digits + 1
             if found is not None:
                 token = _push(tokens, "word", line, p, chunk_end)
                 _describe_word(token, line[p:split], spec, found)
@@ -2219,6 +2590,42 @@ def block_number_of(line: str, cp: CompiledProfile) -> Optional[Dict[str, Any]]:
 _MASK_NAME = re.compile(r"[A-Za-z0-9]")
 
 
+def _expression_holds_lead(line: str, start: int, limit: int, spec: _LexSpec) -> bool:
+    """True when a bracket expression between ``start`` and ``limit`` holds a character that
+    can start a span the mask changes. Mirrors ``expressionHoldsLead`` (``mask.ts``, B1).
+    Each ``[`` is asked once: a ``[`` inside an expression ends no later than the one around it.
+    """
+    open_at = line.find("[", start, limit)
+    while open_at >= 0:
+        lead = spec.mask_lead_pattern
+        if lead is None:
+            return True
+        end = _expression_end_at(line, open_at, limit)
+        found = lead.search(line, open_at + 1)
+        if found is not None and found.start() < end:
+            return True
+        open_at = line.find("[", end, limit) if end < limit else -1
+    return False
+
+
+def _mask_by_tokens(line: str, cp: CompiledProfile, spec: _LexSpec, limit: int) -> str:
+    """The mask written from the tokens of the line (``maskByTokens``, ``mask.ts``, B1)."""
+    masked = ""
+    copied = 0
+    for token in tokenize_line(line, cp)[0]:
+        if token.kind == "comment":
+            masked += line[copied : token.start] + " " * (token.end - token.start)
+            copied = token.end
+        elif (
+            token.kind == "programMarker"
+            and token.start < limit
+            and _program_name_end_at(line, token.start, limit, spec) == token.end
+        ):
+            masked += line[copied : token.start] + _MASK_NAME.sub("_", token.text)
+            copied = token.end
+    return line if copied == 0 else masked + line[copied:]
+
+
 def mask_comments(line: str, cp: CompiledProfile) -> str:
     """``line`` with every comment blanked out, same length. Mirrors ``maskComments``.
 
@@ -2270,6 +2677,11 @@ def mask_comments(line: str, cp: CompiledProfile) -> str:
         found = spec.mask_lead_pattern.search(line, p)
         if found is None or found.start() >= limit:
             return line if copied == 0 else masked + line[copied:]
+
+    # A bracket expression is read whole by the tokenizer, an unclosed one to the line end
+    # (B1): where one holds a comment marker, a quote or a name lead, the tokens decide.
+    if p < limit and _expression_holds_lead(line, p, limit, spec):
+        return _mask_by_tokens(line, cp, spec, limit)
 
     while p < limit:
         code = ord(line[p])

@@ -1,5 +1,5 @@
 //! The list of files that were open when gEdit was last closed (plan §7.10,
-//! AD-22). Stub written by the M7 prelude (P7); **WP7.1** owns it.
+//! AD-22). Built by WP7.1.
 //!
 //! Rust owns the list, in the `session` member of `state.json`, for the same reason
 //! it owns `recent` (P1 AD-9): reopening a file at start needs that path to be in the
@@ -18,7 +18,7 @@
 //! is how a session restore starts looking untrustworthy. [`SessionState::keep`] moves
 //! it, and forgets it when its own path did not survive.
 //!
-//! **A file that is offline at start stays in the list** (TODO Next up 9). A share that
+//! **A file that is offline at start stays in the list**. A share that
 //! mounts after login, or a USB stick that is not in, is not granted at start (nothing
 //! is granted for a path that is not there), so the scope refuses it at the first save
 //! — and before this rule the first tab change dropped it for good. Now a refused path
@@ -381,7 +381,7 @@ pub fn load(dirs: &AppDirs) -> SessionState {
 ///
 /// `async`, and the work is on the blocking pool: a plain `fn` command runs on the main
 /// thread (`tauri-macros` 2.6 `ExecutionContext::Blocking`), and the scope check touches
-/// every path, a hung share's among them (TODO Next up 8; see [`judge`]).
+/// every path, a hung share's among them (see [`judge`]).
 #[tauri::command]
 pub async fn session_save(
     app: AppHandle,
@@ -413,7 +413,7 @@ pub fn session_load(app: AppHandle) -> SessionState {
 ///
 /// `grant_files` finds and grants the files and answers which paths it granted
 /// ([`state::grant_files`] in the app): every other path counts as missing. It runs
-/// outside the state lock and within the startup budget (TODO Next up 8), so a share
+/// outside the state lock and within the startup budget, so a share
 /// that hangs costs at most that and reads as offline. A directory counts as missing —
 /// the webview does not open one either — and is not granted.
 pub fn start(
@@ -520,7 +520,7 @@ mod tests {
         );
         let at = source.find(signature).expect("the signature changed");
         let body = &source[at + signature.len()..];
-        // TODO Next up 8: the scope check touches the share, so it runs off the main
+        // The scope check touches the share, so it runs off the main
         // thread, and the answer is waited for within the stat budget (`judge`).
         let end = body.find("\n}\n").expect("the body does not end");
         assert!(
@@ -797,7 +797,7 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
     }
 
-    // --- a file that was offline at start (TODO Next up 9) -------------------
+    // --- a file that was offline at start -------------------
 
     fn judged(paths: &[(&str, bool)]) -> Vec<(String, bool)> {
         paths
@@ -1177,7 +1177,7 @@ mod tests {
         assert_eq!(asked.load(Ordering::SeqCst), 1);
     }
 
-    /// Review of Next up 8: the scope check of a save touches every path, and the webview
+    /// Review: the scope check of a save touches every path, and the webview
     /// sends the path it could not reach at start with every save — so a share that hung
     /// froze the save (on the main thread) at every tab change. Now the save answers within
     /// the budget, the hung path reads as refused and is kept because it is listed, and
@@ -1232,7 +1232,7 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
     }
 
-    /// Review of Next up 8/9: a startup grant that lands after its budget opens the file
+    /// Review: a startup grant that lands after its budget opens the file
     /// all the same, but the start counts it as missing. The save carried that count on for
     /// every path it kept, so after five such starts over two weeks the rule dropped a file
     /// the user had open all along. A path the scope allows at a save was reachable in this

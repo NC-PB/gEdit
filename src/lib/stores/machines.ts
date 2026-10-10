@@ -1,5 +1,5 @@
 // Machine configurations and the effective view of a document (plan §7.15, AD-31).
-// Owner: WP6.8 (the M6 prelude wrote the stub this replaces).
+// Built by WP6.8.
 //
 // The service owns two things that look like one:
 //
@@ -38,20 +38,20 @@ import {
   positionOf,
   serializeMachinesFile,
 } from '$lib/core/machines/file';
-import { MACHINES_VERSION } from '$lib/core/machines/types';
+import { MACHINES_VERSION, ReportedError } from '$lib/core/machines/types';
 import { MAX_ID_LENGTH, MAX_MACHINES, MAX_NAME_LENGTH, validateMachine } from '$lib/core/machines/validate';
 import { codes as appCodes } from '$lib/stores/codes';
 import { docs as appDocs } from '$lib/stores/documents';
 import { fileMemory as appFileMemory } from '$lib/stores/fileMemory';
 import { profiles as appProfiles } from '$lib/stores/profiles';
 import { status as appStatus } from '$lib/app/status';
-import { configLoad, machinesOpenFile, machinesSave, type ConfigLoad } from '$lib/platform/commands';
+import { configLoad, machinesOpenFile, machinesReplace, machinesSave, type ConfigLoad } from '$lib/platform/commands';
 import { editor as appEditor } from '$lib/monaco/editorService';
 import { t } from '$lib/i18n';
 import { isTauriRuntime } from '$lib/utils/platform';
 import type { CodeDb } from '$lib/core/codes/types';
 import type { Profile } from '$lib/core/profiles/types';
-import type { DocId, MachineImportSummary, MachineService } from '$lib/app/types';
+import type { DocId, MachineImportSummary, MachineService, StatusAction } from '$lib/app/types';
 import type {
   EffectiveMachine,
   EffectiveProfile,
@@ -111,12 +111,16 @@ export interface MachineServiceDeps {
   version(id: DocId): number;
   /** `machines_save`: the whole file, every time. */
   save(file: Record<string, unknown>): Promise<void>;
+  /** `machines_replace`: an empty file in place of the old one, which is kept; answers the backup's name. */
+  replace(): Promise<string | null>;
   /** A fresh `config_load`, for `reloadFromDisk`. */
   reload(): Promise<ConfigLoad>;
   /** `machines_open_file`, then the editor opens the path it answers. */
   openFile(): Promise<string>;
   open(paths: string[]): Promise<unknown>;
-  notify(text: string, o?: { error?: boolean; detail?: string }): void;
+  notify(text: string, o?: { error?: boolean; detail?: string; action?: StatusAction }): void;
+  /** Brings the document to the front and opens the machine picker; the button of the mismatch notice. Absent in tests. */
+  chooseMachine?(docId: DocId): void;
   /** False in a plain browser build, where there is no file to read or write. */
   isTauri(): boolean;
 }
@@ -388,8 +392,8 @@ export function createMachineService(deps: MachineServiceDeps): MachineService {
    * still said once, still per document, and a microtask lands long before anything the user
    * or a scenario can observe.
    */
-  function notifyFromRead(text: string): void {
-    queueMicrotask(() => deps.notify(text));
+  function notifyFromRead(text: string, action?: StatusAction): void {
+    queueMicrotask(() => (action === undefined ? deps.notify(text) : deps.notify(text, { action })));
   }
 
   /**
@@ -400,14 +404,14 @@ export function createMachineService(deps: MachineServiceDeps): MachineService {
     if (blocked()) {
       const message = t('machines.fileBlocked');
       deps.notify(message, { error: true, detail: fileError ?? t('machines.fileReadOnly') });
-      throw new Error(fileError ?? message);
+      throw new ReportedError(fileError ?? message);
     }
     if (deps.isTauri()) {
       try {
         await deps.save(serializeMachinesFile(next));
       } catch (err) {
         deps.notify(t('machines.saveFailed'), { error: true, detail: detailOf(err) });
-        throw err instanceof Error ? err : new Error(detailOf(err));
+        throw new ReportedError(detailOf(err));
       }
     }
     file = next;
@@ -581,6 +585,10 @@ export function createMachineService(deps: MachineServiceDeps): MachineService {
         chosen: eff.mismatch.chosen,
         name: eff.name ?? '',
       }),
+      // Nothing was changed, so the notice offers the way to change it (B1 A4).
+      deps.chooseMachine === undefined
+        ? undefined
+        : { label: t('machines.mismatchAction'), run: () => deps.chooseMachine?.(docId) },
     );
   }
 
@@ -596,6 +604,23 @@ export function createMachineService(deps: MachineServiceDeps): MachineService {
       }
       seen = value;
     });
+  }
+
+  /** Records a document's choice (service, mirror, per-file memory) and forgets what depended on it. */
+  function choose(docId: DocId, id: string | null | undefined): void {
+    choices.set(docId, id === undefined ? FOLLOW_DEFAULT : id);
+    // `DocMeta.machineId` is the mirror WP7.5 persists; the service keeps the authority,
+    // because `docs.update` cannot put a member back to `undefined` (P1 store rule).
+    if (id !== undefined) deps.docs.update(docId, { machineId: id });
+    // M7, AD-22: the choice is remembered for the *file*, and the memo is written from
+    // `id` and not from the mirror — the mirror still carries the previous id when the
+    // document goes back to following its profile's default, and persisting that would
+    // make the reset last exactly until the next start.
+    const path = deps.docs.get(docId)?.path;
+    if (typeof path === 'string' && path !== '') deps.remember(path, id);
+    views.delete(docId);
+    warned.delete(docId);
+    toldAboutFallback.delete(docId);
   }
 
   return {
@@ -656,15 +681,20 @@ export function createMachineService(deps: MachineServiceDeps): MachineService {
 
     blocked,
 
-    async replaceWithEmpty(): Promise<void> {
-      // The one write that is allowed while the file is unusable: Rust rescues what is
-      // there as `machines.json.bak` and puts an empty file in its place.
+    readOnly: () => readOnly,
+
+    async replaceWithEmpty(): Promise<string | null> {
+      // The one write that is allowed while the file is unusable: Rust keeps what is
+      // there as a backup beside it (whatever it holds) and puts an empty file in its
+      // place. A file from a newer gEdit is refused there, and so here.
+      if (readOnly) throw new Error(t('machines.fileReadOnly'));
+      let backup: string | null = null;
       if (deps.isTauri()) {
         try {
-          await deps.save(serializeMachinesFile(emptyMachinesFile()));
+          backup = await deps.replace();
         } catch (err) {
           deps.notify(t('machines.saveFailed'), { error: true, detail: detailOf(err) });
-          throw err instanceof Error ? err : new Error(detailOf(err));
+          throw new ReportedError(detailOf(err));
         }
       }
       file = emptyMachinesFile();
@@ -672,6 +702,7 @@ export function createMachineService(deps: MachineServiceDeps): MachineService {
       readOnly = false;
       revalidate();
       invalidate();
+      return backup;
     },
 
     get(id: string): MachineConfig | undefined {
@@ -780,12 +811,12 @@ export function createMachineService(deps: MachineServiceDeps): MachineService {
       if (blocked()) {
         const message = t('machines.fileBlocked');
         deps.notify(message, { error: true, detail: fileError ?? t('machines.fileReadOnly') });
-        throw new Error(fileError ?? message);
+        throw new ReportedError(fileError ?? message);
       }
       const incoming = parseMachinesFile(raw);
       if (incoming.error !== null) {
         deps.notify(t('machines.transfer.unreadable'), { error: true, detail: incoming.error });
-        throw new Error(incoming.error);
+        throw new ReportedError(incoming.error);
       }
 
       const takenIds = new Set([...file.machines.map((m) => m.id), ...file.invalid.map((entry) => idOf(entry.raw))]);
@@ -859,7 +890,7 @@ export function createMachineService(deps: MachineServiceDeps): MachineService {
         path = await deps.openFile();
       } catch (err) {
         deps.notify(t('machines.openFileFailed'), { error: true, detail: detailOf(err) });
-        throw err instanceof Error ? err : new Error(detailOf(err));
+        throw new ReportedError(detailOf(err));
       }
       await deps.open([path]);
     },
@@ -891,20 +922,21 @@ export function createMachineService(deps: MachineServiceDeps): MachineService {
     },
 
     setForDoc(docId: DocId, id: string | null | undefined): void {
-      choices.set(docId, id === undefined ? FOLLOW_DEFAULT : id);
-      // `DocMeta.machineId` is the mirror WP7.5 persists; the service keeps the authority,
-      // because `docs.update` cannot put a member back to `undefined` (P1 store rule).
-      if (id !== undefined) deps.docs.update(docId, { machineId: id });
-      // M7, AD-22: the choice is remembered for the *file*, and the memo is written from
-      // `id` and not from the mirror — the mirror still carries the previous id when the
-      // document goes back to following its profile's default, and persisting that would
-      // make the reset last exactly until the next start.
-      const path = deps.docs.get(docId)?.path;
-      if (typeof path === 'string' && path !== '') deps.remember(path, id);
-      views.delete(docId);
-      warned.delete(docId);
-      toldAboutFallback.delete(docId);
+      choose(docId, id);
       bump();
+    },
+
+    setProfileAndMachine(docId: DocId, id: string, applyProfile: () => void): void {
+      // The choice comes first, so that while the dialect changes underneath it the
+      // document already asks for the machine that fits the new dialect. The other order
+      // evaluated the old machine against the new dialect and said "that machine is not
+      // for this dialect" about a pick that was never wrong (B1 A4).
+      choose(docId, id);
+      try {
+        applyProfile();
+      } finally {
+        bump();
+      }
     },
   };
 }
@@ -927,11 +959,17 @@ export const machines: MachineService = createMachineService({
   text: (id) => appEditor.getLines(id, 1, DETECT_LINES).join('\n'),
   version: (id) => appEditor.versionId(id),
   save: machinesSave,
+  replace: machinesReplace,
   reload: configLoad,
   openFile: machinesOpenFile,
   // Imported lazily: `app/fileOps` pulls in the whole file pipeline, and only this one
   // action needs it. Nothing else in the service touches a document's content.
   open: async (paths) => (await import('$lib/app/fileOps')).files.open(paths),
   notify: (text, o) => appStatus.show(text, o),
+  chooseMachine: (docId) => {
+    appDocs.activate(docId);
+    // Imported lazily: the command registry is above this store, and only this button needs it.
+    void import('$lib/app/registry/commands').then((m) => m.commands.run('file.setMachine'));
+  },
   isTauri: isTauriRuntime,
 });

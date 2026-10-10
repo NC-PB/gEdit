@@ -56,6 +56,11 @@ export interface FieldSpec {
   max?: number;
   /** Decimal places a `number` may carry. */
   decimals?: number;
+  /**
+   * The most characters a `text` field may hold, counted on the trimmed text (what is
+   * stored). A longer text is refused with a message; it is never cut (B1 A4).
+   */
+  maxLength?: number;
   /** The options of a `choice` or `address-list` field. */
   choices?: FieldChoice[];
   /**

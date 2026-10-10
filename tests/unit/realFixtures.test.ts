@@ -1,5 +1,5 @@
 // The owner's own programs, from a folder that is never committed (plan §9.2, D45, gate
-// G11). Written by the M6 prelude (P6) as a stub; **FX owns it**, and M9 (WP9.6) made it
+// G11). Owned by FX; M9 (WP9.6) made it
 // the real, manifest-driven G11 run of `tests/real/README.md`.
 //
 // Why it is here at all: every committed fixture is synthetic, written from the syntax

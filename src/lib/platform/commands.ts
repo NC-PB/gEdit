@@ -40,6 +40,13 @@ export interface FileStat {
    * known. Rust always sends it; optional so that a hand-made stat need not.
    */
   unavailable?: boolean;
+  /**
+   * Which file this is: the path with symlinks, `..` and mapped drives resolved. Two
+   * spellings of one file share it. Null for a folder, a missing path and a path that
+   * could not be resolved (then only the written spelling is known). Optional so that a
+   * hand-made stat need not carry it.
+   */
+  canonical?: string | null;
 }
 
 /**
@@ -53,9 +60,17 @@ export interface FileStat {
  * "the stat did not answer" and asks before it writes, where an entry that looks like
  * "outside the scope" could let a save skip its changed-on-disk question. A caller that
  * reads `unavailable` per entry passes `{ partial: true }`.
+ *
+ * `canonical` asks Rust to resolve each path (`FileStat.canonical`). It is off by default:
+ * resolving is a lookup per folder level, a network round trip each on a share, so only
+ * the callers that need a file's identity (Open, Save As, restore) ask, and the 2 s poll
+ * never does.
  */
-export async function filesStat(paths: string[], o: { partial?: boolean } = {}): Promise<FileStat[]> {
-  const stats = await invoke<FileStat[]>('files_stat', { paths });
+export async function filesStat(
+  paths: string[],
+  o: { partial?: boolean; canonical?: boolean } = {},
+): Promise<FileStat[]> {
+  const stats = await invoke<FileStat[]>('files_stat', { paths, ...(o.canonical === true ? { canonical: true } : {}) });
   if (!o.partial && stats.length > 0 && stats.every((stat) => stat.unavailable === true)) {
     throw new Error(`files_stat: no answer in time for ${stats.length === 1 ? stats[0].path : `${stats.length} paths`}`);
   }
@@ -162,6 +177,17 @@ export function settingsOpenFile(): Promise<string> {
  */
 export function machinesSave(machines: Record<string, unknown>): Promise<void> {
   return invoke<void>('machines_save', { machines });
+}
+
+/**
+ * B1 A4. "Replace with an empty file" on the Machines page. Rust keeps whatever file is
+ * there as a backup beside it (`machines.json.bak`, or `machines.json.<date>.bak` when that
+ * name is taken) and puts an empty one in its place; it answers the backup's file name, or
+ * `null` when there was no file. A copy that cannot be made, a file from a newer gEdit and
+ * a file that cannot be read are errors, and the old file stays where it was.
+ */
+export function machinesReplace(): Promise<string | null> {
+  return invoke<string | null>('machines_replace');
 }
 
 /**
@@ -298,16 +324,30 @@ export const RECOVERY_HEADER = 'x-gedit-recovery';
  * difference between "the crash cost nothing" and "the crash cost everything the user
  * typed since the last save".
  *
- * A **lone surrogate** in a path is escaped the same way but does not survive the other
- * end: `serde_json` rejects `\ud800` as invalid JSON, so the snapshot is refused rather
- * than stored (WP7.2). That is the safe failure — a refusal with a message, never a
- * half-written file — and no macOS path can reach it today, since a path arrives here
- * as valid UTF-8 from Rust.
+ * A **lone surrogate** (a Windows file name may hold one) would be escaped the same way
+ * but does not survive the other end: `serde_json` rejects `\ud800` as invalid JSON, so
+ * the whole snapshot — the text the user typed — was refused. Every string in the
+ * header is made well-formed first, the lone half becoming U+FFFD, so the snapshot
+ * lands. The stored path is then not the real one; restore finds no file there and says
+ * so, which is better than no snapshot at all.
  */
 export function recoveryHeader(meta: RecoveryMeta): string {
-  return JSON.stringify(meta).replace(/[^\x20-\x7e]/g, (c) =>
-    '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'),
-  );
+  return JSON.stringify(meta, (_key, value: unknown) =>
+    typeof value === 'string' ? wellFormed(value) : value,
+  ).replace(/[^\x20-\x7e]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+}
+
+/** `text` with every lone surrogate replaced by U+FFFD (what `String.toWellFormed` does). */
+export function wellFormed(text: string): string {
+  if (!/[\ud800-\udfff]/.test(text)) return text;
+  let out = '';
+  // Iterating by code point yields a surrogate pair as one two-unit string and a lone
+  // surrogate as a one-unit string, which is exactly the distinction needed.
+  for (const unit of text) {
+    const code = unit.charCodeAt(0);
+    out += unit.length === 1 && code >= 0xd800 && code <= 0xdfff ? '\ufffd' : unit;
+  }
+  return out;
 }
 
 /**
@@ -356,6 +396,14 @@ export function recoveryDiscard(session: string): Promise<void> {
   return invoke<void>('recovery_discard', { session });
 }
 
+/**
+ * Removes one snapshot of a leftover session, which is what a restore does for each
+ * snapshot it has opened. The snapshots beside it stay. Rejects for the running session.
+ */
+export function recoveryDiscardEntry(session: string, key: string): Promise<void> {
+  return invoke<void>('recovery_discard_entry', { session, key });
+}
+
 // ---------------------------------------------------------------------------
 // M12: the sibling lookup (src-tauri/src/channels.rs; plan §7.10, §4, AD-32)
 //
@@ -390,7 +438,7 @@ export function channelSiblings(path: string, names: string[]): Promise<SiblingI
 // name (`^[a-z0-9][a-z0-9._-]{0,63}\.json$`), never by a path the webview makes up. Rust
 // lists and reads them (≤ 64 files, ≤ 1 MiB each, no link followed); a file is granted to
 // the fs scope only when the user creates it, opens it or imports it, so it can be opened
-// as a document. P13 registers the commands as stubs; WP13.1 implements them.
+// as a document. Implemented by WP13.1.
 // ---------------------------------------------------------------------------
 
 /** Which of the two folders. */
@@ -530,6 +578,26 @@ export interface RunRequest {
   context: unknown;
   /** Overrides the header's `timeout` and `scripts.timeoutSeconds`. */
   timeoutSecs: number | null;
+  /**
+   * The `input` and `output` modes the webview based this run on (its last scan). Rust
+   * compares them with the header on disk and refuses with `HEADER_CHANGED_PREFIX` when
+   * the script was edited since, so a run never uses the old modes with the new code.
+   * Optional: left out, nothing is compared.
+   */
+  input?: ScriptInputMode;
+  output?: ScriptOutputMode;
+}
+
+/**
+ * What `scriptRun` rejects with, as its first characters, when the script's header was
+ * edited after the last scan. The webview rescans and runs again (`app/scripts.ts`).
+ */
+export const HEADER_CHANGED_PREFIX = 'header-changed:';
+
+/** Whether a `scriptRun` rejection is the "header was edited" refusal. */
+export function isHeaderChanged(err: unknown): boolean {
+  const text = typeof err === 'string' ? err : err instanceof Error ? err.message : '';
+  return text.startsWith(HEADER_CHANGED_PREFIX);
 }
 
 /** The outcome of one run. A run that never started rejects instead. */
@@ -542,8 +610,13 @@ export interface RunResult {
   stderr: string;
   timedOut: boolean;
   cancelled: boolean;
-  /** stdout hit the runner's 64 MiB cap; what came after it was dropped. */
+  /**
+   * stdout hit the runner's 64 MiB cap, or was still being read when the runner stopped
+   * waiting (something the script started holds the pipe); what is missing was dropped.
+   */
   stdoutTruncated: boolean;
+  /** The same for stderr and its 1 MiB cap. */
+  stderrTruncated: boolean;
   durationMs: number;
   /** The interpreter that ran it, for the output panel's header line. */
   interpreter: string;

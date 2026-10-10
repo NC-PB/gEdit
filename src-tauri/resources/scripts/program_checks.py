@@ -444,6 +444,13 @@ def plural(count: int, one: str, many: str) -> str:
     return "%d %s" % (count, one if count == 1 else many)
 
 
+def unclosed(count: int, bracket: str) -> str:
+    """``a [ is opened and not closed on its line``, ``2 [ are …`` (B1: plain wording)."""
+    if count == 1:
+        return "a %s is opened and not closed on its line" % bracket
+    return "%d %s are opened and not closed on its line" % (count, bracket)
+
+
 def listing(items: Sequence[str]) -> str:
     """``a``, ``a or b``, ``a, b or c``."""
     items = list(items)
@@ -1019,7 +1026,13 @@ def check_tool_words(run: Run, number: int, tokens: Sequence[gedit_nc.Token]) ->
 
 
 def check_brackets(run: Run, number: int, masked: str) -> None:
-    """Unbalanced ``( )`` (where they are syntax, not a comment), ``[ ]`` and ``"``."""
+    """Unbalanced ``( )`` (where they are syntax, not a comment), ``[ ]`` and ``"``.
+
+    An unclosed string or ``[`` runs to the end of its line: the tokenizer reads the rest of
+    the line as part of it, a comment marker included, and so does the mask (B1). Where
+    ``(`` opens a comment, a ``(`` or ``)`` inside a ``[`` is therefore part of the
+    expression and not a stray bracket: the finding is the ``[`` that is not closed.
+    """
     depth = {"(": 0, "[": 0}
     closer = {")": "(", "]": "["}
     in_string = False
@@ -1029,6 +1042,8 @@ def check_brackets(run: Run, number: int, masked: str) -> None:
             in_string = not in_string
             continue
         if in_string:
+            continue
+        if ch in "()" and run.paren_comments and depth["["] > 0:
             continue
         if ch in depth:
             if ch == "(" and run.paren_comments:
@@ -1042,11 +1057,11 @@ def check_brackets(run: Run, number: int, masked: str) -> None:
                 depth[opener] -= 1
     if problem is None:
         if run.strings and in_string:
-            problem = 'a " that is not closed'
+            problem = 'a string is opened with " and not closed on its line'
         elif depth["("] > 0 and not run.paren_comments:
-            problem = "%s not closed" % plural(depth["("], "( is", "( are")
+            problem = unclosed(depth["("], "(")
         elif depth["["] > 0:
-            problem = "%s not closed" % plural(depth["["], "[ is", "[ are")
+            problem = unclosed(depth["["], "[")
     if problem is not None:
         run.add("brackets", number, "error", "%s: %s" % (shown(masked.strip()), problem))
 

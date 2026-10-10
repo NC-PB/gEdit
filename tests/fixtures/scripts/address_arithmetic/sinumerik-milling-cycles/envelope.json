@@ -1,0 +1,23 @@
+{
+  "message": "Added 0.5 to Z in 2 words on 2 blocks. Left 3 blocks as written: 3 cycle calls with positions of their own. No machine chosen: words whose reading depends on the machine are left alone.",
+  "findings": [
+    {
+      "line": 10,
+      "severity": "warning",
+      "message": "N90 CYCLE61(50,0,2,-1,-10,-10,130,90,2,40,0,900,31,0): CYCLE61 has positions of its own (_PA and _PO) that a shift cannot judge.",
+      "reason": "cycle-position"
+    },
+    {
+      "line": 11,
+      "severity": "warning",
+      "message": "N100 POCKET3(10,0,2,-8,40,20,5,50,50,0,2,0.1,0.1,500,100,0,…: POCKET3 has positions of its own (_PA and _PO) that a shift cannot judge.",
+      "reason": "cycle-position"
+    },
+    {
+      "line": 12,
+      "severity": "warning",
+      "message": "N110 SLOT1(10,0,2,-5,,1,30,10,20,20,,0,,100,400,2,0,0.1,1): SLOT1 has positions of its own (_CPA and _CPO) that a shift cannot judge.",
+      "reason": "cycle-position"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
-// Code-database inheritance (plan §7.2, AD-17). Implemented by the M6 prelude (P6);
-// **WP6.1 owns it from Wave A on**.
+// Code-database inheritance (plan §7.2, AD-17). Built by WP6.1
+// (first written in the M6 prelude, P6).
 //
 // A database file may name a parent dialect with `extends` and list parent codes it does
 // not have in `remove`. The Fanuc lathe databases are the reason: `fanuc-lathe` is the
@@ -131,8 +131,11 @@ export interface ResolveCodeDbOptions {
   onEntryProblem?: (dialect: string, p: CodeDbProblem, index: number) => void;
 }
 
-/** Members that are text for a reader, not meaning for the scripts: never reported. */
-const TEXT_MEMBERS = new Set(['code', 'label', 'description', 'replace']);
+/**
+ * Members that are text for a reader, not meaning for the scripts: never reported. B1: `review`,
+ * the owner's review mark, changes nothing the app computes.
+ */
+const TEXT_MEMBERS = new Set(['code', 'label', 'description', 'replace', 'review']);
 
 /** `false`, an empty list and an absent member read the same in `loadCodeDb`. */
 function meaningOf(value: unknown): string | undefined {

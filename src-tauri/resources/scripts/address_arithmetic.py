@@ -181,7 +181,9 @@ whose words are data (`G92`, `G52`, `G10`, a datum shift), incremental words (`G
 incremental twin such as `W`, the Klartext `I` prefix — and every word while the distance
 mode is not known), variables and expressions, words with no resolved value (every
 machine-dependent word while no machine is chosen), and count parameters reached only
-through the arc-centre option (`G83 … K3`).
+through the arc-centre option (`G83 … K3`). An absolute point of a Klartext FK contour
+(`P1X` … `P3Y`, the centre `CCX`/`CCY`) on a chosen axis is left and listed as a warning
+(B1 fix NC, NC-03): gEdit does not move it, so the FK contour has to be checked.
 
 Selections
 ----------
@@ -256,7 +258,19 @@ BLOCK_REASONS = (
     "arc-geometry",
     "not-scaled",
 )
-WORD_REASONS = ("unreadable", "data", "incremental", "expression", "machine-dependent", "count")
+WORD_REASONS = ("unreadable", "data", "incremental", "expression", "machine-dependent", "count", "fk-point")
+
+#: B1 fix NC (NC-03): the absolute points of a Klartext FK contour, by the axis they are a
+#: coordinate of: the auxiliary points ``P1X`` … ``P3Y`` the line or arc passes through and the
+#: circle centre ``CCX``/``CCY`` (the Z points for completeness). They are positions, but
+#: gEdit does not classify every FK word (relative ``PDX``/``PDY``, polar data), so a shift
+#: or scale of their axis leaves them as written and says so instead of moving the contour
+#: only in part without a word.
+FK_POINT_AXES = {
+    "P1X": "X", "P2X": "X", "P3X": "X", "CCX": "X",
+    "P1Y": "Y", "P2Y": "Y", "P3Y": "Y", "CCY": "Y",
+    "P1Z": "Z", "P2Z": "Z", "P3Z": "Z",
+}
 
 #: What the summary calls a count of each reason (singular, plural).
 REASON_TEXT = {
@@ -280,6 +294,7 @@ REASON_TEXT = {
     "expression": ("variable or expression", "variables or expressions"),
     "machine-dependent": ("word whose reading depends on the machine", "words whose reading depends on the machine"),
     "count": ("count", "counts"),
+    "fk-point": ("FK contour point", "FK contour points"),
 }
 
 
@@ -625,6 +640,8 @@ def params_of(entry: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def param_named(entry: Optional[Dict[str, Any]], address: str) -> Optional[Dict[str, Any]]:
+    # B1: the first declaration answers for both blocks of a two-block cycle; its `position`
+    # and `unit` are the same in both (`gedit_nc.params_of_block` has the block's labels).
     for param in params_of(entry):
         written = param.get("address")
         if isinstance(written, str) and written.upper() == address.upper():
@@ -1132,8 +1149,9 @@ class Run:
         # A cycle written as a call (`CYCLE81(…)`), repeated behind `MCALL`.
         starts = [(e, k) for e, k in cycles if sets_of(e).get("cycle") == "start"]
         call_starts = [e for e, k in starts if k == "call"]
-        # A call the database does not know, with a number among its arguments (`CYCLE61(50,0,2,-1,…)`,
-        # `POCKET4(…)`): a cycle nobody described may hold absolute positions that a shift of
+        # A call the database does not know, with a number among its arguments
+        # (`CYCLE76(50,0,2,-1,…)`, `CYCLE77(…)`: Sinumerik cycles the database does not
+        # describe): a cycle nobody described may hold absolute positions that a shift of
         # the tool axis has to move with the axis words, so it is refused and listed, never
         # skipped in silence (found at the M10 integration: the Sinumerik face-milling cycle
         # stayed where it was while every Z word around it moved).
@@ -1202,6 +1220,9 @@ class Run:
                 # NC-5: a chosen word that cannot be read is reported (`judge`).
                 if gedit_nc.unreadable_value(token, line.tokens) is not None:
                     return True
+            # B1 fix NC (NC-03): an FK point on a chosen axis is reported (`judge`).
+            elif FK_POINT_AXES.get((token.address or "").upper()) in setup.chosen and (token.value_text or "") != "":
+                return True
         if not setup.touches_positions:
             return False
         return group is not None or block.opens_frame
@@ -1281,6 +1302,19 @@ class Run:
                 outcome = self.word_outcome(token, line, address, state, codes, in_force, None, False, geo)
                 outcomes.append(outcome)
                 geometry.append(outcome)
+                continue
+            fk_axis = FK_POINT_AXES.get(address)
+            if fk_axis is not None and fk_axis in setup.chosen:
+                written = quote(token.text)
+                outcomes.append(
+                    (
+                        "skip",
+                        line,
+                        "fk-point",
+                        "%s: an absolute point of an FK contour; gEdit does not move it. Check the FK contour" % written,
+                        written,
+                    )
+                )
                 continue
             if address not in setup.words and not is_cycle:
                 continue
@@ -2099,7 +2133,8 @@ def collect_findings(run: Run, findings: Findings) -> None:
             continue
         for number, reason, text in block.word_findings:
             # NC-5: a word that cannot be read still goes to the old position: a warning.
-            rows.append((number, 1, "warning" if reason == "unreadable" else "info", text + ".", reason))
+            # B1 fix NC (NC-03): an FK point left behind changes the contour: a warning too.
+            rows.append((number, 1, "warning" if reason in ("unreadable", "fk-point") else "info", text + ".", reason))
         for number, text in block.notes:
             rows.append((number, 2, "info", text + ".", "rounded"))
     for code, (line, count) in run.unknown_seen.items():

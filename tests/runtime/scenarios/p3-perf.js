@@ -48,6 +48,8 @@ const TYPING_COST_BUDGET_MS = 17
  * become much slower, or no longer finishes, is caught.
  */
 const KLARTEXT_BUILD_BUDGET_MS = 8000
+/** The part of a rebuild's window that belongs to the action that started it (see `checkStall`). */
+const SETTLE_MS = 250
 const KEYSTROKES = 40
 const MOVES = 20
 const MAX_RETRIES = 2
@@ -56,16 +58,26 @@ const MARGIN_LINES = 100
 const MAX_MARKS = 1000
 
 /**
- * The stall check of one rebuild: the longest gap after the outline's own build was done (see `watchRebuild`),
- * held to the budget; and a check that such a window existed, so a rebuild the outline hid is not a pass.
+ * The stall check of one rebuild: the longest gap between two 4 ms ticks over the whole rebuild (the index and the
+ * outline together), held to the budget; and a check that both finished.
+ *
+ * B1 B2 (intentional change): the program map is built in 8 ms idle slices now, as the index is, so the outline no
+ * longer stalls the page for about 90 ms per 20,000-line step. Before, the stall of the index could only be told
+ * from the outline's by looking at the window *after* the outline was done (`watchRebuild`'s `worstAfterOutline`,
+ * and a check that the index outlasted the outline); with both sliced the whole window is the claim, and the
+ * outline may well take longer than the index. The first `SETTLE_MS` after the action are left out: that is the
+ * action's own work (the open's first paint, the machine switch), which has its own budgets in the other scenarios
+ * and was always outside the window this check looked at (a Klartext open stalls about 85-110 ms at 90-140 ms).
  * @param {import('../lib/api.js').Harness} h
  * @param {string} what
  * @param {Awaited<ReturnType<typeof watchRebuild>>} r
  */
 function checkStall(h, what, r) {
   h.log(`${what}: outline ready at ${r.done.outline} ms, index at ${r.done.modal} ms; worst gap ${r.worstAll} ms, after the outline ${r.worstAfterOutline}; gaps over 30 ms: ${r.gaps.map((g) => `${g.at}:${g.gap}`).join(' ')}`)
-  h.check(`${what}: the index outlasted the outline's own build, so its chunks can be told apart (index ${r.done.modal} ms, outline ${r.done.outline} ms)`, r.isolated, r.done)
-  h.checkTime(`${what}: the page is never stalled by the index, the longest gap between two 4 ms ticks after the outline was done`, r.worstAfterOutline ?? r.worstAll, STALL_BUDGET_MS, { done: r.done, gaps: r.gaps.slice(0, 20) }, { also: r.isolated })
+  h.check(`${what}: the outline and the index were both built (index ${r.done.modal} ms, outline ${r.done.outline} ms)`, r.done.modal >= 0 && r.done.outline >= 0, r.done)
+  const later = r.gaps.filter((g) => g.at > SETTLE_MS)
+  const worst = later.length > 0 ? Math.max(...later.map((g) => g.gap)) : 30
+  h.checkTime(`${what}: the page is never stalled by the outline or the index, the longest gap between two 4 ms ticks after the first ${SETTLE_MS} ms`, worst, STALL_BUDGET_MS, { done: r.done, gaps: r.gaps.slice(0, 20), worstAll: r.worstAll })
 }
 
 /**

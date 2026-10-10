@@ -1,5 +1,4 @@
-// Code-database inheritance (plan §7.2, AD-17). Written with `resolve.ts` by the M6
-// prelude (P6); WP6.1 owns both from Wave A on.
+// Code-database inheritance (plan §7.2, AD-17). Written with `resolve.ts` (WP6.1).
 
 import { describe, expect, it } from 'vitest';
 import { BUILTIN_CODE_DB_JSON } from '$lib/data/codes';
@@ -73,6 +72,21 @@ describe('resolveCodeDbFiles', () => {
     const g98 = (merged.codes as Record<string, unknown>[]).find((entry) => entry.code === 'G98');
     expect(g98).toEqual({ code: 'G98', group: 'cyclereturn', modal: false, label: 'Mine' });
     expect(notices).toEqual(['G98 modal true>false']);
+  });
+
+  // B1: the owner's review mark is text for a reader, not a change of meaning.
+  it('does not report a review mark as a change of meaning', () => {
+    const files = {
+      parent: PARENT,
+      kid: { dialect: 'kid', version: 1, extends: 'parent', codes: [{ code: 'G98', review: 'pending' }] },
+    };
+    const notices: string[] = [];
+    const merged = resolveCodeDbFiles(files, undefined, {
+      memberMerge: (dialect) => dialect === 'kid',
+      onMerge: (n) => notices.push(`${n.code} ${n.member}`),
+    }).kid;
+    expect((merged.codes as Record<string, unknown>[]).find((entry) => entry.code === 'G98')?.review).toBe('pending');
+    expect(notices).toEqual([]);
   });
 
   it('keeps the parent order and appends what the child adds', () => {

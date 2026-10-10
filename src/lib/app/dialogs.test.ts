@@ -4,7 +4,7 @@
 //
 // The plugin is injected, so nothing here needs a webview.
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createNativeDialogs, errorText, type DialogBackend } from './dialogs';
 import { createProfileRegistry } from '$lib/stores/profiles';
 import { t } from '$lib/i18n';
@@ -256,6 +256,105 @@ describe('exclusive', () => {
     expect(await dialogs.exclusive(async () => 'third')).toBe('third');
     await expect(dialogs.exclusive(() => Promise.reject(new Error('boom')))).rejects.toThrow('boom');
     expect(await dialogs.exclusive(async () => 'fourth')).toBe('fourth');
+  });
+});
+
+describe('whenFree (B1 A4)', () => {
+  it('waits for the chain in front instead of being sent away', async () => {
+    const { dialogs } = setup();
+    let release = (): void => {};
+    const first = dialogs.exclusive(
+      () =>
+        new Promise<string>((resolve) => {
+          release = () => resolve('first');
+        }),
+    );
+    const order: string[] = [];
+    const second = dialogs.whenFree(async () => {
+      order.push('second');
+      return 'second';
+    });
+    await Promise.resolve();
+    expect(order).toEqual([]);
+    release();
+    expect(await first).toBe('first');
+    expect(await second).toBe('second');
+    expect(order).toEqual(['second']);
+  });
+
+  it('serves several waiters one after the other, in the order they came', async () => {
+    const { dialogs } = setup();
+    let release = (): void => {};
+    const first = dialogs.whenFree(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const log: string[] = [];
+    let release2 = (): void => {};
+    const second = dialogs.whenFree(
+      () =>
+        new Promise<void>((resolve) => {
+          log.push('second starts');
+          release2 = resolve;
+        }),
+    );
+    const third = dialogs.whenFree(async () => void log.push('third'));
+    release();
+    await first;
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(log).toEqual(['second starts']);
+    release2();
+    await second;
+    await third;
+    expect(log).toEqual(['second starts', 'third']);
+  });
+
+  it('frees the lock after a failure and answers a free lock at once', async () => {
+    const { dialogs } = setup();
+    await expect(dialogs.whenFree(() => Promise.reject(new Error('boom')))).rejects.toThrow('boom');
+    expect(await dialogs.whenFree(async () => 'again')).toBe('again');
+    // And `exclusive` still sends a re-entrant call away.
+    let release = (): void => {};
+    const held = dialogs.whenFree(() => new Promise<void>((resolve) => (release = resolve)));
+    expect(await dialogs.exclusive(async () => 'x')).toBeUndefined();
+    release();
+    await held;
+  });
+});
+
+// B1 CODE-09: a `whenFree` called from inside an `exclusive` op waits for itself. The doc
+// comment says not to; a development build also says so after 30 s.
+describe('whenFree called from inside an exclusive op (B1 CODE-09)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('warns once on the console after 30 s of waiting, and stays quiet for a short wait', async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { dialogs } = setup();
+    let release = (): void => {};
+    const first = dialogs.whenFree(() => new Promise<void>((resolve) => (release = resolve)));
+
+    const quick = dialogs.whenFree(async () => 'quick');
+    await vi.advanceTimersByTimeAsync(29_000);
+    expect(warn).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain('whenFree');
+
+    release();
+    await first;
+    expect(await quick).toBe('quick');
+    // A caller that got the lock at once, or in time, sets no warning behind it.
+    warn.mockClear();
+    expect(await dialogs.whenFree(async () => 'free')).toBe('free');
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });
 

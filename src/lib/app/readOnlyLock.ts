@@ -1,4 +1,4 @@
-// The read-only lock for writers that are not typing (M7, AD-23; TODO Next up 6).
+// The read-only lock for writers that are not typing (M7, AD-23).
 //
 // Monaco's `readOnly` option stops the keyboard, a paste, a completion accept and every
 // editor action, because they all go through the editor. The NC transforms and a script's

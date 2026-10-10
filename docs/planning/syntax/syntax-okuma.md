@@ -32,7 +32,7 @@ Anything marked **(verify)** is general knowledge or an interpretation that the 
 
 - `MODIN`/`MODOUT`, `GET`/`PUT`, `READ`/`WRITE`, system variables (`VZOFZ`, `VTOFX[…]`, …).
 - Two-turret synchronization: the `P` sync codes and `M100`. (`G13`/`G14`, which select the turret a block is for, are described since M8; §4.1.)
-- Contour generation (`G101`–`G103`, `G132`/`G133`): described in §4.1 since the source review, not in the database yet.
+- Contour generation (`G101`–`G103`): described in §4.1 since the source review; `G132`/`G133` are in the database since B1 (marked for the owner's review).
 - Schedule programs (`.SDF`, `PSELECT`).
 
 LAP (automatic roughing and finishing, `G80`–`G88`) was in this list until M8. The manual describes its codes and parameters in full, so the database describes them now; §6.4 has what the editor needs.
@@ -282,14 +282,14 @@ A `$` at the start of any line after line 1 is the continuation of the block abo
 | `G112` / `G113` | Thread along an arc, clockwise / counter-clockwise | modal | Optional; used in the shape of a LAP thread (`G88`). End `X Z`; the centre as `I K` from the start point, or a radius `L` (then both X and Z, and the arc under 180°). `F` is the lead (per `J` threads when `J` is given), `E` the lead change per thread (positive grows, negative shrinks), `M26`/`M27` the lead axis, `CL` a retract for a slide hold. |
 | `G140` / `G141` | Machining with the main spindle / the sub spindle | — | Optional, multi-spindle machines. **The program coordinate system and the zero offset switch with them** (the sub spindle's Z runs the other way). One stands at the program start, or right after `G13`/`G14`; the B turret is always in `G140`. Refused under `G91`, `G96`, nose-radius compensation, LAP or a pending chamfer. A program after `G141` is written like one for the main spindle, so a plain `S` there drives the sub spindle (an inference, like Sinumerik `SETMS`; **verify** once). |
 | `G142` / `G143` | Machining with the pick-off spindle / with it and a third turret | — | Only the P200L code table names them; the P300 list has `G144`/`G145` (W-axis control) instead **(verify)** |
-| `G161`–`G170`, `G171`–`G176`, `G205`–`G214` | G-code macros: a code the machine's setup ties to a macro program, called once (`G171`–`G175`, the P200-compatible `G176`, `G205`–`G214`) or after every move like `MODIN` (`G161`–`G170`) | — | Optional. The program map lists them as calls (today only up to `G171`). What the macro does, and what its words mean, depends on the machine; on multi-tasking machines `G174 SX= SY= SZ=` is a zero shift and `G175` cancels it. |
+| `G161`–`G170`, `G171`–`G176`, `G205`–`G214` | G-code macros: a code the machine's setup ties to a macro program, called once (`G171`–`G175`, the P200-compatible `G176`, `G205`–`G214`) or after every move like `MODIN` (`G161`–`G170`) | — | Optional. The program map lists them as calls (`G171`–`G176` since B1). What the macro does, and what its words mean, depends on the machine; on multi-tasking machines `G174 SX= SY= SZ=` is a zero shift and `G175` cancels it. |
 | `G136` / `G137` / `G138` | End conversion and Y-axis mode / start coordinate conversion / Y-axis mode on | modal | Optional (mill-turn). **After `G137` or `G138`, X is a radius**: G137 machines the face in Cartesian X and Y (the block's `C` gives the direction of the new X axis; the first block after it needs both X and Y, and `G91` right after it is an alarm), G138 programs X, Y, Z as a Cartesian system. `G136` ends both, alone in its block. The Y-axis mode survives a reset and a power-off, and on a Y-axis machine an axis move before the first `G136`/`G138` is an alarm, so posts write one at every tool start (the owner's does). In the database since the source review, with `sets.diameter`. |
 | `G101` / `G102` / `G103` | Contour generation: straight line / arc CW / arc CCW in X, C (and Z), arcs with the radius in `L`; with `G137` in X and Y | modal | `F` is in mm/min here. The owner's post writes them in every face-milling section. Missing from the database |
-| `G132` / `G133` | Arc CW / CCW on the cylinder surface: `Z C L F` | modal | Missing from the database |
-| `G119` | Compensation plane C-X-Z (side contour) | modal | Missing from the database |
-| `G20` / `G21` | Home position return / ATC home return (`G24`/`G25` the same without interpolation) | — | **Not inch/metric as on Fanuc.** Optional. |
+| `G132` / `G133` | Arc CW / CCW on the cylinder surface: `Z C L F` | modal | In the database since B1 (marked for review) |
+| `G119` | Compensation plane C-X-Z (side contour) | modal | In the database since B1 (marked for review) |
+| `G20` / `G21` | Home position return / ATC home return (`G24`/`G25` the same without interpolation) | — | **Not inch/metric as on Fanuc.** Optional. In the database since B1 as moves to machine positions (`HP=n` says which position; marked for review). |
 | `G54`–`G59` | Not defined on this control. The work zero lives in the control's zero-offset data; programs shift it with `G50 X Z`, and on machines with the option select a work coordinate system with `G15`/`G16 H`. | — | |
-| `G93` | Inverse-time feed | modal | Optional. Missing from the database |
+| `G93` | Inverse-time feed | modal | Optional. In the database since B1 (marked for review; the manuals do not describe the form of its `F`) |
 
 ### 4.2 M-codes most relevant for CAM output
 
@@ -505,7 +505,7 @@ LAP is an optional function of the control, described in full in the manual (Sec
 
 A long variable list goes on over lines that start with `$` (§3.1): `CALL O1000 V1=0101 V2=0202 …` and then `$ DX1=30 DX2=50`. (Corrected in M8: these notes used to give `&`, which the manual does not use.)
 
-G-code macros (optional) call a macro program through a code of its own: `G171`–`G176` and `G205`–`G214` once, like `CALL`, and `G161`–`G170` after every following move, like `MODIN`. Which program a code runs is part of the machine's setup, not of the program. The program map's call rule stops at `G171` today.
+G-code macros (optional) call a macro program through a code of its own: `G171`–`G176` and `G205`–`G214` once, like `CALL`, and `G161`–`G170` after every following move, like `MODIN`. Which program a code runs is part of the machine's setup, not of the program. The program map's call rule covers `G171`–`G176` since B1.
 
 ### 7.2 Labels and jumps
 

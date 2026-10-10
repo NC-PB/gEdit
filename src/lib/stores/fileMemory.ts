@@ -1,5 +1,5 @@
 // Per-file memory: where you were in a file, and what you chose for it (plan §7.9,
-// AD-22). Owner: WP7.5 (the M7 prelude wrote the stub this replaces).
+// AD-22). Built by WP7.5.
 //
 // The memos live in `UiState.files`, keyed by absolute path, and reach disk through
 // `stores/uiState.ts` — so they inherit its 1 s debounce and its quit flush, and they

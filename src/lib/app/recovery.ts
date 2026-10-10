@@ -31,14 +31,18 @@
 //     answered the quit dialog — clears the session. A Windows logoff ends in the same
 //     `Exit` event as a clean quit, and clearing there would delete the snapshots of
 //     the very session the logoff is killing (F29).
-//  2. **It never discards a leftover session that still holds something.** A partial
-//     restore keeps the session, so the snapshots that were *not* restored are offered
-//     again at the next start instead of disappearing with the ones that were.
+//  2. **It never discards a snapshot that was not restored.** A restore drops each
+//     snapshot it has opened — one by one (`recovery_discard_entry`) — and nothing else,
+//     so the snapshots that were *not* restored are offered again at the next start
+//     instead of disappearing with the ones that were, and a restore that is cut short
+//     leaves exactly the rest.
 //  3. **A failed write is not forgotten, and it is not silent.** The document keeps no
 //     "snapshotted at" stamp, so the next pass tries again rather than assuming the text
-//     is safe — and the first failure of the run says so in the status bar, because a
-//     crash net that is off while the guide promises thirty seconds is worse than one
-//     that was never switched on.
+//     is safe — and the failure is said in the status bar: once as a message, and for as
+//     long as it lasts as an item (`snapshotTrouble`, shown by `RecoveryStatus.svelte`)
+//     that goes when a pass writes again. A crash net that is off while the guide
+//     promises thirty seconds is worse than one that was never switched on, and a
+//     message that was gone after eight seconds did not stay true for the afternoon.
 //
 // `createRecoveryService(deps)` plus the singleton wired to the real services (AD-2),
 // so a unit test drives the whole of it with a fake clock and fake commands.
@@ -49,11 +53,12 @@ import { docs as appDocs } from '$lib/stores/documents';
 import { editor as appEditor } from '$lib/monaco/editorService';
 import { runningScript } from '$lib/stores/scripts';
 import { settings } from '$lib/stores/settings';
-import { get } from 'svelte/store';
+import { get, writable, type Readable } from 'svelte/store';
 import {
   filesStat,
   recoveryClearCurrent,
   recoveryDiscard,
+  recoveryDiscardEntry,
   recoveryDrop,
   recoveryList,
   recoveryPut,
@@ -149,6 +154,13 @@ export interface RecoveryDeps {
   list(): Promise<RecoveryEntry[]>;
   read(session: string, key: string): Promise<string>;
   discardSession(session: string): Promise<void>;
+  /** Removes one snapshot of a leftover session; the ones beside it stay. */
+  discardEntry(session: string, key: string): Promise<void>;
+  /**
+   * Called after every change of the set of documents whose snapshots cannot be written,
+   * with their titles (oldest failure first); an empty list means all is well again.
+   */
+  trouble(titles: string[]): void;
   now(): number;
   /** Installs the "the user turned away" triggers (blur, visibilitychange). */
   watchAway(flush: () => void): Disposable;
@@ -179,14 +191,36 @@ interface Taken {
   ticked: number | null;
 }
 
+/**
+ * The documents whose snapshots are not reaching the disk right now (their titles), or
+ * `null` when all is well. `RecoveryStatus.svelte` shows it for as long as it is set.
+ */
+const trouble = writable<string[] | null>(null);
+export const snapshotTrouble: Readable<string[] | null> = { subscribe: trouble.subscribe };
+
+/** Sets `snapshotTrouble`; an empty list clears it. The singleton's `deps.trouble`, and a test seam. */
+export function setSnapshotTrouble(titles: string[]): void {
+  trouble.set(titles.length > 0 ? titles : null);
+}
+
 export function createRecoveryService(deps: RecoveryDeps): RecoveryService {
   const taken = new Map<DocId, Taken>();
-  /** Documents whose last write failed, so one warning is logged rather than one per pass. */
-  const warned = new Set<DocId>();
   /**
-   * Whether the user has been told that snapshots are not reaching the disk.
+   * Documents whose last write failed, with their titles: one warning is logged rather
+   * than one per pass, and the status item lasts as long as this is not empty.
+   */
+  const warned = new Map<DocId, string>();
+  /** Tells `deps.trouble` what `warned` holds now. */
+  function publish(): void {
+    deps.trouble([...warned.values()]);
+  }
+  /**
+   * Whether the user has been told, by a message, that snapshots are not reaching the
+   * disk. Reset when the trouble is over, so the next episode is told again.
    *
-   * Once per run, in the status bar, the way a failed backup is reported. Without it the
+   * In the status bar, the way a failed backup is reported — and, since B1, beside the
+   * message a lasting item (above), because a message goes after eight seconds and the
+   * trouble does not. Without either the
    * whole feature could be off — a full data volume, a `<data>/recovery` that could not
    * be created, a document grown past `MAX_BODY_BYTES` by a paste or a script — with
    * nothing on screen to say so: the tab is dirty, the status bar is quiet, and the
@@ -264,15 +298,19 @@ export function createRecoveryService(deps: RecoveryDeps): RecoveryService {
         // A forced write leaves the ticker's clock where it was.
         ticked: force ? (previous?.ticked ?? null) : now,
       });
-      warned.delete(doc.id);
+      if (warned.delete(doc.id)) {
+        if (warned.size === 0) told = false;
+        publish();
+      }
     } catch (err) {
       // No stamp is recorded, so the next pass tries the same document again. A
       // warning rather than an error, and only the first one per document: the runtime
       // harness fails on unexpected console errors, and a share that went away would
       // otherwise produce one every 30 s for the rest of the session.
       if (!warned.has(doc.id)) {
-        warned.add(doc.id);
+        warned.set(doc.id, doc.title);
         console.warn(`a recovery snapshot for ${doc.title} could not be written`, err);
+        publish();
       }
       // And said out loud once, because the alternative is a programmer who keeps
       // typing all afternoon believing a crash costs half a minute. See [`told`].
@@ -317,7 +355,10 @@ export function createRecoveryService(deps: RecoveryDeps): RecoveryService {
   /** The document is saved or gone: whatever is on disk for it is now noise. */
   function forget(id: DocId): void {
     taken.delete(id);
-    warned.delete(id);
+    if (warned.delete(id)) {
+      if (warned.size === 0) told = false;
+      publish();
+    }
     void after(async () => {
       try {
         await deps.drop(id);
@@ -341,47 +382,29 @@ export function createRecoveryService(deps: RecoveryDeps): RecoveryService {
   }
 
   /**
-   * Discards every session whose snapshots were **all** restored, and says how many
-   * were kept back.
+   * Says how many snapshots of the sessions just restored from are still on disk.
    *
-   * There is no per-entry drop for a leftover session — `recovery_drop` addresses the
-   * *current* one (§7.10) — so the only way to forget one restored snapshot would be to
-   * delete the session it sits in, taking the snapshots beside it with it. A session is
-   * therefore discarded only when nothing is left in it that the user has not seen
-   * restored, and a partial restore keeps the rest for the next start.
+   * Each restored snapshot is discarded on its own (`recovery_discard_entry`), so what
+   * is left is exactly what the user did not take, or what could not be read or removed.
+   * Before B1 a session could only be discarded whole, so a partial restore had to keep
+   * all of it — and offered the restored snapshots again at the next start, next to the
+   * open, dirty copies of the same work.
    */
-  async function dropRestored(asked: RecoveryEntry[], restored: Set<string>): Promise<void> {
+  async function reportKept(asked: RecoveryEntry[]): Promise<void> {
     const sessions = new Set(asked.map((entry) => entry.session));
     if (sessions.size === 0) return;
-    const remaining = await leftovers();
-    let kept = 0;
-    for (const session of sessions) {
-      const left = remaining.filter(
-        (entry) => entry.session === session && !restored.has(entryKey(entry)),
-      );
-      if (left.length > 0) {
-        kept += left.length;
-        continue;
-      }
-      try {
-        await deps.discardSession(session);
-      } catch (err) {
-        // The documents are open and dirty; the snapshots simply stay. Being offered
-        // them again is the harmless half of this failure.
-        console.warn(`the restored recovery session ${session} could not be discarded`, err);
-      }
-    }
+    const kept = (await leftovers()).filter((entry) => sessions.has(entry.session)).length;
     if (kept > 0) deps.status.show(t('recovery.keptRest', { count: kept }));
   }
 
   async function restore(entries: RecoveryEntry[]): Promise<DocId[]> {
-    const ids: DocId[] = [];
-    const restored = new Set<string>();
+    const restored: { entry: RecoveryEntry; id: DocId }[] = [];
     for (const entry of entries) {
       try {
         const textLF = await deps.read(entry.session, entry.key);
-        ids.push(
-          deps.files.restoreDocument({
+        restored.push({
+          entry,
+          id: deps.files.restoreDocument({
             path: entry.path,
             title: entry.title,
             profileId: entry.profileId,
@@ -392,17 +415,35 @@ export function createRecoveryService(deps: RecoveryDeps): RecoveryService {
             textLF,
             diskStamp: entry.diskStamp,
           }),
-        );
-        restored.add(entryKey(entry));
+        });
       } catch (err) {
-        // One snapshot that cannot be read must not cost the others. It stays on disk:
-        // `dropRestored` keeps a session that still holds anything.
+        // One snapshot that cannot be read must not cost the others. It stays on disk
+        // and is offered again.
         console.warn(`the recovery snapshot ${entryKey(entry)} could not be restored`, err);
         deps.status.show(t('recovery.restoreFailed', { name: entry.title }), { error: true });
       }
     }
-    await dropRestored(entries, restored);
-    return ids;
+    // The restored text is open and dirty now, but the *only* copy of it on disk is still
+    // the old snapshot: this session has not written one for the new document yet, and a
+    // crash in the first half minute would find nothing. So the old snapshots go only
+    // after one forced pass has written the new documents' own, and only those whose
+    // document that pass really wrote. When snapshots are failing (the trouble state) or
+    // the feature is off, nothing is discarded and the entries are offered again (B1).
+    if (restored.length > 0) {
+      await after(() => pass(true));
+      for (const { entry, id } of restored) {
+        if (!taken.has(id)) continue;
+        try {
+          await deps.discardEntry(entry.session, entry.key);
+        } catch (err) {
+          // The document is open and dirty; the snapshot simply stays. Being offered it
+          // again is the harmless half of this failure.
+          console.warn(`the restored recovery snapshot ${entryKey(entry)} could not be discarded`, err);
+        }
+      }
+    }
+    await reportKept(entries);
+    return restored.map(({ id }) => id);
   }
 
   return {
@@ -436,6 +477,8 @@ export function createRecoveryService(deps: RecoveryDeps): RecoveryService {
           }
           taken.clear();
           warned.clear();
+          told = false;
+          publish();
         }),
       );
       return () => {
@@ -604,6 +647,8 @@ export const recovery: RecoveryService = createRecoveryService({
   list: () => (isTauriRuntime() ? recoveryList() : Promise.resolve([])),
   read: recoveryRead,
   discardSession: recoveryDiscard,
+  discardEntry: recoveryDiscardEntry,
+  trouble: setSnapshotTrouble,
   now: () => Date.now(),
   watchAway,
   idle,

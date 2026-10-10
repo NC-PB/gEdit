@@ -25,6 +25,7 @@ import { clickMachineAction, machineItem, machineRows, machineText, tooltipLine 
 import {
   OKUMA,
   choiceOf,
+  shownPreset,
   closeSettingsDialog,
   context,
   detectGolden,
@@ -348,10 +349,13 @@ scenario('m8-okuma', { timeout: 540, files: REPO_FILE }, async (h) => {
   const numberInput = choiceOf(h, 'numberInput')
   h.check(
     'the Okuma form offers exactly the three unit systems of the profile, in its order: 1 mm, 1 µm and 10 µm',
-    presets.length === 3 && JSON.stringify(numberInput.labels) === JSON.stringify(presets.map((preset) => preset.label)) && JSON.stringify(presets.map((preset) => preset.id)) === JSON.stringify(['okuma-1mm', 'okuma-1um', 'okuma-10um']),
+    presets.length === 3 && JSON.stringify(numberInput.labels) === JSON.stringify(presets.map((preset) => shownPreset(h, preset))) && JSON.stringify(presets.map((preset) => preset.id)) === JSON.stringify(['okuma-1mm', 'okuma-1um', 'okuma-10um']),
     { offered: numberInput.labels, presets: presets.map((preset) => preset.id) },
   )
-  h.check('with the 1 mm system picked, the documented default', numberInput.selected === defaultPreset?.label, numberInput.selected)
+  // B1 A4: the 1 mm and 10 µm presets are marked `verify` in the profile, so the form adds
+  // "(unconfirmed)" to their labels; the profile's own label text is unchanged.
+  h.check('the two presets marked to be verified say so in the form, the 1 µm one does not', JSON.stringify(presets.map((preset) => preset.verify === true)) === JSON.stringify([true, false, true]) && numberInput.labels.map((label) => label.endsWith(`(${ctx.t('machines.value.unconfirmed')})`)).join() === 'true,false,true', { offered: numberInput.labels, verify: presets.map((preset) => preset.verify) })
+  h.check('with the 1 mm system picked, the documented default', defaultPreset !== undefined && numberInput.selected === shownPreset(h, defaultPreset), numberInput.selected)
   h.check('each label says that the unit scales every number, a decimal point included', presets.slice(1).every((preset) => /every number scaled, point or not/.test(preset.label)), presets.map((preset) => preset.label))
   h.check('and X is a diameter unless the machine says otherwise', ticked(h, 'diameter') === true, ticked(h, 'diameter'))
   // M9 (WP9.4, R6): the one variant of an Okuma machine is how the `T` word splits. There is

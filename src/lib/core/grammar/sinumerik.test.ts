@@ -15,6 +15,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { generateGrammar } from './index';
+import { allRules, emittedRoles, monarchRun, monarchTokens, type Emitted, type MonarchLike } from './monarchSim';
 import { sinumerikRules } from './sinumerik';
 import { EDITOR_COLORS, ROLES, ROLE_COLORS, type Role } from './roles';
 import { orderedKeywords, type GrammarRule } from './shared';
@@ -35,7 +36,7 @@ const PROFILE_ID = 'sinumerik';
 interface Grammar {
   defaultToken: string;
   ignoreCase: boolean;
-  tokenizer: { root: GrammarRule[] };
+  tokenizer: { root: GrammarRule[]; [state: string]: unknown[] };
 }
 
 /**
@@ -67,45 +68,9 @@ function compileRule([source, action]: GrammarRule, ignoreCase: boolean) {
   };
 }
 
-interface Emitted {
-  text: string;
-  role: string;
-}
-
-/** Monarch's tokenizer loop, for one line and one `root` state. */
+/** Monarch's tokenizer loop for one line, from the base state (`monarchSim.ts`). */
 function tokenize(line: string, built: Grammar = grammar): Emitted[] {
-  const rules = built.tokenizer.root.map((rule) => compileRule(rule, built.ignoreCase));
-  const out: Emitted[] = [];
-  let pos = 0;
-
-  while (pos < line.length) {
-    const rest = line.slice(pos);
-    const hit = rules.find((rule) => (rule.anchored ? pos === 0 : true) && rule.re.test(rest));
-    if (!hit) {
-      // Monarch advances one character with `defaultToken` when nothing matches.
-      out.push({ text: line[pos], role: built.defaultToken });
-      pos += 1;
-      continue;
-    }
-    const matches = rest.match(hit.re) as RegExpMatchArray;
-    expect(matches[0].length, `rule made no progress: ${hit.source}`).toBeGreaterThan(0);
-
-    if (Array.isArray(hit.action)) {
-      expect(matches.length, `group count of ${hit.source}`).toBe(hit.action.length + 1);
-      hit.action.forEach((_role, i) => {
-        expect(matches[i + 1], `group ${i + 1} of ${hit.source} took no part in the match`).toBeTypeOf('string');
-      });
-      const covered = hit.action.reduce((sum, _role, i) => sum + matches[i + 1].length, 0);
-      expect(covered, `groups must cover the whole match of ${hit.source}`).toBe(matches[0].length);
-      hit.action.forEach((role, i) => {
-        if (matches[i + 1] !== '') out.push({ text: matches[i + 1], role });
-      });
-    } else {
-      out.push({ text: matches[0], role: hit.action });
-    }
-    pos += matches[0].length;
-  }
-  return out;
+  return monarchTokens(built as unknown as MonarchLike, line);
 }
 
 /** `role:text` for everything the grammar gives a role to; neutral tokens are dropped. */
@@ -142,14 +107,12 @@ function contrast(a: string, b: string): number {
 }
 
 /** Every role the generated rules can emit, in the order they are declared. */
-const emitted: string[] = [
-  ...new Set(grammar.tokenizer.root.flatMap((rule) => (Array.isArray(rule[1]) ? rule[1] : [rule[1]]))),
-].filter((role) => role !== '');
+const emitted: string[] = emittedRoles(grammar as unknown as MonarchLike);
 
 describe('the sinumerik grammar', () => {
   it('every rule compiles as Monarch compiles it', () => {
     expect(grammar.tokenizer.root.length).toBeGreaterThan(20);
-    for (const rule of grammar.tokenizer.root) {
+    for (const rule of allRules(grammar as unknown as MonarchLike) as GrammarRule[]) {
       expect(() => compileRule(rule, grammar.ignoreCase)).not.toThrow();
       // Monarch reads `^` as the line-start anchor only at position 0; anywhere else it
       // would match at every token boundary.
@@ -223,7 +186,7 @@ describe('the sinumerik grammar reads a block', () => {
     ['GOTOF N200', ['keyword:GOTOF', 'blockNumber:N200']],
     ['R1=R2*2', ['variable:R1', 'operator:=', 'variable:R2', 'operator:*', 'number:2']],
     ['X=$AA_IM[X]', ['axis:X', 'operator:=', 'variable:$AA_IM', 'operator:[', 'operator:]']],
-    ['IF R1==5 GOTOB LOOP_A', ['keyword:IF', 'variable:R1', 'operator:==', 'number:5', 'keyword:GOTOB']],
+    ['IF R1==5 GOTOB LOOP_A', ['keyword:IF', 'variable:R1', 'operator:==', 'number:5', 'keyword:GOTOB', 'section:LOOP_A']],
     ['R1=1.5EX-3', ['variable:R1', 'operator:=', 'number:1.5EX-3']],
     [
       "R2='H7F' R3='B1001'",
@@ -313,6 +276,7 @@ describe('the sinumerik grammar reads a block', () => {
       'number:3',
       'operator:)',
       'keyword:GOTOF',
+      'section:END_A',
     ]);
   });
 
@@ -366,9 +330,10 @@ describe('the sinumerik grammar reads a block', () => {
     expect(at('/1 N50 LAB_D: G0')).toEqual(['skip:/1', 'blockNumber:N50', 'section:LAB_D:', 'gcode:G0']);
     // A label may start with the block-number prefix (§3.1 rule 3).
     expect(at('NEXT_PART:')).toEqual(['section:NEXT_PART:']);
-    // A jump names its target, but the target may just as well be a string variable that
-    // holds a label, so it keeps the neutral colour of a name.
-    expect(at('GOTOF LOOP_A')).toEqual(['keyword:GOTOF']);
+    // A jump names its target, and the tokenizer reads the name behind a jump keyword as a
+    // label (`syntax.labelAfter`, M12.5), so it is painted like the label it names. A block
+    // number, a parameter, a keyword, a call and an assignment behind it keep their own.
+    expect(at('GOTOF LOOP_A')).toEqual(['keyword:GOTOF', 'section:LOOP_A']);
     // Away from the head of the block a colon chains frames; `:=` is no label at all.
     expect(at('$P_PFRAME=FRAME_A:CROT(Z,45)')).toEqual([
       'variable:$P_PFRAME',
@@ -406,12 +371,98 @@ describe('the sinumerik grammar reads a block', () => {
       ':123 LAB_I:',
     ];
     for (const line of lines) {
+      // A jump target (`GOTOF LOOP_A`) is painted as a label too, but it is no definition.
       const labels = tokenize(line)
-        .filter((token) => token.role === 'section')
+        .filter((token) => token.role === 'section' && token.text.endsWith(':'))
         .map((token) => token.text);
       const expected = profileLabel(line);
       expect(labels, line).toEqual(expected === null ? [] : [expected]);
     }
+  });
+
+  // B1-G: the name behind a jump keyword is a label to the tokenizer (`syntax.labelAfter`,
+  // M12.5), so it is painted like the label it names; what is no label stays what it was.
+  it('paints the target of a jump like a label, and a jump keyword is never a label', () => {
+    expect(at('GOTOF SKIPSIM')).toEqual(['keyword:GOTOF', 'section:SKIPSIM']);
+    expect(at('N70 IF XNOW<=XBOT GOTOF LAST_CUT')).toContain('section:LAST_CUT');
+    expect(at('GOTOB LOOP_A ; BACK')).toEqual(['keyword:GOTOB', 'section:LOOP_A', 'comment:; BACK']);
+    expect(at('gotoc end_a')).toEqual(['keyword:gotoc', 'section:end_a']);
+    expect(at('GOTO LOOP2')).toEqual(['keyword:GOTO', 'section:LOOP2']);
+    // A block number, a parameter, a keyword, a string and an expression behind the jump keep their own colours.
+    expect(at('GOTOF N100')).toEqual(['keyword:GOTOF', 'blockNumber:N100']);
+    expect(at('GOTOB R10')).toEqual(['keyword:GOTOB', 'variable:R10']);
+    expect(at('GOTOF "STEP_"<<N')).toEqual(['keyword:GOTOF', 'string:"STEP_"', 'operator:<<']);
+    // A call, an assignment and an indexed name are no target either.
+    expect(at('GOTO FOO(1)')).not.toContain('section:FOO');
+    expect(at('GOTO FOO=1')).not.toContain('section:FOO');
+    expect(at('GOTO FOO[2]')).not.toContain('section:FOO');
+    // `GOTOF:20` is the jump to the main block `:20` (B1); read as a label, the colour said
+    // a label named GOTOF stood there.
+    expect(at('GOTOF:20')).toEqual(['keyword:GOTOF', 'operator::', 'number:20']);
+    expect(at('GOTOF :20')).toEqual(['keyword:GOTOF', 'operator::', 'number:20']);
+    // A real label that merely starts with a jump keyword is one.
+    expect(at('GOTOF_A: G1')).toEqual(['section:GOTOF_A:', 'gcode:G1']);
+  });
+
+  // B1-G: the names a `DEF` block declares (`syntax.declareAfter`, M12.5) are variables. Which
+  // identifier declares depends on what stood before it on the line, so the grammar has states
+  // for it (`declareStates`); they end at the end of the line.
+  it('paints the names a DEF block declares as variables', () => {
+    expect(at('DEF INT COUNTER')).toEqual(['keyword:DEF', 'keyword:INT', 'variable:COUNTER']);
+    expect(at('N10 DEF INT COUNTER')).toEqual(['blockNumber:N10', 'keyword:DEF', 'keyword:INT', 'variable:COUNTER']);
+    expect(at('DEF REAL WIDTH, DEPTH=2.5, AREA[3]')).toEqual([
+      'keyword:DEF', 'keyword:REAL', 'variable:WIDTH', 'operator:,', 'variable:DEPTH', 'operator:=', 'number:2.5', 'operator:,',
+      'variable:AREA', 'operator:[', 'number:3', 'operator:]',
+    ]);
+    expect(at('DEF STRING[16] STEPNAME="AB"')).toEqual([
+      'keyword:DEF', 'keyword:STRING', 'operator:[', 'number:16', 'operator:]', 'variable:STEPNAME', 'operator:=', 'string:"AB"',
+    ]);
+    expect(at('DEF INT A,B')).toEqual(['keyword:DEF', 'keyword:INT', 'variable:A', 'operator:,', 'variable:B']);
+    // Behind a skip mark and a label, as the tokenizer's block head allows.
+    expect(at('/1 DEF REAL B')).toEqual(['skip:/1', 'keyword:DEF', 'keyword:REAL', 'variable:B']);
+    expect(at('/1 /3 DEF INT A')).toEqual(['skip:/1', 'skip:/3', 'keyword:DEF', 'keyword:INT', 'variable:A']);
+    expect(at('  def int a, b')).toEqual(['keyword:def', 'keyword:int', 'variable:a', 'operator:,', 'variable:b']);
+    expect(at('N10 LOOP_A: DEF INT A')).toEqual(['blockNumber:N10', 'section:LOOP_A:', 'keyword:DEF', 'keyword:INT', 'variable:A']);
+    // A name the profile lists as a keyword is the keyword, and a name behind an `=` is no declaration.
+    expect(at('DEF INT A = B')).toEqual(['keyword:DEF', 'keyword:INT', 'variable:A', 'operator:=']);
+    // A `,` inside brackets or a call separates arguments, not names.
+    expect(at('DEF REAL A=SIN(1,2), B')).toEqual([
+      'keyword:DEF', 'keyword:REAL', 'variable:A', 'operator:=', 'keyword:SIN', 'operator:(', 'number:1', 'operator:,', 'number:2',
+      'operator:)', 'operator:,', 'variable:B',
+    ]);
+    expect(at('DEF REAL M[2,3], K')).toEqual([
+      'keyword:DEF', 'keyword:REAL', 'variable:M', 'operator:[', 'number:2', 'operator:,', 'number:3', 'operator:]', 'operator:,', 'variable:K',
+    ]);
+    // A comment ends the list.
+    expect(at('DEF INT A ; B, C')).toEqual(['keyword:DEF', 'keyword:INT', 'variable:A', 'comment:; B, C']);
+    // Away from the head of the block, and without a type in front, nothing is declared.
+    expect(at('G1 DEF INT A')).not.toContain('variable:A');
+    expect(at('DEF A')).not.toContain('variable:A');
+    // The use of a declared name on a later line is a name (one line at a time).
+    expect(at('N20 XNOW=XNOW+1')).not.toContain('variable:XNOW');
+  });
+
+  it('leaves a state at the end of the line, whatever the line was', () => {
+    // Whatever stack a line ends in, the next line starts as a line of the base state does:
+    // a half-typed `DEF` must not paint the lines below it.
+    for (const line of ['DEF INT A', 'DEF INT', 'DEF REAL A[3,', 'DEF STRING[32', 'N10 DEF INT A, B=SIN(', 'DEF', 'DEF INT A ; comment']) {
+      const { stack } = monarchRun(grammar as unknown as MonarchLike, line);
+      for (const next of ['N20 G1 X10', 'GOTOF LOOP_A', 'X5 Y6', '', 'DEF INT A,B']) {
+        expect(monarchRun(grammar as unknown as MonarchLike, next, stack).tokens, `${line} / ${next}`).toEqual(
+          monarchRun(grammar as unknown as MonarchLike, next).tokens,
+        );
+      }
+    }
+    // It is the first rule of every state besides `root`, and it needs no particular character.
+    for (const [state, rules] of Object.entries(grammar.tokenizer)) {
+      if (state !== 'root') expect(rules[0], state).toEqual(['^', { token: '@rematch', next: '@popall' }]);
+    }
+    expect(Object.keys(grammar.tokenizer).sort()).toEqual(['declare', 'declareName', 'declareNest', 'root']);
+  });
+
+  it('paints a stack of block skips', () => {
+    expect(at('/1 /3 N20 G1 X1')).toEqual(['skip:/1', 'skip:/3', 'blockNumber:N20', 'gcode:G1', 'axis:X1']);
+    expect(at('/0 /9 N30 G0 Z5')).toEqual(['skip:/0', 'skip:/9', 'blockNumber:N30', 'gcode:G0', 'axis:Z5']);
   });
 
   it('keeps an address that is written with `=` in the role it has without one', () => {
@@ -508,8 +559,8 @@ describe('the sinumerik grammar reads a block', () => {
   it('leaves a name it has no meaning for in one neutral token', () => {
     // §3.6: a tokenizer cannot tell a global user variable from a subprogram called by
     // name, so the grammar does not pretend it can.
-    const tokens = tokenize('GOTOF PART_TWO');
-    expect(tokens.map((token) => token.text)).toEqual(['GOTOF', ' ', 'PART_TWO']);
+    const tokens = tokenize('G1 PART_TWO');
+    expect(tokens.map((token) => token.text)).toEqual(['G1', ' ', 'PART_TWO']);
     expect(tokens[2].role).toBe('');
   });
 
@@ -718,7 +769,7 @@ describe('over the Sinumerik fixtures', () => {
           if (token.role !== '') seen.add(token.role);
         }
         const label = profileLabel(line);
-        const sections = tokens.filter((token) => token.role === 'section').map((token) => token.text);
+        const sections = tokens.filter((token) => token.role === 'section' && token.text.endsWith(':')).map((token) => token.text);
         expect(sections, `${rel}: ${line}`).toEqual(label === null ? [] : [label]);
         lines += 1;
       }

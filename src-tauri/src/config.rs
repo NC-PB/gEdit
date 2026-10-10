@@ -228,20 +228,8 @@ pub fn save_json_object_versioned(
     current: &JsonFile,
     version_now: u32,
 ) -> Result<(), String> {
-    if current.read_only {
-        return Err(current
-            .error
-            .clone()
-            .unwrap_or_else(|| format!("{name}: written by a newer gEdit and not overwritten")));
-    }
-    // Nothing is known about what is in there, so nothing is thrown away: the
-    // rescue-and-replace below is for a file we have read and judged, not for
-    // one we could not open (G8 M2).
-    if current.unreadable {
-        return Err(current
-            .error
-            .clone()
-            .unwrap_or_else(|| format!("{name}: could not be read, so it is not replaced")));
+    if let Some(refusal) = refusal(name, current) {
+        return Err(refusal);
     }
     object.insert(VERSION_KEY.to_owned(), Value::Number(version_now.into()));
     // Pretty, with a trailing newline: the user can open this file in the editor
@@ -258,9 +246,121 @@ pub fn save_json_object_versioned(
     if current.unusable {
         // Best effort. Losing the rescue copy must not block the write, because
         // then a single broken file would make the app unable to save forever.
-        let _ = std::fs::rename(path, bak_path(path));
+        // (The one explicit "replace" the user asks for is stricter, see
+        // [`replace_json_object_versioned`].)
+        let _ = keep_backup(path);
     }
     write_atomic(path, &bytes).map_err(|err| format!("{name}: {err}"))
+}
+
+/// Why a write over `current` is refused outright, if it is: a file from a newer
+/// gEdit, or one whose contents are unknown.
+fn refusal(name: &str, current: &JsonFile) -> Option<String> {
+    if current.read_only {
+        return Some(
+            current
+                .error
+                .clone()
+                .unwrap_or_else(|| format!("{name}: written by a newer gEdit and not overwritten")),
+        );
+    }
+    // Nothing is known about what is in there, so nothing is thrown away: the
+    // rescue-and-replace is for a file we have read and judged, not for one we
+    // could not open (G8 M2).
+    if current.unreadable {
+        return Some(
+            current
+                .error
+                .clone()
+                .unwrap_or_else(|| format!("{name}: could not be read, so it is not replaced")),
+        );
+    }
+    None
+}
+
+/// Replaces the file with `object` after keeping whatever is there as a backup next
+/// to it, and answers the backup's file name (`None` when there was no file).
+///
+/// This is the user's "Replace with an empty file": unlike a normal save it keeps
+/// the old file **whatever it holds** (a file Rust can parse may still be one the
+/// webview cannot use), and a copy that fails is an error, not something to carry
+/// on past: the old file is then still where it was. A file from a newer gEdit and
+/// one that cannot be read are refused, as for every write.
+pub fn replace_json_object_versioned(
+    path: &Path,
+    name: &str,
+    object: Map<String, Value>,
+    version_now: u32,
+) -> Result<Option<String>, String> {
+    let current = read_json_object_versioned(path, name, version_now);
+    if let Some(refusal) = refusal(name, &current) {
+        return Err(refusal);
+    }
+    let backup = if path.exists() {
+        let kept = keep_backup(path).map_err(|err| {
+            format!(
+                "{name}: a copy of the old file could not be kept ({err}), so it is not replaced"
+            )
+        })?;
+        kept.file_name().map(|n| n.to_string_lossy().into_owned())
+    } else {
+        None
+    };
+    // What is on disk now is judged and saved, so the write below does no rescue
+    // of its own.
+    save_json_object_versioned(path, name, object, &JsonFile::default(), version_now)?;
+    Ok(backup)
+}
+
+/// Copies `path` to a backup beside it and answers the backup's path: `<name>.bak`
+/// when that is free, otherwise `<name>.<yyyymmdd-hhmmss>.bak` (and a counter if
+/// that is taken too), so an earlier rescue copy is never overwritten.
+pub fn keep_backup(path: &Path) -> std::io::Result<PathBuf> {
+    let mut target = bak_path(path);
+    if target.exists() {
+        let base = path.file_name().unwrap_or_default().to_string_lossy();
+        let stamp = timestamp_now();
+        let mut n = 0u32;
+        loop {
+            let suffix = if n == 0 {
+                String::new()
+            } else {
+                format!("-{n}")
+            };
+            target = path.with_file_name(format!("{base}.{stamp}{suffix}{BAK_SUFFIX}"));
+            if !target.exists() {
+                break;
+            }
+            n += 1;
+        }
+    }
+    std::fs::copy(path, &target)?;
+    Ok(target)
+}
+
+/// `yyyymmdd-hhmmss` in UTC.
+fn timestamp_now() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let (days, rest) = ((secs / 86_400) as i64, secs % 86_400);
+    // Civil date from days since 1970-01-01 (proleptic Gregorian).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!(
+        "{year:04}{month:02}{day:02}-{:02}{:02}{:02}",
+        rest / 3_600,
+        rest % 3_600 / 60,
+        rest % 60
+    )
 }
 
 /// `<path>.bak`, the name an unusable file is moved aside to.
@@ -330,17 +430,6 @@ pub fn config_load(app: AppHandle) -> Result<ConfigLoad, String> {
 #[tauri::command]
 pub fn settings_save(app: AppHandle, settings: Value) -> Result<(), String> {
     save_settings(&paths::app_dirs(&app)?, settings)
-}
-
-/// The user's settings as Rust sees them. AD-8 keeps the script settings
-/// (`scripts.python`, `scripts.folders`, `scripts.timeoutSeconds`,
-/// `scripts.showBundled`) off the IPC boundary; M4 reads them through here.
-#[allow(dead_code)] // M4 (scripts) is the first caller
-pub fn read_settings(app: &AppHandle) -> Map<String, Value> {
-    match paths::app_dirs(app) {
-        Ok(dirs) => read_json_object(&dirs.settings_file(), paths::SETTINGS_FILE_NAME).value,
-        Err(_) => Map::new(),
-    }
 }
 
 /// Makes sure `settings.json` exists, grants that one file to the fs scope and
@@ -591,6 +680,41 @@ mod tests {
         assert_eq!(fs::read_to_string(bak_path(&path)).unwrap(), "{not json");
         assert_eq!(parse(&path).get(VERSION_KEY), Some(&Value::from(1)));
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A second broken file does not erase the first rescue copy (B1 A4).
+    #[test]
+    fn a_second_bad_file_keeps_the_first_backup() {
+        let dir = scratch("config", "bak-twice");
+        let path = dir.join(paths::SETTINGS_FILE_NAME);
+        fs::write(&path, "{first").unwrap();
+        let current = read_json_object(&path, paths::SETTINGS_FILE_NAME);
+        save_json_object(&path, paths::SETTINGS_FILE_NAME, Map::new(), &current).unwrap();
+        fs::write(&path, "{second").unwrap();
+        let current = read_json_object(&path, paths::SETTINGS_FILE_NAME);
+        save_json_object(&path, paths::SETTINGS_FILE_NAME, Map::new(), &current).unwrap();
+
+        assert_eq!(fs::read_to_string(bak_path(&path)).unwrap(), "{first");
+        let others: Vec<String> = fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|n| n.ends_with(".bak") && n != "settings.json.bak")
+            .collect();
+        assert_eq!(others.len(), 1, "{others:?}");
+        assert_eq!(fs::read_to_string(dir.join(&others[0])).unwrap(), "{second");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_backup_stamp_is_a_utc_date_and_time() {
+        let stamp = timestamp_now();
+        assert_eq!(stamp.len(), 15, "{stamp}");
+        assert_eq!(stamp.as_bytes()[8], b'-');
+        assert!(stamp.starts_with("20"), "{stamp}");
+        assert!(stamp
+            .bytes()
+            .enumerate()
+            .all(|(i, b)| i == 8 || b.is_ascii_digit()));
     }
 
     /// A good file is replaced in place; no `.bak` is left lying around.

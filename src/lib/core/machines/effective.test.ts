@@ -1,5 +1,4 @@
-// The effective machine (plan §7.15, AD-31). Written with `effective.ts` by the M6
-// prelude (P6); **WP6.8 owns both from Wave A on** and adds the selection-order and
+// The effective machine (plan §7.15, AD-31). Written with `effective.ts` (WP6.8); it also holds the selection-order and
 // mismatch cases that need the service around them.
 
 import { describe, expect, it } from 'vitest';

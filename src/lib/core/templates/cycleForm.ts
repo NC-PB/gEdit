@@ -1,5 +1,5 @@
 // Cycle forms (Phase 3 plan §6.11, AD-39, P3.8; `docs/planning/code-assistant.md` "Cycle forms").
-// Written by the P3b prelude as stubs; owned by P3.8.
+// Built by P3.8.
 //
 // "Edit Cycle" (`nc.editCycle`, P3.5 wires it) opens a form with one field per parameter of the
 // cycle at the cursor, pre-filled from its block, and rewrites the block on confirm; on a line
@@ -25,7 +25,7 @@
 //     know for the cycle is kept (`CycleForm.kept`), as are the block number, the other codes
 //     (`G98`), the comment and the spacing.
 //  3. **The fields.** Id: the address; label: `<address> — <the parameter's label>`; type
-//     `integer` for `unit: 'count'` and the tool, `D` and `H` words, `number` otherwise;
+//     `integer` for `unit: 'count'` (not with `decimals`, B1) and the tool, `D` and `H` words, `number` otherwise;
 //     `required`, `min`, `max` from the parameter. A value written as a variable, an expression or
 //     a word (`Z#101`, `Q206=FAUTO`, `CYCLE83(R1,…)`) is shown in a read-only text field and kept.
 //     **A value is typed as it is written** (the field shows `50` of a point-less `X50`, and `60`
@@ -272,7 +272,8 @@ function paramRows(words: readonly InspectedWord[], entry: CodeEntry): Map<strin
 }
 
 function isWholeNumberWord(param: CodeParam, profile: Profile): boolean {
-  if (param.unit === 'count') return true;
+  // B1 (NC-06): a count with `decimals` is a real number read as written.
+  if (param.unit === 'count') return param.decimals !== true;
   const address = upper(param.address);
   return address === upper(profile.addresses?.tool) || address === 'D' || address === 'H';
 }

@@ -88,7 +88,7 @@ export interface FileOpsDeps {
   profiles: ProfileRegistry;
   fs: FileSystemAccess;
   /** `platform/commands.ts` `filesStat`: with `partial`, an `unavailable` answer resolves. */
-  filesStat(paths: string[], o?: { partial?: boolean }): Promise<FileStat[]>;
+  filesStat(paths: string[], o?: { partial?: boolean; canonical?: boolean }): Promise<FileStat[]>;
   /**
    * M7, AD-21: copies the file aside before the write that overwrites it. Answers where
    * the copy went, `null` when there was nothing to copy (`files.backup` is `off`, or the
@@ -101,6 +101,8 @@ export interface FileOpsDeps {
   fileMemory: Pick<FileMemoryStore, 'profileFor' | 'machineFor' | 'remember'>;
   /** False in a plain browser, where there is no file system to reach. */
   isTauri(): boolean;
+  /** The app's clock, for `DiskStamp.takenAtMs`. `Date.now` unless a test pins it. */
+  now?(): number;
 }
 
 /**
@@ -181,6 +183,26 @@ export function diskChanged(stamp: DiskStamp, stat: FileStat): boolean {
   return stamp.mtimeMs !== null && stat.mtimeMs !== null && stat.mtimeMs !== stamp.mtimeMs;
 }
 
+/**
+ * How close (ms) a file's modification time may lie to the moment its stamp was taken for
+ * the stamp to be *racy*: a file system that keeps time in 2 s steps (FAT32, exFAT) gives
+ * a second write of the same size inside that step the same time, so size and time alone
+ * cannot tell the two files apart. 2 s of granularity plus a margin.
+ */
+export const RACY_WINDOW_MS = 2500;
+
+/**
+ * Whether a stamp could be blind to a same-size rewrite: it has a time, it knows when it
+ * was taken, and the two are within [`RACY_WINDOW_MS`]. A stamp from before `takenAtMs`
+ * existed is not racy (nothing is known), and a time far in the future is a clock that
+ * disagrees with ours, not a write in progress, so it is not either.
+ */
+export function isRacy(stamp: DiskStamp): boolean {
+  if (stamp.mtimeMs === null || stamp.takenAtMs === undefined) return false;
+  const gap = stamp.takenAtMs - stamp.mtimeMs;
+  return gap < RACY_WINDOW_MS && gap > -60_000;
+}
+
 /** A minimal listener list; one failing listener never stops the others. */
 function emitter<A extends unknown[]>(): { add(cb: (...a: A) => void): Disposable; fire(...a: A): void } {
   const listeners = new Set<(...a: A) => void>();
@@ -210,6 +232,7 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
   const saveEvent = emitter<[DocId, string]>();
   const willCloseEvent = emitter<[DocId]>();
   const quitHandlers = new Set<() => Promise<void> | void>();
+  const now = (): number => (deps.now ? deps.now() : Date.now());
 
   // -- helpers --------------------------------------------------------------
 
@@ -244,7 +267,10 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
    * gets `undefined` knows only that it knows nothing, which is the one answer that
    * makes it ask instead of write.
    */
-  async function statOf(paths: string[], o?: { partial?: boolean }): Promise<FileStat[] | undefined> {
+  async function statOf(
+    paths: string[],
+    o?: { partial?: boolean; canonical?: boolean },
+  ): Promise<FileStat[] | undefined> {
     try {
       return await deps.filesStat(paths, o);
     } catch (err) {
@@ -255,16 +281,16 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
 
   /**
    * The stat of one path, or `undefined` for "no answer" **and** "no such entry" — and
-   * for an `unavailable` one (a hung share, TODO Next up 8), which looks like "outside
+   * for an `unavailable` one (a hung share), which looks like "outside
    * the scope" and would otherwise read as "no file there".
    */
-  async function statOne(path: string): Promise<FileStat | undefined> {
-    const stat = (await statOf([path]))?.[0];
+  async function statOne(path: string, o?: { canonical?: boolean }): Promise<FileStat | undefined> {
+    const stat = (await statOf([path], o))?.[0];
     return stat?.unavailable === true ? undefined : stat;
   }
 
   function stampOf(bytes: Uint8Array, stat: FileStat | undefined): DiskStamp {
-    return { mtimeMs: stat?.mtimeMs ?? null, size: bytes.length, hash: fnv1a32(bytes) };
+    return { mtimeMs: stat?.mtimeMs ?? null, size: bytes.length, hash: fnv1a32(bytes), takenAtMs: now() };
   }
 
   /**
@@ -284,7 +310,51 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
       mtimeMs: stat ? stat.mtimeMs : (previous?.mtimeMs ?? null),
       size: bytes.length,
       hash: fnv1a32(bytes),
+      takenAtMs: now(),
     };
+  }
+
+  /**
+   * True when the file is not the one the stamp was taken from — `diskChanged`, and then,
+   * when size and time agree, the bytes.
+   *
+   * Size and mtime are a hint that FAT32 and exFAT can defeat: a post that rewrites a
+   * program to the same length inside the file system's 2 s step leaves both unchanged.
+   * So when they agree the file is read once and its hash compared with the stamp's. A
+   * file that cannot be read now cannot be ruled out, which is the answer that asks
+   * rather than writes.
+   */
+  async function changedOnDisk(stamp: DiskStamp, stat: FileStat, path: string): Promise<boolean> {
+    if (diskChanged(stamp, stat)) return true;
+    if (!stat.allowed || !stat.exists) return false;
+    let bytes: Uint8Array;
+    try {
+      bytes = await deps.fs.readFile(path);
+    } catch (err) {
+      console.warn(`could not read ${path} to compare it`, err);
+      return true;
+    }
+    return bytes.length !== stamp.size || fnv1a32(bytes) !== stamp.hash;
+  }
+
+  /**
+   * Why a file of unknown or excessive size may not be pulled into the webview, or `null`
+   * when it may (G8 F4). One rule for Open and Reload: no answer from `files_stat` is not
+   * "small enough", because the read that follows cannot be cancelled and a 2 GB file
+   * would already be in memory by the time its size were known.
+   *
+   * `stat` is `undefined` when the call did not answer at all. A file that is not there
+   * (`exists: false`) passes: the read reports it in the OS's own words.
+   */
+  function sizeRefusal(name: string, stat: FileStat | undefined): string | null {
+    if (stat === undefined) return t('files.noAnswer', { name });
+    if (stat.unavailable === true) return t('files.notAnswering', { name });
+    if (!stat.exists) return null;
+    if (stat.size === null) return stat.isDir ? null : t('files.noAnswer', { name });
+    if (stat.size > MAX_OPEN_BYTES) {
+      return t('files.tooLarge', { name, size: formatBytes(stat.size), limit: formatBytes(MAX_OPEN_BYTES) });
+    }
+    return null;
   }
 
   /**
@@ -356,31 +426,30 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     path: string,
     notices: string[],
     refuse: (name: string, detail: string) => Promise<void>,
-  ): Promise<DocId | null> {
+    place: { activate: boolean; index: number | undefined },
+  ): Promise<{ id: DocId; created: boolean } | null> {
     const name = baseName(path);
     // The stat runs BEFORE the read: reading first would mean a multi-gigabyte file is
     // already in the webview by the time its size is known (G8 F4). The same answer is
     // the disk stamp below, so this costs no extra round trip.
-    const answered = (await statOf([path], { partial: true }))?.[0];
-    // A share that does not answer (TODO Next up 8): the read would block until the OS
+    const answered = (await statOf([path], { partial: true, canonical: true }))?.[0];
+    // A share that does not answer: the read would block until the OS
     // gives up, and it cannot be cancelled — while it waits, it holds the file-command
     // lock, so Save, Close and the close button would do nothing, silently, for minutes.
-    if (answered?.unavailable === true) {
-      await refuse(name, t('files.notAnswering', { name }));
-      return null;
-    }
     const stat = answered;
-    if (stat && stat.size !== null && stat.size > MAX_OPEN_BYTES) {
-      await refuse(
-        name,
-        t('files.tooLarge', {
-          name,
-          size: formatBytes(stat.size),
-          limit: formatBytes(MAX_OPEN_BYTES),
-        }),
-      );
+    // Also the share that gave no answer at all, and a size that is not known: the size
+    // check used to be skipped for those, which is when it matters most (B1 A1).
+    const refusal = sizeRefusal(name, stat);
+    if (refusal !== null) {
+      await refuse(name, refusal);
       return null;
     }
+
+    // The same file under another spelling (a symlink, a `..`, a mapped drive against its
+    // UNC name): the tab that owns it comes forward instead of a second one being made,
+    // because the later of two tabs on one file would silently overwrite the earlier.
+    const twin = docs.byIdentity(stat?.canonical);
+    if (twin) return { id: twin.id, created: false };
 
     let bytes: Uint8Array;
     try {
@@ -441,11 +510,12 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
         // A stripped NUL means the buffer no longer matches the file (AD-7).
         metaDirty: decoded.nul.stripped > 0,
         disk: stampOf(bytes, stat),
+        canonical: stat?.canonical ?? null,
         external: 'none',
         readOnly,
         readOnlyReason: binary ? 'binary' : readOnly ? 'attribute' : null,
       },
-      { activate: true },
+      { activate: place.activate, ...(place.index !== undefined ? { index: place.index } : {}) },
     );
     editor.createModel(id, decoded.text, profileId, eol);
 
@@ -464,10 +534,20 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     if (decoded.binary) notices.push(t('readOnly.openedBinary', { name, percent: decoded.binary.percent }));
     else if (readOnly) notices.push(t('readOnly.opened', { name }));
     openEvent.fire(id, path);
-    return id;
+    return { id, created: true };
   }
 
-  async function open(paths?: string[], opts?: { keepScratch?: boolean }): Promise<DocId[]> {
+  /**
+   * `opts.activate: false` is an open the user did not just ask for — the tail of a session
+   * restore. The documents are added behind the one in front: no focus is taken, an
+   * already-open file is left alone, refusals are collected into one box (never one box
+   * per file) and no summary replaces the status line. `opts.index` is where the first new
+   * tab goes, the next one after it, and so on; without it they go at the end.
+   */
+  async function open(
+    paths?: string[],
+    opts?: { keepScratch?: boolean; activate?: boolean; index?: number },
+  ): Promise<DocId[]> {
     if (!haveDisk()) return [];
     let wanted = paths;
     if (!wanted) {
@@ -493,26 +573,41 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
 
     // One file: the blocking box, unchanged, because it is the thing the user asked for.
     // Several: collect, and show one box after the loop (G8 M5).
-    const single = wanted.length === 1;
+    const background = opts?.activate === false;
+    const single = wanted.length === 1 && !background;
     const refusals: string[] = [];
     const refuse = async (name: string, detail: string): Promise<void> => {
       if (single) await reportError(t('files.openFailed', { name }), detail);
       else refusals.push(`${name}: ${detail}`);
     };
 
+    const focusExisting = (id: DocId): void => {
+      const existing = docs.get(id);
+      if (!existing) return;
+      if (!background) {
+        docs.activate(id);
+        notices.push(t('files.focused', { name: existing.title }));
+      }
+      if (!opened.includes(id)) opened.push(id);
+    };
+
     for (const path of wanted) {
       const existing = docs.byPath(path);
       if (existing) {
-        docs.activate(existing.id);
-        opened.push(existing.id);
-        notices.push(t('files.focused', { name: existing.title }));
+        focusExisting(existing.id);
         continue;
       }
-      const id = await openOne(path, notices, refuse);
-      if (id !== null) {
-        opened.push(id);
-        created++;
+      const result = await openOne(path, notices, refuse, {
+        activate: opts?.activate !== false,
+        index: opts?.index === undefined ? undefined : opts.index + created,
+      });
+      if (result === null) continue;
+      if (!result.created) {
+        focusExisting(result.id);
+        continue;
       }
+      opened.push(result.id);
+      created++;
     }
 
     // Only once something took its place, and never when it is what the user asked for (or when the
@@ -528,8 +623,12 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
 
     // The summary is shown even when something was refused: the refusal has its own box
     // and its own line in this message, so "Opened 3 files" is no longer suppressed by it.
+    // A background open leaves the summary out: what the user was told when the first tab
+    // came up (the files that were missing) stays on screen.
     const parts: string[] = [];
-    if (created === 1 && opened.length === 1) {
+    if (background) {
+      // nothing but the notices below
+    } else if (created === 1 && opened.length === 1) {
       parts.push(t('files.opened', { name: docs.get(opened[0])?.title ?? baseName(wanted[0]) }));
     } else if (created > 0) {
       parts.push(t('files.openedMany', { count: created }));
@@ -538,7 +637,7 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     if (parts.length > 0) {
       status.show(parts.join(' · '), refusals.length > 0 ? { error: true } : undefined);
     }
-    if (opened.length > 0) editor.focus();
+    if (opened.length > 0 && !background) editor.focus();
     return opened;
   }
 
@@ -687,7 +786,7 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
         doc.disk === null ||
         before === undefined ||
         doc.external !== 'none' ||
-        diskChanged(doc.disk, before);
+        (await changedOnDisk(doc.disk, before, path));
       if (suspect && before?.exists !== false && !(await confirmOverwrite(name))) {
         return 'cancelled';
       }
@@ -756,7 +855,9 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     if (tapeDropped) nul = NO_NUL;
     else if (doc.nul.stripped > 0) nul = { ...doc.nul, stripped: 0 };
 
-    const stat = await statOne(path);
+    // The identity is resolved only when the document is bound to another file (Save As);
+    // a plain Save keeps the one it has, so a save does not pay a resolve per folder.
+    const stat = await statOne(path, { canonical: doc.path !== path });
     docs.update(id, {
       path,
       untitledIndex: null,
@@ -771,6 +872,10 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
       metaDirty: false,
       external: 'none',
       disk: restamp(bytes, stat, doc.disk),
+      // Which file this now is. A stat that did not answer, or whose resolve failed this
+      // once, keeps what was known, unless the path changed (Save As): then nothing about
+      // the old file applies.
+      canonical: stat?.canonical ?? (doc.path === path ? (doc.canonical ?? null) : null),
     });
     if (editor.versionId(id) === versionBefore) editor.markClean(id);
     // Before the save event, so whatever listens to it sees the document's new dialect.
@@ -833,7 +938,15 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     // (AD-23): finding out by writing meant a backup of a file that was never replaced,
     // and then a failed write. The same stat is the changed-on-disk guard's when the
     // target is the document's own file.
-    const target = await statOne(path);
+    const target = await statOne(path, { canonical: true });
+    // The same file under another spelling (a symlink, a `..`, a mapped drive): found out
+    // by what Rust resolved, since the written paths differ.
+    const twin = docs.byIdentity(target?.canonical);
+    if (twin && twin.id !== doc.id) {
+      const name = baseName(path);
+      await reportError(t('files.saveFailed', { name }), t('files.alreadyOpen', { name: twin.title }));
+      return 'failed';
+    }
     if (target?.readonly === true) {
       status.show(t('readOnly.saveAsInstead', { name: baseName(path) }));
       return saveAsOutcome(doc.id);
@@ -1099,6 +1212,13 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
   async function reloadFromDisk(id: DocId): Promise<void> {
     const doc = docs.get(id);
     if (!doc?.path) return;
+    // The same size rule as Open: a file that grew past the limit, or whose size nobody
+    // can say, is not pulled into the webview (B1 A1).
+    const refusal = sizeRefusal(doc.title, (await statOf([doc.path], { partial: true }))?.[0]);
+    if (refusal !== null) {
+      await reportError(t('files.reloadFailed', { name: doc.title }), refusal);
+      return;
+    }
     let bytes: Uint8Array;
     try {
       bytes = await deps.fs.readFile(doc.path);
@@ -1136,6 +1256,8 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
       // The same rule as after a write: a stat that did not answer may not erase the
       // mtime the document had, or the poll compares sizes alone from then on.
       disk: restamp(bytes, stat, doc.disk),
+      // The identity is not asked for again (and a failed resolve may not erase it).
+      ...(stat?.canonical ? { canonical: stat.canonical } : {}),
       external: 'none',
     });
     status.show(t('files.reloaded', { name: doc.title }));
@@ -1173,18 +1295,22 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
    * `write` asks before it writes (G8 M7).
    */
   async function bindRestored(id: DocId, path: string, diskStamp: DiskStamp | null): Promise<void> {
-    const stat = await statOne(path);
+    const stat = await statOne(path, { canonical: true });
     if (stat?.allowed !== true) return;
     const doc = docs.get(id);
     if (!doc || doc.path !== null || doc.proposedPath !== path) return;
     const other = docs.byPath(path);
     if (other && other.id !== id) return;
+    // Another spelling of a file a tab already owns: stay unbound, like the case above.
+    const twin = docs.byIdentity(stat.canonical);
+    if (twin && twin.id !== id) return;
     const unknown = diskStamp === null && stat.exists;
     docs.update(id, {
       path,
       untitledIndex: null,
       proposedPath: null,
       disk: diskStamp,
+      canonical: stat.canonical ?? null,
       ...(unknown ? { external: 'changed' } : {}),
     });
     openEvent.fire(id, path);

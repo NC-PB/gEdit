@@ -1,8 +1,8 @@
 <!--
   The frame every in-app dialog sits in (plan §5 WP2.2, §7.9, AD-6). Owner: WP2.2.
 
-  Props are unchanged from the M2 prelude's stub, so WP2.4 (About, Shortcuts) and WP2.7
-  (Settings) need no edit. What WP2.2 added: focus moves into the dialog on mount and back
+  The props are the ones WP2.4 (About, Shortcuts) and WP2.7
+  (Settings) rely on. WP2.2 added: focus moves into the dialog on mount and back
   to whatever had it when the dialog closes, Tab cannot leave the panel, Esc cancels and
   Enter confirms.
 

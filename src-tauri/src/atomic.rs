@@ -56,12 +56,62 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
 }
 
 fn write_then_rename(temp: &Path, path: &Path, bytes: &[u8]) -> io::Result<()> {
-    let mut file = File::create(temp)?;
+    let mut file = match create_temp(temp, path) {
+        // The name carries our pid and a counter, so a file already under it is a
+        // leftover of a killed process that had the same pid: ours to remove. (One
+        // retry only; a second clash is an error like any other.)
+        Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
+            fs::remove_file(temp)?;
+            create_temp(temp, path)?
+        }
+        created => created?,
+    };
     file.write_all(bytes)?;
     // Before the rename, so that the rename never publishes an empty file.
     file.sync_all()?;
     drop(file);
+    keep_permissions(temp, path)?;
     fs::rename(temp, path)
+}
+
+/// Creates the temp file. On Unix, when the target already exists, the temp file is
+/// created with the target's permission bits from the start, so a file the user
+/// narrowed (say `chmod 600 settings.json`) is never readable by others, not even
+/// for the moment before the rename.
+#[cfg(unix)]
+fn create_temp(temp: &Path, target: &Path) -> io::Result<File> {
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    if let Ok(existing) = fs::metadata(target) {
+        if existing.is_file() {
+            options.mode(existing.permissions().mode() & 0o777);
+        }
+    }
+    options.open(temp)
+}
+
+#[cfg(not(unix))]
+fn create_temp(temp: &Path, _target: &Path) -> io::Result<File> {
+    File::create(temp)
+}
+
+/// Gives the temp file exactly the permissions of the file it replaces, so that a
+/// save does not undo a `chmod` (the `create` above is cut by the umask). A target
+/// that does not exist yet keeps the defaults. Unix only: on Windows the read-only
+/// attribute would make the rename itself fail.
+#[cfg(unix)]
+fn keep_permissions(temp: &Path, target: &Path) -> io::Result<()> {
+    match fs::metadata(target) {
+        Ok(existing) if existing.is_file() => fs::set_permissions(temp, existing.permissions()),
+        _ => Ok(()),
+    }
+}
+
+#[cfg(not(unix))]
+fn keep_permissions(_temp: &Path, _target: &Path) -> io::Result<()> {
+    Ok(())
 }
 
 /// `<parent>/.<name>.tmp-<pid>-<n>`, next to the target so that the rename stays
@@ -173,6 +223,53 @@ mod tests {
         } else {
             fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
         }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A `chmod` the user made on a config file survives the next save. The temp file
+    /// used to be created with the default mode, so the rename reset 600 to 644 (B1 A2).
+    #[cfg(unix)]
+    #[test]
+    fn a_save_keeps_the_permissions_of_the_file_it_replaces() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = scratch("keep-mode");
+        let file = dir.join("settings.json");
+        write_atomic(&file, b"{}").unwrap();
+        // 664 and 775 are what the umask (022) would cut: the creation mode alone, or a
+        // missing `set_permissions`, shows as 644 and 755.
+        for mode in [0o600, 0o640, 0o444, 0o664, 0o775] {
+            fs::set_permissions(&file, fs::Permissions::from_mode(mode)).unwrap();
+            write_atomic(&file, b"{\"a\":1}").unwrap();
+            let kept = fs::metadata(&file).unwrap().permissions().mode() & 0o777;
+            assert_eq!(kept, mode, "mode {mode:o} became {kept:o}");
+            assert_eq!(fs::read(&file).unwrap(), b"{\"a\":1}");
+        }
+        assert_eq!(temp_files(&dir), Vec::<String>::new());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A killed gEdit leaves `.name.tmp-<pid>-<n>` behind; a later process with the same
+    /// pid and a fresh counter meets it. That used to fail the save with "File exists"
+    /// (and only the error branch cleaned up, so the next save worked).
+    #[test]
+    fn a_stale_temp_file_with_the_same_name_does_not_fail_the_save() {
+        let dir = scratch("stale-temp");
+        let file = dir.join("settings.json");
+        write_atomic(&file, b"{\"old\":true}").unwrap();
+        let stale = temp_path(&file, &dir);
+        fs::write(&stale, b"left by a killed process").unwrap();
+
+        write_then_rename(&stale, &file, b"{\"new\":true}").unwrap();
+        assert_eq!(fs::read(&file).unwrap(), b"{\"new\":true}");
+        assert_eq!(temp_files(&dir), Vec::<String>::new());
+
+        // And a stale name that cannot be removed is still an error, not a loop.
+        let blocked = temp_path(&file, &dir);
+        fs::create_dir(&blocked).unwrap();
+        fs::write(blocked.join("inside"), b"x").unwrap();
+        assert!(write_then_rename(&blocked, &file, b"{}").is_err());
+        assert_eq!(fs::read(&file).unwrap(), b"{\"new\":true}");
         let _ = fs::remove_dir_all(&dir);
     }
 

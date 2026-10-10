@@ -30,6 +30,7 @@ function result(over: Partial<RunResult> = {}): RunResult {
     timedOut: false,
     cancelled: false,
     stdoutTruncated: false,
+    stderrTruncated: false,
     durationMs: 12,
     interpreter: '/usr/bin/python3',
     ...over,

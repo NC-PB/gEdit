@@ -440,7 +440,7 @@
     "outline": [
       {
         "kind": "program",
-        "pattern": "^\\s*O(?<name>[A-Z0-9]{1,4})\\s*$"
+        "pattern": "^\\s*O(?<name>[A-Z][A-Z0-9]{0,15}|\\d{1,16})\\s*$"
       },
       {
         "kind": "comment",
@@ -456,7 +456,7 @@
       },
       {
         "kind": "subprogram-call",
-        "pattern": "(?<![A-Z])(?<text>(?:CALL|MODIN)[ \\t]+O[A-Z0-9]{1,4}|G0*(?:16[1-9]|17[01]|20[5-9]|21[0-4])(?![\\d.]))"
+        "pattern": "(?<![A-Z])(?<text>(?:CALL|MODIN)[ \\t]+O(?:[A-Z][A-Z0-9]{0,15}|\\d{1,16})(?![A-Z0-9])|G0*(?:16[1-9]|17[0-6]|20[5-9]|21[0-4])(?![\\d.]))"
       },
       {
         "kind": "stop",
@@ -473,7 +473,7 @@
         "(?<![A-Z])RTS(?![A-Z0-9])"
       ],
       "start": [
-        "^\\s*O(?<name>[A-Z0-9]{1,4})\\s*$"
+        "^\\s*O(?<name>[A-Z][A-Z0-9]{0,15}|\\d{1,16})\\s*$"
       ]
     },
     "shortName": "Okuma",
@@ -495,7 +495,7 @@
           "CALL",
           "MODIN"
         ],
-        "pattern": "O[A-Z0-9]{1,4}"
+        "pattern": "O(?:[A-Z][A-Z0-9]{0,15}|\\d{1,16})(?![A-Z0-9])"
       },
       "comments": [
         {

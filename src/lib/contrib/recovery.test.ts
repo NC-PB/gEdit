@@ -47,7 +47,16 @@ const fake = vi.hoisted(() => ({
   started: 0,
   decided: 0,
   claimed: 0,
-  shown: [] as { text: string; error: boolean }[],
+  shown: [] as { text: string; error: boolean; sticky: boolean }[],
+  /** Paths another tab has open right now. */
+  openPaths: [] as string[],
+  /** Canonical paths of the files other tabs hold, however they were spelled (B1 integration). */
+  openIdentities: [] as string[],
+  /** What `files_stat` answers: path -> canonical path. */
+  canonical: {} as Record<string, string>,
+  /** The calls `files_stat` got, with the options of each. */
+  statCalls: [] as { paths: string[]; partial?: boolean; canonical?: boolean }[],
+  statFails: false,
 }));
 
 vi.mock('$lib/app/recovery', () => ({
@@ -99,8 +108,30 @@ vi.mock('$lib/app/dialogs', () => ({
 
 vi.mock('$lib/app/status', () => ({
   status: {
-    show: (text: string, o?: { error?: boolean }) =>
-      fake.shown.push({ text, error: o?.error === true }),
+    show: (text: string, o?: { error?: boolean; sticky?: boolean }) =>
+      fake.shown.push({ text, error: o?.error === true, sticky: o?.sticky === true }),
+  },
+}));
+
+vi.mock('$lib/stores/documents', () => ({
+  docs: {
+    byPath: (path: string) => (fake.openPaths.includes(path) ? { id: 'd9' } : undefined),
+    byIdentity: (canonical: string | null | undefined) =>
+      canonical && fake.openIdentities.includes(canonical) ? { id: 'd9' } : undefined,
+  },
+}));
+
+vi.mock('$lib/platform/commands', () => ({
+  // Like the real command: `canonical` comes back only when the caller asks for it
+  // (`platform/commands.ts`), so a caller that forgets the argument sees no identity.
+  filesStat: async (paths: string[], o: { partial?: boolean; canonical?: boolean } = {}) => {
+    if (fake.statFails) throw new Error('no answer');
+    fake.statCalls.push({ paths, ...o });
+    return paths.map((path) => ({
+      path,
+      exists: true,
+      ...(o.canonical === true ? { canonical: fake.canonical[path] ?? null } : {}),
+    }));
   },
 }));
 
@@ -122,6 +153,11 @@ beforeEach(() => {
   fake.decided = 0;
   fake.claimed = 0;
   fake.shown = [];
+  fake.openPaths = [];
+  fake.openIdentities = [];
+  fake.canonical = {};
+  fake.statCalls = [];
+  fake.statFails = false;
   fake.restore.mockClear();
   fake.discard.mockClear();
 });
@@ -138,6 +174,8 @@ describe('what it declares', () => {
       title: 'recovery.showPending',
       category: 'recovery.category',
     });
+    // The lasting sign for snapshots that cannot be written (B1 A2).
+    expect(contribution.statusItems.map((item) => item.id)).toEqual(['recovery']);
     expect('keys' in contribution.commands[0]).toBe(false);
   });
 
@@ -187,6 +225,100 @@ describe('the four answers', () => {
     expect(fake.restore).toHaveBeenCalledWith([kept]);
     expect(fake.shown[0].text).toContain('restored');
     expect(fake.discard).not.toHaveBeenCalled();
+  });
+
+  // B1 A2. A snapshot whose file another tab has open still restores, into an untitled
+  // tab (two tabs on one file would each think they own it). Nothing said so: the text
+  // appeared in a tab with the file's name and the first Save went to a Save As dialog.
+  it('says which restored files stayed untitled because another tab has them open', async () => {
+    const taken = entry({ key: 'd2', path: '/nc/open.nc', title: 'open.nc' });
+    fake.leftovers = [entry(), taken];
+    fake.openPaths = ['/nc/open.nc'];
+    fake.answers = [{ action: 'restore', entries: [entry(), taken] }];
+
+    await showLeftovers();
+    expect(fake.shown).toHaveLength(1);
+    const [message] = fake.shown;
+    expect(message.text).toContain('2 documents were restored');
+    expect(message.text).toContain('open.nc is already open in another tab');
+    expect(message.text).toContain('Save As');
+    // The file that nobody else has open is not named.
+    expect(message.text).not.toContain('prog.nc');
+    // What it asks for is not done in four seconds.
+    expect(message.sticky).toBe(true);
+  });
+
+  // B1 integration (A1 x A2). `bindRestored` refuses a twin by canonical path, so a
+  // snapshot of another spelling of an open file also stays untitled: that has to be said.
+  it('names a file another tab holds under another spelling (same canonical path)', async () => {
+    const taken = entry({ key: 'd2', path: '/link/open.nc', title: 'open.nc' });
+    fake.leftovers = [entry(), taken];
+    fake.canonical = { '/link/open.nc': '/real/open.nc', '/nc/prog.nc': '/nc/prog.nc' };
+    fake.openIdentities = ['/real/open.nc'];
+    fake.answers = [{ action: 'restore', entries: [entry(), taken] }];
+
+    await showLeftovers();
+    expect(fake.shown).toHaveLength(1);
+    expect(fake.shown[0].text).toContain('open.nc is already open in another tab');
+    expect(fake.shown[0].text).not.toContain('prog.nc');
+    expect(fake.shown[0].sticky).toBe(true);
+  });
+
+  // B1 harness (b1-recovery-2): the taken-path check read `canonical` from a `files_stat`
+  // that returns it only when asked, and did not ask: a symlink spelling went unnamed.
+  it('asks files_stat for the real path, because it is not sent unasked', async () => {
+    const taken = entry({ key: 'd2', path: '/link/open.nc', title: 'open.nc' });
+    fake.leftovers = [taken];
+    fake.canonical = { '/link/open.nc': '/real/open.nc' };
+    fake.openIdentities = ['/real/open.nc'];
+    fake.answers = [{ action: 'restore', entries: [taken] }];
+
+    await showLeftovers();
+    expect(fake.statCalls.length).toBeGreaterThan(0);
+    expect(fake.statCalls.every((call) => call.canonical === true)).toBe(true);
+    expect(fake.shown[0].text).toContain('open.nc is already open in another tab');
+  });
+
+  it('names the second of two snapshots that are one file under two spellings', async () => {
+    const a = entry({ key: 'd1', path: '/real/x.nc', title: 'x.nc' });
+    const b = entry({ key: 'd2', path: '/link/x.nc', title: 'x.nc' });
+    fake.leftovers = [a, b];
+    fake.canonical = { '/real/x.nc': '/real/x.nc', '/link/x.nc': '/real/x.nc' };
+    fake.answers = [{ action: 'restore', entries: [a, b] }];
+
+    await showLeftovers();
+    expect(fake.shown[0].text).toContain('x.nc is already open in another tab');
+  });
+
+  it('falls back to the written path when the file system gives no canonical path', async () => {
+    const taken = entry({ key: 'd2', path: '/nc/open.nc', title: 'open.nc' });
+    fake.leftovers = [taken];
+    fake.openPaths = ['/nc/open.nc'];
+    fake.statFails = true;
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    fake.answers = [{ action: 'restore', entries: [taken] }];
+
+    await showLeftovers();
+    expect(fake.shown[0].text).toContain('open.nc is already open in another tab');
+  });
+
+  it('names a file once when two snapshots of it come back together', async () => {
+    const first = entry({ key: 'd1' });
+    const second = entry({ key: 'd2', session: 's-2' });
+    fake.leftovers = [first, second];
+    fake.answers = [{ action: 'restore', entries: [first, second] }];
+
+    await showLeftovers();
+    expect(fake.shown[0].text).toContain('prog.nc is already open in another tab');
+  });
+
+  it('keeps the plain message when no restored file is taken', async () => {
+    fake.leftovers = [entry(), entry({ key: 'd2', path: null, title: 'Untitled-1' })];
+    fake.answers = [{ action: 'restore', entries: fake.leftovers }];
+
+    await showLeftovers();
+    expect(fake.shown[0].text).not.toContain('already open');
+    expect(fake.shown[0].sticky).toBe(false);
   });
 
   it('treats Esc and a click outside as Later: nothing opens, nothing is deleted', async () => {

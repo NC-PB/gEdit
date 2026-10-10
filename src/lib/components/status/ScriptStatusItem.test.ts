@@ -4,8 +4,8 @@
 //
 // What the three cases pin is what a scenario reads: the element is always there, it is
 // empty and inert while nothing runs, and while a run is in flight it names the script,
-// carries its id and is the Cancel control. `core/scripting/filter.ts` is WP5.1's and
-// still the P5 stub, so `scriptLabel` is faked.
+// carries its id and is the Cancel control. `scriptLabel` from `core/scripting/filter.ts`
+// is faked.
 
 import { render } from 'svelte/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';

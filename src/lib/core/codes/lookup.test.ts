@@ -190,7 +190,7 @@ describe('completionsFor', () => {
   it('sorts by number, not by text, and keeps a decimal code next to its base', () => {
     const hits = completionsFor(fanuc, 'G5', false).map((e) => e.code);
     expect(hits).toEqual([
-      'G5', 'G5.1', 'G50', 'G50.1', 'G51', 'G51.1', 'G52', 'G53', 'G53.1', 'G54', 'G54.1', 'G55', 'G56', 'G57', 'G58', 'G59',
+      'G5', 'G5.1', 'G5.4', 'G50', 'G50.1', 'G51', 'G51.1', 'G52', 'G53', 'G53.1', 'G54', 'G54.1', 'G55', 'G56', 'G57', 'G58', 'G59',
     ]);
     expect(completionsFor(fanuc, 'M', false).map((e) => e.code).slice(0, 4)).toEqual([
       'M0', 'M1', 'M2', 'M3',

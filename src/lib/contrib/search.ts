@@ -1,4 +1,4 @@
-// The Home tab's "Search" group (plan §6 M11, WP11.1, §7.13, AD-25). One feature per file
+// The Edit tab's "Search" group (plan §6 M11, WP11.1, §7.13, AD-25). One feature per file
 // (plan AD-3); see ./README.md.
 //
 // Three commands:
@@ -249,8 +249,8 @@ export default {
     },
   ],
   ribbon: [
-    { tab: 'home', group: 'search.group', command: 'search.findAll', order: 130 },
-    { tab: 'home', group: 'search.group', command: 'search.replace', order: 131 },
-    { tab: 'home', group: 'search.group', command: 'search.wholeAddressInFind', order: 132 },
+    { tab: 'edit', group: 'search.group', command: 'search.findAll', order: 130 },
+    { tab: 'edit', group: 'search.group', command: 'search.replace', order: 131 },
+    { tab: 'edit', group: 'search.group', command: 'search.wholeAddressInFind', order: 132 },
   ],
 } satisfies Contribution;

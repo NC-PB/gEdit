@@ -1,5 +1,4 @@
-// Profile inheritance (plan §7.1, AD-16). Written with `resolve.ts` by the M6 prelude
-// (P6); WP6.1 owns both from Wave A on and adds the rest of its table.
+// Profile inheritance (plan §7.1, AD-16). Written with `resolve.ts` (WP6.1).
 
 import { describe, expect, it } from 'vitest';
 import { BUILTIN_PROFILE_SOURCES } from '$lib/data/profiles';

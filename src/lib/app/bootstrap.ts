@@ -1,5 +1,5 @@
-// Starting the app (plan §5 WP1.5). Owner: WP1.5 in M1; the prelude owns this file from
-// M2 on (plan §4.2), so the exported names stay.
+// Starting the app (plan §5 WP1.5). Owner: WP1.5 in M1; later milestones
+// extend it (plan §4.2), so the exported names stay.
 //
 // The order is fixed:
 //   1. set the command context provider

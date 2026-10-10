@@ -1,0 +1,32 @@
+{
+  "$format": 1,
+  "note": [
+    "B1 (plan 'Two-block schema'; CodeEntry.blocks, CodeParam.block). Which block of a two-block lathe cycle a written block is, read from the shipped databases as the app resolves them. 'written' is the addresses the block writes, besides the cycle code; 'block' is 1, 2 or null (unknown: the inspector then pairs neighbouring blocks); 'params' are the addresses of that block's parameters in database order.",
+    "src/lib/core/codes/blocks.test.ts holds cycleBlockOf and paramsOfBlock to these cases; tests/python/test_code_blocks.py holds gedit_nc.cycle_block_of and params_of_block to the same.",
+    "The manuals decide by the words: the second block of G71-G73 is the one with P and Q, of G74/G75 the one with an axis word, of G76 the one with X (U) and Z (W) (FANUC Series 30i lathe user manual B-63944GE-1/02, section 4.2)."
+  ],
+  "cases": [
+    { "dialect": "fanuc-lathe", "code": "G71", "written": ["U", "R"], "block": 1, "params": ["U", "R"] },
+    { "dialect": "fanuc-lathe", "code": "G71", "written": ["U"], "block": 1, "params": ["U", "R"] },
+    { "dialect": "fanuc-lathe", "code": "G71", "written": ["P", "Q", "U", "W", "F"], "block": 2, "params": ["P", "Q", "U", "W", "F", "S", "T"] },
+    { "dialect": "fanuc-lathe", "code": "G71", "written": ["U", "P", "Q"], "block": 2, "params": ["P", "Q", "U", "W", "F", "S", "T"] },
+    { "dialect": "fanuc-lathe", "code": "G71", "written": [], "block": null, "params": ["U", "R", "P", "Q", "U", "W", "F", "S", "T"] },
+    { "dialect": "fanuc-lathe", "code": "G71", "written": ["D"], "block": null, "params": ["U", "R", "P", "Q", "U", "W", "F", "S", "T"] },
+    { "dialect": "fanuc-lathe", "code": "G72", "written": ["W", "R"], "block": 1, "params": ["W", "R"] },
+    { "dialect": "fanuc-lathe", "code": "G72", "written": ["P", "Q", "U", "W", "F"], "block": 2, "params": ["P", "Q", "U", "W", "F", "S", "T"] },
+    { "dialect": "fanuc-lathe", "code": "G73", "written": ["U", "W", "R"], "block": 1, "params": ["U", "W", "R"] },
+    { "dialect": "fanuc-lathe", "code": "G73", "written": ["P", "Q", "U", "W", "F"], "block": 2, "params": ["P", "Q", "U", "W", "F", "S", "T"] },
+    { "dialect": "fanuc-lathe", "code": "G74", "written": ["R"], "block": 1, "params": ["R"] },
+    { "dialect": "fanuc-lathe", "code": "G74", "written": ["X", "Z", "P", "Q", "R", "F"], "block": 2, "params": ["X", "U", "Z", "W", "P", "Q", "R", "F"] },
+    { "dialect": "fanuc-lathe", "code": "G74", "written": ["Z", "Q", "F"], "block": 2, "params": ["X", "U", "Z", "W", "P", "Q", "R", "F"] },
+    { "dialect": "fanuc-lathe", "code": "G75", "written": ["R"], "block": 1, "params": ["R"] },
+    { "dialect": "fanuc-lathe", "code": "G75", "written": ["U", "W", "P", "Q", "R", "F"], "block": 2, "params": ["X", "U", "Z", "W", "P", "Q", "R", "F"] },
+    { "dialect": "fanuc-lathe", "code": "G76", "written": ["P", "Q", "R"], "block": 1, "params": ["P", "Q", "R"] },
+    { "dialect": "fanuc-lathe", "code": "G76", "written": ["X", "Z", "P", "Q", "F"], "block": 2, "params": ["X", "U", "Z", "W", "R", "P", "Q", "F"] },
+    { "dialect": "fanuc-lathe", "code": "G76", "written": ["U", "W", "R", "P", "Q", "F"], "block": 2, "params": ["X", "U", "Z", "W", "R", "P", "Q", "F"] },
+    { "dialect": "fanuc-lathe-b", "code": "G76", "written": ["P", "Q", "R"], "block": 1, "params": ["P", "Q", "R"] },
+    { "dialect": "fanuc-lathe-b", "code": "G71", "written": ["P", "Q", "U", "W", "F"], "block": 2, "params": ["P", "Q", "U", "W", "F", "S", "T"] },
+    { "dialect": "fanuc-lathe", "code": "G70", "written": ["P", "Q"], "block": null, "params": ["P", "Q"] },
+    { "dialect": "fanuc", "code": "G76", "written": ["X", "Y", "Z", "R", "Q", "F"], "block": null, "params": ["X", "Y", "Z", "R", "Q", "F", "P", "K"] }
+  ]
+}

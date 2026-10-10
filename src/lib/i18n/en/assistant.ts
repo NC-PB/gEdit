@@ -142,10 +142,14 @@ export default {
     mirror: 'Mirror image',
     polar: 'Polar coordinate interpolation',
     cylindrical: 'Cylindrical interpolation',
+    /** B1 (NC-02): Fanuc lathe G68/G69, a modal group of its own apart from G68.1/G69.1. */
+    turretMirror: 'Mirror image for the second turret',
     /** M10 review (NC-5): Fanuc G15/G16, end points as a radius and an angle. */
     polarCommand: 'Polar coordinate command',
     /** WP8.5: exact stop against continuous path (Sinumerik G60, G64, G641, G642, G645). */
     pathmode: 'Path mode',
+    /** B1 (a7s): Sinumerik G601–G603, when the next block starts under an exact stop (G60, G9). */
+    exactstop: 'Exact stop criterion',
     /** WP8.3: which turret a block is for (Okuma G13, G14). */
     turret: 'Turret selection',
     /** WP8.3: the Okuma LAP codes that describe and run an automatic roughing contour. */

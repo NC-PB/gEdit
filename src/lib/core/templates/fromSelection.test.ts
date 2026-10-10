@@ -313,3 +313,18 @@ describe('P3b fix NC: words in least increments (NC-10) and long numbers (CODE-0
     expect(d.candidates).toEqual([]);
   });
 });
+
+describe('B1 fix NC (NC-06): a count that is a real number', () => {
+  const lines = ['5 CYCL DEF 247 DATUM SETTING ~', '  Q339=+4 ;DATUM NUMBER'];
+  const q339 = (d: TemplateDraft) => d.candidates.find((c) => c.address === 'Q339')?.param;
+
+  it('offers a count as a whole number, and one marked `decimals` as a number', () => {
+    expect(q339(draftOf('heidenhain-klartext', 'heidenhain', lines))).toMatchObject({ type: 'integer' });
+    const base = db('heidenhain');
+    const real: CodeDb = {
+      ...base,
+      codes: base.codes.map((e) => ({ ...e, params: e.params?.map((p) => (p.address === 'Q339' ? { ...p, decimals: true } : p)) })),
+    };
+    expect(q339(templateFromSelection(lines, cpOf('heidenhain-klartext'), real))).toMatchObject({ type: 'number' });
+  });
+});

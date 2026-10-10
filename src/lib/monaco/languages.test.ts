@@ -156,6 +156,18 @@ describe('languageConfiguration', () => {
     const comma = { ...fanuc, syntax: { ...fanuc.syntax, decimalSeparator: ',' } } as unknown as Profile;
     expect('X10,5'.match(languageConfiguration(comma).wordPattern)).toEqual(['X10,5']);
   });
+
+  // B1: Klartext also writes the decimal comma (`syntax.decimalSeparatorAlt`), and a
+  // double-click on `241,781` selected `241` or `781` instead of the number.
+  it('keeps a number with the second decimal mark in one piece', () => {
+    const words = (text: string): string[] => text.match(languageConfiguration(klartext).wordPattern) ?? [];
+    expect(words('7 L X+241,781 Y-5.5 Z,5 FMAX')).toEqual(['7', 'L', 'X', '241,781', 'Y', '5.5', 'Z,5', 'FMAX']);
+    expect(words('Q1 = 241,781')).toEqual(['Q1', '241,781']);
+    // A comma with no digit behind it is no decimal mark.
+    expect(words('Q1,Q2')).toEqual(['Q1', 'Q2']);
+    // A profile without the second mark keeps a comma out of its numbers.
+    expect('X10,5'.match(languageConfiguration(fanuc).wordPattern)).toEqual(['X10', '5']);
+  });
 });
 
 // M13 (WP13.2, AD-29): a reload registers again, without registering an id twice.

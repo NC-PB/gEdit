@@ -257,3 +257,22 @@ describe('a read-only field (Phase 3 plan §7 #226)', () => {
     expect(validateFields([{ ...computed, readOnly: false }], {})).toEqual({ feed: { key: 'forms.errors.required' } });
   });
 });
+
+describe('maxLength (B1 A4)', () => {
+  const text: FieldSpec = { id: 'notes', type: 'text', label: 'Notes', maxLength: 5 };
+
+  it('refuses a text that is longer, with the limit in the message', () => {
+    expect(validateFields([text], { notes: '123456' })).toEqual({
+      notes: { key: 'forms.errors.tooLong', params: { count: 5 } },
+    });
+  });
+
+  it('accepts a text of exactly the limit, and counts the trimmed text', () => {
+    expect(validateFields([text], { notes: '12345' })).toEqual({});
+    expect(validateFields([text], { notes: '  12345  ' })).toEqual({});
+  });
+
+  it('does nothing for a field without a limit', () => {
+    expect(validateFields([{ ...text, maxLength: undefined }], { notes: 'x'.repeat(10_000) })).toEqual({});
+  });
+});

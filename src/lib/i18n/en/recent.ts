@@ -1,4 +1,4 @@
-// The recent-files list: the Home "Recent" dropdown and the two commands
+// The recent-files list: the File tab "Recent" dropdown and the two commands
 // (`contrib/recent.ts`, `components/menus/RecentMenu.svelte`, `stores/recent.ts`).
 // One namespace per feature (plan AD-14); the namespace name is this file's name.
 
@@ -11,7 +11,7 @@ export default {
   openRecent: 'Open Recent…',
   clearRecent: 'Clear Recent Files',
 
-  // The dropdown in the Home tab
+  // The dropdown in the File tab
   menuLabel: 'Recent files',
   menuPlaceholder: 'Recent…',
   clearItem: 'Clear recent files',
@@ -29,4 +29,5 @@ export default {
   removeButton: 'Remove',
   removed: 'Removed {name} from the recent files.',
   cleared: 'The recent files were cleared.',
+  saveFailed: 'The list of recent files could not be saved.',
 } as const satisfies Messages;

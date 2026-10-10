@@ -1,6 +1,5 @@
 // A template from the selected lines (Phase 3 plan §6.11, P3.8 engine half, P3.9 the dialog;
-// `docs/planning/code-assistant.md` "Template files and management"). Written by the P3b prelude
-// as stubs; owned by P3.8.
+// `docs/planning/code-assistant.md` "Template files and management").
 //
 // The rules (binding):
 //
@@ -25,7 +24,7 @@
 //     is written with a point (`decimals: 'min1'` for a trailing point `-5.`, `'as-entered'`
 //     otherwise) or the profile's decimal point is not significant (Klartext `X-60`,
 //     `'as-entered'`), `integer` without a point on a profile where the point is significant
-//     and for a count (`unit: 'count'` of the parameter), or the tool word, `D` and `H` where no
+//     and for a count (`unit: 'count'` of the parameter, without `decimals`), or the tool word, `D` and `H` where no
 //     code of the block says what they are; `plusSign` where the value is written with a
 //     `+` (Klartext `Y+30`); `default` = the value as written; `required: true`; label = the
 //     database's label of the parameter (of the block's cycle, else of another code of the block) or of the address (at most `TEMPLATE_LIMITS.label`
@@ -415,7 +414,7 @@ function paramFor(id: string, found: Found, codes: readonly CodeEntry[], db: Cod
     label = label.length + suffix.length <= TEMPLATE_LIMITS.label ? label + suffix : found.address + suffix;
   }
   // A count, or a register number (tool, `D`, `H`) where no cycle parameter says otherwise (Okuma `G85 … D4` is a depth).
-  const whole = cycleParam ? cycleParam.unit === 'count' : address === tool || address === 'D' || address === 'H';
+  const whole = cycleParam ? cycleParam.unit === 'count' && cycleParam.decimals !== true : address === tool || address === 'D' || address === 'H';
   const param: TemplateParam = { id, label, type: 'number', required: true, prefix: found.prefix };
   if (increments) {
     param.type = 'integer';

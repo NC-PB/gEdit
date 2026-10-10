@@ -114,6 +114,8 @@ REQUIRED_CASES = [
     "sinumerik-mcall-tapping-selection",
     "sinumerik-setms-main",
     "okuma-continued-block",
+    # B1: a Klartext cutting speed written with a colon (`VC:120`).
+    "klartext-cutting-speed",
 ]
 
 #: The address this script is allowed to rewrite; everything else comes back token for
@@ -469,6 +471,32 @@ class TestCodeDatabase(unittest.TestCase):
         self.assertEqual(payload["text"], "S500 M3\nG71 Z-10. F1.5\nG1 X10.\n")
         self.assertEqual(payload["findings"][0]["line"], 2)
         self.assertIn("thread block (G71)", payload["findings"][0]["message"])
+
+    def test_a_klartext_cutting_speed_written_with_a_colon_follows_the_surface_speed_option(self):
+        # B1 (owner: yes): `VC:120` in a TURNDATA block is the tool's cutting speed, read off
+        # the database (`sets.speedUnit: 'surface'` on the shipped `VC` entry of the Klartext
+        # database). Automatically means no on this milling profile, so it is reported; yes
+        # scales the number and keeps the colon form.
+        context = helpers.effective_context("heidenhain-klartext")
+        self.assertTrue(any(entry.get("code") == "VC" for entry in context["codes"]))
+        program = "1 FUNCTION TURNDATA SPIN VCONST:ON VC:120 SMAX3000\n2 FUNCTION TURNDATA SPIN VCONST:OFF S1000\n"
+        for choice, text, findings in (
+            ("auto", "1 FUNCTION TURNDATA SPIN VCONST:ON VC:120 SMAX3000\n2 FUNCTION TURNDATA SPIN VCONST:OFF S500\n",
+             ["VC:120 is the cutting speed of the tool (VC), so it is not scaled."]),
+            ("yes", "1 FUNCTION TURNDATA SPIN VCONST:ON VC:60 SMAX3000\n2 FUNCTION TURNDATA SPIN VCONST:OFF S500\n", []),
+        ):
+            with self.subTest(surfaceSpeed=choice):
+                run = helpers.make_context(params={"percent": 50, "surfaceSpeed": choice}, profile=context["profile"], codes=context["codes"])
+                result = helpers.run_script(SCRIPT, stdin=program, context=run)
+                self.assertTrue(result.ok, result.stderr)
+                payload = result.json()
+                self.assertEqual(payload["text"], text)
+                self.assertEqual([f["message"] for f in payload["findings"]], findings)
+        # Without the entry `VC:` is no speed of this run at all, as before.
+        without = [entry for entry in context["codes"] if entry.get("code") != "VC"]
+        run = helpers.make_context(params={"percent": 50, "surfaceSpeed": "yes"}, profile=context["profile"], codes=without)
+        payload = helpers.run_script(SCRIPT, stdin=program, context=run).json()
+        self.assertIn("VC:120 SMAX3000", payload["text"])
 
     def test_a_run_without_a_code_database_says_what_it_could_not_know(self):
         payload = self.run_with([], "G96 S180 M3\n")

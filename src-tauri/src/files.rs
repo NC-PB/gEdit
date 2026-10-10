@@ -71,6 +71,13 @@ pub struct FileStat {
     /// call asked for more than [`MAX_STAT_PATHS`] paths. Every other field is empty then,
     /// and **empty does not mean gone**: nothing about this path is known.
     pub unavailable: bool,
+    /// **Which file this is**: the path with every symlink, `..` and mapped-drive
+    /// spelling resolved (`std::fs::canonicalize`, `\\?\` folded away by
+    /// [`crate::paths::plain`]). Two spellings of one file answer the same string, so the
+    /// webview can tell that a second tab, or a Save As, would take a file another tab
+    /// already owns. `None` unless the call asked for it (`canonical: true`), for a
+    /// directory, for a path that is not there, and when resolving it failed — then only the lexical comparison is left.
+    pub canonical: Option<String>,
 }
 
 impl FileStat {
@@ -139,11 +146,16 @@ fn not_writable(_path: &str, meta: &Metadata) -> bool {
 /// it, `tauri-macros` 2.6 `ExecutionContext::Blocking`), and the waiting is done on
 /// the blocking pool rather than on an async worker.
 #[tauri::command]
-pub async fn files_stat(app: AppHandle, paths: Vec<String>) -> Vec<FileStat> {
+pub async fn files_stat(
+    app: AppHandle,
+    paths: Vec<String>,
+    canonical: Option<bool>,
+) -> Vec<FileStat> {
     let scope = app.fs_scope();
     let asked = paths.clone();
+    let canonical = canonical.unwrap_or(false);
     tauri::async_runtime::spawn_blocking(move || {
-        stat_all(paths, move |path| scope.is_allowed(path))
+        stat_all(paths, canonical, move |path| scope.is_allowed(path))
     })
     .await
     // The pool task panicked: nothing is known about any of them.
@@ -153,22 +165,28 @@ pub async fn files_stat(app: AppHandle, paths: Vec<String>) -> Vec<FileStat> {
 /// The command's body with the scope predicate injected, so the rules can be
 /// tested without an app handle. The predicate runs on the worker thread too:
 /// `Scope::is_allowed` canonicalizes, which touches the share as well.
+///
+/// `canonical` asks for [`FileStat::canonical`]: resolving a path is one lookup per
+/// component (a network round trip each on a share), so only the callers that need a
+/// file's identity ask (Open, Save As, restore); the 2 s poll never does.
 pub fn stat_all(
     paths: Vec<String>,
+    canonical: bool,
     is_allowed: impl Fn(&Path) -> bool + Send + Sync + 'static,
 ) -> Vec<FileStat> {
-    stat_all_within(paths, STAT_BUDGET, is_allowed)
+    stat_all_within(paths, STAT_BUDGET, canonical, is_allowed)
 }
 
 /// [`stat_all`] with the time budget injected, for the tests.
 pub fn stat_all_within(
     mut paths: Vec<String>,
     budget: Duration,
+    canonical: bool,
     is_allowed: impl Fn(&Path) -> bool + Send + Sync + 'static,
 ) -> Vec<FileStat> {
     let over = paths.split_off(paths.len().min(MAX_STAT_PATHS));
     let answers = run_bounded(paths.clone(), budget, move |path| {
-        stat_one(path, &is_allowed)
+        stat_one(path, canonical, &is_allowed)
     });
     paths
         .into_iter()
@@ -178,15 +196,16 @@ pub fn stat_all_within(
         .collect()
 }
 
-fn stat_one(path: &str, is_allowed: &impl Fn(&Path) -> bool) -> FileStat {
+fn stat_one(path: &str, canonical: bool, is_allowed: &impl Fn(&Path) -> bool) -> FileStat {
     // Symlinks are followed: the document's identity is the file the user
     // opened through the link, and that is what a save rewrites.
-    stat_one_with(path, is_allowed, |path| std::fs::metadata(path))
+    stat_one_with(path, canonical, is_allowed, |path| std::fs::metadata(path))
 }
 
 /// [`stat_one`] with the metadata call injected, so the error cases can be tested.
 fn stat_one_with(
     path: &str,
+    canonical: bool,
     is_allowed: &impl Fn(&Path) -> bool,
     metadata: impl Fn(&Path) -> io::Result<Metadata>,
 ) -> FileStat {
@@ -198,7 +217,7 @@ fn stat_one_with(
         };
     }
     match metadata(Path::new(&path)) {
-        Ok(meta) => of_metadata(path, &meta),
+        Ok(meta) => of_metadata(path, &meta, canonical),
         // Missing, or unreadable because a parent directory lost its
         // permissions; either way there is nothing to report.
         Err(err) if is_absent(err.kind()) => FileStat {
@@ -370,9 +389,12 @@ fn is_stuck(key: &str) -> bool {
     abandoned().by_path.contains_key(key)
 }
 
-fn of_metadata(path: String, meta: &Metadata) -> FileStat {
+fn of_metadata(path: String, meta: &Metadata, with_canonical: bool) -> FileStat {
     let is_dir = meta.is_dir();
     let readonly = not_writable(&path, meta);
+    let canonical = (with_canonical && !is_dir)
+        .then(|| canonical_of(&path))
+        .flatten();
     FileStat {
         path,
         allowed: true,
@@ -382,7 +404,15 @@ fn of_metadata(path: String, meta: &Metadata) -> FileStat {
         size: (!is_dir).then_some(meta.len()),
         readonly,
         unavailable: false,
+        canonical,
     }
+}
+
+/// [`FileStat::canonical`] for a path that was just stat-ed. It runs on the same
+/// worker thread as the stat, so the time budget of [`run_bounded`] covers it too.
+fn canonical_of(path: &str) -> Option<String> {
+    let resolved = std::fs::canonicalize(path).ok()?;
+    crate::paths::plain(&resolved).to_str().map(str::to_owned)
 }
 
 /// `SystemTime` as epoch milliseconds. A modification time before 1970 is
@@ -435,7 +465,7 @@ mod tests {
 
     /// The single answer for one path.
     fn one(path: String) -> FileStat {
-        let mut stats = stat_all(vec![path], allow_except_secret);
+        let mut stats = stat_all(vec![path], true, allow_except_secret);
         assert_eq!(stats.len(), 1);
         stats.remove(0)
     }
@@ -444,12 +474,12 @@ mod tests {
     fn answers_one_entry_per_path_in_order() {
         let dir = scratch_dir("order");
         let paths = vec![s(&dir.join("a.nc")), s(&dir.join("gone.nc")), s(&dir)];
-        let stats = stat_all(paths.clone(), allow_except_secret);
+        let stats = stat_all(paths.clone(), true, allow_except_secret);
         assert_eq!(
             stats.iter().map(|f| f.path.clone()).collect::<Vec<_>>(),
             paths
         );
-        assert_eq!(stat_all(vec![], allow_except_secret), vec![]);
+        assert_eq!(stat_all(vec![], true, allow_except_secret), vec![]);
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -512,6 +542,68 @@ mod tests {
         assert!(stat.allowed && stat.exists && stat.is_dir);
         assert_eq!(stat.size, None);
         assert!(stat.mtime_ms.is_some());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// B1 A1. Two spellings of one file must answer one `canonical`: a `..` hop and a
+    /// symlink both reach `a.nc`, and a tab opened through either must find the other.
+    #[cfg(unix)]
+    #[test]
+    fn canonical_is_the_same_for_every_spelling_of_a_file() {
+        let dir = scratch_dir("canonical");
+        std::os::unix::fs::symlink(dir.join("a.nc"), dir.join("link.nc")).unwrap();
+        let direct = one(s(&dir.join("a.nc")));
+        let through_link = one(s(&dir.join("link.nc")));
+        let through_dots = one(s(&dir.join("sub").join("..").join("a.nc")));
+        let canonical = direct.canonical.clone().expect("no canonical path");
+        assert!(canonical.ends_with("a.nc"), "{canonical}");
+        assert_eq!(through_link.canonical.as_deref(), Some(canonical.as_str()));
+        assert_eq!(through_dots.canonical.as_deref(), Some(canonical.as_str()));
+        // The answer to the stat itself is untouched: the path is the one passed in.
+        assert_eq!(through_link.path, s(&dir.join("link.nc")));
+        // Another file is another identity.
+        let other = one(s(&dir.join("secret.nc")));
+        assert_ne!(other.canonical, direct.canonical);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn canonical_is_empty_for_a_directory_a_missing_path_and_a_refusal() {
+        let dir = scratch_dir("canonical-none");
+        assert_eq!(one(s(&dir.join("sub"))).canonical, None);
+        assert_eq!(one(s(&dir.join("gone.nc"))).canonical, None);
+        assert_eq!(one(s(&dir.join("secret.nc"))).canonical, None);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// B1 CODE-07. The 2 s poll stats every open file; resolving each path again on
+    /// every tick is a round trip per folder level on a share. Only a call that asks
+    /// gets the canonical path.
+    #[test]
+    fn canonical_is_only_resolved_when_the_call_asks_for_it() {
+        let dir = scratch_dir("canonical-option");
+        let path = s(&dir.join("a.nc"));
+        let plain = stat_all(vec![path.clone()], false, allow_except_secret).remove(0);
+        assert!(plain.exists && plain.allowed, "{plain:?}");
+        assert_eq!(plain.canonical, None);
+        // Everything else about the answer is the same.
+        let asked = stat_all(vec![path], true, allow_except_secret).remove(0);
+        assert!(asked.canonical.is_some());
+        assert_eq!(
+            FileStat {
+                canonical: None,
+                ..asked
+            },
+            plain
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn canonical_is_serialized_in_camel_case() {
+        let dir = scratch_dir("canonical-json");
+        let json = serde_json::to_value(one(s(&dir.join("a.nc")))).unwrap();
+        assert!(json["canonical"].is_string(), "{json}");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -585,7 +677,7 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
-    // --- the time budget (TODO "Next up" 8) -----------------------------------
+    // --- the time budget -----------------------------------
 
     use std::sync::atomic::AtomicUsize;
 
@@ -634,7 +726,7 @@ mod tests {
         let paths = vec![s(&dir.join("a.nc")), hung.clone(), s(&dir.join("sub"))];
 
         let started = Instant::now();
-        let stats = stat_all_within(paths, SHORT, hanging(release.clone(), asked));
+        let stats = stat_all_within(paths, SHORT, true, hanging(release.clone(), asked));
         let took = started.elapsed();
         release.store(true, Ordering::SeqCst);
 
@@ -663,6 +755,7 @@ mod tests {
         let first = stat_all_within(
             vec![hung.clone()],
             SHORT,
+            true,
             hanging(release.clone(), asked.clone()),
         );
         assert!(first[0].unavailable);
@@ -672,6 +765,7 @@ mod tests {
         let second = stat_all_within(
             vec![hung.clone()],
             SHORT,
+            true,
             hanging(release.clone(), asked.clone()),
         );
         assert!(second[0].unavailable);
@@ -687,7 +781,12 @@ mod tests {
 
         release.store(true, Ordering::SeqCst);
         wait_until_unstuck(&hung);
-        let third = stat_all_within(vec![hung.clone()], SHORT, hanging(release, asked.clone()));
+        let third = stat_all_within(
+            vec![hung.clone()],
+            SHORT,
+            true,
+            hanging(release, asked.clone()),
+        );
         assert!(third[0].allowed && third[0].exists && !third[0].unavailable);
         assert_eq!(asked.load(Ordering::SeqCst), 2);
         let _ = fs::remove_dir_all(&dir);
@@ -701,7 +800,7 @@ mod tests {
         let paths: Vec<String> = (0..MAX_STAT_PATHS + 2)
             .map(|n| s(&dir.join(format!("gone{n}.nc"))))
             .collect();
-        let stats = stat_all(paths.clone(), allow_except_secret);
+        let stats = stat_all(paths.clone(), true, allow_except_secret);
         assert_eq!(stats.len(), paths.len());
         assert!(stats[..MAX_STAT_PATHS]
             .iter()
@@ -720,7 +819,7 @@ mod tests {
         let a = s(&dir.join("a.nc"));
         let calls = Arc::new(AtomicUsize::new(0));
         let counted = Arc::clone(&calls);
-        let stats = stat_all(vec![a.clone(), a.clone(), a], move |path| {
+        let stats = stat_all(vec![a.clone(), a.clone(), a], true, move |path| {
             counted.fetch_add(1, Ordering::SeqCst);
             allow_except_secret(path)
         });
@@ -739,7 +838,7 @@ mod tests {
         let workers: Vec<_> = (0..8)
             .map(|_| {
                 let a = a.clone();
-                std::thread::spawn(move || stat_all(vec![a], allow_except_secret).remove(0))
+                std::thread::spawn(move || stat_all(vec![a], true, allow_except_secret).remove(0))
             })
             .collect();
         for worker in workers {
@@ -749,14 +848,16 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
-    /// Review of Next up 8: a stat that failed quickly with anything but "not there" was
+    /// Review: a stat that failed quickly with anything but "not there" was
     /// reported as `allowed: true, exists: false`, so a soft mount's ETIMEDOUT or a
     /// host that is down marked the tab deleted and let a save skip its question.
     #[test]
     fn a_stat_error_that_is_not_absence_is_unavailable() {
         let path = "/Volumes/dnc/a.nc";
         let failing = |kind: io::ErrorKind| {
-            stat_one_with(path, &|_: &Path| true, move |_| Err(io::Error::from(kind)))
+            stat_one_with(path, true, &|_: &Path| true, move |_| {
+                Err(io::Error::from(kind))
+            })
         };
         for kind in [
             io::ErrorKind::NotFound,
@@ -791,7 +892,7 @@ mod tests {
         // An I/O error the way the OS reports it (EIO has no kind of its own).
         #[cfg(unix)]
         assert_eq!(
-            stat_one_with(path, &|_: &Path| true, |_| Err(
+            stat_one_with(path, true, &|_: &Path| true, |_| Err(
                 io::Error::from_raw_os_error(libc::EIO)
             )),
             FileStat::unavailable(path.to_owned())

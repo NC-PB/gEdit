@@ -187,6 +187,44 @@ jobs:
             fi
           done
 
+      # The Linux program is `gedit-nc` (src-tauri/tauri.linux.conf.json, mainBinaryName):
+      # `gedit` is GNOME's text editor, and a package that installs /usr/bin/gedit would
+      # replace it or fail to install beside it. The .deb's file list and its desktop
+      # entry are what the user's system sees, so they are what is checked.
+      - name: Linux program is gedit-nc, not gedit
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          BUNDLE_DIR: ${{ matrix.bundle-dir }}
+        run: |
+          deb=$(ls "$BUNDLE_DIR"/deb/*.deb | head -n 1)
+          dpkg-deb -c "$deb"
+          listing=$(dpkg-deb -c "$deb")
+          if ! grep -qE ' (\./)?usr/bin/gedit-nc$' <<< "$listing"; then
+            echo "::error::The .deb does not install /usr/bin/gedit-nc."
+            exit 1
+          fi
+          if grep -qE ' (\./)?usr/bin/gedit$' <<< "$listing"; then
+            echo "::error::The .deb installs /usr/bin/gedit, which is GNOME's editor."
+            exit 1
+          fi
+          # The package name is separate from the program name: Tauri takes it from the product
+          # name ("gEdit" -> gedit) unless told otherwise, and Debian/Ubuntu's own text editor
+          # is the package `gedit`. Printed so a run shows it; a package called `gedit` fails.
+          package=$(dpkg-deb -f "$deb" Package)
+          echo "Package: $package"
+          if [ "$package" = "gedit" ]; then
+            echo "::error::The .deb package is called gedit, the name of GNOME's editor package."
+            exit 1
+          fi
+          unpacked=$(mktemp -d)
+          dpkg-deb -x "$deb" "$unpacked"
+          cat "$unpacked"/usr/share/applications/*.desktop
+          if ! grep -qE '^Exec=gedit-nc( |$)' "$unpacked"/usr/share/applications/*.desktop; then
+            echo "::error::The desktop entry does not start gedit-nc."
+            exit 1
+          fi
+
       - uses: actions/upload-artifact@v6
         with:
           name: gedit-release-${{ matrix.os }}

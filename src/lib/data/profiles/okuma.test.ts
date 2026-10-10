@@ -39,6 +39,7 @@ import { MAX_SNIFF_LINES, detectProfile, detectResult } from '$lib/core/profiles
 import { validateProfile } from '$lib/core/profiles/validate';
 import { OutlineIndex } from '$lib/core/profiles/outline';
 import { maskComments } from '$lib/core/nc/mask';
+import { tokenizeLine } from '$lib/core/nc/tokenizer';
 import { parseNumber } from '$lib/core/nc/numbers';
 import { modalGroupsOf } from '$lib/core/codes/resolve';
 import { applyMachine, effectiveMachine, noMachine } from '$lib/core/machines/effective';
@@ -604,16 +605,32 @@ describe('the program map', () => {
   });
 
   it('lists a G-code macro as a call (G10 M8)', () => {
-    // G161-G170 call their macro after every move like MODIN, G171 and G205-G214 once like
-    // CALL (syntax-okuma.md §7.1). What the macro does is the machine's setup, not the map's.
+    // G161-G170 call their macro after every move like MODIN, G171-G176 (a fixed subprogram
+    // name, B1: the OSP-P300 G-code list) and G205-G214 once like CALL (syntax-okuma.md
+    // §7.1). What the macro does is the machine's setup, not the map's.
     const index = new OutlineIndex(okuma);
-    index.reset(['G171 X40 Z-20', 'G0161 A1', 'G205', 'G214 B2', 'G160', 'G172', 'G1710', 'G215', '(G171)']);
+    index.reset(['G171 X40 Z-20', 'G0161 A1', 'G205', 'G214 B2', 'G160', 'G172', 'G1710', 'G215', '(G171)', 'G176 A2', 'G177']);
     expect(index.items().map((item) => `${item.kind}@${item.line}: ${item.text}`)).toEqual([
       'subprogram-call@1: G171',
       'subprogram-call@2: G0161',
       'subprogram-call@3: G205',
       'subprogram-call@4: G214',
+      'subprogram-call@6: G172',
       'comment@9: G171',
+      'subprogram-call@10: G176',
+    ]);
+  });
+
+  it('reads a program name of up to 16 characters in the map, the call and the program start (B1)', () => {
+    // The control takes up to 16 characters behind the O with its optional parameter for
+    // longer subprogram names; the detection rules keep reading the plain four.
+    const index = new OutlineIndex(okuma);
+    index.reset(['OSUBPROGRAM12345', 'G0 X10', 'RTS', 'CALL OSUBPROGRAM12345 Q2', 'MODIN OROUGHING2', 'O12345678901234567']);
+    expect(index.items().map((item) => `${item.kind}@${item.line}: ${item.text}`)).toEqual([
+      'program@1: OSUBPROGRAM12345',
+      'end@3: RTS',
+      'subprogram-call@4: CALL OSUBPROGRAM12345',
+      'subprogram-call@5: MODIN OROUGHING2',
     ]);
   });
 
@@ -937,5 +954,32 @@ describe('the profile around its syntax', () => {
     expect(raw.syntax.sequenceNames).toBe(true);
     expect(raw.syntax.header).toBe('^\\$[^%]*%');
     expect(raw.syntax.maxLineLength).toBe(158);
+  });
+});
+
+describe('B1 fix NC (NC-09): what a call names', () => {
+  const marked = (line: string) =>
+    tokenizeLine(line, okuma).tokens.filter((t) => t.kind === 'programMarker').map((t) => t.text);
+
+  it('takes a name that starts with a letter, or digits only, as the call target', () => {
+    expect(marked('CALL OAB12')).toEqual(['OAB12']);
+    expect(marked('CALL O1234')).toEqual(['O1234']);
+    expect(marked('CALL O1234 Q2')).toEqual(['O1234']);
+    expect(marked('CALL OSUBPROGRAM12345')).toEqual(['OSUBPROGRAM12345']);
+  });
+
+  it('takes no digit-first name with letters behind it (the manual allows digits only there)', () => {
+    expect(marked('CALL O1000ABC=1')).toEqual([]);
+    expect(marked('CALL O1000ABC')).toEqual([]);
+  });
+
+  it('lists neither such a call nor such a program start in the map', () => {
+    const index = new OutlineIndex(okuma);
+    index.reset(['O1000ABC', 'O1000', 'CALL O1000ABC', 'CALL O2000', 'OAB12']);
+    expect(index.items().map((item) => `${item.kind}@${item.line}: ${item.text}`)).toEqual([
+      'program@2: O1000',
+      'subprogram-call@4: CALL O2000',
+      'program@5: OAB12',
+    ]);
   });
 });

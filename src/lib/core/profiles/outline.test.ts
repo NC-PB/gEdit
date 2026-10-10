@@ -231,6 +231,19 @@ describe('the kinds', () => {
     expect(flat.some((item) => item.line === 50)).toBe(false);
   });
 
+  // B1 (A5): a Sinumerik jump written without the blank (`GOTOF:20`) has the shape of a label
+  // definition, and the map listed a label named `GOTOF`. It is a jump to the main block `:20`.
+  it('does not list a Sinumerik jump to a main block as a label', () => {
+    const text = 'N10 GOTOF:20\n/1 gotob:20 M30\nGOTO_END:\nLOOP_A: M30\n:20 G0 X0\n';
+    const items = index(text, compiled('sinumerik')).items();
+    const flat = items.flatMap((item) => [item, ...(item.children ?? [])]);
+    expect(flat.map((item) => [item.line, item.kind, item.text])).toEqual([
+      [2, 'end', 'M30'],
+      [3, 'label', 'GOTO_END'],
+      [4, 'end', 'LOOP_A: M30'],
+    ]);
+  });
+
   // 2026-09 (review finding NC4): the block skip may stand in front of the block number
   // (`/15 L ...`), and a skipped structure block or comment is still one.
   it('reads a Klartext section and comment with the block skip in front of the number', () => {

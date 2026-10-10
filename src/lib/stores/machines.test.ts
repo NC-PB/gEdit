@@ -1,4 +1,4 @@
-// The machine service (plan §7.15, AD-31). Owner: WP6.8 (P6 wrote the stub this replaces).
+// The machine service (plan §7.15, AD-31). Written with WP6.8.
 //
 // The cases that matter here are the ones where a wrong answer misreads a program:
 //
@@ -21,7 +21,8 @@ import { createMachineService, slugOf } from './machines';
 import type { MachineServiceDeps } from './machines';
 import type { ConfigLoad } from '$lib/platform/commands';
 import type { DocId, MachineService } from '$lib/app/types';
-import type { EffectiveMachine } from '$lib/core/machines/types';
+import { wasReported, type EffectiveMachine } from '$lib/core/machines/types';
+import { t } from '$lib/i18n';
 
 const FILES = fileURLToPath(new URL('../../../tests/fixtures/machines/files/', import.meta.url));
 
@@ -54,6 +55,11 @@ interface Harness {
   machines: MachineService;
   /** Every payload `machines_save` was given, newest last. */
   saved: Record<string, unknown>[];
+  /** Notices that carried a button, and the documents `chooseMachine` was asked for. */
+  actions: { text: string; label: string; run: () => void }[];
+  chosen: DocId[];
+  /** How many times `machines_replace` ran (an empty file in place of the old one). */
+  replaced: number;
   /** Every status message the service showed. */
   notes: string[];
   /** What `config_load` would answer now. */
@@ -84,6 +90,9 @@ function harness(
   const state: Harness = {
     machines: undefined as unknown as MachineService,
     saved: [],
+    actions: [],
+    chosen: [],
+    replaced: 0,
     notes: [],
     disk: o.file ?? { $version: 1, machines: [], defaults: {} },
     handEdit(file) {
@@ -144,11 +153,25 @@ function harness(
       state.saved.push(file);
       state.disk = { $version: 1, ...file };
     },
+    replace: async () => {
+      if (failure !== null) {
+        const reason = failure;
+        failure = null;
+        throw new Error(reason);
+      }
+      state.replaced += 1;
+      state.disk = { $version: 1, machines: [], defaults: {} };
+      return 'machines.json.bak';
+    },
     reload: async () => load(state.disk, null),
     openFile: async () => PATHS.machinesFile,
     open: async () => [],
-    notify: (text) => {
+    notify: (text, o) => {
       state.notes.push(text);
+      if (o?.action !== undefined) state.actions.push({ text, label: o.action.label, run: o.action.run });
+    },
+    chooseMachine: (docId) => {
+      state.chosen.push(docId);
     },
     isTauri: () => true,
   });
@@ -354,6 +377,37 @@ describe('which machine a document uses (AD-31 order)', () => {
     expect(h.notes.filter((note) => note.includes('not for this profile'))).toHaveLength(1);
   });
 
+  it('picking a machine of another control changes machine and dialect in one step, with no notice (B1 A4)', async () => {
+    const h = harness({
+      docs: [{ ...LATHE_DOC, path: '/jobs/welle.nc' }],
+      file: { ...FILE, defaults: { 'fanuc-lathe': 'lathe-a' } },
+    });
+    h.machines.setForDoc('d1', 'lathe-b');
+    h.notes.length = 0;
+    // The status item reads the effective view while the dialect changes; it must already see
+    // the new machine.
+    h.machines.setProfileAndMachine('d1', 'okuma-1', () => {
+      h.setProfile('d1', 'okuma-osp');
+      expect(eff(h, 'd1')).toMatchObject({ id: 'okuma-1', choice: 'document' });
+    });
+    await said();
+    expect(h.notes).toEqual([]);
+    expect(eff(h, 'd1')).toMatchObject({ id: 'okuma-1', choice: 'document' });
+    // The per-file memory got the machine, like `setForDoc` gives it.
+    expect(h.memory['/jobs/welle.nc']).toBe('okuma-1');
+  });
+
+  it('the old order, dialect first and machine second, is what said "not for this profile" (B1 A4)', async () => {
+    const h = harness({ docs: [LATHE_DOC], file: FILE });
+    h.machines.setForDoc('d1', 'lathe-b');
+    h.notes.length = 0;
+    h.setProfile('d1', 'okuma-osp');
+    eff(h, 'd1');
+    h.machines.setForDoc('d1', 'okuma-1');
+    await said();
+    expect(h.notes.filter((note) => note.includes('not for this profile'))).toHaveLength(1);
+  });
+
   it('keeps a lathe machine on a mill program and says the machine type differs (owner 2026-10-08)', () => {
     const h = harness({
       docs: [LATHE_DOC],
@@ -474,6 +528,28 @@ describe('variant detection', () => {
     expect(h.notes.filter((note) => note.includes('looks like'))).toHaveLength(1);
   });
 
+  it('offers a "Choose Machine…" button with the warning, which asks for the picker of that document (B1 A4)', async () => {
+    const h = harness({ docs: [LATHE_DOC], file: FILE });
+    h.detect['fanuc-lathe'] = B_TEXT;
+    h.machines.setForDoc('d1', 'lathe-a');
+    h.machines.effective('d1');
+    await said();
+    expect(h.actions).toHaveLength(1);
+    expect(h.actions[0].text).toContain('looks like');
+    expect(h.actions[0].label).toBe(t('machines.mismatchAction'));
+    expect(h.chosen).toEqual([]);
+    h.actions[0].run();
+    expect(h.chosen).toEqual(['d1']);
+  });
+
+  it('puts no button on the other notices', async () => {
+    const h = harness({ docs: [{ ...LATHE_DOC, machineId: 'vanished' }], file: FILE });
+    h.machines.effective('d1');
+    await said();
+    expect(h.notes.length).toBeGreaterThan(0);
+    expect(h.actions).toEqual([]);
+  });
+
   it('is ignored below the margin of 3, so an unusual program changes nothing', () => {
     const h = harness({ docs: [LATHE_DOC] });
     h.detect['fanuc-lathe'] = { gcodeSystem: { value: 'B', margin: 2 } };
@@ -509,9 +585,38 @@ describe('a file that could not be read', () => {
   it('still opens the file and still replaces it with an empty one (AD-31 Management)', async () => {
     const h = harness({ machinesError: 'machines.json: invalid JSON' });
     await h.machines.openFile();
-    await h.machines.replaceWithEmpty();
-    expect(h.saved).toEqual([{ machines: [], defaults: {} }]);
+    await expect(h.machines.replaceWithEmpty()).resolves.toBe('machines.json.bak');
+    expect(h.replaced).toBe(1);
+    expect(h.saved).toEqual([]);
     expect(h.machines.blocked()).toBe(false);
+  });
+
+  it('does not replace a file from a newer gEdit, and says so once (B1 A4)', async () => {
+    const h = harness({ file: sample('newer-version') });
+    expect(h.machines.readOnly()).toBe(true);
+    await expect(h.machines.replaceWithEmpty()).rejects.toThrow(/newer/);
+    expect(h.replaced).toBe(0);
+    expect(h.machines.blocked()).toBe(true);
+    expect(get(h.machines.list).map((m) => m.id)).toEqual(['lathe-2']);
+  });
+
+  it('a failed replace keeps the file blocked and tells the user once (B1 A4)', async () => {
+    const h = harness({ machinesError: 'machines.json: invalid JSON' });
+    h.notes.length = 0;
+    h.failNextSave('a copy of the old file could not be kept');
+    const failure = await h.machines.replaceWithEmpty().catch((err: unknown) => err);
+    expect(wasReported(failure)).toBe(true);
+    expect(h.machines.blocked()).toBe(true);
+    expect(h.notes).toEqual([t('machines.saveFailed')]);
+  });
+
+  it('marks a failed save as already told, so the page adds nothing (B1 A4)', async () => {
+    const h = harness({ file: sample('invalid-record') });
+    h.notes.length = 0;
+    h.failNextSave('disk full');
+    const failure = await h.machines.setDefault('fanuc-lathe', 'lathe-ok').catch((err: unknown) => err);
+    expect(wasReported(failure)).toBe(true);
+    expect(h.notes).toEqual([t('machines.saveFailed')]);
   });
 
   it('reads a file from a newer gEdit and never writes it', async () => {

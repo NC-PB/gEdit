@@ -119,7 +119,10 @@ describe('the cost at 300,000 lines', () => {
   };
 
   for (const id of ['fanuc-gcode', 'okuma-osp', 'sinumerik']) {
-    it(`${id}: well inside a frame budget and at least three times faster than tokenizing every line`, async () => {
+    // That the fast reading leaves most lines out of the tokenizer is pinned by count in
+    // documentNumbers.calls.test.ts; here only the time, against the frame budget. A ratio to the
+    // tokenizer (3x) is noise on a shared runner: 2.98x failed a CI run while the count held.
+    it(`${id}: well inside a frame budget`, async () => {
       const cp = cpOf(id);
       const lines = program(id);
       documentNumbers(lines, cp);
@@ -130,10 +133,7 @@ describe('the cost at 300,000 lines', () => {
         documentNumbers(lines, cp);
         fast = Math.min(fast, performance.now() - started);
       }
-      await breathe();
-      const slow = fastest(1, () => void documentNumbersByTokens(lines, cp));
       expectWithin(fast, 300, `documentNumbers on ${lines.length} ${id} lines`);
-      expect(fast * 3, `fast ${fast.toFixed(0)} ms, tokenizer ${slow.toFixed(0)} ms`).toBeLessThan(slow);
       await breathe();
       same(lines, cp, `${id} 300k`);
     });

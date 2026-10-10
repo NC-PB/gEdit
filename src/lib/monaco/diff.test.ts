@@ -1,4 +1,4 @@
-// The comparison, the read-only lock (AD-23, TODO Next up 6) and the scratch models
+// The comparison, the read-only lock (AD-23) and the scratch models
 // (M11: reused, never disposed, which is what closes the compare race by ordering).
 //
 // The modified side of the diff editor is the document's own model, and the gutter's
@@ -190,6 +190,17 @@ describe('createDiff and the read-only lock', () => {
   it('leaves an editable document editable', async () => {
     (await compare(open(false))).dispose();
     expect(fake.created[0]).toMatchObject({ readOnly: false, originalEditable: false });
+  });
+
+  it('creates the diff editor with the same colour and overflow options as the main editor (B1 A9)', async () => {
+    // Both creation sites feed the one shared configuration service, so they must agree.
+    (await compare(open(false))).dispose();
+    expect(fake.created[0]).toMatchObject({
+      colorDecorators: false,
+      defaultColorDecorators: 'never',
+      fixedOverflowWidgets: true,
+    });
+    expect(fake.created[0]).not.toHaveProperty('hover');
   });
 
   it('locks the modified side of a locked document, revert arrows included', async () => {

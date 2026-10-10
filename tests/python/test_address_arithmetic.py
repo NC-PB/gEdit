@@ -74,6 +74,9 @@ REQUIRED_CASES = [
     "fanuc-polar-g16",
     "sinumerik-mill-x-shift",
     "fanuc-multiply-rule",
+    # B1 fix NC: the lathe turret mirror apart from the rotation (NC-02), FK points (NC-03).
+    "lathe-frames",
+    "klartext-fk",
 ]
 
 #: The vocabulary of the README: block reasons, word reasons, notes and run notes.
@@ -93,7 +96,7 @@ BLOCK_REASONS = {
     "cycle-expression",
     "cycle-unresolved",
 }
-WORD_REASONS = {"unreadable", "data", "incremental", "expression", "machine-dependent", "count"}
+WORD_REASONS = {"unreadable", "data", "incremental", "expression", "machine-dependent", "count", "fk-point"}
 NOTE_REASONS = {"rounded"}
 RUN_REASONS = {"selection", "no-database", "unknown-code-note"}
 
@@ -146,6 +149,37 @@ def run(text, profile="fanuc-gcode", preset=None, name=None, **params):
     if not result.ok:
         raise AssertionError(result.stderr)
     return result.json()
+
+
+class TestFkContour(unittest.TestCase):
+    """B1 fix NC (NC-03): the absolute points of a Klartext FK contour are left and listed."""
+
+    PROGRAM = "\n".join([
+        "0 BEGIN PGM FK MM",
+        "1 L X+10 Y+10 R0 FMAX",
+        "2 FL X+80 Y+20 AN+0",
+        "3 FC DR+ R30 CCX+50 CCY+50 P1X+70 P1Y+60",
+        "4 FCT DR- R15 P1X+30 P1Y+40 P2X+40 P2Y+50",
+        "5 END PGM FK MM",
+    ])
+
+    def test_an_x_shift_leaves_the_x_points_and_says_so(self):
+        payload = run(self.PROGRAM, profile="heidenhain-klartext", operation="add", operand=5, addresses=["X"])
+        text = lines_of(payload)
+        self.assertEqual(text[2], "2 FL X+85 Y+20 AN+0")
+        self.assertEqual(text[3], "3 FC DR+ R30 CCX+50 CCY+50 P1X+70 P1Y+60")
+        fk = [(f["line"], f["message"].split(":")[0], f["severity"]) for f in payload["findings"] if f["reason"] == "fk-point"]
+        self.assertEqual(fk, [(4, "CCX+50", "warning"), (4, "P1X+70", "warning"), (5, "P1X+30", "warning"), (5, "P2X+40", "warning")])
+        self.assertIn("4 FK contour points", payload["message"])
+
+    def test_a_y_shift_lists_the_y_points_only(self):
+        payload = run(self.PROGRAM, profile="heidenhain-klartext", operation="add", operand=5, addresses=["Y"])
+        words = [f["message"].split(":")[0] for f in payload["findings"] if f["reason"] == "fk-point"]
+        self.assertEqual(words, ["CCY+50", "P1Y+60", "P1Y+40", "P2Y+50"])
+
+    def test_a_z_shift_touches_no_fk_point(self):
+        payload = run(self.PROGRAM, profile="heidenhain-klartext", operation="add", operand=5, addresses=["Z"])
+        self.assertEqual([f for f in payload["findings"] if f["reason"] == "fk-point"], [])
 
 
 def lines_of(payload):
@@ -222,8 +256,8 @@ class TestGoldenCases(unittest.TestCase):
                     reason = finding["reason"]
                     if reason in BLOCK_REASONS:
                         self.assertEqual(finding["severity"], "warning")
-                    elif reason == "unreadable":
-                        self.assertEqual(finding["severity"], "warning")  # M13 review NC-5
+                    elif reason in ("unreadable", "fk-point"):
+                        self.assertEqual(finding["severity"], "warning")  # M13 review NC-5, B1 fix NC (NC-03)
                     elif reason in WORD_REASONS or reason in NOTE_REASONS:
                         self.assertEqual(finding["severity"], "info")
                     else:

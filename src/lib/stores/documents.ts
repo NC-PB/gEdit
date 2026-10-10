@@ -35,7 +35,8 @@ export interface DocumentStoreDeps {
  * Purely lexical, and deliberately so. `..` is left alone: resolving it without asking
  * the file system is wrong across a symlinked directory, and a wrong *merge* is worse
  * than a missed one — it would hand two different files to a single tab. Full identity
- * needs a canonical path from Rust, which is M2 work.
+ * needs a canonical path from Rust: `FileStat.canonical`, kept on the document and
+ * compared by `byIdentity` (B1 A1).
  *
  * The one thing it does know about a platform's spelling is Windows' `\\?\` (M8):
  * `\\?\C:\nc\a.nc` and `C:\nc\a.nc` are the same file, and `canonicalize` answers with
@@ -190,6 +191,12 @@ export function createDocumentStore(deps: DocumentStoreDeps): DocumentStore {
     byPath(path: string): DocMeta | undefined {
       const wanted = key(path);
       return items.find((d) => d.path !== null && key(d.path) === wanted);
+    },
+
+    byIdentity(canonical: string | null | undefined): DocMeta | undefined {
+      if (!canonical) return undefined;
+      const wanted = key(canonical);
+      return items.find((d) => d.canonical != null && key(d.canonical) === wanted);
     },
 
     nextUntitledIndex(): number {

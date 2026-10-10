@@ -1,0 +1,53 @@
+# B1: the bug-fix round after the first release (plan: the B1 round of 2026-10-10, packages A1 to A9, B1-G and B4).
+# Run with: tests/runtime/suites/m0.txt tests/runtime/suites/m1.txt tests/runtime/suites/m2.txt tests/runtime/suites/m3.txt tests/runtime/suites/m4.txt tests/runtime/suites/m5.txt tests/runtime/suites/m6.txt tests/runtime/suites/m7.txt tests/runtime/suites/m8.txt tests/runtime/suites/m9.txt tests/runtime/suites/m10.txt tests/runtime/suites/m11.txt tests/runtime/suites/m12.txt tests/runtime/suites/rp.txt tests/runtime/suites/m13.txt tests/runtime/suites/p3a.txt tests/runtime/suites/p3b.txt tests/runtime/suites/b1.txt
+#
+# What the round changed that only the running app can prove: two spellings of one file, the order a session comes back
+# in, Settings asking before it loses typed input, one undo for a transform of more than a thousand lines, the map
+# following the cursor, the ribbon's seven tabs and its scrollbar, no colour box on a variable, a hover on the first
+# line, the recovery warning, and the login shell's PATH. Expected text is ctx.t(...) or a golden of the package, never
+# what the app happens to show.
+#
+# Intentional changes to earlier scenarios, made with this suite (B1 B4; the hand-off lists each with its package):
+# the ribbon has seven tabs (File, Edit, Insert, NC, Tools, Scripts, View: no Home tab; scripts of the user's folders are
+# on Scripts, the built-in ones on Tools; Program start only on Insert); Settings asks before it closes with something
+# typed; commands without a key are hidden in the shortcut list until a box is ticked; a restore discards the snapshots
+# one by one; the presets marked "verify" read "(unconfirmed)" in the machine form; G93 is offered as a snippet; the
+# hover of a two-block cycle lists the parameters of its own block; the descriptions of G71 and G76 are the new ones;
+# the login shell is not started for the PATH when scripts.python or GEDIT_PYTHON is set (a regression of A3 found by
+# the first hosted run and fixed here).
+
+# A1: one file under two spellings (a symbolic link, a "folder/../" path) is one tab; Save As onto the other spelling is
+# refused; a rewrite of the same size and time is noticed at Save.
+b1-files-spellings
+
+# A1: a restored session shows the tab that was in front first, then fills in the rest in the stored order.
+b1-session-1
+b1-session-2
+
+# A4 and A9: Settings asks before it throws away what was typed, also for an open machine form and a tab change.
+b1-settings-leave
+
+# A4: a transform that changes 1,500 lines keeps the bookmarks and is one undo step; the program map scrolls to the cursor.
+b1-edits-1000
+b1-map-scroll
+
+# A5: Convert Case keeps program names and says so.
+b1-convert-case
+
+# A9: no colour box on #101=5; a hover on the first lines is fully visible.
+b1-colorbox
+b1-hover-line1
+
+# A9: the seven ribbon tabs, their groups, and the scrollbar below the group labels at a narrow width.
+b1-ribbon-tabs
+b1-ribbon-narrow
+
+# A2: the lasting recovery warning while snapshots fail; the recent-files list that cannot be saved; a restore onto a file
+# another tab holds (under another spelling) goes to an untitled tab.
+b1-recovery-status
+b1-recovery-1
+b1-recovery-2
+
+# A3 and B4: the login shell's PATH is added behind the app's own, and not asked for when scripts.python is set.
+b1-py3-loginpath
+b1-py3-setting

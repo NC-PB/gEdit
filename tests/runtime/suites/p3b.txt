@@ -18,7 +18,7 @@
 # them; p3-templates holds the new state (and that the old one is gone) instead.
 
 # X9t: the Insert tab of a lathe and of a mill program against the code databases (groups, toolbar buttons, More
-# lists, "review pending"), the Home tab's Program start (unnumbered in a program without block numbers, golden
+# lists, "review pending"), Program start (since B1 A9 on the Insert tab only; unnumbered in a program without block numbers, golden
 # otherwise), Tool start on a numbered lathe program (form, defaults, live text, refused values, a changed value, the
 # next block numbers, one Undo, Cancel; system B writes G92 S), a formula (rigid tapping's feed, read-only), the
 # completion item accepted with Tab, the stars (Favorites first, state.json, the quick pick), a Klartext template with

@@ -24,9 +24,12 @@
 import type { Messages } from '../types';
 
 export default {
-  // The palette category and the Tools group caption.
+  // The palette category and the captions of the ribbon groups: Run and Manage on the Scripts tab,
+  // "My Scripts" (the user's own) beside them, and "Built-in Scripts" on the Tools tab (B1 A9).
   category: 'Scripts',
-  groupScripts: 'Python Scripts',
+  groupScripts: 'Run',
+  groupOwn: 'My Scripts',
+  groupBundled: 'Built-in Scripts',
 
   // -------------------------------------------------------------------------
   // The run, as the status bar and the panel title say it
@@ -70,6 +73,8 @@ export default {
   scriptTooltip: '{script} — {description}',
   noneForProfile: 'No scripts for this dialect',
   noneAtAll: 'No scripts found. Use New Script or Add Folder.',
+  /** The Scripts tab's own list while the user folders hold no script (the built-in ones are on the Tools tab). */
+  noneOwn: 'No scripts of your own yet. Use New Script or Add Folder.',
   headerProblem: '{script}: the header could not be read, so it runs in output mode',
 
   // -------------------------------------------------------------------------
@@ -85,7 +90,7 @@ export default {
   newTitle: 'Name for the new script',
   newPlaceholder: 'scale_feed',
   nameEmpty: 'Enter a name',
-  nameInvalid: 'Use a plain file name: no / \\ : and no leading _ or .',
+  nameInvalid: 'Use a plain file name: none of / \\ : < > " | ? * and no leading _ or .',
   nameReserved: 'gedit_nc.py is the script library and cannot be used as a name',
   nameDevice: 'CON, PRN, AUX, NUL, COM0-COM9 and LPT0-LPT9 name Windows devices, not files',
   created: 'Created {name}',
@@ -138,6 +143,7 @@ export default {
   staleMessage:
     '{script} finished, but the program was edited while it ran, so nothing was applied. The result can still be opened in a new tab.',
   staleOpen: 'Open in new tab',
+  headerChanged: '{script} was changed since the script list was loaded. Reloading the list and running it again.',
   staleDiscarded: '{script}: the result was discarded',
 
   // -------------------------------------------------------------------------
@@ -165,6 +171,7 @@ export default {
   outputTimedOut: 'Timed out',
   outputCancelled: 'Stopped',
   outputTruncated: 'Output cut off',
+  outputStderrTruncated: 'Error messages cut off',
   outputNoStdout: 'The script printed nothing on stdout.',
   outputCut_one: '… 1 more character, not shown here.',
   outputCut_other: '… {count} more characters, not shown here.',

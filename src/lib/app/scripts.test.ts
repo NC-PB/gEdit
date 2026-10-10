@@ -98,6 +98,7 @@ function result(over: Partial<RunResult> = {}): RunResult {
     timedOut: false,
     cancelled: false,
     stdoutTruncated: false,
+    stderrTruncated: false,
     durationMs: 12,
     interpreter: '/usr/bin/python3',
     ...over,
@@ -157,6 +158,11 @@ interface Harness {
   formAnswers: (Record<string, unknown> | undefined)[];
   confirms: { title: string; message: string; ok: string }[];
   confirmAnswers: boolean[];
+  /** Another dialog is in front: `whenFree` holds its operation until this opens (null = free). */
+  dialogInFront: Promise<void> | null;
+  /** Whether each confirm ran inside `whenFree`. */
+  confirmsInsideWhenFree: boolean[];
+  insideWhenFree: boolean;
   applied: { id: DocId; startLine: number; endLine: number; lines: string[] }[];
   /** What the fake `applyLines` reports as changed; null means "one per line handed over". */
   applyLinesAnswer: number | null;
@@ -205,6 +211,9 @@ function harness(o: { profileId?: string; entries?: ScriptEntry[] } = {}): Harne
     formAnswers: [],
     confirms: [],
     confirmAnswers: [],
+    dialogInFront: null,
+    confirmsInsideWhenFree: [],
+    insideWhenFree: false,
     applied: [],
     applyLinesAnswer: null,
     created: [],
@@ -261,7 +270,17 @@ function harness(o: { profileId?: string; entries?: ScriptEntry[] } = {}): Harne
     dialogs: {
       confirm: (request) => {
         h.confirms.push({ title: request.title, message: request.message, ok: request.ok });
+        h.confirmsInsideWhenFree.push(h.insideWhenFree);
         return Promise.resolve(h.confirmAnswers.shift() ?? false);
+      },
+      whenFree: async (op) => {
+        if (h.dialogInFront !== null) await h.dialogInFront;
+        h.insideWhenFree = true;
+        try {
+          return await op();
+        } finally {
+          h.insideWhenFree = false;
+        }
       },
     },
     status: {
@@ -911,6 +930,30 @@ describe('ScriptService.run: the stale guard', () => {
     expect(h.created).toEqual([{ profileId: 'fanuc-gcode', text: 'N10 G1 F90.' }]);
   });
 
+  // B1 integration (A3 x A4). The stale-result offer is a question that must be asked: with
+  // another dialog in front it waits for it (`dialogs.whenFree`) instead of being skipped.
+  it('asks for the new tab only when the dialog in front has gone', async () => {
+    const h = await ready();
+    h.duringRun = () => {
+      h.version += 1;
+    };
+    h.runs = [result({ stdout: 'N10 G1 F90.' })];
+    h.confirmAnswers = [true];
+    let close: () => void = () => {};
+    h.dialogInFront = new Promise<void>((resolve) => (close = resolve));
+
+    const running = h.service.run('bundled:scale_feed.py');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(h.confirms).toHaveLength(0);
+    expect(h.created).toHaveLength(0);
+
+    close();
+    await running;
+    expect(h.confirms).toHaveLength(1);
+    expect(h.confirmsInsideWhenFree).toEqual([true]);
+    expect(h.created).toEqual([{ profileId: 'fanuc-gcode', text: 'N10 G1 F90.' }]);
+  });
+
   it('says so when the user declines the new tab', async () => {
     const h = await ready();
     h.duringRun = () => {
@@ -1221,6 +1264,66 @@ describe('ScriptService.runLast', () => {
     await h.service.runLast();
     expect(lastStatus(h).error).toBe(true);
     expect(h.requests).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A header edited after the last scan
+// ---------------------------------------------------------------------------
+
+describe('ScriptService.run: the header was edited since the scan', () => {
+  it('sends the modes it prepared the run with', async () => {
+    const h = await ready({
+      entries: [entry('user:a.py', { meta: meta({ input: 'document', output: 'new-document' }) })],
+    });
+    await h.service.run('user:a.py');
+    expect(h.requests[0]).toMatchObject({ input: 'document', output: 'new-document' });
+  });
+
+  it('sends the defaults for a script with no header', async () => {
+    const h = await ready({ entries: [entry('user:plain.py', { meta: null })] });
+    await h.service.run('user:plain.py');
+    expect(h.requests[0]).toMatchObject({ input: 'selection-or-document', output: 'panel' });
+  });
+
+  // The webview used to run an edited script under the modes cached at the last scan: a
+  // script changed from `replace` to `panel` would have its report applied as new program
+  // text, until the user happened to press Rescan.
+  it('rescans and runs again with the header the file has now', async () => {
+    const h = await ready({ entries: [entry('user:a.py', { meta: meta({ output: 'replace' }) })] });
+    // The file was edited: the list Rust now gives says `panel`.
+    h.entries = [entry('user:a.py', { meta: meta({ output: 'panel' }) })];
+    h.runs = [
+      new Error('header-changed: the header of user:a.py was changed after the scripts were listed'),
+      result({ stdout: 'a report, not a program' }),
+    ];
+    await h.service.run('user:a.py');
+
+    expect(h.requests.map((r) => r.output)).toEqual(['replace', 'panel']);
+    expect(get(scriptList)[0].meta?.output).toBe('panel');
+    // Nothing was applied to the program, and the user was told what happened.
+    expect(h.applied).toHaveLength(0);
+    expect(h.status.map((s) => s.text)).toContain('scripts.headerChanged {"script":"Scale feed rates"}');
+    expect(h.status.some((s) => s.text.startsWith('scripts.runFailed'))).toBe(false);
+    expect(get(runningScript)).toBeNull();
+  });
+
+  it('gives up after one rescan instead of looping', async () => {
+    const h = await ready();
+    const changed = () => new Error('header-changed: again');
+    h.runs = [changed(), changed(), changed()];
+    await h.service.run('bundled:scale_feed.py');
+    expect(h.requests).toHaveLength(2);
+    expect(lastStatus(h)).toMatchObject({ error: true });
+    expect(lastStatus(h).text).toContain('scripts.runFailed');
+    expect(get(runningScript)).toBeNull();
+  });
+
+  it('does not treat any other failure as a changed header', async () => {
+    const h = await ready();
+    h.runs = [new Error('Script not found: bundled:scale_feed.py')];
+    await h.service.run('bundled:scale_feed.py');
+    expect(h.requests).toHaveLength(1);
   });
 });
 

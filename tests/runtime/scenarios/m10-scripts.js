@@ -233,7 +233,7 @@ scenario('m10-scripts', { timeout: 540 }, async (h) => {
     // the extents may, and where the clock of a budget has to start at the click.
     const id = await writeUserScript(h, 'rh_noform_report.py', NO_FORM_REPORT)
     const quick = await runFromTools(h, id, undefined, 30000)
-    h.check('the plumbing: a script with no form runs from the Tools tab at once and its report reaches the store', quick.form === false && storeRows(h).length === 1 && storeRows(h)[0].scope === 'noform' && quick.ms >= 0, { form: quick.form, rows: storeRows(h) })
+    h.check('the plumbing: a script with no form runs from the ribbon at once and its report reaches the store', quick.form === false && storeRows(h).length === 1 && storeRows(h)[0].scope === 'noform' && quick.ms >= 0, { form: quick.form, rows: storeRows(h) })
   })
 
   // =============================================================== A. the Tools tab

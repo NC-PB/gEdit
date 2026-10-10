@@ -1,6 +1,13 @@
 <!--
-  The Tools tab's script list (plan §5 WP5.2, §7.9: `scripts-group`, `script-item` with
+  The script lists of the ribbon (plan §5 WP5.2, §7.9: `scripts-group`, `script-item` with
   `data-script-id`). Owner: WP5.2. Registered by `contrib/scripts.ts`.
+
+  **Two lists, one component (B1 A9).** `scope="bundled"` is the Tools tab's list of the
+  scripts that ship with gEdit (program checks, scale feed, tool list, ...); `scope="own"`
+  is the Scripts tab's list of the user's own scripts (the user folder and any folder added
+  by hand). `scope="all"` (the default) is both, as before. `BundledScriptsMenu.svelte` and
+  `OwnScriptsMenu.svelte` are the two registrations, because a ribbon group component takes
+  no props.
 
   A custom ribbon group, because its content is data rather than commands: the scripts
   come from `scripts_list` and change with every rescan, every new script and every folder
@@ -37,6 +44,15 @@
   import { t } from '$lib/i18n';
   import type { ScriptEntry } from '$lib/platform/commands';
 
+  type Scope = 'all' | 'bundled' | 'own';
+  let { scope = 'all' }: { scope?: Scope } = $props();
+
+  /** Whether `entry` belongs on this list: a script of the `bundled` root, or any other. */
+  function inScope(entry: ScriptEntry, scope: Scope): boolean {
+    if (scope === 'all') return true;
+    return (entry.root === 'bundled') === (scope === 'bundled');
+  }
+
   const list = scripts.list;
   const python = scripts.python;
   const active = docs.active;
@@ -44,14 +60,13 @@
 
   const profileId = $derived($active?.profileId ?? null);
 
-  // The empty list is short-circuited rather than filtered: there is nothing to decide,
-  // and it keeps the group renderable while `core/scripting/filter.ts` is still the P5
-  // stub on this branch (WP5.1 implements it).
-  const offered = $derived($list.length === 0 ? [] : scriptsForProfile($list, profileId));
+  // The empty list is short-circuited rather than filtered: there is nothing to decide.
+  const mine = $derived($list.filter((entry) => inScope(entry, scope)));
+  const offered = $derived(mine.length === 0 ? [] : scriptsForProfile(mine, profileId));
   const groups = $derived(offered.length === 0 ? [] : groupScripts(offered));
 
   const pythonMissing = $derived($python !== null && !$python.ok);
-  const hasScripts = $derived($list.some((entry) => !entry.shadowed));
+  const hasScripts = $derived(mine.some((entry) => !entry.shadowed));
 
   function commandId(entry: ScriptEntry): string {
     return `script.run:${entry.id}`;
@@ -87,11 +102,19 @@
   {:else if $scriptListError !== null}
     <p class="notice" title={$scriptListError}>{t('scripts.rescanFailed')}</p>
   {:else if groups.length === 0}
-    <p class="hint">{hasScripts ? t('scripts.noneForProfile') : t('scripts.noneAtAll')}</p>
+    {#if hasScripts}
+      <p class="hint">{t('scripts.noneForProfile')}</p>
+    {:else if scope === 'own'}
+      <p class="hint">{t('scripts.noneOwn')}</p>
+    {:else if scope === 'all'}
+      <p class="hint">{t('scripts.noneAtAll')}</p>
+    {/if}
   {:else}
     {#each groups as group (group.group ?? '')}
       <div class="group" data-testid="scripts-group" data-group={group.group ?? ''}>
-        <span class="caption">{group.group ?? t('scripts.ungrouped')}</span>
+        {#if group.group !== null || groups.length > 1 || scope === 'all'}
+          <span class="caption">{group.group ?? t('scripts.ungrouped')}</span>
+        {/if}
         <div class="items">
           {#each group.scripts as entry (entry.id)}
             <button

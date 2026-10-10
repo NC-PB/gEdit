@@ -1,4 +1,4 @@
-// The v2 script UI: the Tools group, the `script.*` commands, the Output panel and the
+// The v2 script UI: the Scripts tab, the Built-in Scripts group of the Tools tab, the `script.*` commands, the Output panel and the
 // status item (plan §5 WP5.2, §7.9, §7.11). Owner: **WP5.2**.
 // One feature per file (plan AD-3); see ./README.md.
 //
@@ -56,7 +56,8 @@ import FolderPlus from 'lucide-svelte/icons/folder-plus';
 import Play from 'lucide-svelte/icons/play';
 import RefreshCw from 'lucide-svelte/icons/refresh-cw';
 import { get } from 'svelte/store';
-import ScriptsMenu from '$lib/components/menus/ScriptsMenu.svelte';
+import BundledScriptsMenu from '$lib/components/menus/BundledScriptsMenu.svelte';
+import OwnScriptsMenu from '$lib/components/menus/OwnScriptsMenu.svelte';
 import ScriptOutputPanel from '$lib/components/panels/ScriptOutputPanel.svelte';
 import ScriptStatusItem from '$lib/components/status/ScriptStatusItem.svelte';
 import { asIcon } from '$lib/app/icons';
@@ -171,6 +172,9 @@ export function validateScriptName(value: string): Msg | null {
     stem.startsWith('.') ||
     stem.endsWith('.') ||
     /[/\\:]/.test(stem) ||
+    // Characters Windows does not allow in a file name; a folder of scripts is often
+    // synced to a Windows machine (Rust refuses them too, on every platform).
+    /[<>"|?*]/.test(stem) ||
     // Control characters, which `is_safe_segment` refuses too.
     [...stem].some((ch) => ch < ' ' || ch === '\u007f');
   return unsafe ? { key: 'scripts.nameInvalid' } : null;
@@ -485,16 +489,19 @@ export default {
     },
   ],
   ribbon: [
-    { tab: 'tools', group: 'scripts.groupScripts', command: 'script.runPicker', order: 10 },
-    { tab: 'tools', group: 'scripts.groupScripts', command: 'script.cancel', order: 20 },
-    { tab: 'tools', group: 'scripts.groupManage', command: 'script.new', order: 10 },
-    { tab: 'tools', group: 'scripts.groupManage', command: 'script.openSource', order: 20 },
-    { tab: 'tools', group: 'scripts.groupManage', command: 'script.rescan', order: 30 },
-    { tab: 'tools', group: 'scripts.groupManage', command: 'script.addFolder', order: 40 },
+    // The Scripts tab (B1 A9): Run, then the user's own scripts, then Manage.
+    { tab: 'scripts', group: 'scripts.groupScripts', command: 'script.runPicker', order: 10 },
+    { tab: 'scripts', group: 'scripts.groupScripts', command: 'script.cancel', order: 20 },
+    { tab: 'scripts', group: 'scripts.groupManage', command: 'script.new', order: 40 },
+    { tab: 'scripts', group: 'scripts.groupManage', command: 'script.openSource', order: 50 },
+    { tab: 'scripts', group: 'scripts.groupManage', command: 'script.rescan', order: 60 },
+    { tab: 'scripts', group: 'scripts.groupManage', command: 'script.addFolder', order: 70 },
   ],
   ribbonGroups: [
-    // Joins the "Python Scripts" group and renders after its two buttons (`ribbonModel`).
-    { tab: 'tools', group: 'scripts.groupScripts', order: 30, component: ScriptsMenu },
+    { tab: 'scripts', group: 'scripts.groupOwn', order: 30, component: OwnScriptsMenu },
+    // The scripts that ship with gEdit are tools, not something the user maintains: the
+    // Tools tab, after Compare (10) and before the channel check (60) and the profile tester (70).
+    { tab: 'tools', group: 'scripts.groupBundled', order: 30, component: BundledScriptsMenu },
   ],
   panels: [
     {

@@ -1,5 +1,4 @@
-// Sync marks, pure (plan §7.17, AD-32). Implemented by the M12 prelude (P12); owned and
-// hardened by WP12.1.
+// Sync marks, pure (plan §7.17, AD-32). Built and hardened by WP12.1.
 //
 // A mark is found on the MASKED line with strings blanked too, so a wait written in a
 // comment or inside a string is not a wait. Rules run in declaration order and the first

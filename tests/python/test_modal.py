@@ -554,6 +554,22 @@ class TestGeneralRules(ModalTestCase):
                          [None, "5", "5"])
         self.assertEqual(states[1]["tool"]["line"], 2)
 
+    def test_a_tool_group_that_took_no_part_in_the_match_names_no_tool(self) -> None:
+        # B1: a variant of the Klartext profile whose tool pattern makes the number optional,
+        # so `TOOL CALL Z S2000` matches without it. The whole match ("TOOL CALL") is no
+        # station: the tool of the line above stays, as in the program map and the tool list.
+        context = helpers.effective_context("heidenhain-klartext")
+        profile = json.loads(json.dumps(context["profile"]))
+        profile["toolCall"] = {
+            "trigger": "\\bTOOL\\s+CALL\\b",
+            "tool": "TOOL\\s+CALL\\s+(?<tool>\\d+)?",
+            "toolFrom": "same-line",
+        }
+        states = self.walk(profile, context["codes"], ["1 TOOL CALL 5 Z S1000", "2 TOOL CALL Z S2000"])
+        self.assertEqual([state["tool"]["station"] for state in states], ["5", "5"])
+        self.assertEqual(states[1]["tool"]["line"], 1)
+        self.assertTrue(states[1]["block"]["toolChange"])
+
     def test_a_line_without_masked_text_leaves_the_tool_alone(self) -> None:
         # `masked` is optional: a caller that does not need the tool does not have to mask
         # every line to use the rest of the state.
@@ -762,6 +778,83 @@ class TestSpeedLimitOf(unittest.TestCase):
         self.assertIsNone(self.limit("G50 S2500", codes=without))
 
 
+class TestOwnWords(unittest.TestCase):
+    """B1 (owner decision): the words a function owns behind it in its block (``ownWords``).
+
+    A test-local database until the shipped Klartext entries carry the attribute.
+    """
+
+    CODES: List[Dict[str, Any]] = [
+        {"code": "L", "group": "motion", "modal": True, "sets": {"motion": "feed"}, "label": "Line"},
+        {"code": "M128", "group": "tcpm", "modal": True, "sets": {"tcp": "on"}, "label": "TCPM",
+         "params": [{"address": "F", "label": "Feed for the compensating moves"}], "ownWords": ["F"]},
+        {"code": "M129", "group": "tcpm", "modal": True, "sets": {"tcp": "off"}, "label": "TCPM off"},
+        {"code": "PLANE SPATIAL", "group": "tilt", "frame": "open", "label": "Tilt", "ownWords": ["F"]},
+        {"code": "CYCL DEF 19", "group": "tilt", "axisWords": "data", "label": "Tilt cycle", "ownWords": ["f"]},
+    ]
+
+    def owned(self, codes: Sequence[Dict[str, Any]], lines: Sequence[str]) -> List[List[Any]]:
+        cp = gedit_nc.compile_profile(helpers.effective_context("heidenhain-klartext")["profile"])
+        tracker = gedit_nc.FeedModeTracker(codes)
+        state = None
+        out = []
+        for line in lines:
+            tokens, state = gedit_nc.tokenize_line(line, cp, state)
+            tracker.update(tokens, continued=gedit_nc.continues_block(line, cp))
+            out.append([(t.text.strip(), tracker.own_word_of(t)) for t in tokens if tracker.own_word_of(t) is not None])
+        return out
+
+    def test_a_word_behind_the_function_is_its_own_and_one_in_front_is_not(self) -> None:
+        lines = [
+            "1 L X+10 F400 M128 F800",
+            "2 L X+20 F600",
+            "3 PLANE SPATIAL SPA+0 SPB+45 SPC+0 MOVE DIST50 F2000",
+            "4 CYCL DEF 19.1 A+0 B+45 C+0 F1500",
+            "5 M129 F300",
+        ]
+        self.assertEqual(
+            self.owned(self.CODES, lines),
+            [[("F800", "M128")], [], [("F2000", "PLANE SPATIAL")], [("F1500", "CYCL DEF 19")], []],
+        )
+
+    def test_a_block_over_several_lines_keeps_its_owner(self) -> None:
+        lines = ["1 PLANE SPATIAL SPA+0 SPB+45 SPC+0 ~", "  MOVE DIST50 F2000", "2 L X+5 F100"]
+        self.assertEqual(self.owned(self.CODES, lines), [[], [("F2000", "PLANE SPATIAL")], []])
+
+    def test_without_the_attribute_no_word_is_owned(self) -> None:
+        plain = [{k: v for k, v in entry.items() if k != "ownWords"} for entry in self.CODES]
+        self.assertEqual(self.owned(plain, ["1 L X+10 F400 M128 F800"]), [[]])
+
+
+class TestOwnWordsInTheState(ModalTestCase):
+    """B1 NC-01 (rule 16): a function's own word is no feed in force, with the shipped Klartext database."""
+
+    def run_lines(self, lines: Sequence[str]) -> List[Dict[str, Any]]:
+        context = helpers.effective_context("heidenhain-klartext")
+        return self.walk(context["profile"], context["codes"], lines)
+
+    def test_the_feed_in_force_is_the_path_feed(self) -> None:
+        lines = [
+            "L X+10 Y+10 R0 F500",
+            "M128 F800",
+            "PLANE SPATIAL SPA+0 SPB+30 SPC+0 MOVE DIST50 F2000",
+            "CYCL DEF 19.1 A+0 B+30 F1500",
+            "M140 MB MAX F1000",
+            "L X+50 F600 M128 F900",
+            "L X+60",
+        ]
+        feeds = [(state["feed"] or {}).get("valueText") for state in self.run_lines(lines)]
+        self.assertEqual(feeds, ["500", "500", "500", "500", "500", "600", "600"])
+
+    def test_an_owned_f_does_not_end_a_feed_per_tooth(self) -> None:
+        states = self.run_lines(["L X+10 FZ0.05", "M128 F800", "L X+20"])
+        self.assertEqual([(s["feed"]["valueText"], s["feedUnit"]) for s in states], [("0.05", "per-tooth")] * 3)
+
+    def test_the_owner_lasts_over_a_continued_line_only(self) -> None:
+        states = self.run_lines(["L X+5 F100", "PLANE SPATIAL SPA+0 SPB+30 SPC+0 ~", "  MOVE DIST50 F2000", "L X+10 F300"])
+        self.assertEqual([s["feed"]["valueText"] for s in states], ["100", "100", "100", "300"])
+
+
 class TestFeedModeTrackerIsAWrapper(ModalTestCase):
     """Phase 1's tracker, now reading the same rules (plan §7.10 is unchanged for scripts).
 
@@ -832,8 +925,7 @@ class TestTappingInTheTracker(ModalTestCase):
 
     ``tapping`` / ``tapping_code`` come from the database's ``tapping`` flag on a code of the
     block, on the cycle in force or on a mode in force; ``pitch_mode`` is a modal
-    ``pitchFeed`` code outside the cycle and motion groups (the ``G63`` decision of TODO
-    Next up 8); ``data_code`` is a ``wordsAreData`` code of the block.
+    ``pitchFeed`` code outside the cycle and motion groups (the ``G63`` decision of 2026-09); ``data_code`` is a ``wordsAreData`` code of the block.
     """
 
     def walk(self, lines, profile_id="fanuc-gcode", codes=None):
@@ -1028,9 +1120,12 @@ class TestDefinedCycle(ModalTestCase):
         cycle = {code: (entry.get("sets") or {}).get("cycle") for code, entry in codes.items()}
         self.assertEqual(
             sorted(code for code, value in cycle.items() if value == "define"),
-            # M10 P10 added 202 (boring), 208 (bore milling) and 262 (thread milling).
+            # M10 P10 added 202 (boring), 208 (bore milling) and 262 (thread milling); B1 (a7s) the
+            # SL cycles 21-25 and the pocket, slot and stud cycles 251-254, 256, 257.
             ["CYCL DEF 200", "CYCL DEF 201", "CYCL DEF 202", "CYCL DEF 203", "CYCL DEF 205", "CYCL DEF 206",
-             "CYCL DEF 207", "CYCL DEF 208", "CYCL DEF 209", "CYCL DEF 240", "CYCL DEF 262"],
+             "CYCL DEF 207", "CYCL DEF 208", "CYCL DEF 209", "CYCL DEF 21", "CYCL DEF 22", "CYCL DEF 23",
+             "CYCL DEF 24", "CYCL DEF 240", "CYCL DEF 25", "CYCL DEF 251", "CYCL DEF 252", "CYCL DEF 253",
+             "CYCL DEF 254", "CYCL DEF 256", "CYCL DEF 257", "CYCL DEF 262"],
         )
         self.assertEqual(sorted(code for code, value in cycle.items() if value == "call"),
                          ["CYCL CALL", "CYCL CALL PAT", "CYCL CALL POS", "M99"])
@@ -1038,7 +1133,8 @@ class TestDefinedCycle(ModalTestCase):
         # Owner decision of 2026-10-08 (M9-4): on the owner's controls M89 is the modal cycle
         # call, so the entry is no longer marked for verification.
         self.assertIsNone(codes["M89"].get("verify"), "M89 is the modal cycle call (the owner, 2026-10-08)")
-        for code in ("CYCL DEF", "CYCL DEF 7", "CYCL DEF 9", "CYCL DEF 19", "CYCL DEF 32", "CYCL DEF 247"):
+        # B1 (a7s): cycle 14 CONTOUR acts where it is defined (TNC 640 cycle manual 10/2017, §7.2).
+        for code in ("CYCL DEF", "CYCL DEF 7", "CYCL DEF 9", "CYCL DEF 14", "CYCL DEF 19", "CYCL DEF 32", "CYCL DEF 247"):
             with self.subTest(code=code):
                 self.assertIsNone(cycle[code])
         self.assertNotIn("start", cycle.values())

@@ -12,6 +12,13 @@
 // marking errors is the linter's job, not the grammar's, and the generator never emits the
 // `invalid` role at all. Anything the grammar does not recognise is left uncoloured.
 //
+// A grammar is one state, `root`, and stateless line by line, with one exception: the names a
+// Sinumerik `DEF` block declares depend on what stood before them on the line, so that grammar
+// has three more states (`sinumerik.ts`, `declareStates`), each of which ends at the first
+// character of the next line. `syntax.freeText`, `colonWords`, `callTargets`, `labelAfter`
+// and `plainTextRun` (M12.5) are rules of `root`, built so that the grammar paints what the
+// tokenizer reads; `differential.test.ts` holds the two together.
+//
 // The module is Monaco-free (AD-1): `generateGrammar` returns a plain object that happens
 // to be an `IMonarchLanguage`, which is what lets the whole generator be unit-tested in
 // node and keeps Monaco out of the initial bundle.
@@ -21,7 +28,7 @@ import type { Profile } from '$lib/core/profiles/types';
 import { isoRules } from './iso';
 import { klartextRules } from './klartext';
 import { okumaRules } from './okuma';
-import { sinumerikRules } from './sinumerik';
+import { sinumerikRules, sinumerikStates } from './sinumerik';
 import type { GrammarRule, MonarchGrammar } from './shared';
 
 export {
@@ -34,7 +41,7 @@ export {
   type Role,
 } from './roles';
 export { generateThemes, profileOverrides, type GeneratedTheme, type ThemeRule } from './themes';
-export type { GrammarAction, GrammarRule, MonarchGrammar } from './shared';
+export type { GrammarAction, GrammarEntry, GrammarRule, GrammarStep, MonarchGrammar } from './shared';
 
 /**
  * The rule builder one profile asks for (P8).
@@ -66,7 +73,7 @@ export function generateGrammar(p: Profile, db: CodeDb): Record<string, unknown>
   const grammar: MonarchGrammar = {
     defaultToken: '',
     ignoreCase: p?.syntax?.caseSensitive !== true,
-    tokenizer: { root: rules },
+    tokenizer: { root: rules, ...(p?.grammar === 'sinumerik' ? sinumerikStates(p, db) : {}) },
   };
   return grammar as unknown as Record<string, unknown>;
 }
