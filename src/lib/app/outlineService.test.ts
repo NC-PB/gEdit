@@ -37,6 +37,20 @@ interface Task {
   cancelled: boolean;
 }
 
+/**
+ * The fake clock of the first build's time budget (B1 B2): every reading moves it on by
+ * `tick` ms. At 10 ms a reading finds the 8 ms budget spent, so a slice reads one run of
+ * `chunkLines` lines (the behaviour these tests were written for); a smaller tick lets a
+ * slice read several.
+ */
+interface Clock {
+  tick: number;
+  at: number;
+  reads: number;
+  /** ms the clock moves on for every line the build reads (the cost of classifying it). */
+  perLine: number;
+}
+
 interface Harness {
   docs: DocumentStore;
   outline: OutlineServiceInternals;
@@ -48,9 +62,12 @@ interface Harness {
   createModel(id: DocId): void;
   /** Runs every queued task, repeatedly, until nothing is left (the whole build). */
   flush(): number;
-  /** Runs only the tasks queued with `ms === 0` (the build chunks), once. */
+  /** Runs only the tasks queued with `ms === 0` (the build slices), once. */
   runChunks(): number;
   pending(): number;
+  clock: Clock;
+  /** The slices queued on the idle scheduler (only with `idleQueue`). */
+  idleTasks: Task[];
   stop: Disposable;
 }
 
@@ -70,8 +87,11 @@ const META: NewDocMeta = {
   readOnlyReason: null,
 };
 
-function harness(over: Partial<OutlineServiceDeps> = {}): Harness {
+function harness(over: Partial<OutlineServiceDeps> & { idleQueue?: boolean } = {}): Harness {
+  const { idleQueue = false, ...overrides } = over;
   const docs = createDocumentStore({ caseInsensitivePaths: false });
+  const clock: Clock = { tick: 10, at: 0, reads: 0, perLine: 0 };
+  const idleTasks: Task[] = [];
   const lines = new Map<DocId, string[]>();
   const tasks: Task[] = [];
   let onContent: (id: DocId, change: ContentChange) => void = () => {};
@@ -83,7 +103,11 @@ function harness(over: Partial<OutlineServiceDeps> = {}): Harness {
     editor: {
       hasModel: (id) => lines.has(id),
       getLineCount: (id) => lines.get(id)?.length ?? 0,
-      getLines: (id, from, to) => (lines.get(id) ?? []).slice(Math.max(1, from) - 1, to),
+      getLines: (id, from, to) => {
+        const read = (lines.get(id) ?? []).slice(Math.max(1, from) - 1, to);
+        clock.at += clock.perLine * read.length;
+        return read;
+      },
       onDidChangeContent: (cb) => {
         onContent = cb;
         return () => {
@@ -112,9 +136,24 @@ function harness(over: Partial<OutlineServiceDeps> = {}): Harness {
         task.cancelled = true;
       };
     },
+    now: () => {
+      clock.reads++;
+      return (clock.at += clock.tick);
+    },
+    ...(idleQueue
+      ? {
+          idle: (fn: () => void): Disposable => {
+            const task: Task = { fn, ms: -1, cancelled: false };
+            idleTasks.push(task);
+            return () => {
+              task.cancelled = true;
+            };
+          },
+        }
+      : {}),
     chunkLines: 4,
     delayMs: 150,
-    ...over,
+    ...overrides,
   };
 
   const outline = createOutlineService(deps);
@@ -131,6 +170,13 @@ function harness(over: Partial<OutlineServiceDeps> = {}): Harness {
       task.fn();
     }
     return ran;
+  }
+
+  /** The slices of the build: on the idle scheduler when the test gave one, on a zero timer otherwise. */
+  function runChunks(): number {
+    const queued = idleTasks.splice(0, idleTasks.length).filter((task) => !task.cancelled);
+    for (const task of queued) task.fn();
+    return queued.length + run(0);
   }
 
   return {
@@ -167,14 +213,17 @@ function harness(over: Partial<OutlineServiceDeps> = {}): Harness {
     },
     flush() {
       let total = 0;
-      for (let i = 0; i < 1000 && tasks.some((task) => !task.cancelled); i++) total += run();
+      for (let i = 0; i < 1000 && (tasks.some((task) => !task.cancelled) || idleTasks.some((task) => !task.cancelled)); i++) {
+        total += runChunks();
+        total += run();
+      }
       return total;
     },
-    runChunks() {
-      return run(0);
-    },
+    runChunks,
+    clock,
+    idleTasks,
     pending() {
-      return tasks.filter((task) => !task.cancelled).length;
+      return tasks.filter((task) => !task.cancelled).length + idleTasks.filter((task) => !task.cancelled).length;
     },
   };
 }
@@ -200,6 +249,95 @@ describe('the first build', () => {
     expect(h.outline.toolLines(id)).toEqual([3]);
     h.flush();
     expect(h.outline.toolLines(id)).toEqual([3, 6]);
+  });
+
+  // B1 B2: the first build was 20,000 lines a slice, which is 150 ms and more on a slow engine
+  // (a 388k-line program: 2.3 s in one stretch of 20 stalls). It is time-sliced like the modal
+  // index now: runs of `chunkLines` lines until the budget is spent, on the idle scheduler.
+  describe('time slices (B1 B2)', () => {
+    // Tool changes on lines 3, 7, 13, 17, 23, 27, 33 and 37.
+    const LONG = Array.from({ length: 40 }, (_, i) => (i % 10 === 2 || i % 10 === 6 ? `T${i} M6` : `G1 X${i}.`)).join('\n');
+    const ALL = [3, 7, 13, 17, 23, 27, 33, 37];
+
+    it('reads runs of lines while the budget lasts, and stops at the first look that finds it spent', () => {
+      const h = harness();
+      h.clock.tick = 0;
+      h.clock.perLine = 1; // a run of 4 lines costs 4 ms; the budget is 8 ms
+      const id = h.add(LONG);
+      h.runChunks();
+      // Two runs (lines 1..8) in the first slice, not one run and not the whole program.
+      expect(h.outline.toolLines(id)).toEqual([3, 7]);
+      h.runChunks();
+      expect(h.outline.toolLines(id)).toEqual([3, 7, 13]); // lines 9..16
+      h.flush();
+      expect(h.outline.toolLines(id)).toEqual(ALL);
+    });
+
+    it('reads one run per slice at least, whatever the clock says, so the build always moves on', () => {
+      const h = harness({ budgetMs: 0 });
+      h.clock.tick = 0;
+      const id = h.add(LONG);
+      h.runChunks();
+      expect(h.outline.toolLines(id)).toEqual([3]); // lines 1..4
+      h.runChunks();
+      expect(h.outline.toolLines(id)).toEqual([3, 7]); // lines 5..8
+      h.runChunks();
+      expect(h.outline.toolLines(id)).toEqual([3, 7]); // lines 9..12
+      h.runChunks();
+      expect(h.outline.toolLines(id)).toEqual([3, 7, 13]); // lines 13..16
+    });
+
+    it('never holds the thread longer than the budget plus one run', () => {
+      const h = harness({ idleQueue: true });
+      h.clock.tick = 0;
+      h.clock.perLine = 1;
+      const id = h.add(LONG);
+      let slices = 0;
+      let longest = 0;
+      while (h.idleTasks.some((task) => !task.cancelled)) {
+        const before = h.clock.at;
+        h.runChunks();
+        longest = Math.max(longest, h.clock.at - before);
+        slices++;
+      }
+      expect(longest).toBeLessThanOrEqual(8);
+      expect(slices).toBe(5); // 40 lines at 8 per slice
+      expect(h.outline.toolLines(id)).toEqual(ALL);
+    });
+
+    it('takes the slices from the idle scheduler, and keeps the debounce on the timer', () => {
+      const h = harness({ idleQueue: true });
+      const id = h.add(PROGRAM);
+      // One slice waits for idle time; the other pending task is the 150 ms publish.
+      expect(h.idleTasks.filter((task) => !task.cancelled)).toHaveLength(1);
+      expect(h.pending()).toBe(2);
+      h.flush();
+      expect(h.outline.toolLines(id)).toEqual([3, 6]);
+      expect(get(h.outline.items(id)).map((item) => item.line)).toEqual([1, 2, 3, 6]);
+    });
+
+    it('rebuilds after a machine switch in slices as well, not inside the switch', () => {
+      const machineRevision = writable(0);
+      let key = 'a';
+      const cp = COMPILED.get(FANUC) as CompiledProfile;
+      const h = harness({ idleQueue: true, machineRevision, effective: () => ({ cp, key }) });
+      h.clock.tick = 0;
+      h.clock.perLine = 1;
+      const id = h.add(LONG);
+      h.flush();
+      expect(h.outline.toolLines(id)).toEqual(ALL);
+
+      key = 'b';
+      machineRevision.set(1);
+      // The switch itself reads nothing: the index starts empty and the slices fill it.
+      expect(h.outline.toolLines(id)).toEqual([]);
+      const before = h.clock.at;
+      h.runChunks();
+      expect(h.clock.at - before).toBeLessThanOrEqual(8);
+      expect(h.outline.toolLines(id)).toEqual([3, 7]);
+      h.flush();
+      expect(h.outline.toolLines(id)).toEqual(ALL);
+    });
   });
 
   it('resolves whenReady once it has finished', async () => {
