@@ -1,5 +1,5 @@
 // Cycle forms (Phase 3 plan §6.11, AD-39, P3.8; `docs/planning/code-assistant.md` "Cycle forms").
-// Written by the P3b prelude as stubs; owned by P3.8.
+// Built by P3.8.
 //
 // "Edit Cycle" (`nc.editCycle`, P3.5 wires it) opens a form with one field per parameter of the
 // cycle at the cursor, pre-filled from its block, and rewrites the block on confirm; on a line

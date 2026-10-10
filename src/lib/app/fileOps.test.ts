@@ -802,7 +802,7 @@ describe('open', () => {
       );
     });
 
-    // Review of Next up 8: an Open Recent entry on a hung share reads as existing, and the
+    // Review: an Open Recent entry on a hung share reads as existing, and the
     // stat that comes back `unavailable` used to be treated as "nothing known" — so the
     // read went ahead and blocked, uncancellably, while it held the file-command lock.
     it('refuses a file whose stat does not answer, without reading it', async () => {
@@ -2546,7 +2546,7 @@ describe('a save over a file the document cannot vouch for (G8 M7)', () => {
     expect(text(path)).toContain('my edit');
   });
 
-  // TODO Next up 8: an `unavailable` answer reads like "outside the scope" (`exists:
+  // An `unavailable` answer reads like "outside the scope" (`exists:
   // false`), which `write` would take for "no file there" and write without asking.
   // The wrapper rejects when nothing answered, but `statOne` must not depend on that.
   it('asks when the stat comes back unavailable (a hung share)', async () => {

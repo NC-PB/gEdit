@@ -1,5 +1,5 @@
 // The generated view of the shipped data (plan M6 P6 item 12, §5.2 rule 3, gate G10).
-// Written by the M6 prelude (P6); **WP6.1 owns it from Wave A on**.
+// Owned by WP6.1.
 //
 // Three kinds of consumer read `tests/fixtures/resolved/**`, and none of them may compute
 // it for itself:

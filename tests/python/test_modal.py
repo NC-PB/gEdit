@@ -896,8 +896,7 @@ class TestTappingInTheTracker(ModalTestCase):
 
     ``tapping`` / ``tapping_code`` come from the database's ``tapping`` flag on a code of the
     block, on the cycle in force or on a mode in force; ``pitch_mode`` is a modal
-    ``pitchFeed`` code outside the cycle and motion groups (the ``G63`` decision of TODO
-    Next up 8); ``data_code`` is a ``wordsAreData`` code of the block.
+    ``pitchFeed`` code outside the cycle and motion groups (the ``G63`` decision of 2026-09); ``data_code`` is a ``wordsAreData`` code of the block.
     """
 
     def walk(self, lines, profile_id="fanuc-gcode", codes=None):

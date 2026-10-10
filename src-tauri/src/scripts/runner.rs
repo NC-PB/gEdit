@@ -443,7 +443,7 @@ pub fn execute(plan: &RunPlan, state: &RunState) -> Result<RunOutcome, String> {
         // The child is the group leader, so the group id is its pid.
         command.process_group(0);
     }
-    // No console window on Windows (TODO "Next up 10").
+    // No console window on Windows.
     crate::python::hidden(&mut command);
 
     let mut child = command

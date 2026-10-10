@@ -111,7 +111,7 @@ fn cached_or(lookup: impl FnOnce() -> Lookup) -> Cached {
     found
 }
 
-/// Every child process gEdit starts is started through this (TODO "Next up 10"): the
+/// Every child process gEdit starts is started through this: the
 /// interpreter probes here and a script run in `scripts::runner`. On Windows it applies
 /// [`CREATE_NO_WINDOW`], so a release build — which has no console of its own — never
 /// flashes one for a child; on macOS and Linux there is no such window and it does
@@ -158,7 +158,7 @@ fn suppress_console<C: SetCreationFlags>(command: &mut C) {
 
 #[cfg(all(test, windows))]
 mod creation_flags_tests {
-    //! Regression test for TODO "Next up 10": a release build must never flash a console
+    //! Regression test: a release build must never flash a console
     //! for a script run or an interpreter probe. `Command` gives no way to read its flags
     //! back, so this proves [`suppress_console`] against a recording double instead — see
     //! the doc comment on [`SetCreationFlags`] for why that is the real spawn path and not
@@ -186,7 +186,7 @@ mod creation_flags_tests {
 mod spawn_sites_tests {
     //! The flag test above proves what [`hidden`] does, not that anything calls it: a
     //! refactor that dropped the call from a spawn site would have left it green and the
-    //! console flashing again on Windows (review of Next up 10). So every `.spawn()` in
+    //! console flashing again on Windows (from a review). So every `.spawn()` in
     //! the two modules that start processes has to follow a [`hidden`] call in the same
     //! function. Scanned on every platform, because the call is unconditional.
     use crate::source_scan;

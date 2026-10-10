@@ -1,6 +1,5 @@
 //! `<config>/machines.json`: the user's machine configurations (plan §7.10, §7.15,
-//! AD-31, D50). Stub written by the M6 prelude (P6); **WP6.8** owns it and adds the
-//! tests.
+//! AD-31, D50). Built by WP6.8.
 //!
 //! Rust owns this file exactly as it owns `settings.json` (F47): it is read in the
 //! one `config_load` round trip and written whole by [`machines_save`], through the

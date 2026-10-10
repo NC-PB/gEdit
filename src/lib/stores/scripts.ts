@@ -1,5 +1,4 @@
-// What the script UI shows (plan §5 WP5.1). Owner: **WP5.1** — written by P5, and real
-// code rather than a stub, the same call P4 made for `stores/results.ts`.
+// What the script UI shows (plan §5 WP5.1). Built by WP5.1.
 //
 // Plain `svelte/store` modules, no Tauri and no i18n (AD-2), for two reasons:
 //

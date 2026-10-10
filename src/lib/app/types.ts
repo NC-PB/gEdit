@@ -521,7 +521,7 @@ export interface Modals {
     okLabel?: string;
     context?: { addresses?: string[] };
     /**
-     * Phase 3 (P3b prelude; Phase 3 plan §6.11, §7 #226; built by P3.5 in `FormDialog`). Called
+     * Phase 3 (Phase 3 plan §6.11, §7 #226; built by P3.5 in `FormDialog`). Called
      * with the current values after every change (the dialog computes it as a derived value, so
      * once per update, not once per keystroke event): the values it answers are shown in the
      * read-only fields (the formulas) and handed over with the answer, `preview` under the form
@@ -531,7 +531,7 @@ export interface Modals {
      * message, not display text). Absent: the P2 form, unchanged.
      */
     live?: (values: Record<string, unknown>) => FormLiveResult;
-    /** Phase 3 (P3b prelude): a plain-text note shown above the fields (a template's "review pending", the words a cycle form keeps). */
+    /** Phase 3: a plain-text note shown above the fields (a template's "review pending", the words a cycle form keeps). */
     note?: string;
     /**
      * Phase 3 (P3.5): a test id and data attributes for the note's element, so a scenario can find
@@ -814,7 +814,7 @@ export interface CompareService {
   /** Disposes any temporary model and restores the editor's view state. */
   close(): void;
 
-  // M11 (P11, §7.7, AD-26). Stubs until WP11.3; the rules are in `core/compare/types.ts`.
+  // M11 (P11, §7.7, AD-26). Built by WP11.3; the rules are in `core/compare/types.ts`.
 
   /** `raw`: the documents as they are (P1). `review`: both sides normalized, read-only. */
   readonly mode: Readable<'raw' | 'review'>;
@@ -1085,7 +1085,7 @@ export interface MachineImportSummary {
 }
 
 /**
- * stores/machines.ts → `export const machines: MachineService` (P6 stub; owner WP6.8;
+ * stores/machines.ts → `export const machines: MachineService` (WP6.8;
  * WP7.5 adds the per-file persistence, WP12.6 import and export)
  *
  * It owns two things that look like one: the **set** of machine configurations
@@ -1209,7 +1209,7 @@ export interface FileMemo {
 }
 
 /**
- * stores/fileMemory.ts → `export const fileMemory: FileMemoryStore` (P7 stub; owner WP7.5)
+ * stores/fileMemory.ts → `export const fileMemory: FileMemoryStore` (WP7.5)
  *
  * The memos live in `UiState.files` and reach disk through `uiState`, so they follow
  * its 1 s debounce and its quit flush; this store is the rules on top of them: at most
@@ -1238,7 +1238,7 @@ export interface FileMemoryStore {
 }
 
 /**
- * app/session.ts → `export const session: SessionService` (P7 stub; owner WP7.5)
+ * app/session.ts → `export const session: SessionService` (WP7.5)
  *
  * Rust owns the stored list (`state.json` → `session`) and the grants; this is the
  * webview's half: which paths are in it, when it is written (1 s after any open, close
@@ -1294,7 +1294,7 @@ export interface RecoveryEntry {
 }
 
 /**
- * app/recovery.ts → `export const recovery: RecoveryService` (P7 stub; owner WP7.4)
+ * app/recovery.ts → `export const recovery: RecoveryService` (WP7.4)
  *
  * The webview half of AD-21: every dirty document whose version changed is sent at
  * most every 30 s, and at once on blur and on `visibilitychange`, **from an idle
@@ -1337,7 +1337,7 @@ export interface UserFileEntry {
 }
 
 /**
- * app/userConfig.ts → `export const userConfig: UserConfigService` (P13 stub; WP13.2).
+ * app/userConfig.ts → `export const userConfig: UserConfigService` (WP13.2).
  *
  * The one place that reads the two user folders and hands them to the registries. The
  * order inside `load()` is fixed: both folders are listed (`user_files_list`), then
@@ -1370,7 +1370,7 @@ export interface UserConfigService {
 }
 
 /**
- * Phase 3 (P3a prelude; Phase 3 plan §6.2; P3.1 fills it): `app/modalService.ts` →
+ * Phase 3 (Phase 3 plan §6.2; P3.1): `app/modalService.ts` →
  * `export const modal: ModalService`.
  *
  * One `ModalIndex` per open document, built with the document's **effective** compiled
@@ -1449,14 +1449,14 @@ export interface AppContext {
   channels: ChannelService;
   // P13
   userConfig: UserConfigService;
-  // Phase 3, P3a prelude
+  // Phase 3, P3a
   modal: ModalService;
-  // Phase 3, P3b prelude (P3.5 fills it)
+  // Phase 3, P3b (P3.5)
   templates: TemplateService;
 }
 
 /**
- * Phase 3 (P3b prelude; Phase 3 plan §6.11, §7 #229; **P3.5 fills it**): `app/templateService.ts`
+ * Phase 3 (Phase 3 plan §6.11, §7 #229; **P3.5**): `app/templateService.ts`
  * → `export const templates: TemplateService`, the harness hook `h.app.ctx.templates`.
  *
  * The templates a document sees are those of its **effective** database
@@ -1500,7 +1500,7 @@ export interface TemplateService {
 // ---------------------------------------------------------------------------
 
 /**
- * stores/channels.ts → `export const channels: ChannelService` (P12 stub; owner WP12.5)
+ * stores/channels.ts → `export const channels: ChannelService` (WP12.5)
  *
  * Which channel a document and a line are in, and the wait-code check over the open
  * channels. The resolution order is AD-32's: the document's effective machine

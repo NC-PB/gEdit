@@ -1,6 +1,5 @@
 // A template from the selected lines (Phase 3 plan §6.11, P3.8 engine half, P3.9 the dialog;
-// `docs/planning/code-assistant.md` "Template files and management"). Written by the P3b prelude
-// as stubs; owned by P3.8.
+// `docs/planning/code-assistant.md` "Template files and management").
 //
 // The rules (binding):
 //

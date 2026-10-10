@@ -1,5 +1,5 @@
-// The M9 code-database flags as a contract (plan §7.2, §7.16; P9). Written by the M9
-// prelude; WP9.2 owns it with `load.ts` and `lookup.ts` from Wave A on. The M10 prelude
+// The M9 code-database flags as a contract (plan §7.2, §7.16; P9). Written in the M9
+// prelude and kept by WP9.2 with `load.ts` and `lookup.ts`. The M10 prelude
 // (P10) adds three: the R8 parameter role (`CodeParam.position`), tool centre point control
 // (`CodeSets.tcp`) and the Klartext tool-axis plane (`CodeSets.planeFromAxisWord`).
 //

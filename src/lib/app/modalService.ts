@@ -1,5 +1,4 @@
-// The modal state of every open document (Phase 3 plan §6.2, AD-33). Written by the Phase 3
-// prelude (P3a) as a stub; implemented by P3.1. The contract is `ModalService` in
+// The modal state of every open document (Phase 3 plan §6.2, AD-33). Implemented by P3.1. The contract is `ModalService` in
 // `app/types.ts`; in short:
 //
 //   1. one `ModalIndex` (`core/nc/modal.ts`) per open document, built with the document's

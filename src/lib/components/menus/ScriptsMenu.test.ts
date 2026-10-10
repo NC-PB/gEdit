@@ -6,7 +6,7 @@
 // with four different fixes, and a single "no scripts" for all of them sends the user
 // looking in the wrong place. The fifth case pins the seam a scenario clicks.
 //
-// `core/scripting/filter.ts` is WP5.1's and still the P5 stub, so the filter is faked with
+// The filter of `core/scripting/filter.ts` is faked with
 // the rules its header states.
 
 import { render } from 'svelte/server';

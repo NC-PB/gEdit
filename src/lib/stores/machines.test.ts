@@ -1,4 +1,4 @@
-// The machine service (plan §7.15, AD-31). Owner: WP6.8 (P6 wrote the stub this replaces).
+// The machine service (plan §7.15, AD-31). Written with WP6.8.
 //
 // The cases that matter here are the ones where a wrong answer misreads a program:
 //

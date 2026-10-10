@@ -221,7 +221,7 @@ describe('availability and options', () => {
     expect(fields.every((field) => field.label.trim() !== '' && !field.label.includes('ncNumbering.'))).toBe(true);
   });
 
-  // TODO Next up 7: Digits allowed 9 on Okuma, and N00010 is a number the control rejects.
+  // Digits allowed 9 on Okuma, and N00010 is a number the control rejects.
   it('bounds the form by the limit of a dialect that stops at its maximum', () => {
     const byId = new Map((renumber.options?.(compiled('okuma-osp')) ?? []).map((field) => [field.id, field]));
     expect(byId.get('digits')).toMatchObject({ default: 0, min: 0, max: 4 });
@@ -255,7 +255,7 @@ describe('availability and options', () => {
       { key: 'ncNumbering.renumber.limitedMax', params: { max: 9999 } },
       { key: 'ncNumbering.renumber.limitedDigits', params: { digits: 4 } },
     ]);
-    // Review of Next up 7: only the answer that was over is named. A run that asked for
+    // Review: only the answer that was over is named. A run that asked for
     // too high a maximum and left the digits alone was told "at most 0 digits".
     const maxOnly = renumber.run(['N1 G0 X0'], context(okuma, { max: 50000 }));
     expect(maxOnly.warnings).toEqual([{ key: 'ncNumbering.renumber.limitedMax', params: { max: 9999 } }]);

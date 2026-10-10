@@ -1,5 +1,4 @@
-// Session restore and per-file memory, webview half (plan §7.9, AD-22). Owner: WP7.5
-// (the M7 prelude wrote the stubs this replaces).
+// Session restore and per-file memory, webview half (plan §7.9, AD-22). Built by WP7.5.
 //
 // Two halves of one idea — "gEdit comes back the way it was left" — and they are in one
 // file because they are switched on by two settings that the user reads as one feature:
@@ -556,7 +555,7 @@ export function createFileTracker(deps: FileTrackerDeps): Disposable {
 // ---------------------------------------------------------------------------
 
 /**
- * The restore's stat, answered per entry (review of TODO Next up 8). A session usually
+ * The restore's stat, answered per entry (from a review). A session usually
  * lives on one share, and when that share hangs every entry comes back `unavailable` —
  * which plain `filesStat` turns into a rejection, and a restore whose stat rejected opened
  * nothing and said nothing. Read per entry, an unavailable path has `allowed: false`, so

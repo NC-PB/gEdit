@@ -1,5 +1,5 @@
 // Machine configurations and the effective view of a document (plan §7.15, AD-31).
-// Owner: WP6.8 (the M6 prelude wrote the stub this replaces).
+// Built by WP6.8.
 //
 // The service owns two things that look like one:
 //

@@ -1,5 +1,5 @@
-// The template file format (Phase 3 plan §6.11, P3b prelude). Written by the P3b prelude; **P3.4
-// owns it from Wave A on** (the formula check it calls belongs to P3.8, `formula.ts`).
+// The template file format (Phase 3 plan §6.11). Built by P3.4
+// (the formula check it calls belongs to P3.8, `formula.ts`).
 //
 // `templates` is an array member of a code database file: `src/lib/data/codes/<id>.json` for the
 // built-ins, `<config>/codes/<id>.json` for the user's (M13, AD-29: at most 64 files of at most

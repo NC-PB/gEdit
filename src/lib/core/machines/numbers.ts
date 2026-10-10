@@ -280,7 +280,8 @@ function paramsOf(entry: CodeEntry | undefined): readonly CodeParam[] {
  * keeps `pitchFeed` (nothing may scale its feed) and its `F` follows rule 5; a code whose
  * `F` really is the lead says so with its parameter's unit (rule 1). A `G63` mode in force
  * reaches this function through `inForce` like any other code: it is a tap, so its feed
- * is in the feed unit (TODO, the modal pitch-feed mode of the Python tracker).
+ * is in the feed unit (the modal pitch-feed mode is tracked by the Python `FeedModeTracker` only; `numberClassOf` does not read it
+ * yet, a documented gap in the Phase 2 plan).
  *
  * `null` also means "undecidable": a feed while the feed unit is unknown, the feed of a
  * block whose code is `pitchFeedAmbiguous` (the same number is a threading cycle in
@@ -319,7 +320,7 @@ export function numberClassOf(
   const feedWords = feedWordsOf(o.profile, unitWords);
   if (feedWords.has(word)) {
     // 2. a block where the feed word is a time
-    if (codes.some((entry) => (entry as { fNotFeed?: boolean })?.fNotFeed === true)) return 'dwell';
+    if (codes.some((entry) => entry?.fNotFeed === true)) return 'dwell';
     // 3. a code that may be a threading cycle in another G-code system tells us nothing…
     if (codes.some((entry) => entry?.pitchFeedAmbiguous === true)) return null;
     // …and neither does a pitch nobody named: a lead and a tap's feed are only the same

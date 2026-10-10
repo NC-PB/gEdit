@@ -1,4 +1,4 @@
-// The template file format (Phase 3 plan §6.11; P3b prelude). Owner: P3.4 from Wave A on.
+// The template file format (Phase 3 plan §6.11). Owner: P3.4.
 //
 // What is pinned: what a file may say, what makes a template unusable (dropped, with the JSON
 // path and a plain reason), the limits, the "review pending" marker and the machine-type filter.

@@ -279,7 +279,7 @@ impl BackupSettings {
 /// `async`, and the work is on the blocking pool: a plain `fn` command runs on the main
 /// thread (`tauri-macros` 2.6 `ExecutionContext::Blocking`), and both the scope check
 /// (it canonicalizes) and the copy touch the file's share. A save to a share that has
-/// stopped answering waits for it here without freezing the window (TODO Next up 8).
+/// stopped answering waits for it here without freezing the window.
 #[tauri::command]
 pub async fn files_backup(app: AppHandle, path: String) -> Result<Option<String>, String> {
     let scope = app.fs_scope();
@@ -1228,7 +1228,7 @@ mod tests {
             body.contains(concat!("scope.is_", "allowed(path)")),
             "the fs scope is taken but never asked about the path"
         );
-        // TODO Next up 8: the scope check and the copy touch the share, so neither may
+        // The scope check and the copy touch the share, so neither may
         // run on the main thread.
         assert!(
             body.contains(concat!("spawn_", "blocking(")),

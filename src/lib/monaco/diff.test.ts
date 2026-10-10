@@ -1,4 +1,4 @@
-// The comparison, the read-only lock (AD-23, TODO Next up 6) and the scratch models
+// The comparison, the read-only lock (AD-23) and the scratch models
 // (M11: reused, never disposed, which is what closes the compare race by ordering).
 //
 // The modified side of the diff editor is the document's own model, and the gutter's

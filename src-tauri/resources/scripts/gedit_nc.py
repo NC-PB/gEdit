@@ -1,7 +1,7 @@
 """Shared helpers for gEdit's bundled and user Python scripts (plan section 7.10).
 
 Every public name below is the binding contract: a script written against it keeps
-working. The API stub came from the M4 prelude (P4); **WP4.6** filled it in.
+working. Implemented by **WP4.6**.
 
 What it is for
 --------------

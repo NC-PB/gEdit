@@ -1,5 +1,5 @@
-// Code-database inheritance (plan §7.2, AD-17). Implemented by the M6 prelude (P6);
-// **WP6.1 owns it from Wave A on**.
+// Code-database inheritance (plan §7.2, AD-17). Built by WP6.1
+// (first written in the M6 prelude, P6).
 //
 // A database file may name a parent dialect with `extends` and list parent codes it does
 // not have in `remove`. The Fanuc lathe databases are the reason: `fanuc-lathe` is the

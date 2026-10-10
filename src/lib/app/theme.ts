@@ -11,7 +11,7 @@
 // `applyTheme` only *applies*: `appearance.theme` is written by the `view.setTheme`
 // command, and `contrib/theme.ts` calls `applyTheme` from its subscription to the
 // settings. Persisting here as well would make the store and this module chase each
-// other. (The P2 stub's doc comment said otherwise; the signature is unchanged.)
+// other.
 //
 // `createTheme(deps)` plus the singleton wired to the real platform (AD-2), so a unit
 // test needs neither a DOM nor a webview.

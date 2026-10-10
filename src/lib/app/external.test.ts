@@ -41,7 +41,7 @@ interface Disk {
   allowed?: boolean;
   /** `decodeFile` refuses these bytes, so `reloadFromDisk` changes nothing at all. */
   undecodable?: boolean;
-  /** The stat does not answer in time: a hung share (TODO "Next up" 8). */
+  /** The stat does not answer in time: a hung share. */
   unavailable?: boolean;
 }
 
@@ -340,7 +340,7 @@ describe('what is watched', () => {
     expect(warn).toHaveBeenCalled();
   });
 
-  // TODO "Next up" 8: a hung share answers `unavailable`. Unknown is not a change, not a
+  // A hung share answers `unavailable`. Unknown is not a change, not a
   // deletion, and not "back to normal" either — whatever the tab showed, it keeps.
   it('decides nothing on a stat that did not answer in time', async () => {
     const h = harness();

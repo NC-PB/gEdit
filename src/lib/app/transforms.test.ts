@@ -285,7 +285,7 @@ describe('TransformService.run: the options form', () => {
     expect(h.forms[0].values).toEqual({ start: 500, pad: true });
   });
 
-  // TODO Next up 7: after a Fanuc run, Okuma was offered 99999 / "Start over" instead of
+  // After a Fanuc run, Okuma was offered 99999 / "Start over" instead of
   // its own 9999 / "Stop", and Sinumerik lost its skip list.
   it('remembers the answers per dialect, not across dialects', async () => {
     const h = harness();

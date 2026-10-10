@@ -1,5 +1,5 @@
 // The TypeScript modal interpreter and its index (Phase 3 plan §6.1, Phase 2 plan §7.4 and
-// AD-19). Written by the Phase 3 prelude (P3a) as a stub; implemented by P3.1.
+// AD-19). Implemented by P3.1.
 //
 // What it does, in one paragraph: it reads the same state out of a program as the Python
 // interpreter (`src-tauri/resources/scripts/_nc_modal.py`), rule for rule (AD-19 rules 1-12,
@@ -49,8 +49,8 @@ export const SNAPSHOT_EVERY = 1000;
 export const STATES_MAX = 1000;
 
 /**
- * Thrown by the prelude's stub. Nothing throws it since P3.1; it stays exported because the
- * parity harness of the prelude named it, and a later stub may use it again.
+ * Thrown by a placeholder implementation. Nothing throws it since P3.1; it stays exported
+ * because the parity harness names it.
  */
 export class ModalNotImplemented extends Error {
   constructor(what: string) {

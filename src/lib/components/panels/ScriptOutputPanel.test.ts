@@ -7,8 +7,8 @@
 // markup is rendered with `svelte/server`, so there is no DOM, no Monaco and no `$effect`,
 // and what is checked is the seam the runtime harness reads.
 //
-// `core/scripting/filter.ts` is WP5.1's and still the P5 stub, so `scriptLabel` is faked
-// here: these tests are about the panel, not about the filter.
+// `scriptLabel` from `core/scripting/filter.ts` is faked here:
+// these tests are about the panel, not about the filter.
 
 import { render } from 'svelte/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';

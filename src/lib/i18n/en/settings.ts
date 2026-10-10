@@ -50,10 +50,6 @@ export default {
   },
   resetFailed: 'The settings could not be reset',
   resetDone: '{category} settings were reset',
-  // The Machines page (M6, AD-31). A machine configuration says how one control reads its
-  // programs; without one, gEdit uses the profile's documented defaults and says so.
-  machinesEmpty:
-    'No machines yet. Documents are read with the defaults their dialect profile documents, and anything that depends on the machine is shown as assumed.',
   openFile: 'Open settings file',
   openFileFailed: 'The settings file could not be opened',
   reloadFailed: 'The saved settings file could not be read again',

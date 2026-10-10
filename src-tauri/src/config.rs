@@ -432,17 +432,6 @@ pub fn settings_save(app: AppHandle, settings: Value) -> Result<(), String> {
     save_settings(&paths::app_dirs(&app)?, settings)
 }
 
-/// The user's settings as Rust sees them. AD-8 keeps the script settings
-/// (`scripts.python`, `scripts.folders`, `scripts.timeoutSeconds`,
-/// `scripts.showBundled`) off the IPC boundary; M4 reads them through here.
-#[allow(dead_code)] // M4 (scripts) is the first caller
-pub fn read_settings(app: &AppHandle) -> Map<String, Value> {
-    match paths::app_dirs(app) {
-        Ok(dirs) => read_json_object(&dirs.settings_file(), paths::SETTINGS_FILE_NAME).value,
-        Err(_) => Map::new(),
-    }
-}
-
 /// Makes sure `settings.json` exists, grants that one file to the fs scope and
 /// returns its path, so that "Open settings file" can open it as a document
 /// (WP2.7). Only this one file is granted — never the folder.

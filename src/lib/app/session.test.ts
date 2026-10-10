@@ -346,7 +346,7 @@ describe('restoring the session', () => {
 
   it('joins the missing-files notice onto the summary files.open leaves on screen', async () => {
     // There is one status message, and `files.open` shows "Opened N files" last: said
-    // before it, the notice was replaced before anyone could read it (TODO Next up 9).
+    // before it, the notice was replaced before anyone could read it.
     const h = sessionHarness();
     h.stored = { paths: ['/net/gone.nc', '/a.nc', '/b.nc'], active: 1 };
     h.onDisk.add('/a.nc');
@@ -410,7 +410,7 @@ describe('restoring the session', () => {
 });
 
 /**
- * Review of TODO Next up 8/9: the notice about skipped files, when the share behind them
+ * Review: the notice about skipped files, when the share behind them
  * hangs, and when something else is on screen already.
  */
 describe('the missing-files notice', () => {

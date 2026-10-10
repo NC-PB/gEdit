@@ -104,7 +104,7 @@ describe('built-in code databases', () => {
     expect(fanuc.db.codes.find((e) => e.code === 'G96')?.group).not.toBe(spindle);
   });
 
-  // 2026-09 decision (TODO Next up 8): `pitchFeed` sits in the cycle or motion group, or on
+  // 2026-09 decision: `pitchFeed` sits in the cycle or motion group, or on
   // a modal code of a group of its own — a mode such as Fanuc's tapping mode `G63`, which is
   // in force until another code of its group (`G61`, `G62`, `G64`) replaces it. The scripts'
   // tracker reads such a mode off the groups (`FeedModeTracker.pitch_mode`); a non-modal
@@ -132,7 +132,7 @@ describe('built-in code databases', () => {
   it('marks the tapping and threading codes the plan names as pitchFeed', () => {
     const fanucPitch = fanuc.db.codes.filter((e) => e.pitchFeed).map((e) => e.code);
     // The source review (2026-09) added the variable-lead thread G34 from the control's list.
-    // 2026-09 (TODO Next up 8): the older-format rigid tapping cycles and the tapping mode.
+    // 2026-09: the older-format rigid tapping cycles and the tapping mode.
     expect(fanucPitch.sort()).toEqual(['G32', 'G33', 'G34', 'G63', 'G74', 'G84', 'G84.2', 'G84.3']);
     expect(fanuc.db.codes.find((e) => e.code === 'G76')?.pitchFeed).toBeUndefined();
 
@@ -151,7 +151,7 @@ describe('built-in code databases', () => {
     }
   });
 
-  // TODO Next up 8: the words of a macro call and of a data-setting block are no feeds.
+  // The words of a macro call and of a data-setting block are no feeds.
   it('marks the macro calls and the data-setting block as blocks whose words are data', () => {
     // M9 (WP9.2): the modal call that runs after every block, G66.1, is one of them.
     expect(fanuc.db.codes.filter((e) => e.wordsAreData).map((e) => e.code)).toEqual(['G10', 'G65', 'G66', 'G66.1']);

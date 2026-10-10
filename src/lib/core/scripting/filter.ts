@@ -1,5 +1,5 @@
 // Which scripts are offered, and in what order (plan §5 WP5.1 step 1, §5 WP5.2 "grouped
-// by folder, filtered by profile"). Owner: **WP5.1**. Stub written by P5.
+// by folder, filtered by profile").
 //
 // *Suggested shape*, not a §7 contract: it is here because **two** work packages need the
 // same answer and must not disagree. WP5.2 builds the Tools ribbon group and the

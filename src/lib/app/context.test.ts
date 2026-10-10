@@ -2,7 +2,7 @@
 // every service the milestone promises. Importing it here also runs the whole singleton
 // graph in node, which is the guard that keeps Monaco and the Tauri runtime out of module
 // scope: `monaco/editorService.ts` must load `$lib/monaco/core` dynamically, or this test
-// fails as soon as WP1.2 lands.
+// fails.
 
 import { describe, expect, it } from 'vitest';
 import { ctx } from './context';
@@ -24,34 +24,34 @@ const M1_SERVICES = [
   't',
 ] as const;
 
-/** What P2 adds (plan §7.3). The singletons are stubs on `m2/base`; the keys are not. */
+/** What P2 adds (plan §7.3). */
 const M2_SERVICES = ['settings', 'uiState', 'recent', 'external', 'compare'] as const;
 
-/** What P3 adds (plan §7.3). The singletons are stubs on `m3/base`; the keys are not. */
+/** What P3 adds (plan §7.3). */
 const M3_SERVICES = ['codes', 'outline'] as const;
 
-/** What P4 adds (plan §7.3). The singletons are stubs on `m4/base`; the keys are not. */
+/** What P4 adds (plan §7.3). */
 const M4_SERVICES = ['transforms', 'results', 'bookmarks'] as const;
 
-/** What P5 adds (plan §7.3). The singleton is a stub on `m5/base`; the key is not. */
+/** What P5 adds (plan §7.3). */
 const M5_SERVICES = ['scripts'] as const;
 
-/** What P6 adds (plan §7.15). The singleton is a stub on `m6/base`; the key is not. */
+/** What P6 adds (plan §7.15). */
 const M6_SERVICES = ['machines'] as const;
 
-/** What P7 adds (plan §7.9). The singletons are stubs on `m7/base`; the keys are not. */
+/** What P7 adds (plan §7.9). */
 const M7_SERVICES = ['fileMemory', 'session', 'recovery'] as const;
 
-/** What P12 adds (plan §7.17). The singleton is a stub on `m12/base`; the key is not. */
+/** What P12 adds (plan §7.17). */
 const M12_SERVICES = ['channels'] as const;
 
-/** What P13 adds (plan §7.3, §7.12). The singleton is a stub on `m13/base`; the key is not. */
+/** What P13 adds (plan §7.3, §7.12). */
 const M13_SERVICES = ['userConfig'] as const;
 
-/** What the Phase 3 prelude (P3a) adds (Phase 3 plan §6.2). The singleton is a stub on `p3/base`; the key is not. */
+/** What Phase 3 (P3a) adds (Phase 3 plan §6.2). */
 const P3A_SERVICES = ['modal'] as const;
 
-/** What the P3b prelude adds (Phase 3 plan §6.11). The singleton is a stub on `p3b/base`; the key is not. */
+/** What P3b adds (Phase 3 plan §6.11). */
 const P3B_SERVICES = ['templates'] as const;
 
 const SERVICES = [

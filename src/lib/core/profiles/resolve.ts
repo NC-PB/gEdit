@@ -1,5 +1,5 @@
-// Profile inheritance (plan §7.1, AD-16). Implemented by the M6 prelude (P6) because
-// every Wave A work package builds on it; **WP6.1 owns it from Wave A on**.
+// Profile inheritance (plan §7.1, AD-16). Built by WP6.1
+// (first written in the M6 prelude, P6, because every Wave A work package builds on it).
 //
 // A child profile names a parent with `extends` and writes down only what differs. The
 // Fanuc lathe is the reason: it is the mill profile with other addresses, another tool

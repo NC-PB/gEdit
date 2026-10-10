@@ -60,9 +60,7 @@
 
   const profileId = $derived($active?.profileId ?? null);
 
-  // The empty list is short-circuited rather than filtered: there is nothing to decide,
-  // and it keeps the group renderable while `core/scripting/filter.ts` is still the P5
-  // stub on this branch (WP5.1 implements it).
+  // The empty list is short-circuited rather than filtered: there is nothing to decide.
   const mine = $derived($list.filter((entry) => inScope(entry, scope)));
   const offered = $derived(mine.length === 0 ? [] : scriptsForProfile(mine, profileId));
   const groups = $derived(offered.length === 0 ? [] : groupScripts(offered));

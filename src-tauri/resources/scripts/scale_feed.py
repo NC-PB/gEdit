@@ -1550,7 +1550,7 @@ def scale_token(
         )
         return None
 
-    # M9 (WP9.5a, the last "Next up" item): a Fanuc lathe roughing cycle carries its feed
+    # M9 (WP9.5a): a Fanuc lathe roughing cycle carries its feed
     # with its profile range, and the same code without one is an Okuma thread cycle whose
     # F is the lead. Only a machine confirms which dialect the program was written for.
     range_code = profile_range_code(entries)

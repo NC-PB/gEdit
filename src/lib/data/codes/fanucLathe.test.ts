@@ -64,7 +64,7 @@ const FANUC_DIALECTS = [MILL, A, B];
 // them together). `G73 R` is one row the table does not have — see the hand-off note.
 
 /** The mill's canned cycles: the `G81`–`G89` rows of §8.2 cover all of them. */
-// 2026-09: with the older-format rigid tapping cycles `G84.2` and `G84.3` (TODO Next up 8).
+// 2026-09: with the older-format rigid tapping cycles `G84.2` and `G84.3`.
 const MILL_CYCLES = ['G73', 'G74', 'G76', 'G81', 'G82', 'G83', 'G84', 'G84.2', 'G84.3', 'G85', 'G86', 'G87', 'G88', 'G89'];
 
 type Unit = NonNullable<CodeParam['unit']>;

@@ -1,5 +1,4 @@
-// Channel resolution, pure (plan §7.17, AD-32). Implemented by the M12 prelude (P12) because
-// every Wave A work package builds on it; owned and hardened by WP12.1.
+// Channel resolution, pure (plan §7.17, AD-32). Built and hardened by WP12.1.
 //
 // Four questions, each a pure function over lines and the machine's `ChannelParams`:
 //

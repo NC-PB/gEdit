@@ -1,6 +1,6 @@
 // The template contracts (Phase 2 plan §7.8, extended by the P3b prelude; Phase 3 plan §6.11).
-// Written by the P3b prelude; binding. Owner from Wave A on: P3.4 (this file and the engine),
-// with the formula, cycle-form and selection shapes below owned by P3.8.
+// Binding. Built by P3.4 (this file and the engine),
+// with the formula, cycle-form and selection shapes below built by P3.8.
 //
 // A template is a named piece of NC text with parameters, scoped to one code database and one
 // group ("Program", "Tool change", "Drilling"). It lives in the database file's `templates`

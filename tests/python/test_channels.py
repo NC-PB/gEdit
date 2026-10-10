@@ -1,6 +1,6 @@
-"""The channels of a document in a script (plan §7.17, AD-32). Owner: **WP12.6**; P12 wrote
-the part that stays true after the stub is replaced: the names, and the empty answer for a
-context without the member, which is what keeps every M5–M11 script unaffected.
+"""The channels of a document in a script (plan §7.17, AD-32). Owner: **WP12.6**. It pins
+the names, and the empty answer for a context without the member, which is what keeps every
+M5–M11 script unaffected.
 """
 
 from __future__ import annotations

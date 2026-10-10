@@ -1,7 +1,7 @@
 <!--
   The one-line prompt behind `modals.prompt()` (plan §5 WP2.2, §7.2). Owner: WP2.2.
 
-  Props are unchanged from the M2 prelude's stub. It is a `Modal` with a single input, so
+  It is a `Modal` with a single input, so
   Esc, Enter, the focus trap and the OK / Cancel test ids all come from there: Enter
   confirms only while `validate` is happy, because `Modal` ignores it when OK is disabled.
 

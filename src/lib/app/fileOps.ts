@@ -278,7 +278,7 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
 
   /**
    * The stat of one path, or `undefined` for "no answer" **and** "no such entry" — and
-   * for an `unavailable` one (a hung share, TODO Next up 8), which looks like "outside
+   * for an `unavailable` one (a hung share), which looks like "outside
    * the scope" and would otherwise read as "no file there".
    */
   async function statOne(path: string): Promise<FileStat | undefined> {
@@ -430,7 +430,7 @@ export function createFileOps(deps: FileOpsDeps): FileOps & FileOpsQuit {
     // already in the webview by the time its size is known (G8 F4). The same answer is
     // the disk stamp below, so this costs no extra round trip.
     const answered = (await statOf([path], { partial: true }))?.[0];
-    // A share that does not answer (TODO Next up 8): the read would block until the OS
+    // A share that does not answer: the read would block until the OS
     // gives up, and it cannot be cancelled — while it waits, it holds the file-command
     // lock, so Save, Close and the close button would do nothing, silently, for minutes.
     const stat = answered;

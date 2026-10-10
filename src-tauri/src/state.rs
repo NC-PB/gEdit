@@ -920,7 +920,7 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
-    // --- a hung share (TODO "Next up" 8) ----------------------------------------
+    // --- a hung share ----------------------------------------
 
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;

@@ -1,5 +1,5 @@
 // Formula parameters (Phase 3 plan §6.11, AD-38, P3.8; `docs/planning/code-assistant.md` "Formula
-// parameters"). Written by the P3b prelude as a contract with a light check; owned by P3.8.
+// parameters"). Built by P3.8.
 //
 // A formula parameter computes its value from the other parameters of its template, for example a
 // feed from speed, teeth and chip load: `s * z * fz`, the depth of a drill's point from its

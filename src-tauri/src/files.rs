@@ -640,7 +640,7 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
-    // --- the time budget (TODO "Next up" 8) -----------------------------------
+    // --- the time budget -----------------------------------
 
     use std::sync::atomic::AtomicUsize;
 
@@ -804,7 +804,7 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
-    /// Review of Next up 8: a stat that failed quickly with anything but "not there" was
+    /// Review: a stat that failed quickly with anything but "not there" was
     /// reported as `allowed: true, exists: false`, so a soft mount's ETIMEDOUT or a
     /// host that is down marked the tab deleted and let a save skip its question.
     #[test]

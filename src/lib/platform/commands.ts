@@ -430,7 +430,7 @@ export function channelSiblings(path: string, names: string[]): Promise<SiblingI
 // name (`^[a-z0-9][a-z0-9._-]{0,63}\.json$`), never by a path the webview makes up. Rust
 // lists and reads them (≤ 64 files, ≤ 1 MiB each, no link followed); a file is granted to
 // the fs scope only when the user creates it, opens it or imports it, so it can be opened
-// as a document. P13 registers the commands as stubs; WP13.1 implements them.
+// as a document. Implemented by WP13.1.
 // ---------------------------------------------------------------------------
 
 /** Which of the two folders. */

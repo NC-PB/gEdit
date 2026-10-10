@@ -66,7 +66,7 @@ describe('filesStat', () => {
     await expect(filesStat(['/nc/a.nc', '/nope'])).resolves.toEqual(stats);
   });
 
-  // TODO "Next up" 8. Rust answers a stat that hung (an SMB or DNC share gone quiet) as
+  // Rust answers a stat that hung (an SMB or DNC share gone quiet) as
   // `unavailable` with everything else empty — the same fields as "outside the scope",
   // which `fileOps.write` reads as "no file there, nothing to ask about". A rejection is
   // what every one-path caller already reads as "the stat did not answer".

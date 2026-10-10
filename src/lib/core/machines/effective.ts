@@ -1,6 +1,5 @@
-// The effective machine of a document, as pure functions (plan §7.15, AD-31). Implemented
-// by the M6 prelude (P6) because every Wave A work package builds on it; **WP6.8 owns it
-// from Wave A on**.
+// The effective machine of a document, as pure functions (plan §7.15, AD-31). Built by
+// WP6.8 (first written in the M6 prelude, P6, because every Wave A work package builds on it).
 //
 // Four steps, and they are always in this order:
 //

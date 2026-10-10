@@ -1,4 +1,4 @@
-// The contradiction guard (R1, TODO Next up 5): a rewrite by a dialect's rules refuses
+// The contradiction guard: a rewrite by a dialect's rules refuses
 // to run on a program whose own text says it is written in another dialect.
 //
 // Detection (`detect.ts`) weighs evidence and can be wrong, and the user can choose a

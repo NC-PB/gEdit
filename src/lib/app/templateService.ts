@@ -1,5 +1,5 @@
 // The templates of every open document (Phase 3 plan §6.11, AD-28; `TemplateService` in
-// `app/types.ts`). Owner: P3.5 (written as a stub by the P3b prelude).
+// `app/types.ts`). Built by P3.5.
 //
 // `createTemplateService(deps)` plus the singleton wired to the real modules (AD-2), so a unit
 // test drives it with a fake editor, a scripted form and a fake clock.

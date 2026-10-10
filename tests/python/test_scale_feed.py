@@ -205,7 +205,7 @@ REQUIRED_CASES = [
     "sinumerik-mcall-tapping",
     "sinumerik-variable-lead",
     "sinumerik-variable-lead-under-g33",
-    # 2026-09 (TODO Next up 8 and 2, R10): the leads the databases did not know, a selection
+    # 2026-09 (R10): the leads the databases did not know, a selection
     # inside a modal tapping call, and the feeds of an Okuma LAP contour.
     "fanuc-leads-the-database-knows",
     "sinumerik-mcall-tapping-selection",
@@ -1718,7 +1718,7 @@ class TestTurningDialects(unittest.TestCase):
 
 
 class TestLeadsTheDatabaseKnows(unittest.TestCase):
-    """2026-09: TODO Next up 8, the first two items of Next up 2, R10 and review §6.
+    """2026-09: R10 and review §6.
 
     Every rule is the database's: a lead of a code it marks ``pitchFeed`` (G84.2, G84.3, the
     tapping mode G63), a block whose words are data (``wordsAreData``: G65, G66, G10), and a

@@ -1,6 +1,6 @@
 """How the control reads numbers (plan §7.15, AD-31), the Python half.
 
-Written as a stub by the M6 prelude (P6) and implemented by **WP6.9** against the golden
+Implemented by **WP6.9** against the golden
 set ``tests/fixtures/machines/numbers.json``, which this module and
 ``src/lib/core/machines/numbers.ts`` both pass. ``gedit_nc`` re-exports every
 public name below; a script must not import this module directly.

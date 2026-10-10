@@ -1,12 +1,7 @@
 """The Python test plumbing itself, and the `gedit_nc` API surface. Owner: **P4**.
 
-Gate G4 (``python3 -m unittest discover -s tests/python -t .``) has to be green from the
-prelude on, and ``unittest`` exits 5 when it finds nothing, so this file is also what
-keeps the gate meaningful before WP4.6 lands.
-
-Everything asserted here stays true **after** ``gedit_nc`` is implemented: the names of
-plan §7.10 and the shape of the helpers, never a stub's behaviour. WP4.6 tests the
-behaviour in ``test_gedit_nc.py``.
+What is asserted here is the names of plan §7.10 and the shape of the helpers, not their
+behaviour. ``test_gedit_nc.py`` tests the behaviour.
 """
 
 from __future__ import annotations

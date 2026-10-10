@@ -1,5 +1,5 @@
-// The M9 syntax pins (plan §6 M9, P9 item 4; §7.1 "The M9 syntax pins"). Written by the
-// M9 prelude; the M9 integration owns it and `tests/fixtures/pins/m9-syntax.json`.
+// The M9 syntax pins (plan §6 M9, P9 item 4; §7.1 "The M9 syntax pins"). Owned by
+// the M9 integration, together with `tests/fixtures/pins/m9-syntax.json`.
 //
 // P8 pinned the syntax sections of its two new profiles by a rule in the plan. M9 changes
 // five live profiles at once — the tokenizer rules of WP9.3, the milling profile of WP9.1,

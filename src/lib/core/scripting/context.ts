@@ -1,4 +1,4 @@
-// `buildContext` (plan §7.5). Owner: **WP5.1**. Stub written by P5 — the signature is
+// `buildContext` (plan §7.5). The signature is
 // binding, the body is not.
 //
 // Pure: it maps what the app already knows onto the JSON the script reads back with
